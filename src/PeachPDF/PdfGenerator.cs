@@ -190,7 +190,6 @@ namespace PeachPDF
                 page.Width = orgPageSize.Width;
 
                 using var g = XGraphics.FromPdfPage(page);
-                //g.IntersectClip(new XRect(config.MarginLeft, config.MarginTop, pageSize.Width, pageSize.Height));
                 g.IntersectClip(new XRect(0, 0, page.Width, page.Height));
 
                 container.ScrollOffset = new XPoint(0, scrollOffset);
@@ -212,7 +211,7 @@ namespace PeachPDF
         {
             foreach (var link in container.GetLinks())
             {
-                int i = (int)(link.Rectangle.Top / pageSize.Height);
+                var i = (int)(link.Rectangle.Top / pageSize.Height);
                 for (; i < document.Pages.Count && pageSize.Height * i < link.Rectangle.Bottom; i++)
                 {
                     var offset = pageSize.Height * i;
@@ -225,21 +224,19 @@ namespace PeachPDF
                         // create link to another page in the document
                         var anchorRect = container.GetElementRectangle(link.AnchorId);
 
-                        if (anchorRect.HasValue)
+                        if (!anchorRect.HasValue) continue;
+
+                        var anchorPageNumber = 1;
+                        var top = anchorRect.Value.Top;
+
+                        while (top > pageSize.Height)
                         {
-                            // document links to the same page as the link is not allowed
-                            int anchorPageNumber = 0;
-                            var top = anchorRect.Value.Top;
-
-                            while (top > pageSize.Height)
-                            {
-                                top -= pageSize.Height;
-                                anchorPageNumber++;
-                            }
-
-                            document.AddNamedDestination(link.AnchorId, anchorPageNumber, PdfNamedDestinationParameters.CreatePosition(anchorRect.Value.Left, top));
-                            document.Pages[i].AddDocumentLink(new PdfRectangle(xRect), link.AnchorId);
+                            top -= pageSize.Height;
+                            anchorPageNumber++;
                         }
+
+                        document.AddNamedDestination(link.AnchorId, anchorPageNumber, PdfNamedDestinationParameters.CreateFitVertically(top));
+                        document.Pages[i].AddDocumentLink(new PdfRectangle(xRect), link.AnchorId);
                     }
                     else
                     {
