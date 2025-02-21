@@ -48,9 +48,14 @@ namespace PeachPDF
         #endregion
 
         /// <summary>
-        /// the dots per inch to use for the generated pdf
+        /// the amount of pixels per inch. We always render at 72 points per inch, so this is used to determine how many pixels a point is
         /// </summary>
-        public int DotsPerInch { get; set; } = 72;
+        public double PixelsPerInch { get; set; } = 72d;
+
+        /// <summary>
+        /// When set to true, this renders the page and automatically scales PixelsPerInch to fit the page contents
+        /// </summary>
+        public bool ScaleToPageSize { get; set; }
 
         /// <summary>
         /// the page size to use for each page in the generated pdf
@@ -66,7 +71,6 @@ namespace PeachPDF
         /// the orientation of each page of the generated pdf
         /// </summary>
         public PageOrientation PageOrientation { get; set; }
-
 
         /// <summary>
         /// The resources to load network content for the renderer.

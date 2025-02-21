@@ -24,60 +24,60 @@ namespace PeachPDF.Utilities
         /// <summary>
         /// Convert from WinForms point to core point.
         /// </summary>
-        public static RPoint Convert(XPoint p)
+        public static RPoint Convert(XPoint p, double pixelsPerPoint)
         {
-            return new RPoint(p.X, p.Y);
+            return new RPoint(p.X * pixelsPerPoint, p.Y * pixelsPerPoint);
         }
 
         /// <summary>
         /// Convert from WinForms point to core point.
         /// </summary>
-        public static XPoint[] Convert(RPoint[] points)
+        public static XPoint[] Convert(RPoint[] points, double pixelsPerPoint)
         {
             XPoint[] myPoints = new XPoint[points.Length];
             for (int i = 0; i < points.Length; i++)
-                myPoints[i] = Convert(points[i]);
+                myPoints[i] = Convert(points[i], pixelsPerPoint);
             return myPoints;
         }
 
         /// <summary>
         /// Convert from core point to WinForms point.
         /// </summary>
-        public static XPoint Convert(RPoint p)
+        public static XPoint Convert(RPoint p, double pixelsPerPoint)
         {
-            return new XPoint(p.X, p.Y);
+            return new XPoint(p.X / pixelsPerPoint, p.Y / pixelsPerPoint);
         }
 
         /// <summary>
         /// Convert from WinForms size to core size.
         /// </summary>
-        public static RSize Convert(XSize s)
+        public static RSize Convert(XSize s, double pixelsPerPoint)
         {
-            return new RSize(s.Width, s.Height);
+            return new RSize(s.Width * pixelsPerPoint, s.Height * pixelsPerPoint);
         }
 
         /// <summary>
         /// Convert from core size to WinForms size.
         /// </summary>
-        public static XSize Convert(RSize s)
+        public static XSize Convert(RSize s, double pixelsPerPoint)
         {
-            return new XSize(s.Width, s.Height);
+            return new XSize(s.Width / pixelsPerPoint, s.Height / pixelsPerPoint);
         }
 
         /// <summary>
         /// Convert from WinForms rectangle to core rectangle.
         /// </summary>
-        public static RRect Convert(XRect r)
+        public static RRect Convert(XRect r, double pixelsPerPoint)
         {
-            return new RRect(r.X, r.Y, r.Width, r.Height);
+            return new RRect(r.X * pixelsPerPoint, r.Y * pixelsPerPoint, r.Width * pixelsPerPoint, r.Height * pixelsPerPoint);
         }
 
         /// <summary>
         /// Convert from core rectangle to WinForms rectangle.
         /// </summary>
-        public static XRect Convert(RRect r)
+        public static XRect Convert(RRect r, double pixelsPerPoint)
         {
-            return new XRect(r.X, r.Y, r.Width, r.Height);
+            return new XRect(r.X / pixelsPerPoint, r.Y / pixelsPerPoint, r.Width / pixelsPerPoint, r.Height / pixelsPerPoint);
         }
 
         /// <summary>

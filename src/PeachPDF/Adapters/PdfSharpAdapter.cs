@@ -26,7 +26,6 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace PeachPDF.Adapters
 {
@@ -65,6 +64,11 @@ namespace PeachPDF.Adapters
         public RNetworkLoader NetworkLoader { get; set;  } = new DataUriNetworkLoader();
 
         public override Uri? BaseUri => NetworkLoader.BaseUri;
+
+        /// <summary>
+        /// the amount of pixels per point
+        /// </summary>
+        public double PixelsPerPoint { get; set; } = 72d;
 
         internal FontResolver FontResolver => _fontResolver;
 
@@ -143,7 +147,7 @@ namespace PeachPDF.Adapters
                 _ => XLinearGradientMode.Horizontal
             };
 
-            return new BrushAdapter(new XLinearGradientBrush(Utils.Convert(rect), Utils.Convert(color1), Utils.Convert(color2), mode));
+            return new BrushAdapter(new XLinearGradientBrush(Utils.Convert(rect, PixelsPerPoint), Utils.Convert(color1), Utils.Convert(color2), mode));
         }
 
         protected override RImage? ConvertImageInt(object? image)
@@ -159,15 +163,15 @@ namespace PeachPDF.Adapters
         protected override RFont CreateFontInt(string family, double size, RFontStyle style)
         {
             var fontStyle = (XFontStyle)((int)style);
-            var xFont = new XFont(family, size, fontStyle, new XPdfFontOptions(PdfFontEncoding.Unicode), _fontResolver);
-            return new FontAdapter(xFont);
+            var xFont = new XFont(family, size / PixelsPerPoint, fontStyle, new XPdfFontOptions(PdfFontEncoding.Unicode), _fontResolver);
+            return new FontAdapter(xFont, PixelsPerPoint);
         }
 
         protected override RFont CreateFontInt(RFontFamily family, double size, RFontStyle style)
         {
             var fontStyle = (XFontStyle)((int)style);
-            var xFont = new XFont(((FontFamilyAdapter)family).FontFamily.Name, size, fontStyle, new XPdfFontOptions(PdfFontEncoding.Unicode), _fontResolver);
-            return new FontAdapter(xFont);
+            var xFont = new XFont(((FontFamilyAdapter)family).FontFamily.Name, size / PixelsPerPoint, fontStyle, new XPdfFontOptions(PdfFontEncoding.Unicode), _fontResolver);
+            return new FontAdapter(xFont, PixelsPerPoint);
         }
 
         protected override async Task AddFontFromStream(string fontFamilyName, Stream stream, string? format)

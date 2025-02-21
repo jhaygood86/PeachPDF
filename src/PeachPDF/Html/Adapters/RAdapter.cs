@@ -88,6 +88,8 @@ namespace PeachPDF.Html.Adapters
 
         public abstract Uri? BaseUri { get; }
 
+        public void ClearFontCache() => _fontsHandler.ClearCache();
+
         /// <summary>
         /// Resolve color value from given color name.
         /// </summary>

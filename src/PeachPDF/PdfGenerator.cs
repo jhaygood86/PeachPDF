@@ -18,8 +18,10 @@ using PeachPDF.PdfSharpCore;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using System.ComponentModel;
 using System.IO;
 using System.Threading.Tasks;
+using static Org.BouncyCastle.Math.EC.ECCurve;
 
 namespace PeachPDF
 {
@@ -147,7 +149,7 @@ namespace PeachPDF
         public async Task AddPdfPages(PdfDocument document, string html, PdfGenerateConfig config, CssData cssData = null)
         {
             // get the size of each page to layout the HTML in
-            var orgPageSize = config.PageSize != PageSize.Undefined ? PageSizeConverter.ToSize(config.PageSize, config.DotsPerInch) : config.ManualPageSize;
+            var orgPageSize = config.PageSize != PageSize.Undefined ? PageSizeConverter.ToSize(config.PageSize) : config.ManualPageSize;
 
             if (config.PageOrientation == PageOrientation.Landscape)
             {
@@ -158,27 +160,35 @@ namespace PeachPDF
             if (string.IsNullOrEmpty(html) && config.NetworkLoader is null) return;
 
             _pdfSharpAdapter.NetworkLoader = config.NetworkLoader ?? new DataUriNetworkLoader();
+            _pdfSharpAdapter.PixelsPerPoint = config.PixelsPerInch / 72d;
 
             html ??= await config.NetworkLoader.GetPrimaryContents();
 
             using var container = new HtmlContainer(_pdfSharpAdapter);
 
+            await SetContent(container, config, html, cssData, orgPageSize);
 
-            container.MarginBottom = config.MarginBottom;
-            container.MarginLeft = config.MarginLeft;
-            container.MarginRight = config.MarginRight;
-            container.MarginTop = config.MarginTop;
+            var measure = XGraphics.CreateMeasureContext(container.PageSize, XGraphicsUnit.Point, XPageDirection.Downwards);
 
-            await container.SetHtml(html, cssData);
+            if (config.ScaleToPageSize)
+            {
+                container.MaxSize = XSize.Empty;
+                await container.PerformLayout(measure);
 
-            // Just in case @page rules got applied
-            var pageSize = new XSize(orgPageSize.Width - container.MarginLeft - container.MarginRight, orgPageSize.Height - container.MarginTop - container.MarginBottom);
-            container.PageSize = pageSize;
-            container.Location = new XPoint(container.MarginLeft, container.MarginTop);
-            container.MaxSize = new XSize(pageSize.Width, 0);
+                var actualWidth = container.ActualSize.Width;
+                
+                _pdfSharpAdapter.ClearFontCache();
+                _pdfSharpAdapter.PixelsPerPoint = (config.PixelsPerInch / 72d) * (actualWidth / orgPageSize.Width);
+
+                await SetContent(container, config, html, cssData, orgPageSize);
+
+                measure?.Dispose();
+                measure = XGraphics.CreateMeasureContext(container.PageSize, XGraphicsUnit.Point, XPageDirection.Downwards); ;
+            }
+
+            container.MaxSize = new XSize(container.PageSize.Width, 0);
 
             // layout the HTML with the page width restriction to know how many pages are required
-            using var measure = XGraphics.CreateMeasureContext(pageSize, XGraphicsUnit.Point, XPageDirection.Downwards);
             await container.PerformLayout(measure);
 
             // while there is un-rendered HTML, create another PDF page and render with proper offset for the next page
@@ -194,11 +204,28 @@ namespace PeachPDF
 
                 container.ScrollOffset = new XPoint(0, scrollOffset);
                 await container.PerformPaint(g);
-                scrollOffset -= pageSize.Height;
+                scrollOffset -= container.PageSize.Height;
             }
 
             // add web links and anchors
-            HandleLinks(document, container, orgPageSize, pageSize);
+            HandleLinks(document, container, orgPageSize, container.PageSize);
+
+            measure?.Dispose();
+        }
+
+        private static async Task SetContent(HtmlContainer container, PdfGenerateConfig config, string html, CssData cssData, XSize orgPageSize)
+        {
+            container.MarginBottom = config.MarginBottom;
+            container.MarginLeft = config.MarginLeft;
+            container.MarginRight = config.MarginRight;
+            container.MarginTop = config.MarginTop;
+
+            await container.SetHtml(html, cssData);
+
+            // Just in case @page rules got applied
+            var pageSize = new XSize(orgPageSize.Width - container.MarginLeft - container.MarginRight, orgPageSize.Height - container.MarginTop - container.MarginBottom);
+            container.PageSize = pageSize;
+            container.Location = new XPoint(container.MarginLeft, container.MarginTop);
         }
 
 

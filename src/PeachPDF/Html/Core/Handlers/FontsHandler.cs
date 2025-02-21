@@ -58,6 +58,11 @@ namespace PeachPDF.Html.Core.Handlers
             _adapter = adapter;
         }
 
+        public void ClearCache()
+        {
+            _fontsCache.Clear();
+        }
+
         /// <summary>
         /// Check if the given font family exists by name
         /// </summary>

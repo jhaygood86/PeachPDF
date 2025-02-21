@@ -122,6 +122,7 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufräumen
 
             Initialize();
         }
+
         XGraphics(XSize size, XGraphicsUnit pageUnit, XPageDirection pageDirection)
         {
             _gsStack = new GraphicsStateStack(this);

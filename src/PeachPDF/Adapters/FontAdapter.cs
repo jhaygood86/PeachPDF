@@ -20,8 +20,6 @@ namespace PeachPDF.Adapters
     /// </summary>
     internal sealed class FontAdapter : RFont
     {
-        #region Fields and Consts
-
         /// <summary>
         /// the vertical offset of the font underline location from the top of the font.
         /// </summary>
@@ -37,15 +35,14 @@ namespace PeachPDF.Adapters
         /// </summary>
         private double _whitespaceWidth = -1;
 
-        #endregion
-
 
         /// <summary>
         /// Init.
         /// </summary>
-        public FontAdapter(XFont font)
+        public FontAdapter(XFont font, double pixelsPerPoint)
         {
             Font = font;
+            PixelsPerPoint = pixelsPerPoint;
         }
 
         /// <summary>
@@ -53,13 +50,15 @@ namespace PeachPDF.Adapters
         /// </summary>
         public XFont Font { get; }
 
+        private double PixelsPerPoint { get; set; }
+
         public override double Size => Font.Size;
 
         public override double UnderlineOffset => _underlineOffset;
 
-        public override double Height => _height;
+        public override double Height => _height * PixelsPerPoint;
 
-        public override double LeftPadding => _height / 6f;
+        public override double LeftPadding => Height / 6f;
 
 
         public override double GetWhitespaceWidth(RGraphics graphics)
@@ -68,6 +67,7 @@ namespace PeachPDF.Adapters
             {
                 _whitespaceWidth = graphics.MeasureString(" ", this).Width;
             }
+
             return _whitespaceWidth;
         }
 

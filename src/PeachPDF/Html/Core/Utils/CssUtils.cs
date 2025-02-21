@@ -15,7 +15,6 @@
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
-using SixLabors.Fonts;
 using System;
 using System.Collections.Generic;
 using System.Linq;

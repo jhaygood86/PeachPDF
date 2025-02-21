@@ -24,8 +24,6 @@ namespace PeachPDF.Adapters
     /// </summary>
     internal sealed class GraphicsAdapter : RGraphics
     {
-        #region Fields and Consts
-
         /// <summary>
         /// The wrapped WinForms graphics object
         /// </summary>
@@ -36,13 +34,12 @@ namespace PeachPDF.Adapters
         /// </summary>
         private readonly bool _releaseGraphics;
 
+        private double PixelsPerPoint { get; }
+
         /// <summary>
         /// Used to measure and draw strings
         /// </summary>
         private static readonly XStringFormat _stringFormat;
-
-        #endregion
-
 
         static GraphicsAdapter()
         {
@@ -58,14 +55,17 @@ namespace PeachPDF.Adapters
         /// </summary>
         /// <param name="adapter">the adapter</param>
         /// <param name="g">the win forms graphics object to use</param>
+        /// <param name="pixelsPerPoint">The number of pixels in each point</param>
         /// <param name="releaseGraphics">optional: if to release the graphics object on dispose (default - false)</param>
-        public GraphicsAdapter(RAdapter adapter, XGraphics g, bool releaseGraphics = false)
+        public GraphicsAdapter(RAdapter adapter, XGraphics g, double pixelsPerPoint, bool releaseGraphics = false)
             : base(adapter, new RRect(0, 0, double.MaxValue, double.MaxValue))
         {
             ArgumentNullException.ThrowIfNull(g);
 
             _g = g;
             _releaseGraphics = releaseGraphics;
+
+            PixelsPerPoint = pixelsPerPoint;
         }
 
         public override void PopClip()
@@ -78,7 +78,7 @@ namespace PeachPDF.Adapters
         {
             _clipStack.Push(rect);
             _g.Save();
-            _g.IntersectClip(Utils.Convert(rect));
+            _g.IntersectClip(Utils.Convert(rect, PixelsPerPoint));
         }
 
         public override void PushClipExclude(RRect rect)
@@ -105,14 +105,14 @@ namespace PeachPDF.Adapters
             var realFont = fontAdapter.Font;
             var size = _g.MeasureString(str, realFont, _stringFormat);
 
-            if (!(font.Height < 0)) return Utils.Convert(size);
+            if (!(font.Height < 0)) return Utils.Convert(size, PixelsPerPoint);
 
             var height = realFont.Height;
             var fontResolver = ((PdfSharpAdapter)_adapter).FontResolver;
             var descent = realFont.Size * realFont.FontFamily.GetCellDescent(realFont.Style, fontResolver) / realFont.FontFamily.GetEmHeight(realFont.Style, fontResolver);
             fontAdapter.SetMetrics(height, (int)Math.Round((height - descent + 1f)));
 
-            return Utils.Convert(size);
+            return Utils.Convert(size, PixelsPerPoint);
         }
 
         public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth)
@@ -124,12 +124,15 @@ namespace PeachPDF.Adapters
         public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl)
         {
             var xBrush = ((BrushAdapter)_adapter.GetSolidBrush(color)).Brush;
-            _g.DrawString(str, ((FontAdapter)font).Font, xBrush, point.X, point.Y, _stringFormat);
+
+            var xPoint = Utils.Convert(point, PixelsPerPoint);
+
+            _g.DrawString(str, ((FontAdapter)font).Font, xBrush, xPoint.X, xPoint.Y, _stringFormat);
         }
 
         public override RBrush GetTextureBrush(RImage image, RRect dstRect, RPoint translateTransformLocation)
         {
-            return new BrushAdapter(new XTextureBrush(((ImageAdapter)image).Image, Utils.Convert(dstRect), Utils.Convert(translateTransformLocation)));
+            return new BrushAdapter(new XTextureBrush(((ImageAdapter)image).Image, Utils.Convert(dstRect, PixelsPerPoint), Utils.Convert(translateTransformLocation, PixelsPerPoint)));
         }
 
         public override RGraphicsPath GetGraphicsPath()
@@ -148,12 +151,12 @@ namespace PeachPDF.Adapters
 
         public override void DrawLine(RPen pen, double x1, double y1, double x2, double y2)
         {
-            _g.DrawLine(((PenAdapter)pen).Pen, x1, y1, x2, y2);
+            _g.DrawLine(((PenAdapter)pen).Pen, x1 / PixelsPerPoint, y1 / PixelsPerPoint, x2 / PixelsPerPoint, y2 / PixelsPerPoint);
         }
 
         public override void DrawRectangle(RPen pen, double x, double y, double width, double height)
         {
-            _g.DrawRectangle(((PenAdapter)pen).Pen, x, y, width, height);
+            _g.DrawRectangle(((PenAdapter)pen).Pen, x / PixelsPerPoint, y / PixelsPerPoint, width / PixelsPerPoint, height / PixelsPerPoint);
         }
 
         public override void DrawRectangle(RBrush brush, double x, double y, double width, double height)
@@ -161,26 +164,26 @@ namespace PeachPDF.Adapters
             var xBrush = ((BrushAdapter)brush).Brush;
             if (xBrush is XTextureBrush xTextureBrush)
             {
-                xTextureBrush.DrawRectangle(_g, x, y, width, height);
+                xTextureBrush.DrawRectangle(_g, x / PixelsPerPoint, y / PixelsPerPoint, width / PixelsPerPoint, height / PixelsPerPoint);
             }
             else
             {
-                _g.DrawRectangle(xBrush, x, y, width, height);
+                _g.DrawRectangle(xBrush, x / PixelsPerPoint, y / PixelsPerPoint, width / PixelsPerPoint, height / PixelsPerPoint);
 
                 // handle bug in PdfSharp that keeps the brush color for next string draw
                 if (xBrush is XLinearGradientBrush)
-                    _g.DrawRectangle(XBrushes.White, 0, 0, 0.1, 0.1);
+                    _g.DrawRectangle(XBrushes.White, 0, 0, 0.1 / PixelsPerPoint, 0.1 / PixelsPerPoint);
             }
         }
 
         public override void DrawImage(RImage image, RRect destRect, RRect srcRect)
         {
-            _g.DrawImage(((ImageAdapter)image).Image, Utils.Convert(destRect), Utils.Convert(srcRect), XGraphicsUnit.Point);
+            _g.DrawImage(((ImageAdapter)image).Image, Utils.Convert(destRect, PixelsPerPoint), Utils.Convert(srcRect, PixelsPerPoint), XGraphicsUnit.Point);
         }
 
         public override void DrawImage(RImage image, RRect destRect)
         {
-            _g.DrawImage(((ImageAdapter)image).Image, Utils.Convert(destRect));
+            _g.DrawImage(((ImageAdapter)image).Image, Utils.Convert(destRect, PixelsPerPoint));
         }
 
         public override void DrawPath(RPen pen, RGraphicsPath path)
@@ -197,7 +200,7 @@ namespace PeachPDF.Adapters
         {
             if (points is { Length: > 0 })
             {
-                _g.DrawPolygon((XBrush)((BrushAdapter)brush).Brush, Utils.Convert(points), XFillMode.Winding);
+                _g.DrawPolygon((XBrush)((BrushAdapter)brush).Brush, Utils.Convert(points, PixelsPerPoint), XFillMode.Winding);
             }
         }
 

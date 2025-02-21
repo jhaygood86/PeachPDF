@@ -8,9 +8,9 @@ var httpClient = new HttpClient();
 
 PdfGenerateConfig pdfConfig = new()
 {
-    PageSize = PageSize.Letter,
-    PageOrientation = PageOrientation.Portrait,
-    NetworkLoader = new HttpClientNetworkLoader(httpClient, new Uri("http://www.example.com"))
+    PageSize = PageSize.A4,
+    PageOrientation = PageOrientation.Landscape,
+    ScaleToPageSize = true
 };
 
 PdfGenerator generator = new();
@@ -18,15 +18,54 @@ PdfGenerator generator = new();
 var stream = new MemoryStream();
 
 var html = """
-           <link href="https://fonts.googleapis.com/css2?family=Playwrite+AR+Guides&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
-           <style type="text/css">
-           p { font-family: "Playwrite AR Guides"; font-size: 48pt}
-           </style>
-           <p>Hello World!</p>
+           <html>
+
+           <head>
+               <title></title>
+               <style>       
+                   body {
+                       font-family: Verdana;
+                       margin: 0;
+                   }
+                   
+                   table {
+                       border-collapse: collapse;
+                       border: 1px solid grey;
+                       border-spacing: 0px !important
+                   }
+                   
+                   tr {
+                       border: 1px solid grey;
+                   }
+                   
+                   td {
+                       border: 1px solid grey;
+                   }
+                   
+                   th {
+                       border: 1px solid grey;
+                   }
+               </style>
+
+           </head>
+
+           <body>
+           	<div class="Title">
+           		<h1>Certificate</h1>
+           	</div>
+           
+           	<div class="Section1">
+           		<p></p>
+           		<br/>
+           <table class="RecentWo"><thead><tr><th>Plant</th><th>Line</th><th>Order</th><th>Run No</th><th>Job Status</th><th>Material</th><th>Description</th><th>Start-End Operation</th><th>Start</th><th>Job Duration%</th><th>Setup Time</th><th># Comments</th><th>Quantity Ordered</th><th>Good Quantity</th><th>#IP Out</th><th>#Insp</th><th>PO Status</th><th># Attachments</th><th>Start User</th><th>PO Duration</th></tr></thead><tbody><tr></tr></tbody></table>
+           
+           	</div>
+            </body>
+           </html>
            """;
 
 var document = await generator.GeneratePdf(html, pdfConfig);
 document.Save(stream);
 
-File.Delete("test_google_font.pdf");
-File.WriteAllBytes("test_google_font.pdf", stream.ToArray());
+File.Delete("test_same_page_links.pdf");
+File.WriteAllBytes("test_same_page_links.pdf", stream.ToArray());
