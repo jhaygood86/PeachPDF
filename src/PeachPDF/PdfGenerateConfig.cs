@@ -58,6 +58,11 @@ namespace PeachPDF
         public bool ScaleToPageSize { get; set; }
 
         /// <summary>
+        /// When set to true, sets the PixelsPerInch to fit the page contents only if the page contents is larger than the window
+        /// </summary>
+        public bool ShrinkToFit { get; set; }
+
+        /// <summary>
         /// the page size to use for each page in the generated pdf
         /// </summary>
         public PageSize PageSize { get; set; }

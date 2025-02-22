@@ -18,10 +18,8 @@ using PeachPDF.PdfSharpCore;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
-using System.ComponentModel;
 using System.IO;
 using System.Threading.Tasks;
-using static Org.BouncyCastle.Math.EC.ECCurve;
 
 namespace PeachPDF
 {
@@ -170,7 +168,7 @@ namespace PeachPDF
 
             var measure = XGraphics.CreateMeasureContext(container.PageSize, XGraphicsUnit.Point, XPageDirection.Downwards);
 
-            if (config.ScaleToPageSize)
+            if (config.ScaleToPageSize || config.ShrinkToFit)
             {
                 container.MaxSize = XSize.Empty;
                 await container.PerformLayout(measure);
@@ -178,7 +176,11 @@ namespace PeachPDF
                 var actualWidth = container.ActualSize.Width;
                 
                 _pdfSharpAdapter.ClearFontCache();
-                _pdfSharpAdapter.PixelsPerPoint = (config.PixelsPerInch / 72d) * (actualWidth / orgPageSize.Width);
+                var pixelsPerPoint = (config.PixelsPerInch / 72d) * (actualWidth / orgPageSize.Width);
+
+                _pdfSharpAdapter.PixelsPerPoint = (config.ShrinkToFit && pixelsPerPoint > 1) || config.ScaleToPageSize
+                    ? pixelsPerPoint
+                    : _pdfSharpAdapter.PixelsPerPoint;
 
                 await SetContent(container, config, html, cssData, orgPageSize);
 

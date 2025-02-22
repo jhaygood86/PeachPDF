@@ -11,7 +11,6 @@
 // "The Art of War"
 
 using PeachPDF.Adapters;
-using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Utils;
@@ -20,7 +19,6 @@ using PeachPDF.Utilities;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Org.BouncyCastle.Bcpg.OpenPgp;
 
 namespace PeachPDF
 {
@@ -30,28 +28,18 @@ namespace PeachPDF
     /// <seealso cref="HtmlContainerInt"/>
     public sealed class HtmlContainer : IDisposable
     {
-        #region Fields and Consts
-
-        /// <summary>
-        /// The internal core html container
-        /// </summary>
-        private readonly HtmlContainerInt _htmlContainerInt;
-
-        #endregion
-
-
         /// <summary>
         /// Init.
         /// </summary>
         internal HtmlContainer(PdfSharpAdapter adapter)
         {
-            _htmlContainerInt = new HtmlContainerInt(adapter);
+            HtmlContainerInt = new HtmlContainerInt(adapter);
         }
 
         /// <summary>
         /// The internal core html container
         /// </summary>
-        internal HtmlContainerInt HtmlContainerInt => _htmlContainerInt;
+        internal HtmlContainerInt HtmlContainerInt { get; }
 
         /// <summary>
         /// The scroll offset of the html.<br/>
@@ -63,8 +51,8 @@ namespace PeachPDF
         /// </example>
         public XPoint ScrollOffset
         {
-            get => Utils.Convert(_htmlContainerInt.ScrollOffset, PixelsPerPoint);
-            set => _htmlContainerInt.ScrollOffset = Utils.Convert(value, PixelsPerPoint);
+            get => Utils.Convert(HtmlContainerInt.ScrollOffset, PixelsPerPoint);
+            set => HtmlContainerInt.ScrollOffset = Utils.Convert(value, PixelsPerPoint);
         }
 
         /// <summary>
@@ -73,8 +61,8 @@ namespace PeachPDF
         /// </summary>
         public XPoint Location
         {
-            get => Utils.Convert(_htmlContainerInt.Location, PixelsPerPoint);
-            set => _htmlContainerInt.Location = Utils.Convert(value, PixelsPerPoint);
+            get => Utils.Convert(HtmlContainerInt.Location, PixelsPerPoint);
+            set => HtmlContainerInt.Location = Utils.Convert(value, PixelsPerPoint);
         }
 
         /// <summary>
@@ -86,8 +74,8 @@ namespace PeachPDF
         /// </summary>
         public XSize MaxSize
         {
-            get => Utils.Convert(_htmlContainerInt.MaxSize, PixelsPerPoint);
-            set => _htmlContainerInt.MaxSize = Utils.Convert(value, PixelsPerPoint);
+            get => Utils.Convert(HtmlContainerInt.MaxSize, PixelsPerPoint);
+            set => HtmlContainerInt.MaxSize = Utils.Convert(value, PixelsPerPoint);
         }
 
         /// <summary>
@@ -95,13 +83,13 @@ namespace PeachPDF
         /// </summary>
         public XSize ActualSize
         {
-            get => Utils.Convert(_htmlContainerInt.ActualSize, PixelsPerPoint);
-            internal set => _htmlContainerInt.ActualSize = Utils.Convert(value, PixelsPerPoint);
+            get => Utils.Convert(HtmlContainerInt.ActualSize, PixelsPerPoint);
+            internal set => HtmlContainerInt.ActualSize = Utils.Convert(value, PixelsPerPoint);
         }
 
         public XSize PageSize {
-            get => Utils.Convert(_htmlContainerInt.PageSize, PixelsPerPoint);
-            set => _htmlContainerInt.PageSize = Utils.Convert(value, PixelsPerPoint);
+            get => Utils.Convert(HtmlContainerInt.PageSize, PixelsPerPoint);
+            set => HtmlContainerInt.PageSize = Utils.Convert(value, PixelsPerPoint);
         }
 
         /// <summary>
@@ -109,11 +97,11 @@ namespace PeachPDF
         /// </summary>
         public double MarginTop
         {
-            get => _htmlContainerInt.MarginTop / PixelsPerPoint;
+            get => HtmlContainerInt.MarginTop / PixelsPerPoint;
             set
             {
                 if (value > -1)
-                    _htmlContainerInt.MarginTop = value * PixelsPerPoint;
+                    HtmlContainerInt.MarginTop = value * PixelsPerPoint;
             }
         }
 
@@ -122,11 +110,11 @@ namespace PeachPDF
         /// </summary>
         public double MarginBottom
         {
-            get => _htmlContainerInt.MarginBottom / PixelsPerPoint;
+            get => HtmlContainerInt.MarginBottom / PixelsPerPoint;
             set
             {
                 if (value > -1)
-                    _htmlContainerInt.MarginBottom = value * PixelsPerPoint;
+                    HtmlContainerInt.MarginBottom = value * PixelsPerPoint;
             }
         }
 
@@ -135,11 +123,11 @@ namespace PeachPDF
         /// </summary>
         public double MarginLeft
         {
-            get => _htmlContainerInt.MarginLeft / PixelsPerPoint;
+            get => HtmlContainerInt.MarginLeft / PixelsPerPoint;
             set
             {
                 if (value > -1)
-                    _htmlContainerInt.MarginLeft = value * PixelsPerPoint;
+                    HtmlContainerInt.MarginLeft = value * PixelsPerPoint;
             }
         }
 
@@ -148,15 +136,15 @@ namespace PeachPDF
         /// </summary>
         public double MarginRight
         {
-            get => _htmlContainerInt.MarginRight / PixelsPerPoint;
+            get => HtmlContainerInt.MarginRight / PixelsPerPoint;
             set
             {
                 if (value > -1)
-                    _htmlContainerInt.MarginRight = value * PixelsPerPoint;
+                    HtmlContainerInt.MarginRight = value * PixelsPerPoint;
             }
         }
 
-        internal double PixelsPerPoint => ((PdfSharpAdapter)_htmlContainerInt.Adapter).PixelsPerPoint;
+        internal double PixelsPerPoint => ((PdfSharpAdapter)HtmlContainerInt.Adapter).PixelsPerPoint;
 
         /// <summary>
         /// Init with optional document and stylesheet.
@@ -165,7 +153,7 @@ namespace PeachPDF
         /// <param name="baseCssData">optional: the stylesheet to init with, init default if not given</param>
         public async Task SetHtml(string htmlSource, CssData baseCssData = null)
         {
-            await _htmlContainerInt.SetHtml(htmlSource, baseCssData);
+            await HtmlContainerInt.SetHtml(htmlSource, baseCssData);
         }
 
         /// <summary>
@@ -204,7 +192,7 @@ namespace PeachPDF
         /// <returns>the rectangle of the element or null if not found</returns>
         public XRect? GetElementRectangle(string elementId)
         {
-            var r = _htmlContainerInt.GetElementRectangle(elementId);
+            var r = HtmlContainerInt.GetElementRectangle(elementId);
             return r.HasValue ? Utils.Convert(r.Value, PixelsPerPoint) : (XRect?)null;
         }
 
@@ -216,8 +204,8 @@ namespace PeachPDF
         {
             ArgumentNullException.ThrowIfNull(g);
 
-            using var ig = new GraphicsAdapter(_htmlContainerInt.Adapter, g, PixelsPerPoint);
-            await _htmlContainerInt.PerformLayout(ig);
+            using var ig = new GraphicsAdapter(HtmlContainerInt.Adapter, g, PixelsPerPoint);
+            await HtmlContainerInt.PerformLayout(ig);
         }
 
         /// <summary>
@@ -228,13 +216,13 @@ namespace PeachPDF
         {
             ArgumentNullException.ThrowIfNull(g);
 
-            using var ig = new GraphicsAdapter(_htmlContainerInt.Adapter, g, PixelsPerPoint);
-            await _htmlContainerInt.PerformPaint(ig);
+            using var ig = new GraphicsAdapter(HtmlContainerInt.Adapter, g, PixelsPerPoint);
+            await HtmlContainerInt.PerformPaint(ig);
         }
 
         public void Dispose()
         {
-            _htmlContainerInt.Dispose();
+            HtmlContainerInt.Dispose();
         }
     }
 }

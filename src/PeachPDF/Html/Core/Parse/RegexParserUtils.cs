@@ -20,19 +20,6 @@ namespace PeachPDF.Html.Core.Parse
     /// </summary>
     internal static partial class RegexParserUtils
     {
-        #region Fields and Consts
-
-        /// <summary>
-        /// Extracts the media types from a media at-rule; e.g. @media print, 3d, screen {
-        /// </summary>
-        public const string CssMediaTypes = @"@media[^\{\}]*\{";
-
-        /// <summary>
-        /// Extracts defined blocks in CSS. 
-        /// WARNING: Blocks will include blocks inside at-rules.
-        /// </summary>
-        public const string CssBlocks = @"[^\{\}]*\{[^\{\}]*\}";
-
         /// <summary>
         /// Extracts a number; e.g.  5, 6, 7.5, 0.9
         /// </summary>
@@ -57,11 +44,6 @@ namespace PeachPDF.Html.Core.Parse
         public const string CssLineHeight = "(normal|" + CssNumber + "|" + CssLength + "|" + CssPercentage + ")";
 
         /// <summary>
-        /// Extracts font-family values
-        /// </summary>
-        public const string CssFontFamily = "(\"[^\"]*\"|'[^']*'|\\S+\\s*)(\\s*\\,\\s*(\"[^\"]*\"|'[^']*'|\\S+))*";
-
-        /// <summary>
         /// Extracts CSS font-styles; e.g. normal italic oblique
         /// </summary>
         public const string CssFontStyle = "(normal|italic|oblique)";
@@ -77,7 +59,7 @@ namespace PeachPDF.Html.Core.Parse
         public const string CssFontWeight = "(normal|bold|bolder|lighter|100|200|300|400|500|600|700|800|900)";
 
         /// <summary>
-        /// Exracts font sizes: xx-small, larger, small, 34pt, 30%, 2em
+        /// Extracts font sizes: xx-small, larger, small, 34pt, 30%, 2em
         /// </summary>
         public const string CssFontSize = "(" + CssLength + "|" + CssPercentage + "|xx-small|x-small|small|medium|large|x-large|xx-large|larger|smaller)";
 
@@ -90,48 +72,8 @@ namespace PeachPDF.Html.Core.Parse
         /// <summary>
         /// the regexes cache that is used by the parser so not to create regex each time
         /// </summary>
-        private static readonly Dictionary<string, Regex> _regexes = new Dictionary<string, Regex>();
+        private static readonly Dictionary<string, Regex> _regexes = new();
 
-        #endregion
-
-
-        /// <summary>
-        /// Get CSS at rule from the given stylesheet.
-        /// </summary>
-        /// <param name="stylesheet">the stylesheet data to retrieve the rule from</param>
-        /// <param name="startIdx">the index to start the search for the rule, on return will be the value of the end of the found rule</param>
-        /// <returns>the found at rule or null if not exists</returns>
-        public static string GetCssAtRules(string stylesheet, ref int startIdx)
-        {
-            startIdx = stylesheet.IndexOf('@', startIdx);
-            if (startIdx > -1)
-            {
-                int count = 1;
-                int endIdx = stylesheet.IndexOf('{', startIdx);
-                if (endIdx > -1)
-                {
-                    while (count > 0 && endIdx < stylesheet.Length)
-                    {
-                        endIdx++;
-                        if (stylesheet[endIdx] == '{')
-                        {
-                            count++;
-                        }
-                        else if (stylesheet[endIdx] == '}')
-                        {
-                            count--;
-                        }
-                    }
-                    if (endIdx < stylesheet.Length)
-                    {
-                        var atrule = stylesheet.Substring(startIdx, endIdx - startIdx + 1);
-                        startIdx = endIdx;
-                        return atrule;
-                    }
-                }
-            }
-            return null;
-        }
 
         /// <summary>
         /// Extracts matches from the specified source
@@ -211,11 +153,10 @@ namespace PeachPDF.Html.Core.Parse
         /// <returns>the regex instance</returns>
         private static Regex GetRegex(string regex)
         {
-            if (!_regexes.TryGetValue(regex, out Regex r))
-            {
-                r = new Regex(regex, RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
-                _regexes[regex] = r;
-            }
+            if (_regexes.TryGetValue(regex, out var r)) return r;
+            
+            r = new Regex(regex, RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
+            _regexes[regex] = r;
 
             return r;
         }
