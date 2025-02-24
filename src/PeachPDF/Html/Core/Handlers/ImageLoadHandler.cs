@@ -15,9 +15,7 @@ using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Utils;
 using SixLabors.ImageSharp;
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Handlers
@@ -110,8 +108,8 @@ namespace PeachPDF.Html.Core.Handlers
             }
             catch (Exception ex)
             {
-                _htmlContainer.ReportError(HtmlRenderErrorType.Image, "Exception in handling image source", ex);
                 ImageLoadComplete();
+                _htmlContainer.ReportError(HtmlRenderErrorType.Image, "Exception in handling image source", ex);
             }
         }
 
@@ -155,15 +153,15 @@ namespace PeachPDF.Html.Core.Handlers
             }
             else
             {
-                var fileInfo = CommonUtils.TryGetFileInfo(uri.AbsolutePath);
+                var fileInfo = CommonUtils.TryGetFileInfo(path);
                 if (fileInfo != null)
                 {
                     SetImageFromFile(fileInfo);
                 }
                 else
                 {
-                    _htmlContainer.ReportError(HtmlRenderErrorType.Image, "Failed load image, invalid source: " + path);
                     ImageLoadComplete();
+                    _htmlContainer.ReportError(HtmlRenderErrorType.Image, "Failed load image, invalid source: " + path);
                 }
             }
         }
@@ -206,8 +204,8 @@ namespace PeachPDF.Html.Core.Handlers
             }
             catch (Exception ex)
             {
-                _htmlContainer.ReportError(HtmlRenderErrorType.Image, "Failed to load image from disk: " + source, ex);
                 ImageLoadComplete();
+                _htmlContainer.ReportError(HtmlRenderErrorType.Image, "Failed to load image from disk: " + source, ex);
             }
         }
 
