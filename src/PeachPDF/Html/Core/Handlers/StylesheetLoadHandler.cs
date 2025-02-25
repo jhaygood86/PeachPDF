@@ -15,6 +15,7 @@ using PeachPDF.Html.Core.Utils;
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using PeachPDF.Network;
 
 namespace PeachPDF.Html.Core.Handlers
 {
@@ -41,8 +42,8 @@ namespace PeachPDF.Html.Core.Handlers
                     baseUrl = baseElement.HtmlTag.TryGetAttribute("href", "");
                 }
 
-                var baseUri = string.IsNullOrWhiteSpace(baseUrl) ? htmlContainer.Adapter.BaseUri : new Uri(baseUrl);
-                var href = baseUri is null ? src : new Uri(baseUri, src).AbsoluteUri;
+                var baseUri = string.IsNullOrWhiteSpace(baseUrl) ? htmlContainer.Adapter.BaseUri : new RUri(baseUrl);
+                var href = baseUri is null ? src : new RUri(baseUri, src).AbsoluteUri;
 
                 var uri = CommonUtils.TryGetUri(href);
 

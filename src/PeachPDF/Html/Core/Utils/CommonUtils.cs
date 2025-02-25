@@ -17,6 +17,7 @@ using System.IO;
 using System.Net;
 using System.Text;
 using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.Network;
 
 namespace PeachPDF.Html.Core.Utils
 {
@@ -141,13 +142,13 @@ namespace PeachPDF.Html.Core.Utils
         /// </summary>
         /// <param name="path">the path to get uri for</param>
         /// <returns>uri or null if not valid</returns>
-        public static Uri TryGetUri(string path)
+        public static RUri TryGetUri(string path)
         {
             try
             {
                 if (Uri.IsWellFormedUriString(path, UriKind.RelativeOrAbsolute))
                 {
-                    return new Uri(path);
+                    return new RUri(path);
                 }
             }
             catch
@@ -211,7 +212,7 @@ namespace PeachPDF.Html.Core.Utils
         /// </summary>
         /// <param name="imageUri">The online image uri.</param>
         /// <returns>The path of the file on the disk.</returns>
-        public static FileInfo GetLocalfileName(Uri imageUri)
+        public static FileInfo GetLocalfileName(RUri imageUri)
         {
             StringBuilder fileNameBuilder = new();
             string absoluteUri = imageUri.AbsoluteUri;

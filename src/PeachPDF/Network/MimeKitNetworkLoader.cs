@@ -13,7 +13,7 @@ namespace PeachPDF.Network
         private readonly Task<MimeMessage> _messageTask;
         private MimeMessage? _message = null;
 
-        public override Uri? BaseUri => null;
+        public override RUri? BaseUri => null;
 
         public MimeKitNetworkLoader(Stream stream)
         {
@@ -28,7 +28,7 @@ namespace PeachPDF.Network
             return _message.HtmlBody;
         }
 
-        public override async Task<Stream?> GetResourceStream(Uri uri)
+        public override async Task<Stream?> GetResourceStream(RUri uri)
         {
             _message ??= await _messageTask;
 
@@ -36,7 +36,7 @@ namespace PeachPDF.Network
 
             part = _message.BodyParts
                 .OfType<MimePart>()
-                .FirstOrDefault(x => x.ContentLocation == uri || x.Headers["Content-Location"] == uri.OriginalString);
+                .FirstOrDefault(x => x.ContentLocation == uri.Uri || x.Headers["Content-Location"] == uri.OriginalString);
 
             return part?.Content.Open();
         }

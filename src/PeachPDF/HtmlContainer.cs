@@ -19,6 +19,7 @@ using PeachPDF.Utilities;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using PeachPDF.Network;
 
 namespace PeachPDF
 {
@@ -172,11 +173,11 @@ namespace PeachPDF
                 baseUrl = baseElement.HtmlTag.TryGetAttribute("href", "");
             }
 
-            var baseUri = string.IsNullOrWhiteSpace(baseUrl) ? HtmlContainerInt.Adapter.BaseUri : new Uri(baseUrl);
+            var baseUri = string.IsNullOrWhiteSpace(baseUrl) ? HtmlContainerInt.Adapter.BaseUri : new RUri(baseUrl);
 
             foreach (var link in HtmlContainerInt.GetLinks())
             {
-                var href = link.Href.StartsWith('#') || baseUri is null ? link.Href : new Uri(baseUri, link.Href).AbsoluteUri;
+                var href = link.Href.StartsWith('#') || baseUri is null ? link.Href : new RUri(baseUri, link.Href).AbsoluteUri;
                 linkElements.Add(new LinkElementData<XRect>(link.Id, href, Utils.Convert(link.Rectangle, PixelsPerPoint)));
             }
 

@@ -63,7 +63,7 @@ namespace PeachPDF.Adapters
 
         public RNetworkLoader NetworkLoader { get; set;  } = new DataUriNetworkLoader();
 
-        public override Uri? BaseUri => NetworkLoader.BaseUri;
+        public override RUri? BaseUri => NetworkLoader.BaseUri;
 
         /// <summary>
         /// the amount of pixels per point
@@ -72,7 +72,7 @@ namespace PeachPDF.Adapters
 
         internal FontResolver FontResolver => _fontResolver;
 
-        public override async Task<Stream?> GetResourceStream(Uri uri)
+        public override async Task<Stream?> GetResourceStream(RUri uri)
         {
             if (!uri.IsAbsoluteUri || uri.Scheme is not "data") return await NetworkLoader.GetResourceStream(uri);
 

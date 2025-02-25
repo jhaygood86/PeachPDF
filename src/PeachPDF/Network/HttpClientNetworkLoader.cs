@@ -9,16 +9,16 @@ namespace PeachPDF.Network
 {
     public class HttpClientNetworkLoader(HttpClient httpClient, Uri? primaryContentsUri) : RNetworkLoader
     {
-        public override Uri? BaseUri => primaryContentsUri;
+        public override RUri? BaseUri => primaryContentsUri != null ? new RUri(primaryContentsUri) : null;
 
         public override async Task<string> GetPrimaryContents()
         {
-            if (primaryContentsUri is null)
+            if (BaseUri is null)
             {
                 throw new InvalidOperationException("Primary contents URL is not set.");
             }
 
-            var stream = await GetResourceStream(primaryContentsUri);
+            var stream = await GetResourceStream(BaseUri);
 
             if (stream is null)
             {
@@ -29,9 +29,9 @@ namespace PeachPDF.Network
             return await streamReader.ReadToEndAsync();
         }
 
-        public override async Task<Stream?> GetResourceStream(Uri uri)
+        public override async Task<Stream?> GetResourceStream(RUri uri)
         {
-            var response = await httpClient.GetAsync(uri);
+            var response = await httpClient.GetAsync(uri.Uri);
 
             if (!response.IsSuccessStatusCode)
             {

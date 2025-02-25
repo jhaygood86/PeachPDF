@@ -16,6 +16,7 @@ using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Utils;
+using PeachPDF.Network;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -86,7 +87,7 @@ namespace PeachPDF.Html.Adapters
         /// </summary>
         public async Task<CssData> GetDefaultCssData() => _defaultCssData ??= await CssData.Parse(this, CssDefaults.DefaultStyleSheet, false);
 
-        public abstract Uri? BaseUri { get; }
+        public abstract RUri? BaseUri { get; }
 
         public void ClearFontCache() => _fontsHandler.ClearCache();
 
@@ -184,7 +185,7 @@ namespace PeachPDF.Html.Adapters
 
         public async Task AddFontFamilyFromUrl(string fontFamilyName, string url, string? format)
         {
-            var resourceStream = await GetResourceStream(new Uri(url));
+            var resourceStream = await GetResourceStream(new RUri(url));
 
             if (resourceStream is not null)
             {
@@ -279,7 +280,7 @@ namespace PeachPDF.Html.Adapters
         /// </summary>
         /// <param name="uri">Uri to load</param>
         /// <returns>The stream of the contents</returns>
-        public abstract Task<Stream?> GetResourceStream(Uri uri);
+        public abstract Task<Stream?> GetResourceStream(RUri uri);
 
         #region Private/Protected methods
 

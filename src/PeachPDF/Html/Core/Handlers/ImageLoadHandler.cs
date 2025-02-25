@@ -17,6 +17,7 @@ using SixLabors.ImageSharp;
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using PeachPDF.Network;
 
 namespace PeachPDF.Html.Core.Handlers
 {
@@ -131,7 +132,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// <param name="path">the file path or uri to load image from</param>
         private async ValueTask SetImageFromPath(string path)
         {
-            var uri = new Uri(path, UriKind.RelativeOrAbsolute);
+            var uri = new RUri(path, UriKind.RelativeOrAbsolute);
 
             if (!uri.IsAbsoluteUri)
             {
@@ -143,8 +144,8 @@ namespace PeachPDF.Html.Core.Handlers
                     baseUrl = baseElement.HtmlTag.TryGetAttribute("href", "");
                 }
 
-                var baseUri = string.IsNullOrWhiteSpace(baseUrl) ? _htmlContainer.Adapter.BaseUri : new Uri(baseUrl);
-                uri = baseUri is null ? uri : new Uri(baseUri, uri);
+                var baseUri = string.IsNullOrWhiteSpace(baseUrl) ? _htmlContainer.Adapter.BaseUri : new RUri(baseUrl);
+                uri = baseUri is null ? uri : new RUri(baseUri, uri);
             }
 
             if (!uri.IsAbsoluteUri || uri.Scheme != "file")
@@ -228,7 +229,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// Create local file name in temp folder from the URI, if the file already exists use it as it has already been downloaded.
         /// If not download the file.
         /// </summary>
-        private async ValueTask SetImageFromUrl(Uri source)
+        private async ValueTask SetImageFromUrl(RUri source)
         {
             if (source.IsAbsoluteUri && source.IsFile)
             {
