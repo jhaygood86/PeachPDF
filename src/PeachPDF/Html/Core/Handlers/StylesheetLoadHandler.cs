@@ -39,19 +39,19 @@ namespace PeachPDF.Html.Core.Handlers
 
                 if (baseElement is not null)
                 {
-                    baseUrl = baseElement.HtmlTag.TryGetAttribute("href", "");
+                    baseUrl = baseElement.HtmlTag!.TryGetAttribute("href", "");
                 }
 
                 var baseUri = string.IsNullOrWhiteSpace(baseUrl) ? htmlContainer.Adapter.BaseUri : new RUri(baseUrl);
                 var href = baseUri is null ? src : new RUri(baseUri, src).AbsoluteUri;
 
-                var uri = CommonUtils.TryGetUri(href);
+                var uri = CommonUtils.TryGetUri(href)!;
 
-                Stream stream = null;
+                Stream? stream = null;
 
                 if (uri.IsFile)
                 {
-                    var fileInfo = CommonUtils.TryGetFileInfo(uri.AbsoluteUri);
+                    var fileInfo = CommonUtils.TryGetFileInfo(uri.AbsoluteUri)!;
 
                     if (fileInfo.Exists)
                     {

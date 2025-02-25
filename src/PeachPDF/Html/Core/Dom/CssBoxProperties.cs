@@ -10,6 +10,8 @@
 // - Sun Tsu,
 // "The Art of War"
 
+#nullable enable
+
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Entities;
@@ -38,7 +40,7 @@ namespace PeachPDF.Html.Core.Dom
         private string _borderRightColor = "black";
         private string _borderBottomColor = "black";
         private string _borderLeftColor = "black";
-        private string _bottom;
+        private string? _bottom;
         private string _color = "black";
         private string _cornerRadius = "0";
         private string _fontSize = "medium";
@@ -46,7 +48,7 @@ namespace PeachPDF.Html.Core.Dom
         private string _paddingBottom = "0";
         private string _paddingRight = "0";
         private string _paddingTop = "0";
-        private string _right;
+        private string? _right;
         private string _textIndent = "0";
         private string _wordSpacing = "normal";
 
@@ -88,7 +90,7 @@ namespace PeachPDF.Html.Core.Dom
         private RColor _actualBorderBottomColor = RColor.Empty;
         private RColor _actualBorderRightColor = RColor.Empty;
         private RColor _actualBackgroundColor = RColor.Empty;
-        private RFont _actualFont;
+        private RFont? _actualFont;
         private string _display = "inline";
 
         #endregion
@@ -187,7 +189,7 @@ namespace PeachPDF.Html.Core.Dom
         public string BorderSpacing { get; set; } = "0";
 
         public string BorderCollapse { get; set; } = "separate";
-        public string BoxSizing { get; set; }
+        public string BoxSizing { get; set; } = CssConstants.ContentBox;
 
         public string CornerRadius
         {
@@ -319,7 +321,7 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        public string Content { get; set; } = "normal";
+        public string? Content { get; set; } = "normal";
 
         public string Display
         {
@@ -393,7 +395,7 @@ namespace PeachPDF.Html.Core.Dom
 
         public string WordBreak { get; set; } = "normal";
 
-        public string FontFamily { get; set; }
+        public string? FontFamily { get; set; }
 
         public string FontSize
         {
@@ -413,7 +415,7 @@ namespace PeachPDF.Html.Core.Dom
                     }
                     else if (len.Unit == CssUnit.Ems && GetParent() != null)
                     {
-                        computedValue = len.ConvertEmToPoints(GetParent().ActualFont.Size).ToString();
+                        computedValue = len.ConvertEmToPoints(GetParent()!.ActualFont.Size).ToString();
                     }
                     else
                     {
@@ -794,8 +796,6 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        protected abstract RPoint GetActualLocation(string X, string Y);
-
         protected abstract RColor GetActualColor(string colorStr);
 
         /// <summary>
@@ -978,11 +978,6 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Gets the actual font of the parent
-        /// </summary>
-        public RFont ActualParentFont => GetParent() == null ? ActualFont : GetParent().ActualFont;
-
-        /// <summary>
         /// Gets the font that should be actually used to paint the text of the box
         /// </summary>
         public RFont ActualFont
@@ -1017,7 +1012,7 @@ namespace PeachPDF.Html.Core.Dom
                 double parentSize = CssConstants.FontSize;
 
                 if (GetParent() != null)
-                    parentSize = GetParent().ActualFont.Size;
+                    parentSize = GetParent()!.ActualFont.Size;
 
                 fsize = FontSize switch
                 {
@@ -1040,11 +1035,11 @@ namespace PeachPDF.Html.Core.Dom
 
                 _actualFont = GetCachedFont(FontFamily, fsize, st) ?? GetCachedFont(CssConstants.DefaultFont, fsize, st);
 
-                return _actualFont;
+                return _actualFont!;
             }
         }
 
-        protected abstract RFont GetCachedFont(string fontFamily, double fsize, RFontStyle st);
+        protected abstract RFont? GetCachedFont(string fontFamily, double fsize, RFontStyle st);
 
         /// <summary>
         /// Gets the line height
@@ -1120,7 +1115,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Get the parent of this css properties instance.
         /// </summary>
         /// <returns></returns>
-        protected abstract CssBoxProperties GetParent();
+        protected abstract CssBoxProperties? GetParent();
 
         /// <summary>
         /// Gets the height of the font in the specified units
@@ -1152,7 +1147,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="style">optional: the style to set</param>
         /// <param name="width">optional: the width to set</param>
         /// <param name="color">optional: the color to set</param>
-        protected void SetAllBorders(string style = null, string width = null, string color = null)
+        protected void SetAllBorders(string? style = null, string? width = null, string? color = null)
         {
             if (style != null)
                 BorderLeftStyle = BorderTopStyle = BorderRightStyle = BorderBottomStyle = style;
@@ -1173,7 +1168,7 @@ namespace PeachPDF.Html.Core.Dom
             if (WordSpacing == CssConstants.Normal) return;
 
             var len = RegexParserUtils.Search(RegexParserUtils.CssLengthRegex(), WordSpacing);
-            _actualWordSpacing += CssValueParser.ParseLength(len, 1, this);
+            _actualWordSpacing += CssValueParser.ParseLength(len!, 1, this);
         }
 
         /// <summary>
@@ -1181,7 +1176,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         /// <param name="everything">Set to true to inherit all CSS properties instead of only the ineritables</param>
         /// <param name="p">Box to inherit the properties</param>
-        protected void InheritStyle(CssBox p, bool everything)
+        protected void InheritStyle(CssBox? p, bool everything)
         {
             if (p == null) return;
 

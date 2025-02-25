@@ -61,16 +61,6 @@ namespace PeachPDF.Html.Adapters
         /// </summary>
         private CssData? _defaultCssData;
 
-        /// <summary>
-        /// image used to draw loading image icon
-        /// </summary>
-        private RImage? _loadImage;
-
-        /// <summary>
-        /// image used to draw error image icon
-        /// </summary>
-        private RImage? _errorImage;
-
         #endregion
 
 
@@ -217,35 +207,9 @@ namespace PeachPDF.Html.Adapters
         /// <param name="size">font size</param>
         /// <param name="style">font style</param>
         /// <returns>font instance</returns>
-        public RFont GetFont(string family, double size, RFontStyle style)
+        public RFont? GetFont(string family, double size, RFontStyle style)
         {
             return _fontsHandler.GetCachedFont(family, size, style);
-        }
-
-        /// <summary>
-        /// Get image to be used while HTML image is loading.
-        /// </summary>
-        public RImage? GetLoadingImage()
-        {
-            if (_loadImage != null) return _loadImage;
-
-            var stream = typeof(HtmlRendererUtils).Assembly.GetManifestResourceStream("PeachPDF.Html.Core.Utils.ImageLoad.png");
-            if (stream != null)
-                _loadImage = ImageFromStream(stream);
-            return _loadImage;
-        }
-
-        /// <summary>
-        /// Get image to be used if HTML image load failed.
-        /// </summary>
-        public RImage? GetLoadingFailedImage()
-        {
-            if (_errorImage != null) return _errorImage;
-
-            var stream = typeof(HtmlRendererUtils).Assembly.GetManifestResourceStream("PeachPDF.Html.Core.Utils.ImageError.png");
-            if (stream != null)
-                _errorImage = ImageFromStream(stream);
-            return _errorImage;
         }
 
         /// <summary>

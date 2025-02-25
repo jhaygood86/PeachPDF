@@ -84,7 +84,7 @@ namespace PeachPDF.Html.Core
             return styleRules.Where(rule => DoesSelectorMatch(rule.Selector, box));
         }
 
-        private static bool DoesSelectorMatch(ISelector selector, CssBox box)
+        private static bool DoesSelectorMatch(ISelector selector, CssBox? box)
         {
             return selector switch
             {
@@ -104,24 +104,24 @@ namespace PeachPDF.Html.Core
                 _ => false
             };
         }
-        private static bool DoesSelectorMatch(ListSelector listSelector, CssBox box)
+        private static bool DoesSelectorMatch(ListSelector listSelector, CssBox? box)
         {
             return listSelector.Any(selector => DoesSelectorMatch(selector, box));
         }
 
-        private static bool DoesSelectorMatch(CompoundSelector compoundSelector, CssBox box)
+        private static bool DoesSelectorMatch(CompoundSelector compoundSelector, CssBox? box)
         {
             return compoundSelector.All(selector => DoesSelectorMatch(selector, box));
         }
 
-        private static bool DoesSelectorMatch(TypeSelector typeSelector, CssBox box)
+        private static bool DoesSelectorMatch(TypeSelector typeSelector, CssBox? box)
         {
-            return box.HtmlTag is not null && typeSelector.Name.Equals(box.HtmlTag.Name, StringComparison.InvariantCultureIgnoreCase);
+            return box?.HtmlTag is not null && typeSelector.Name.Equals(box.HtmlTag.Name, StringComparison.InvariantCultureIgnoreCase);
         }
 
-        private static bool DoesSelectorMatch(ClassSelector classSelector, CssBox box)
+        private static bool DoesSelectorMatch(ClassSelector classSelector, CssBox? box)
         {
-            if (box.HtmlTag is not null && box.HtmlTag.Attributes.TryGetValue("class", out var classNames))
+            if (box?.HtmlTag?.Attributes is not null && box.HtmlTag.Attributes.TryGetValue("class", out var classNames))
             {
                 return classNames.Split(' ').Any(className =>
                     className.Equals(classSelector.Class, StringComparison.InvariantCultureIgnoreCase));
@@ -130,9 +130,9 @@ namespace PeachPDF.Html.Core
             return false;
         }
 
-        private static bool DoesSelectorMatch(IdSelector idSelector, CssBox box)
+        private static bool DoesSelectorMatch(IdSelector idSelector, CssBox? box)
         {
-            if (box.HtmlTag is not null && box.HtmlTag.Attributes.TryGetValue("id", out var id))
+            if (box?.HtmlTag?.Attributes is not null && box.HtmlTag.Attributes.TryGetValue("id", out var id))
             {
                 return id.Equals(idSelector.Id, StringComparison.InvariantCultureIgnoreCase);
             }
@@ -140,9 +140,9 @@ namespace PeachPDF.Html.Core
             return false;
         }
 
-        private static bool DoesSelectorMatch(AttrAvailableSelector attrAvailableSelector, CssBox box)
+        private static bool DoesSelectorMatch(AttrAvailableSelector attrAvailableSelector, CssBox? box)
         {
-            if (box.HtmlTag is null)
+            if (box?.HtmlTag?.Attributes is null)
             {
                 return false;
             }
@@ -158,9 +158,9 @@ namespace PeachPDF.Html.Core
             return false;
         }
 
-        private static bool DoesSelectorMatch(AttrMatchSelector attrMatchSelector, CssBox box)
+        private static bool DoesSelectorMatch(AttrMatchSelector attrMatchSelector, CssBox? box)
         {
-            if (box.HtmlTag is null)
+            if (box?.HtmlTag?.Attributes is null)
             {
                 return false;
             }
@@ -219,13 +219,14 @@ namespace PeachPDF.Html.Core
             return pseudoClassSelector.Class == "link" && box.IsClickable;
         }
 
-        private static bool DoesSelectorMatch(ComplexSelector complexSelector, CssBox box)
+        private static bool DoesSelectorMatch(ComplexSelector complexSelector, CssBox? box)
         {
-            var currentLevel = box;
             var selectorsInReverse = complexSelector.Reverse();
 
             var isLowestItem = true;
             var isMatch = false;
+
+            var currentLevel = box;
 
             foreach (var selector in selectorsInReverse)
             {

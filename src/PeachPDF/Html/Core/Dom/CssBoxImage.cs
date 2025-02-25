@@ -24,8 +24,6 @@ namespace PeachPDF.Html.Core.Dom
     /// </summary>
     internal sealed class CssBoxImage : CssBox
     {
-        #region Fields and Consts
-
         /// <summary>
         /// the image word of this image box
         /// </summary>
@@ -34,22 +32,14 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// handler used for image loading by source
         /// </summary>
-        private ImageLoadHandler _imageLoadHandler;
-
-        /// <summary>
-        /// is image load is finished, used to know if no image is found
-        /// </summary>
-        private bool _imageLoadingComplete;
-
-        #endregion
-
+        private ImageLoadHandler? _imageLoadHandler;
 
         /// <summary>
         /// Init.
         /// </summary>
         /// <param name="parent">the parent box of this box</param>
         /// <param name="tag">the html tag data of this box</param>
-        public CssBoxImage(CssBox parent, HtmlTag tag)
+        public CssBoxImage(CssBox? parent, HtmlTag tag)
             : base(parent, tag)
         {
             _imageWord = new CssRectImage(this);
@@ -59,7 +49,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Get the image of this image box.
         /// </summary>
-        public RImage Image => _imageWord.Image;
+        public RImage? Image => _imageWord.Image;
 
         public string ImageSource => GetAttribute("src");
 
@@ -72,7 +62,7 @@ namespace PeachPDF.Html.Core.Dom
             // load image if it is in visible rectangle
             if (_imageLoadHandler == null)
             {
-                _imageLoadHandler = new ImageLoadHandler(HtmlContainer);
+                _imageLoadHandler = new ImageLoadHandler(HtmlContainer!);
                 await _imageLoadHandler.LoadImage(ImageSource);
                 OnLoadImageComplete(_imageLoadHandler.Image);
             }
@@ -81,7 +71,7 @@ namespace PeachPDF.Html.Core.Dom
             var offset = RPoint.Empty;
 
             if (!IsFixed)
-                offset = HtmlContainer.ScrollOffset;
+                offset = HtmlContainer!.ScrollOffset;
 
             rect.Offset(offset);
 
@@ -104,21 +94,6 @@ namespace PeachPDF.Html.Core.Dom
                     g.DrawImage(_imageWord.Image, r);
                 }
             }
-            else if (_imageLoadingComplete)
-            {
-                if (_imageLoadingComplete && r is { Width: > 19, Height: > 19 })
-                {
-                    RenderUtils.DrawImageErrorIcon(g, HtmlContainer, r);
-                }
-            }
-            else
-            {
-                RenderUtils.DrawImageLoadingIcon(g, HtmlContainer, r);
-                if (r is { Width: > 19, Height: > 19 })
-                {
-                    g.DrawRectangle(g.GetPen(RColor.LightGray), r.X, r.Y, r.Width, r.Height);
-                }
-            }
 
             if (clipped)
                 g.PopClip();
@@ -134,7 +109,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (_imageLoadHandler == null)
                 {
-                    _imageLoadHandler = new ImageLoadHandler(HtmlContainer);
+                    _imageLoadHandler = new ImageLoadHandler(HtmlContainer!);
 
                     if (this.Content != null && this.Content != CssConstants.Normal)
                         await _imageLoadHandler.LoadImage(this.Content);
@@ -160,20 +135,14 @@ namespace PeachPDF.Html.Core.Dom
             base.Dispose();
         }
 
-
-        #region Private methods
-
         /// <summary>
         /// On image load process is complete with image or without update the image box.
         /// </summary>
         /// <param name="image">the image loaded or null if failed</param>
-        private void OnLoadImageComplete(RImage image)
+        private void OnLoadImageComplete(RImage? image)
         {
             _imageWord.Image = image;
-            _imageLoadingComplete = true;
             _wordsSizeMeasured = false;
         }
-
-        #endregion
     }
 }

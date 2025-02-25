@@ -40,7 +40,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         /// <param name="parent">the parent box of this box</param>
         /// <param name="tag">the html tag data of this box</param>
-        public CssBoxFrame(CssBox parent, HtmlTag tag)
+        public CssBoxFrame(CssBox? parent, HtmlTag tag)
             : base(parent, tag)
         {
             _imageWord = new CssRectImage(this);

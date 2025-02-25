@@ -99,7 +99,7 @@ namespace PeachPDF.Html.Core.Handlers
             if (borderPath != null)
             {
                 // rounded border need special path
-                Object prevMode = null;
+                Object? prevMode = null;
                 if (box.HtmlContainer is { AvoidGeometryAntialias: false } && box.IsRounded)
                     prevMode = g.SetAntiAliasSmoothingMode();
 
@@ -199,9 +199,9 @@ namespace PeachPDF.Html.Core.Handlers
         /// <param name="b">Box which the border corresponds</param>
         /// <param name="r">the rectangle the border is enclosing</param>
         /// <returns>Beveled border path, null if there is no rounded corners</returns>
-        private static RGraphicsPath GetRoundedBorderPath(RGraphics g, Border border, CssBox b, RRect r)
+        private static RGraphicsPath? GetRoundedBorderPath(RGraphics g, Border border, CssBox b, RRect r)
         {
-            RGraphicsPath path = null;
+            RGraphicsPath? path = null;
             switch (border)
             {
                 case Border.Top:

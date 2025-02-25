@@ -10,30 +10,21 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.Network;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using System.Net;
 using System.Text;
-using PeachPDF.Html.Adapters.Entities;
-using PeachPDF.Network;
 
 namespace PeachPDF.Html.Core.Utils
 {
-    internal delegate void ActionInt<in T>(T obj);
-
-    internal delegate void ActionInt<in T1, in T2>(T1 arg1, T2 arg2);
-
-    internal delegate void ActionInt<in T1, in T2, in T3>(T1 arg1, T2 arg2, T3 arg3);
-
     /// <summary>
     /// Utility methods for general stuff.
     /// </summary>
     internal static class CommonUtils
     {
-        #region Fields and Consts
-
         /// <summary>
         /// Table to convert numbers into roman digits
         /// </summary>
@@ -69,22 +60,20 @@ namespace PeachPDF.Html.Core.Utils
             { "Ճ", "Մ", "Յ", "Ն", "Շ", "Ո", "Չ", "Պ", "Ջ" }
         };
 
-        private static readonly string[] _hiraganaDigitsTable = new[]
-        {
+        private static readonly string[] _hiraganaDigitsTable =
+        [
             "あ", "ぃ", "ぅ", "ぇ", "ぉ", "か", "き", "く", "け", "こ", "さ", "し", "す", "せ", "そ", "た", "ち", "つ", "て", "と", "な", "に", "ぬ", "ね", "の", "は", "ひ", "ふ", "へ", "ほ", "ま", "み", "む", "め", "も", "ゃ", "ゅ", "ょ", "ら", "り", "る", "れ", "ろ", "ゎ", "ゐ", "ゑ", "を", "ん"
-        };
+        ];
 
-        private static readonly string[] _satakanaDigitsTable = new[]
-        {
+        private static readonly string[] _satakanaDigitsTable =
+        [
             "ア", "イ", "ウ", "エ", "オ", "カ", "キ", "ク", "ケ", "コ", "サ", "シ", "ス", "セ", "ソ", "タ", "チ", "ツ", "テ", "ト", "ナ", "ニ", "ヌ", "ネ", "ノ", "ハ", "ヒ", "フ", "ヘ", "ホ", "マ", "ミ", "ム", "メ", "モ", "ヤ", "ユ", "ヨ", "ラ", "リ", "ル", "レ", "ロ", "ワ", "ヰ", "ヱ", "ヲ", "ン"
-        };
+        ];
 
         /// <summary>
         /// the temp path to use for local files
         /// </summary>
-        public static String _tempPath;
-
-        #endregion
+        public static string? _tempPath;
 
 
         /// <summary>
@@ -92,7 +81,7 @@ namespace PeachPDF.Html.Core.Utils
         /// </summary>
         /// <param name="ch">the character to check</param>
         /// <returns>true - Asian char, false - otherwise</returns>
-        public static bool IsAsianCharecter(char ch)
+        public static bool IsAsianCharacter(char ch)
         {
             return ch >= 0x4e00 && ch <= 0xFA2D;
         }
@@ -105,7 +94,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <returns>true - is digit, false - not a digit</returns>
         public static bool IsDigit(char ch, bool hex = false)
         {
-            return (ch >= '0' && ch <= '9') || (hex && ((ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F')));
+            return ch is >= '0' and <= '9' || (hex && ch is >= 'a' and <= 'f' or >= 'A' and <= 'F');
         }
 
         /// <summary>
@@ -116,17 +105,17 @@ namespace PeachPDF.Html.Core.Utils
         /// <returns>true - is digit, false - not a digit</returns>
         public static int ToDigit(char ch, bool hex = false)
         {
-            if (ch >= '0' && ch <= '9')
+            if (ch is >= '0' and <= '9')
                 return ch - '0';
-            else if (hex)
-            {
-                if (ch >= 'a' && ch <= 'f')
-                    return ch - 'a' + 10;
-                else if (ch >= 'A' && ch <= 'F')
-                    return ch - 'A' + 10;
-            }
 
-            return 0;
+            if (!hex) return 0;
+
+            return ch switch
+            {
+                >= 'a' and <= 'f' => ch - 'a' + 10,
+                >= 'A' and <= 'F' => ch - 'A' + 10,
+                _ => 0
+            };
         }
 
         /// <summary>
@@ -142,7 +131,7 @@ namespace PeachPDF.Html.Core.Utils
         /// </summary>
         /// <param name="path">the path to get uri for</param>
         /// <returns>uri or null if not valid</returns>
-        public static RUri TryGetUri(string path)
+        public static RUri? TryGetUri(string path)
         {
             try
             {
@@ -165,13 +154,13 @@ namespace PeachPDF.Html.Core.Utils
         /// <param name="dic">the dictionary</param>
         /// <param name="defaultValue">optional: the default value to return of no elements found in dictionary </param>
         /// <returns>first element or default value</returns>
-        public static TValue GetFirstValueOrDefault<TKey, TValue>(IDictionary<TKey, TValue> dic, TValue defaultValue = default(TValue))
+        public static TValue? GetFirstValueOrDefault<TKey, TValue>(IDictionary<TKey, TValue>? dic, TValue? defaultValue = default)
         {
-            if (dic != null)
-            {
-                foreach (var value in dic)
-                    return value.Value;
-            }
+            if (dic == null) return defaultValue;
+
+            foreach (var value in dic)
+                return value.Value;
+
             return defaultValue;
         }
 
@@ -180,7 +169,7 @@ namespace PeachPDF.Html.Core.Utils
         /// </summary>
         /// <param name="path">the path to get file info for</param>
         /// <returns>file info or null if not valid</returns>
-        public static FileInfo TryGetFileInfo(string path)
+        public static FileInfo? TryGetFileInfo(string path)
         {
             try
             {
@@ -193,26 +182,11 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         /// <summary>
-        /// Get web client response content type.
-        /// </summary>
-        /// <param name="client">the web client to get the response content type from</param>
-        /// <returns>response content type or null</returns>
-        public static string GetResponseContentType(WebClient client)
-        {
-            foreach (string header in client.ResponseHeaders)
-            {
-                if (header.Equals("Content-Type", StringComparison.InvariantCultureIgnoreCase))
-                    return client.ResponseHeaders[header];
-            }
-            return null;
-        }
-
-        /// <summary>
         /// Gets the representation of the online uri on the local disk.
         /// </summary>
         /// <param name="imageUri">The online image uri.</param>
         /// <returns>The path of the file on the disk.</returns>
-        public static FileInfo GetLocalfileName(RUri imageUri)
+        public static FileInfo? GetLocalFileName(RUri imageUri)
         {
             StringBuilder fileNameBuilder = new();
             string absoluteUri = imageUri.AbsoluteUri;
@@ -234,8 +208,8 @@ namespace PeachPDF.Html.Core.Utils
                 int indexOfDot = restOfUri.IndexOf('.');
                 if (indexOfDot > -1)
                 {
-                    ext = restOfUri.Substring(indexOfDot);
-                    restOfUri = restOfUri.Substring(0, indexOfDot);
+                    ext = restOfUri[indexOfDot..];
+                    restOfUri = restOfUri[..indexOfDot];
                 }
 
                 fileNameBuilder.Append(restOfUri);
@@ -264,15 +238,14 @@ namespace PeachPDF.Html.Core.Utils
             var validFileName = GetValidFileName(fileNameBuilder.ToString());
             if (validFileName.Length > 25)
             {
-                validFileName = validFileName.Substring(0, 24) + validFileName.Substring(24).GetHashCode() + Path.GetExtension(validFileName);
+                validFileName = validFileName[..24] + validFileName[24..].GetHashCode() + Path.GetExtension(validFileName);
             }
 
-            if (_tempPath == null)
-            {
-                _tempPath = Path.Combine(Path.GetTempPath(), "HtmlRenderer");
-                if (!Directory.Exists(_tempPath))
-                    Directory.CreateDirectory(_tempPath);
-            }
+            if (_tempPath != null) return new FileInfo(Path.Combine(_tempPath, validFileName));
+            
+            _tempPath = Path.Combine(Path.GetTempPath(), "HtmlRenderer");
+            if (!Directory.Exists(_tempPath))
+                Directory.CreateDirectory(_tempPath);
 
             return new FileInfo(Path.Combine(_tempPath, validFileName));
         }
@@ -286,12 +259,12 @@ namespace PeachPDF.Html.Core.Utils
         /// <returns>the index of the substring, -1 if no valid sub-string found</returns>
         public static int GetNextSubString(string str, int idx, out int length)
         {
-            while (idx < str.Length && Char.IsWhiteSpace(str[idx]))
+            while (idx < str.Length && char.IsWhiteSpace(str[idx]))
                 idx++;
             if (idx < str.Length)
             {
                 var endIdx = idx + 1;
-                while (endIdx < str.Length && !Char.IsWhiteSpace(str[endIdx]))
+                while (endIdx < str.Length && !char.IsWhiteSpace(str[endIdx]))
                     endIdx++;
                 length = endIdx - idx;
                 return idx;
@@ -311,7 +284,7 @@ namespace PeachPDF.Html.Core.Utils
             {
                 for (int i = 0; i < length; i++)
                 {
-                    if (Char.ToLowerInvariant(str[idx + i]) != Char.ToLowerInvariant(str2[i]))
+                    if (char.ToLowerInvariant(str[idx + i]) != char.ToLowerInvariant(str2[i]))
                         return false;
                 }
                 return true;
@@ -336,7 +309,7 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         /// <summary>
-        /// Convert number to alpha numeric system by the requested style (UpperAlpha, LowerRoman, Hebrew, etc.).
+        /// Convert number to alphanumeric system by the requested style (UpperAlpha, LowerRoman, Hebrew, etc.).
         /// </summary>
         /// <param name="number">the number to convert</param>
         /// <param name="style">the css style to convert by</param>
@@ -400,12 +373,12 @@ namespace PeachPDF.Html.Core.Utils
                 var n = number % 26 - 1;
                 if (n >= 0)
                 {
-                    sb = (Char)(alphStart + n) + sb;
+                    sb = (char)(alphStart + n) + sb;
                     number /= 26;
                 }
                 else
                 {
-                    sb = (Char)(alphStart + 25) + sb;
+                    sb = (char)(alphStart + 25) + sb;
                     number = (number - 1) / 26;
                 }
             }
@@ -433,7 +406,7 @@ namespace PeachPDF.Html.Core.Utils
                 }
                 else
                 {
-                    sb = (Char)(945 + 24) + sb;
+                    sb = (char)(945 + 24) + sb;
                     number = (number - 1) / 25;
                 }
             }

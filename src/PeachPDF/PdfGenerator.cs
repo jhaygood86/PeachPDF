@@ -79,7 +79,7 @@ namespace PeachPDF
         /// <param name="margin">the margin to use between the HTML and the edges of each page</param>
         /// <param name="cssData">optional: the style to use for html rendering (default - use W3 default style)</param>
         /// <returns>the generated image of the html</returns>
-        public async Task<PdfDocument> GeneratePdf(string html, PageSize pageSize, int margin = 20, CssData cssData = null)
+        public async Task<PdfDocument> GeneratePdf(string html, PageSize pageSize, int margin = 20, CssData? cssData = null)
         {
             var config = new PdfGenerateConfig
             {
@@ -100,7 +100,7 @@ namespace PeachPDF
         /// <param name="stylesheetLoad">optional: can be used to overwrite stylesheet resolution logic</param>
         /// <param name="imageLoad">optional: can be used to overwrite image resolution logic</param>
         /// <returns>the generated image of the html</returns>
-        public async Task<PdfDocument> GeneratePdf(string html, PdfGenerateConfig config, CssData cssData = null)
+        public async Task<PdfDocument> GeneratePdf(string html, PdfGenerateConfig config, CssData? cssData = null)
         {
             // create PDF document to render the HTML into
             var document = new PdfDocument();
@@ -122,7 +122,7 @@ namespace PeachPDF
         /// <param name="stylesheetLoad">optional: can be used to overwrite stylesheet resolution logic</param>
         /// <param name="imageLoad">optional: can be used to overwrite image resolution logic</param>
         /// <returns>the generated image of the html</returns>
-        public async Task AddPdfPages(PdfDocument document, string html, PageSize pageSize, int margin = 20, CssData cssData = null)
+        public async Task AddPdfPages(PdfDocument document, string html, PageSize pageSize, int margin = 20, CssData? cssData = null)
         {
             var config = new PdfGenerateConfig
             {
@@ -144,7 +144,7 @@ namespace PeachPDF
         /// <param name="stylesheetLoad">optional: can be used to overwrite stylesheet resolution logic</param>
         /// <param name="imageLoad">optional: can be used to overwrite image resolution logic</param>
         /// <returns>the generated image of the html</returns>
-        public async Task AddPdfPages(PdfDocument document, string html, PdfGenerateConfig config, CssData cssData = null)
+        public async Task AddPdfPages(PdfDocument document, string html, PdfGenerateConfig config, CssData? cssData = null)
         {
             // get the size of each page to layout the HTML in
             var orgPageSize = config.PageSize != PageSize.Undefined ? PageSizeConverter.ToSize(config.PageSize) : config.ManualPageSize;

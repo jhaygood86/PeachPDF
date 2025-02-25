@@ -129,7 +129,7 @@ namespace PeachPDF.Html.Core
         /// <summary>
         /// the parsed stylesheet data used for handling the html
         /// </summary>
-        public CssData CssData { get; private set; }
+        public CssData? CssData { get; private set; }
 
         /// <summary>
         /// Gets or sets a value indicating if anti-aliasing should be avoided for geometry like backgrounds and borders (default - false).
@@ -223,14 +223,14 @@ namespace PeachPDF.Html.Core
         /// <summary>
         /// the root css box of the parsed html
         /// </summary>
-        internal CssBox Root { get; private set; }
+        internal CssBox? Root { get; private set; }
 
         /// <summary>
         /// Init with optional document and stylesheet.
         /// </summary>
         /// <param name="htmlSource">the html to init with, init empty if not given</param>
         /// <param name="baseCssData">optional: the stylesheet to init with, init default if not given</param>
-        public async Task SetHtml(string htmlSource, CssData baseCssData = null)
+        public async Task SetHtml(string htmlSource, CssData? baseCssData = null)
         {
             Clear();
             if (string.IsNullOrEmpty(htmlSource)) return;
@@ -358,7 +358,7 @@ namespace PeachPDF.Html.Core
         /// <param name="message">the error message</param>
         /// <param name="exception">optional: the exception that occured</param>
         [DoesNotReturn]
-        internal void ReportError(HtmlRenderErrorType type, string message, Exception exception = null)
+        internal void ReportError(HtmlRenderErrorType type, string message, Exception? exception = null)
         {
             throw new HtmlRenderException(message, type, exception);
         }

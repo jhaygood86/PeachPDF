@@ -112,7 +112,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// Improve performance not to create same font multiple times.
         /// </summary>
         /// <returns>cached font instance</returns>
-        public RFont GetCachedFont(string family, double size, RFontStyle style)
+        public RFont? GetCachedFont(string family, double size, RFontStyle style)
         {
             var font = TryGetFont(family, size, style);
 
@@ -148,9 +148,9 @@ namespace PeachPDF.Html.Core.Handlers
         /// <summary>
         /// Get cached font if it exists in cache or null if it is not.
         /// </summary>
-        private RFont TryGetFont(string family, double size, RFontStyle style)
+        private RFont? TryGetFont(string family, double size, RFontStyle style)
         {
-            RFont font = null;
+            RFont? font = null;
 
             if (_fontsCache.TryGetValue(family, out var a))
             {

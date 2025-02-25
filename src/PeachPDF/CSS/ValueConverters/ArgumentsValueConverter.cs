@@ -1,6 +1,8 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 
+#nullable disable
+
 namespace PeachPDF.CSS
 {
     internal sealed class ArgumentsValueConverter : IValueConverter

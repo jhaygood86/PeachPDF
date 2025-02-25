@@ -1,4 +1,6 @@
-﻿namespace PeachPDF.CSS
+﻿#nullable disable
+
+namespace PeachPDF.CSS
 {
     internal abstract class ShorthandProperty : Property
     {

@@ -1,4 +1,6 @@
-﻿using System;
+﻿#nullable disable
+
+using System;
 
 // ReSharper disable UnusedMember.Global
 

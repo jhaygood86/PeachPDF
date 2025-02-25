@@ -37,11 +37,11 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// 
         /// </summary>
-        private CssBox _caption;
+        private CssBox? _caption;
 
-        private CssBox _headerBox;
+        private CssBox? _headerBox;
 
-        private CssBox _footerBox;
+        private CssBox? _footerBox;
 
         /// <summary>
         /// collection of all rows boxes
@@ -62,9 +62,9 @@ namespace PeachPDF.Html.Core.Dom
 
         private bool _widthSpecified;
 
-        private double[] _columnWidths;
+        private double[]? _columnWidths;
 
-        private double[] _columnMinWidths;
+        private double[]? _columnMinWidths;
 
         #endregion
 
@@ -139,7 +139,7 @@ namespace PeachPDF.Html.Core.Dom
             }
             catch (Exception ex)
             {
-                tableBox.HtmlContainer.ReportError(HtmlRenderErrorType.Layout, "Failed table layout", ex);
+                tableBox.HtmlContainer?.ReportError(HtmlRenderErrorType.Layout, "Failed table layout", ex);
             }
         }
 
@@ -381,7 +381,7 @@ namespace PeachPDF.Html.Core.Dom
                 int numOfNans = 0;
 
                 //Calculate number of NaNs and occupied space
-                foreach (double colWidth in _columnWidths)
+                foreach (double colWidth in _columnWidths!)
                 {
                     if (double.IsNaN(colWidth))
                         numOfNans++;
@@ -390,7 +390,7 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 var orgNumOfNans = numOfNans;
 
-                double[] orgColWidths = null;
+                double[]? orgColWidths = null;
                 if (numOfNans < _columnWidths.Length)
                 {
                     orgColWidths = new double[_columnWidths.Length];
@@ -457,7 +457,7 @@ namespace PeachPDF.Html.Core.Dom
                 //Get the minimum and maximum full length of NaN boxes
                 GetColumnsMinMaxWidthByContent(true, out var minFullWidths, out var maxFullWidths);
 
-                for (var i = 0; i < _columnWidths.Length; i++)
+                for (var i = 0; i < _columnWidths!.Length; i++)
                 {
                     if (double.IsNaN(_columnWidths[i]))
                         _columnWidths[i] = minFullWidths[i];
@@ -489,7 +489,7 @@ namespace PeachPDF.Html.Core.Dom
                 while (!CanReduceWidth(curCol))
                     curCol++;
 
-                _columnWidths[curCol] -= 1f;
+                _columnWidths![curCol] -= 1f;
 
                 curCol++;
 
@@ -508,7 +508,7 @@ namespace PeachPDF.Html.Core.Dom
             GetColumnsMinMaxWidthByContent(false, out var minFullWidths, out var maxFullWidths);
 
             // lower all the columns to the minimum
-            for (var i = 0; i < _columnWidths.Length; i++)
+            for (var i = 0; i < _columnWidths!.Length; i++)
                 _columnWidths[i] = minFullWidths[i];
 
             // either min for all column is not enought and we need to lower it more resulting in clipping
@@ -589,7 +589,7 @@ namespace PeachPDF.Html.Core.Dom
                     var col = GetCellRealColumnIndex(row, cell);
                     var affectColumn = col + colspan - 1;
 
-                    if (_columnWidths.Length <= col || !(_columnWidths[col] < GetColumnMinWidths()[col])) continue;
+                    if (_columnWidths!.Length <= col || !(_columnWidths[col] < GetColumnMinWidths()[col])) continue;
                     var diff = GetColumnMinWidths()[col] - _columnWidths[col];
                     _columnWidths[affectColumn] = GetColumnMinWidths()[affectColumn];
 
@@ -634,7 +634,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 foreach (var cell in row.Boxes)
                 {
-                    if (currentColumn >= _columnWidths.Length)
+                    if (currentColumn >= _columnWidths!.Length)
                         break;
 
                     var rowSpan = GetRowSpan(cell);
@@ -754,7 +754,7 @@ namespace PeachPDF.Html.Core.Dom
 
             for (int i = column; i < column + colspan; i++)
             {
-                if (column >= _columnWidths.Length)
+                if (column >= _columnWidths!.Length)
                     break;
                 if (_columnWidths.Length <= i)
                     break;
@@ -812,7 +812,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <returns></returns>
         private bool CanReduceWidth()
         {
-            for (int i = 0; i < _columnWidths.Length; i++)
+            for (int i = 0; i < _columnWidths!.Length; i++)
             {
                 if (CanReduceWidth(i))
                 {
@@ -831,7 +831,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <returns></returns>
         private bool CanReduceWidth(int columnIndex)
         {
-            if (_columnWidths.Length >= columnIndex || GetColumnMinWidths().Length >= columnIndex)
+            if (_columnWidths!.Length >= columnIndex || GetColumnMinWidths().Length >= columnIndex)
                 return false;
             return _columnWidths[columnIndex] > GetColumnMinWidths()[columnIndex];
         }
@@ -852,11 +852,11 @@ namespace PeachPDF.Html.Core.Dom
             if (tableBoxLength.Number > 0)
             {
                 _widthSpecified = true;
-                return CssValueParser.ParseLength(_tableBox.Width, _tableBox.ParentBox.AvailableWidth, _tableBox);
+                return CssValueParser.ParseLength(_tableBox.Width, _tableBox.ParentBox!.AvailableWidth, _tableBox);
             }
             else
             {
-                return _tableBox.ParentBox.AvailableWidth;
+                return _tableBox.ParentBox!.AvailableWidth;
             }
         }
 
@@ -875,7 +875,7 @@ namespace PeachPDF.Html.Core.Dom
             if (tblen.Number > 0)
             {
                 _widthSpecified = true;
-                return CssValueParser.ParseLength(_tableBox.MaxWidth, _tableBox.ParentBox.AvailableWidth, _tableBox);
+                return CssValueParser.ParseLength(_tableBox.MaxWidth, _tableBox.ParentBox!.AvailableWidth, _tableBox);
             }
             else
             {
@@ -893,7 +893,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="maxFullWidths">return the max width for each column - the max width the cell content can take without wrapping</param>
         private void GetColumnsMinMaxWidthByContent(bool onlyNans, out double[] minFullWidths, out double[] maxFullWidths)
         {
-            maxFullWidths = new double[_columnWidths.Length];
+            maxFullWidths = new double[_columnWidths!.Length];
             minFullWidths = new double[_columnWidths.Length];
 
             foreach (var row in _allRows)
@@ -939,7 +939,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             double f = 0f;
 
-            foreach (double t in _columnWidths)
+            foreach (double t in _columnWidths!)
             {
                 if (double.IsNaN(t))
                     throw new Exception("CssTable Algorithm error: There's a NaN in column widths");
@@ -973,7 +973,7 @@ namespace PeachPDF.Html.Core.Dom
         private double[] GetColumnMinWidths()
         {
             if (_columnMinWidths != null) return _columnMinWidths;
-            _columnMinWidths = new double[_columnWidths.Length];
+            _columnMinWidths = new double[_columnWidths!.Length];
 
             foreach (var row in _allRows)
             {

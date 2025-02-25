@@ -1,4 +1,6 @@
-﻿namespace PeachPDF.CSS
+﻿#nullable disable
+
+namespace PeachPDF.CSS
 {
     public struct CombinatorSelector
     {

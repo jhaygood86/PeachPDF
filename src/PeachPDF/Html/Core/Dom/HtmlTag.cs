@@ -25,7 +25,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="name">the name of the html tag</param>
         /// <param name="isSingle">if the tag is single placed; in other words it doesn't have a separate closing tag;</param>
         /// <param name="attributes">collection of attributes and their value the html tag has</param>
-        public HtmlTag(string name, bool isSingle, Dictionary<string, string> attributes = null)
+        public HtmlTag(string name, bool isSingle, Dictionary<string, string>? attributes = null)
         {
             ArgChecker.AssertArgNotNullOrEmpty(name, "name");
 
@@ -42,7 +42,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Gets collection of attributes and their value the html tag has
         /// </summary>
-        public Dictionary<string, string> Attributes { get; }
+        public Dictionary<string, string>? Attributes { get; }
 
         /// <summary>
         /// Gets if the tag is single placed; in other words it doesn't have a separate closing tag; <br/>
@@ -75,9 +75,9 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="attribute">attribute name to get by</param>
         /// <param name="defaultValue">optional: value to return if attribute is not specified</param>
         /// <returns>attribute value or null if not found</returns>
-        public string TryGetAttribute(string attribute, string defaultValue = null)
+        public string? TryGetAttribute(string attribute, string? defaultValue = null)
         {
-            if(Attributes is not null && Attributes.TryGetValue(attribute, out string value))
+            if(Attributes is not null && Attributes.TryGetValue(attribute, out var value))
             {
                 return value;
             }

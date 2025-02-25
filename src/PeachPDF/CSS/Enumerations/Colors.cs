@@ -197,7 +197,7 @@ namespace PeachPDF.CSS
             return null;
         }
 
-        public static string GetName(Color color)
+        public static string? GetName(Color color)
         {
             return (from pair in NamedColors where pair.Value.Equals(color) select pair.Key).FirstOrDefault();
         }

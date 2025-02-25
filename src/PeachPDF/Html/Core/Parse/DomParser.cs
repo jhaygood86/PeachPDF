@@ -10,6 +10,8 @@
 // - Sun Tsu,
 // "The Art of War"
 
+#nullable enable
+
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Handlers;
@@ -29,15 +31,10 @@ namespace PeachPDF.Html.Core.Parse
     /// </summary>
     internal sealed class DomParser
     {
-        #region Fields and Consts
-
         /// <summary>
         /// Parser for CSS
         /// </summary>
         private readonly CssParser _cssParser;
-
-        #endregion
-
 
         /// <summary>
         /// Init.
@@ -94,7 +91,7 @@ namespace PeachPDF.Html.Core.Parse
 
         #region Private methods
 
-        private async Task CascadeApplyStyleFonts(CssData cssData, RAdapter adapter)
+        private static async Task CascadeApplyStyleFonts(CssData cssData, RAdapter adapter)
         {
             foreach (var stylesheet in cssData.Stylesheets)
             {
@@ -134,7 +131,7 @@ namespace PeachPDF.Html.Core.Parse
             {
                 // Check for the <link rel=stylesheet> tag
                 if (box.HtmlTag.Name.Equals("link", StringComparison.CurrentCultureIgnoreCase) &&
-                    box.GetAttribute("rel", string.Empty).Equals("stylesheet", StringComparison.CurrentCultureIgnoreCase))
+                   box.GetAttribute("rel", string.Empty).Equals("stylesheet", StringComparison.CurrentCultureIgnoreCase))
                 {
                     CloneCssData(ref cssData, ref cssDataChanged);
                     var stylesheet = await StylesheetLoadHandler.LoadStylesheet(htmlContainer, box.GetAttribute("href", string.Empty));
@@ -147,7 +144,7 @@ namespace PeachPDF.Html.Core.Parse
                 {
                     CloneCssData(ref cssData, ref cssDataChanged);
                     foreach (var child in box.Boxes)
-                        await _cssParser.ParseStyleSheet(cssData, child.Text);
+                        await _cssParser.ParseStyleSheet(cssData, child.Text!);
                 }
             }
 
@@ -301,7 +298,7 @@ namespace PeachPDF.Html.Core.Parse
                     importantPropertyNames.Add(prop.Name.ToLowerInvariant());
                 }
 
-                if (IsStyleOnElementAllowed(box, prop.Name, value) && value is not null)
+                if (value is not null && IsStyleOnElementAllowed(box, prop.Name, value))
                 {
                     CssUtils.SetPropertyValue(valueParser ,box, prop.Name, value);
                 }
@@ -361,7 +358,7 @@ namespace PeachPDF.Html.Core.Parse
         {
             if (!tag.HasAttributes()) return;
 
-            foreach (var att in tag.Attributes.Keys)
+            foreach (var att in tag.Attributes!.Keys)
             {
                 var value = tag.Attributes[att];
 
@@ -483,7 +480,7 @@ namespace PeachPDF.Html.Core.Parse
         /// </summary>
         /// <param name="table">the table element</param>
         /// <param name="action">the action to execute</param>
-        private static void SetForAllCells(CssBox table, ActionInt<CssBox> action)
+        private static void SetForAllCells(CssBox table, Action<CssBox> action)
         {
             foreach (var l1 in table.Boxes)
             {
@@ -540,7 +537,7 @@ namespace PeachPDF.Html.Core.Parse
                     else
                     {
                         // remove text box that has no 
-                        childBox.ParentBox.Boxes.RemoveAt(i);
+                        childBox.ParentBox!.Boxes.RemoveAt(i);
                     }
                 }
                 else
@@ -562,7 +559,7 @@ namespace PeachPDF.Html.Core.Parse
                 var childBox = box.Boxes[i];
                 if (childBox is CssBoxImage && childBox.Display == CssConstants.Block)
                 {
-                    var block = CssBox.CreateBlock(childBox.ParentBox, null, childBox);
+                    var block = CssBox.CreateBlock(childBox.ParentBox!, null, childBox);
                     childBox.ParentBox = block;
                     childBox.Display = CssConstants.Inline;
                 }
@@ -592,7 +589,7 @@ namespace PeachPDF.Html.Core.Parse
             }
 
             int lastBr = -1;
-            CssBox brBox;
+            CssBox? brBox;
             do
             {
                 brBox = null;
@@ -637,11 +634,11 @@ namespace PeachPDF.Html.Core.Parse
                     while (tempRightBox != null)
                     {
                         // loop on the created temp right box for the fixed box until no more need (optimization remove recursion)
-                        CssBox newTempRightBox = null;
+                        CssBox? newTempRightBox = null;
                         if (DomUtils.ContainsInlinesOnly(tempRightBox) && !ContainsInlinesOnlyDeep(tempRightBox))
                             newTempRightBox = CorrectBlockInsideInlineImp(tempRightBox);
 
-                        tempRightBox.ParentBox.SetAllBoxes(tempRightBox);
+                        tempRightBox.ParentBox!.SetAllBoxes(tempRightBox);
                         tempRightBox.ParentBox = null;
                         tempRightBox = newTempRightBox;
                     }
@@ -656,7 +653,7 @@ namespace PeachPDF.Html.Core.Parse
             }
             catch (Exception ex)
             {
-                box.HtmlContainer.ReportError(HtmlRenderErrorType.HtmlParsing, "Failed in block inside inline box correction", ex);
+                box.HtmlContainer?.ReportError(HtmlRenderErrorType.HtmlParsing, "Failed in block inside inline box correction", ex);
             }
         }
 
@@ -664,7 +661,7 @@ namespace PeachPDF.Html.Core.Parse
         /// Rearrange the DOM of the box to have block box with boxes before the inner block box and after.
         /// </summary>
         /// <param name="box">the box that has the problem</param>
-        private static CssBox CorrectBlockInsideInlineImp(CssBox box)
+        private static CssBox? CorrectBlockInsideInlineImp(CssBox box)
         {
             if (box.Display == CssConstants.Inline)
                 box.Display = CssConstants.Block;
@@ -712,7 +709,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="leftBlock">the left block box that is created for the split</param>
         private static void CorrectBlockSplitBadBox(CssBox parentBox, CssBox badBox, CssBox leftBlock)
         {
-            CssBox leftbox = null;
+            CssBox? leftbox = null;
             while (badBox.Boxes[0].IsInline && ContainsInlinesOnlyDeep(badBox.Boxes[0]))
             {
                 if (leftbox == null)

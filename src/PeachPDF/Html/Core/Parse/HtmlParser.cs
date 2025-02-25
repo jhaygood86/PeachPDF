@@ -166,7 +166,7 @@ namespace PeachPDF.Html.Core.Parse
 
         private static CssBox CloseElement(CssBox cssBox, string tagName)
         {
-            var currentBox =  DomUtils.FindParent(cssBox.ParentBox, tagName, cssBox);
+            var currentBox =  DomUtils.FindParent(cssBox.ParentBox!, tagName, cssBox);
 
 #if DEBUG
             Console.WriteLine($"parse token, closing: {cssBox}. current box is now: {currentBox}");

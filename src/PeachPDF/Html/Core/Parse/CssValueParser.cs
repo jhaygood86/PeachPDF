@@ -185,7 +185,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="fontAdjust">if the length is in pixels and the length is font related it needs to use 72/96 factor</param>
         /// <param name="returnPoints">Allows the return double to be in points. If false, result will be pixels</param>
         /// <returns>the parsed length value with adjustments</returns>
-        public static double ParseLength(string length, double hundredPercent, double emFactor, string defaultUnit, bool fontAdjust, bool returnPoints)
+        public static double ParseLength(string length, double hundredPercent, double emFactor, string? defaultUnit, bool fontAdjust, bool returnPoints)
         {
             //Return zero if no length specified, zero specified
             if (string.IsNullOrEmpty(length) || length == "0")
@@ -248,7 +248,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <summary>
         /// Get the unit to use for the length, use default if no unit found in length string.
         /// </summary>
-        private static string GetUnit(string length, string defaultUnit, out bool hasUnit)
+        private static string GetUnit(string length, string? defaultUnit, out bool hasUnit)
         {
             var unit = length.Length >= 3 ? length.Substring(length.Length - 2, 2) : string.Empty;
             switch (unit)
@@ -265,7 +265,7 @@ namespace PeachPDF.Html.Core.Parse
                     break;
                 default:
                     hasUnit = false;
-                    unit = defaultUnit ?? String.Empty;
+                    unit = defaultUnit ?? string.Empty;
                     break;
             }
 

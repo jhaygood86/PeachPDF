@@ -136,7 +136,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Gets the image this words represents (if one exists)
         /// </summary>
-        public virtual RImage Image
+        public virtual RImage? Image
         {
             get => null;
             // ReSharper disable ValueParameterNotUsed
@@ -163,12 +163,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Gets the text of the word
         /// </summary>
-        public virtual string Text => null;
-
-        /// <summary>
-        /// Gets or sets an offset to be considered in measurements
-        /// </summary>
-        internal double LeftGlyphPadding => OwnerBox != null ? OwnerBox.ActualFont.LeftPadding : 0;
+        public virtual string? Text => null;
 
         /// <summary>
         /// Represents this word for debugging purposes

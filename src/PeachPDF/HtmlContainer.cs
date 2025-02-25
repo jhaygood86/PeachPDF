@@ -152,7 +152,7 @@ namespace PeachPDF
         /// </summary>
         /// <param name="htmlSource">the html to init with, init empty if not given</param>
         /// <param name="baseCssData">optional: the stylesheet to init with, init default if not given</param>
-        public async Task SetHtml(string htmlSource, CssData baseCssData = null)
+        public async Task SetHtml(string htmlSource, CssData? baseCssData = null)
         {
             await HtmlContainerInt.SetHtml(htmlSource, baseCssData);
         }
@@ -170,7 +170,7 @@ namespace PeachPDF
 
             if (baseElement is not null)
             {
-                baseUrl = baseElement.HtmlTag.TryGetAttribute("href", "");
+                baseUrl = baseElement.HtmlTag?.TryGetAttribute("href", "");
             }
 
             var baseUri = string.IsNullOrWhiteSpace(baseUrl) ? HtmlContainerInt.Adapter.BaseUri : new RUri(baseUrl);

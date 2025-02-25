@@ -1,4 +1,6 @@
-﻿using System;
+﻿#nullable disable
+
+using System;
 using System.Runtime.InteropServices;
 
 // ReSharper disable UnusedMember.Global

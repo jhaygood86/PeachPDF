@@ -33,8 +33,7 @@ namespace PeachPDF.Html.Core.Handlers
         public static void DrawBackgroundImage(RGraphics g, CssBox box, ImageLoadHandler imageLoadHandler, RRect rectangle)
         {
             // image size depends if specific rectangle given in image loader
-            var imgSize = new RSize(imageLoadHandler.Image.Width,
-                imageLoadHandler.Image.Height);
+            var imgSize = new RSize(imageLoadHandler.Image!.Width, imageLoadHandler.Image!.Height);
 
             // get the location by BackgroundPosition value
             var location = GetLocation(box.BackgroundPosition, rectangle, imgSize);
@@ -120,10 +119,10 @@ namespace PeachPDF.Html.Core.Handlers
             while (destRect.X > rectangle.X)
                 destRect.X -= imgSize.Width;
 
-            using (var brush = g.GetTextureBrush(imageLoadHandler.Image, srcRect, destRect.Location))
-            {
-                g.DrawRectangle(brush, rectangle.X, destRect.Y, rectangle.Width, srcRect.Height);
-            }
+            if (imageLoadHandler.Image is null) return;
+
+            using var brush = g.GetTextureBrush(imageLoadHandler.Image, srcRect, destRect.Location);
+            g.DrawRectangle(brush, rectangle.X, destRect.Y, rectangle.Width, srcRect.Height);
         }
 
         /// <summary>
@@ -135,10 +134,10 @@ namespace PeachPDF.Html.Core.Handlers
             while (destRect.Y > rectangle.Y)
                 destRect.Y -= imgSize.Height;
 
-            using (var brush = g.GetTextureBrush(imageLoadHandler.Image, srcRect, destRect.Location))
-            {
-                g.DrawRectangle(brush, destRect.X, rectangle.Y, srcRect.Width, rectangle.Height);
-            }
+            if (imageLoadHandler.Image is null) return;
+
+            using var brush = g.GetTextureBrush(imageLoadHandler.Image, srcRect, destRect.Location);
+            g.DrawRectangle(brush, destRect.X, rectangle.Y, srcRect.Width, rectangle.Height);
         }
 
         /// <summary>
@@ -152,10 +151,10 @@ namespace PeachPDF.Html.Core.Handlers
             while (destRect.Y > rectangle.Y)
                 destRect.Y -= imgSize.Height;
 
-            using (var brush = g.GetTextureBrush(imageLoadHandler.Image, srcRect, destRect.Location))
-            {
-                g.DrawRectangle(brush, rectangle.X, rectangle.Y, rectangle.Width, rectangle.Height);
-            }
+            if (imageLoadHandler.Image is null) return;
+
+            using var brush = g.GetTextureBrush(imageLoadHandler.Image, srcRect, destRect.Location);
+            g.DrawRectangle(brush, rectangle.X, rectangle.Y, rectangle.Width, rectangle.Height);
         }
 
         #endregion

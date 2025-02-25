@@ -91,7 +91,7 @@ namespace PeachPDF.Adapters
             return prevMode;
         }
 
-        public override void ReturnPreviousSmoothingMode(object prevMode)
+        public override void ReturnPreviousSmoothingMode(object? prevMode)
         {
             if (prevMode != null)
             {

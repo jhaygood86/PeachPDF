@@ -250,11 +250,10 @@ namespace PeachPDF.Html.Adapters.Entities
         /// <param name="obj">
         ///     The <see cref="T:System.Object" /> to test.
         /// </param>
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
-            if (!(obj is RRect))
+            if (obj is not RRect rectangleF)
                 return false;
-            var rectangleF = (RRect)obj;
             if (Math.Abs(rectangleF.X - X) < 0.001 && Math.Abs(rectangleF.Y - Y) < 0.001 && Math.Abs(rectangleF.Width - Width) < 0.001)
                 return Math.Abs(rectangleF.Height - Height) < 0.001;
             else

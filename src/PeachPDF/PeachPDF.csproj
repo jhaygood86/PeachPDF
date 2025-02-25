@@ -15,15 +15,8 @@
 		<GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>
 		<GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
 		<RunCodeAnalysis>false</RunCodeAnalysis>
+    <Nullable>enable</Nullable>
 	</PropertyGroup>
-	<ItemGroup>
-	  <None Remove="Html\Core\Utils\ImageError.png" />
-	  <None Remove="Html\Core\Utils\ImageLoad.png" />
-	</ItemGroup>
-	<ItemGroup>
-	  <EmbeddedResource Include="Html\Core\Utils\ImageError.png" />
-	  <EmbeddedResource Include="Html\Core\Utils\ImageLoad.png" />
-	</ItemGroup>
 	<ItemGroup>
 	  <PackageReference Include="MimeKit" Version="4.10.0" />
 	</ItemGroup>

@@ -114,7 +114,7 @@ namespace PeachPDF.Html.Core.Utils
         public static CssBox? GetPreviousContainingBlockSibling(CssBox b)
         {
             var conBlock = b;
-            var index = conBlock.ParentBox.Boxes.IndexOf(conBlock);
+            var index = conBlock.ParentBox!.Boxes.IndexOf(conBlock);
             while (conBlock.ParentBox != null && index < 1 && conBlock.Display != CssConstants.Block && conBlock.Display != CssConstants.Table && conBlock.Display != CssConstants.TableCell && conBlock.Display != CssConstants.ListItem)
             {
                 conBlock = conBlock.ParentBox;
@@ -389,9 +389,9 @@ namespace PeachPDF.Html.Core.Utils
             do
             {
                 currentBox = currentBox.ParentBox;
-            } while (!currentBox.IsPositioned && currentBox.ParentBox is not null);
+            } while (currentBox is { IsPositioned: false, ParentBox: not null });
 
-            return currentBox;
+            return currentBox!;
         }
 
         public static CssBox? GetFirstIntersectingFloatBox(CssBox reference, CssFloatCoordinates coordinates, string floatProp)

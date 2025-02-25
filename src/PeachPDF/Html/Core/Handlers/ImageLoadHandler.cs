@@ -50,7 +50,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// <summary>
         /// Must be open as long as the image is in use
         /// </summary>
-        private FileStream _imageFileStream;
+        private FileStream? _imageFileStream;
 
         /// <summary>
         /// flag to indicate if to release the image object on box dispose (only if image was loaded by the box)
@@ -79,7 +79,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// <summary>
         /// the image instance of the loaded image
         /// </summary>
-        public RImage Image { get; private set; }
+        public RImage? Image { get; private set; }
 
         /// <summary>
         /// Set image of this image box by analyzing the src attribute.<br/>
@@ -141,7 +141,7 @@ namespace PeachPDF.Html.Core.Handlers
 
                 if (baseElement is not null)
                 {
-                    baseUrl = baseElement.HtmlTag.TryGetAttribute("href", "");
+                    baseUrl = baseElement.HtmlTag?.TryGetAttribute("href", "");
                 }
 
                 var baseUri = string.IsNullOrWhiteSpace(baseUrl) ? _htmlContainer.Adapter.BaseUri : new RUri(baseUrl);
@@ -210,7 +210,7 @@ namespace PeachPDF.Html.Core.Handlers
             }
         }
 
-        private RImage LoadImageFromStream(Stream stream)
+        private void LoadImageFromStream(Stream stream)
         {
             try
             {
@@ -218,10 +218,8 @@ namespace PeachPDF.Html.Core.Handlers
             }
             catch (UnknownImageFormatException)
             {
-                Image = _htmlContainer.Adapter.GetLoadingFailedImage();
+                Image = null;
             }
-
-            return Image;
         }
 
         /// <summary>
@@ -231,11 +229,11 @@ namespace PeachPDF.Html.Core.Handlers
         /// </summary>
         private async ValueTask SetImageFromUrl(RUri source)
         {
-            if (source.IsAbsoluteUri && source.IsFile)
+            if (source is { IsAbsoluteUri: true, IsFile: true })
             {
-                var filePath = CommonUtils.GetLocalfileName(source);
+                var filePath = CommonUtils.GetLocalFileName(source);
 
-                if (filePath.Exists && filePath.Length > 0)
+                if (filePath is { Exists: true, Length: > 0 })
                 {
                     SetImageFromFile(filePath);
                 }

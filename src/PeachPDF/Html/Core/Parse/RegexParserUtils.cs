@@ -93,7 +93,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="regex"></param>
         /// <param name="source"></param>
         /// <returns></returns>
-        public static string Search(string regex, string source)
+        public static string? Search(string regex, string source)
         {
             return Search(regex, source, out _);
         }
@@ -104,7 +104,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="regex"></param>
         /// <param name="source"></param>
         /// <returns></returns>
-        public static string Search(Regex regex, string source)
+        public static string? Search(Regex regex, string source)
         {
             return Search(regex, source, out _);
         }
@@ -116,7 +116,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="source"></param>
         /// <param name="position"> </param>
         /// <returns></returns>
-        public static string Search(string regex, string source, out int position)
+        public static string? Search(string regex, string source, out int position)
         {
             var matches = Match(regex, source);
 
@@ -131,7 +131,7 @@ namespace PeachPDF.Html.Core.Parse
             return null;
         }
 
-        public static string Search(Regex regex, string source, out int position)
+        public static string? Search(Regex regex, string source, out int position)
         {
             var matches = regex.Matches(source);
 

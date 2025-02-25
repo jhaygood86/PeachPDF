@@ -211,13 +211,13 @@ namespace PeachPDF.Html.Adapters.Entities
         /// </returns>
         /// <param name="obj">The object to test. </param>
         /// <filterpriority>1</filterpriority>
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
-            if (obj is RColor)
+            if (obj is RColor color)
             {
-                var color = (RColor)obj;
                 return _value == color._value;
             }
+
             return false;
         }
 
