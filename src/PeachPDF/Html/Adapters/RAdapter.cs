@@ -177,9 +177,9 @@ namespace PeachPDF.Html.Adapters
         {
             var resourceStream = await GetResourceStream(new RUri(url));
 
-            if (resourceStream is not null)
+            if (resourceStream?.ResourceStream is not null)
             {
-                await AddFontFromStream(fontFamilyName, resourceStream, format);
+                await AddFontFromStream(fontFamilyName, resourceStream.ResourceStream, format);
             }
         }
 
@@ -244,7 +244,7 @@ namespace PeachPDF.Html.Adapters
         /// </summary>
         /// <param name="uri">Uri to load</param>
         /// <returns>The stream of the contents</returns>
-        public abstract Task<Stream?> GetResourceStream(RUri uri);
+        public abstract Task<RNetworkResponse?> GetResourceStream(RUri uri);
 
         #region Private/Protected methods
 

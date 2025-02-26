@@ -10,8 +10,6 @@
 // - Sun Tsu,
 // "The Art of War"
 
-#nullable enable
-
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
@@ -74,6 +72,9 @@ namespace PeachPDF.Html.Core.Utils
                 "corner-ne-radius" => cssBox.CornerNeRadius,
                 "corner-se-radius" => cssBox.CornerSeRadius,
                 "corner-sw-radius" => cssBox.CornerSwRadius,
+                "counter-increment" => cssBox.CounterIncrement,
+                "counter-reset" => cssBox.CounterReset,
+                "counter-set" => cssBox.CounterSet,
                 "margin-bottom" => cssBox.MarginBottom,
                 "margin-left" => cssBox.MarginLeft,
                 "margin-right" => cssBox.MarginRight,
@@ -278,6 +279,15 @@ namespace PeachPDF.Html.Core.Utils
                 case "corner-sw-radius":
                     cssBox.CornerSwRadius = value;
                     break;
+                case "counter-increment":
+                    cssBox.CounterIncrement = value;
+                    break;
+                case "counter-reset":
+                    cssBox.CounterReset = value;
+                    break;
+                case "counter-set":
+                    cssBox.CounterSet = value;
+                    break;
                 case "margin":
                     SetMultiDirectionProperty(valueParser, cssBox, "margin", value);
                     break;
@@ -356,7 +366,7 @@ namespace PeachPDF.Html.Core.Utils
 
                     break;
                 case "background-image":
-                    cssBox.BackgroundImage = CssValueParser.GetImagePropertyValue(value);
+                    cssBox.BackgroundImage = value;
                     break;
                 case "background-position":
                     cssBox.BackgroundPosition = value;
@@ -378,7 +388,7 @@ namespace PeachPDF.Html.Core.Utils
 
                     break;
                 case "content":
-                    cssBox.Content = CssValueParser.GetImagePropertyValue(value);
+                    cssBox.Content = value;
                     break;
                 case "display":
                     cssBox.Display = value;
@@ -479,6 +489,30 @@ namespace PeachPDF.Html.Core.Utils
             }
         }
 
+        public static void ApplyCurrentColor(CssBox box, CssValueParser valueParser)
+        {
+            string[] colorProperties =
+            [
+                "border-top-color",
+                "border-bottom-color",
+                "border-left-color",
+                "border-right-color",
+                "background-color"
+            ];
+
+            var colorValue = GetPropertyValue(box, "color") ?? CssConstants.Initial;
+
+            foreach (var propertyName in colorProperties)
+            {
+                var value = GetPropertyValue(box, propertyName);
+
+                if (value is CssConstants.CurrentColor)
+                {
+                    SetPropertyValue(valueParser, box, propertyName, colorValue);
+                }
+            }
+        }
+
         private static bool IsValidLengthProperty(string propValue)
         {
             return CssValueParser.IsValidLength(propValue) ||
@@ -487,7 +521,7 @@ namespace PeachPDF.Html.Core.Utils
 
         private static bool IsValidColorProperty(CssValueParser valueParser, string propValue)
         {
-            return valueParser.IsColorValid(propValue);
+            return propValue is CssConstants.CurrentColor || valueParser.IsColorValid(propValue);
         }
 
         private static bool IsValidBorderStyleProperty(string propValue)
@@ -704,6 +738,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <summary>
         /// 
         /// </summary>
+        /// <parm name="valueParser"></parm>
         /// <param name="value"></param>
         /// <param name="width"> </param>
         /// <param name="style"></param>

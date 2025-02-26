@@ -10,8 +10,6 @@
 // - Sun Tsu,
 // "The Art of War"
 
-#nullable enable
-
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
@@ -87,7 +85,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <summary>
         /// Gets the previous sibling of this box.
         /// </summary>
-        /// <returns>Box before this one on the tree. Null if its the first</returns>
+        /// <returns>Box before this one on the tree. Null if it is the first</returns>
         public static CssBox? GetPreviousSibling(CssBox b, bool includeFloats = true)
         {
             if (b.ParentBox == null) return null;

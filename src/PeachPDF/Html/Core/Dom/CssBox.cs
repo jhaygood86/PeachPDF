@@ -127,10 +127,18 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         public List<CssBox> Boxes { get; } = [];
 
+        public Dictionary<string, CssCounter> Counters { get; } = [];
+
         /// <summary>
         /// Is the box is of "br" element.
         /// </summary>
         public bool IsBrElement => HtmlTag != null && HtmlTag.Name.Equals("br", StringComparison.InvariantCultureIgnoreCase);
+
+        public bool IsBeforePseudoElement { get; set; }
+
+        public bool IsAfterPseudoElement { get; set; }
+
+        public bool IsPseudoElement => IsBeforePseudoElement || IsAfterPseudoElement;
 
         /// <summary>
         /// is the box "Display" is "Inline", is this is an inline box and not block.
@@ -327,6 +335,7 @@ namespace PeachPDF.Html.Core.Dom
 
             var newBox = new CssBox(parent, tag);
             newBox.InheritStyle();
+
             if (before != null)
             {
                 newBox.SetBeforeBox(before);
@@ -744,7 +753,13 @@ namespace PeachPDF.Html.Core.Dom
             if (BackgroundImage != CssConstants.None && _imageLoadHandler == null)
             {
                 _imageLoadHandler = new ImageLoadHandler(HtmlContainer!);
-                await _imageLoadHandler.LoadImage(BackgroundImage);
+
+                var backgroundImage = CssValueParser.GetImagePropertyValue(BackgroundImage);
+
+                if (backgroundImage is not null)
+                {
+                    await _imageLoadHandler.LoadImage(backgroundImage);
+                }
             }
 
             MeasureWordSpacing(g);

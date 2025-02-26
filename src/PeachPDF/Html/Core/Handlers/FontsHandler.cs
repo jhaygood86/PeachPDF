@@ -43,7 +43,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// <summary>
         /// cache of all the font used not to create same font again and again
         /// </summary>
-        private readonly Dictionary<string, Dictionary<double, Dictionary<RFontStyle, RFont>>> _fontsCache = new(StringComparer.InvariantCultureIgnoreCase);
+        private readonly Dictionary<string, Dictionary<double, Dictionary<RFontStyle, RFont?>>> _fontsCache = new(StringComparer.InvariantCultureIgnoreCase);
 
         #endregion
 
@@ -73,7 +73,7 @@ namespace PeachPDF.Html.Core.Handlers
             bool exists = _existingFontFamilies.ContainsKey(family);
             if (!exists)
             {
-                if (_fontsMapping.TryGetValue(family, out string mappedFamily))
+                if (_fontsMapping.TryGetValue(family, out var mappedFamily))
                 {
                     exists = _existingFontFamilies.ContainsKey(mappedFamily);
                 }
@@ -120,7 +120,7 @@ namespace PeachPDF.Html.Core.Handlers
             {
                 if (!_existingFontFamilies.TryGetValue(family, out var existingFontFamily))
                 {
-                    if (_fontsMapping.TryGetValue(family, out string mappedFamily))
+                    if (_fontsMapping.TryGetValue(family, out var mappedFamily))
                     {
                         font = TryGetFont(mappedFamily, size, style);
                         if (font == null)
@@ -165,7 +165,7 @@ namespace PeachPDF.Html.Core.Handlers
             }
             else
             {
-                _fontsCache[family] = new Dictionary<double, Dictionary<RFontStyle, RFont>>
+                _fontsCache[family] = new Dictionary<double, Dictionary<RFontStyle, RFont?>>
                 {
                     [size] = new()
                 };
@@ -178,7 +178,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// </summary>
         private RFont CreateFont(string family, double size, RFontStyle style)
         {
-            RFontFamily fontFamily;
+            RFontFamily? fontFamily;
             try
             {
                 return _existingFontFamilies.TryGetValue(family, out fontFamily)

@@ -289,7 +289,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <returns>Color value</returns>
         public RColor GetActualColor(string colorValue)
         {
-            TryGetColor(colorValue, 0, colorValue.Length, out RColor color);
+            TryGetColor(colorValue, 0, colorValue.Length, out var color);
             return color;
         }
 
@@ -378,28 +378,30 @@ namespace PeachPDF.Html.Core.Parse
         /// </summary>
         /// <param name="propValue">the value of the property to parse</param>
         /// <returns>parsed value</returns>
-        public static string GetImagePropertyValue(string propValue)
+        public static CssImage? GetImagePropertyValue(string propValue)
         {
-            var startIdx = propValue.IndexOf("url(", StringComparison.InvariantCultureIgnoreCase);
-            if (startIdx <= -1) return propValue;
-            startIdx += 4;
+            var tokens = GetCssTokens(propValue);
 
-            var endIdx = propValue.IndexOf(')', startIdx);
-            if (endIdx <= -1) return propValue;
-            endIdx -= 1;
+            var urlToken = tokens.OfType<UrlToken>().SingleOrDefault();
 
-            while (startIdx < endIdx && (char.IsWhiteSpace(propValue[startIdx]) || propValue[startIdx] == '\'' || propValue[startIdx] == '"'))
-                startIdx++;
-
-            while (startIdx < endIdx && (char.IsWhiteSpace(propValue[endIdx]) || propValue[endIdx] == '\'' || propValue[endIdx] == '"'))
-                endIdx--;
-
-            return startIdx <= endIdx ? propValue.Substring(startIdx, endIdx - startIdx + 1) : propValue;
+            return urlToken is not null ? CssImage.GetUrl(urlToken.Data) : null;
         }
 
         public static CssFontFace GetFontFacePropertyValue(string propValue)
         {
-            var lexer = new Lexer(new TextSource(propValue));
+            var tokens = GetCssTokens(propValue);
+
+            var urlToken = tokens.OfType<UrlToken>().SingleOrDefault();
+            var formatToken = tokens.OfType<FunctionToken>().SingleOrDefault(x => x.Data == "format");
+            var techToken = tokens.OfType<FunctionToken>().SingleOrDefault(x => x.Data == "tech");
+            var localToken = tokens.OfType<FunctionToken>().SingleOrDefault(x => x.Data == "local");
+
+            return new CssFontFace(urlToken?.Data, formatToken?.ArgumentTokens?.FirstOrDefault()?.Data, techToken?.ArgumentTokens?.FirstOrDefault()?.Data, localToken?.ArgumentTokens?.FirstOrDefault()?.Data);
+        }
+
+        public static List<Token> GetCssTokens(string propValue)
+        {
+            var lexer = new Lexer(propValue);
 
             List<Token> tokens = [];
 
@@ -416,12 +418,7 @@ namespace PeachPDF.Html.Core.Parse
 
             } while (token.Type != TokenType.EndOfFile);
 
-            var urlToken = tokens.OfType<UrlToken>().SingleOrDefault();
-            var formatToken = tokens.OfType<FunctionToken>().SingleOrDefault(x => x.Data == "format");
-            var techToken = tokens.OfType<FunctionToken>().SingleOrDefault(x => x.Data == "tech");
-            var localToken = tokens.OfType<FunctionToken>().SingleOrDefault(x => x.Data == "local");
-
-            return new CssFontFace(urlToken?.Data, formatToken?.ArgumentTokens?.FirstOrDefault()?.Data, techToken?.ArgumentTokens?.FirstOrDefault()?.Data, localToken?.ArgumentTokens?.FirstOrDefault()?.Data);
+            return tokens;
         }
 
         public static string GetFontFaceFamilyName(string propValue)

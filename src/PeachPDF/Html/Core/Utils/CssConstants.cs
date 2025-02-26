@@ -18,10 +18,12 @@ namespace PeachPDF.Html.Core.Utils
     internal static class CssConstants
     {
         public const string Absolute = "absolute";
-        public const string Auto = "auto";
+        public const string After = "after";
         public const string Always = "always";
+        public const string Auto = "auto";
         public const string Avoid = "avoid";
         public const string Baseline = "baseline";
+        public const string Before = "before";
         public const string Blink = "blink";
         public const string Block = "block";
         public const string InlineBlock = "inline-block";
@@ -34,6 +36,7 @@ namespace PeachPDF.Html.Core.Utils
         public const string KeepAll = "keep-all";
         public const string Center = "center";
         public const string Collapse = "collapse";
+        public const string Counter = "counter";
         public const string ContentBox = "content-box";
         public const string CurrentColor = "currentcolor";
         public const string Cursive = "cursive";

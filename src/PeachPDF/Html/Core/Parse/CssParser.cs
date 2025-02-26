@@ -134,7 +134,11 @@ namespace PeachPDF.Html.Core.Parse
                     }
 
                     var importedStylesheet = await StylesheetLoadHandler.LoadStylesheet(_htmlContainer, importRule.Href);
-                    await ParseStyle(data, importedStylesheet);
+
+                    if (importedStylesheet is not null)
+                    {
+                        await ParseStyle(data, importedStylesheet);
+                    }
                 }
                 else
                 {

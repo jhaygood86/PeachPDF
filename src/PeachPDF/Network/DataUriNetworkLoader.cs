@@ -1,6 +1,7 @@
 ﻿#nullable enable
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 
@@ -15,9 +16,9 @@ namespace PeachPDF.Network
             return null!;
         }
 
-        public override Task<Stream?> GetResourceStream(RUri uri)
+        public override Task<RNetworkResponse?> GetResourceStream(RUri uri)
         {
-            if (uri.Scheme is not "data") return Task.FromResult<Stream?>(null);
+            if (uri.Scheme is not "data") return Task.FromResult<RNetworkResponse?>(null);
 
             var dataUri = uri.AbsoluteUri;
             var uriComponents = dataUri.Split(':', 2);
@@ -32,7 +33,9 @@ namespace PeachPDF.Network
 
             var contents = Convert.FromBase64String(uriDataComponents[1]);
 
-            return Task.FromResult<Stream?>(new MemoryStream(contents));
+            var response = new RNetworkResponse(new MemoryStream(contents), null);
+
+            return Task.FromResult<RNetworkResponse?>(response);
 
         }
     }

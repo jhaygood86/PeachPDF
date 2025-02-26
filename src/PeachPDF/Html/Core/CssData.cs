@@ -14,6 +14,7 @@ using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
+using PeachPDF.Html.Core.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -93,7 +94,7 @@ namespace PeachPDF.Html.Core
                 TypeSelector typeSelector => DoesSelectorMatch(typeSelector, box),
                 ComplexSelector complexSelector => DoesSelectorMatch(complexSelector, box),
                 CompoundSelector compoundSelector => DoesSelectorMatch(compoundSelector, box),
-                PseudoElementSelector => false,
+                PseudoElementSelector pseudoElementSelector => DoesSelectorMatch(pseudoElementSelector, box),
                 PseudoClassSelector pseudoClassSelector => DoesSelectorMatch(pseudoClassSelector, box),
                 AttrMatchSelector attrMatchSelector => DoesSelectorMatch(attrMatchSelector, box),
                 ClassSelector classSelector => DoesSelectorMatch(classSelector, box),
@@ -111,7 +112,56 @@ namespace PeachPDF.Html.Core
 
         private static bool DoesSelectorMatch(CompoundSelector compoundSelector, CssBox? box)
         {
-            return compoundSelector.All(selector => DoesSelectorMatch(selector, box));
+            if (box is null)
+            {
+                return false;
+            }
+
+            if (compoundSelector.Last() is not PseudoElementSelector pseudoElementSelector)
+                return compoundSelector.All(selector => DoesSelectorMatch(selector, box));
+
+            var referenceBox = box.IsPseudoElement ? box.ParentBox : box;
+
+            var isMatchWithoutPseudoElement = compoundSelector
+                .Where(x => x is not PseudoElementSelector)
+                .All(selector => DoesSelectorMatch(selector, referenceBox));
+
+            if (!isMatchWithoutPseudoElement) return false;
+
+            if (box.IsPseudoElement)
+            {
+                return DoesSelectorMatch(pseudoElementSelector, box);
+            }
+                
+            switch (pseudoElementSelector.Name)
+            {
+                case CssConstants.Before:
+                {
+                    var beforePseudoBox = new CssBox(box, null)
+                    {
+                        IsBeforePseudoElement = true
+                    };
+
+                    beforePseudoBox.InheritStyle(box);
+                    box.Boxes.Remove(beforePseudoBox);
+                    box.Boxes.Insert(0, beforePseudoBox);
+                    break;
+                }
+                case CssConstants.After:
+                {
+                    var afterPseudoBox = new CssBox(box, null)
+                    {
+                        IsAfterPseudoElement = true
+                    };
+
+                    afterPseudoBox.InheritStyle(box);
+                    box.Boxes.Remove(afterPseudoBox);
+                    box.Boxes.Add(afterPseudoBox);
+                    break;
+                }
+            }
+
+            return false;
         }
 
         private static bool DoesSelectorMatch(TypeSelector typeSelector, CssBox? box)
@@ -176,9 +226,9 @@ namespace PeachPDF.Html.Core
             return false;
         }
 
-        private static bool DoesSelectorMatch(AttrListSelector attrListSelector, CssBox box)
+        private static bool DoesSelectorMatch(AttrListSelector attrListSelector, CssBox? box)
         {
-            if (box.HtmlTag is null)
+            if (box?.HtmlTag?.Attributes is null)
             {
                 return false;
             }
@@ -196,9 +246,9 @@ namespace PeachPDF.Html.Core
             return false;
         }
 
-        private static bool DoesSelectorMatch(AttrContainsSelector attrContainsSelector, CssBox box)
+        private static bool DoesSelectorMatch(AttrContainsSelector attrContainsSelector, CssBox? box)
         {
-            if (box.HtmlTag is null)
+            if (box?.HtmlTag?.Attributes is null)
             {
                 return false;
             }
@@ -214,9 +264,26 @@ namespace PeachPDF.Html.Core
             return false;
         }
 
-        private static bool DoesSelectorMatch(PseudoClassSelector pseudoClassSelector, CssBox box)
+        private static bool DoesSelectorMatch(PseudoClassSelector pseudoClassSelector, CssBox? box)
         {
-            return pseudoClassSelector.Class == "link" && box.IsClickable;
+            return pseudoClassSelector.Class == "link" && box is not null && box.IsClickable;
+        }
+
+        private static bool DoesSelectorMatch(PseudoElementSelector pseudoElementSelector, CssBox? box)
+        {
+            if (box is null)
+            {
+                return false;
+            }
+
+            switch (pseudoElementSelector.Name)
+            {
+                case CssConstants.Before when box.IsBeforePseudoElement:
+                case CssConstants.After when box.IsAfterPseudoElement:
+                    return true;
+                default:
+                    return false;
+            }
         }
 
         private static bool DoesSelectorMatch(ComplexSelector complexSelector, CssBox? box)
@@ -242,7 +309,7 @@ namespace PeachPDF.Html.Core
                         }
 
                         isLowestItem = false;
-                        currentLevel = box.ParentBox;
+                        currentLevel = box?.ParentBox;
                         continue;
                     }
 

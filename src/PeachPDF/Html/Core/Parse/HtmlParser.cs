@@ -10,8 +10,6 @@
 // - Sun Tsu,
 // "The Art of War"
 
-#nullable enable
-
 using System;
 using System.Collections.Generic;
 using System.IO;

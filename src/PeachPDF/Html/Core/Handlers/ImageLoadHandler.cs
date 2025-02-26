@@ -82,6 +82,16 @@ namespace PeachPDF.Html.Core.Handlers
         public RImage? Image { get; private set; }
 
         /// <summary>
+        /// Sets image of this image box from a CSS image definition
+        /// </summary>
+        /// <param name="image"></param>
+        /// <returns></returns>
+        public async ValueTask LoadImage(CssImage image)
+        {
+            if (image.Kind == CssImage.CssImageKind.Url) await LoadImage(image.Url!);
+        }
+
+        /// <summary>
         /// Set image of this image box by analyzing the src attribute.<br/>
         /// Load the image from inline base64 encoded string.<br/>
         /// Or from calling property/method on the bridge object that returns image or URL to image.<br/>
@@ -241,11 +251,11 @@ namespace PeachPDF.Html.Core.Handlers
                 return;
             }
 
-            var stream = await _htmlContainer.Adapter.GetResourceStream(source);
+            var networkResponse = await _htmlContainer.Adapter.GetResourceStream(source);
 
-            if (stream is not null)
+            if (networkResponse?.ResourceStream is not null)
             {
-                LoadImageFromStream(stream);
+                LoadImageFromStream(networkResponse.ResourceStream);
             }
 
             ImageLoadComplete();

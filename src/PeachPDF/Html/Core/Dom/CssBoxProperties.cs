@@ -10,13 +10,12 @@
 // - Sun Tsu,
 // "The Art of War"
 
-#nullable enable
-
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
+using System.Collections.Generic;
 using System.Globalization;
 
 namespace PeachPDF.Html.Core.Dom
@@ -236,6 +235,9 @@ namespace PeachPDF.Html.Core.Dom
         public string CornerSeRadius { get; set; } = "0";
 
         public string CornerSwRadius { get; set; } = "0";
+        public string CounterIncrement { get; set; } = CssConstants.None;
+        public string CounterReset { get; set; } = CssConstants.None;
+        public string CounterSet { get; set; } = CssConstants.None;
 
         public string MarginBottom { get; set; } = "0";
 
@@ -321,8 +323,7 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        public string? Content { get; set; } = "normal";
-
+        public string Content { get; set; } = CssConstants.Normal;
         public string Display
         {
             get

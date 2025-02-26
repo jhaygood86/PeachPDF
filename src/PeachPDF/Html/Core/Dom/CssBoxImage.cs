@@ -16,6 +16,7 @@ using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Utils;
 using System;
 using System.Threading.Tasks;
+using PeachPDF.Html.Core.Parse;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -111,8 +112,16 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     _imageLoadHandler = new ImageLoadHandler(HtmlContainer!);
 
-                    if (this.Content != null && this.Content != CssConstants.Normal)
-                        await _imageLoadHandler.LoadImage(this.Content);
+                    if (Content != CssConstants.Normal)
+                    {
+                        var imageContent = CssValueParser.GetImagePropertyValue(Content);
+
+                        if (imageContent is not null)
+                        {
+                            await _imageLoadHandler.LoadImage(imageContent);
+                        }
+                        
+                    }
                     else
                         await _imageLoadHandler.LoadImage(ImageSource);
 

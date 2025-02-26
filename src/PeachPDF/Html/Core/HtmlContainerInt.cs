@@ -270,17 +270,6 @@ namespace PeachPDF.Html.Core
         }
 
         /// <summary>
-        /// Get css link href at the given x,y location.
-        /// </summary>
-        /// <param name="location">the location to find the link at</param>
-        /// <returns>css link href if exists or null</returns>
-        public string GetLinkAt(RPoint location)
-        {
-            var link = DomUtils.GetLinkBox(Root, OffsetByScroll(location));
-            return link?.HrefLink;
-        }
-
-        /// <summary>
         /// Get the rectangle of html element as calculated by html layout.<br/>
         /// Element if found by id (id attribute on the html element).<br/>
         /// Note: to get the screen rectangle you need to adjust by the hosting control.<br/>

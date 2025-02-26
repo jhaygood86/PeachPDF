@@ -72,7 +72,7 @@ namespace PeachPDF.Adapters
 
         internal FontResolver FontResolver => _fontResolver;
 
-        public override async Task<Stream?> GetResourceStream(RUri uri)
+        public override async Task<RNetworkResponse?> GetResourceStream(RUri uri)
         {
             if (!uri.IsAbsoluteUri || uri.Scheme is not "data") return await NetworkLoader.GetResourceStream(uri);
 

@@ -10,8 +10,6 @@
 // - Sun Tsu,
 // "The Art of War"
 
-#nullable enable
-
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Handlers;
@@ -222,6 +220,11 @@ namespace PeachPDF.Html.Core.Parse
                     AssignCssBlock(valueParser, box, block.StyleRules.Single(), importantPropertyNames);
                 }
             }
+
+            // Correct current color
+            CssUtils.ApplyCurrentColor(box, valueParser);
+
+
 
             // cascade text decoration only to boxes that actually have text so it will be handled correctly.
             if (box.TextDecoration != string.Empty && box.Text == null)
@@ -512,6 +515,9 @@ namespace PeachPDF.Html.Core.Parse
             for (var i = box.Boxes.Count - 1; i >= 0; i--)
             {
                 var childBox = box.Boxes[i];
+
+                CssContentEngine.ApplyContent(childBox);
+
                 if (childBox.Text != null)
                 {
                     // is the box has text

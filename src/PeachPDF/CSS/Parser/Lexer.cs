@@ -15,6 +15,11 @@ namespace PeachPDF.CSS
             IsInValue = false;
         }
 
+        public Lexer(string source) : base(new TextSource(source))
+        {
+            IsInValue = false;
+        }
+
         public bool IsInValue { get; set; }
 
         public Token Get()

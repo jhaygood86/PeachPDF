@@ -2,6 +2,7 @@
 
 using System;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 
@@ -18,18 +19,18 @@ namespace PeachPDF.Network
                 throw new InvalidOperationException("Primary contents URL is not set.");
             }
 
-            var stream = await GetResourceStream(BaseUri);
+            var networkResponse = await GetResourceStream(BaseUri);
 
-            if (stream is null)
+            if (networkResponse?.ResourceStream is null)
             {
                 throw new InvalidOperationException("Primary contents stream is null.");
             }
 
-            using var streamReader = new StreamReader(stream);
+            using var streamReader = new StreamReader(networkResponse.ResourceStream);
             return await streamReader.ReadToEndAsync();
         }
 
-        public override async Task<Stream?> GetResourceStream(RUri uri)
+        public override async Task<RNetworkResponse?> GetResourceStream(RUri uri)
         {
             var response = await httpClient.GetAsync(uri.Uri);
 
@@ -38,7 +39,10 @@ namespace PeachPDF.Network
                 return null;
             }
 
-            return await response.Content.ReadAsStreamAsync();
+            var headers = response.Headers.ToDictionary(x => x.Key, x => x.Value.ToArray());
+            var stream = await response.Content.ReadAsStreamAsync();
+
+            return new RNetworkResponse(stream, headers);
         }
     }
 }

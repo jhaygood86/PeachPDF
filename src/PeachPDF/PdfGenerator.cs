@@ -97,10 +97,8 @@ namespace PeachPDF
         /// <param name="html">HTML source to create PDF from</param>
         /// <param name="config">the configuration to use for the PDF generation (page size/page orientation/margins/etc.)</param>
         /// <param name="cssData">optional: the style to use for html rendering (default - use W3 default style)</param>
-        /// <param name="stylesheetLoad">optional: can be used to overwrite stylesheet resolution logic</param>
-        /// <param name="imageLoad">optional: can be used to overwrite image resolution logic</param>
         /// <returns>the generated image of the html</returns>
-        public async Task<PdfDocument> GeneratePdf(string html, PdfGenerateConfig config, CssData? cssData = null)
+        public async Task<PdfDocument> GeneratePdf(string? html, PdfGenerateConfig config, CssData? cssData = null)
         {
             // create PDF document to render the HTML into
             var document = new PdfDocument();
@@ -119,8 +117,6 @@ namespace PeachPDF
         /// <param name="pageSize">the page size to use for each page in the generated pdf </param>
         /// <param name="margin">the margin to use between the HTML and the edges of each page</param>
         /// <param name="cssData">optional: the style to use for html rendering (default - use W3 default style)</param>
-        /// <param name="stylesheetLoad">optional: can be used to overwrite stylesheet resolution logic</param>
-        /// <param name="imageLoad">optional: can be used to overwrite image resolution logic</param>
         /// <returns>the generated image of the html</returns>
         public async Task AddPdfPages(PdfDocument document, string html, PageSize pageSize, int margin = 20, CssData? cssData = null)
         {
@@ -141,10 +137,8 @@ namespace PeachPDF
         /// <param name="html">HTML source to create PDF from</param>
         /// <param name="config">the configuration to use for the PDF generation (page size/page orientation/margins/etc.)</param>
         /// <param name="cssData">optional: the style to use for html rendering (default - use W3 default style)</param>
-        /// <param name="stylesheetLoad">optional: can be used to overwrite stylesheet resolution logic</param>
-        /// <param name="imageLoad">optional: can be used to overwrite image resolution logic</param>
         /// <returns>the generated image of the html</returns>
-        public async Task AddPdfPages(PdfDocument document, string html, PdfGenerateConfig config, CssData? cssData = null)
+        public async Task AddPdfPages(PdfDocument document, string? html, PdfGenerateConfig config, CssData? cssData = null)
         {
             // get the size of each page to layout the HTML in
             var orgPageSize = config.PageSize != PageSize.Undefined ? PageSizeConverter.ToSize(config.PageSize) : config.ManualPageSize;
@@ -160,7 +154,7 @@ namespace PeachPDF
             _pdfSharpAdapter.NetworkLoader = config.NetworkLoader ?? new DataUriNetworkLoader();
             _pdfSharpAdapter.PixelsPerPoint = config.PixelsPerInch / 72d;
 
-            html ??= await config.NetworkLoader.GetPrimaryContents();
+            html ??= await _pdfSharpAdapter.NetworkLoader.GetPrimaryContents();
 
             using var container = new HtmlContainer(_pdfSharpAdapter);
 
@@ -215,7 +209,7 @@ namespace PeachPDF
             measure?.Dispose();
         }
 
-        private static async Task SetContent(HtmlContainer container, PdfGenerateConfig config, string html, CssData cssData, XSize orgPageSize)
+        private static async Task SetContent(HtmlContainer container, PdfGenerateConfig config, string html, CssData? cssData, XSize orgPageSize)
         {
             container.MarginBottom = config.MarginBottom;
             container.MarginLeft = config.MarginLeft;

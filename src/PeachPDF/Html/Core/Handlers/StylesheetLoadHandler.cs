@@ -10,12 +10,13 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.CSS;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Utils;
+using PeachPDF.Network;
 using System;
 using System.IO;
 using System.Threading.Tasks;
-using PeachPDF.Network;
 
 namespace PeachPDF.Html.Core.Handlers
 {
@@ -30,7 +31,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// <param name="htmlContainer">the container of the html to handle load stylesheet for</param>
         /// <param name="src">the file path or uri to load the stylesheet from</param>
         /// <returns>the stylesheet string</returns>
-        public static async Task<string> LoadStylesheet(HtmlContainerInt htmlContainer, string src)
+        public static async Task<string?> LoadStylesheet(HtmlContainerInt htmlContainer, string src)
         {
             try
             {
@@ -48,6 +49,7 @@ namespace PeachPDF.Html.Core.Handlers
                 var uri = CommonUtils.TryGetUri(href)!;
 
                 Stream? stream = null;
+                var isInvalidNetworkResponse = false;
 
                 if (uri.IsFile)
                 {
@@ -60,9 +62,24 @@ namespace PeachPDF.Html.Core.Handlers
                 }
                 else
                 {
-                    stream = await htmlContainer.Adapter.GetResourceStream(uri);
+                    var networkResponse = await htmlContainer.Adapter.GetResourceStream(uri);
 
+                    isInvalidNetworkResponse = true;
 
+                    if (networkResponse?.ResponseHeaders?.TryGetValue("Content-Type", out var contentType) ?? false)
+                    {
+                        if (contentType.Contains("text/css"))
+                        {
+                            stream = networkResponse.ResourceStream;
+                            isInvalidNetworkResponse = false;
+                        }
+                    }
+
+                }
+
+                if (isInvalidNetworkResponse)
+                {
+                    return string.Empty;
                 }
 
                 if (stream is null)

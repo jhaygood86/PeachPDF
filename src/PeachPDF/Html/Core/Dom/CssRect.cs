@@ -172,14 +172,14 @@ namespace PeachPDF.Html.Core.Dom
         public override string ToString()
         {
             return
-                $"{Text.Replace(' ', '-').Replace("\n", "\\n")} ({Text.Length} char{(Text.Length != 1 ? "s" : string.Empty)})";
+                $"{Text!.Replace(' ', '-').Replace("\n", "\\n")} ({Text.Length} char{(Text.Length != 1 ? "s" : string.Empty)})";
         }
 
         public bool BreakPage()
         {
             var container = this.OwnerBox.HtmlContainer;
 
-            if (this.Height >= container.PageSize.Height)
+            if (this.Height >= container!.PageSize.Height)
                 return false;
 
             var remTop = (this.Top - container.MarginTop) % container.PageSize.Height;

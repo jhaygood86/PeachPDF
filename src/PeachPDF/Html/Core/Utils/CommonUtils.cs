@@ -98,6 +98,24 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         /// <summary>
+        /// Returns true if the provided span represents an integer
+        /// </summary>
+        /// <param name="value">A span of characters</param>
+        /// <returns>true if an integer, false otherwise</returns>
+        public static bool IsInteger(ReadOnlySpan<char> value)
+        {
+            foreach (var charValue in value)
+            {
+                if (!char.IsNumber(charValue) && charValue is not '-')
+                {
+                    return false;
+                }
+            }
+
+            return value.Length > 0;
+        }
+
+        /// <summary>
         /// Convert the given char to digit.
         /// </summary>
         /// <param name="ch">the character to check</param>
