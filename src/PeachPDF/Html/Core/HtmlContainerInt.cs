@@ -296,7 +296,7 @@ namespace PeachPDF.Html.Core
             if (Root is null) return;
 
             // if width is not restricted we set it to large value to get the actual later
-            Root.Size = new RSize(MaxSize.Width > 0 ? MaxSize.Width : 99999, 0);
+            Root.Size = new RSize(MaxSize.Width > 0 ? MaxSize.Width : PageSize.Width, 0);
             Root.Location = Location;
             await Root.PerformLayout(g);
 

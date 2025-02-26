@@ -170,7 +170,7 @@ namespace PeachPDF
                 var actualWidth = container.ActualSize.Width;
                 
                 _pdfSharpAdapter.ClearFontCache();
-                var pixelsPerPoint = (config.PixelsPerInch / 72d) * (actualWidth / orgPageSize.Width);
+                var pixelsPerPoint = (config.PixelsPerInch / 72d) * (actualWidth / container.PageSize.Width);
 
                 _pdfSharpAdapter.PixelsPerPoint = (config.ShrinkToFit && pixelsPerPoint > 1) || config.ScaleToPageSize
                     ? pixelsPerPoint
