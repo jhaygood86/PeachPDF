@@ -237,7 +237,7 @@ namespace PeachPDF.Html.Core
             {
                 if (attribute.Key.Equals(attrListSelector.Attribute, StringComparison.InvariantCultureIgnoreCase))
                 {
-                    var attributeValues = attribute.Value.Split(' ');
+                    var attributeValues = attribute.Value.Split(' ').Where(x => x.Length > 0).ToArray();
 
                     return attributeValues.Any(value => value.Equals(attrListSelector.Value, StringComparison.InvariantCultureIgnoreCase));
                 }

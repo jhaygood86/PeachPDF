@@ -39,7 +39,10 @@ namespace PeachPDF.Network
                 return null;
             }
 
-            var headers = response.Headers.ToDictionary(x => x.Key, x => x.Value.ToArray());
+            var headers = response.Headers
+                .Union(response.Content.Headers)
+                .ToDictionary(x => x.Key, x => x.Value.ToArray());
+
             var stream = await response.Content.ReadAsStreamAsync();
 
             return new RNetworkResponse(stream, headers);
