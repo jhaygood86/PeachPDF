@@ -94,6 +94,11 @@ namespace PeachPDF.Html.Core.Dom
             HtmlTag = tag;
         }
 
+        public static void ClearCounter()
+        {
+            _idCounter = 0;
+        }
+
         /// <summary>
         /// Gets the HtmlContainer of the Box.
         /// WARNING: May be null.
@@ -134,6 +139,8 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         public bool IsBrElement => HtmlTag != null && HtmlTag.Name.Equals("br", StringComparison.InvariantCultureIgnoreCase);
 
+        public bool IsRoot { get; set; }
+
         public bool IsBeforePseudoElement { get; set; }
 
         public bool IsAfterPseudoElement { get; set; }
@@ -143,7 +150,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// is the box "Display" is "Inline", is this is an inline box and not block.
         /// </summary>
-        public bool IsInline => Display is CssConstants.Inline or CssConstants.InlineBlock && !IsBrElement;
+        public bool IsInline => Display is CssConstants.Inline or CssConstants.InlineBlock or CssConstants.InlineTable && !IsBrElement;
 
         /// <summary>
         /// is the box "Display" is "Block", is this is a block box and not inline.
@@ -221,6 +228,26 @@ namespace PeachPDF.Html.Core.Dom
                 return box;
             }
         }
+
+        /// <summary>
+        /// Gets the actual top's Margin
+        /// </summary>
+        public double ActualMarginTop => CssValueParser.ParseLength(MarginTop, ContainingBlock.Size.Width, this);
+
+        /// <summary>
+        /// Gets the actual Margin on the left
+        /// </summary>
+        public double ActualMarginLeft => CssLayoutEngine.GetActualMarginLeft(this);
+
+        /// <summary>
+        /// Gets the actual Margin of the bottom
+        /// </summary>
+        public double ActualMarginBottom => CssValueParser.ParseLength(MarginBottom, ContainingBlock.Size.Width, this);
+
+        /// <summary>
+        /// Gets the actual Margin on the right
+        /// </summary>
+        public double ActualMarginRight => CssLayoutEngine.GetActualMarginRight(this);
 
         /// <summary>
         /// Gets the HTMLTag that hosts this box
@@ -603,7 +630,7 @@ namespace PeachPDF.Html.Core.Dom
 
                     if (Width != CssConstants.Auto && !string.IsNullOrEmpty(Width))
                     {
-                        width = CssValueParser.ParseLength(Width, width, this);
+                        width = CssValueParser.ParseLength(Width, ContainingBlock.Size.Width, this);
                     }
 
                     ActualRight = Location.X + width + ActualBoxSizeIncludedWidth;
@@ -616,7 +643,7 @@ namespace PeachPDF.Html.Core.Dom
                         var prevSibling = DomUtils.GetPreviousSibling(this, false);
 
                         var left = ContainingBlock.ClientLeft;
-                        var top = (prevSibling == null && ContainingBlock != null ? ContainingBlock.ClientTop : ParentBox == null ? Location.Y : 0) + MarginTopCollapse(prevSibling) + (prevSibling != null ? prevSibling.ActualBottom + prevSibling.ActualBorderBottomWidth : 0);
+                        var top = (prevSibling == null ? ContainingBlock.ClientTop : ParentBox == null ? Location.Y : 0) + MarginTopCollapse(prevSibling) + (prevSibling != null ? prevSibling.ActualBottom + prevSibling.ActualBorderBottomWidth : 0);
 
                         Location = new RPoint(left + ActualMarginLeft, top);
                         ActualBottom = top;
@@ -1127,7 +1154,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         /// <param name="prevSibling">the previous box under the same parent</param>
         /// <returns>Resulting top margin</returns>
-        protected double MarginTopCollapse(CssBoxProperties? prevSibling)
+        protected double MarginTopCollapse(CssBox? prevSibling)
         {
             double value;
             if (prevSibling != null)
@@ -1255,8 +1282,10 @@ namespace PeachPDF.Html.Core.Dom
 
             _listItemBox?.OffsetTop(amount);
 
-            Location = new RPoint(Location.X, Location.Y + amount);
+            Location = Location with { Y = Location.Y + amount };
         }
+
+        private bool _hasPainted = false;
 
         /// <summary>
         /// Paints the fragment
@@ -1264,6 +1293,11 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="g">the device to draw to</param>
         protected virtual async ValueTask PaintImp(RGraphics g)
         {
+            if (_hasPainted)
+            {
+                return;
+            }
+
             if (Display == CssConstants.None ||
                 (Display == CssConstants.TableCell && EmptyCells == CssConstants.Hide && IsSpaceOrEmpty)) return;
 
@@ -1303,24 +1337,37 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
-            // split paint to handle z-order
-            foreach (var b in Boxes)
+            var stackingContextBoxes = DomUtils.FlattenStackingContext(this);
+
+            foreach (var layerBoxes in DomUtils.GetBoxesByLayers(stackingContextBoxes))
             {
-                if (b.Position != CssConstants.Absolute && !b.IsFixed)
-                    await b.Paint(g);
+                // split paint to handle z-order
+                foreach (var b in layerBoxes)
+                {
+                    if (b.Position != CssConstants.Absolute && b is { IsFixed: false, IsFloated: false })
+                        await b.Paint(g);
+                }
+
+                foreach (var b in layerBoxes)
+                {
+                    if (b.IsFloated)
+                        await b.Paint(g);
+                }
+
+                foreach (var b in layerBoxes)
+                {
+                    if (b.Position == CssConstants.Absolute)
+                        await b.Paint(g);
+                }
+
+                foreach (var b in layerBoxes)
+                {
+                    if (b.IsFixed)
+                        await b.Paint(g);
+                }
             }
 
-            foreach (var b in Boxes)
-            {
-                if (b.Position == CssConstants.Absolute)
-                    await b.Paint(g);
-            }
 
-            foreach (var b in Boxes)
-            {
-                if (b.IsFixed)
-                    await b.Paint(g);
-            }
 
             if (clipped)
                 g.PopClip();
@@ -1329,6 +1376,8 @@ namespace PeachPDF.Html.Core.Dom
             {
                 await _listItemBox.Paint(g);
             }
+
+            _hasPainted = true;
         }
 
         private static bool IsRectVisible(RRect rect, RRect clip)

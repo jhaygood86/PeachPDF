@@ -102,6 +102,7 @@ namespace PeachPDF.Html.Core
                 AttrAvailableSelector attrAvailableSelector => DoesSelectorMatch(attrAvailableSelector, box),
                 AttrContainsSelector attrContainsSelector => DoesSelectorMatch(attrContainsSelector, box),
                 AttrListSelector attrListSelector => DoesSelectorMatch(attrListSelector, box),
+                FirstChildSelector firstChildSelector => DoesSelectorMatch(firstChildSelector, box),
                 _ => false
             };
         }
@@ -117,48 +118,64 @@ namespace PeachPDF.Html.Core
                 return false;
             }
 
-            if (compoundSelector.Last() is not PseudoElementSelector pseudoElementSelector)
+            var lastSelector = compoundSelector.Last();
+
+            if (lastSelector is not PseudoElementSelector or FirstChildSelector)
                 return compoundSelector.All(selector => DoesSelectorMatch(selector, box));
 
-            var referenceBox = box.IsPseudoElement ? box.ParentBox : box;
-
-            var isMatchWithoutPseudoElement = compoundSelector
-                .Where(x => x is not PseudoElementSelector)
-                .All(selector => DoesSelectorMatch(selector, referenceBox));
-
-            if (!isMatchWithoutPseudoElement) return false;
-
-            if (box.IsPseudoElement)
+            if (lastSelector is PseudoElementSelector pseudoElementSelector)
             {
-                return DoesSelectorMatch(pseudoElementSelector, box);
+                var referenceBox = box.IsPseudoElement ? box.ParentBox : box;
+
+                var isMatchWithoutPseudoElement = compoundSelector
+                    .Where(x => x is not PseudoElementSelector)
+                    .All(selector => DoesSelectorMatch(selector, referenceBox));
+
+                if (!isMatchWithoutPseudoElement) return false;
+
+                if (box.IsPseudoElement)
+                {
+                    return DoesSelectorMatch(pseudoElementSelector, box);
+                }
+
+                switch (pseudoElementSelector.Name)
+                {
+                    case CssConstants.Before:
+                    {
+                        var beforePseudoBox = new CssBox(box, null)
+                        {
+                            IsBeforePseudoElement = true
+                        };
+
+                        beforePseudoBox.InheritStyle(box);
+                        box.Boxes.Remove(beforePseudoBox);
+                        box.Boxes.Insert(0, beforePseudoBox);
+                        break;
+                    }
+                    case CssConstants.After:
+                    {
+                        var afterPseudoBox = new CssBox(box, null)
+                        {
+                            IsAfterPseudoElement = true
+                        };
+
+                        afterPseudoBox.InheritStyle(box);
+                        box.Boxes.Remove(afterPseudoBox);
+                        box.Boxes.Add(afterPseudoBox);
+                        break;
+                    }
+                }
             }
-                
-            switch (pseudoElementSelector.Name)
+
+            if (lastSelector is FirstChildSelector firstChildSelector)
             {
-                case CssConstants.Before:
-                {
-                    var beforePseudoBox = new CssBox(box, null)
-                    {
-                        IsBeforePseudoElement = true
-                    };
+                var referenceBox = DomUtils.GetNearestParentElementBox(box);
 
-                    beforePseudoBox.InheritStyle(box);
-                    box.Boxes.Remove(beforePseudoBox);
-                    box.Boxes.Insert(0, beforePseudoBox);
-                    break;
-                }
-                case CssConstants.After:
-                {
-                    var afterPseudoBox = new CssBox(box, null)
-                    {
-                        IsAfterPseudoElement = true
-                    };
+                var isMatchWithoutNthChildElement = compoundSelector
+                    .Where(x => x is not FirstChildSelector)
+                    .All(selector => DoesSelectorMatch(selector, referenceBox));
 
-                    afterPseudoBox.InheritStyle(box);
-                    box.Boxes.Remove(afterPseudoBox);
-                    box.Boxes.Add(afterPseudoBox);
-                    break;
-                }
+                return isMatchWithoutNthChildElement && DoesSelectorMatch(firstChildSelector, box);
             }
 
             return false;
@@ -284,6 +301,24 @@ namespace PeachPDF.Html.Core
                 default:
                     return false;
             }
+        }
+
+        private static bool DoesSelectorMatch(FirstChildSelector firstChildSelector, CssBox? box)
+        {
+            if (box?.HtmlTag is null)
+            {
+                return false;
+            }
+
+            var parentBox = DomUtils.GetNearestParentElementBox(box);
+
+            if (parentBox is null)
+            {
+                return false;
+            }
+
+            var currentIndex = parentBox.Boxes.Where(b => b.HtmlTag is not null).ToList();
+            return currentIndex.IndexOf(box) == firstChildSelector.Offset;
         }
 
         private static bool DoesSelectorMatch(ComplexSelector complexSelector, CssBox? box)

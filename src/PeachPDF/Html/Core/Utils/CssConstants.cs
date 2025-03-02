@@ -133,6 +133,7 @@ namespace PeachPDF.Html.Core.Utils
         public const string Groove = "groove";
         public const string Ridge = "ridge";
         public const string Wavy = "wavy";
+        public const string PeachBaselineMiddle = "-peachpdf-baseline-middle"; // same as -webkit-baseline-middle
 
         /// <summary>
         /// Centimeters

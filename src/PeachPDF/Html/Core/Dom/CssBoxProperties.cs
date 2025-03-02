@@ -66,11 +66,7 @@ namespace PeachPDF.Html.Core.Dom
         private double _actualPaddingBottom = double.NaN;
         private double _actualPaddingRight = double.NaN;
         private double _actualPaddingLeft = double.NaN;
-        private double _actualMarginTop = double.NaN;
         private double _collapsedMarginTop = double.NaN;
-        private double _actualMarginBottom = double.NaN;
-        private double _actualMarginRight = double.NaN;
-        private double _actualMarginLeft = double.NaN;
         private double _actualBorderTopWidth = double.NaN;
         private double _actualBorderLeftWidth = double.NaN;
         private double _actualBorderBottomWidth = double.NaN;
@@ -623,89 +619,12 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Gets the actual top's Margin
-        /// </summary>
-        public double ActualMarginTop
-        {
-            get
-            {
-                if (!double.IsNaN(_actualMarginTop)) return _actualMarginTop;
-
-                if (MarginTop == CssConstants.Auto)
-                    MarginTop = "0";
-
-                var actualMarginTop = CssValueParser.ParseLength(MarginTop, Size.Width, this);
-                if (MarginLeft.EndsWith('%'))
-                    return actualMarginTop;
-
-                _actualMarginTop = actualMarginTop;
-                return _actualMarginTop;
-            }
-        }
-
-        /// <summary>
         /// The margin top value if was effected by margin collapse.
         /// </summary>
         public double CollapsedMarginTop
         {
             get => double.IsNaN(_collapsedMarginTop) ? 0 : _collapsedMarginTop;
             set => _collapsedMarginTop = value;
-        }
-
-        /// <summary>
-        /// Gets the actual Margin on the left
-        /// </summary>
-        public double ActualMarginLeft
-        {
-            get
-            {
-                if (!double.IsNaN(_actualMarginLeft)) return _actualMarginLeft;
-
-                if (MarginLeft == CssConstants.Auto)
-                    MarginLeft = "0";
-                var actualMarginLeft = CssValueParser.ParseLength(MarginLeft, Size.Width, this);
-                if (MarginLeft.EndsWith('%'))
-                    return actualMarginLeft;
-                _actualMarginLeft = actualMarginLeft;
-                return _actualMarginLeft;
-            }
-        }
-
-        /// <summary>
-        /// Gets the actual Margin of the bottom
-        /// </summary>
-        public double ActualMarginBottom
-        {
-            get
-            {
-                if (!double.IsNaN(_actualMarginBottom)) return _actualMarginBottom;
-
-                if (MarginBottom == CssConstants.Auto)
-                    MarginBottom = "0";
-                var actualMarginBottom = CssValueParser.ParseLength(MarginBottom, Size.Width, this);
-                if (MarginLeft.EndsWith('%'))
-                    return actualMarginBottom;
-                _actualMarginBottom = actualMarginBottom;
-                return _actualMarginBottom;
-            }
-        }
-
-        /// <summary>
-        /// Gets the actual Margin on the right
-        /// </summary>
-        public double ActualMarginRight
-        {
-            get
-            {
-                if (!double.IsNaN(_actualMarginRight)) return _actualMarginRight;
-                if (MarginRight == CssConstants.Auto)
-                    MarginRight = "0";
-                var actualMarginRight = CssValueParser.ParseLength(MarginRight, Size.Width, this);
-                if (MarginLeft.EndsWith('%'))
-                    return actualMarginRight;
-                _actualMarginRight = actualMarginRight;
-                return _actualMarginRight;
-            }
         }
 
         /// <summary>
@@ -1111,6 +1030,8 @@ namespace PeachPDF.Html.Core.Dom
         /// relative, absolute, fixed, or sticky
         /// </summary>
         public bool IsPositioned => Position is CssConstants.Relative or CssConstants.Absolute or CssConstants.Fixed or CssConstants.Sticky;
+
+        public string ZIndex { get; set; } = CssConstants.Auto;
 
         /// <summary>
         /// Get the parent of this css properties instance.

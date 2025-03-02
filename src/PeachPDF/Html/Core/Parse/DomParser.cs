@@ -53,8 +53,9 @@ namespace PeachPDF.Html.Core.Parse
         /// <returns>the root of the generated tree</returns>
         public async Task<(CssBox cssBox, CssData cssData)> GenerateCssTree(string html, HtmlContainerInt htmlContainer, CssData cssData)
         {
+            CssBox.ClearCounter();
             var root = HtmlParser.ParseDocument(html);
-
+            root.IsRoot = true;
             root.HtmlContainer = htmlContainer;
             const bool cssDataChanged = false;
 
@@ -368,10 +369,38 @@ namespace PeachPDF.Html.Core.Parse
                 switch (att)
                 {
                     case HtmlConstants.Align:
-                        if (value is HtmlConstants.Left or HtmlConstants.Center or HtmlConstants.Right or HtmlConstants.Justify)
-                            box.TextAlign = value.ToLower();
+                        if (tag.Name is "img")
+                        {
+                            switch (value)
+                            {
+                                case HtmlConstants.Left:
+                                    box.VerticalAlign = CssConstants.Top;
+                                    box.Float = CssConstants.Left;
+                                    break;
+                                case HtmlConstants.Right:
+                                    box.VerticalAlign = CssConstants.Top;
+                                    box.Float = CssConstants.Right;
+                                    break;
+                                case HtmlConstants.Bottom:
+                                    box.VerticalAlign = CssConstants.Baseline;
+                                    break;
+                                case HtmlConstants.Middle:
+                                    box.VerticalAlign = CssConstants.PeachBaselineMiddle;
+                                    break;
+                                case HtmlConstants.Top:
+                                    box.VerticalAlign = CssConstants.Top;
+                                    break;
+                            }
+                        }
                         else
-                            box.VerticalAlign = value.ToLower();
+                        {
+                            if (value is HtmlConstants.Left or HtmlConstants.Center or HtmlConstants.Right or HtmlConstants.Justify)
+                                box.TextAlign = value.ToLower();
+                            else
+                                box.VerticalAlign = value.ToLower();
+
+                        }
+
                         break;
                     case HtmlConstants.Background:
                         box.BackgroundImage = value.ToLower();

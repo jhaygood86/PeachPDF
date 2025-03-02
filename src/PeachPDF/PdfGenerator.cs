@@ -162,15 +162,24 @@ namespace PeachPDF
 
             var measure = XGraphics.CreateMeasureContext(container.PageSize, XGraphicsUnit.Point, XPageDirection.Downwards);
 
+            var basePixelsPerPoint = config.PixelsPerInch / 72d;
+            var minPixelsPerPoint = config.MinContentWidth > 0 ? config.MinContentWidth / container.PageSize.Width : basePixelsPerPoint;
+            var pixelsPerPoint = minPixelsPerPoint;
+
             if (config.ScaleToPageSize || config.ShrinkToFit)
             {
-                container.MaxSize = XSize.Empty;
+                container.MaxSize = new XSize(container.PageSize.Width, 0);
                 await container.PerformLayout(measure);
 
                 var actualWidth = container.ActualSize.Width;
-                
+
                 _pdfSharpAdapter.ClearFontCache();
-                var pixelsPerPoint = (config.PixelsPerInch / 72d) * (actualWidth / container.PageSize.Width);
+                pixelsPerPoint *= (actualWidth / container.PageSize.Width);
+
+                if (pixelsPerPoint < minPixelsPerPoint)
+                {
+                    pixelsPerPoint = minPixelsPerPoint;
+                }
 
                 _pdfSharpAdapter.PixelsPerPoint = (config.ShrinkToFit && pixelsPerPoint > 1) || config.ScaleToPageSize
                     ? pixelsPerPoint
@@ -179,7 +188,7 @@ namespace PeachPDF
                 await SetContent(container, config, html, cssData, orgPageSize);
 
                 measure?.Dispose();
-                measure = XGraphics.CreateMeasureContext(container.PageSize, XGraphicsUnit.Point, XPageDirection.Downwards); ;
+                measure = XGraphics.CreateMeasureContext(container.PageSize, XGraphicsUnit.Point, XPageDirection.Downwards);
             }
 
             container.MaxSize = new XSize(container.PageSize.Width, 0);

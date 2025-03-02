@@ -15,10 +15,10 @@
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Entities;
+using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System;
 using System.Collections.Generic;
-using System.Data.Common;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -209,7 +209,7 @@ namespace PeachPDF.Html.Core.Dom
                 return;
             }
 
-            var containingBox = box.ParentBox!;
+            var containingBox = box.ContainingBlock!;
 
             var limitRight = containingBox.ClientRight;
 
@@ -233,6 +233,62 @@ namespace PeachPDF.Html.Core.Dom
             {
                 ClearBox(box, currentBoxIdx, containingBox);
             }
+        }
+
+        public static double GetActualMarginLeft(CssBox box, double? boxWidth = null)
+        {
+            if (box.MarginLeft is not CssConstants.Auto)
+            {
+                return CssValueParser.ParseLength(box.MarginLeft, box.ContainingBlock.Size.Width, box);
+            }
+
+            if (box.MarginRight is not CssConstants.Auto) return 0;
+
+            if (box.Display.StartsWith("table-") && box.Display != CssConstants.TableCaption)
+            {
+                return 0;
+            }
+
+            // This will be used by the table layout engine later with boxWidth provided
+            if (box.Display is CssConstants.Table && boxWidth is null)
+            {
+                return 0;
+            }
+
+            var width = boxWidth ?? box.Size.Width;
+            var containingWidth = box.ContainingBlock.Size.Width;
+            var remainingWidth = containingWidth - width;
+
+            return remainingWidth / 2;
+
+        }
+
+        public static double GetActualMarginRight(CssBox box, double? boxWidth = null)
+        {
+            if (box.MarginRight is not CssConstants.Auto)
+            {
+                return CssValueParser.ParseLength(box.MarginRight, box.ContainingBlock.Size.Width, box);
+            }
+
+            if (box.MarginLeft is not CssConstants.Auto) return 0;
+
+            if (box.Display.StartsWith("table-") && box.Display != CssConstants.TableCaption)
+            {
+                return 0;
+            }
+
+            // This will be used by the table layout engine later with boxWidth provided
+            if (box.Display is CssConstants.Table && boxWidth is null)
+            {
+                return 0;
+            }
+
+            var width = boxWidth ?? box.Size.Width;
+            var containingWidth = box.ContainingBlock.Size.Width;
+            var remainingWidth = containingWidth - width;
+
+            return remainingWidth / 2;
+
         }
 
         #region Private methods

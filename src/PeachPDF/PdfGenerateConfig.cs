@@ -63,6 +63,11 @@ namespace PeachPDF
         public bool ShrinkToFit { get; set; }
 
         /// <summary>
+        /// When set to a positive number, sets the PixelsPerInch to fit the minimum content width
+        /// </summary>
+        public double MinContentWidth { get; set; }
+
+        /// <summary>
         /// the page size to use for each page in the generated pdf
         /// </summary>
         public PageSize PageSize { get; set; }

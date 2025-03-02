@@ -127,6 +127,7 @@ namespace PeachPDF.Html.Core.Utils
                 "list-style-image" => cssBox.ListStyleImage,
                 "list-style-type" => cssBox.ListStyleType,
                 "overflow" => cssBox.Overflow,
+                "z-index" => cssBox.ZIndex,
                 _ => null
             };
         }
@@ -480,6 +481,13 @@ namespace PeachPDF.Html.Core.Utils
                     break;
                 case "overflow":
                     cssBox.Overflow = value;
+                    break;
+                case "z-index":
+                    if (value is CssConstants.Auto || int.TryParse(value, out _))
+                    {
+                        cssBox.ZIndex = value;
+                    }
+                    
                     break;
                 case "unicode-bidi":
                 case "background-attachment":

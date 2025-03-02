@@ -483,6 +483,88 @@ namespace PeachPDF.Html.Core.Utils
             return lastIntersectingFloat;
         }
 
+        public static CssBox? GetNearestParentElementBox(CssBox box)
+        {
+            var parentBox = box.ParentBox;
+
+            while (parentBox is not null)
+            {
+                if (parentBox.HtmlTag is not null)
+                {
+                    return parentBox;
+                }
+
+                parentBox = parentBox.ParentBox;
+            }
+
+            return null;
+        }
+
+        public static IEnumerable<CssBox> FlattenStackingContext(CssBox box)
+        {
+            foreach (var childBox in box.Boxes)
+            {
+                if (!IsStackingContextBox(childBox))
+                {
+                    yield return childBox;
+                }
+
+                var flattenedChildBoxes = FlattenStackingContext(childBox);
+
+                foreach (var flattenedChildBox in flattenedChildBoxes)
+                {
+                    if (!IsStackingContextBox(flattenedChildBox))
+                    {
+                        yield return flattenedChildBox;
+                    }
+                }
+            }
+        }
+
+        public static bool IsStackingContextBox(CssBox box)
+        {
+            if (box.IsRoot)
+            {
+                return true;
+            }
+
+            if (box.Position is CssConstants.Absolute or CssConstants.Relative && box.ZIndex is not CssConstants.Auto)
+            {
+                return true;
+            }
+
+            if (box.Position is CssConstants.Fixed or CssConstants.Sticky)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        public static IEnumerable<List<CssBox>> GetBoxesByLayers(IEnumerable<CssBox> cssBoxes)
+        {
+            var boxesByLayer = new Dictionary<int, List<CssBox>>();
+
+            foreach (var cssBox in cssBoxes)
+            {
+                var zIndex = 0;
+
+                if (cssBox.ZIndex is not CssConstants.Auto)
+                {
+                    zIndex = int.Parse(cssBox.ZIndex);
+                }
+
+                if (!boxesByLayer.ContainsKey(zIndex))
+                {
+                    boxesByLayer[zIndex] = [];
+                }
+
+                boxesByLayer[zIndex].Add(cssBox);
+            }
+
+            return boxesByLayer.OrderBy(x => x.Key).Select(x => x.Value);
+        }
+
         private static CssBox? GetNextIntersectingFloatBox(CssBox box, CssFloatCoordinates coordinates, string floatProp)
         {
             if (IsFloatIntersecting(coordinates, floatProp, box))
