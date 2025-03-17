@@ -122,7 +122,6 @@ namespace PeachPDF.Html.Core.Utils
                 "font-style" => cssBox.FontStyle,
                 "font-variant" => cssBox.FontVariant,
                 "font-weight" => cssBox.FontWeight,
-                "list-style" => cssBox.ListStyle,
                 "list-style-position" => cssBox.ListStylePosition,
                 "list-style-image" => cssBox.ListStyleImage,
                 "list-style-type" => cssBox.ListStyleType,
@@ -468,7 +467,7 @@ namespace PeachPDF.Html.Core.Utils
                     cssBox.FontWeight = value;
                     break;
                 case "list-style":
-                    cssBox.ListStyle = value;
+                    SetListStyle(cssBox, value);
                     break;
                 case "list-style-position":
                     cssBox.ListStylePosition = value;
@@ -718,6 +717,39 @@ namespace PeachPDF.Html.Core.Utils
                     break;
             }
         }
+
+        private static void SetListStyle(CssBox box, string propValue)
+        {
+            var values = SplitValues(propValue);
+
+            var listStyleType = CssConstants.None;
+            var listStyleImage = CssConstants.None;
+            var listStylePosition = CssConstants.Outside;
+
+            foreach (var value in values)
+            {
+                if (value is CssConstants.Inside or CssConstants.Outside)
+                {
+                    listStylePosition = value;
+                }
+
+                var imageValue = CssValueParser.GetImagePropertyValue(value);
+
+                if (imageValue is null)
+                {
+                    listStyleType = value;
+                }
+                else
+                {
+                    listStyleImage = value;
+                }
+            }
+
+            box.ListStyleType = listStyleType;
+            box.ListStyleImage = listStyleImage;
+            box.ListStylePosition = listStylePosition;
+        }
+
 
         /// <summary>
         /// Split the value by the specified separator; e.g. Useful in values like 'padding:5 4 3 inherit'

@@ -225,8 +225,6 @@ namespace PeachPDF.Html.Core.Parse
             // Correct current color
             CssUtils.ApplyCurrentColor(box, valueParser);
 
-
-
             // cascade text decoration only to boxes that actually have text so it will be handled correctly.
             if (box.TextDecoration != string.Empty && box.Text == null)
             {

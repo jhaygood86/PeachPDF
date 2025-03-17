@@ -51,6 +51,7 @@ namespace PeachPDF.Html.Core.Utils
         public const string Initial = "initial";
         public const string Inline = "inline";
         public const string InlineTable = "inline-table";
+        public const string Inside = "inside";
         public const string Inset = "inset";
         public const string Italic = "italic";
         public const string Justify = "justify";

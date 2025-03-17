@@ -22,6 +22,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
+using PeachPDF.CSS;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -854,41 +855,58 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="g"></param>
         private async ValueTask CreateListItemBox(RGraphics g)
         {
-            if (Display != CssConstants.ListItem || ListStyleType == CssConstants.None) return;
+            if (Display != CssConstants.ListItem || (ListStyleType == CssConstants.None && ListStyleImage == CssConstants.None)) return;
 
             if (_listItemBox == null)
             {
-                _listItemBox = new CssBox(null, null);
-                _listItemBox.InheritStyle(this);
-                _listItemBox.Display = CssConstants.Inline;
-                _listItemBox.HtmlContainer = HtmlContainer;
+                if (ListStyleImage is not CssConstants.None)
+                {
+                    var listStyleImage = CssValueParser.GetImagePropertyValue(ListStyleImage);
 
-                if (ListStyleType.Equals(CssConstants.Disc, StringComparison.InvariantCultureIgnoreCase))
-                {
-                    _listItemBox.Text = "•";
-                }
-                else if (ListStyleType.Equals(CssConstants.Circle, StringComparison.InvariantCultureIgnoreCase))
-                {
-                    _listItemBox.Text = "o";
-                }
-                else if (ListStyleType.Equals(CssConstants.Square, StringComparison.InvariantCultureIgnoreCase))
-                {
-                    _listItemBox.Text = "\u25a0";
-                }
-                else if (ListStyleType.Equals(CssConstants.Decimal, StringComparison.InvariantCultureIgnoreCase))
-                {
-                    _listItemBox.Text = GetIndexForList().ToString(CultureInfo.InvariantCulture) + ".";
-                }
-                else if (ListStyleType.Equals(CssConstants.DecimalLeadingZero, StringComparison.InvariantCultureIgnoreCase))
-                {
-                    _listItemBox.Text = GetIndexForList().ToString("00", CultureInfo.InvariantCulture) + ".";
+                    var imageTag = new HtmlTag("img", true, new Dictionary<string, string>
+                    {
+                        { "src", listStyleImage!.Url! }
+                    });
+
+                    _listItemBox = new CssBoxImage(null, imageTag);
+                    _listItemBox.InheritStyle(this);
+                    _listItemBox.Display = CssConstants.Inline;
+                    _listItemBox.HtmlContainer = HtmlContainer;
                 }
                 else
                 {
-                    _listItemBox.Text = CommonUtils.ConvertToAlphaNumber(GetIndexForList(), ListStyleType) + ".";
-                }
+                    _listItemBox = new CssBox(null, null);
+                    _listItemBox.InheritStyle(this);
+                    _listItemBox.Display = CssConstants.Inline;
+                    _listItemBox.HtmlContainer = HtmlContainer;
 
-                _listItemBox.ParseToWords();
+                    if (ListStyleType.Equals(CssConstants.Disc, StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        _listItemBox.Text = "•";
+                    }
+                    else if (ListStyleType.Equals(CssConstants.Circle, StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        _listItemBox.Text = "o";
+                    }
+                    else if (ListStyleType.Equals(CssConstants.Square, StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        _listItemBox.Text = "\u25a0";
+                    }
+                    else if (ListStyleType.Equals(CssConstants.Decimal, StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        _listItemBox.Text = GetIndexForList().ToString(CultureInfo.InvariantCulture) + ".";
+                    }
+                    else if (ListStyleType.Equals(CssConstants.DecimalLeadingZero, StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        _listItemBox.Text = GetIndexForList().ToString("00", CultureInfo.InvariantCulture) + ".";
+                    }
+                    else
+                    {
+                        _listItemBox.Text = CommonUtils.ConvertToAlphaNumber(GetIndexForList(), ListStyleType) + ".";
+                    }
+
+                    _listItemBox.ParseToWords();
+                }
 
                 await _listItemBox.PerformLayoutImp(g);
                 _listItemBox.Size = new RSize(_listItemBox.Words[0].Width, _listItemBox.Words[0].Height);

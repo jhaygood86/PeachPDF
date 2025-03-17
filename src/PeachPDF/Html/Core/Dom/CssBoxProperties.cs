@@ -434,8 +434,6 @@ namespace PeachPDF.Html.Core.Dom
 
         public string FontWeight { get; set; } = "normal";
 
-        public string ListStyle { get; set; } = string.Empty;
-
         public string Overflow { get; set; } = "visible";
 
         public string ListStylePosition { get; set; } = "outside";
@@ -1119,7 +1117,6 @@ namespace PeachPDF.Html.Core.Dom
             ListStyleImage = p.ListStyleImage;
             ListStylePosition = p.ListStylePosition;
             ListStyleType = p.ListStyleType;
-            ListStyle = p.ListStyle;
             LineHeight = p.LineHeight;
             WordBreak = p.WordBreak;
             Direction = p.Direction;
