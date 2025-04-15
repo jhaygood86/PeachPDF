@@ -424,6 +424,16 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
+        internal void ResetPaint()
+        {
+            _hasPainted = false;
+
+            foreach (var childBox in Boxes)
+            {
+                childBox.ResetPaint();
+            }
+        }
+
         /// <summary>
         /// Paints the fragment
         /// </summary>
@@ -1475,7 +1485,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="offset">the current scroll offset to offset the words</param>
         private void PaintWords(RGraphics g, RPoint offset)
         {
-            if (Width.Length <= 0) return;
+            if (Width is null or { Length: <= 0 }) return;
 
             var isRtl = Direction == CssConstants.Rtl;
 

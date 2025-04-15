@@ -324,6 +324,7 @@ namespace PeachPDF.Html.Core
 
             if (Root is not null)
             {
+                Root.ResetPaint();
                 await Root.Paint(g);
             }
 
