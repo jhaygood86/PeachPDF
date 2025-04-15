@@ -428,6 +428,8 @@ namespace PeachPDF.Html.Core.Dom
         {
             _hasPainted = false;
 
+            _listItemBox?.ResetPaint();
+
             foreach (var childBox in Boxes)
             {
                 childBox.ResetPaint();
@@ -659,6 +661,7 @@ namespace PeachPDF.Html.Core.Dom
                         Location = new RPoint(left + ActualMarginLeft, top);
                         ActualBottom = top;
 
+                        
                         CssLayoutEngine.FloatBox(this);
                     }
 
