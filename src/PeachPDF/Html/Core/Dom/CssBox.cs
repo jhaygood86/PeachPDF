@@ -10,19 +10,18 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
-using PeachPDF.Html.Core.Entities;
-using PeachPDF.Html.Core.Handlers;
-using PeachPDF.Html.Core.Parse;
-using PeachPDF.Html.Core.Utils;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
-using PeachPDF.CSS;
+using PeachPDF.Html.Adapters;
+using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.Html.Core.Entities;
+using PeachPDF.Html.Core.Handlers;
+using PeachPDF.Html.Core.Parse;
+using PeachPDF.Html.Core.Utils;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -644,6 +643,11 @@ namespace PeachPDF.Html.Core.Dom
                     if (Width != CssConstants.Auto && !string.IsNullOrEmpty(Width))
                     {
                         width = CssValueParser.ParseLength(Width, ContainingBlock.Size.Width, this);
+                    }
+
+                    if (Width is CssConstants.Auto)
+                    {
+                        width -= ActualBoxSizeIncludedWidth;
                     }
 
                     ActualRight = Location.X + width + ActualBoxSizeIncludedWidth;

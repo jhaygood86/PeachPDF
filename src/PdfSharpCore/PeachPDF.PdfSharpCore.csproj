@@ -14,7 +14,7 @@ PeachPDF.PdfSharpCore is a partial port of PdfSharp.Xamarin for .NET Core Additi
     <PackageProjectUrl>https://github.com/jhaygood86/PeachPDF</PackageProjectUrl>
     <RepositoryUrl>https://github.com/jhaygood86/PeachPDF</RepositoryUrl>
     <PackageReleaseNotes>PeachPDF.PdfSharpCore is a partial port of PdfSharp.Xamarin for .NET Core Additionally MigraDoc has been ported as well (from version 1.32)</PackageReleaseNotes>
-    <PackageVersion>0.7.6</PackageVersion>
+    <PackageVersion>0.7.15</PackageVersion>
     <summary>PdfSharp for .NET Core</summary>
     <IsTrimmable>true</IsTrimmable>
     <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
@@ -48,7 +48,7 @@ PeachPDF.PdfSharpCore is a partial port of PdfSharp.Xamarin for .NET Core Additi
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="SharpZipLib" Version="1.4.2" />
-    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.6" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.7" />
     <PackageReference Include="SixLabors.Fonts" Version="2.1.2" />
   </ItemGroup>
 
