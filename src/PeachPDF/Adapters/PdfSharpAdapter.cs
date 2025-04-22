@@ -56,8 +56,17 @@ namespace PeachPDF.Adapters
 
             foreach(var fontPath in fonts)
             {
-                var font = _fontCollection.Add(fontPath);
-                AddFontFamily(new FontFamilyAdapter(new XFontFamily(font.Name)));
+                try
+                {
+                    var font = _fontCollection.Add(fontPath);
+                    AddFontFamily(new FontFamilyAdapter(new XFontFamily(font.Name)));
+                }
+                catch (Exception)
+                {
+#if DEBUG
+                    Console.Error.WriteLine($"Failed to load font from path: {fontPath}");
+#endif
+                }
             }
         }
 

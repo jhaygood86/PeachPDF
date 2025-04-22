@@ -10,13 +10,12 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using System.Globalization;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
-using System.Collections.Generic;
-using System.Globalization;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -952,6 +951,11 @@ namespace PeachPDF.Html.Core.Dom
                 }
 
                 _actualFont = GetCachedFont(FontFamily, fsize, st) ?? GetCachedFont(CssConstants.DefaultFont, fsize, st);
+
+                if (_actualFont is null)
+                {
+                    throw new HtmlRenderException($"Cannot find font: {FontFamily} and Default Font {CssConstants.DefaultFont} is not installed",HtmlRenderErrorType.General);
+                }
 
                 return _actualFont!;
             }
