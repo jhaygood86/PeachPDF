@@ -84,6 +84,9 @@ namespace PeachPDF.Html.Core.Parse
             CorrectBlockInsideInline(root);
 
             CorrectInlineBoxesParent(root);
+
+            CorrectAnonymousTables(root);
+
             return (root,cssData);
         }
 
@@ -825,6 +828,159 @@ namespace PeachPDF.Html.Core.Parse
                     CorrectInlineBoxesParent(childBox);
                 }
             }
+        }
+
+        /// <summary>
+        /// Corrects the missing elements in tables per https://www.w3.org/TR/CSS2/tables.html#anonymous-boxes
+        /// </summary>
+        /// <param name="box"></param>
+        private static void CorrectAnonymousTables(CssBox box)
+        {
+            // 1. Remove irrelevant boxes
+            CorrectAnonymousTablesRemoveIrrelevantBoxes(box);
+
+            foreach (var childBox in box.Boxes.ToArray())
+            {
+                CorrectAnonymousTablesRemoveIrrelevantBoxes(childBox);
+            }
+
+
+            // 2. Generate missing child wrappers
+            CorrectAnonymousTablesGenerateMissingChildWrappers(box);
+
+            foreach (var childBox in box.Boxes.ToArray())
+            {
+                CorrectAnonymousTablesGenerateMissingChildWrappers(childBox);
+            }
+
+            // 3. Generate Missing Parents
+            CorrectAnonymousTablesGenerateMissingParents(box);
+
+            foreach (var childBox in box.Boxes.ToArray())
+            {
+                CorrectAnonymousTablesGenerateMissingParents(childBox);
+            }
+
+            foreach (var childBox in box.Boxes.ToArray())
+            {
+                CorrectAnonymousTables(childBox);
+            }
+        }
+
+        private static void CorrectAnonymousTablesRemoveIrrelevantBoxes(CssBox box)
+        {
+            // 1.1 All child boxes of a 'table-column' parent are treated as if they had 'display: none'
+            if (box.Display is CssConstants.TableColumn)
+            {
+                foreach (var childBox in box.Boxes)
+                {
+                    childBox.Display = CssConstants.None;
+                }
+            }
+
+            // 1.2 If a child C of a 'table-column-group' parent is not a 'table-column' box, then it is treated as if it had 'display: none'.
+            if (box.Display is CssConstants.TableColumnGroup && box.ParentBox?.Display is not CssConstants.TableColumn)
+            {
+                box.Display = CssConstants.None;
+            }
+
+            // 1.3 This is handled via CorrectTextBoxes above
+            // 1.4 This is handled via CorrectTextBoxes above
+        }
+
+        private static void CorrectAnonymousTablesGenerateMissingChildWrappers(CssBox box)
+        {
+            // 2.1 If a child C of a 'table' or 'inline-table' box is not a proper table child, then generate an anonymous 'table-row' box around C and all consecutive siblings of C that are not proper table children.
+            if (box.ParentBox?.Display is CssConstants.Table)
+            {
+                if (DomUtils.IsProperTableChild(box))
+                {
+                    var tableRowBox = new CssBox(box.ParentBox, null);
+                    tableRowBox.Display = CssConstants.TableRow;
+                    box.ParentBox = tableRowBox;
+                }
+            }
+
+            // 2.2 If a child C of a row group box is not a 'table-row' box, then generate an anonymous 'table-row' box around C and all consecutive siblings of C that are not 'table-row' boxes.
+            if (box.ParentBox?.IsTableRowGroupBox ?? false)
+            {
+                if (box.Display is not CssConstants.TableRow)
+                {
+                    var tableRowBox = new CssBox(box.ParentBox, null);
+                    tableRowBox.Display = CssConstants.TableRow;
+                    box.ParentBox = tableRowBox;
+                }
+            }
+
+            // 2.3 If a child C of a 'table-row' box is not a 'table-cell', then generate an anonymous 'table-cell' box around C and all consecutive siblings of C that are not 'table-cell' boxes.
+            if (box.ParentBox?.Display is CssConstants.TableRow)
+            {
+                if (box.Display is not CssConstants.TableCell)
+                {
+                    CssBox? tableCellBox = null;
+
+                    var previousSibling = DomUtils.GetPreviousSibling(box);
+
+                    if (previousSibling is not null && previousSibling.HtmlTag is null && previousSibling.Display is CssConstants.TableCell)
+                    {
+                        tableCellBox = previousSibling;
+                    }
+
+                    tableCellBox ??= new CssBox(box.ParentBox, null);
+                    tableCellBox.Display = CssConstants.TableCell;
+                    box.ParentBox = tableCellBox;
+                }
+            }
+        }
+
+        private static void CorrectAnonymousTablesGenerateMissingParents(CssBox box)
+        {
+            // 3.1 For each 'table-cell' box C in a sequence of consecutive internal table and 'table-caption' siblings, if C's parent is not a 'table-row' then generate an anonymous 'table-row' box around C and all consecutive siblings of C that are 'table-cell' boxes.
+            if (box.Display is CssConstants.TableCell)
+            {
+                if (box.ParentBox?.Display is not CssConstants.TableRow)
+                {
+                    var followingMatchingSiblings =
+                        DomUtils.GetFollowingSiblings(box, sibling => sibling.Display is CssConstants.TableCell, true)
+                            .ToList();
+
+                    var tableRowBox = new CssBox(box.ParentBox, null);
+                    tableRowBox.Display = CssConstants.TableRow;
+                    box.ParentBox = tableRowBox;
+
+                    followingMatchingSiblings.ForEach(sib => sib.ParentBox = tableRowBox);
+                }
+            }
+
+            // 3.2 For each proper table child C in a sequence of consecutive proper table children, if C is misparented then generate an anonymous 'table' or 'inline-table' box T around C and all consecutive siblings of C that are proper table children. (If C's parent is an 'inline' box, then T must be an 'inline-table' box; otherwise it must be a 'table' box.)
+            // - A 'table-row' is misparented if its parent is neither a row group box nor a 'table' or 'inline-table' box.
+            // - A 'table-column' box is misparented if its parent is neither a 'table-column-group' box nor a 'table' or 'inline-table' box.
+            // - A row group box, 'table-column-group' box, or 'table-caption' box is misparented if its parent is neither a 'table' box nor an 'inline-table' box.
+
+            if (DomUtils.IsProperTableChild(box))
+            {
+                var isMissingParent = box.ParentBox is null;
+                var isParentNotTable = box.ParentBox?.Display is not CssConstants.Table;
+                var isParentNotInlineTable = box.ParentBox?.Display is not CssConstants.InlineTable;
+
+                var isMisparented = isMissingParent || isParentNotTable || isParentNotInlineTable;
+
+                if (isMisparented)
+                {
+                    var parentDisplay = box.ParentBox is null || box.ParentBox.IsBlock ? CssConstants.Table : CssConstants.InlineTable;
+
+                    var followingMatchingSiblings =
+                        DomUtils.GetFollowingSiblings(box, DomUtils.IsProperTableChild, true)
+                            .ToList();
+
+                    var tableBox = new CssBox(box.ParentBox, null);
+                    tableBox.Display = parentDisplay;
+                    box.ParentBox = tableBox;
+
+                    followingMatchingSiblings.ForEach(sib => sib.ParentBox = tableBox);
+                }
+            }
+
         }
 
         /// <summary>

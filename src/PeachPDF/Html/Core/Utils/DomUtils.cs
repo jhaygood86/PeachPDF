@@ -105,6 +105,30 @@ namespace PeachPDF.Html.Core.Utils
             return sib;
         }
 
+        public static IEnumerable<CssBox> GetFollowingSiblings(CssBox box, Predicate<CssBox> matcher, bool isConsecutive)
+        {
+            if (box.ParentBox == null) yield break;
+
+            var index = box.ParentBox.Boxes.IndexOf(box);
+
+            const int diff = 1;
+
+            while (box.ParentBox.Boxes.Count > index + diff)
+            {
+                var sib = box.ParentBox.Boxes[index + diff];
+
+                if (matcher.Invoke(sib))
+                {
+                    yield return sib;
+                } else if (isConsecutive)
+                {
+                    yield break;
+                }
+
+                index += diff;
+            }
+        }
+
         /// <summary>
         /// Gets the previous sibling of this box.
         /// </summary>
@@ -563,6 +587,13 @@ namespace PeachPDF.Html.Core.Utils
             }
 
             return boxesByLayer.OrderBy(x => x.Key).Select(x => x.Value);
+        }
+
+        public static bool IsProperTableChild(CssBox box)
+        {
+            return box.IsTableRowGroupBox || box.Display is CssConstants.TableRow ||
+                   box.Display is CssConstants.TableColumn || box.Display is CssConstants.TableColumnGroup ||
+                   box.Display is CssConstants.TableCaption;
         }
 
         private static CssBox? GetNextIntersectingFloatBox(CssBox box, CssFloatCoordinates coordinates, string floatProp)

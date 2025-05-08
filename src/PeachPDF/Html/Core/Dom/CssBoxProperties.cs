@@ -323,6 +323,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
+
                 if (Float is not CssConstants.None)
                 {
                     return _display switch
@@ -353,7 +354,7 @@ namespace PeachPDF.Html.Core.Dom
 
         public string EmptyCells { get; set; } = "show";
 
-        public string Float { get; set; } = "none";
+        public string Float { get; set; } = CssConstants.None;
 
         public string Clear { get; set; } = CssConstants.None;
 
@@ -920,7 +921,14 @@ namespace PeachPDF.Html.Core.Dom
                     st |= RFontStyle.Italic;
                 }
 
-                if (FontWeight != CssConstants.Normal && FontWeight != CssConstants.Lighter && !string.IsNullOrEmpty(FontWeight) && FontWeight != CssConstants.Inherit)
+                if (int.TryParse(FontWeight, out var fontWeightValue))
+                {
+                    if (fontWeightValue >= 700)
+                    {
+                        st |= RFontStyle.Bold;
+                    }
+                }
+                else if (FontWeight is CssConstants.Bold or CssConstants.Bolder)
                 {
                     st |= RFontStyle.Bold;
                 }

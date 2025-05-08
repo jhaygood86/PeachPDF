@@ -194,6 +194,8 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
+        public virtual bool IsTableRowGroupBox => Display is CssConstants.TableRowGroup or CssConstants.TableHeaderGroup or CssConstants.TableFooterGroup;
+
         /// <summary>
         /// Get the href link of the box (by default get "href" attribute)
         /// </summary>
@@ -1401,8 +1403,6 @@ namespace PeachPDF.Html.Core.Dom
                         await b.Paint(g);
                 }
             }
-
-
 
             if (clipped)
                 g.PopClip();

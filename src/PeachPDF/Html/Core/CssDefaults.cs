@@ -34,7 +34,7 @@ namespace PeachPDF.Html.Core
             frame, frameset,
             h1, h2, h3, h4,
             h5, h6, 
-            hgroup, main,nav
+            hgroup, main, nav,
             section, search,
             noframes,
             ol, p, ul, center,
