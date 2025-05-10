@@ -11,6 +11,10 @@ _Note: This package depends on PeachPDF.PdfSharpCore and various SixLabors libra
 
 Install the PeachPDF package from nuget.org
 
+```
+dotnet add package PeachPDF
+```
+
 ## Using PeachPDF
 
 ### Simple example
@@ -54,8 +58,6 @@ document.Save(stream);
 
 You can also render HTML from the Internet to a PDF
 
-_Note: a future version will be required in order to have the base URI automatically detected, so make sure the document has a <base href> tag set for images, styles, and links to resolve correctly_
-
 ```csharp
 HttpClient httpClient = new();
 
@@ -96,6 +98,8 @@ You can also add a font at runtime by loading the ttf font into a Stream, and th
 PdfGenerator generator = new();
 await generator.AddFontFromStream(fontStream); // where fontStream is a System.IO.Stream of the loaded TTF file
 ```
+
+Web fonts loaded via @font-face are also supported.
 
 ### Supported font formats
 
