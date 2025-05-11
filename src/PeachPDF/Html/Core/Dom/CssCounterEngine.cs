@@ -173,12 +173,12 @@ namespace PeachPDF.Html.Core.Dom
             var diff = 1;
             var sib = b.ParentBox.Boxes[index - diff];
 
-            while (sib.Display == CssConstants.None && index - diff - 1 >= 0)
+            while (sib.Display.DisplayBox is CssDisplay.CssDisplayBox.None && index - diff - 1 >= 0)
             {
                 sib = b.ParentBox.Boxes[index - ++diff];
             }
 
-            sib = sib.Display == CssConstants.None ? null : sib;
+            sib = sib.Display.DisplayBox is CssDisplay.CssDisplayBox.None ? null : sib;
 
             return sib;
         }

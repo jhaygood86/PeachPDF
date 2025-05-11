@@ -91,7 +91,7 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var box in tableBox.Boxes)
             {
-                switch (box.Display)
+                switch (box.Display.Value)
                 {
                     case CssConstants.TableColumn:
                         columns += GetSpan(box);
@@ -101,7 +101,7 @@ namespace PeachPDF.Html.Core.Dom
                         foreach (var cr in tableBox.Boxes)
                         {
                             count++;
-                            if (cr.Display == CssConstants.TableRow)
+                            if (cr.Display.Value == CssConstants.TableRow)
                                 columns = Math.Max(columns, cr.Boxes.Count);
                         }
 
@@ -152,7 +152,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private async ValueTask Layout(RGraphics g)
         {
-            await MeasureWords(_tableBox, g);
+            await CssLayoutEngine.MeasureWords(_tableBox, g);
 
             // get the table boxes into the proper fields
             AssignBoxKinds();
@@ -190,7 +190,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             foreach (var box in _tableBox.Boxes)
             {
-                switch (box.Display)
+                switch (box.Display.Value)
                 {
                     case CssConstants.TableCaption:
                         _caption = box;
@@ -200,7 +200,7 @@ namespace PeachPDF.Html.Core.Dom
                         break;
                     case CssConstants.TableRowGroup:
                         foreach (CssBox childBox in box.Boxes)
-                            if (childBox.Display == CssConstants.TableRow)
+                            if (childBox.Display.Value == CssConstants.TableRow)
                                 _bodyRows.Add(childBox);
                         break;
                     case CssConstants.TableHeaderGroup:
@@ -352,7 +352,7 @@ namespace PeachPDF.Html.Core.Dom
                     {
                         if (i >= 20 && !double.IsNaN(_columnWidths[i])) continue; // limit column width check
 
-                        if (i >= row.Boxes.Count || row.Boxes[i].Display != CssConstants.TableCell) continue;
+                        if (i >= row.Boxes.Count || row.Boxes[i].Display.Value != CssConstants.TableCell) continue;
 
                         var len = CssValueParser.ParseLength(row.Boxes[i].Width, availCellSpace, row.Boxes[i]);
 
@@ -788,23 +788,6 @@ namespace PeachPDF.Html.Core.Dom
             var att = b.GetAttribute("rowspan", "1");
 
             return !int.TryParse(att, out var rowSpan) ? 1 : rowSpan;
-        }
-
-        /// <summary>
-        /// Recursively measures words inside the box
-        /// </summary>
-        /// <param name="box">the box to measure</param>
-        /// <param name="g">Device to use</param>
-        private static async ValueTask MeasureWords(CssBox box, RGraphics g)
-        {
-            if (box != null)
-            {
-                foreach (var childBox in box.Boxes)
-                {
-                    await childBox.MeasureWordsSize(g);
-                    await MeasureWords(childBox, g);
-                }
-            }
         }
 
         /// <summary>

@@ -16,6 +16,7 @@ using PeachPDF.Html.Core.Parse;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using PeachPDF.Html.Core.Entities;
 
 namespace PeachPDF.Html.Core.Utils
 {
@@ -99,10 +100,11 @@ namespace PeachPDF.Html.Core.Utils
                 "background-gradient-angle" => cssBox.BackgroundGradientAngle,
                 "content" => cssBox.Content,
                 "color" => cssBox.Color,
-                "display" => cssBox.Display,
+                "display" => cssBox.Display.Value,
                 "direction" => cssBox.Direction,
                 "empty-cells" => cssBox.EmptyCells,
                 "float" => cssBox.Float,
+                "flex-direction" => cssBox.FlexDirection,
                 "clear" => cssBox.Clear,
                 "position" => cssBox.Position,
                 "line-height" => cssBox.LineHeight,
@@ -391,13 +393,16 @@ namespace PeachPDF.Html.Core.Utils
                     cssBox.Content = value;
                     break;
                 case "display":
-                    cssBox.Display = value;
+                    cssBox.Display = new CssDisplay(value);
                     break;
                 case "direction":
                     cssBox.Direction = value;
                     break;
                 case "empty-cells":
                     cssBox.EmptyCells = value;
+                    break;
+                case "flex-direction":
+                    cssBox.FlexDirection = value;
                     break;
                 case "float":
                     cssBox.Float = value;

@@ -1,3 +1,5 @@
+#nullable enable
+
 #region PDFsharp - A .NET library for processing PDF
 //
 // Authors:
@@ -70,7 +72,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 };
             }
         }
-        string _version = "1.3";
+
+        private string _version = "1.3";
 
         /// <summary>
         /// Gets the pages collection of this document.
@@ -88,7 +91,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 return _pages;
             }
         }
-        PdfPages _pages;
+
+        private PdfPages? _pages;
 
         /// <summary>
         /// Implementation of PdfDocument.PageLayout.
@@ -118,7 +122,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 return _viewerPreferences ??= (PdfViewerPreferences)Elements.GetValue(Keys.ViewerPreferences, VCF.CreateIndirect);
             }
         }
-        PdfViewerPreferences _viewerPreferences;
+
+        private PdfViewerPreferences? _viewerPreferences;
 
         /// <summary>
         /// Implementation of PdfDocument.Outlines.
@@ -131,7 +136,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 return _outline.Outlines;
             }
         }
-        PdfOutline _outline;
+
+        private PdfOutline?  _outline;
 
         /// <summary>
         /// Gets the name dictionary of this document.
@@ -416,7 +422,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             {
                 get { return _meta ??= CreateMeta(typeof(Keys)); }
             }
-            static DictionaryMeta _meta;
+
+            static DictionaryMeta? _meta;
         }
 
         /// <summary>

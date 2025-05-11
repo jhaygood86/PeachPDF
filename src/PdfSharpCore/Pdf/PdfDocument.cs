@@ -391,10 +391,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         {
             PdfDocumentInformation info = Info;
 
-            // Add patch level to producer if it is not '0'.
-            string pdfSharpProducer = VersionInfo.Producer;
-            if (!ProductVersionInfo.VersionPatch.Equals("0"))
-                pdfSharpProducer = ProductVersionInfo.Producer2;
+            string pdfSharpProducer = ProductVersionInfo.Producer;
 
             // Set Creator if value is undefined.
             if (info.Elements[PdfDocumentInformation.Keys.Creator] == null)
@@ -407,14 +404,13 @@ namespace PeachPDF.PdfSharpCore.Pdf
             else
             {
                 // Prevent endless concatenation if file is edited with PDFsharp more than once.
-                if (!producer.StartsWith(VersionInfo.Title))
+                if (!producer.StartsWith(ProductVersionInfo.Title))
                     producer = pdfSharpProducer + " (Original: " + producer + ")";
             }
             info.Elements.SetString(PdfDocumentInformation.Keys.Producer, producer);
 
             // Prepare used fonts.
-            if (_fontTable != null)
-                _fontTable.PrepareForSave();
+            _fontTable?.PrepareForSave();
 
             // Let catalog do the rest.
             Catalog.PrepareForSave();

@@ -21,6 +21,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using MimeKit;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -167,7 +168,7 @@ namespace PeachPDF.Html.Core.Dom
             blockBox.ActualBottom = coordinates.MaxBottom + blockBox.ActualPaddingBottom + blockBox.ActualBorderBottomWidth;
 
             // handle limiting block height when overflow is hidden
-            if (blockBox.Height != null && blockBox.Height != CssConstants.Auto && blockBox.Overflow == CssConstants.Hidden && blockBox.ActualBottom - blockBox.Location.Y > blockBox.ActualHeight)
+            if (blockBox.Height != CssConstants.Auto && blockBox.Overflow == CssConstants.Hidden && blockBox.ActualBottom - blockBox.Location.Y > blockBox.ActualHeight)
             {
                 blockBox.ActualBottom = blockBox.Location.Y + blockBox.ActualHeight + blockBox.ActualPaddingBottom + blockBox.ActualPaddingTop;
             }
@@ -244,13 +245,13 @@ namespace PeachPDF.Html.Core.Dom
 
             if (box.MarginRight is not CssConstants.Auto) return 0;
 
-            if (box.Display.StartsWith("table-") && box.Display != CssConstants.TableCaption)
+            if (box.Display.IsTable && box.Display.Value != CssConstants.TableCaption)
             {
                 return 0;
             }
 
             // This will be used by the table layout engine later with boxWidth provided
-            if (box.Display is CssConstants.Table && boxWidth is null)
+            if (box.Display.DisplayInside is CssDisplay.CssDisplayInside.Table && boxWidth is null)
             {
                 return 0;
             }
@@ -272,13 +273,13 @@ namespace PeachPDF.Html.Core.Dom
 
             if (box.MarginLeft is not CssConstants.Auto) return 0;
 
-            if (box.Display.StartsWith("table-") && box.Display != CssConstants.TableCaption)
+            if (box.Display.IsTable && box.Display.Value != CssConstants.TableCaption)
             {
                 return 0;
             }
 
             // This will be used by the table layout engine later with boxWidth provided
-            if (box.Display is CssConstants.Table && boxWidth is null)
+            if (box.Display.DisplayInside is CssDisplay.CssDisplayInside.Table && boxWidth is null)
             {
                 return 0;
             }
@@ -289,6 +290,29 @@ namespace PeachPDF.Html.Core.Dom
 
             return remainingWidth / 2;
 
+        }
+
+        /// <summary>
+        /// Recursively measures words inside the box
+        /// </summary>
+        /// <param name="box">the box to measure</param>
+        /// <param name="g">Device to use</param>
+        public static async ValueTask MeasureWords(CssBox box, RGraphics g)
+        {
+            foreach (var childBox in box.Boxes)
+            {
+                await childBox.MeasureWordsSize(g);
+                await MeasureWords(childBox, g);
+            }
+        }
+
+        public static async Task<double> GetFitContentWidth(RGraphics g, CssBox box, double maxWidth)
+        {
+            await MeasureWords(box, g);
+
+            box.GetMinMaxWidth(out _, out var maxIntrinsicWidth);
+
+            return maxIntrinsicWidth;
         }
 
         #region Private methods
@@ -421,6 +445,7 @@ namespace PeachPDF.Html.Core.Dom
                         coordinates.Right = intersectingFloat.Location.X;
                         break;
                 }
+
                 if (intersectingFloat.ActualBottom > coordinates.MaxBottom)
                 {
                     coordinates.MaxBottom = intersectingFloat.ActualBottom;

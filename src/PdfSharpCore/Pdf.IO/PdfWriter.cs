@@ -471,7 +471,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
 
             if (_layout == PdfWriterLayout.Verbose)
             {
-                WriteRaw(String.Format("% PDFsharp Version {0} (verbose mode)\n", VersionInfo.Version));
+                WriteRaw("% PeachPDF (based on PDFsharp) (verbose mode)\n");
                 // Keep some space for later fix-up.
                 _commentPosition = (int)_stream.Position + 2;
                 WriteRaw("%                                                \n");

@@ -1,6 +1,5 @@
-using System;
 using System.Collections.Generic;
-using PeachPDF.Html.Core.Utils;
+using PeachPDF.Html.Core.Entities;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -23,7 +22,7 @@ namespace PeachPDF.Html.Core.Dom
             : base(tableBox, new HtmlTag("none", false, new Dictionary<string, string> { { "colspan", "1" } }))
         {
             ExtendedBox = extendedBox;
-            Display = CssConstants.None;
+            Display = CssDisplay.None;
 
             StartRow = startRow;
             _endRow = startRow + int.Parse(extendedBox.GetAttribute("rowspan", "1")) - 1;

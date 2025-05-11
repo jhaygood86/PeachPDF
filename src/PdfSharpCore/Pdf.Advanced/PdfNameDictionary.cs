@@ -1,7 +1,8 @@
-﻿// PDFsharp - A .NET library for processing PDF
+﻿#nullable enable
+
+// PDFsharp - A .NET library for processing PDF
 // See the LICENSE file in the solution root for more information.
 
-using System.IO;
 
 namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 {
@@ -49,8 +50,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             PdfPage dest = Owner.Pages[destIndex];
 
 #if true
-            PdfArray destination = new PdfArray(Owner,
-                new PdfLiteral("{0} 0 R {1}", dest.ObjectNumber, parameters));
+            PdfArray destination = new(Owner, new PdfLiteral("{0} 0 R {1}", dest.ObjectNumber, parameters));
             _dests.AddName(destinationName, destination);
 #else
 // Insert reference to destination dictionary instead of inserting the destination array directly.

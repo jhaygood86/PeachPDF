@@ -1,6 +1,4 @@
-﻿using PeachPDF.Html.Core.Dom;
-
-namespace PeachPDF.Html.Core.Entities
+﻿namespace PeachPDF.Html.Core.Entities
 {
     internal record CssFloatCoordinates
     {

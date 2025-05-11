@@ -1,4 +1,6 @@
-﻿// PDFsharp - A .NET library for processing PDF
+﻿#nullable enable
+
+// PDFsharp - A .NET library for processing PDF
 // See the LICENSE file in the solution root for more information.
 
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
@@ -81,7 +83,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// </summary>
         public IEnumerable<PdfNameTreeNode> Kids => _kids;
 
-        private readonly List<PdfNameTreeNode> _kids = new();
+        private readonly List<PdfNameTreeNode> _kids = [];
 
         private void Initialize()
         {

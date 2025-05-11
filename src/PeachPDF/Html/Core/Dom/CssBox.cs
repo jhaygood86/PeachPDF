@@ -148,16 +148,18 @@ namespace PeachPDF.Html.Core.Dom
         public bool IsPseudoElement => IsBeforePseudoElement || IsAfterPseudoElement;
 
         /// <summary>
-        /// is the box "Display" is "Inline", is this is an inline box and not block.
+        /// is the box "Value" is "Inline", is this is an inline box and not block.
         /// </summary>
-        public bool IsInline => Display is CssConstants.Inline or CssConstants.InlineBlock or CssConstants.InlineTable && !IsBrElement;
+        public bool IsInline => Display.DisplayOutside == CssDisplay.CssDisplayOutside.Inline && !IsBrElement;
 
         /// <summary>
-        /// is the box "Display" is "Block", is this is a block box and not inline.
+        /// is the box "Value" is "Block", is this is a block box and not inline.
         /// </summary>
-        public bool IsBlock => Display == CssConstants.Block;
+        public bool IsBlock => Display.DisplayOutside == CssDisplay.CssDisplayOutside.Block;
 
         public bool IsFloated => Float is CssConstants.Left or CssConstants.Right;
+
+        public bool IsFlexItem => ParentBox?.Display.DisplayInside == CssDisplay.CssDisplayInside.Flex;
 
         /// <summary>
         /// Is the css box clickable (by default only "a" element is clickable)
@@ -194,7 +196,7 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        public virtual bool IsTableRowGroupBox => Display is CssConstants.TableRowGroup or CssConstants.TableHeaderGroup or CssConstants.TableFooterGroup;
+        public virtual bool IsTableRowGroupBox => Display is { IsInternal: true, Value: CssConstants.TableRowGroup or CssConstants.TableHeaderGroup or CssConstants.TableFooterGroup };
 
         /// <summary>
         /// Get the href link of the box (by default get "href" attribute)
@@ -215,9 +217,9 @@ namespace PeachPDF.Html.Core.Dom
 
                 var box = ParentBox;
                 while (!box.IsBlock &&
-                       box.Display != CssConstants.ListItem &&
-                       box.Display != CssConstants.Table &&
-                       box.Display != CssConstants.TableCell &&
+                       box.Display.Value != CssConstants.ListItem &&
+                       box.Display.Value != CssConstants.Table &&
+                       box.Display.Value != CssConstants.TableCell &&
                        box.ParentBox != null)
                 {
                     box = box.ParentBox;
@@ -380,7 +382,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             return new CssBox(null, null)
             {
-                Display = CssConstants.Block
+                Display = CssDisplay.Block
             };
         }
 
@@ -404,7 +406,7 @@ namespace PeachPDF.Html.Core.Dom
             ArgumentNullException.ThrowIfNull(parent);
 
             var newBox = CreateBox(parent, tag, before);
-            newBox.Display = CssConstants.Block;
+            newBox.Display = CssDisplay.Block;
             return newBox;
         }
 
@@ -449,7 +451,7 @@ namespace PeachPDF.Html.Core.Dom
 
             try
             {
-                if (Display == CssConstants.None || Visibility != CssConstants.Visible) return;
+                if (Display.DisplayBox is CssDisplay.CssDisplayBox.None || Visibility != CssConstants.Visible) return;
 
                 // use initial clip to draw blocks with Position = fixed. I.e. ignore page margins
                 if (Position == CssConstants.Fixed)
@@ -602,7 +604,7 @@ namespace PeachPDF.Html.Core.Dom
             Console.WriteLine($"layout start: {ToString()}");
 #endif
 
-            if (Display != CssConstants.None)
+            if (Display.DisplayBox is not CssDisplay.CssDisplayBox.None)
             {
                 RectanglesReset();
                 await MeasureWordsSize(g);
@@ -630,12 +632,13 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
-            if (IsBlock || Display == CssConstants.ListItem || Display == CssConstants.Table || Display == CssConstants.InlineTable || Display == CssConstants.TableCell)
+            if (IsBlock || Display.IsListItem || Display.DisplayInside is CssDisplay.CssDisplayInside.Table || Display is { IsInternal: true, Value: CssConstants.TableCell })
             {
                 // Because their width and height are set by CssTable
-                if (Display != CssConstants.TableCell && Display != CssConstants.Table)
+                if (Display.Value is not  CssConstants.TableCell && Display.DisplayInside is not CssDisplay.CssDisplayInside.Table)
                 {
-                    var width = ContainingBlock.ClientRight - ContainingBlock.ClientLeft - ActualMarginLeft - ActualMarginRight;
+                    var contentAreaWidth = ContainingBlock.ClientRight - ContainingBlock.ClientLeft - ActualMarginLeft - ActualMarginRight;
+                    var width = contentAreaWidth;
 
                     if (Words.Count > 0)
                     {
@@ -647,15 +650,21 @@ namespace PeachPDF.Html.Core.Dom
                         width = CssValueParser.ParseLength(Width, ContainingBlock.Size.Width, this);
                     }
 
-                    if (Width is CssConstants.Auto)
+                    if (Width is CssConstants.Auto && !IsFlexItem)
                     {
                         width -= ActualBoxSizeIncludedWidth;
+                    }
+
+                    if (Width is CssConstants.Auto && IsFlexItem || Width is CssConstants.FitContent)
+                    {
+                        var fitContentWidth = await CssLayoutEngine.GetFitContentWidth(g, this, contentAreaWidth);
+                        width = fitContentWidth;
                     }
 
                     ActualRight = Location.X + width + ActualBoxSizeIncludedWidth;
                 }
 
-                if (Display != CssConstants.TableCell)
+                if (Display.Value != CssConstants.TableCell && !IsFlexItem)
                 {
                     if (Position is CssConstants.Static or CssConstants.Relative)
                     {
@@ -701,41 +710,17 @@ namespace PeachPDF.Html.Core.Dom
                     }
                 }
 
-                //If we're talking about a table here...
-                if (Display is CssConstants.Table or CssConstants.InlineTable)
+                switch (Display.DisplayInside)
                 {
-                    await CssLayoutEngineTable.PerformLayout(g, this);
-                }
-                else
-                {
-                    //If there's just inline boxes, create LineBoxes
-                    if (DomUtils.ContainsInlinesOnly(this))
-                    {
-                        ActualBottom = Location.Y;
-                        await CssLayoutEngine.CreateLineBoxes(g, this); //This will automatically set the bottom of this block
-
-#if DEBUG
-                        foreach (var lineBox in LineBoxes)
-                        {
-                            Console.WriteLine($"layout linebox: {lineBox} [h: {lineBox.LineBottom}]");
-                        }
-#endif
-
-                    }
-                    else if (Boxes.Count > 0)
-                    {
-                        foreach (var childBox in Boxes)
-                        {
-                            await childBox.PerformLayout(g);
-                        }
-
-                        ActualRight = CalculateActualRight();
-
-                        if (Boxes.Any(b => !b.IsFloated))
-                        {
-                            ActualBottom = MarginBottomCollapse();
-                        }
-                    }
+                    case CssDisplay.CssDisplayInside.Table:
+                        await CssLayoutEngineTable.PerformLayout(g, this);
+                        break;
+                    case CssDisplay.CssDisplayInside.Flow or CssDisplay.CssDisplayInside.FlowRoot:
+                        await CssLayoutEngineFlow.PerformLayout(g, this);
+                        break;
+                    case CssDisplay.CssDisplayInside.Flex:
+                        await CssLayoutEngineFlex.PerformLayout(g, this);
+                        break;
                 }
             }
             else
@@ -846,7 +831,7 @@ namespace PeachPDF.Html.Core.Dom
                     index = 0;
                     foreach (CssBox b in ParentBox.Boxes)
                     {
-                        if (b.Display == CssConstants.ListItem)
+                        if (b.Display.IsListItem)
                             index++;
                     }
                 }
@@ -861,7 +846,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (b.Equals(this))
                     return index;
 
-                if (b.Display == CssConstants.ListItem)
+                if (b.Display.IsListItem)
                     index += reversed ? -1 : 1;
             }
 
@@ -874,7 +859,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="g"></param>
         private async ValueTask CreateListItemBox(RGraphics g)
         {
-            if (Display != CssConstants.ListItem || (ListStyleType == CssConstants.None && ListStyleImage == CssConstants.None)) return;
+            if (!Display.IsListItem || (ListStyleType == CssConstants.None && ListStyleImage == CssConstants.None)) return;
 
             if (_listItemBox == null)
             {
@@ -889,14 +874,14 @@ namespace PeachPDF.Html.Core.Dom
 
                     _listItemBox = new CssBoxImage(null, imageTag);
                     _listItemBox.InheritStyle(this);
-                    _listItemBox.Display = CssConstants.Inline;
+                    _listItemBox.Display = CssDisplay.Inline;
                     _listItemBox.HtmlContainer = HtmlContainer;
                 }
                 else
                 {
                     _listItemBox = new CssBox(null, null);
                     _listItemBox.InheritStyle(this);
-                    _listItemBox.Display = CssConstants.Inline;
+                    _listItemBox.Display = CssDisplay.Inline;
                     _listItemBox.HtmlContainer = HtmlContainer;
 
                     if (ListStyleType.Equals(CssConstants.Disc, StringComparison.InvariantCultureIgnoreCase))
@@ -1121,7 +1106,7 @@ namespace PeachPDF.Html.Core.Dom
             double? oldSum = null;
 
             // not inline (block) boxes start a new line so we need to reset the max sum
-            if (box.Display != CssConstants.Inline && box.Display != CssConstants.TableCell && box.WhiteSpace != CssConstants.NoWrap)
+            if (box.Display.DisplayOutside is not CssDisplay.CssDisplayOutside.Inline && box.Display.Value != CssConstants.TableCell && box.WhiteSpace != CssConstants.NoWrap)
             {
                 oldSum = maxSum;
                 maxSum = marginSum;
@@ -1132,7 +1117,7 @@ namespace PeachPDF.Html.Core.Dom
 
 
             // for tables the padding also contains the spacing between cells
-            if (box.Display == CssConstants.Table)
+            if (box.Display.DisplayInside is CssDisplay.CssDisplayInside.Table)
                 paddingSum += CssLayoutEngineTable.GetTableSpacing(box);
 
             if (box.Words.Count > 0)
@@ -1238,60 +1223,6 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Calculate the actual right of the box by the actual right of the child boxes if this box actual right is not set.
-        /// </summary>
-        /// <returns>the calculated actual right value</returns>
-        private double CalculateActualRight()
-        {
-            if (!(ActualRight > 90999)) return ActualRight;
-
-            var maxRight = 0d;
-
-            double additionalMarginRight;
-
-            foreach (var box in Boxes)
-            { 
-                additionalMarginRight = box.BoxSizing switch
-                {
-                    CssConstants.ContentBox => 0,
-                    CssConstants.BorderBox => box.ActualMarginRight,
-                    _ => throw new HtmlRenderException("Unknown BoxSizing", HtmlRenderErrorType.Layout)
-                };
-
-                maxRight = Math.Max(maxRight, box.ActualRight + additionalMarginRight);
-            }
-
-            additionalMarginRight = BoxSizing switch
-            {
-                CssConstants.ContentBox => 0,
-                CssConstants.BorderBox => ActualMarginRight,
-                _ => throw new HtmlRenderException("Unknown BoxSizing", HtmlRenderErrorType.Layout)
-            };
-
-            return maxRight + ActualPaddingRight + additionalMarginRight + ActualBorderRightWidth;
-
-        }
-
-        /// <summary>
-        /// Gets the result of collapsing the vertical margins of the two boxes
-        /// </summary>
-        /// <returns>Resulting bottom margin</returns>
-        private double MarginBottomCollapse()
-        {
-            var lastNonFloatingBox = Boxes.Last(b => !b.IsFloated);
-
-            double margin = 0;
-            if (ParentBox == null || ParentBox.Boxes.IndexOf(this) != ParentBox.Boxes.Count - 1 ||
-                !(_parentBox!.ActualMarginBottom < 0.1))
-                return Math.Max(ActualBottom,
-                    lastNonFloatingBox.ActualBottom + margin + ActualPaddingBottom + ActualBorderBottomWidth);
-
-            var lastChildBottomMargin = lastNonFloatingBox.ActualMarginBottom;
-            margin = Height == "auto" ? Math.Max(ActualMarginBottom, lastChildBottomMargin) : lastChildBottomMargin;
-            return Math.Max(ActualBottom, lastNonFloatingBox.ActualBottom + margin + ActualPaddingBottom + ActualBorderBottomWidth);
-        }
-
-        /// <summary>
         /// Deeply offsets the top of the box and its contents
         /// </summary>
         /// <param name="amount"></param>
@@ -1335,8 +1266,8 @@ namespace PeachPDF.Html.Core.Dom
                 return;
             }
 
-            if (Display == CssConstants.None ||
-                (Display == CssConstants.TableCell && EmptyCells == CssConstants.Hide && IsSpaceOrEmpty)) return;
+            if (Display.DisplayBox is CssDisplay.CssDisplayBox.None ||
+                (Display.Value == CssConstants.TableCell && EmptyCells == CssConstants.Hide && IsSpaceOrEmpty)) return;
 
             var clipped = RenderUtils.ClipGraphicsByOverflow(g, this);
 
@@ -1689,7 +1620,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 return $"{(ParentBox == null ? "Root: " : string.Empty)}{tag} Block {FontSize}, Children:{Boxes.Count}";
             }
-            else if (Display == CssConstants.None)
+            else if (Display.DisplayBox is CssDisplay.CssDisplayBox.None)
             {
                 return $"{(ParentBox == null ? "Root: " : string.Empty)}{tag} None";
             }

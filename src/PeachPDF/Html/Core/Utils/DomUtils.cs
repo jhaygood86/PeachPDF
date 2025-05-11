@@ -95,12 +95,12 @@ namespace PeachPDF.Html.Core.Utils
             var diff = 1;
             var sib = b.ParentBox.Boxes[index - diff];
 
-            while ((sib.Display == CssConstants.None || sib.Position == CssConstants.Absolute || sib.Position == CssConstants.Fixed || (!includeFloats && sib.IsFloated)) && index - diff - 1 >= 0)
+            while ((sib.Display.DisplayBox is CssDisplay.CssDisplayBox.None || sib.Position == CssConstants.Absolute || sib.Position == CssConstants.Fixed || (!includeFloats && sib.IsFloated)) && index - diff - 1 >= 0)
             {
                 sib = b.ParentBox.Boxes[index - ++diff];
             }
 
-            sib = sib.Display == CssConstants.None || sib.Position == CssConstants.Fixed || (!includeFloats && sib.IsFloated) ? null : sib;
+            sib = sib.Display.DisplayBox is CssDisplay.CssDisplayBox.None || sib.Position == CssConstants.Fixed || (!includeFloats && sib.IsFloated) ? null : sib;
 
             return sib;
         }
@@ -137,7 +137,7 @@ namespace PeachPDF.Html.Core.Utils
         {
             var conBlock = b;
             var index = conBlock.ParentBox!.Boxes.IndexOf(conBlock);
-            while (conBlock.ParentBox != null && index < 1 && conBlock.Display != CssConstants.Block && conBlock.Display != CssConstants.Table && conBlock.Display != CssConstants.TableCell && conBlock.Display != CssConstants.ListItem)
+            while (conBlock.ParentBox != null && index < 1 && conBlock.Display.DisplayOutside != CssDisplay.CssDisplayOutside.Block && conBlock.Display.DisplayInside != CssDisplay.CssDisplayInside.Table && conBlock.Display.Value != CssConstants.TableCell && conBlock.Display.Value != CssConstants.ListItem)
             {
                 conBlock = conBlock.ParentBox;
                 index = conBlock.ParentBox != null ? conBlock.ParentBox.Boxes.IndexOf(conBlock) : -1;
@@ -148,12 +148,12 @@ namespace PeachPDF.Html.Core.Utils
             var diff = 1;
             var sib = conBlock.Boxes[index - diff];
 
-            while ((sib.Display == CssConstants.None || sib.Position == CssConstants.Absolute || sib.Position == CssConstants.Fixed) && index - diff - 1 >= 0)
+            while ((sib.Display.DisplayBox is CssDisplay.CssDisplayBox.None || sib.Position == CssConstants.Absolute || sib.Position == CssConstants.Fixed) && index - diff - 1 >= 0)
             {
                 sib = conBlock.Boxes[index - ++diff];
             }
 
-            return sib.Display == CssConstants.None ? null : sib;
+            return sib.Display.DisplayBox is CssDisplay.CssDisplayBox.None ? null : sib;
         }
 
         /// <summary>
@@ -591,9 +591,9 @@ namespace PeachPDF.Html.Core.Utils
 
         public static bool IsProperTableChild(CssBox box)
         {
-            return box.IsTableRowGroupBox || box.Display is CssConstants.TableRow ||
-                   box.Display is CssConstants.TableColumn || box.Display is CssConstants.TableColumnGroup ||
-                   box.Display is CssConstants.TableCaption;
+            return box.IsTableRowGroupBox || box.Display.Value is CssConstants.TableRow ||
+                   box.Display.Value is CssConstants.TableColumn || box.Display.Value is CssConstants.TableColumnGroup ||
+                   box.Display.Value is CssConstants.TableCaption;
         }
 
         private static CssBox? GetNextIntersectingFloatBox(CssBox box, CssFloatCoordinates coordinates, string floatProp)
