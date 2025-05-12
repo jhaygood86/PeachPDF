@@ -291,7 +291,8 @@ namespace PeachPDF.Html.Core.Dom
 
         public string Width { get; set; } = "auto";
 
-        public string MaxWidth { get; set; } = "none";
+        public string MaxWidth { get; set; } = CssConstants.None;
+        public string MinWidth { get; set; } = CssConstants.Auto;
 
         public string Height { get; set; } = "auto";
         public string MinHeight { get; set; } = "auto";
@@ -1023,6 +1024,12 @@ namespace PeachPDF.Html.Core.Dom
         public string ZIndex { get; set; } = CssConstants.Auto;
 
         public string FlexDirection { get; set; } = CssConstants.Row;
+
+        public string FlexBasis { get; set; } = CssConstants.Auto;
+
+        public string FlexGrow { get; set; } = CssConstants.Zero;
+
+        public string FlexShrink { get; set; } = CssConstants.One;
 
         /// <summary>
         /// Get the parent of this css properties instance.

@@ -23,18 +23,25 @@ var css = """
             border: 2px solid #608BA8;
             border-radius: 5px;
             background-color: #D3E5ED;
+            flex-grow: 1;
           }
           
           .box {
             border: 2px dotted rgb(96 139 168);
             display: flex;
-            flex-direction: row-reverse
+            flex-direction: row;
+            width: 200px;
+          }
+          
+          #first {
+            flex-basis: 200px;
+            text-align: center;
           }
           """;
 
 var html = """
            <div class="box">
-             <div>One</div>
+             <div id="first">One</div>
              <div>Two</div>
              <div>Three <br />has <br />extra <br />text</div>
            </div>

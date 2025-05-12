@@ -90,6 +90,7 @@ namespace PeachPDF.Html.Core.Utils
                 "top" => cssBox.Top,
                 "width" => cssBox.Width,
                 "max-width" => cssBox.MaxWidth,
+                "min-width" => cssBox.MinWidth,
                 "height" => cssBox.Height,
                 "min-height" => cssBox.MinHeight,
                 "background-color" => cssBox.BackgroundColor,
@@ -105,6 +106,9 @@ namespace PeachPDF.Html.Core.Utils
                 "empty-cells" => cssBox.EmptyCells,
                 "float" => cssBox.Float,
                 "flex-direction" => cssBox.FlexDirection,
+                "flex-basis" => cssBox.FlexBasis,
+                "flex-grow" => cssBox.FlexGrow,
+                "flex-shrink" => cssBox.FlexShrink,
                 "clear" => cssBox.Clear,
                 "position" => cssBox.Position,
                 "line-height" => cssBox.LineHeight,
@@ -346,6 +350,12 @@ namespace PeachPDF.Html.Core.Utils
                     }
 
                     break;
+                case "min-width":
+                    if (IsValidLengthProperty(value))
+                    {
+                        cssBox.MinWidth = value;
+                    }
+                    break;
                 case "height":
                     if (IsValidLengthProperty(value))
                     {
@@ -403,6 +413,15 @@ namespace PeachPDF.Html.Core.Utils
                     break;
                 case "flex-direction":
                     cssBox.FlexDirection = value;
+                    break;
+                case "flex-basis":
+                    cssBox.FlexBasis = value;
+                    break;
+                case "flex-grow":
+                    cssBox.FlexGrow = value;
+                    break;
+                case "flex-shrink":
+                    cssBox.FlexShrink = value;
                     break;
                 case "float":
                     cssBox.Float = value;

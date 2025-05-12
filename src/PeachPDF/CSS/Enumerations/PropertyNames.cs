@@ -96,6 +96,7 @@
         public static readonly string Content = "content";
         public static readonly string CounterIncrement = "counter-increment";
         public static readonly string CounterReset = "counter-reset";
+        public static readonly string CounterSet = "counter-set";
         public static readonly string Cursor = "cursor";
         public static readonly string Direction = "direction";
         public static readonly string Display = "display";

@@ -16,6 +16,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
+using Org.BouncyCastle.Bcpg.OpenPgp;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Entities;
@@ -161,6 +162,8 @@ namespace PeachPDF.Html.Core.Dom
 
         public bool IsFlexItem => ParentBox?.Display.DisplayInside == CssDisplay.CssDisplayInside.Flex;
 
+        public bool IsFlexFrozen { get; set; } = false;
+
         /// <summary>
         /// Is the css box clickable (by default only "a" element is clickable)
         /// </summary>
@@ -252,6 +255,10 @@ namespace PeachPDF.Html.Core.Dom
         /// Gets the actual Margin on the right
         /// </summary>
         public double ActualMarginRight => CssLayoutEngine.GetActualMarginRight(this);
+
+        public double ContentAreaWidth => ContainingBlock.ClientRight - ContainingBlock.ClientLeft - ActualMarginLeft - ActualMarginRight;
+
+        public double FlexAdditionalSpace { get; set; } = 0d;
 
         /// <summary>
         /// Gets the HTMLTag that hosts this box
@@ -647,7 +654,7 @@ namespace PeachPDF.Html.Core.Dom
 
                     if (Width != CssConstants.Auto && !string.IsNullOrEmpty(Width))
                     {
-                        width = CssValueParser.ParseLength(Width, ContainingBlock.Size.Width, this);
+                        width = CssValueParser.ParseLength(Width, contentAreaWidth, this);
                     }
 
                     if (Width is CssConstants.Auto && !IsFlexItem)
@@ -657,8 +664,30 @@ namespace PeachPDF.Html.Core.Dom
 
                     if (Width is CssConstants.Auto && IsFlexItem || Width is CssConstants.FitContent)
                     {
-                        var fitContentWidth = await CssLayoutEngine.GetFitContentWidth(g, this, contentAreaWidth);
-                        width = fitContentWidth;
+                        width = await CssLayoutEngine.GetFitContentWidth(g, this, contentAreaWidth);
+                    }
+
+                    if (IsFlexItem && FlexBasis is not CssConstants.Auto)
+                    {
+                        if (CssValueParser.IsValidLength(FlexBasis))
+                        {
+                            width = CssValueParser.ParseLength(FlexBasis, contentAreaWidth, this);
+                        }
+
+                        if (FlexBasis is CssConstants.MinContent)
+                        {
+                            width = await CssLayoutEngine.GetMinContentWidth(g, this);
+                        }
+
+                        if (FlexBasis is CssConstants.MaxContent)
+                        {
+                            width = await CssLayoutEngine.GetMaxContentWidth(g, this);
+                        }
+                    }
+
+                    if (IsFlexItem)
+                    {
+                        width += FlexAdditionalSpace;
                     }
 
                     ActualRight = Location.X + width + ActualBoxSizeIncludedWidth;

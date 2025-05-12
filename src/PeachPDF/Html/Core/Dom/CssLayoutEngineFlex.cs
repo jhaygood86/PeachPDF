@@ -1,7 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 
 namespace PeachPDF.Html.Core.Dom
@@ -33,11 +36,26 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
+            await DistributePositiveSpace(g);
+            await DistributeNegativeSpace(g);
+
             FlexBox.Boxes.ForEach(box =>
             {
                 box.Size = box.Size with { Height = flexItemHeight - box.ActualBoxSizeIncludedHeight };
             });
+        }
 
+        private static async ValueTask<double> SumAsync(IEnumerable<CssBox> boxes, Func<CssBox, ValueTask<double>> expression)
+        {
+            double sum = 0;
+
+            foreach (var box in boxes)
+            {
+                var add = await expression(box);
+                sum += add;
+            }
+
+            return sum;
         }
 
         private RPoint GetStartingPoint()
@@ -78,6 +96,121 @@ namespace PeachPDF.Html.Core.Dom
             };
 
             return new RPoint(left, top);
+        }
+
+        private async ValueTask DistributePositiveSpace(RGraphics g)
+        {
+            var usedWidth = await SumAsync(FlexBox.Boxes, b => GetHypotheticalMainWidth(g,b));
+
+            if (usedWidth >= FlexBox.ContentAreaWidth)
+            {
+                return;
+            }
+
+            foreach (var box in FlexBox.Boxes)
+            {
+                var flexBaseSize = await GetFlexBasisWidth(g, box);
+                var hypotheticalMainSize = await GetHypotheticalMainWidth(g, box);
+
+                if (flexBaseSize > hypotheticalMainSize)
+                {
+                    box.IsFlexFrozen = true;
+                }
+            }
+
+            while (FlexBox.Boxes.Any(b => !b.IsFlexFrozen))
+            {
+                usedWidth = FlexBox.Boxes.Sum(b => b.ActualWidth + b.ActualMarginLeft + b.ActualMarginRight);
+
+                var initialRemainingWidth = FlexBox.ContentAreaWidth - usedWidth;
+                var flexGrowSums = FlexBox.Boxes.Where(b => !b.IsFlexFrozen).Sum(b => double.Parse(b.FlexGrow));
+
+                var remainingWidth = flexGrowSums > 1 ? initialRemainingWidth : 
+
+                var start = GetStartingPoint();
+            }
+
+            foreach (var box in FlexBox.Boxes)
+            {
+                var flexGrow = double.Parse(box.FlexGrow);
+                box.FlexAdditionalSpace = flexGrow > 0 ? remainingWidth * (flexGrow / flexGrowSums) : 0;
+
+                box.Location = await GetNextPoint(g, box, start);
+                await box.PerformLayout(g);
+            }
+        }
+
+        private async ValueTask DistributeNegativeSpace(RGraphics g)
+        {
+            var contentAreaWidth = FlexBox.ClientRight - FlexBox.ClientLeft - FlexBox.ActualMarginLeft - FlexBox.ActualMarginRight;
+            var usedWidth = FlexBox.Boxes.Sum(b => b.ActualWidth + b.ActualMarginLeft + b.ActualMarginRight);
+
+            if (contentAreaWidth >= usedWidth)
+            {
+                return;
+            }
+
+            var remainingWidth = usedWidth - contentAreaWidth;
+
+            var flexShrinkSums = FlexBox.Boxes.Sum(b => double.Parse(b.FlexShrink) * b.Size.Width);
+
+            var start = GetStartingPoint();
+
+            foreach (var box in FlexBox.Boxes)
+            {
+                var flexShrink = double.Parse(box.FlexShrink) * box.Size.Width;
+                box.FlexAdditionalSpace = flexShrink > 0 ? -remainingWidth * (flexShrink / flexShrinkSums) : 0;
+
+                box.Location = await GetNextPoint(g, box, start);
+                await box.PerformLayout(g);
+            }
+        } 
+
+        private static async ValueTask<double> GetFlexBasisWidth(RGraphics g, CssBox box)
+        {
+            if (CssValueParser.IsValidLength(box.FlexBasis))
+            {
+                return CssValueParser.ParseLength(box.FlexBasis, box.ContentAreaWidth, box);
+            }
+
+            if (box.FlexBasis is CssConstants.Content || box is { FlexBasis: CssConstants.Auto, Width: CssConstants.Auto })
+            {
+                return await CssLayoutEngine.GetFitContentWidth(g, box, box.ContentAreaWidth);
+            }
+
+            if (box is { FlexBasis: CssConstants.Auto, Width: not CssConstants.Auto })
+            {
+                return CssValueParser.ParseLength(box.Width, box.ContentAreaWidth, box);
+            }
+
+            throw new NotImplementedException($"Unknown flex-basis: {box.FlexBasis}");
+        }
+
+        private static async ValueTask<double> GetHypotheticalMainWidth(RGraphics g, CssBox box)
+        {
+            var flexBasisWidth = await GetFlexBasisWidth(g, box);
+
+            if (box.MinWidth is not CssConstants.Auto)
+            {
+                var minWidth = CssValueParser.ParseLength(box.MinWidth, box.ContentAreaWidth, box);
+
+                if (minWidth > flexBasisWidth)
+                {
+                    return minWidth;
+                }
+            }
+
+            if (box.MaxWidth is not CssConstants.None)
+            {
+                var maxWidth = CssValueParser.ParseLength(box.MaxWidth, box.ContentAreaWidth, box);
+
+                if (flexBasisWidth > maxWidth)
+                {
+                    return maxWidth;
+                }
+            }
+
+            return flexBasisWidth;
         }
     }
 }

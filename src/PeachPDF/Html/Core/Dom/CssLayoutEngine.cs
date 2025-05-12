@@ -306,7 +306,22 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        public static async Task<double> GetFitContentWidth(RGraphics g, CssBox box, double maxWidth)
+        public static async Task<double> GetFitContentWidth(RGraphics g, CssBox box, double contentAreaWidth)
+        {
+            var maxIntrinsicWidth = await GetMaxContentWidth(g, box);
+            return maxIntrinsicWidth < contentAreaWidth ? maxIntrinsicWidth : contentAreaWidth;
+        }
+
+        public static async Task<double> GetMinContentWidth(RGraphics g, CssBox box)
+        {
+            await MeasureWords(box, g);
+
+            box.GetMinMaxWidth(out var minIntrinsicWidth, out _);
+
+            return minIntrinsicWidth;
+        }
+
+        public static async Task<double> GetMaxContentWidth(RGraphics g, CssBox box)
         {
             await MeasureWords(box, g);
 
