@@ -1089,6 +1089,11 @@ namespace PeachPDF.Html.Core.Dom
                 currentMaxBottom = Math.Max(currentMaxBottom, GetMaximumBottom(b, currentMaxBottom));
             }
 
+            if (startBox.Height is not CssConstants.Auto)
+            {
+                currentMaxBottom = Math.Max(currentMaxBottom,startBox.ActualBottom);
+            }
+
             return currentMaxBottom;
         }
 
