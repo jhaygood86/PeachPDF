@@ -846,6 +846,7 @@ namespace PeachPDF.Html.Core.Parse
                 blockBox.Right = box.Right;
                 blockBox.Width = box.Width;
                 blockBox.Height = box.Height;
+                blockBox.TextAlign = box.TextAlign;
 
                 box.Position = CssConstants.Static;
                 box.ParentBox = blockBox;
