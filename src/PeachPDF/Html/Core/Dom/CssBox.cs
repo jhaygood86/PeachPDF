@@ -39,8 +39,6 @@ namespace PeachPDF.Html.Core.Dom
     {
         #region Fields and Consts
 
-        private readonly uint _id = 0;
-
         private static uint _idCounter = 0;
 
         /// <summary>
@@ -90,9 +88,11 @@ namespace PeachPDF.Html.Core.Dom
                 _parentBox.Boxes.Add(this);
             }
 
-            _id = ++_idCounter;
+            Id = ++_idCounter;
             HtmlTag = tag;
         }
+
+        public uint Id { get; }
 
         public static void ClearCounter()
         {
@@ -158,6 +158,8 @@ namespace PeachPDF.Html.Core.Dom
         public bool IsBlock => Display == CssConstants.Block;
 
         public bool IsFloated => Float is CssConstants.Left or CssConstants.Right;
+
+        public bool IsOutOfFlow => IsFloated || Position is CssConstants.Absolute or CssConstants.Fixed;
 
         /// <summary>
         /// Is the css box clickable (by default only "a" element is clickable)
@@ -731,7 +733,7 @@ namespace PeachPDF.Html.Core.Dom
 
                         ActualRight = CalculateActualRight();
 
-                        if (Boxes.Any(b => !b.IsFloated))
+                        if (Boxes.Any(b => !b.IsOutOfFlow))
                         {
                             ActualBottom = MarginBottomCollapse();
                         }
@@ -1278,7 +1280,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <returns>Resulting bottom margin</returns>
         private double MarginBottomCollapse()
         {
-            var lastNonFloatingBox = Boxes.Last(b => !b.IsFloated);
+            var lastNonFloatingBox = Boxes.Last(b => !b.IsOutOfFlow);
 
             double margin = 0;
             if (ParentBox == null || ParentBox.Boxes.IndexOf(this) != ParentBox.Boxes.Count - 1 ||
@@ -1663,7 +1665,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <returns></returns>
         public override string ToString()
         {
-            var tag = HtmlTag != null ? $"<{HtmlTag.Name}#{_id}>" : $"anon#{_id}";
+            var tag = HtmlTag != null ? $"<{HtmlTag.Name}#{Id}>" : $"anon#{Id}";
 
             if (HtmlTag?.Attributes?.ContainsKey("class") ?? false)
             {
