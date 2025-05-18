@@ -306,13 +306,16 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        public static async Task<double> GetFitContentWidth(RGraphics g, CssBox box, double contentAreaWidth)
+        public static async ValueTask<double> GetFitContentWidth(RGraphics g, CssBox box, double contentAreaWidth)
         {
             var maxIntrinsicWidth = await GetMaxContentWidth(g, box);
-            return maxIntrinsicWidth < contentAreaWidth ? maxIntrinsicWidth : contentAreaWidth;
+
+            var fitContentWidth = await GetLargestChildWidth(g, box, maxIntrinsicWidth);
+
+            return fitContentWidth < contentAreaWidth ? fitContentWidth : contentAreaWidth;
         }
 
-        public static async Task<double> GetMinContentWidth(RGraphics g, CssBox box)
+        public static async ValueTask<double> GetMinContentWidth(RGraphics g, CssBox box)
         {
             await MeasureWords(box, g);
 
@@ -321,13 +324,40 @@ namespace PeachPDF.Html.Core.Dom
             return minIntrinsicWidth;
         }
 
-        public static async Task<double> GetMaxContentWidth(RGraphics g, CssBox box)
+        public static async ValueTask<double> GetMaxContentWidth(RGraphics g, CssBox box)
         {
             await MeasureWords(box, g);
 
             box.GetMinMaxWidth(out _, out var maxIntrinsicWidth);
 
             return maxIntrinsicWidth;
+        }
+
+        public static async ValueTask<double> GetBoxWidth(RGraphics g, CssBox box)
+        {
+            var width = box.ContainingBlock.ClientRight - box.ContainingBlock.ClientLeft - box.ActualMarginLeft - box.ActualMarginRight;
+
+            if (box.Words.Count > 0)
+            {
+                width = box.Words.Sum(x => x.FullWidth);
+            }
+
+            if (box.Width != CssConstants.Auto && !string.IsNullOrEmpty(box.Width))
+            {
+                width = CssValueParser.ParseLength(box.Width, box.ContainingBlock.Size.Width, box);
+            }
+
+            if (box is { Width: CssConstants.Auto, Position: not CssConstants.Absolute })
+            {
+                width -= box.ActualBoxSizeIncludedWidth;
+            }
+
+            if (box is { Width: CssConstants.Auto, Position: CssConstants.Absolute })
+            {
+                width = await GetFitContentWidth(g, box, box.ContainingBlock.Size.Width);
+            }
+
+            return width;
         }
 
         #region Private methods
@@ -906,6 +936,20 @@ namespace PeachPDF.Html.Core.Dom
                 line.Rectangles[b] = new RRect(r.X + diff, r.Y, r.Width, r.Height);
             }
         }
+
+        private static async ValueTask<double> GetLargestChildWidth(RGraphics g, CssBox box, double currentSize)
+        {
+            foreach (var childBox in box.Boxes)
+            {
+                var childBoxWidth = await GetBoxWidth(g, childBox);
+                childBoxWidth = await GetLargestChildWidth(g, childBox, Math.Max(currentSize, childBoxWidth));
+                currentSize = childBoxWidth > currentSize ? childBoxWidth : currentSize;
+            }
+
+            return currentSize;
+        }
+
+
         #endregion
     }
 }

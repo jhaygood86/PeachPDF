@@ -17,11 +17,6 @@ namespace PeachPDF.Html.Core.Dom
     /// </summary>
     internal sealed class CssRectWord : CssRect
     {
-        #region Fields and Consts
-
-        #endregion
-
-
         /// <summary>
         /// Init.
         /// </summary>
@@ -80,8 +75,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <returns></returns>
         public override string ToString()
         {
-            return
-                $"{Text.Replace(' ', '-').Replace("\n", "\\n")} ({Text.Length} char{(Text.Length != 1 ? "s" : string.Empty)})";
+            return $"{Text.Replace(' ', '-').Replace("\n", "\\n")} ({Text.Length} char{(Text.Length != 1 ? "s" : string.Empty)})";
         }
     }
 }

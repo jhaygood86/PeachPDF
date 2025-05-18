@@ -88,6 +88,8 @@ namespace PeachPDF.Html.Core.Utils
                 "page-break-inside" => cssBox.PageBreakInside,
                 "left" => cssBox.Left,
                 "top" => cssBox.Top,
+                "right" => cssBox.Right,
+                "bottom" => cssBox.Bottom,
                 "width" => cssBox.Width,
                 "max-width" => cssBox.MaxWidth,
                 "min-width" => cssBox.MinWidth,
@@ -335,6 +337,12 @@ namespace PeachPDF.Html.Core.Utils
                     break;
                 case "top":
                     cssBox.Top = value;
+                    break;
+                case "right":
+                    cssBox.Right = value;
+                    break;
+                case "bottom":
+                    cssBox.Bottom = value;
                     break;
                 case "width":
                     if (IsValidLengthProperty(value))

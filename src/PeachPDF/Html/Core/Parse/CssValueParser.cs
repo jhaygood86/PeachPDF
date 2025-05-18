@@ -167,19 +167,6 @@ namespace PeachPDF.Html.Core.Parse
         /// </summary>
         /// <param name="length">Specified length</param>
         /// <param name="hundredPercent">Equivalent to 100 percent when length is percentage</param>
-        /// <param name="box"></param>
-        /// <param name="defaultUnit"></param>
-        /// <returns>the parsed length value with adjustments</returns>
-        public static double ParseLength(string length, double hundredPercent, CssBoxProperties box, string defaultUnit)
-        {
-            return ParseLength(length, hundredPercent, box.GetEmHeight(), defaultUnit, false, false);
-        }
-
-        /// <summary>
-        /// Parses a length. Lengths are followed by an unit identifier (e.g. 10px, 3.1em)
-        /// </summary>
-        /// <param name="length">Specified length</param>
-        /// <param name="hundredPercent">Equivalent to 100 percent when length is percentage</param>
         /// <param name="emFactor"></param>
         /// <param name="defaultUnit"></param>
         /// <param name="fontAdjust">if the length is in pixels and the length is font related it needs to use 72/96 factor</param>
@@ -349,7 +336,7 @@ namespace PeachPDF.Html.Core.Parse
         public string GetFontFamilyByName(string propValue)
         {
             int start = 0;
-            while (start > -1 && start < propValue.Length)
+            while (start < propValue.Length)
             {
                 while (char.IsWhiteSpace(propValue[start]) || propValue[start] == ',' || propValue[start] == '\'' || propValue[start] == '"')
                     start++;
@@ -440,7 +427,7 @@ namespace PeachPDF.Html.Core.Parse
 
             } while (token.Type != TokenType.EndOfFile);
 
-            if (tokens.Count == 1 && tokens[0] is StringToken stringToken)
+            if (tokens is [StringToken stringToken])
             {
                 return stringToken.Data;
             }

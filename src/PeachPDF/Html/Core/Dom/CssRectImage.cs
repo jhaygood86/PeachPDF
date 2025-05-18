@@ -11,7 +11,6 @@
 // "The Art of War"
 
 using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
 
 namespace PeachPDF.Html.Core.Dom
 {

@@ -78,6 +78,8 @@ namespace PeachPDF.Html.Core.Parse
 
             CorrectInlineBoxesParent(root);
 
+            CorrectAbsolutelyPositionedInlineElements(root);
+
             CorrectBlockInsideInline(root);
 
             CorrectInlineBoxesParent(root);
@@ -780,6 +782,32 @@ namespace PeachPDF.Html.Core.Parse
             }
         }
 
+
+        private static void CorrectAbsolutelyPositionedInlineElements(CssBox box)
+        {
+            if (box is { Display: CssConstants.Inline, Position: CssConstants.Absolute })
+            {
+                var blockBox = new CssBox(box.ParentBox, null);
+                blockBox.Display = CssConstants.Block;
+                blockBox.Position = CssConstants.Absolute;
+                blockBox.Left = box.Left;
+                blockBox.Top = box.Top;
+                blockBox.Bottom = box.Bottom;
+                blockBox.Right = box.Right;
+                blockBox.Width = box.Width;
+                blockBox.Height = box.Height;
+                blockBox.TextAlign = box.TextAlign;
+
+                box.Position = CssConstants.Static;
+                box.ParentBox = blockBox;
+            }
+
+            foreach (var childBox in box.Boxes.ToArray())
+            {
+                CorrectAbsolutelyPositionedInlineElements(childBox);
+            }
+        }
+
         /// <summary>
         /// Corrects the missing elements in tables per https://www.w3.org/TR/CSS2/tables.html#anonymous-boxes
         /// </summary>
@@ -843,8 +871,12 @@ namespace PeachPDF.Html.Core.Parse
             // 2.1 If a child C of a 'table' or 'inline-table' box is not a proper table child, then generate an anonymous 'table-row' box around C and all consecutive siblings of C that are not proper table children.
             if (box.ParentBox?.Display.DisplayInside is CssDisplay.CssDisplayInside.Table)
             {
-                if (DomUtils.IsProperTableChild(box))
+                if (!DomUtils.IsProperTableChild(box))
                 {
+#if DEBUG
+                    Console.WriteLine($"dom: if box {box.Id} is not a proper table child and parent is a table, then generate table around element");
+#endif
+
                     var tableRowBox = new CssBox(box.ParentBox, null);
                     tableRowBox.Display = CssDisplay.TableRow;
                     box.ParentBox = tableRowBox;
@@ -856,6 +888,10 @@ namespace PeachPDF.Html.Core.Parse
             {
                 if (box.Display.Value is not CssConstants.TableRow)
                 {
+#if DEBUG
+                    Console.WriteLine($"dom: if box {box.Id} is not a table row and parent is a table row group box, then generate table-row around element");
+#endif
+
                     var tableRowBox = new CssBox(box.ParentBox, null);
                     tableRowBox.Display = CssDisplay.TableRow;
                     box.ParentBox = tableRowBox;
@@ -867,18 +903,20 @@ namespace PeachPDF.Html.Core.Parse
             {
                 if (box.Display.Value is not CssConstants.TableCell)
                 {
-                    CssBox? tableCellBox = null;
 
-                    var previousSibling = DomUtils.GetPreviousSibling(box);
+#if DEBUG
+                    Console.WriteLine($"dom: if box {box.Id} is not a table cell and parent is a table row, then generate table-row around element and following  elements");
+#endif
 
-                    if (previousSibling is not null && previousSibling.HtmlTag is null && previousSibling.Display.Value is CssConstants.TableCell)
-                    {
-                        tableCellBox = previousSibling;
-                    }
+                    var followingMatchingSiblings =
+                        DomUtils.GetFollowingSiblings(box, sibling => sibling.Display is CssConstants.TableCell, true)
+                            .ToList();
 
-                    tableCellBox ??= new CssBox(box.ParentBox, null);
-                    tableCellBox.Display = CssDisplay.TableCell;
+                    var tableCellBox = new CssBox(box.ParentBox, null);
+                    tableCellBox.Display = CssConstants.TableCell;
                     box.ParentBox = tableCellBox;
+
+                    followingMatchingSiblings.ForEach(sib => sib.ParentBox = tableCellBox);
                 }
             }
         }
@@ -912,7 +950,7 @@ namespace PeachPDF.Html.Core.Parse
                 var isMissingParent = box.ParentBox is null;
                 var isParentNotTable = box.ParentBox?.Display.DisplayInside is not CssDisplay.CssDisplayInside.Table;
 
-                var isMisparented = isMissingParent || isParentNotTable;
+                var isMisparented = isMissingParent && isParentNotTable && isParentNotInlineTable;
 
                 if (isMisparented)
                 {
