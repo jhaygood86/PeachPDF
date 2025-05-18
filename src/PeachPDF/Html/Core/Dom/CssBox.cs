@@ -10,18 +10,18 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using System;
-using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
-using System.Globalization;
-using System.Linq;
-using System.Threading.Tasks;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -637,23 +637,7 @@ namespace PeachPDF.Html.Core.Dom
                 // Because their width and height are set by CssTable
                 if (Display != CssConstants.TableCell && Display != CssConstants.Table)
                 {
-                    var width = ContainingBlock.ClientRight - ContainingBlock.ClientLeft - ActualMarginLeft - ActualMarginRight;
-
-                    if (Words.Count > 0)
-                    {
-                        width = Words.Sum(x => x.FullWidth);
-                    }
-
-                    if (Width != CssConstants.Auto && !string.IsNullOrEmpty(Width))
-                    {
-                        width = CssValueParser.ParseLength(Width, ContainingBlock.Size.Width, this);
-                    }
-
-                    if (Width is CssConstants.Auto)
-                    {
-                        width -= ActualBoxSizeIncludedWidth;
-                    }
-
+                    var width = await CssLayoutEngine.GetBoxWidth(g, this);
                     ActualRight = Location.X + width + ActualBoxSizeIncludedWidth;
                 }
 
@@ -781,6 +765,21 @@ namespace PeachPDF.Html.Core.Dom
             ActualBottom = Math.Max(ActualBottom, Location.Y + height);
 
             await CreateListItemBox(g);
+
+            if (Position is CssConstants.Absolute)
+            {
+                if (Left is CssConstants.Auto && Right is not CssConstants.Auto)
+                {
+                    var nearestPositionedAncestor = DomUtils.GetNearestPositionedAncestor(this);
+
+                    var right = CssValueParser.ParseLength(Right, nearestPositionedAncestor.ActualWidth, this);
+                    var actualRight = nearestPositionedAncestor.ClientRight + nearestPositionedAncestor.ActualPaddingRight - right;
+
+                    var delta = actualRight - ActualRight;
+
+                    OffsetLeft(delta);
+                }
+            }
 
 #if DEBUG
             Console.WriteLine($"layout finish: {ToString()} [x: {Location.X}, y: {Location.Y}, b: {ActualBottom}, r: {ActualRight}, h: {Size.Height}, w: {Size.Width}]");
@@ -1108,6 +1107,7 @@ namespace PeachPDF.Html.Core.Dom
             double maxSum = 0f;
             double paddingSum = 0f;
             double marginSum = 0f;
+
             GetMinMaxSumWords(this, ref min, ref maxSum, ref paddingSum, ref marginSum);
 
             maxWidth = paddingSum + maxSum;
@@ -1145,7 +1145,7 @@ namespace PeachPDF.Html.Core.Dom
             if (box.Words.Count > 0)
             {
                 // calculate the min and max sum for all the words in the box
-                foreach (CssRect word in box.Words)
+                foreach (var word in box.Words)
                 {
                     maxSum += word.FullWidth + (word.HasSpaceBefore ? word.OwnerBox.ActualWordSpacing : 0);
                     min = Math.Max(min, word.Width);
@@ -1158,9 +1158,8 @@ namespace PeachPDF.Html.Core.Dom
             else
             {
                 // recursively on all the child boxes
-                for (int i = 0; i < box.Boxes.Count; i++)
+                foreach (var childBox in box.Boxes)
                 {
-                    CssBox childBox = box.Boxes[i];
                     marginSum += childBox.ActualMarginLeft + childBox.ActualMarginRight;
 
                     //maxSum += childBox.ActualMarginLeft + childBox.ActualMarginRight;
@@ -1305,21 +1304,21 @@ namespace PeachPDF.Html.Core.Dom
         internal void OffsetTop(double amount)
         {
             List<CssLineBox> lines = [];
-            foreach (CssLineBox line in Rectangles.Keys)
+            foreach (var line in Rectangles.Keys)
                 lines.Add(line);
 
-            foreach (CssLineBox line in lines)
+            foreach (var line in lines)
             {
-                RRect r = Rectangles[line];
+                var r = Rectangles[line];
                 Rectangles[line] = new RRect(r.X, r.Y + amount, r.Width, r.Height);
             }
 
-            foreach (CssRect word in Words)
+            foreach (var word in Words)
             {
                 word.Top += amount;
             }
 
-            foreach (CssBox b in Boxes)
+            foreach (var b in Boxes)
             {
                 b.OffsetTop(amount);
             }
@@ -1329,7 +1328,38 @@ namespace PeachPDF.Html.Core.Dom
             Location = Location with { Y = Location.Y + amount };
         }
 
-        private bool _hasPainted = false;
+        /// <summary>
+        /// Deeply offsets the top of the box and its contents
+        /// </summary>
+        /// <param name="amount"></param>
+        internal void OffsetLeft(double amount)
+        {
+            List<CssLineBox> lines = [];
+            foreach (var line in Rectangles.Keys)
+                lines.Add(line);
+
+            foreach (var line in lines)
+            {
+                var r = Rectangles[line];
+                Rectangles[line] = new RRect(r.X + amount, r.Y, r.Width, r.Height);
+            }
+
+            foreach (var word in Words)
+            {
+                word.Left += amount;
+            }
+
+            foreach (var b in Boxes)
+            {
+                b.OffsetLeft(amount);
+            }
+
+            _listItemBox?.OffsetLeft(amount);
+
+            Location = Location with { X = Location.X + amount };
+        }
+
+        private bool _hasPainted;
 
         /// <summary>
         /// Paints the fragment

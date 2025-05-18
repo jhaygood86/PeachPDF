@@ -12,6 +12,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading.Tasks;
 using PeachPDF.Html.Adapters;
@@ -625,6 +626,8 @@ namespace PeachPDF.Html.Core.Dom
             var maxBottom = 0d;
             var currentRow = 0;
 
+            Dictionary<int, List<CssBox>> rowSpannedBoxes = new Dictionary<int, List<CssBox>>();
+
             for (var i = 0; i < _allRows.Count; i++)
             {
                 var row = _allRows[i];
@@ -654,20 +657,43 @@ namespace PeachPDF.Html.Core.Dom
                             maxBottom = Math.Max(maxBottom, sb.ExtendedBox.ActualBottom);
                         }
                     }
-                    else if (rowSpan == 1)
+                    else switch (rowSpan)
                     {
-                        maxBottom = Math.Max(maxBottom, cell.ActualBottom);
+                        case 1:
+                            maxBottom = Math.Max(maxBottom, cell.ActualBottom);
+                            break;
+                        case > 1:
+                        {
+                            var endRow = i + rowSpan - 1;
+
+                            if(!rowSpannedBoxes.TryGetValue(endRow, out var rowSpannedBoxesForRow))
+                            {
+                                rowSpannedBoxesForRow = (List<CssBox>) [];
+                                rowSpannedBoxes[endRow] = rowSpannedBoxesForRow;
+                            }
+
+                            rowSpannedBoxesForRow.Add(cell);
+                            break;
+                        }
                     }
+
                     maxRight = Math.Max(maxRight, cell.ActualRight);
                     currentColumn++;
                     currentX = cell.ActualRight + GetHorizontalSpacing();
                 }
 
-                foreach (var cell in row.Boxes)
+                IEnumerable<CssBox> boxesToVerticallyAlign = row.Boxes;
+
+                if (rowSpannedBoxes.TryGetValue(i, out var boxesThatEndOnRow))
+                {
+                    boxesToVerticallyAlign = boxesToVerticallyAlign.Union(boxesThatEndOnRow);
+                }
+
+                foreach (var cell in boxesToVerticallyAlign)
                 {
                     var spacer = cell as CssSpacingBox;
 
-                    if (spacer == null && GetRowSpan(cell) == 1)
+                    if (spacer == null && (GetRowSpan(cell) == 1 || (boxesThatEndOnRow?.Contains(cell) ?? false)))
                     {
                         cell.ActualBottom = maxBottom;
                         CssLayoutEngine.ApplyCellVerticalAlignment(g, cell);

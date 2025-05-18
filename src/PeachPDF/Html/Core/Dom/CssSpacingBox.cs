@@ -1,6 +1,5 @@
-using System;
-using System.Collections.Generic;
 using PeachPDF.Html.Core.Utils;
+using System.Collections.Generic;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -9,16 +8,6 @@ namespace PeachPDF.Html.Core.Dom
     /// </summary>
     internal sealed class CssSpacingBox : CssBox
     {
-        #region Fields and Consts
-
-        /// <summary>
-        /// the index of the row where box ends
-        /// </summary>
-        private readonly int _endRow;
-
-        #endregion
-
-
         public CssSpacingBox(CssBox tableBox, ref CssBox extendedBox, int startRow)
             : base(tableBox, new HtmlTag("none", false, new Dictionary<string, string> { { "colspan", "1" } }))
         {
@@ -26,7 +15,7 @@ namespace PeachPDF.Html.Core.Dom
             Display = CssConstants.None;
 
             StartRow = startRow;
-            _endRow = startRow + int.Parse(extendedBox.GetAttribute("rowspan", "1")) - 1;
+            EndRow = startRow + int.Parse(extendedBox.GetAttribute("rowspan", "1")) - 1;
         }
 
         public CssBox ExtendedBox { get; }
@@ -39,9 +28,6 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Gets the index of the row where box ends
         /// </summary>
-        public int EndRow
-        {
-            get { return _endRow; }
-        }
+        public int EndRow { get; }
     }
 }

@@ -100,7 +100,7 @@ namespace PeachPDF.Html.Core.Handlers
             {
                 // rounded border need special path
                 Object? prevMode = null;
-                if (box.HtmlContainer is { AvoidGeometryAntialias: false } && box.IsRounded)
+                if (box is { HtmlContainer: { AvoidGeometryAntialias: false }, IsRounded: true })
                     prevMode = g.SetAntiAliasSmoothingMode();
 
                 var pen = GetPen(g, style, color, GetWidth(border, box));
@@ -112,7 +112,7 @@ namespace PeachPDF.Html.Core.Handlers
             else
             {
                 // non rounded border
-                if (style == CssConstants.Inset || style == CssConstants.Outset)
+                if (style is CssConstants.Inset or CssConstants.Outset)
                 {
                     // inset/outset border needs special rectangle
                     SetInOutsetRectanglePoints(border, box, rect, isLineStart, isLineEnd);
@@ -282,18 +282,14 @@ namespace PeachPDF.Html.Core.Handlers
         {
             var p = g.GetPen(color);
             p.Width = width;
-            switch (style)
+            p.DashStyle = style switch
             {
-                case "solid":
-                    p.DashStyle = RDashStyle.Solid;
-                    break;
-                case "dotted":
-                    p.DashStyle = RDashStyle.Dot;
-                    break;
-                case "dashed":
-                    p.DashStyle = RDashStyle.Dash;
-                    break;
-            }
+                "solid" => RDashStyle.Solid,
+                "dotted" => RDashStyle.Dot,
+                "dashed" => RDashStyle.Dash,
+                _ => throw new ArgumentOutOfRangeException(nameof(style))
+            };
+
             return p;
         }
 
@@ -302,19 +298,20 @@ namespace PeachPDF.Html.Core.Handlers
         /// </summary>
         private static RColor GetColor(Border border, CssBoxProperties box, string style)
         {
-            switch (border)
+            return border switch
             {
-                case Border.Top:
-                    return style == CssConstants.Inset ? Darken(box.ActualBorderTopColor) : box.ActualBorderTopColor;
-                case Border.Right:
-                    return style == CssConstants.Outset ? Darken(box.ActualBorderRightColor) : box.ActualBorderRightColor;
-                case Border.Bottom:
-                    return style == CssConstants.Outset ? Darken(box.ActualBorderBottomColor) : box.ActualBorderBottomColor;
-                case Border.Left:
-                    return style == CssConstants.Inset ? Darken(box.ActualBorderLeftColor) : box.ActualBorderLeftColor;
-                default:
-                    throw new ArgumentOutOfRangeException("border");
-            }
+                Border.Top => style == CssConstants.Inset ? Darken(box.ActualBorderTopColor) : box.ActualBorderTopColor,
+                Border.Right => style == CssConstants.Outset
+                    ? Darken(box.ActualBorderRightColor)
+                    : box.ActualBorderRightColor,
+                Border.Bottom => style == CssConstants.Outset
+                    ? Darken(box.ActualBorderBottomColor)
+                    : box.ActualBorderBottomColor,
+                Border.Left => style == CssConstants.Inset
+                    ? Darken(box.ActualBorderLeftColor)
+                    : box.ActualBorderLeftColor,
+                _ => throw new ArgumentOutOfRangeException(nameof(border))
+            };
         }
 
         /// <summary>
@@ -322,19 +319,14 @@ namespace PeachPDF.Html.Core.Handlers
         /// </summary>
         private static double GetWidth(Border border, CssBoxProperties box)
         {
-            switch (border)
+            return border switch
             {
-                case Border.Top:
-                    return box.ActualBorderTopWidth;
-                case Border.Right:
-                    return box.ActualBorderRightWidth;
-                case Border.Bottom:
-                    return box.ActualBorderBottomWidth;
-                case Border.Left:
-                    return box.ActualBorderLeftWidth;
-                default:
-                    throw new ArgumentOutOfRangeException("border");
-            }
+                Border.Top => box.ActualBorderTopWidth,
+                Border.Right => box.ActualBorderRightWidth,
+                Border.Bottom => box.ActualBorderBottomWidth,
+                Border.Left => box.ActualBorderLeftWidth,
+                _ => throw new ArgumentOutOfRangeException(nameof(border))
+            };
         }
 
         /// <summary>
@@ -342,19 +334,14 @@ namespace PeachPDF.Html.Core.Handlers
         /// </summary>
         private static string GetStyle(Border border, CssBoxProperties box)
         {
-            switch (border)
+            return border switch
             {
-                case Border.Top:
-                    return box.BorderTopStyle;
-                case Border.Right:
-                    return box.BorderRightStyle;
-                case Border.Bottom:
-                    return box.BorderBottomStyle;
-                case Border.Left:
-                    return box.BorderLeftStyle;
-                default:
-                    throw new ArgumentOutOfRangeException("border");
-            }
+                Border.Top => box.BorderTopStyle,
+                Border.Right => box.BorderRightStyle,
+                Border.Bottom => box.BorderBottomStyle,
+                Border.Left => box.BorderLeftStyle,
+                _ => throw new ArgumentOutOfRangeException(nameof(border))
+            };
         }
 
         /// <summary>

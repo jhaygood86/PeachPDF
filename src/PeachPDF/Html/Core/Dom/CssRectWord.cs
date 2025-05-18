@@ -17,26 +17,6 @@ namespace PeachPDF.Html.Core.Dom
     /// </summary>
     internal sealed class CssRectWord : CssRect
     {
-        #region Fields and Consts
-
-        /// <summary>
-        /// The word text
-        /// </summary>
-        private readonly string _text;
-
-        /// <summary>
-        /// was there a whitespace before the word chars (before trim)
-        /// </summary>
-        private readonly bool _hasSpaceBefore;
-
-        /// <summary>
-        /// was there a whitespace after the word chars (before trim)
-        /// </summary>
-        private readonly bool _hasSpaceAfter;
-
-        #endregion
-
-
         /// <summary>
         /// Init.
         /// </summary>
@@ -47,26 +27,20 @@ namespace PeachPDF.Html.Core.Dom
         public CssRectWord(CssBox owner, string text, bool hasSpaceBefore, bool hasSpaceAfter)
             : base(owner)
         {
-            _text = text;
-            _hasSpaceBefore = hasSpaceBefore;
-            _hasSpaceAfter = hasSpaceAfter;
+            Text = text;
+            HasSpaceBefore = hasSpaceBefore;
+            HasSpaceAfter = hasSpaceAfter;
         }
 
         /// <summary>
         /// was there a whitespace before the word chars (before trim)
         /// </summary>
-        public override bool HasSpaceBefore
-        {
-            get { return _hasSpaceBefore; }
-        }
+        public override bool HasSpaceBefore { get; }
 
         /// <summary>
         /// was there a whitespace after the word chars (before trim)
         /// </summary>
-        public override bool HasSpaceAfter
-        {
-            get { return _hasSpaceAfter; }
-        }
+        public override bool HasSpaceAfter { get; }
 
         /// <summary>
         /// Gets a bool indicating if this word is composed only by spaces.
@@ -88,18 +62,12 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Gets if the word is composed by only a line break
         /// </summary>
-        public override bool IsLineBreak
-        {
-            get { return Text == "\n"; }
-        }
+        public override bool IsLineBreak => Text == "\n";
 
         /// <summary>
         /// Gets the text of the word
         /// </summary>
-        public override string Text
-        {
-            get { return _text; }
-        }
+        public override string Text { get; }
 
         /// <summary>
         /// Represents this word for debugging purposes
@@ -107,7 +75,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <returns></returns>
         public override string ToString()
         {
-            return string.Format("{0} ({1} char{2})", Text.Replace(' ', '-').Replace("\n", "\\n"), Text.Length, Text.Length != 1 ? "s" : string.Empty);
+            return $"{Text.Replace(' ', '-').Replace("\n", "\\n")} ({Text.Length} char{(Text.Length != 1 ? "s" : string.Empty)})";
         }
     }
 }
