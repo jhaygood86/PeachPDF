@@ -647,56 +647,6 @@ namespace PeachPDF.Html.Core.Dom
                 if (Display.Value is not  CssConstants.TableCell && Display.DisplayInside is not CssDisplay.CssDisplayInside.Table)
                 {
                     var width = await CssLayoutEngine.GetBoxWidth(g, this);
-                    
-
-
-
-                    var contentAreaWidth = ContainingBlock.ClientRight - ContainingBlock.ClientLeft - ActualMarginLeft - ActualMarginRight;
-                    var width = contentAreaWidth;
-
-                    if (Words.Count > 0)
-                    {
-                        width = Words.Sum(x => x.FullWidth);
-                    }
-
-                    if (Width != CssConstants.Auto && !string.IsNullOrEmpty(Width))
-                    {
-                        width = CssValueParser.ParseLength(Width, contentAreaWidth, this);
-                    }
-
-                    if (Width is CssConstants.Auto && !IsFlexItem)
-                    {
-                        width -= ActualBoxSizeIncludedWidth;
-                    }
-
-                    if (Width is CssConstants.Auto && IsFlexItem || Width is CssConstants.FitContent)
-                    {
-                        width = await CssLayoutEngine.GetFitContentWidth(g, this, contentAreaWidth);
-                    }
-
-                    if (IsFlexItem && FlexBasis is not CssConstants.Auto)
-                    {
-                        if (CssValueParser.IsValidLength(FlexBasis))
-                        {
-                            width = CssValueParser.ParseLength(FlexBasis, contentAreaWidth, this);
-                        }
-
-                        if (FlexBasis is CssConstants.MinContent)
-                        {
-                            width = await CssLayoutEngine.GetMinContentWidth(g, this);
-                        }
-
-                        if (FlexBasis is CssConstants.MaxContent)
-                        {
-                            width = await CssLayoutEngine.GetMaxContentWidth(g, this);
-                        }
-                    }
-
-                    if (IsFlexItem)
-                    {
-                        width += FlexAdditionalSpace;
-                    }
-
                     ActualRight = Location.X + width + ActualBoxSizeIncludedWidth;
                 }
 

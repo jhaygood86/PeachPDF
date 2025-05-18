@@ -335,7 +335,8 @@ namespace PeachPDF.Html.Core.Dom
 
         public static async ValueTask<double> GetBoxWidth(RGraphics g, CssBox box)
         {
-            var width = box.ContainingBlock.ClientRight - box.ContainingBlock.ClientLeft - box.ActualMarginLeft - box.ActualMarginRight;
+            var contentAreaWidth = box.ContainingBlock.ClientRight - box.ContainingBlock.ClientLeft - box.ActualMarginLeft - box.ActualMarginRight;
+            var width = contentAreaWidth;
 
             if (box.Words.Count > 0)
             {
@@ -347,14 +348,34 @@ namespace PeachPDF.Html.Core.Dom
                 width = CssValueParser.ParseLength(box.Width, box.ContainingBlock.Size.Width, box);
             }
 
-            if (box is { Width: CssConstants.Auto, Position: not CssConstants.Absolute })
+            if (box is { Width: CssConstants.Auto, Position: not CssConstants.Absolute, IsFlexItem: false })
             {
                 width -= box.ActualBoxSizeIncludedWidth;
             }
 
-            if (box is { Width: CssConstants.Auto, Position: CssConstants.Absolute })
+            if (box is { Width: CssConstants.Auto, Position: CssConstants.Absolute } or { Width: CssConstants.Auto, IsFlexItem: true } or { Width: CssConstants.FitContent })
             {
                 width = await GetFitContentWidth(g, box, box.ContainingBlock.Size.Width);
+            }
+
+            if (box is { IsFlexItem: true, FlexBasis: not CssConstants.Auto })
+            {
+                if (CssValueParser.IsValidLength(box.FlexBasis))
+                {
+                    width = CssValueParser.ParseLength(box.FlexBasis, contentAreaWidth, box);
+                }
+
+                width = box.FlexBasis switch
+                {
+                    CssConstants.MinContent => await GetMinContentWidth(g, box),
+                    CssConstants.MaxContent => await GetMaxContentWidth(g, box),
+                    _ => width
+                };
+            }
+
+            if (box.IsFlexItem)
+            {
+                width += box.FlexAdditionalSpace;
             }
 
             return width;
