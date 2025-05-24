@@ -10,6 +10,12 @@ namespace PeachPDF.Network
 {
     public class HttpClientNetworkLoader(HttpClient httpClient, Uri? primaryContentsUri) : RNetworkLoader
     {
+        public HttpClientNetworkLoader(HttpClient httpClient, string primaryContentsUri) 
+            : this(httpClient, new Uri(primaryContentsUri))
+        {
+
+        }
+
         public override RUri? BaseUri => primaryContentsUri != null ? new RUri(primaryContentsUri) : null;
 
         public override async Task<string> GetPrimaryContents()

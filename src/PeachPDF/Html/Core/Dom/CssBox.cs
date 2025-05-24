@@ -150,7 +150,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// is the box "Display" is "Inline", is this is an inline box and not block.
         /// </summary>
-        public bool IsInline => Display is CssConstants.Inline or CssConstants.InlineBlock or CssConstants.InlineTable && !IsBrElement;
+        public bool IsInline => Display is CssConstants.Inline or CssConstants.InlineBlock or CssConstants.InlineTable;
 
         /// <summary>
         /// is the box "Display" is "Block", is this is a block box and not inline.
@@ -529,7 +529,7 @@ namespace PeachPDF.Html.Core.Dom
 
             var startIdx = 0;
             var preserveSpaces = WhiteSpace is CssConstants.Pre or CssConstants.PreWrap;
-            var respectNewLines = preserveSpaces || WhiteSpace == CssConstants.PreLine;
+            var respectNewLines = preserveSpaces || WhiteSpace == CssConstants.PreLine || IsBrElement;
 
             while (startIdx < _text!.Length)
             {

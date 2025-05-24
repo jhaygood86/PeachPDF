@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.CSS;
 using PeachPDF.Html.Core.Utils;
 using System.Collections.Generic;
 
@@ -89,11 +90,12 @@ namespace PeachPDF.Html.Core
             ol              { list-style-type: decimal }
             ol ul, ul ol,
             ul ul, ol ol    { margin-top: 0; margin-bottom: 0 }
-            ol ul, ul ul   { list-style-type: circle }
+            ol ul, ul ul    { list-style-type: circle }
             ul ul ul, 
             ol ul ul, 
             ul ol ul        { list-style-type: square }
             u, ins          { text-decoration: underline }
+            
             br:before       { content: "\A" }
             :before, :after { white-space: pre-line }
             center          { text-align: center }
@@ -128,12 +130,12 @@ namespace PeachPDF.Html.Core
 
         public static Dictionary<string, string> InitialValues = new()
         {
-            { "background-attachment", CssConstants.Scroll },
-            { "background-clip", CssConstants.BorderBox },
-            { "background-color", CssConstants.Transparent },
-            { "background-image", CssConstants.None },
-            { "background-origin", CssConstants.PaddingBox },
-            { "background-position", "0% 0%"},
+            { PropertyNames.BackgroundAttachment, CssConstants.Scroll },
+            { PropertyNames.BackgroundClip, CssConstants.BorderBox },
+            { PropertyNames.BackgroundColor, CssConstants.Transparent },
+            { PropertyNames.BackgroundImage, CssConstants.None },
+            { PropertyNames.BackgroundOrigin, CssConstants.PaddingBox },
+            { PropertyNames.BackgroundPosition, "0% 0%"},
             { "background-repeat", CssConstants.Repeat },
             { "background-size", $"{CssConstants.Auto} {CssConstants.Auto}"},
             { "border-bottom-color", CssConstants.CurrentColor },

@@ -21,14 +21,12 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var token in tokens)
             {
-                if (token is StringToken stringToken)
+                switch (token)
                 {
-                    contentText.Append(stringToken.Data);
-                }
-
-                if (token is FunctionToken functionToken)
-                {
-                    if (functionToken.Data is CssConstants.Counter)
+                    case StringToken stringToken:
+                        contentText.Append(stringToken.Data);
+                        break;
+                    case FunctionToken { Data: CssConstants.Counter } functionToken:
                     {
                         var arguments = functionToken.ArgumentTokens.ToArray();
 
@@ -41,6 +39,8 @@ namespace PeachPDF.Html.Core.Dom
                         {
                             contentText.Append(counterValue);
                         }
+
+                        break;
                     }
                 }
             }

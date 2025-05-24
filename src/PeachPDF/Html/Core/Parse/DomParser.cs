@@ -76,8 +76,7 @@ namespace PeachPDF.Html.Core.Parse
 
             CorrectImgBoxes(root);
 
-            var followingBlock = true;
-            CorrectLineBreaksBlocks(root, ref followingBlock);
+            CorrectLineBreaksBlocks(root);
 
             CorrectInlineBoxesParent(root);
 
@@ -555,6 +554,9 @@ namespace PeachPDF.Html.Core.Parse
                     // is the box has text
                     var keepBox = !string.IsNullOrWhiteSpace(childBox.Text);
 
+                    // if the box is a br
+                    keepBox = keepBox || childBox.IsBrElement;
+
                     // is the box is pre-formatted
                     keepBox = keepBox || childBox.WhiteSpace == CssConstants.Pre || childBox.WhiteSpace == CssConstants.PreWrap;
 
@@ -615,46 +617,31 @@ namespace PeachPDF.Html.Core.Parse
         /// but if it is after block box then it will have min-height of the font size so it will create empty line.
         /// </summary>
         /// <param name="box">the current box to correct its sub-tree</param>
-        /// <param name="followingBlock">used to know if the br is following a box so it should create an empty line or not so it only
         /// move to a new line</param>
-        private static void CorrectLineBreaksBlocks(CssBox box, ref bool followingBlock)
+        private static void CorrectLineBreaksBlocks(CssBox box)
         {
-            followingBlock = followingBlock || box.IsBlock;
             foreach (var childBox in box.Boxes)
             {
-                CorrectLineBreaksBlocks(childBox, ref followingBlock);
-                followingBlock = childBox.Words.Count == 0 && (followingBlock || childBox.IsBlock);
+                CorrectLineBreaksBlocks(childBox);
             }
 
-            int lastBr = -1;
-            CssBox? brBox;
-            do
+            if (!box.IsBrElement)
             {
-                brBox = null;
-                for (int i = 0; i < box.Boxes.Count && brBox == null; i++)
-                {
-                    if (i > lastBr && box.Boxes[i].IsBrElement)
-                    {
-                        brBox = box.Boxes[i];
-                        lastBr = i;
-                    }
-                    else if (box.Boxes[i].Words.Count > 0)
-                    {
-                        followingBlock = false;
-                    }
-                    else if (box.Boxes[i].IsBlock)
-                    {
-                        followingBlock = true;
-                    }
-                }
+                return;
+            }
 
-                if (brBox != null)
+            var previousSibling = DomUtils.GetPreviousSibling(box);
+
+            if (previousSibling is null or { IsBlock: true })
+            {
+                var nextSibling = DomUtils.GetFollowingSiblings(box, b => b is { IsInline: true, IsBrElement: false }, true).FirstOrDefault();
+
+                if (nextSibling is null)
                 {
-                    brBox.Display = CssConstants.Block;
-                    if (followingBlock)
-                        brBox.Height = ".95em"; // TODO:a check the height to min-height when it is supported
+                    box.Text = "\n";
+                    box.ParseToWords();
                 }
-            } while (brBox != null);
+            }
         }
 
         /// <summary>
