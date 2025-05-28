@@ -198,10 +198,7 @@ namespace PeachPDF.Html.Core.Dom
 
         public virtual bool IsTableRowGroupBox => Display is CssConstants.TableRowGroup or CssConstants.TableHeaderGroup or CssConstants.TableFooterGroup;
 
-        /// <summary>
-        /// Get the href link of the box (by default get "href" attribute)
-        /// </summary>
-        public virtual string HrefLink => GetAttribute(HtmlConstants.Href);
+        public virtual bool IsTableCell => Display is CssConstants.TableCell;
 
         /// <summary>
         /// Gets the containing block-box of this box. (The nearest parent box with display=block)
@@ -1225,22 +1222,21 @@ namespace PeachPDF.Html.Core.Dom
 
         public bool BreakPage()
         {
-            var container = this.HtmlContainer;
+            var container = HtmlContainer;
 
-            if (this.Size.Height >= container!.PageSize.Height)
+            if (Size.Height >= container!.PageSize.Height)
                 return false;
 
-            var remTop = (this.Location.Y - container.MarginTop) % container.PageSize.Height;
-            var remBottom = (this.ActualBottom - container.MarginTop) % container.PageSize.Height;
+            var remTop = (Location.Y - container.MarginTop) % container.PageSize.Height;
+            var remBottom = (ActualBottom - container.MarginTop) % container.PageSize.Height;
 
-            if (remTop > remBottom)
-            {
-                var diff = container.PageSize.Height - remTop;
-                this.Location = new RPoint(this.Location.X, this.Location.Y + diff + 1);
-                return true;
-            }
+            if (!(remTop > remBottom)) return false;
+            
+            var diff = container.PageSize.Height - remTop;
+            Location = Location with { Y = Location.Y + diff + 1 };
 
-            return false;
+            return true;
+
         }
 
         /// <summary>

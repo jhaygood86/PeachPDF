@@ -611,7 +611,7 @@ namespace PeachPDF.Html.Core.Dom
                         word.Left = coordinates.CurrentX;
                         word.Top = coordinates.CurrentY;
 
-                        if (!box.IsFixed)
+                        if (box is { IsFixed: false, IsTableCell: false })
                         {
                             word.BreakPage();
                         }

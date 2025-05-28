@@ -10,16 +10,15 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Threading.Tasks;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -28,17 +27,10 @@ namespace PeachPDF.Html.Core.Dom
     /// </summary>
     internal sealed class CssLayoutEngineTable
     {
-        #region Fields and Consts
-
         /// <summary>
         /// the main box of the table
         /// </summary>
         private readonly CssBox _tableBox;
-
-        /// <summary>
-        /// 
-        /// </summary>
-        private CssBox? _caption;
 
         private CssBox? _headerBox;
 
@@ -66,9 +58,6 @@ namespace PeachPDF.Html.Core.Dom
         private double[]? _columnWidths;
 
         private double[]? _columnMinWidths;
-
-        #endregion
-
 
         /// <summary>
         /// Init.
@@ -194,7 +183,6 @@ namespace PeachPDF.Html.Core.Dom
                 switch (box.Display)
                 {
                     case CssConstants.TableCaption:
-                        _caption = box;
                         break;
                     case CssConstants.TableRow:
                         _bodyRows.Add(box);
@@ -626,7 +614,7 @@ namespace PeachPDF.Html.Core.Dom
             var maxBottom = 0d;
             var currentRow = 0;
 
-            Dictionary<int, List<CssBox>> rowSpannedBoxes = new Dictionary<int, List<CssBox>>();
+            Dictionary<int, List<CssBox>> rowSpannedBoxes = new();
 
             for (var i = 0; i < _allRows.Count; i++)
             {
@@ -705,7 +693,7 @@ namespace PeachPDF.Html.Core.Dom
                     }
 
                     // If one cell crosses page borders then don't need to check other cells in the row
-                    if (_tableBox.PageBreakInside != CssConstants.Avoid) continue;
+                    if (_tableBox.PageBreakInside is CssConstants.Avoid) continue;
 
                     breakPage = cell.BreakPage();
                     if (!breakPage) continue;
@@ -823,13 +811,10 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="g">Device to use</param>
         private static async ValueTask MeasureWords(CssBox box, RGraphics g)
         {
-            if (box != null)
+            foreach (var childBox in box.Boxes)
             {
-                foreach (var childBox in box.Boxes)
-                {
-                    await childBox.MeasureWordsSize(g);
-                    await MeasureWords(childBox, g);
-                }
+                await childBox.MeasureWordsSize(g);
+                await MeasureWords(childBox, g);
             }
         }
 
@@ -840,7 +825,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <returns></returns>
         private bool CanReduceWidth()
         {
-            for (int i = 0; i < _columnWidths!.Length; i++)
+            for (var i = 0; i < _columnWidths!.Length; i++)
             {
                 if (CanReduceWidth(i))
                 {
@@ -963,7 +948,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             double f = 0f;
 
-            foreach (double t in _columnWidths!)
+            foreach (var t in _columnWidths!)
             {
                 if (double.IsNaN(t))
                     throw new Exception("CssTable Algorithm error: There's a NaN in column widths");
@@ -986,7 +971,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="b"></param>
         private static int GetSpan(CssBox b)
         {
-            double f = CssValueParser.ParseNumber(b.GetAttribute("span"), 1);
+            var f = CssValueParser.ParseNumber(b.GetAttribute("span"), 1);
 
             return Math.Max(1, Convert.ToInt32(f));
         }

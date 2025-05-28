@@ -177,21 +177,18 @@ namespace PeachPDF.Html.Core.Dom
 
         public bool BreakPage()
         {
-            var container = this.OwnerBox.HtmlContainer;
+            var container = OwnerBox.HtmlContainer;
 
-            if (this.Height >= container!.PageSize.Height)
+            if (Height >= container!.PageSize.Height)
                 return false;
 
-            var remTop = (this.Top - container.MarginTop) % container.PageSize.Height;
-            var remBottom = (this.Bottom - container.MarginTop) % container.PageSize.Height;
+            var remTop = (Top - container.MarginTop) % container.PageSize.Height;
+            var remBottom = (Bottom - container.MarginTop) % container.PageSize.Height;
 
-            if (remTop > remBottom)
-            {
-                this.Top += container.PageSize.Height - remTop + 1;
-                return true;
-            }
+            if (!(remTop > remBottom)) return false;
+            Top += container.PageSize.Height - remTop + 1;
+            return true;
 
-            return false;
         }
     }
 }

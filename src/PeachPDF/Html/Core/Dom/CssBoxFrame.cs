@@ -54,11 +54,6 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         public override bool IsClickable => true;
 
-        /// <summary>
-        /// Get the href link of the box (by default get "href" attribute)
-        /// </summary>
-        public override string HrefLink => GetAttribute("src");
-
         #region Private methods
 
         /// <summary>

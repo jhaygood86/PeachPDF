@@ -122,19 +122,20 @@ namespace PeachPDF.Html.Core.Handlers
                 {
                     // solid/dotted/dashed border draw as simple line
                     var pen = GetPen(g, style, color, GetWidth(border, box));
+
                     switch (border)
                     {
                         case Border.Top:
-                            g.DrawLine(pen, Math.Ceiling(rect.Left), rect.Top + box.ActualBorderTopWidth / 2, rect.Right - 1, rect.Top + box.ActualBorderTopWidth / 2);
+                            g.DrawLine(pen, rect.Left, rect.Top + box.ActualBorderTopWidth / 2, rect.Right, rect.Top + box.ActualBorderTopWidth / 2);
                             break;
                         case Border.Left:
-                            g.DrawLine(pen, rect.Left + box.ActualBorderLeftWidth / 2, Math.Ceiling(rect.Top), rect.Left + box.ActualBorderLeftWidth / 2, Math.Floor(rect.Bottom));
+                            g.DrawLine(pen, rect.Left + box.ActualBorderLeftWidth / 2, rect.Top, rect.Left + box.ActualBorderLeftWidth / 2, rect.Bottom);
                             break;
                         case Border.Bottom:
-                            g.DrawLine(pen, Math.Ceiling(rect.Left), rect.Bottom - box.ActualBorderBottomWidth / 2, rect.Right - 1, rect.Bottom - box.ActualBorderBottomWidth / 2);
+                            g.DrawLine(pen, rect.Left, rect.Bottom - box.ActualBorderBottomWidth / 2, rect.Right, rect.Bottom - box.ActualBorderBottomWidth / 2);
                             break;
                         case Border.Right:
-                            g.DrawLine(pen, rect.Right - box.ActualBorderRightWidth / 2, Math.Ceiling(rect.Top), rect.Right - box.ActualBorderRightWidth / 2, Math.Floor(rect.Bottom));
+                            g.DrawLine(pen, rect.Right - box.ActualBorderRightWidth / 2, rect.Top, rect.Right - box.ActualBorderRightWidth / 2, rect.Bottom);
                             break;
                     }
                 }
