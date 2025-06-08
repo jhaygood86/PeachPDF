@@ -1,6 +1,7 @@
 // See https://aka.ms/new-console-template for more information
 
 using PeachPDF;
+using PeachPDF.Html.Core;
 using PeachPDF.Network;
 using PeachPDF.PdfSharpCore;
 
@@ -10,7 +11,8 @@ PdfGenerateConfig pdfConfig = new()
 {
     PageSize = PageSize.A4,
     PageOrientation = PageOrientation.Portrait,
-    ShrinkToFit = true
+    ShrinkToFit = true,
+    NetworkLoader = new HttpClientNetworkLoader(httpClient, "https://www.ballentinepointe.com")
 };
 
 PdfGenerator generator = new();
@@ -18,11 +20,32 @@ PdfGenerator generator = new();
 var stream = new MemoryStream();
 
 var html = """
-           <img width="auto" alt="signature" height="75" style="margin: 5px" src="data:image/png;base64,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">
+           
+           
+           <!DOCTYPE html>
+           <html>
+               <head>
+                   <style>
+                   h2 { string-set: header content(before) ':' content(text) } 
+                   </style>
+               </head>
+               <body>
+                 <h2>Chapter 1: The Machine</h2>
+               </body>
+           </html>
+           
+           
            """;
 
-var document = await generator.GeneratePdf(html, pdfConfig);
+var font = File.OpenRead("NotoSerif-Regular.ttf");
+
+await generator.AddFontFromStream(font);
+generator.AddFontFamilyMapping("Segoe UI","Noto Serif");
+
+var cssData = await generator.ParseStyleSheet("", false);
+
+var document = await generator.GeneratePdf(html, pdfConfig, cssData);
 document.Save(stream);
 
-File.Delete("test_flyer.pdf");
-File.WriteAllBytes("test_flyer.pdf", stream.ToArray());
+File.Delete("test_statement.pdf");
+File.WriteAllBytes("test_statement.pdf", stream.ToArray());

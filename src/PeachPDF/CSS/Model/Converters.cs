@@ -127,6 +127,12 @@ namespace PeachPDF.CSS
                 .Or(new FunctionValueConverter(FunctionNames.Counters, WithArgs(name, def, kind))));
         });
 
+        public static readonly IValueConverter ContentConverter = Construct(() =>
+        {
+            var kind = IdentifierConverter.Option(Keywords.Text);
+            return new FunctionValueConverter(FunctionNames.Content, WithArgs(kind));
+        });
+
         public static readonly IValueConverter ShapeConverter = Construct(() =>
         {
             var length = LengthConverter.Required();
@@ -438,6 +444,14 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter BackgroundRepeatsConverter = BackgroundRepeatConverter.Or(
             Keywords.RepeatX).Or(Keywords.RepeatY).Or(
             WithOrder(BackgroundRepeatConverter.Required(), BackgroundRepeatConverter.Required()));
+
+        public static readonly IValueConverter StringSetConverter =
+            Continuous(
+                WithOrder(
+                    IdentifierConverter.Required(),
+                    Continuous(WithAny(CounterConverter.Option(), ContentConverter.Option(), AttrConverter.Option(), StringConverter.Option()))
+                )
+            );
 
         #endregion
 

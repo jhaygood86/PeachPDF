@@ -83,6 +83,21 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         /// <summary>
+        /// Gets the root box of the given box
+        /// </summary>
+        /// <param name="box">Current box</param>
+        /// <returns>Root box</returns>
+        public static CssBox GetRoot(CssBox box)
+        {
+            while (box.ParentBox != null)
+            {
+                box = box.ParentBox;
+            }
+
+            return box;
+        }
+
+        /// <summary>
         /// Gets the previous sibling of this box.
         /// </summary>
         /// <returns>Box before this one on the tree. Null if it is the first</returns>

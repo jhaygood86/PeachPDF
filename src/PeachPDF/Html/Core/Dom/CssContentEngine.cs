@@ -8,6 +8,18 @@ namespace PeachPDF.Html.Core.Dom
 {
     internal static class CssContentEngine
     {
+
+        public static void SetContent(CssBox cssBox)
+        {
+            if (cssBox.StringSet is CssConstants.None)
+            {
+                return;
+            }
+
+            var rootBox = DomUtils.GetRoot(cssBox);
+
+        }
+
         public static void ApplyContent(CssBox cssBox)
         {
             if (cssBox.Content is CssConstants.None or CssConstants.Normal)

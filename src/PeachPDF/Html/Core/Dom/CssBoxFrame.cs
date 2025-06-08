@@ -25,16 +25,10 @@ namespace PeachPDF.Html.Core.Dom
     /// </summary>
     internal sealed class CssBoxFrame : CssBox
     {
-        #region Fields and Consts
-
         /// <summary>
         /// the image word of this image box
         /// </summary>
         private readonly CssRectImage _imageWord;
-
-        #endregion
-
-
         /// <summary>
         /// Init.
         /// </summary>

@@ -8,6 +8,16 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="NotoSerif-Regular.ttf" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="NotoSerif-Regular.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="HtmlAgilityPack" Version="1.12.1" />
   </ItemGroup>
 

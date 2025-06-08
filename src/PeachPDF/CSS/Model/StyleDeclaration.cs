@@ -1444,6 +1444,12 @@ namespace PeachPDF.CSS
             set => SetPropertyValue(PropertyNames.ScrollbarTrackColor, value);
         }
 
+        public string StringSetProperty
+        {
+            get => GetPropertyValue(PropertyNames.StringSet);
+            set => SetPropertyValue(PropertyNames.StringSet, value);
+        }
+
         public string Stroke
         {
             get => GetPropertyValue(PropertyNames.Stroke);

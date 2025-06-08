@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using PeachPDF.CSS.StyleProperties.Content;
 
 namespace PeachPDF.CSS
 {
@@ -284,6 +285,9 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.Position, () => new PositionProperty());
             AddLonghand(PropertyNames.Quotes, () => new QuotesProperty());
             AddLonghand(PropertyNames.Right, () => new RightProperty(), true);
+
+            AddLonghand(PropertyNames.StringSet, () => new StringSetProperty());
+
             AddLonghand(PropertyNames.RowGap, () => new RowGapProperty(), true);
             AddLonghand(PropertyNames.Stroke, () => new StrokeProperty(), true);
             AddLonghand(PropertyNames.StrokeDasharray, () => new StrokeDasharrayProperty(), true);

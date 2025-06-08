@@ -23,8 +23,6 @@ namespace PeachPDF.Html.Core.Entities
         Image = 3,
         Paint = 4,
         Layout = 5,
-        KeyboardMouse = 6,
-        Iframe = 7,
-        ContextMenu = 8,
+        Iframe = 7
     }
 }

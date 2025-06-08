@@ -164,7 +164,8 @@ namespace PeachPDF.Html.Core
             { "list-style-position", CssConstants.Outside },
             { "text-decoration-color", CssConstants.CurrentColor },
             { "text-decoration-style", CssConstants.Solid },
-            { "z-index", CssConstants.Auto }
+            { "z-index", CssConstants.Auto },
+            { PropertyNames.StringSet, CssConstants.None }
         };
     }
 }

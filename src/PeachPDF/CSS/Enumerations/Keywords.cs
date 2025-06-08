@@ -312,5 +312,6 @@
         public static readonly string SelfEnd = "self-end";
         public static readonly string Size = "size";
         public static readonly string InlineSize = "inline-size";
+        public static readonly string Contents = "contents";
     }
 }

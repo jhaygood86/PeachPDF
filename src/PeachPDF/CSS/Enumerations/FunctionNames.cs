@@ -46,5 +46,6 @@
         public static readonly string Perspective = "perspective";
         public static readonly string Gray = "gray";
         public static readonly string Hwb = "hwb";
+        public static readonly string Content = "content";
     }
 }

@@ -10,11 +10,11 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using System;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
+using System;
 
 namespace PeachPDF.Html.Core.Handlers
 {
@@ -23,15 +23,10 @@ namespace PeachPDF.Html.Core.Handlers
     /// </summary>
     internal static class BordersDrawHandler
     {
-        #region Fields and Consts
-
         /// <summary>
         /// used for all border paint to use the same points and not create new array each time.
         /// </summary>
         private static readonly RPoint[] _borderPts = new RPoint[4];
-
-        #endregion
-
 
         /// <summary>
         /// Draws all the border of the box with respect to style, width, etc.

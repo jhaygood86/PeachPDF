@@ -12,18 +12,13 @@ namespace PeachPDF.Html.Adapters.Entities
     /// </summary>
     public readonly struct RColor
     {
-        #region Fields and Consts
-
         /// <summary>
         ///     Represents a color that is null.
         /// </summary>
         /// <filterpriority>1</filterpriority>
-        public static readonly RColor Empty = new RColor();
+        public static readonly RColor Empty = new();
 
         private readonly long _value;
-
-        #endregion
-
 
         private RColor(long value)
         {
@@ -33,74 +28,37 @@ namespace PeachPDF.Html.Adapters.Entities
         /// <summary>
         /// Gets a system-defined color.
         /// </summary>
-        public static RColor Transparent
-        {
-            get { return new RColor(0); }
-        }
+        public static RColor Transparent => new(0);
 
         /// <summary>
         ///     Gets a system-defined color that has an ARGB value of #FF000000.
         /// </summary>
-        public static RColor Black
-        {
-            get { return FromArgb(0, 0, 0); }
-        }
+        public static RColor Black => FromArgb(0, 0, 0);
 
         /// <summary>
         /// Gets a system-defined color that has an ARGB value of #FFFFFFFF.
         /// </summary>
-        public static RColor White
-        {
-            get { return FromArgb(255, 255, 255); }
-        }
-
-        /// <summary>
-        /// Gets a system-defined color that has an ARGB value of #FFF5F5F5.
-        /// </summary>
-        public static RColor WhiteSmoke
-        {
-            get { return FromArgb(245, 245, 245); }
-        }
-
-        /// <summary>
-        /// Gets a system-defined color that has an ARGB value of #FFD3D3D3.
-        /// </summary>
-        public static RColor LightGray
-        {
-            get { return FromArgb(211, 211, 211); }
-        }
+        public static RColor White => FromArgb(255, 255, 255);
 
         /// <summary>
         ///     Gets the red component value of this <see cref="RColor" /> structure.
         /// </summary>
-        public byte R
-        {
-            get { return (byte)((ulong)(_value >> 16) & byte.MaxValue); }
-        }
+        public byte R => (byte)((ulong)(_value >> 16) & byte.MaxValue);
 
         /// <summary>
         ///     Gets the green component value of this <see cref="RColor" /> structure.
         /// </summary>
-        public byte G
-        {
-            get { return (byte)((ulong)(_value >> 8) & byte.MaxValue); }
-        }
+        public byte G => (byte)((ulong)(_value >> 8) & byte.MaxValue);
 
         /// <summary>
         ///     Gets the blue component value of this <see cref="RColor" /> structure.
         /// </summary>
-        public byte B
-        {
-            get { return (byte)((ulong)_value & byte.MaxValue); }
-        }
+        public byte B => (byte)((ulong)_value & byte.MaxValue);
 
         /// <summary>
         ///     Gets the alpha component value of this <see cref="RColor" /> structure.
         /// </summary>
-        public byte A
-        {
-            get { return (byte)((ulong)(_value >> 24) & byte.MaxValue); }
-        }
+        public byte A => (byte)((ulong)(_value >> 24) & byte.MaxValue);
 
         /// <summary>
         ///     Specifies whether this <see cref="RColor" /> structure is uninitialized.
@@ -109,10 +67,7 @@ namespace PeachPDF.Html.Adapters.Entities
         ///     This property returns true if this color is uninitialized; otherwise, false.
         /// </returns>
         /// <filterpriority>1</filterpriority>
-        public bool IsEmpty
-        {
-            get { return _value == 0; }
-        }
+        public bool IsEmpty => _value == 0;
 
         /// <summary>
         ///     Tests whether two specified <see cref="RColor" /> structures are equivalent.
@@ -254,20 +209,15 @@ namespace PeachPDF.Html.Adapters.Entities
             }
             else
                 stringBuilder.Append("Empty");
-            stringBuilder.Append("]");
+            stringBuilder.Append(']');
             return stringBuilder.ToString();
         }
 
-
-        #region Private methods
-
         private static void CheckByte(int value)
         {
-            if (value >= 0 && value <= byte.MaxValue)
+            if (value is >= 0 and <= byte.MaxValue)
                 return;
             throw new ArgumentException("InvalidEx2BoundArgument");
         }
-
-        #endregion
     }
 }

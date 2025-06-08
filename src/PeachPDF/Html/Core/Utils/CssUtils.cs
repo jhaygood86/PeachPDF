@@ -16,6 +16,7 @@ using PeachPDF.Html.Core.Parse;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using PeachPDF.CSS;
 
 namespace PeachPDF.Html.Core.Utils
 {
@@ -129,6 +130,7 @@ namespace PeachPDF.Html.Core.Utils
                 "list-style-type" => cssBox.ListStyleType,
                 "overflow" => cssBox.Overflow,
                 "z-index" => cssBox.ZIndex,
+                PropertyNames.StringSet => cssBox.StringSet,
                 _ => null
             };
         }
@@ -495,6 +497,9 @@ namespace PeachPDF.Html.Core.Utils
                         cssBox.ZIndex = value;
                     }
                     
+                    break;
+                case PropertyNames.StringSet:
+                    cssBox.StringSet = value;
                     break;
                 case "unicode-bidi":
                 case "background-attachment":

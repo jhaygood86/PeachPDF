@@ -134,6 +134,8 @@ namespace PeachPDF.Html.Core.Dom
 
         public Dictionary<string, CssCounter> Counters { get; } = [];
 
+        public Dictionary<string, CssStringContent> Strings { get; } = [];
+
         /// <summary>
         /// Is the box is of "br" element.
         /// </summary>

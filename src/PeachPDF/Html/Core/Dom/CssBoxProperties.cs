@@ -446,6 +446,8 @@ namespace PeachPDF.Html.Core.Dom
 
         public string ListStyleType { get; set; } = "disc";
 
+        public string StringSet { get; set; } = CssConstants.None;
+
         #endregion CSS Propertier
 
         /// <summary>

@@ -233,9 +233,6 @@ namespace PeachPDF
             container.Location = new XPoint(container.MarginLeft, container.MarginTop);
         }
 
-
-        #region Private/Protected methods
-
         /// <summary>
         /// Handle HTML links by create PDF Documents link either to external URL or to another page in the document.
         /// </summary>
@@ -278,7 +275,5 @@ namespace PeachPDF
                 }
             }
         }
-
-        #endregion
     }
 }
