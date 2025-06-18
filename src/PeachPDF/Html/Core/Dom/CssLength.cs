@@ -87,6 +87,10 @@ namespace PeachPDF.Html.Core.Dom
                 case CssConstants.Pc:
                     Unit = CssUnit.Picas;
                     break;
+                case CssConstants.Rem:
+                    Unit = CssUnit.Rem;
+                    IsRelative = true;
+                    break;
                 default:
                     HasError = true;
                     return;

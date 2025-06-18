@@ -939,9 +939,20 @@ namespace PeachPDF.Html.Core.Dom
 
                 double fsize;
                 double parentSize = CssConstants.FontSize;
+                double rootSize = CssConstants.FontSize;
+                double remSize;
 
-                if (GetParent() != null)
+                var parentBox = GetParent();
+
+                if (parentBox is not null)
+                {
                     parentSize = GetParent()!.ActualFont.Size;
+                    remSize = GetRemHeight();
+                }
+                else
+                {
+                    remSize = CssConstants.FontSize;
+                }
 
                 fsize = FontSize switch
                 {
@@ -954,7 +965,7 @@ namespace PeachPDF.Html.Core.Dom
                     CssConstants.XXLarge => CssConstants.FontSize + 4,
                     CssConstants.Smaller => parentSize - 2,
                     CssConstants.Larger => parentSize + 2,
-                    _ => CssValueParser.ParseLength(FontSize, parentSize, parentSize, null, true, true)
+                    _ => CssValueParser.ParseLength(FontSize, parentSize, parentSize, remSize, null, true, true)
                 };
 
                 if (fsize <= 1f)
@@ -1060,6 +1071,24 @@ namespace PeachPDF.Html.Core.Dom
         public double GetEmHeight()
         {
             return ActualFont.Height;
+        }
+
+        /// <summary>
+        /// Gets the height of the root font in the specified units
+        /// </summary>
+        /// <returns></returns>
+        public double GetRemHeight()
+        {
+            var box = this;
+            var parentBox = box.GetParent();
+
+            while(parentBox is not null)
+            {
+                box = parentBox;
+                parentBox = box.GetParent();
+            }
+
+            return box.GetEmHeight();
         }
 
         /// <summary>

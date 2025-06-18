@@ -28,6 +28,7 @@ namespace PeachPDF.Html.Core.Dom
         Centimeters,
         Milimeters,
         Points,
-        Picas
+        Picas,
+        Rem
     }
 }

@@ -130,13 +130,13 @@ namespace PeachPDF.Html.Core.Parse
                 return 0f;
             }
 
-            string toParse = number;
-            bool isPercent = number.EndsWith('%');
+            var toParse = number;
+            var isPercent = number.EndsWith('%');
 
             if (isPercent)
                 toParse = number[..^1];
 
-            if (!double.TryParse(toParse, NumberStyles.Number, NumberFormatInfo.InvariantInfo, out double result))
+            if (!double.TryParse(toParse, NumberStyles.Number, NumberFormatInfo.InvariantInfo, out var result))
             {
                 return 0f;
             }
@@ -159,7 +159,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <returns>the parsed length value with adjustments</returns>
         public static double ParseLength(string length, double hundredPercent, CssBoxProperties box, bool fontAdjust = false)
         {
-            return ParseLength(length, hundredPercent, box.GetEmHeight(), null, fontAdjust, false);
+            return ParseLength(length, hundredPercent, box.GetEmHeight(), box.GetRemHeight(), null, fontAdjust, false);
         }
 
         /// <summary>
@@ -168,34 +168,34 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="length">Specified length</param>
         /// <param name="hundredPercent">Equivalent to 100 percent when length is percentage</param>
         /// <param name="emFactor"></param>
+        /// <param name="remFactor"></param>
         /// <param name="defaultUnit"></param>
         /// <param name="fontAdjust">if the length is in pixels and the length is font related it needs to use 72/96 factor</param>
         /// <param name="returnPoints">Allows the return double to be in points. If false, result will be pixels</param>
         /// <returns>the parsed length value with adjustments</returns>
-        public static double ParseLength(string length, double hundredPercent, double emFactor, string? defaultUnit, bool fontAdjust, bool returnPoints)
+        public static double ParseLength(string length, double hundredPercent, double emFactor, double remFactor, string? defaultUnit, bool fontAdjust, bool returnPoints)
         {
             //Return zero if no length specified, zero specified
             if (string.IsNullOrEmpty(length) || length == "0")
                 return 0f;
 
-            //If percentage, use ParseNumber
-            if (length.EndsWith('%'))
-                return ParseNumber(length, hundredPercent);
-
             //Get units of the length
-            string unit = GetUnit(length, defaultUnit, out bool hasUnit);
+            var (unit,numberValue) = GetUnit(length, defaultUnit, out var hasUnit);
 
             //Factor will depend on the unit
             double factor;
 
             //Number of the length
-            string number = hasUnit ? length[..^2] : length;
+            var number = hasUnit ? numberValue : ParseNumber(length, hundredPercent);
 
             //TODO: Units behave different in paper and in screen!
             switch (unit)
             {
                 case CssConstants.Em:
                     factor = emFactor;
+                    break;
+                case CssConstants.Rem:
+                    factor = remFactor;
                     break;
                 case CssConstants.Ex:
                     factor = emFactor / 2;
@@ -217,46 +217,39 @@ namespace PeachPDF.Html.Core.Parse
 
                     if (returnPoints)
                     {
-                        return ParseNumber(number, hundredPercent);
+                        return number!.Value;
                     }
 
                     break;
                 case CssConstants.Pc:
                     factor = 16f; // 1 pica = 12 points
                     break;
+                case CssConstants.Percent:
+                    factor = hundredPercent / 100d;
+                    break;
                 default:
                     factor = 0f;
                     break;
             }
 
-            return factor * ParseNumber(number, hundredPercent);
+            return factor * number!.Value;
         }
 
         /// <summary>
         /// Get the unit to use for the length, use default if no unit found in length string.
         /// </summary>
-        private static string GetUnit(string length, string? defaultUnit, out bool hasUnit)
+        private static (string? unit, double? value) GetUnit(string length, string? defaultUnit, out bool hasUnit)
         {
-            var unit = length.Length >= 3 ? length.Substring(length.Length - 2, 2) : string.Empty;
-            switch (unit)
+            var tokens = GetCssTokens(length);
+
+            if (tokens is [UnitToken unitToken])
             {
-                case CssConstants.Em:
-                case CssConstants.Ex:
-                case CssConstants.Px:
-                case CssConstants.Mm:
-                case CssConstants.Cm:
-                case CssConstants.In:
-                case CssConstants.Pt:
-                case CssConstants.Pc:
-                    hasUnit = true;
-                    break;
-                default:
-                    hasUnit = false;
-                    unit = defaultUnit ?? string.Empty;
-                    break;
+                hasUnit = true;
+                return (unitToken.Unit, unitToken.Value);
             }
 
-            return unit;
+            hasUnit = false;
+            return (defaultUnit, null);
         }
 
         /// <summary>
@@ -410,22 +403,7 @@ namespace PeachPDF.Html.Core.Parse
 
         public static string GetFontFaceFamilyName(string propValue)
         {
-            var lexer = new Lexer(new TextSource(propValue));
-
-            List<Token> tokens = [];
-
-            Token token;
-
-            do
-            {
-                token = lexer.Get();
-
-                if (token.Type != TokenType.EndOfFile && token.Type != TokenType.Whitespace)
-                {
-                    tokens.Add(token);
-                }
-
-            } while (token.Type != TokenType.EndOfFile);
+            var tokens = GetCssTokens(propValue);
 
             if (tokens is [StringToken stringToken])
             {
