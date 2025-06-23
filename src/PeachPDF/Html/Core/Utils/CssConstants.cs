@@ -84,6 +84,7 @@ namespace PeachPDF.Html.Core.Utils
         public const string Outside = "outside";
         public const string Overline = "overline";
         public const string PaddingBox = "padding-box";
+        public const string Page = "page";
         public const string Percent = "%";
         public const string Pre = "pre";
         public const string PreWrap = "pre-wrap";

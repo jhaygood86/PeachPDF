@@ -607,15 +607,12 @@ namespace PeachPDF.Html.Core.Dom
                 await MeasureWordsSize(g);
             }
 
-
-
-            if (PageBreakBefore is CssConstants.Always)
+            if (BreakBefore is CssConstants.Page)
             {
                 var previousSibling = DomUtils.GetPreviousSibling(this);
 
                 if (previousSibling is not null)
                 {
-
                     var bottomRelativeToCurrentPage = previousSibling.ActualBottom;
                     var pageHeight = HtmlContainer!.PageSize.Height;
 
@@ -762,6 +759,26 @@ namespace PeachPDF.Html.Core.Dom
             ActualBottom = Math.Max(ActualBottom, Location.Y + height);
 
             await CreateListItemBox(g);
+
+            if (BreakInside is CssConstants.Avoid)
+            {
+                var pageHeight = HtmlContainer!.PageSize.Height;
+
+                var topRelativeToCurrentPage = Location.Y;
+
+                while (topRelativeToCurrentPage > pageHeight)
+                {
+                    topRelativeToCurrentPage -= pageHeight;
+                }
+
+                var bottomRelativeToCurrentPage = topRelativeToCurrentPage + ActualBottom - Location.Y;
+
+                if (bottomRelativeToCurrentPage > pageHeight)
+                {
+                    var offset = pageHeight - topRelativeToCurrentPage + HtmlContainer.MarginBottom;
+                    OffsetTop(offset);
+                }
+            }
 
             if (Position is CssConstants.Absolute)
             {

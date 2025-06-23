@@ -693,7 +693,7 @@ namespace PeachPDF.Html.Core.Dom
                     }
 
                     // If one cell crosses page borders then don't need to check other cells in the row
-                    if (_tableBox.PageBreakInside is CssConstants.Avoid) continue;
+                    if (_tableBox.BreakInside is CssConstants.Avoid) continue;
 
                     breakPage = cell.BreakPage();
                     if (!breakPage) continue;

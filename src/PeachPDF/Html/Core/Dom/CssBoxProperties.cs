@@ -282,8 +282,9 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        public string PageBreakBefore { get; set; } = CssConstants.Auto;
-        public string PageBreakInside { get; set; } = CssConstants.Auto;
+        public string BreakBefore { get; set; } = CssConstants.Auto;
+        public string BreakInside { get; set; } = CssConstants.Auto;
+        public string BreakAfter { get; set; } = CssConstants.Auto;
 
         public string Left { get; set; } = CssConstants.Auto;
 

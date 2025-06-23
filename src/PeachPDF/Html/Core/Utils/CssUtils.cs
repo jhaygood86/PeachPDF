@@ -67,6 +67,9 @@ namespace PeachPDF.Html.Core.Utils
                 "border-top-color" => cssBox.BorderTopColor,
                 "border-spacing" => cssBox.BorderSpacing,
                 "border-collapse" => cssBox.BorderCollapse,
+                "break-after" => cssBox.BreakAfter,
+                "break-before" => cssBox.BreakBefore,
+                "break-inside" => cssBox.BreakInside,
                 "corner-radius" => cssBox.CornerRadius,
                 "corner-nw-radius" => cssBox.CornerNwRadius,
                 "corner-ne-radius" => cssBox.CornerNeRadius,
@@ -83,8 +86,9 @@ namespace PeachPDF.Html.Core.Utils
                 "padding-left" => cssBox.PaddingLeft,
                 "padding-right" => cssBox.PaddingRight,
                 "padding-top" => cssBox.PaddingTop,
-                "page-break-before" => cssBox.PageBreakBefore,
-                "page-break-inside" => cssBox.PageBreakInside,
+                "page-break-after" => cssBox.BreakAfter,
+                "page-break-before" => cssBox.BreakBefore,
+                "page-break-inside" => cssBox.BreakInside,
                 "left" => cssBox.Left,
                 "top" => cssBox.Top,
                 "right" => cssBox.Right,
@@ -320,11 +324,27 @@ namespace PeachPDF.Html.Core.Utils
                 case "padding-top":
                     cssBox.PaddingTop = value;
                     break;
+                case "break-after":
+                case "page-break-after":
+                    if (value is CssConstants.Always && propName is "page-break-after")
+                    {
+                        value = CssConstants.Page;
+                    }
+
+                    cssBox.BreakAfter = value;
+                    break;
                 case "page-break-before":
-                    cssBox.PageBreakBefore = value;
+                case "break-before":
+                    if (value is CssConstants.Always && propName is "page-break-before")
+                    {
+                        value = CssConstants.Page;
+                    }
+
+                    cssBox.BreakBefore = value;
                     break;
                 case "page-break-inside":
-                    cssBox.PageBreakInside = value;
+                case "break-inside":
+                    cssBox.BreakInside = value;
                     break;
                 case "left":
                     cssBox.Left = value;
