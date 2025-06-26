@@ -230,6 +230,8 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
+        public bool IsHeightCalculated { get; set; } = false;
+
         /// <summary>
         /// Gets the actual top's Margin
         /// </summary>
@@ -729,34 +731,8 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
-            var height = ActualBoxSizingHeight;
-
-            if (Words.Count > 0)
-            {
-                height = Math.Max(height, Words.Sum(w => w.Height));
-            }
-
-            if (CssValueParser.IsValidLength(MinHeight))
-            {
-                var minHeight = CssValueParser.ParseLength(MinHeight, ParentBox?.Size.Height ?? Size.Height, this) + ActualBoxSizeIncludedHeight;
-
-                if (minHeight > height)
-                {
-                    height = minHeight;
-                }
-            }
-
-            if (CssValueParser.IsValidLength(Height))
-            {
-                var cssHeight = CssValueParser.ParseLength(Height, ParentBox?.Size.Height ?? Size.Height, this) + ActualBoxSizeIncludedHeight;
-
-                if (cssHeight > height)
-                {
-                    height = cssHeight;
-                }
-            }
-
-            ActualBottom = Math.Max(ActualBottom, Location.Y + height);
+            CssLayoutEngine.ApplyHeight(this); 
+            CssLayoutEngine.ApplyParentHeight(this);
 
             await CreateListItemBox(g);
 

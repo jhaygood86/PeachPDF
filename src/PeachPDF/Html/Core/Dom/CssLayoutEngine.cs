@@ -21,6 +21,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using PeachPDF.PdfSharpCore;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -357,6 +358,65 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             return width;
+        }
+
+        public static double? GetBoxHeight(CssBox box)
+        {
+            var height = box.ActualBoxSizingHeight;
+
+            if (box == box.ContainingBlock && box.HtmlContainer is not null)
+            {
+                height = Math.Max(height, box.HtmlContainer.PageSize.Height);
+            }
+
+            if (box.Words.Count > 0)
+            {
+                height = Math.Max(height, box.Words.Sum(w => w.Height));
+            }
+
+            if (CssValueParser.IsValidLength(box.MinHeight))
+            {
+                var minHeight = CssValueParser.ParseLength(box.MinHeight, box.ContainingBlock.Size.Height, box) + box.ActualBoxSizeIncludedHeight;
+
+                if (minHeight > height)
+                {
+                    height = minHeight;
+                }
+            }
+
+            if (CssValueParser.IsValidLength(box.Height))
+            {
+                if (!box.ContainingBlock.IsHeightCalculated && box.Height.EndsWith('%'))
+                {
+                    return null;
+                }
+
+                var cssHeight = CssValueParser.ParseLength(box.Height, box.ContainingBlock.Size.Height, box) + box.ActualBoxSizeIncludedHeight;
+
+                if (cssHeight > height)
+                {
+                    height = cssHeight;
+                }
+            }
+
+            return height;
+        }
+
+        public static void ApplyParentHeight(CssBox box)
+        {
+            foreach (var childBox in box.Boxes)
+            {
+                ApplyHeight(childBox);
+                ApplyParentHeight(childBox);
+            }
+        }
+
+        public static void ApplyHeight(CssBox box)
+        {
+            var boxHeight = GetBoxHeight(box);
+            var height = boxHeight ?? 0;
+            box.ActualBottom = Math.Max(box.ActualBottom, box.Location.Y + height);
+            box.IsHeightCalculated = boxHeight is not null;
         }
 
         #region Private methods
