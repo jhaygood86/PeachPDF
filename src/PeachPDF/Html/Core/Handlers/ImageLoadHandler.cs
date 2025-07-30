@@ -158,7 +158,7 @@ namespace PeachPDF.Html.Core.Handlers
                 uri = baseUri is null ? uri : new RUri(baseUri, uri);
             }
 
-            if (!uri.IsAbsoluteUri || uri.Scheme != "file")
+            if (uri is { IsAbsoluteUri: true, Scheme: not "file" })
             {
                 await SetImageFromUrl(uri);
             }

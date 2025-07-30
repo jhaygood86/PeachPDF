@@ -3,7 +3,7 @@
 		<TargetFrameworks>net8.0</TargetFrameworks>
 		<AssemblyName>PeachPDF</AssemblyName>
 		<PackageId>PeachPDF</PackageId>
-		<PackageVersion>0.7.24</PackageVersion>
+		<PackageVersion>0.7.25</PackageVersion>
 		<IncludeSymbols>true</IncludeSymbols>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
@@ -18,7 +18,7 @@
     <Nullable>enable</Nullable>
 	</PropertyGroup>
 	<ItemGroup>
-	  <PackageReference Include="MimeKit" Version="4.12.0" />
+	  <PackageReference Include="MimeKit" Version="4.13.0" />
 	</ItemGroup>
 	<ItemGroup>
 	  <ProjectReference Include="..\PdfSharpCore\PeachPDF.PdfSharpCore.csproj" />
