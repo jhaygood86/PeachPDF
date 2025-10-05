@@ -1213,7 +1213,7 @@ namespace PeachPDF.Html.Core.Dom
             return value;
         }
 
-        public bool BreakPage()
+        public virtual bool BreakPage()
         {
             var container = HtmlContainer;
 

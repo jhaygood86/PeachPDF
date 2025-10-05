@@ -535,11 +535,11 @@ namespace PeachPDF.Html.Core.Utils
 
                 var flattenedChildBoxes = FlattenStackingContext(childBox);
 
-                foreach (var flattenedChildBox in flattenedChildBoxes)
+                foreach (var flattenedStackingBox in flattenedChildBoxes)
                 {
-                    if (!IsStackingContextBox(flattenedChildBox))
+                    if (!IsStackingContextBox(flattenedStackingBox))
                     {
-                        yield return flattenedChildBox;
+                        yield return flattenedStackingBox;
                     }
                 }
             }

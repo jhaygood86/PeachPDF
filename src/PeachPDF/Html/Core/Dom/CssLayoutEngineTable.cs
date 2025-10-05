@@ -246,42 +246,40 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private void InsertEmptyBoxes()
         {
-            if (!_tableBox._tableFixed)
+            if (_tableBox._tableFixed) return;
+            
+            var currentRow = 0;
+
+            foreach (var row in _bodyRows)
             {
-                int currow = 0;
-                List<CssBox> rows = _bodyRows;
-
-                foreach (CssBox row in rows)
+                for (var k = 0; k < row.Boxes.Count; k++)
                 {
-                    for (int k = 0; k < row.Boxes.Count; k++)
-                    {
-                        CssBox cell = row.Boxes[k];
-                        int rowspan = GetRowSpan(cell);
-                        int realcol = GetCellRealColumnIndex(row, cell); //Real column of the cell
+                    var cell = row.Boxes[k];
+                    var rowSpan = GetRowSpan(cell);
+                    var realColumnIndex = GetCellRealColumnIndex(row, cell); //Real column of the cell
 
-                        for (int i = currow + 1; i < currow + rowspan; i++)
+                    for (var i = currentRow + 1; i < currentRow + rowSpan; i++)
+                    {
+                        if (_bodyRows.Count <= i) continue;
+                        
+                        var columnCount = 0;
+                        for (var j = 0; j < _bodyRows[i].Boxes.Count; j++)
                         {
-                            if (rows.Count > i)
+                            if (columnCount == realColumnIndex)
                             {
-                                int colcount = 0;
-                                for (int j = 0; j < rows[i].Boxes.Count; j++)
-                                {
-                                    if (colcount == realcol)
-                                    {
-                                        rows[i].Boxes.Insert(colcount, new CssSpacingBox(_tableBox, ref cell, currow));
-                                        break;
-                                    }
-                                    colcount++;
-                                    realcol -= GetColSpan(rows[i].Boxes[j]) - 1;
-                                }
+                                _bodyRows[i].Boxes.Insert(columnCount, new CssSpacingBox(_tableBox, ref cell, currentRow));
+                                break;
                             }
+                            columnCount++;
+                            realColumnIndex -= GetColSpan(_bodyRows[i].Boxes[j]) - 1;
                         }
                     }
-                    currow++;
                 }
 
-                _tableBox._tableFixed = true;
+                currentRow++;
             }
+
+            _tableBox._tableFixed = true;
         }
 
         /// <summary>
@@ -714,6 +712,14 @@ namespace PeachPDF.Html.Core.Dom
                 }
 
                 currentY = maxBottom + GetVerticalSpacing();
+
+                var rowX = row.Boxes.Min(x => x.Location.X);
+                var rowY = row.Boxes.Min(x => x.Location.Y);
+                var rowActualRight = row.Boxes.Max(x => x.ActualRight);
+
+                row.Location = new RPoint(rowX, rowY);
+                row.ActualRight = rowActualRight;
+                row.ActualBottom = maxBottom;
 
                 currentRow++;
             }

@@ -1,5 +1,7 @@
+using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core.Utils;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -12,7 +14,7 @@ namespace PeachPDF.Html.Core.Dom
             : base(tableBox, new HtmlTag("none", false, new Dictionary<string, string> { { "colspan", "1" } }))
         {
             ExtendedBox = extendedBox;
-            Display = CssConstants.None;
+            Display = CssConstants.TableCell;
 
             StartRow = startRow;
             EndRow = startRow + int.Parse(extendedBox.GetAttribute("rowspan", "1")) - 1;
@@ -29,5 +31,17 @@ namespace PeachPDF.Html.Core.Dom
         /// Gets the index of the row where box ends
         /// </summary>
         public int EndRow { get; }
+
+        public override bool BreakPage()
+        {
+            return ExtendedBox.BreakPage();
+        }
+
+        protected override async ValueTask PaintImp(RGraphics g)
+        {
+            ExtendedBox.ResetPaint();
+
+            await ExtendedBox.Paint(g);
+        }
     }
 }
