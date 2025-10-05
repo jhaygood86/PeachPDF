@@ -76,6 +76,8 @@ var document = await generator.GeneratePdf(null, pdfConfig);
 document.Save(stream);
 ```
 
+Note that loading images using relative paths will default to local file system unless a RNetworkLoader instance is provided (such as HttpClientNetworkAdapter) that sets the BaseUri property or if the HTML has a <base> element with an href property set. Images will need to be in the current working directory.
+
 ## Fonts
 
 ### Default Font
