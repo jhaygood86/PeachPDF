@@ -5,28 +5,69 @@ using System.Linq;
 
 namespace PeachPDF.CSS
 {
-    internal sealed class UnorderedOptionsConverter : IValueConverter
+    internal sealed class UnorderedOptionsConverter(params IValueConverter[] converters) : IValueConverter
     {
-        private readonly IValueConverter[] _converters;
-
-        public UnorderedOptionsConverter(params IValueConverter[] converters)
-        {
-            _converters = converters;
-        }
-
         public IPropertyValue Convert(IEnumerable<Token> value)
         {
-            var list = new List<Token>(value);
-            var options = new IPropertyValue[_converters.Length];
-
-            for (var i = 0; i < _converters.Length; i++)
+            var perms = GetPermutations(converters).ToList();
+            
+            foreach (var perm in perms)
             {
-                options[i] = _converters[i].VaryAll(list);
-
-                if (options[i] == null) return null;
+                var list = new List<Token>(value);
+                var options = new IPropertyValue[perm.Length];
+                var success = TryOrder(perm, list, options);
+                if (success && list.Count == 0)
+                {
+                    return new OptionsValue(options, value);
+                }
             }
 
-            return list.Count == 0 ? new OptionsValue(options, value) : null;
+            // If none work, lenient with original order
+            var list2 = new List<Token>(value);
+            var options2 = new IPropertyValue[converters.Length];
+            TryOrder(converters, list2, options2);
+            return new OptionsValue(options2, value);
+        }
+
+        private static bool TryOrder(IValueConverter[] converters, List<Token> list, IPropertyValue[] options)
+        {
+            for (var i = 0; i < converters.Length; i++)
+            {
+                options[i] = converters[i].VaryAll(list);
+                if (options[i] == null) return false;
+            }
+            return true;
+        }
+
+        private static IEnumerable<IValueConverter[]> GetPermutations(IValueConverter[] converters)
+        {
+            var list = new List<IValueConverter>(converters);
+            return Permute(list, 0).Select(l => l.ToArray());
+        }
+
+        private static IEnumerable<List<IValueConverter>> Permute(List<IValueConverter> list, int start)
+        {
+            if (start == list.Count - 1)
+            {
+                yield return [..list];
+            }
+            else
+            {
+                for (var i = start; i < list.Count; i++)
+                {
+                    Swap(list, start, i);
+                    foreach (var perm in Permute(list, start + 1))
+                    {
+                        yield return perm;
+                    }
+                    Swap(list, start, i); // backtrack
+                }
+            }
+        }
+
+        private static void Swap<T>(List<T> list, int i, int j)
+        {
+            (list[i], list[j]) = (list[j], list[i]);
         }
 
         public IPropertyValue Construct(Property[] properties)
@@ -35,57 +76,46 @@ namespace PeachPDF.CSS
 
             if (result != null) return result;
 
-            var values = new IPropertyValue[_converters.Length];
+            var values = new IPropertyValue[converters.Length];
 
-            for (var i = 0; i < _converters.Length; i++)
+            for (var i = 0; i < converters.Length; i++)
             {
-                var value = _converters[i].Construct(properties);
+                var value = converters[i].Construct(properties);
 
                 if (value == null) return null;
 
                 values[i] = value;
             }
 
-            result = new OptionsValue(values, Enumerable.Empty<Token>());
+            result = new OptionsValue(values, []);
 
             return result;
         }
 
-        private sealed class OptionsValue : IPropertyValue
+        private sealed class OptionsValue(IPropertyValue[] options, IEnumerable<Token> tokens) : IPropertyValue
         {
-            private readonly IPropertyValue[] _options;
-
-            public OptionsValue(IPropertyValue[] options, IEnumerable<Token> tokens)
-            {
-                _options = options;
-                Original = new TokenValue(tokens);
-            }
-
             public string CssText
             {
                 get
                 {
                     return string.Join(" ",
-                        _options.Where(m => !string.IsNullOrEmpty(m.CssText)).Select(m => m.CssText));
+                        options.Where(m => !string.IsNullOrEmpty(m.CssText)).Select(m => m.CssText));
                 }
             }
 
-            public TokenValue Original { get; }
+            public TokenValue Original { get; } = new TokenValue(tokens);
 
             public TokenValue ExtractFor(string name)
             {
                 var tokens = new List<Token>();
 
-                foreach (var option in _options)
+                foreach (var option in options)
                 {
                     var extracted = option.ExtractFor(name);
 
-                    if (extracted is {Count: > 0})
-                    {
-                        if (tokens.Count > 0) tokens.Add(Token.Whitespace);
-
-                        tokens.AddRange(extracted);
-                    }
+                    if (extracted is not { Count: > 0 }) continue;
+                    if (tokens.Count > 0) tokens.Add(Token.Whitespace);
+                    tokens.AddRange(extracted);
                 }
 
                 return new TokenValue(tokens);

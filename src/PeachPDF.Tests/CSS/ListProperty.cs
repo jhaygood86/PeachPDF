@@ -1,5 +1,4 @@
-﻿using PeachPDF.CSS;
-
+using PeachPDF.CSS;
 namespace PeachPDF.Tests.CSS
 {
     using Xunit;
@@ -323,5 +322,25 @@ namespace PeachPDF.Tests.CSS
             Assert.True(concrete.HasValue);
             Assert.Equal("chapter section 2 page", concrete.Value);
         }
+
+        [Fact]
+        public void CssListStyleNoneSquareLegal()
+        {
+            var snippet = "list-style: none square";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("list-style", property.Name);
+            Assert.False(property.IsImportant);
+            Assert.IsType<ListStyleProperty>(property);
+            var concrete = (ListStyleProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal("none square", concrete.Value);
+        }
     }
 }
+
+
+
+
+
+
