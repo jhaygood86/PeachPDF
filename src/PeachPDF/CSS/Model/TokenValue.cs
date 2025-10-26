@@ -19,7 +19,7 @@ namespace PeachPDF.CSS
 
         private TokenValue(Token token)
         {
-            _tokens = new List<Token> {token};
+            _tokens = new List<Token> { token };
         }
 
         public TokenValue(IEnumerable<Token> tokens)

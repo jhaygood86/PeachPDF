@@ -13,10 +13,10 @@
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Handlers;
+using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System;
 using System.Threading.Tasks;
-using PeachPDF.Html.Core.Parse;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -120,7 +120,7 @@ namespace PeachPDF.Html.Core.Dom
                         {
                             await _imageLoadHandler.LoadImage(imageContent);
                         }
-                        
+
                     }
                     else
                         await _imageLoadHandler.LoadImage(ImageSource);

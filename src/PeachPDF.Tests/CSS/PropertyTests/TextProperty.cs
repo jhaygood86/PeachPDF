@@ -1,7 +1,7 @@
 namespace PeachPDF.Tests.CSS.PropertyTests
 {
     using PeachPDF.CSS;
-using Xunit;
+    using Xunit;
 
     public class TextPropertyTests : CssConstructionFunctions
     {
@@ -347,449 +347,449 @@ using Xunit;
             var result = ParseRule(snippet);
             var actual = result.Text;
             Assert.Equal(expected, actual);
-		}
-
-		[Fact]
-		public void WordBreakNormalLegal()
-		{
-			var snippet = "word-break : normal";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("word-break", property.Name);
-			Assert.True(property.HasValue);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<WordBreakProperty>(property);
-			var concrete = (WordBreakProperty)property;
-			Assert.Equal("normal", concrete.Value);
-		}
-
-		[Fact]
-		public void WordBreakBreakAllLegal()
-		{
-			var snippet = "word-break : break-all";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("word-break", property.Name);
-			Assert.True(property.HasValue);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<WordBreakProperty>(property);
-			var concrete = (WordBreakProperty)property;
-			Assert.Equal("break-all", concrete.Value);
-		}
-
-		[Fact]
-		public void WordBreakKeepAllLegal()
-		{
-			var snippet = "word-break : keep-all";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("word-break", property.Name);
-			Assert.True(property.HasValue);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<WordBreakProperty>(property);
-			var concrete = (WordBreakProperty)property;
-			Assert.Equal("keep-all", concrete.Value);
-		}
-
-		[Fact]
-		public void WordBreakNoneIllegal()
-		{
-			var snippet = "word-break : none";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("word-break", property.Name);
-			Assert.False(property.HasValue);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<WordBreakProperty>(property);
-		}
+        }
 
         [Fact]
-		public void TextAlignLastAutoLegal()
-		{
-			var snippet = "text-align-last: auto";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("text-align-last", property.Name);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<TextAlignLastProperty>(property);
-			var concrete = (TextAlignLastProperty)property;
-			Assert.True(property.HasValue);
-			Assert.Equal("auto", concrete.Value);
-		}
+        public void WordBreakNormalLegal()
+        {
+            var snippet = "word-break : normal";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("word-break", property.Name);
+            Assert.True(property.HasValue);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<WordBreakProperty>(property);
+            var concrete = (WordBreakProperty)property;
+            Assert.Equal("normal", concrete.Value);
+        }
 
-		[Fact]
-		public void TextAlignLastStartLegal()
-		{
-			var snippet = "text-align-last: start";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("text-align-last", property.Name);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<TextAlignLastProperty>(property);
-			var concrete = (TextAlignLastProperty)property;
-			Assert.True(property.HasValue);
-			Assert.Equal("start", concrete.Value);
-		}
+        [Fact]
+        public void WordBreakBreakAllLegal()
+        {
+            var snippet = "word-break : break-all";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("word-break", property.Name);
+            Assert.True(property.HasValue);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<WordBreakProperty>(property);
+            var concrete = (WordBreakProperty)property;
+            Assert.Equal("break-all", concrete.Value);
+        }
 
-		[Fact]
-		public void TextAlignLastEndLegal()
-		{
-			var snippet = "text-align-last: end";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("text-align-last", property.Name);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<TextAlignLastProperty>(property);
-			var concrete = (TextAlignLastProperty)property;
-			Assert.True(property.HasValue);
-			Assert.Equal("end", concrete.Value);
-		}
+        [Fact]
+        public void WordBreakKeepAllLegal()
+        {
+            var snippet = "word-break : keep-all";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("word-break", property.Name);
+            Assert.True(property.HasValue);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<WordBreakProperty>(property);
+            var concrete = (WordBreakProperty)property;
+            Assert.Equal("keep-all", concrete.Value);
+        }
 
-		[Fact]
-		public void TextAlignLastRightLegal()
-		{
-			var snippet = "text-align-last: right";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("text-align-last", property.Name);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<TextAlignLastProperty>(property);
-			var concrete = (TextAlignLastProperty)property;
-			Assert.True(property.HasValue);
-			Assert.Equal("right", concrete.Value);
-		}
+        [Fact]
+        public void WordBreakNoneIllegal()
+        {
+            var snippet = "word-break : none";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("word-break", property.Name);
+            Assert.False(property.HasValue);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<WordBreakProperty>(property);
+        }
 
-		[Fact]
-		public void TextAlignLastLeftLegal()
-		{
-			var snippet = "text-align-last: left";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("text-align-last", property.Name);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<TextAlignLastProperty>(property);
-			var concrete = (TextAlignLastProperty)property;
-			Assert.True(property.HasValue);
-			Assert.Equal("left", concrete.Value);
-		}
+        [Fact]
+        public void TextAlignLastAutoLegal()
+        {
+            var snippet = "text-align-last: auto";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-align-last", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextAlignLastProperty>(property);
+            var concrete = (TextAlignLastProperty)property;
+            Assert.True(property.HasValue);
+            Assert.Equal("auto", concrete.Value);
+        }
 
-		[Fact]
-		public void TextAlignLastCenterLegal()
-		{
-			var snippet = "text-align-last: center";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("text-align-last", property.Name);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<TextAlignLastProperty>(property);
-			var concrete = (TextAlignLastProperty)property;
-			Assert.True(property.HasValue);
-			Assert.Equal("center", concrete.Value);
-		}
+        [Fact]
+        public void TextAlignLastStartLegal()
+        {
+            var snippet = "text-align-last: start";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-align-last", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextAlignLastProperty>(property);
+            var concrete = (TextAlignLastProperty)property;
+            Assert.True(property.HasValue);
+            Assert.Equal("start", concrete.Value);
+        }
 
-		[Fact]
-		public void TextAlignLastJustifyLegal()
-		{
-			var snippet = "text-align-last: justify";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("text-align-last", property.Name);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<TextAlignLastProperty>(property);
-			var concrete = (TextAlignLastProperty)property;
-			Assert.True(property.HasValue);
-			Assert.Equal("justify", concrete.Value);
-		}
+        [Fact]
+        public void TextAlignLastEndLegal()
+        {
+            var snippet = "text-align-last: end";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-align-last", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextAlignLastProperty>(property);
+            var concrete = (TextAlignLastProperty)property;
+            Assert.True(property.HasValue);
+            Assert.Equal("end", concrete.Value);
+        }
 
-		[Fact]
-		public void TextAlignLastNoneIllegal()
-		{
-			var snippet = "text-align-last: none";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("text-align-last", property.Name);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<TextAlignLastProperty>(property);
-			var concrete = (TextAlignLastProperty)property;
-			Assert.False(property.HasValue);
-		}
+        [Fact]
+        public void TextAlignLastRightLegal()
+        {
+            var snippet = "text-align-last: right";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-align-last", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextAlignLastProperty>(property);
+            var concrete = (TextAlignLastProperty)property;
+            Assert.True(property.HasValue);
+            Assert.Equal("right", concrete.Value);
+        }
 
-		[Fact]
-		public void TextAnchorStartLegal()
-		{
-			var snippet = "text-anchor: start";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("text-anchor", property.Name);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<TextAnchorProperty>(property);
-			var concrete = (TextAnchorProperty)property;
-			Assert.True(property.HasValue);
-			Assert.Equal("start", concrete.Value);
-		}
+        [Fact]
+        public void TextAlignLastLeftLegal()
+        {
+            var snippet = "text-align-last: left";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-align-last", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextAlignLastProperty>(property);
+            var concrete = (TextAlignLastProperty)property;
+            Assert.True(property.HasValue);
+            Assert.Equal("left", concrete.Value);
+        }
 
-		[Fact]
-		public void TextAnchorMiddleLegal()
-		{
-			var snippet = "text-anchor: middle";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("text-anchor", property.Name);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<TextAnchorProperty>(property);
-			var concrete = (TextAnchorProperty)property;
-			Assert.True(property.HasValue);
-			Assert.Equal("middle", concrete.Value);
-		}
+        [Fact]
+        public void TextAlignLastCenterLegal()
+        {
+            var snippet = "text-align-last: center";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-align-last", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextAlignLastProperty>(property);
+            var concrete = (TextAlignLastProperty)property;
+            Assert.True(property.HasValue);
+            Assert.Equal("center", concrete.Value);
+        }
 
-		[Fact]
-		public void TextAnchorEndLegal()
-		{
-			var snippet = "text-anchor: end";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("text-anchor", property.Name);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<TextAnchorProperty>(property);
-			var concrete = (TextAnchorProperty)property;
-			Assert.True(property.HasValue);
-			Assert.Equal("end", concrete.Value);
-		}
+        [Fact]
+        public void TextAlignLastJustifyLegal()
+        {
+            var snippet = "text-align-last: justify";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-align-last", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextAlignLastProperty>(property);
+            var concrete = (TextAlignLastProperty)property;
+            Assert.True(property.HasValue);
+            Assert.Equal("justify", concrete.Value);
+        }
 
-		[Fact]
-		public void TextAnchorNoneIllegal()
-		{
-			var snippet = "text-anchor: none";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("text-anchor", property.Name);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<TextAnchorProperty>(property);
-			var concrete = (TextAnchorProperty)property;
-			Assert.False(property.HasValue);
-		}
+        [Fact]
+        public void TextAlignLastNoneIllegal()
+        {
+            var snippet = "text-align-last: none";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-align-last", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextAlignLastProperty>(property);
+            var concrete = (TextAlignLastProperty)property;
+            Assert.False(property.HasValue);
+        }
 
-		[Fact]
-		public void TextJustifyAutoLegal()
-		{
-			var snippet = "text-justify: auto";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("text-justify", property.Name);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<TextJustifyProperty>(property);
-			var concrete = (TextJustifyProperty)property;
-			Assert.True(property.HasValue);
-			Assert.Equal("auto", concrete.Value);
-		}
+        [Fact]
+        public void TextAnchorStartLegal()
+        {
+            var snippet = "text-anchor: start";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-anchor", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextAnchorProperty>(property);
+            var concrete = (TextAnchorProperty)property;
+            Assert.True(property.HasValue);
+            Assert.Equal("start", concrete.Value);
+        }
 
-		[Fact]
-		public void TextJustifyDistributeLegal()
-		{
-			var snippet = "text-justify: distribute";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("text-justify", property.Name);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<TextJustifyProperty>(property);
-			var concrete = (TextJustifyProperty)property;
-			Assert.True(property.HasValue);
-			Assert.Equal("distribute", concrete.Value);
-		}
+        [Fact]
+        public void TextAnchorMiddleLegal()
+        {
+            var snippet = "text-anchor: middle";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-anchor", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextAnchorProperty>(property);
+            var concrete = (TextAnchorProperty)property;
+            Assert.True(property.HasValue);
+            Assert.Equal("middle", concrete.Value);
+        }
 
-		[Fact]
-		public void TextJustifyDistributeAllLinesLegal()
-		{
-			var snippet = "text-justify: distribute-all-lines";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("text-justify", property.Name);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<TextJustifyProperty>(property);
-			var concrete = (TextJustifyProperty)property;
-			Assert.True(property.HasValue);
-			Assert.Equal("distribute-all-lines", concrete.Value);
-		}
+        [Fact]
+        public void TextAnchorEndLegal()
+        {
+            var snippet = "text-anchor: end";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-anchor", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextAnchorProperty>(property);
+            var concrete = (TextAnchorProperty)property;
+            Assert.True(property.HasValue);
+            Assert.Equal("end", concrete.Value);
+        }
 
-		[Fact]
-		public void TextJustifyDistributeCenterLastLegal()
-		{
-			var snippet = "text-justify: distribute-center-last";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("text-justify", property.Name);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<TextJustifyProperty>(property);
-			var concrete = (TextJustifyProperty)property;
-			Assert.True(property.HasValue);
-			Assert.Equal("distribute-center-last", concrete.Value);
-		}
+        [Fact]
+        public void TextAnchorNoneIllegal()
+        {
+            var snippet = "text-anchor: none";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-anchor", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextAnchorProperty>(property);
+            var concrete = (TextAnchorProperty)property;
+            Assert.False(property.HasValue);
+        }
 
-		[Fact]
-		public void TextJustifyInterClusterLegal()
-		{
-			var snippet = "text-justify: inter-cluster";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("text-justify", property.Name);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<TextJustifyProperty>(property);
-			var concrete = (TextJustifyProperty)property;
-			Assert.True(property.HasValue);
-			Assert.Equal("inter-cluster", concrete.Value);
-		}
+        [Fact]
+        public void TextJustifyAutoLegal()
+        {
+            var snippet = "text-justify: auto";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-justify", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextJustifyProperty>(property);
+            var concrete = (TextJustifyProperty)property;
+            Assert.True(property.HasValue);
+            Assert.Equal("auto", concrete.Value);
+        }
 
-		[Fact]
-		public void TextJustifyInterIdeographLegal()
-		{
-			var snippet = "text-justify: inter-ideograph";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("text-justify", property.Name);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<TextJustifyProperty>(property);
-			var concrete = (TextJustifyProperty)property;
-			Assert.True(property.HasValue);
-			Assert.Equal("inter-ideograph", concrete.Value);
-		}
+        [Fact]
+        public void TextJustifyDistributeLegal()
+        {
+            var snippet = "text-justify: distribute";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-justify", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextJustifyProperty>(property);
+            var concrete = (TextJustifyProperty)property;
+            Assert.True(property.HasValue);
+            Assert.Equal("distribute", concrete.Value);
+        }
 
-		[Fact]
-		public void TextJustifyInterWordLegal()
-		{
-			var snippet = "text-justify: inter-word";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("text-justify", property.Name);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<TextJustifyProperty>(property);
-			var concrete = (TextJustifyProperty)property;
-			Assert.True(property.HasValue);
-			Assert.Equal("inter-word", concrete.Value);
-		}
+        [Fact]
+        public void TextJustifyDistributeAllLinesLegal()
+        {
+            var snippet = "text-justify: distribute-all-lines";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-justify", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextJustifyProperty>(property);
+            var concrete = (TextJustifyProperty)property;
+            Assert.True(property.HasValue);
+            Assert.Equal("distribute-all-lines", concrete.Value);
+        }
 
-		[Fact]
-		public void TextJustifyKashidaLegal()
-		{
-			var snippet = "text-justify: kashida";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("text-justify", property.Name);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<TextJustifyProperty>(property);
-			var concrete = (TextJustifyProperty)property;
-			Assert.True(property.HasValue);
-			Assert.Equal("kashida", concrete.Value);
-		}
+        [Fact]
+        public void TextJustifyDistributeCenterLastLegal()
+        {
+            var snippet = "text-justify: distribute-center-last";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-justify", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextJustifyProperty>(property);
+            var concrete = (TextJustifyProperty)property;
+            Assert.True(property.HasValue);
+            Assert.Equal("distribute-center-last", concrete.Value);
+        }
 
-		[Fact]
-		public void TextJustifyNewspaperLegal()
-		{
-			var snippet = "text-justify: newspaper";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("text-justify", property.Name);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<TextJustifyProperty>(property);
-			var concrete = (TextJustifyProperty)property;
-			Assert.True(property.HasValue);
-			Assert.Equal("newspaper", concrete.Value);
-		}
+        [Fact]
+        public void TextJustifyInterClusterLegal()
+        {
+            var snippet = "text-justify: inter-cluster";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-justify", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextJustifyProperty>(property);
+            var concrete = (TextJustifyProperty)property;
+            Assert.True(property.HasValue);
+            Assert.Equal("inter-cluster", concrete.Value);
+        }
 
-		[Fact]
-		public void TextJustifyNoneIllegal()
-		{
-			var snippet = "text-justify: none";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("text-justify", property.Name);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<TextJustifyProperty>(property);
-			var concrete = (TextJustifyProperty)property;
-			Assert.False(property.HasValue);
-		}
+        [Fact]
+        public void TextJustifyInterIdeographLegal()
+        {
+            var snippet = "text-justify: inter-ideograph";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-justify", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextJustifyProperty>(property);
+            var concrete = (TextJustifyProperty)property;
+            Assert.True(property.HasValue);
+            Assert.Equal("inter-ideograph", concrete.Value);
+        }
 
-		[Fact]
-		public void OverflowWrapNormalLegal()
-		{
-			var snippet = "overflow-wrap: normal";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("overflow-wrap", property.Name);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<OverflowWrapProperty>(property);
-			var concrete = (OverflowWrapProperty)property;
-			Assert.True(property.HasValue);
-			Assert.Equal("normal", concrete.Value);
-		}
+        [Fact]
+        public void TextJustifyInterWordLegal()
+        {
+            var snippet = "text-justify: inter-word";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-justify", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextJustifyProperty>(property);
+            var concrete = (TextJustifyProperty)property;
+            Assert.True(property.HasValue);
+            Assert.Equal("inter-word", concrete.Value);
+        }
 
-		[Fact]
-		public void OverflowWrapAlternateNameNormalLegal()
-		{
-			var snippet = "word-wrap: normal";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("overflow-wrap", property.Name);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<OverflowWrapProperty>(property);
-			var concrete = (OverflowWrapProperty)property;
-			Assert.True(property.HasValue);
-			Assert.Equal("normal", concrete.Value);
-		}
+        [Fact]
+        public void TextJustifyKashidaLegal()
+        {
+            var snippet = "text-justify: kashida";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-justify", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextJustifyProperty>(property);
+            var concrete = (TextJustifyProperty)property;
+            Assert.True(property.HasValue);
+            Assert.Equal("kashida", concrete.Value);
+        }
 
-		[Fact]
-		public void OverflowWrapBreakWordLegal()
-		{
-			var snippet = "overflow-wrap: break-word";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("overflow-wrap", property.Name);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<OverflowWrapProperty>(property);
-			var concrete = (OverflowWrapProperty)property;
-			Assert.True(property.HasValue);
-			Assert.Equal("break-word", concrete.Value);
-		}
+        [Fact]
+        public void TextJustifyNewspaperLegal()
+        {
+            var snippet = "text-justify: newspaper";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-justify", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextJustifyProperty>(property);
+            var concrete = (TextJustifyProperty)property;
+            Assert.True(property.HasValue);
+            Assert.Equal("newspaper", concrete.Value);
+        }
 
-		[Fact]
-		public void OverflowWrapAlternateNameBreakWordLegal()
-		{
-			var snippet = "word-wrap: break-word";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("overflow-wrap", property.Name);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<OverflowWrapProperty>(property);
-			var concrete = (OverflowWrapProperty)property;
-			Assert.True(property.HasValue);
-			Assert.Equal("break-word", concrete.Value);
-		}
+        [Fact]
+        public void TextJustifyNoneIllegal()
+        {
+            var snippet = "text-justify: none";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-justify", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextJustifyProperty>(property);
+            var concrete = (TextJustifyProperty)property;
+            Assert.False(property.HasValue);
+        }
 
-		[Fact]
-		public void OverflowWrapNoneIllegal()
-		{
-			var snippet = "overflow-wrap: none";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("overflow-wrap", property.Name);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<OverflowWrapProperty>(property);
-			var concrete = (OverflowWrapProperty)property;
-			Assert.False(property.HasValue);
-		}
+        [Fact]
+        public void OverflowWrapNormalLegal()
+        {
+            var snippet = "overflow-wrap: normal";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("overflow-wrap", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<OverflowWrapProperty>(property);
+            var concrete = (OverflowWrapProperty)property;
+            Assert.True(property.HasValue);
+            Assert.Equal("normal", concrete.Value);
+        }
 
-		[Fact]
-		public void OverflowWrapAlternateNameNoneIllegal()
-		{
-			var snippet = "word-wrap: none";
-			var property = ParseDeclaration(snippet);
-			Assert.Equal("overflow-wrap", property.Name);
-			Assert.False(property.IsInherited);
-			Assert.False(property.IsImportant);
-			Assert.IsType<OverflowWrapProperty>(property);
-			var concrete = (OverflowWrapProperty)property;
-			Assert.False(property.HasValue);
-		}
-	}
+        [Fact]
+        public void OverflowWrapAlternateNameNormalLegal()
+        {
+            var snippet = "word-wrap: normal";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("overflow-wrap", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<OverflowWrapProperty>(property);
+            var concrete = (OverflowWrapProperty)property;
+            Assert.True(property.HasValue);
+            Assert.Equal("normal", concrete.Value);
+        }
+
+        [Fact]
+        public void OverflowWrapBreakWordLegal()
+        {
+            var snippet = "overflow-wrap: break-word";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("overflow-wrap", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<OverflowWrapProperty>(property);
+            var concrete = (OverflowWrapProperty)property;
+            Assert.True(property.HasValue);
+            Assert.Equal("break-word", concrete.Value);
+        }
+
+        [Fact]
+        public void OverflowWrapAlternateNameBreakWordLegal()
+        {
+            var snippet = "word-wrap: break-word";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("overflow-wrap", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<OverflowWrapProperty>(property);
+            var concrete = (OverflowWrapProperty)property;
+            Assert.True(property.HasValue);
+            Assert.Equal("break-word", concrete.Value);
+        }
+
+        [Fact]
+        public void OverflowWrapNoneIllegal()
+        {
+            var snippet = "overflow-wrap: none";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("overflow-wrap", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<OverflowWrapProperty>(property);
+            var concrete = (OverflowWrapProperty)property;
+            Assert.False(property.HasValue);
+        }
+
+        [Fact]
+        public void OverflowWrapAlternateNameNoneIllegal()
+        {
+            var snippet = "word-wrap: none";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("overflow-wrap", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.False(property.IsImportant);
+            Assert.IsType<OverflowWrapProperty>(property);
+            var concrete = (OverflowWrapProperty)property;
+            Assert.False(property.HasValue);
+        }
+    }
 }
 
 

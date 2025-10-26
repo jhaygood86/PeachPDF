@@ -19,7 +19,7 @@ namespace PeachPDF.CSS
         public override void ToCss(TextWriter writer, IStyleFormatter formatter)
         {
             writer.Write(formatter.Rule("@page", Selector == null ? "" : SelectorText, "{"));
-            
+
             Style.ToCss(writer, formatter);
 
             if (Style.Any())

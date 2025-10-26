@@ -1,7 +1,7 @@
-using System;
-using System.Globalization;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
+using System;
+using System.Globalization;
 
 namespace PeachPDF.Html.Core.Dom
 {

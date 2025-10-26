@@ -149,7 +149,7 @@ namespace PeachPDF.Html.Core.Dom
                         };
                     }
                 }
-                
+
             }
 
             ApplyCounterResets(currentBox);

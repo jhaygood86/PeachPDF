@@ -1,12 +1,12 @@
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
 using MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes;
-using System;
-using System.IO;
+using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Formats.Bmp;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.Formats.Png;
+using SixLabors.ImageSharp.PixelFormats;
+using System;
+using System.IO;
 
 namespace PeachPDF.PdfSharpCore.Utils
 {
@@ -33,7 +33,7 @@ namespace PeachPDF.PdfSharpCore.Utils
             var decoderOptions = new DecoderOptions();
             var image = Image.Load<TPixel>(decoderOptions, path);
             var imgFormat = Image.DetectFormat(decoderOptions, path);
-            return new ImageSharpImageSourceImpl<TPixel>(path, image, (int) quality!, imgFormat is PngFormat);
+            return new ImageSharpImageSourceImpl<TPixel>(path, image, (int)quality!, imgFormat is PngFormat);
         }
 
         protected override IImageSource FromStreamImpl(string name, Func<Stream> imageStream, int? quality = 75)

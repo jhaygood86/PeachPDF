@@ -1,5 +1,4 @@
 using PeachPDF.CSS;
-using Xunit;
 
 namespace PeachPDF.Tests.CSS.PropertyTests
 {
@@ -562,17 +561,17 @@ namespace PeachPDF.Tests.CSS.PropertyTests
         [Fact]
         public void AnimationCountDoubleIllegal()
         {
-          var snippet = "animation : 10 20";
+            var snippet = "animation : 10 20";
             var property = ParseDeclaration(snippet);
- Assert.Equal("animation", property.Name);
-     Assert.False(property.IsImportant);
+            Assert.Equal("animation", property.Name);
+            Assert.False(property.IsImportant);
             Assert.IsType<AnimationProperty>(property);
             var concrete = (AnimationProperty)property;
-        Assert.False(concrete.IsInherited);
-         // Two unitless numbers is ambiguous and should not parse successfully
-        // ("10 20ms" would be valid: 10 iterations, 20ms duration)
-    // But "10 20" with two unitless numbers has no clear interpretation
-        Assert.False(concrete.HasValue);
+            Assert.False(concrete.IsInherited);
+            // Two unitless numbers is ambiguous and should not parse successfully
+            // ("10 20ms" would be valid: 10 iterations, 20ms duration)
+            // But "10 20" with two unitless numbers has no clear interpretation
+            Assert.False(concrete.HasValue);
         }
 
         [Fact]

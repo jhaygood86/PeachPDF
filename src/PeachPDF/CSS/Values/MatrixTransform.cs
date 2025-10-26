@@ -11,7 +11,7 @@
 
         public TransformMatrix ComputeMatrix()
         {
-            return new (_values);
+            return new(_values);
         }
     }
 }

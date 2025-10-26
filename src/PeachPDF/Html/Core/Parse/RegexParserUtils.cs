@@ -154,7 +154,7 @@ namespace PeachPDF.Html.Core.Parse
         private static Regex GetRegex(string regex)
         {
             if (_regexes.TryGetValue(regex, out var r)) return r;
-            
+
             r = new Regex(regex, RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
             _regexes[regex] = r;
 

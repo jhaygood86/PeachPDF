@@ -39,7 +39,14 @@ namespace PeachPDF.Html.Core.Dom
                     {
                         // Evaluate and store the current named string
                         var value = EvaluateContentList(cssBox, contentItems);
-                        cssBox.NamedStrings[currentName] = new NamedString(currentName, value);
+                        var namedString = new NamedString(currentName, value);
+                        cssBox.NamedStrings[currentName] = namedString;
+
+                        // Register with document-level storage if container is available
+                        if (cssBox.HtmlContainer != null)
+                        {
+                            cssBox.HtmlContainer.RegisterNamedString(namedString);
+                        }
                     }
 
                     currentName = null;
@@ -69,13 +76,20 @@ namespace PeachPDF.Html.Core.Dom
             if (currentName != null && contentItems.Count > 0)
             {
                 var value = EvaluateContentList(cssBox, contentItems);
-                cssBox.NamedStrings[currentName] = new NamedString(currentName, value);
+                var namedString = new NamedString(currentName, value);
+                cssBox.NamedStrings[currentName] = namedString;
+
+                // Register with document-level storage if container is available
+                if (cssBox.HtmlContainer != null)
+                {
+                    cssBox.HtmlContainer.RegisterNamedString(namedString);
+                }
             }
         }
 
         /// <summary>
         /// Evaluates a content-list (list of content items) into a string value.
-        /// Supports: string literals, counter(), counters(), attr(), content() functions.
+        /// Supports: string literals, counter(), counters(), attr(), content(), string() functions.
         /// </summary>
         /// <param name="cssBox">The CSS box context for evaluation</param>
         /// <param name="contentItems">The tokens representing the content-list</param>
@@ -103,7 +117,7 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Evaluates a function token (counter, counters, attr, content) into its string value.
+        /// Evaluates a function token (counter, counters, attr, content, string) into its string value.
         /// </summary>
         /// <param name="cssBox">The CSS box context for evaluation</param>
         /// <param name="functionToken">The function token to evaluate</param>
@@ -125,6 +139,9 @@ namespace PeachPDF.Html.Core.Dom
 
                 case "content":
                     return EvaluateContentFunction(cssBox, functionToken);
+
+                case "string":
+                    return EvaluateStringFunction(cssBox, functionToken);
 
                 default:
                     return string.Empty;
@@ -255,6 +272,111 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Evaluates string() function - returns a named string value.
+        /// Syntax: string(name) or string(name, keyword)
+        /// Keywords: first (default), start, last, first-except
+        /// </summary>
+        private static string EvaluateStringFunction(CssBox cssBox, FunctionToken functionToken)
+        {
+            var arguments = functionToken.ArgumentTokens
+             .Where(t => t.Type != TokenType.Comma && t.Type != TokenType.Whitespace)
+       .ToArray();
+
+            if (arguments.Length == 0)
+            {
+                return string.Empty;
+            }
+
+            // First argument is the named string identifier
+            if (arguments[0] is not KeywordToken nameToken)
+            {
+                return string.Empty;
+            }
+
+            var stringName = nameToken.Data;
+
+            // Second argument is the optional keyword (first, start, last, first-except)
+            // Default is "first"
+            var keyword = "first";
+            if (arguments.Length > 1 && arguments[1] is KeywordToken keywordToken)
+            {
+                keyword = keywordToken.Data.ToLowerInvariant();
+            }
+
+            return GetNamedStringValue(cssBox, stringName, keyword);
+        }
+
+        /// <summary>
+        /// Gets a named string value based on the specified keyword.
+        /// </summary>
+        /// <param name="cssBox">The CSS box context</param>
+        /// <param name="name">The name of the string to retrieve</param>
+        /// <param name="keyword">The keyword: first, start, last, or first-except</param>
+        /// <returns>The named string value</returns>
+        private static string GetNamedStringValue(CssBox cssBox, string name, string keyword)
+        {
+            // Get document-level named strings from the HTML container
+            if (cssBox.HtmlContainer != null)
+            {
+                var documentStrings = cssBox.HtmlContainer.NamedStrings;
+
+                // Filter to only this named string
+                NamedString? firstMatch = null;
+                NamedString? lastMatch = null;
+
+                foreach (var namedString in documentStrings)
+                {
+                    if (namedString.Name == name)
+                    {
+                        if (firstMatch == null)
+                        {
+                            firstMatch = namedString;
+                        }
+                        lastMatch = namedString;
+                    }
+                }
+
+                // Apply keyword logic
+                return keyword switch
+                {
+                    "first" => firstMatch?.Value ?? string.Empty,
+                    "start" => firstMatch?.Value ?? string.Empty, // TODO: Implement proper start logic (first on page)
+                    "last" => lastMatch?.Value ?? string.Empty,
+                    "first-except" => string.Empty, // TODO: Implement proper first-except logic
+                    _ => firstMatch?.Value ?? string.Empty
+                };
+            }
+
+            // Fallback to tree-based search if no container (shouldn't happen in normal flow)
+            // This maintains backward compatibility
+            var box = cssBox;
+            NamedString? nearestAssignment = null;
+            NamedString? farthestAssignment = null;
+
+            while (box != null)
+            {
+                if (box.NamedStrings.TryGetValue(name, out var namedString))
+                {
+                    if (nearestAssignment == null)
+                    {
+                        nearestAssignment = namedString;
+                    }
+                    farthestAssignment = namedString;
+                }
+                box = box.ParentBox;
+            }
+
+            return keyword switch
+            {
+                "first" => farthestAssignment?.Value ?? string.Empty,
+                "start" => farthestAssignment?.Value ?? string.Empty,
+                "last" => nearestAssignment?.Value ?? string.Empty,
+                "first-except" => string.Empty,
+                _ => farthestAssignment?.Value ?? string.Empty
+            };
+        }
+
+        /// <summary>
         /// Gets the text content of an element (normalized as if white-space: normal).
         /// </summary>
         private static string GetElementText(CssBox cssBox)
@@ -263,10 +385,10 @@ namespace PeachPDF.Html.Core.Dom
             {
                 // Normalize whitespace: collapse multiple spaces to single space
                 return System.Text.RegularExpressions.Regex.Replace(
-             cssBox.Text.Trim(),
-                 @"\s+",
-           " "
-                 );
+                 cssBox.Text.Trim(),
+                     @"\s+",
+                   " "
+                         );
             }
 
             // If no direct text, collect text from child boxes
@@ -308,7 +430,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             // Look for pseudo-element boxes
             var pseudoBox = cssBox.Boxes.FirstOrDefault(b =>
-                      isBefore ? b.IsBeforePseudoElement : b.IsAfterPseudoElement);
+     isBefore ? b.IsBeforePseudoElement : b.IsAfterPseudoElement);
 
             return pseudoBox != null ? GetElementText(pseudoBox) : string.Empty;
         }

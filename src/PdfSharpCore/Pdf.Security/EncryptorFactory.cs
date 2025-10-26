@@ -13,7 +13,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Security
             var maxSupportedVersion = 5;
             if (filter != "/Standard" || !(v >= 1 && v <= maxSupportedVersion))
                 throw new PdfReaderException(PSSR.UnknownEncryption);
-            foreach (var keyName in new []{"/StrF", "/StmF"})
+            foreach (var keyName in new[] { "/StrF", "/StmF" })
             {
                 IEncryptor encryptor = null;
                 if (v >= 4)

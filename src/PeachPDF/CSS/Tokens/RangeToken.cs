@@ -13,7 +13,7 @@ namespace PeachPDF.CSS
 
             if (index > Symbols.MaximumCodepoint) return null;
 
-            if (End == null) return new[] {index.ConvertFromUtf32()};
+            if (End == null) return new[] { index.ConvertFromUtf32() };
 
             var list = new List<string>();
             var f = int.Parse(End, NumberStyles.HexNumber);

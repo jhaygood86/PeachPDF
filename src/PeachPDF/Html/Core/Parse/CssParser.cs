@@ -70,7 +70,7 @@ namespace PeachPDF.Html.Core.Parse
         public async Task<CssData> ParseStyleSheet(string stylesheet, bool combineWithDefault)
         {
             var cssData = combineWithDefault ? await _adapter.GetDefaultCssData() : new CssData();
-            
+
             if (!string.IsNullOrEmpty(stylesheet))
             {
                 await ParseStyleSheet(cssData, stylesheet);

@@ -611,6 +611,12 @@ namespace PeachPDF.Html.Core.Dom
                 await MeasureWordsSize(g);
             }
 
+            // Apply named strings if string-set property is present
+            if (!string.IsNullOrEmpty(StringSet) && StringSet != CssConstants.None)
+            {
+                CssNamedStringEngine.ApplyStringSet(this);
+            }
+
             if (BreakBefore is CssConstants.Page)
             {
                 var previousSibling = DomUtils.GetPreviousSibling(this);

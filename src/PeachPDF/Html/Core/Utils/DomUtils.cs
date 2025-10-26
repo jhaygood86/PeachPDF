@@ -120,7 +120,8 @@ namespace PeachPDF.Html.Core.Utils
                 if (matcher.Invoke(sib))
                 {
                     yield return sib;
-                } else if (isConsecutive)
+                }
+                else if (isConsecutive)
                 {
                     yield break;
                 }

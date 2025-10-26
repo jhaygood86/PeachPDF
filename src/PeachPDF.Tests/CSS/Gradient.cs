@@ -1,7 +1,7 @@
 namespace PeachPDF.Tests.CSS
 {
     using PeachPDF.CSS;
-using Xunit;
+    using Xunit;
 
     public class GradientTests : CssConstructionFunctions
     {
@@ -97,7 +97,7 @@ using Xunit;
             var backgroundImage = property as BackgroundImageProperty;
             Assert.True(backgroundImage.HasValue);
             Assert.False(backgroundImage.IsInitial);
-        
+
         }
 
         [Fact]

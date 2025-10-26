@@ -16,7 +16,7 @@
             Elements.SetObject(Keys.EF, embeddedFileDictionary);
         }
 
-        public PdfFileSpecification(PdfDocument document, string fileName, PdfEmbeddedFile embeddedFile) 
+        public PdfFileSpecification(PdfDocument document, string fileName, PdfEmbeddedFile embeddedFile)
             : this(document)
         {
             this.FileName = fileName;
@@ -52,7 +52,7 @@
                 }
             }
         }
-        
+
         /// <summary>
         /// Predefined keys of this embedded file.
         /// </summary>
@@ -78,7 +78,7 @@
             /// </summary>
             [KeyInfo(KeyType.Dictionary | KeyType.Optional)]
             public const string F = "/F";
-            
+
             /// <summary>
             /// (Required if RF is present; PDF 1.3; amended to include the UF key in PDF 1.7) 
             /// A dictionary containing a subset of the keys F, UF, DOS, Mac, and Unix, 

@@ -1,11 +1,9 @@
 namespace PeachPDF.Tests.CSS
 {
     using PeachPDF.CSS;
-using Xunit;
     using System.Linq;
-
-    using PeachPDF.CSS;
-public class CssContainerTests : CssConstructionFunctions
+    using Xunit;
+    public class CssContainerTests : CssConstructionFunctions
     {
         [Fact]
         public void SimpleContainer()

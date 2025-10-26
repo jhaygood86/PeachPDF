@@ -27,19 +27,19 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using PeachPDF.PdfSharpCore.Pdf.Filters;
+using PeachPDF.PdfSharpCore.Pdf.Internal;
+using PeachPDF.PdfSharpCore.Pdf.IO;
 using System;
-using System.Diagnostics;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Reflection;
 using System.Text;
-using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Pdf.IO;
-using PeachPDF.PdfSharpCore.Pdf.Filters;
-using PeachPDF.PdfSharpCore.Pdf.Advanced;
-using PeachPDF.PdfSharpCore.Pdf.Internal;
-using System.Diagnostics.CodeAnalysis;
 
 namespace PeachPDF.PdfSharpCore.Pdf
 {
@@ -948,7 +948,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
             /// <summary>
             /// Returns the type of the object to be created as value of the specified key.
             /// </summary>
-            [return:DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)]
+            [return: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)]
             Type GetValueType(string key)  // TODO: move to PdfObject
             {
                 Type type = null;
@@ -966,7 +966,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
                 return type;
             }
 
-            PdfArray CreateArray([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)]Type type, PdfArray oldArray)
+            PdfArray CreateArray([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)] Type type, PdfArray oldArray)
             {
                 // Rewritten WinRT style.
                 PdfArray array = null;
@@ -1043,7 +1043,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
                 return dict;
             }
 
-            PdfItem CreateValue([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)]Type type, PdfDictionary oldValue)
+            PdfItem CreateValue([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)] Type type, PdfDictionary oldValue)
             {
 
                 // Rewritten WinRT style.
@@ -1770,8 +1770,8 @@ namespace PeachPDF.PdfSharpCore.Pdf
             get
             {
 #if true
-                return String.Format(CultureInfo.InvariantCulture, "dictionary({0},[{1}])={2}", 
-                    ObjectID.DebuggerDisplay, 
+                return String.Format(CultureInfo.InvariantCulture, "dictionary({0},[{1}])={2}",
+                    ObjectID.DebuggerDisplay,
                     Elements.Count,
                     _elements.DebuggerDisplay);
 #else

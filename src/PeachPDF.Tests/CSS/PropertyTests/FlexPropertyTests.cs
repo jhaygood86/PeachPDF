@@ -1,6 +1,4 @@
-using System.Linq;
 using PeachPDF.CSS;
-using Xunit;
 
 namespace PeachPDF.Tests.CSS.PropertyTests
 {

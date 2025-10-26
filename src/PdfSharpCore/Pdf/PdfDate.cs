@@ -27,9 +27,9 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachPDF.PdfSharpCore.Pdf.IO;
 using System;
 using System.Diagnostics;
-using PeachPDF.PdfSharpCore.Pdf.IO;
 
 namespace PeachPDF.PdfSharpCore.Pdf
 {

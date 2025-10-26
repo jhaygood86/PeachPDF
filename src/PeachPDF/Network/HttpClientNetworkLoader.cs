@@ -10,7 +10,7 @@ namespace PeachPDF.Network
 {
     public class HttpClientNetworkLoader(HttpClient httpClient, Uri? primaryContentsUri) : RNetworkLoader
     {
-        public HttpClientNetworkLoader(HttpClient httpClient, string primaryContentsUri) 
+        public HttpClientNetworkLoader(HttpClient httpClient, string primaryContentsUri)
             : this(httpClient, new Uri(primaryContentsUri))
         {
 

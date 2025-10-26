@@ -40,7 +40,7 @@ namespace PeachPDF.CSS
         {
             var options = new IPropertyValue[_labels.Length];
 
-            for(var i = 0; i < _labels.Length; i++)
+            for (var i = 0; i < _labels.Length; i++)
                 options[i] = _converter.Construct(properties.Where(m => m.Name == _labels[i]).ToArray());
 
             return options.All(opt => opt != null)

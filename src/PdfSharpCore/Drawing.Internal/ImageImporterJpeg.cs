@@ -27,8 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using System;
 using PeachPDF.PdfSharpCore.Pdf;
+using System;
 
 namespace PeachPDF.PdfSharpCore.Drawing.Internal
 {

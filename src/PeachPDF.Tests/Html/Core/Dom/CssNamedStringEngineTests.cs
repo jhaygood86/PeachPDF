@@ -1,3 +1,5 @@
+using PeachPDF.Adapters;
+using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 
@@ -177,9 +179,122 @@ namespace PeachPDF.Tests.Html.Core.Dom
             Assert.Equal(string.Empty, result);
         }
 
+        [Fact]
+        public void ApplyStringSet_WithStringFunction_RetrievesNamedString()
+        {
+            // Arrange
+            var parentBox = CreateTestBox();
+            parentBox.NamedStrings["chapter"] = new NamedString("chapter", "Chapter 1");
+
+            var box = new CssBox(parentBox, null);
+            box.StringSet = "heading string(chapter)";
+
+            // Act
+            CssNamedStringEngine.ApplyStringSet(box);
+
+            // Assert
+            Assert.Single(box.NamedStrings);
+            Assert.Equal("Chapter 1", box.NamedStrings["heading"].Value);
+        }
+
+        [Fact]
+        public void ApplyStringSet_WithStringFunctionFirst_RetrievesFirstAssignment()
+        {
+            // Arrange
+            var grandParentBox = CreateTestBox();
+            grandParentBox.NamedStrings["chapter"] = new NamedString("chapter", "First");
+
+            var parentBox = new CssBox(grandParentBox, null);
+            parentBox.NamedStrings["chapter"] = new NamedString("chapter", "Second");
+
+            var box = new CssBox(parentBox, null);
+            box.StringSet = "heading string(chapter, first)";
+
+            // Act
+            CssNamedStringEngine.ApplyStringSet(box);
+
+            // Assert
+            Assert.Single(box.NamedStrings);
+            Assert.Equal("First", box.NamedStrings["heading"].Value);
+        }
+
+        [Fact]
+        public void ApplyStringSet_WithStringFunctionLast_RetrievesLastAssignment()
+        {
+            // Arrange
+            var grandParentBox = CreateTestBox();
+            grandParentBox.NamedStrings["chapter"] = new NamedString("chapter", "First");
+
+            var parentBox = new CssBox(grandParentBox, null);
+            parentBox.NamedStrings["chapter"] = new NamedString("chapter", "Second");
+
+            var box = new CssBox(parentBox, null);
+            box.StringSet = "heading string(chapter, last)";
+
+            // Act
+            CssNamedStringEngine.ApplyStringSet(box);
+
+            // Assert
+            Assert.Single(box.NamedStrings);
+            Assert.Equal("Second", box.NamedStrings["heading"].Value);
+        }
+
+        [Fact]
+        public void ApplyStringSet_WithStringFunctionAndStringLiteral_ConcatenatesCorrectly()
+        {
+            // Arrange
+            var parentBox = CreateTestBox();
+            parentBox.NamedStrings["chapter"] = new NamedString("chapter", "Introduction");
+
+            var box = new CssBox(parentBox, null);
+            box.StringSet = "heading \"Chapter: \" string(chapter)";
+
+            // Act
+            CssNamedStringEngine.ApplyStringSet(box);
+
+            // Assert
+            Assert.Single(box.NamedStrings);
+            Assert.Equal("Chapter: Introduction", box.NamedStrings["heading"].Value);
+        }
+
+        [Fact]
+        public void ApplyStringSet_WithStringFunctionNotFound_ReturnsEmptyString()
+        {
+            // Arrange
+            var box = CreateTestBox();
+            box.StringSet = "heading string(nonexistent)";
+
+            // Act
+            CssNamedStringEngine.ApplyStringSet(box);
+
+            // Assert
+            Assert.Single(box.NamedStrings);
+            Assert.Equal(string.Empty, box.NamedStrings["heading"].Value);
+        }
+
         private static CssBox CreateTestBox(HtmlTag? tag = null)
         {
             return new CssBox(null, tag);
+        }
+
+        private CssBox CreateBox()
+        {
+            var tag = new HtmlTag("div", false, new Dictionary<string, string>());
+            return new CssBox(null, tag);
+        }
+
+        private CssBox CreateBox(HtmlContainerInt container)
+        {
+            var tag = new HtmlTag("div", false, new Dictionary<string, string>());
+            var box = new CssBox(null, tag);
+            box.HtmlContainer = container;
+            return box;
+        }
+
+        private HtmlContainerInt CreateContainer()
+        {
+            var adapter = new PdfSharpAdapter();
+            return new HtmlContainerInt(adapter);
         }
     }
 }

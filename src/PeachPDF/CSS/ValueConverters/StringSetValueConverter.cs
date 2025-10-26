@@ -16,10 +16,11 @@ namespace PeachPDF.CSS
 
         public StringSetValueConverter()
         {
-            // Content list can contain: strings, counter(), counters(), content(), attr()
+            // Content list can contain: strings, counter(), counters(), content(), attr(), string()
             _contentListItemConverter = Converters.StringConverter
                 .Or(Converters.CounterConverter)
                 .Or(new ContentFunctionConverter())
+                .Or(new StringFunctionConverter())
                 .Or(Converters.AttrConverter);
         }
 

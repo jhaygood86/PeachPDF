@@ -1,7 +1,5 @@
 namespace PeachPDF.CSS
 {
-    using static Converters;
-
     /// <summary>
     /// Represents the CSS string-set property from CSS Generated Content for Paged Media Module.
     /// Syntax: string-set: [ &lt;custom-ident&gt; &lt;content-list&gt; ]# | none

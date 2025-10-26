@@ -32,7 +32,8 @@ namespace PeachPDF.CSS
         public void ReplaceChild(IStylesheetNode oldChild, IStylesheetNode newChild)
         {
             for (var i = 0; i < _children.Count; i++)
-            {   if (ReferenceEquals(oldChild, _children[i]))
+            {
+                if (ReferenceEquals(oldChild, _children[i]))
                 {
                     Teardown(oldChild);
                     Setup(newChild);

@@ -35,7 +35,7 @@ namespace PeachPDF.Html.Core
     /// The max width and height of the rendered html.<br/>
     /// The max width will effect the html layout wrapping lines, resize images and tables where possible.<br/>
     /// The max height does NOT effect layout, but will not render outside it (clip).<br/>
-    /// <see cref="ActualSize"/> can exceed the max size by layout restrictions (unwrap-able line, set image size, etc.).<br/>
+    /// <see cref="ActualSize"/> can be exceed the max size by layout restrictions (unwrap-able line, set image size, etc.).<br/>
     /// Set zero for unlimited (width/height separately).<br/>
     /// </para>
     /// <para>
@@ -102,6 +102,12 @@ namespace PeachPDF.Html.Core
         /// </summary>
         private double _marginRight;
 
+        /// <summary>
+        /// Document-level named string storage for CSS GCPM string-set property.
+        /// Stores named strings in document order to support first/last retrieval.
+        /// </summary>
+        private readonly List<NamedString> _namedStrings = new();
+
         #endregion
 
 
@@ -113,7 +119,7 @@ namespace PeachPDF.Html.Core
             ArgumentNullException.ThrowIfNull(adapter);
 
             Adapter = adapter;
-            CssParser = new CssParser(adapter,this);
+            CssParser = new CssParser(adapter, this);
         }
 
         /// <summary>
@@ -135,6 +141,30 @@ namespace PeachPDF.Html.Core
         /// Gets or sets a value indicating if anti-aliasing should be avoided for geometry like backgrounds and borders (default - false).
         /// </summary>
         public bool AvoidGeometryAntialias { get; set; }
+
+        /// <summary>
+        /// Gets the document-level named strings in document order.
+        /// Used by CSS GCPM string-set and string() functions.
+        /// </summary>
+        internal IReadOnlyList<NamedString> NamedStrings => _namedStrings;
+
+        /// <summary>
+        /// Registers a named string at the document level in document order.
+        /// Used by CSS GCPM string-set property.
+        /// </summary>
+        /// <param name="namedString">The named string to register</param>
+        internal void RegisterNamedString(NamedString namedString)
+        {
+            _namedStrings.Add(namedString);
+        }
+
+        /// <summary>
+        /// Clears all document-level named strings.
+        /// </summary>
+        internal void ClearNamedStrings()
+        {
+            _namedStrings.Clear();
+        }
 
         /// <summary>
         /// The scroll offset of the html.<br/>
@@ -238,7 +268,7 @@ namespace PeachPDF.Html.Core
             CssData = baseCssData ?? await Adapter.GetDefaultCssData();
 
             DomParser parser = new(CssParser);
-            (Root,CssData) = await parser.GenerateCssTree(htmlSource, this, CssData);
+            (Root, CssData) = await parser.GenerateCssTree(htmlSource, this, CssData);
         }
 
         /// <summary>
@@ -250,6 +280,7 @@ namespace PeachPDF.Html.Core
 
             Root.Dispose();
             Root = null;
+            ClearNamedStrings();
         }
 
         /// <summary>
@@ -306,6 +337,34 @@ namespace PeachPDF.Html.Core
                 Root.Size = new RSize((int)Math.Ceiling(ActualSize.Width), 0);
                 ActualSize = RSize.Empty;
                 await Root.PerformLayout(g);
+            }
+
+            // After layout, re-apply content to pseudo-elements now that named strings are set
+            ReapplyPseudoElementContent(Root);
+        }
+
+        /// <summary>
+        /// Recursively re-applies content to pseudo-elements after layout completes.
+        /// This ensures pseudo-elements can access named strings set during layout.
+        /// </summary>
+        private void ReapplyPseudoElementContent(CssBox box)
+        {
+            foreach (var childBox in box.Boxes)
+            {
+                if (childBox.IsPseudoElement && !string.IsNullOrEmpty(childBox.Content) && childBox.Content != CssConstants.None && childBox.Content != CssConstants.Normal)
+                {
+                    // Check if content contains string() function
+                    if (childBox.Content.Contains("string("))
+                    {
+                        CssContentEngine.ApplyContent(childBox);
+                        // Re-parse words after content changes
+                        if (!string.IsNullOrEmpty(childBox.Text))
+                        {
+                            childBox.ParseToWords();
+                        }
+                    }
+                }
+                ReapplyPseudoElementContent(childBox);
             }
         }
 

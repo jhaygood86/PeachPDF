@@ -194,7 +194,7 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.FlexBasis, () => new FlexBasisProperty(), true);
             AddLonghand(PropertyNames.FlexDirection, () => new FlexDirectionProperty());
             AddShorthand(PropertyNames.FlexFlow, () => new FlexFlowProperty(),
-                PropertyNames.FlexDirection, 
+                PropertyNames.FlexDirection,
                 PropertyNames.FlexWrap);
             AddLonghand(PropertyNames.FlexGrow, () => new FlexGrowProperty());
             AddLonghand(PropertyNames.FlexShrink, () => new FlexShrinkProperty());
@@ -218,13 +218,13 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.FontStretch, () => new FontStretchProperty(), true, true);
 
             AddShorthand(PropertyNames.Gap, () => new GapProperty(),
-                PropertyNames.RowGap, 
+                PropertyNames.RowGap,
                 PropertyNames.ColumnGap);
 
             AddLonghand(PropertyNames.Height, () => new HeightProperty(), true);
-            
+
             AddLonghand(PropertyNames.JustifyContent, () => new JustifyContentProperty());
-            
+
             AddLonghand(PropertyNames.Left, () => new LeftProperty(), true);
             AddLonghand(PropertyNames.LetterSpacing, () => new LetterSpacingProperty());
             AddLonghand(PropertyNames.LineHeight, () => new LineHeightProperty(), true);

@@ -10,10 +10,10 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using System;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
+using System;
 
 namespace PeachPDF.Html.Core.Handlers
 {

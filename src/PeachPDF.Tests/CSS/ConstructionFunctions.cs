@@ -1,7 +1,7 @@
 namespace PeachPDF.Tests.CSS
 {
     using PeachPDF.CSS;
-using System.Collections.Generic;
+    using System.Collections.Generic;
     using Xunit;
 
     public class CssConstructionFunctions

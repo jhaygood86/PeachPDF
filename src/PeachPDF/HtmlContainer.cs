@@ -14,12 +14,12 @@ using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Utils;
+using PeachPDF.Network;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Utilities;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using PeachPDF.Network;
 
 namespace PeachPDF
 {
@@ -88,7 +88,8 @@ namespace PeachPDF
             internal set => HtmlContainerInt.ActualSize = Utils.Convert(value, PixelsPerPoint);
         }
 
-        public XSize PageSize {
+        public XSize PageSize
+        {
             get => Utils.Convert(HtmlContainerInt.PageSize, PixelsPerPoint);
             set => HtmlContainerInt.PageSize = Utils.Convert(value, PixelsPerPoint);
         }

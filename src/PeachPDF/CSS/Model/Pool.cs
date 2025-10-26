@@ -23,8 +23,8 @@ namespace PeachPDF.CSS
         {
             lock (Lock)
             {
-                return Selector.Count == 0 
-                    ? new SelectorConstructor(attributeSelector, pseudoClassSelector, pseudoElementSelector) 
+                return Selector.Count == 0
+                    ? new SelectorConstructor(attributeSelector, pseudoClassSelector, pseudoElementSelector)
                     : Selector.Pop().Reset(attributeSelector, pseudoClassSelector, pseudoElementSelector);
             }
         }
@@ -33,7 +33,7 @@ namespace PeachPDF.CSS
         {
             lock (Lock)
             {
-                return Value.Count == 0 
+                return Value.Count == 0
                     ? new ValueBuilder()
                     : Value.Pop().Reset();
             }

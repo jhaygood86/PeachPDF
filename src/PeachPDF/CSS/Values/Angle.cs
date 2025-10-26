@@ -121,9 +121,9 @@ namespace PeachPDF.CSS
         {
             return Type switch
             {
-                Unit.Deg => (float) (Math.PI / 180.0 * Value),
-                Unit.Grad => (float) (Math.PI / 200.0 * Value),
-                Unit.Turn => (float) (2.0 * Math.PI * Value),
+                Unit.Deg => (float)(Math.PI / 180.0 * Value),
+                Unit.Grad => (float)(Math.PI / 200.0 * Value),
+                Unit.Turn => (float)(2.0 * Math.PI * Value),
                 _ => Value
             };
         }
@@ -132,9 +132,9 @@ namespace PeachPDF.CSS
         {
             return Type switch
             {
-                Unit.Deg => (float) (Value / 360.0),
-                Unit.Grad => (float) (Value / 400.0),
-                Unit.Rad => (float) (Value / (2.0 * Math.PI)),
+                Unit.Deg => (float)(Value / 360.0),
+                Unit.Grad => (float)(Value / 400.0),
+                Unit.Rad => (float)(Value / (2.0 * Math.PI)),
                 _ => Value
             };
         }
@@ -190,7 +190,7 @@ namespace PeachPDF.CSS
         /// <returns>The integer value of the hashcode.</returns>
         public override int GetHashCode()
         {
-            return (int) Value;
+            return (int)Value;
         }
 
         public override string ToString()

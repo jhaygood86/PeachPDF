@@ -27,8 +27,6 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using System;
-
 namespace PeachPDF.PdfSharpCore
 {
     /// <summary>
@@ -133,7 +131,7 @@ namespace PeachPDF.PdfSharpCore
         /// </summary>
 // ReSharper disable RedundantNameQualifier
         public static int BuildNumber = (System.DateTime.Now - new System.DateTime(2005, 1, 1)).Days;
-// ReSharper restore RedundantNameQualifier
+        // ReSharper restore RedundantNameQualifier
 #endif
 
         /// <summary>

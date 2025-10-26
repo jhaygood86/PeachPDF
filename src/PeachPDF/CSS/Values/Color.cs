@@ -134,7 +134,7 @@ namespace PeachPDF.CSS
                     break;
             }
 
-            return new Color((byte) r, (byte) g, (byte) b, (byte) a);
+            return new Color((byte)r, (byte)g, (byte)b, (byte)a);
         }
 
         public static bool TryFromHex(string color, out Color value)
@@ -175,14 +175,14 @@ namespace PeachPDF.CSS
                 var r = chars[0 * n + s].FromHex();
                 var g = chars[1 * n + s].FromHex();
                 var b = chars[2 * n + s].FromHex();
-                return new Color((byte) r, (byte) g, (byte) b);
+                return new Color((byte)r, (byte)g, (byte)b);
             }
             else
             {
                 var r = 16 * chars[0 * n + s].FromHex() + chars[0 * n + s + 1].FromHex();
                 var g = 16 * chars[1 * n + s].FromHex() + chars[1 * n + s + 1].FromHex();
                 var b = 16 * chars[2 * n + s].FromHex() + chars[2 * n + s + 1].FromHex();
-                return new Color((byte) r, (byte) g, (byte) b);
+                return new Color((byte)r, (byte)g, (byte)b);
             }
         }
 
@@ -220,7 +220,7 @@ namespace PeachPDF.CSS
                 blackness *= ratio;
             }
 
-            var p = (int) (6 * hue);
+            var p = (int)(6 * hue);
             var f = 6 * hue - p;
 
             if ((p & 0x01) != 0) f = 1 - f;
@@ -322,17 +322,17 @@ namespace PeachPDF.CSS
             var r = gamma * below.R + alpha * above.R;
             var g = gamma * below.G + alpha * above.G;
             var b = gamma * below.B + alpha * above.B;
-            return new Color((byte) r, (byte) g, (byte) b);
+            return new Color((byte)r, (byte)g, (byte)b);
         }
 
         private static byte Normalize(float value)
         {
-            return (byte) Math.Max(Math.Min(Math.Round(255 * value), 255), 0);
+            return (byte)Math.Max(Math.Min(Math.Round(255 * value), 255), 0);
         }
 
         private static byte Convert(float value)
         {
-            return (byte) Math.Round(255f * value);
+            return (byte)Math.Round(255f * value);
         }
 
         private static float HueToRgb(float m1, float m2, float h)

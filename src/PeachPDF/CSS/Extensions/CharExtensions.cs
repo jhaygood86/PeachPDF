@@ -12,7 +12,7 @@
 
         public static string ToHex(this char character)
         {
-            return ((int) character).ToString("x");
+            return ((int)character).ToString("x");
         }
 
         public static bool IsInRange(this char c, int lower, int upper)
@@ -65,7 +65,7 @@
 
         public static bool IsNonPrintable(this char c)
         {
-            return c is /*>= Symbols.Null and*/ <= Symbols.Backspace 
+            return c is /*>= Symbols.Null and*/ <= Symbols.Backspace
                 or >= Symbols.ShiftOut and <= Symbols.UnitSeparator
                 or >= Symbols.Delete and < Symbols.NonBreakingSpace;
         }

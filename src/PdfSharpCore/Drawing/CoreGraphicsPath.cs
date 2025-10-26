@@ -29,7 +29,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using PeachPDF.PdfSharpCore.Internal;
 
 namespace PeachPDF.PdfSharpCore.Drawing
 {

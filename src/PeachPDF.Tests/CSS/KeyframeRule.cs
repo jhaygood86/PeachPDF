@@ -1,10 +1,8 @@
 namespace PeachPDF.Tests.CSS
 {
-    using Xunit;
     using System.Linq;
-    
-    using PeachPDF.CSS;
-public class CssKeyframeRuleTests : CssConstructionFunctions
+    using Xunit;
+    public class CssKeyframeRuleTests : CssConstructionFunctions
     {
         [Fact]
         public void KeyframeRuleWithFromAndMarginLeft()

@@ -1,8 +1,9 @@
-﻿using System.Linq;
-using System.Text;
-using PeachPDF.CSS;
+﻿using PeachPDF.CSS;
+using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
+using System.Linq;
+using System.Text;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -51,6 +52,15 @@ namespace PeachPDF.Html.Core.Dom
                             }
                             break;
                         }
+                    case FunctionToken { Data: "string" } stringFunctionToken:
+                        {
+                            var stringValue = ExtractStringValue(cssBox, stringFunctionToken);
+                            if (!string.IsNullOrEmpty(stringValue))
+                            {
+                                contentText.Append(stringValue);
+                            }
+                            break;
+                        }
                     case FunctionToken { Data: "attr" } attrFunctionToken:
                         {
                             // Handle attr() function
@@ -77,6 +87,99 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             cssBox.Text = contentText.ToString();
+        }
+
+        private static string? ExtractStringValue(CssBox cssBox, FunctionToken stringFunctionToken)
+        {
+            var arguments = stringFunctionToken.ArgumentTokens
+   .Where(t => t.Type != TokenType.Comma && t.Type != TokenType.Whitespace)
+        .ToArray();
+
+            if (arguments.Length == 0)
+            {
+                return null;
+            }
+
+            // First argument is the named string identifier
+            if (arguments[0] is not KeywordToken nameToken)
+            {
+                return null;
+            }
+
+            var stringName = nameToken.Data;
+
+            // Second argument is the optional keyword (first, start, last, first-except)
+            // Default is "first"
+            var keyword = "first";
+            if (arguments.Length > 1 && arguments[1] is KeywordToken keywordToken)
+            {
+                keyword = keywordToken.Data.ToLowerInvariant();
+            }
+
+            // Use the CssNamedStringEngine to retrieve the named string
+            return GetNamedStringValue(cssBox, stringName, keyword);
+        }
+
+        private static string? GetNamedStringValue(CssBox cssBox, string name, string keyword)
+        {
+            // Get document-level named strings from the HTML container
+            if (cssBox.HtmlContainer != null)
+            {
+                var documentStrings = cssBox.HtmlContainer.NamedStrings;
+
+                // Filter to only this named string
+                NamedString? firstMatch = null;
+                NamedString? lastMatch = null;
+
+                foreach (var namedString in documentStrings)
+                {
+                    if (namedString.Name == name)
+                    {
+                        if (firstMatch == null)
+                        {
+                            firstMatch = namedString;
+                        }
+                        lastMatch = namedString;
+                    }
+                }
+
+                // Apply keyword logic
+                return keyword switch
+                {
+                    "first" => firstMatch?.Value ?? string.Empty,
+                    "start" => firstMatch?.Value ?? string.Empty, // TODO: Implement proper start logic (first on page)
+                    "last" => lastMatch?.Value ?? string.Empty,
+                    "first-except" => string.Empty, // TODO: Implement proper first-except logic
+                    _ => firstMatch?.Value ?? string.Empty
+                };
+            }
+
+            // Fallback to tree-based search if no container
+            var box = cssBox;
+            NamedString? nearestAssignment = null;
+            NamedString? farthestAssignment = null;
+
+            while (box != null)
+            {
+                if (box.NamedStrings.TryGetValue(name, out var namedString))
+                {
+                    if (nearestAssignment == null)
+                    {
+                        nearestAssignment = namedString;
+                    }
+                    farthestAssignment = namedString;
+                }
+                box = box.ParentBox;
+            }
+
+            return keyword switch
+            {
+                "first" => farthestAssignment?.Value ?? string.Empty,
+                "start" => farthestAssignment?.Value ?? string.Empty,
+                "last" => nearestAssignment?.Value ?? string.Empty,
+                "first-except" => string.Empty,
+                _ => farthestAssignment?.Value ?? string.Empty
+            };
         }
 
         private static string? ExtractContentValue(CssBox cssBox, FunctionToken contentFunctionToken)

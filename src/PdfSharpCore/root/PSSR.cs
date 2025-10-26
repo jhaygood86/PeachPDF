@@ -27,13 +27,13 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using System;
-using System.Diagnostics;
-using System.Resources;
-using System.Reflection;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Internal;
 using PeachPDF.PdfSharpCore.Pdf;
+using System;
+using System.Diagnostics;
+using System.Reflection;
+using System.Resources;
 
 #pragma warning disable 1591
 

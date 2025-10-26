@@ -16,7 +16,7 @@
             Elements.SetObject(Keys.Params, paramsDictionary);
         }
 
-        public PdfEmbeddedFile(PdfDocument document, byte[] bytes, string checksum = null) 
+        public PdfEmbeddedFile(PdfDocument document, byte[] bytes, string checksum = null)
             : this(document)
         {
             this.CreateStreamAndSetProperties(bytes, checksum);
@@ -38,7 +38,7 @@
         {
             get { return Elements.GetName(Keys.Subtype); }
             set { Elements.SetName(Keys.Subtype, value); }
-        }        
+        }
 
         // TODO : Add properties for the subdictionnary Params and the subsubdictionnary Mac
 

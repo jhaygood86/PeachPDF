@@ -28,10 +28,10 @@
 #endregion
 
 using System;
-using System.Diagnostics;
 using System.Collections.Generic;
-using System.Reflection;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 
 namespace PeachPDF.PdfSharpCore.Pdf
 {
@@ -186,7 +186,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     {
         public DictionaryMeta([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields)] Type type)
         {
-            #if NET5_0_OR_GREATER
+#if NET5_0_OR_GREATER
             FieldInfo[] fields = type.GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
             foreach (FieldInfo field in fields)
             {
@@ -198,7 +198,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
                     _keyDescriptors[descriptor.KeyValue] = descriptor;
                 }
             }
-            #else
+#else
             // Rewritten for WinRT.
             CollectKeyDescriptors(type);
             //var fields = type.GetRuntimeFields();  // does not work
@@ -213,10 +213,10 @@ namespace PeachPDF.PdfSharpCore.Pdf
             //        _keyDescriptors[descriptor.KeyValue] = descriptor;
             //    }
             //}
-            #endif
+#endif
         }
 
-        #if !NET5_0_OR_GREATER
+#if !NET5_0_OR_GREATER
         // Background: The function GetRuntimeFields gets constant fields only for the specified type,
         // not for its base types. So we have to walk recursively through base classes.
         // The docmentation says full trust for the immediate caller is required for property BaseClass.
@@ -239,7 +239,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
             if (type != typeof(object) && type != typeof(PdfObject))
                 CollectKeyDescriptors(type);
         }
-        #endif
+#endif
 
         /// <summary>
         /// Gets the KeyDescriptor of the specified key, or null if no such descriptor exits.

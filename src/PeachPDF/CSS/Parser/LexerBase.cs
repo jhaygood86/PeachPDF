@@ -113,7 +113,7 @@ namespace PeachPDF.CSS
             var c = NormalizeBackward(Source[Source.Index - 1]);
             if (c == Symbols.LineFeed)
             {
-                Column = _columns.Count != 0 ? _columns.Pop() : (ushort) 1;
+                Column = _columns.Count != 0 ? _columns.Pop() : (ushort)1;
                 Line--;
                 Current = c;
             }
