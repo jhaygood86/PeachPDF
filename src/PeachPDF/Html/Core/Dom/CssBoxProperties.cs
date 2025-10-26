@@ -233,6 +233,7 @@ namespace PeachPDF.Html.Core.Dom
         public string CounterIncrement { get; set; } = CssConstants.None;
         public string CounterReset { get; set; } = CssConstants.None;
         public string CounterSet { get; set; } = CssConstants.None;
+        public string StringSet { get; set; } = CssConstants.None;
 
         public string MarginBottom { get; set; } = "0";
 
