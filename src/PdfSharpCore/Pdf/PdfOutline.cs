@@ -29,15 +29,15 @@
 
 // Review: Under construction - StL/14-10-05
 
+using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PdfSharpCore.Pdf.Actions;
+using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using PeachPDF.PdfSharpCore.Pdf.Internal;
+using PeachPDF.PdfSharpCore.Pdf.IO;
 using System;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
-using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Pdf.Actions;
-using PeachPDF.PdfSharpCore.Pdf.Advanced;
-using PeachPDF.PdfSharpCore.Pdf.IO;
-using PeachPDF.PdfSharpCore.Pdf.Internal;
 
 namespace PeachPDF.PdfSharpCore.Pdf
 {
@@ -360,10 +360,10 @@ namespace PeachPDF.PdfSharpCore.Pdf
                     }
                     else if (dest is PdfReference detRef)
                     {
-                      // Replace Action with /Dest entry.
-                      Elements.Remove(Keys.A);
-                      Elements.Add(Keys.Dest, detRef.Value);
-                      SplitDestinationPage((PdfArray)detRef.Value);
+                        // Replace Action with /Dest entry.
+                        Elements.Remove(Keys.A);
+                        Elements.Add(Keys.Dest, detRef.Value);
+                        SplitDestinationPage((PdfArray)detRef.Value);
                     }
                     else
                     {
@@ -389,8 +389,8 @@ namespace PeachPDF.PdfSharpCore.Pdf
 #pragma warning disable 162
 
             // The destination page may not yet transformed to PdfPage.
-            PdfDictionary destPage = (destination.Elements[0] is PdfInteger) ? 
-                destination.Owner.Pages[((PdfInteger)destination.Elements[0]).Value] : 
+            PdfDictionary destPage = (destination.Elements[0] is PdfInteger) ?
+                destination.Owner.Pages[((PdfInteger)destination.Elements[0]).Value] :
                 (PdfDictionary)((PdfReference)destination.Elements[0]).Value;
             PdfPage page = destPage as PdfPage;
             if (page == null)

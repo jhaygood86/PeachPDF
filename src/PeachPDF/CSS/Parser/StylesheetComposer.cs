@@ -504,7 +504,7 @@ namespace PeachPDF.CSS
                 switch (token.Type)
                 {
                     case TokenType.Percentage:
-                        keys.Add(new Percent(((UnitToken) token).Value));
+                        keys.Add(new Percent(((UnitToken)token).Value));
                         break;
                     case TokenType.Ident when token.Data.Is(Keywords.From):
                         keys.Add(Percent.Zero);
@@ -618,9 +618,9 @@ namespace PeachPDF.CSS
                 else
                 {
                     var sourceProperty = CreateDeclarationWith(PropertyFactory.Instance.Create, ref token);
-                    var resolvedProperties = new[] {sourceProperty};
+                    var resolvedProperties = new[] { sourceProperty };
 
-                    if (sourceProperty is {HasValue: true})
+                    if (sourceProperty is { HasValue: true })
                     {
                         // For shorthand properties we need to first find out what alternate set of properties they will
                         // end up resolving into so that we can compare them with their previously parsed counterparts (if any)
@@ -707,9 +707,9 @@ namespace PeachPDF.CSS
                         RaiseErrorOccurred(ParseError.ValueMissing, token.Position);
                     else if (property != null)
                     {
-                        if(property.TrySetValue(value))
+                        if (property.TrySetValue(value))
                             property.IsImportant = important;
-                        else if(_parser.Options.AllowInvalidValues)
+                        else if (_parser.Options.AllowInvalidValues)
                         {
                             _nodes.Pop();
 
@@ -719,7 +719,7 @@ namespace PeachPDF.CSS
                             _nodes.Push(property);
                         }
                     }
-                        
+
 
                     ParseComments(ref token);
                 }
@@ -1052,7 +1052,7 @@ namespace PeachPDF.CSS
             {
                 var property = CreateDeclarationWith(createProperty, ref token);
 
-                if (property is {HasValue: true})
+                if (property is { HasValue: true })
                 {
                     rule.SetProperty(property);
                 }
@@ -1188,7 +1188,7 @@ namespace PeachPDF.CSS
             var result = value.ToPool();
 
             //var node = result as StylesheetNode;
-            var node = (StylesheetNode) result;
+            var node = (StylesheetNode)result;
 
             if (node != null)
             {

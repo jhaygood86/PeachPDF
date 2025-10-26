@@ -134,7 +134,7 @@ namespace PeachPDF.PdfSharpCore.Utils
             {
                 return ResolveFontConfig().Where(x => x.EndsWith(".ttf", StringComparison.OrdinalIgnoreCase)).ToArray();
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
 #if DEBUG
                 Console.Error.WriteLine(ex.ToString());

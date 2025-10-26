@@ -27,10 +27,10 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using System;
-using System.Collections.Generic;
-using System.Collections;
 using PeachPDF.PdfSharpCore.Drawing;
+using System;
+using System.Collections;
+using System.Collections.Generic;
 
 // Review: CountOpen does not work. - StL/14-10-05
 

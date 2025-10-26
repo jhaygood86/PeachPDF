@@ -27,10 +27,10 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachPDF.PdfSharpCore.Pdf.Internal;
 using System;
 using System.Diagnostics;
 using System.IO;
-using PeachPDF.PdfSharpCore.Pdf.Internal;
 
 namespace PeachPDF.PdfSharpCore.Pdf.Content
 {
@@ -172,18 +172,18 @@ namespace PeachPDF.PdfSharpCore.Pdf.Content
                 case CharCat.Delimiter:
                     break;
 
-                //case CharCat.Character:
-                //  if (this.layout == PdfWriterLayout.Verbose)
-                //  {
-                //    //if (cat == CharCat.Character || ch == '/')
-                //    this.stream.WriteByte((byte)' ');
-                //  }
-                //  else
-                //  {
-                //    if (cat == CharCat.Character)
-                //      this.stream.WriteByte((byte)' ');
-                //  }
-                //  break;
+                    //case CharCat.Character:
+                    //  if (this.layout == PdfWriterLayout.Verbose)
+                    //  {
+                    //    //if (cat == CharCat.Character || ch == '/')
+                    //    this.stream.WriteByte((byte)' ');
+                    //  }
+                    //  else
+                    //  {
+                    //    if (cat == CharCat.Character)
+                    //      this.stream.WriteByte((byte)' ');
+                    //  }
+                    //  break;
             }
         }
 

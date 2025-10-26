@@ -27,11 +27,11 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using System;
-using System.Diagnostics;
+using PeachPDF.PdfSharpCore.Pdf.Internal;
 using PeachPDF.PdfSharpCore.Pdf.IO;
 using PeachPDF.PdfSharpCore.Pdf.Security;
-using PeachPDF.PdfSharpCore.Pdf.Internal;
+using System;
+using System.Diagnostics;
 
 namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 {

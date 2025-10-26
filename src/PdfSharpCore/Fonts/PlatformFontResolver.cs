@@ -27,13 +27,6 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using System;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Xml;
 using PeachPDF.PdfSharpCore.Drawing;
 
 #pragma warning disable 1591

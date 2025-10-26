@@ -1,6 +1,5 @@
 ﻿#nullable disable
 
-using System;
 using System.IO;
 
 namespace PeachPDF.CSS
@@ -27,7 +26,7 @@ namespace PeachPDF.CSS
 
         public string Value => HasValue ? _tokenValue.Text : string.Empty;
 
-        public bool HasValue => _tokenValue is {Count: > 0};
+        public bool HasValue => _tokenValue is { Count: > 0 };
 
         public override void ToCss(TextWriter writer, IStyleFormatter formatter)
         {

@@ -10,7 +10,7 @@ namespace PeachPDF.Network
 
         public RUri(string uriString)
         {
-            ArgumentNullException.ThrowIfNull(uriString,nameof(uriString));
+            ArgumentNullException.ThrowIfNull(uriString, nameof(uriString));
 
             if (uriString.StartsWith("data:"))
             {

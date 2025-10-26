@@ -27,9 +27,6 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using System;
-using System.ComponentModel;
-using PeachPDF.PdfSharpCore.Internal;
 // ReSharper disable RedundantNameQualifier because it is required for hybrid build
 
 namespace PeachPDF.PdfSharpCore.Drawing

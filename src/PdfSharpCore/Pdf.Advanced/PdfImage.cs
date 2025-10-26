@@ -28,12 +28,11 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PdfSharpCore.Pdf.Filters;
 using System;
 using System.Diagnostics;
 using System.IO;
-using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Drawing.Internal;
-using PeachPDF.PdfSharpCore.Pdf.Filters;
 
 namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 {
@@ -205,8 +204,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 }
                 bigHeader = infoHeaderSize == 108;
                 if (ReadWord(imageBits, 26) != 1 ||
-                  (!hasAlpha && ReadWord(imageBits, bigHeader?30:28) != components * bits ||
-                   hasAlpha && ReadWord(imageBits, bigHeader?30:28) != (components + 1) * bits) ||
+                  (!hasAlpha && ReadWord(imageBits, bigHeader ? 30 : 28) != components * bits ||
+                   hasAlpha && ReadWord(imageBits, bigHeader ? 30 : 28) != (components + 1) * bits) ||
                   bigHeader ? ReadWord(imageBits, 32) != 0 : ReadDWord(imageBits, 30) != 0)
                 {
                     throw new NotImplementedException("ReadTrueColorMemoryBitmap: unsupported format #3");

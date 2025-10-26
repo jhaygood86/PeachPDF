@@ -53,14 +53,14 @@ namespace PeachPDF.Html.Adapters.Entities
         ///     structure.
         /// </param>
         public RSize(RSize size) : this(size.Width, size.Height)
-        {}
+        { }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="RSize" /> structure from the specified <see cref="RPoint" /> structure.
         /// </summary>
         /// <param name="pt">The <see cref="RPoint" /> structure from which to initialize this <see cref="RSize" /> structure.</param>
         public RSize(RPoint pt) : this(pt.X, pt.Y)
-        {}
+        { }
 
         /// <summary>
         ///     Gets a value that indicates whether this <see cref="RSize" /> structure has zero width and height.

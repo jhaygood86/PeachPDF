@@ -1,9 +1,9 @@
 namespace PeachPDF.Tests.CSS.PropertyTests
 {
     using PeachPDF.CSS;
-using Xunit;
     using System.Linq;
-    
+    using Xunit;
+
     public class CssCoordinatePropertyTests : CssConstructionFunctions
     {
         [Fact]

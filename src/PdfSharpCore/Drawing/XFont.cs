@@ -29,13 +29,13 @@
 
 // #??? Clean up
 
-using System;
-using System.Diagnostics;
-using System.Globalization;
-using System.ComponentModel;
 using PeachPDF.PdfSharpCore.Fonts;
 using PeachPDF.PdfSharpCore.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Pdf;
+using System;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Globalization;
 
 namespace PeachPDF.PdfSharpCore.Drawing
 {

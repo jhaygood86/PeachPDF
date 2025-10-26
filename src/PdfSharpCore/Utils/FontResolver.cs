@@ -44,7 +44,7 @@ namespace PeachPDF.PdfSharpCore.Utils
             }
 
             var isWindows = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows);
-            
+
             if (isWindows)
             {
                 fontDir = System.Environment.ExpandEnvironmentVariables(@"%SystemRoot%\Fonts");
@@ -54,14 +54,14 @@ namespace PeachPDF.PdfSharpCore.Utils
                 fontPaths.AddRange(systemFontPaths);
 
                 var appdataFontDir = System.Environment.ExpandEnvironmentVariables(@"%LOCALAPPDATA%\Microsoft\Windows\Fonts");
-                if(Directory.Exists(appdataFontDir))
+                if (Directory.Exists(appdataFontDir))
                 {
                     var appdataFontPaths = System.IO.Directory.GetFiles(appdataFontDir, "*.ttf", SearchOption.AllDirectories);
                     fontPaths.AddRange(appdataFontPaths);
                 }
 
                 SupportedFonts = fontPaths.ToArray();
-                
+
                 return;
             }
 
@@ -226,21 +226,21 @@ namespace PeachPDF.PdfSharpCore.Utils
                     case true when isItalic && family.FontFiles.TryGetValue(XFontStyle.BoldItalic, out var boldItalicFile):
                         return new FontResolverInfo(boldItalicFile.FontNameInvariantCulture);
                     case true:
-                    {
-                        if (family.FontFiles.TryGetValue(XFontStyle.Bold, out var boldFile))
-                            return new FontResolverInfo(boldFile.FontNameInvariantCulture);
-                        break;
-                    }
-                    default:
-                    {
-                        if (isItalic)
                         {
-                            if (family.FontFiles.TryGetValue(XFontStyle.Italic, out var italicFile))
-                                return new FontResolverInfo(italicFile.FontNameInvariantCulture);
+                            if (family.FontFiles.TryGetValue(XFontStyle.Bold, out var boldFile))
+                                return new FontResolverInfo(boldFile.FontNameInvariantCulture);
+                            break;
                         }
+                    default:
+                        {
+                            if (isItalic)
+                            {
+                                if (family.FontFiles.TryGetValue(XFontStyle.Italic, out var italicFile))
+                                    return new FontResolverInfo(italicFile.FontNameInvariantCulture);
+                            }
 
-                        break;
-                    }
+                            break;
+                        }
                 }
 
                 if (family.FontFiles.TryGetValue(XFontStyle.Regular, out var regularFile))

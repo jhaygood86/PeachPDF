@@ -29,8 +29,6 @@
 
 using System;
 using System.Diagnostics;
-using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Fonts;
 
 namespace PeachPDF.PdfSharpCore.Internal
 {

@@ -31,7 +31,6 @@ using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Internal;
 using System;
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.Text;
 
 namespace PeachPDF.PdfSharpCore.Fonts.OpenType

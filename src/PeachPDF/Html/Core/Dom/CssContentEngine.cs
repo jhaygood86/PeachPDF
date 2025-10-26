@@ -1,8 +1,8 @@
-﻿using System.Linq;
-using System.Text;
-using PeachPDF.CSS;
+﻿using PeachPDF.CSS;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
+using System.Linq;
+using System.Text;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -27,21 +27,21 @@ namespace PeachPDF.Html.Core.Dom
                         contentText.Append(stringToken.Data);
                         break;
                     case FunctionToken { Data: CssConstants.Counter } functionToken:
-                    {
-                        var arguments = functionToken.ArgumentTokens.ToArray();
-
-                        var counterName = (KeywordToken)arguments[0];
-                        var counter = CssCounterEngine.GetCounter(cssBox, counterName.Data);
-
-                        var counterValue = counter?.Value ?? 1;
-
-                        if (arguments.Length is 1)
                         {
-                            contentText.Append(counterValue);
-                        }
+                            var arguments = functionToken.ArgumentTokens.ToArray();
 
-                        break;
-                    }
+                            var counterName = (KeywordToken)arguments[0];
+                            var counter = CssCounterEngine.GetCounter(cssBox, counterName.Data);
+
+                            var counterValue = counter?.Value ?? 1;
+
+                            if (arguments.Length is 1)
+                            {
+                                contentText.Append(counterValue);
+                            }
+
+                            break;
+                        }
                 }
             }
 

@@ -14,7 +14,7 @@ namespace PeachPDF.CSS
         private const string CurrentDirectory = ".";
         private const string CurrentDirectoryAlternative = "%2e";
         private const string UpperDirectory = "..";
-        private static readonly string[] UpperDirectoryAlternatives = {"%2e%2e", ".%2e", "%2e."};
+        private static readonly string[] UpperDirectoryAlternatives = { "%2e%2e", ".%2e", "%2e." };
         private static readonly Url DefaultBase = new(string.Empty, string.Empty, string.Empty);
 
         private string _fragment;
@@ -803,18 +803,18 @@ namespace PeachPDF.CSS
                     case Symbols.ReverseSolidus:
                         break;
                     case Symbols.Dot:
-                        chars[count++] = (byte) hostName[i];
+                        chars[count++] = (byte)hostName[i];
                         break;
                     case Symbols.Percent:
                         if (i + 2 < n && hostName[i + 1].IsHex() && hostName[i + 2].IsHex())
                         {
                             var weight = hostName[i + 1].FromHex() * 16 + hostName[i + 2].FromHex();
-                            chars[count++] = (byte) weight;
+                            chars[count++] = (byte)weight;
                             i += 2;
                         }
                         else
                         {
-                            chars[count++] = (byte) Symbols.Percent;
+                            chars[count++] = (byte)Symbols.Percent;
                         }
 
                         break;
@@ -822,7 +822,7 @@ namespace PeachPDF.CSS
 
                         if (Symbols.Punycode.TryGetValue(hostName[i], out var chr))
                         {
-                            chars[count++] = (byte) chr;
+                            chars[count++] = (byte)chr;
                         }
                         else if (hostName[i].IsAlphanumericAscii() == false)
                         {
@@ -838,7 +838,7 @@ namespace PeachPDF.CSS
                         }
                         else
                         {
-                            chars[count++] = (byte) char.ToLowerInvariant(hostName[i]);
+                            chars[count++] = (byte)char.ToLowerInvariant(hostName[i]);
                         }
 
                         break;

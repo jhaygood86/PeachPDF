@@ -27,8 +27,6 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using System.Collections.Generic;
-
 namespace PeachPDF.PdfSharpCore.Pdf.Internal
 {
 #if true_

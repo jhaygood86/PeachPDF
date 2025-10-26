@@ -17,7 +17,6 @@ using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
-using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;

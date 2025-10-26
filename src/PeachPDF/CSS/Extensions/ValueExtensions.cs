@@ -216,7 +216,7 @@ namespace PeachPDF.CSS
         {
             var element = value.OnlyOrDefault();
 
-            if (element != null && element.Type == TokenType.Number) return ((NumberToken) element).Value;
+            if (element != null && element.Type == TokenType.Number) return ((NumberToken)element).Value;
 
             return null;
         }
@@ -237,9 +237,9 @@ namespace PeachPDF.CSS
         {
             var element = value.OnlyOrDefault();
 
-            if (element != null && element.Type == TokenType.Number && ((NumberToken) element).IsInteger)
+            if (element != null && element.Type == TokenType.Number && ((NumberToken)element).IsInteger)
             {
-                return ((NumberToken) element).IntegerValue;
+                return ((NumberToken)element).IntegerValue;
             }
 
             return null;
@@ -286,13 +286,13 @@ namespace PeachPDF.CSS
             var enumerable = value as Token[] ?? value.ToArray();
             var element = enumerable.ToNaturalInteger();
 
-            if (element.HasValue) return (byte) Math.Min(element.Value, 255);
+            if (element.HasValue) return (byte)Math.Min(element.Value, 255);
 
             var percent = enumerable.ToPercent();
 
             if (!percent.HasValue) return null;
 
-            return (byte) (255f * percent.Value.NormalizedValue);
+            return (byte)(255f * percent.Value.NormalizedValue);
         }
 
         public static Angle? ToAngle(this IEnumerable<Token> value)
@@ -301,7 +301,7 @@ namespace PeachPDF.CSS
 
             if (element == null || element.Type != TokenType.Dimension) return null;
 
-            var token = (UnitToken) element;
+            var token = (UnitToken)element;
             var unit = Angle.GetUnit(token.Unit);
 
             if (unit != Angle.Unit.None) return new Angle(token.Value, unit);
@@ -332,14 +332,14 @@ namespace PeachPDF.CSS
                 switch (element.Type)
                 {
                     case TokenType.Dimension:
-                    {
-                        var token = (UnitToken) element;
-                        var unit = Length.GetUnit(token.Unit);
+                        {
+                            var token = (UnitToken)element;
+                            var unit = Length.GetUnit(token.Unit);
 
-                        if (unit != Length.Unit.None) return new Length(token.Value, unit);
-                        break;
-                    }
-                    case TokenType.Number when ((NumberToken) element).Value == 0f:
+                            if (unit != Length.Unit.None) return new Length(token.Value, unit);
+                            break;
+                        }
+                    case TokenType.Number when ((NumberToken)element).Value == 0f:
                         return Length.Zero;
                 }
             }
@@ -353,7 +353,7 @@ namespace PeachPDF.CSS
 
             if (element == null || element.Type != TokenType.Dimension) return null;
 
-            var token = (UnitToken) element;
+            var token = (UnitToken)element;
             var unit = Resolution.GetUnit(token.Unit);
 
             if (unit != Resolution.Unit.None) return new Resolution(token.Value, unit);
@@ -367,7 +367,7 @@ namespace PeachPDF.CSS
 
             if (element == null || element.Type != TokenType.Dimension) return null;
 
-            var token = (UnitToken) element;
+            var token = (UnitToken)element;
             var unit = Time.GetUnit(token.Unit);
 
             if (unit != Time.Unit.None) return new Time(token.Value, unit);
@@ -491,7 +491,7 @@ namespace PeachPDF.CSS
 
             if (element != null && element.Type == TokenType.Ident) return Color.FromName(element.Data);
 
-            if (element != null && element.Type == TokenType.Color && !((ColorToken) element).IsValid)
+            if (element != null && element.Type == TokenType.Color && !((ColorToken)element).IsValid)
             {
                 return Color.FromHex(element.Data);
             }

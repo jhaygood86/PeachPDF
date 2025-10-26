@@ -27,16 +27,16 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes;
+using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using PeachPDF.PdfSharpCore.Pdf.IO;
+using PeachPDF.PdfSharpCore.Pdf.IO.enums;
+using PeachPDF.PdfSharpCore.Utils;
+using SixLabors.ImageSharp.PixelFormats;
 using System;
 using System.Diagnostics;
 using System.IO;
-using PeachPDF.PdfSharpCore.Pdf.IO;
-using PeachPDF.PdfSharpCore.Pdf.Advanced;
-using MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes;
-using PeachPDF.PdfSharpCore.Pdf.IO.enums;
 using static MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes.ImageSource;
-using PeachPDF.PdfSharpCore.Utils;
-using SixLabors.ImageSharp.PixelFormats;
 
 namespace PeachPDF.PdfSharpCore.Drawing
 {
@@ -95,7 +95,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         {
             // Create a dummy unique path.
             _path = "*" + Guid.NewGuid().ToString("B");
-            if (ImageSource.ImageSourceImpl == null) 
+            if (ImageSource.ImageSourceImpl == null)
                 ImageSource.ImageSourceImpl = new ImageSharpImageSource<Rgba32>();
             _source = ImageSource.FromStream(_path, stream);
             Initialize();

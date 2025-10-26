@@ -113,7 +113,7 @@ namespace PeachPDF.Html.Core
             ArgumentNullException.ThrowIfNull(adapter);
 
             Adapter = adapter;
-            CssParser = new CssParser(adapter,this);
+            CssParser = new CssParser(adapter, this);
         }
 
         /// <summary>
@@ -238,7 +238,7 @@ namespace PeachPDF.Html.Core
             CssData = baseCssData ?? await Adapter.GetDefaultCssData();
 
             DomParser parser = new(CssParser);
-            (Root,CssData) = await parser.GenerateCssTree(htmlSource, this, CssData);
+            (Root, CssData) = await parser.GenerateCssTree(htmlSource, this, CssData);
         }
 
         /// <summary>

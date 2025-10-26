@@ -27,14 +27,14 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Collections;
-using System.Globalization;
-using System.Text;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF.PdfSharpCore.Pdf.IO;
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
+using System.Text;
 
 namespace PeachPDF.PdfSharpCore.Pdf
 {

@@ -27,13 +27,13 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using System;
-using System.Diagnostics;
-using System.Collections.Generic;
-using System.Text;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Internal;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Text;
 
 #pragma warning disable 1591
 // ReSharper disable RedundantNameQualifier

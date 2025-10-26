@@ -177,7 +177,7 @@ namespace PeachPDF.PdfSharpCore.Internal
                 throw new InvalidOperationException("Missing end quote"); //SR.Get(SRID.TokenizerHelperMissingEndQuote, new object[0]));
 
             // Move at the start of the nextToken.
-            ScanToNextToken(separator); 
+            ScanToNextToken(separator);
 
             // Update the _currentToken values.
             _currentTokenIndex = newTokenIndex;

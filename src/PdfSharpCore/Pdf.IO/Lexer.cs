@@ -27,15 +27,15 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using System;
-using System.Globalization;
-using System.Diagnostics;
-using System.Text;
-using System.IO;
 using PeachPDF.PdfSharpCore.Internal;
 using PeachPDF.PdfSharpCore.Pdf.Internal;
+using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO;
 using System.Linq;
+using System.Text;
 
 namespace PeachPDF.PdfSharpCore.Pdf.IO
 {
@@ -86,7 +86,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
         // /// <param name="testReference">Indicates whether to test the next token if it is a reference.</param>
         public Symbol ScanNextToken()
         {
-        Again:
+            Again:
             _token = new StringBuilder();
 
             char ch = MoveToNonWhiteSpace();
@@ -713,7 +713,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
             Position = positon;
             return true;
 
-        False:
+            False:
             Position = positon;
             return false;
         }
@@ -762,32 +762,32 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
             }
             return _currChar;
         }
-// #if DEBUG
-//         public string SurroundingsOfCurrentPosition(bool hex)
-//         {
-//             const int range = 20;
-//             int start = Math.Max(Position - range, 0);
-//             int length = Math.Min(2 * range, PdfLength - start);
-//             long posOld = _pdfSteam.Position;
-//             _pdfSteam.Position = start;
-//             byte[] bytes = new byte[length];
-//             _pdfSteam.Read(bytes, 0, length);
-//             _pdfSteam.Position = posOld;
-//             string result = "";
-//             if (hex)
-//             {
-//                 for (int idx = 0; idx < length; idx++)
-//                     result += ((int)bytes[idx]).ToString("x2");
-//                 //result += string.Format("{0:", (int) bytes[idx]);
-//             }
-//             else
-//             {
-//                 for (int idx = 0; idx < length; idx++)
-//                     result += (char)bytes[idx];
-//             }
-//             return result;
-//         }
-// #endif
+        // #if DEBUG
+        //         public string SurroundingsOfCurrentPosition(bool hex)
+        //         {
+        //             const int range = 20;
+        //             int start = Math.Max(Position - range, 0);
+        //             int length = Math.Min(2 * range, PdfLength - start);
+        //             long posOld = _pdfSteam.Position;
+        //             _pdfSteam.Position = start;
+        //             byte[] bytes = new byte[length];
+        //             _pdfSteam.Read(bytes, 0, length);
+        //             _pdfSteam.Position = posOld;
+        //             string result = "";
+        //             if (hex)
+        //             {
+        //                 for (int idx = 0; idx < length; idx++)
+        //                     result += ((int)bytes[idx]).ToString("x2");
+        //                 //result += string.Format("{0:", (int) bytes[idx]);
+        //             }
+        //             else
+        //             {
+        //                 for (int idx = 0; idx < length; idx++)
+        //                     result += (char)bytes[idx];
+        //             }
+        //             return result;
+        //         }
+        // #endif
 
         /// <summary>
         /// Gets the current symbol.

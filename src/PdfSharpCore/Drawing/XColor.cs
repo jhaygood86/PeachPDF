@@ -28,9 +28,9 @@
 #endregion
 
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
-using System.ComponentModel;
 // ReSharper disable RedundantNameQualifier
 
 namespace PeachPDF.PdfSharpCore.Drawing

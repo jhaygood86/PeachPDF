@@ -260,7 +260,7 @@ namespace PeachPDF.Html.Core.Utils
             }
 
             if (_tempPath != null) return new FileInfo(Path.Combine(_tempPath, validFileName));
-            
+
             _tempPath = Path.Combine(Path.GetTempPath(), "HtmlRenderer");
             if (!Directory.Exists(_tempPath))
                 Directory.CreateDirectory(_tempPath);

@@ -1,8 +1,8 @@
 namespace PeachPDF.Tests.CSS
 {
     using PeachPDF.CSS;
-using Xunit;
-    
+    using Xunit;
+
     public class CssPropertyTests : CssConstructionFunctions
     {
         [Fact]
@@ -1300,7 +1300,7 @@ using Xunit;
         public void CssUnknownPropertyPreservesCase()
         {
             var snippet = "my-Property: something";
-            var property = ParseDeclaration(snippet, includeUnknownDeclarations:true);
+            var property = ParseDeclaration(snippet, includeUnknownDeclarations: true);
             Assert.Equal("my-Property", property.Name);
             Assert.IsType<UnknownProperty>(property);
         }

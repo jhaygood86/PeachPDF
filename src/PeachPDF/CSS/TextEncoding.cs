@@ -10,7 +10,7 @@ namespace PeachPDF.CSS
     public static class TextEncoding
     {
         public static HashSet<string> AvailableEncodings = new(from encoding in Encoding.GetEncodings()
-            select encoding.Name);
+                                                               select encoding.Name);
 
         public static readonly Encoding Utf8 = new UTF8Encoding(false);
         public static readonly Encoding Utf16Be = new UnicodeEncoding(true, false);

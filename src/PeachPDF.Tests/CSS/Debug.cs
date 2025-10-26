@@ -1,12 +1,7 @@
-using System;
-using System.Linq;
-using PeachPDF.CSS;
-using Xunit;
-
 namespace PeachPDF.Tests.CSS
 {
     using PeachPDF.CSS;
-public class DebugTests
+    public class DebugTests
     {
         [Fact]
         public void Debug_stuff_here()

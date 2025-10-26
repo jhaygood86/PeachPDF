@@ -35,7 +35,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     public sealed class XFontMetrics
     {
         internal XFontMetrics(string name, int unitsPerEm, int ascent, int descent, int leading, int lineSpacing,
-            int capHeight, int xHeight, int stemV, int stemH, int averageWidth, int maxWidth ,
+            int capHeight, int xHeight, int stemV, int stemH, int averageWidth, int maxWidth,
             int underlinePosition, int underlineThickness, int strikethroughPosition, int strikethroughThickness)
         {
             _name = name;

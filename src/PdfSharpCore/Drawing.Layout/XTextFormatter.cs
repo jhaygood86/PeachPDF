@@ -27,11 +27,11 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachPDF.PdfSharpCore.Drawing.Layout.enums;
+using PeachPDF.PdfSharpCore.Pdf.IO;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using PeachPDF.PdfSharpCore.Drawing.Layout.enums;
-using PeachPDF.PdfSharpCore.Pdf.IO;
 
 namespace PeachPDF.PdfSharpCore.Drawing.Layout
 {
@@ -106,12 +106,12 @@ namespace PeachPDF.PdfSharpCore.Drawing.Layout
         /// When true, ignore the height of text areas when rendering multiline strings
         /// </summary>
         public bool AllowVerticalOverflow { get; set; } = false;
-        
+
         /// <summary>
         /// Gets or sets the horizontal alignment of the text.
         /// </summary>
         public XParagraphAlignment Alignment { get; set; } = XParagraphAlignment.Left;
-        
+
         /// <summary>
         /// Gets or sets the vertical alignment of the text.
         /// </summary>
@@ -126,8 +126,8 @@ namespace PeachPDF.PdfSharpCore.Drawing.Layout
             Alignment = alignments.Horizontal;
             VerticalAlignment = alignments.Vertical;
         }
-        
-        
+
+
         /// <summary>
         /// Draws the text.
         /// </summary>
@@ -162,7 +162,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Layout
             Text = text;
             Font = font;
             LayoutRectangle = layoutRectangle;
-            
+
             _lineHeight = lineHeight?.Point ?? _lineSpace;
 
             if (text.Length == 0)
@@ -174,7 +174,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Layout
 
             double dx = layoutRectangle.Location.X;
             double dy = layoutRectangle.Location.Y + _cyAscent;
-            
+
             if (VerticalAlignment == XVerticalAlignment.Middle)
             {
                 dy += layoutRectangle.Height / 2 - _layoutRectangle.Height / 2 - _cyDescent;
@@ -183,7 +183,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Layout
             {
                 dy = layoutRectangle.Location.Y + layoutRectangle.Height - _layoutRectangle.Height + _lineHeight - _cyDescent;
             }
-            
+
             int count = _blocks.Count;
             for (int idx = 0; idx < count; idx++)
             {
@@ -305,7 +305,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Layout
             }
             if (firstIndex < count && Alignment != XParagraphAlignment.Justify)
                 HorizontalAlignLine(firstIndex, count - 1, rectWidth);
-            
+
             var minY = _blocks.Min(b => b.Location.Y);
             var maxY = _blocks.Max(b => b.Location.Y + _lineHeight);
             var minX = _blocks.Min(b => b.Location.X);

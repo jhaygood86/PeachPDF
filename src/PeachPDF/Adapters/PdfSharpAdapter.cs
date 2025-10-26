@@ -54,7 +54,7 @@ namespace PeachPDF.Adapters
             _fontCollection = new FontCollection();
             _fontCollection.AddSystemFonts();
 
-            foreach(var fontPath in fonts)
+            foreach (var fontPath in fonts)
             {
                 try
                 {
@@ -70,7 +70,7 @@ namespace PeachPDF.Adapters
             }
         }
 
-        public RNetworkLoader NetworkLoader { get; set;  } = new DataUriNetworkLoader();
+        public RNetworkLoader NetworkLoader { get; set; } = new DataUriNetworkLoader();
 
         public override RUri? BaseUri => NetworkLoader.BaseUri;
 

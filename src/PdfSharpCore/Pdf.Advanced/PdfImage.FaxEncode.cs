@@ -350,7 +350,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         private static uint CountOneBits(BitReader reader, uint bitsLeft)
         {
             uint found = 0;
-            for (;;)
+            for (; ; )
             {
                 uint bits;
                 int @byte = reader.PeekByte(out bits);
@@ -377,7 +377,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         private static uint CountZeroBits(BitReader reader, uint bitsLeft)
         {
             uint found = 0;
-            for (;;)
+            for (; ; )
             {
                 uint bits;
                 int @byte = reader.PeekByte(out bits);
@@ -470,7 +470,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             uint a2, b2;
             // ReSharper restore TooWideLocalVariableScope
 
-            for (;;)
+            for (; ; )
             {
                 b2 = FindDifferenceWithCheck(readerReference, b1, width, readerReference.GetBit(b1));
                 if (b2 >= a1)

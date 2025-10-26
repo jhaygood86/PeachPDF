@@ -24,7 +24,7 @@ namespace PeachPDF.CSS
 
         public TextPosition Shift(int columns)
         {
-            return new(_line, (ushort) (_column + columns), Position + columns);
+            return new(_line, (ushort)(_column + columns), Position + columns);
         }
 
         public TextPosition After(char chr)

@@ -1,8 +1,4 @@
 using PeachPDF.CSS;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Xunit;
 
 namespace PeachPDF.Tests.CSS
 {
@@ -33,7 +29,7 @@ namespace PeachPDF.Tests.CSS
             // Assert
             Assert.Equal(2, list.Count());
         }
-        
+
         [Fact]
         public async Task FindAllAttrHyphenSelectorsThatMatchAttributeName()
         {
@@ -46,7 +42,7 @@ namespace PeachPDF.Tests.CSS
             // Assert
             Assert.Equal(2, list.Count());
         }
-        
+
         [Fact]
         public async Task FindAllAttrBeginsSelectorsThatMatchAttributeName()
         {
@@ -59,7 +55,7 @@ namespace PeachPDF.Tests.CSS
             // Assert
             Assert.Equal(2, list.Count());
         }
-        
+
         [Fact]
         public async Task FindAllAttrEndsSelectorsThatMatchAttributeName()
         {
@@ -72,7 +68,7 @@ namespace PeachPDF.Tests.CSS
             // Assert
             Assert.Equal(2, list.Count());
         }
-        
+
         [Fact]
         public async Task FindAllAttrContainsSelectorsThatMatchAttributeName()
         {
@@ -85,7 +81,7 @@ namespace PeachPDF.Tests.CSS
             // Assert
             Assert.Equal(2, list.Count());
         }
-        
+
         [Fact]
         public async Task FindAllAttrNotMatchSelectorsThatMatchAttributeName()
         {
