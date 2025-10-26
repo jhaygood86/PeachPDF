@@ -155,6 +155,7 @@ namespace PeachPDF.Html.Core
             { "counter-increment", CssConstants.None },
             { "counter-reset", CssConstants.None },
             { "counter-set", CssConstants.None },
+            { "string-set", CssConstants.None },
             { "font-stretch", CssConstants.Normal },
             { "font-style", CssConstants.Normal },
             { "font-variant", CssConstants.Normal },

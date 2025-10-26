@@ -199,6 +199,7 @@
         public static readonly string StrokeMiterlimit = "stroke-miterlimit";
         public static readonly string StrokeOpacity = "stroke-opacity";
         public static readonly string StrokeWidth = "stroke-width";
+        public static readonly string StringSet = "string-set";
         public static readonly string TableLayout = "table-layout";
         public static readonly string TextAlign = "text-align";
         public static readonly string TextAlignLast = "text-align-last";

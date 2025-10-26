@@ -19,6 +19,7 @@
         public static readonly string Image = "image";
         public static readonly string Counter = "counter";
         public static readonly string Counters = "counters";
+        public static readonly string Content = "content";
         public static readonly string Calc = "calc";
         public static readonly string Toggle = "toggle";
         public static readonly string Translate = "translate";

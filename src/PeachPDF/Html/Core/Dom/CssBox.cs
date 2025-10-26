@@ -134,6 +134,8 @@ namespace PeachPDF.Html.Core.Dom
 
         public Dictionary<string, CssCounter> Counters { get; } = [];
 
+        public Dictionary<string, NamedString> NamedStrings { get; } = [];
+
         /// <summary>
         /// Is the box is of "br" element.
         /// </summary>
@@ -607,6 +609,12 @@ namespace PeachPDF.Html.Core.Dom
             {
                 RectanglesReset();
                 await MeasureWordsSize(g);
+            }
+
+            // Apply named strings if string-set property is present
+            if (!string.IsNullOrEmpty(StringSet) && StringSet != CssConstants.None)
+            {
+                CssNamedStringEngine.ApplyStringSet(this);
             }
 
             if (BreakBefore is CssConstants.Page)
