@@ -23,6 +23,8 @@
 	<ItemGroup>
 	  <ProjectReference Include="..\PdfSharpCore\PeachPDF.PdfSharpCore.csproj" />
 	</ItemGroup>
-
+	<ItemGroup>
+		<InternalsVisibleTo Include="PeachPDF.Tests" />
+	</ItemGroup>
 </Project>
 
