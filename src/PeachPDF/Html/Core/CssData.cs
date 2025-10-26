@@ -141,29 +141,29 @@ namespace PeachPDF.Html.Core
                 switch (pseudoElementSelector.Name)
                 {
                     case CssConstants.Before:
-                    {
-                        var beforePseudoBox = new CssBox(box, null)
                         {
-                            IsBeforePseudoElement = true
-                        };
+                            var beforePseudoBox = new CssBox(box, null)
+                            {
+                                IsBeforePseudoElement = true
+                            };
 
-                        beforePseudoBox.InheritStyle(box);
-                        box.Boxes.Remove(beforePseudoBox);
-                        box.Boxes.Insert(0, beforePseudoBox);
-                        break;
-                    }
+                            beforePseudoBox.InheritStyle(box);
+                            box.Boxes.Remove(beforePseudoBox);
+                            box.Boxes.Insert(0, beforePseudoBox);
+                            break;
+                        }
                     case CssConstants.After:
-                    {
-                        var afterPseudoBox = new CssBox(box, null)
                         {
-                            IsAfterPseudoElement = true
-                        };
+                            var afterPseudoBox = new CssBox(box, null)
+                            {
+                                IsAfterPseudoElement = true
+                            };
 
-                        afterPseudoBox.InheritStyle(box);
-                        box.Boxes.Remove(afterPseudoBox);
-                        box.Boxes.Add(afterPseudoBox);
-                        break;
-                    }
+                            afterPseudoBox.InheritStyle(box);
+                            box.Boxes.Remove(afterPseudoBox);
+                            box.Boxes.Add(afterPseudoBox);
+                            break;
+                        }
                 }
             }
 
@@ -366,25 +366,25 @@ namespace PeachPDF.Html.Core
 
                             break;
                         case " " or null:
-                        {
-                            do
                             {
-                                isMatch = DoesSelectorMatch(selector.Selector, currentLevel);
+                                do
+                                {
+                                    isMatch = DoesSelectorMatch(selector.Selector, currentLevel);
+
+                                    if (!isMatch)
+                                    {
+                                        currentLevel = currentLevel.ParentBox;
+                                    }
+
+                                } while (!isMatch && currentLevel is not null);
 
                                 if (!isMatch)
                                 {
-                                    currentLevel = currentLevel.ParentBox;
+                                    return false;
                                 }
 
-                            } while (!isMatch && currentLevel is not null);
-
-                            if (!isMatch)
-                            {
-                                return false;
+                                break;
                             }
-
-                            break;
-                        }
                     }
                 }
                 else

@@ -1,8 +1,4 @@
-using System;
 using System.Collections;
-using System.Collections.Generic;
-
-using PeachPDF.CSS;
 namespace PeachPDF.Tests.CSS
 {
     class ObjectArrayComparer : IEqualityComparer, IEqualityComparer<object[]>

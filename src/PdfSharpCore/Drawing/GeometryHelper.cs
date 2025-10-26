@@ -27,10 +27,10 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using System;
-using System.Diagnostics;
-using System.Collections.Generic;
 using PeachPDF.PdfSharpCore.Internal;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 
 // ReSharper disable RedundantNameQualifier
 // ReSharper disable CompareOfFloatsByEqualityOperator

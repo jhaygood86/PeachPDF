@@ -1,11 +1,9 @@
 namespace PeachPDF.Tests.CSS
 {
     using PeachPDF.CSS;
-using Xunit;
     using System.Linq;
-    
-    using PeachPDF.CSS;
-public class CssDocumentFunctionTests : CssConstructionFunctions
+    using Xunit;
+    public class CssDocumentFunctionTests : CssConstructionFunctions
     {
         [Fact]
         public void CssDocumentRuleSingleUrlFunction()

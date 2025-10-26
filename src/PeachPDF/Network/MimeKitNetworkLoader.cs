@@ -1,6 +1,5 @@
 ﻿#nullable enable
 
-using System;
 using MimeKit;
 using System.IO;
 using System.Linq;
@@ -8,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace PeachPDF.Network
 {
-    public class MimeKitNetworkLoader: RNetworkLoader
+    public class MimeKitNetworkLoader : RNetworkLoader
     {
         private readonly Task<MimeMessage> _messageTask;
         private MimeMessage? _message = null;
@@ -39,7 +38,7 @@ namespace PeachPDF.Network
                 .FirstOrDefault(x => x.ContentLocation == uri.Uri || x.Headers["Content-Location"] == uri.OriginalString);
 
             var stream = part?.Content.Open();
-            var headers = part?.Headers.ToDictionary(x => x.Field, x => new[]{ x.Value });
+            var headers = part?.Headers.ToDictionary(x => x.Field, x => new[] { x.Value });
 
             return new RNetworkResponse(stream, headers);
         }

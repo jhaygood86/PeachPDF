@@ -87,16 +87,16 @@ namespace PeachPDF.Html.Core.Dom
                         columns += GetSpan(box);
                         break;
                     case CssConstants.TableRowGroup:
-                    {
-                        foreach (var cr in tableBox.Boxes)
                         {
-                            count++;
-                            if (cr.Display == CssConstants.TableRow)
-                                columns = Math.Max(columns, cr.Boxes.Count);
-                        }
+                            foreach (var cr in tableBox.Boxes)
+                            {
+                                count++;
+                                if (cr.Display == CssConstants.TableRow)
+                                    columns = Math.Max(columns, cr.Boxes.Count);
+                            }
 
-                        break;
-                    }
+                            break;
+                        }
                     case CssConstants.TableRow:
                         count++;
                         columns = Math.Max(columns, box.Boxes.Count);
@@ -247,7 +247,7 @@ namespace PeachPDF.Html.Core.Dom
         private void InsertEmptyBoxes()
         {
             if (_tableBox._tableFixed) return;
-            
+
             var currentRow = 0;
 
             foreach (var row in _bodyRows)
@@ -261,7 +261,7 @@ namespace PeachPDF.Html.Core.Dom
                     for (var i = currentRow + 1; i < currentRow + rowSpan; i++)
                     {
                         if (_bodyRows.Count <= i) continue;
-                        
+
                         var columnCount = 0;
                         for (var j = 0; j < _bodyRows[i].Boxes.Count; j++)
                         {
@@ -300,7 +300,7 @@ namespace PeachPDF.Html.Core.Dom
                     var rowColumnCount = b.Boxes.Sum(GetColSpan);
                     _columnCount = Math.Max(_columnCount, rowColumnCount);
                 }
-                    
+
             }
 
             //Initialize column widths array with NaNs
@@ -644,24 +644,24 @@ namespace PeachPDF.Html.Core.Dom
                         }
                     }
                     else switch (rowSpan)
-                    {
-                        case 1:
-                            maxBottom = Math.Max(maxBottom, cell.ActualBottom);
-                            break;
-                        case > 1:
                         {
-                            var endRow = i + rowSpan - 1;
+                            case 1:
+                                maxBottom = Math.Max(maxBottom, cell.ActualBottom);
+                                break;
+                            case > 1:
+                                {
+                                    var endRow = i + rowSpan - 1;
 
-                            if(!rowSpannedBoxes.TryGetValue(endRow, out var rowSpannedBoxesForRow))
-                            {
-                                rowSpannedBoxesForRow = (List<CssBox>) [];
-                                rowSpannedBoxes[endRow] = rowSpannedBoxesForRow;
-                            }
+                                    if (!rowSpannedBoxes.TryGetValue(endRow, out var rowSpannedBoxesForRow))
+                                    {
+                                        rowSpannedBoxesForRow = (List<CssBox>)[];
+                                        rowSpannedBoxes[endRow] = rowSpannedBoxesForRow;
+                                    }
 
-                            rowSpannedBoxesForRow.Add(cell);
-                            break;
+                                    rowSpannedBoxesForRow.Add(cell);
+                                    break;
+                                }
                         }
-                    }
 
                     maxRight = Math.Max(maxRight, cell.ActualRight);
                     currentColumn++;
@@ -869,7 +869,7 @@ namespace PeachPDF.Html.Core.Dom
             CssLength tableBoxLength = new(_tableBox.Width);
 
             if (!(tableBoxLength.Number > 0)) return _tableBox.ContainingBlock.Size.Width;
-            
+
             _widthSpecified = true;
             return CssValueParser.ParseLength(_tableBox.Width, _tableBox.ContainingBlock.Size.Width, _tableBox);
 

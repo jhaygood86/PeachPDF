@@ -66,51 +66,51 @@ namespace PeachPDF.CSS
                     current = GetNext();
                     return current == Symbols.Equality ? NewMatch(Combinators.InText) : NewDelimiter(GetPrevious());
                 case Symbols.Plus:
-                {
-                    var c1 = GetNext();
-                    if (c1 != Symbols.EndOfFile)
                     {
-                        var c2 = GetNext();
-                        Back(2);
+                        var c1 = GetNext();
+                        if (c1 != Symbols.EndOfFile)
+                        {
+                            var c2 = GetNext();
+                            Back(2);
 
-                        if (c1.IsDigit() || c1 == Symbols.Dot && c2.IsDigit()) return NumberStart(current);
-                    }
-                    else
-                    {
-                        Back();
-                    }
+                            if (c1.IsDigit() || c1 == Symbols.Dot && c2.IsDigit()) return NumberStart(current);
+                        }
+                        else
+                        {
+                            Back();
+                        }
 
-                    return NewDelimiter(current);
-                }
+                        return NewDelimiter(current);
+                    }
                 case Symbols.Comma:
                     return NewComma();
 
                 case Symbols.Dot:
-                {
-                    var c = GetNext();
-                    return c.IsDigit() ? NumberStart(GetPrevious()) : NewDelimiter(GetPrevious());
-                }
-                case Symbols.Minus:
-                {
-                    var c1 = GetNext();
-                    if (c1 != Symbols.EndOfFile)
                     {
-                        var c2 = GetNext();
-                        Back(2);
-                        if (c1.IsDigit() || c1 == Symbols.Dot && c2.IsDigit()) return NumberStart(current);
-                        if (c1.IsNameStart()) return IdentStart(current);
-                        if (c1 == Symbols.ReverseSolidus && !c2.IsLineBreak() && c2 != Symbols.EndOfFile)
-                            return IdentStart(current);
-                        if (c1 != Symbols.Minus || c2 != Symbols.GreaterThan) return NewDelimiter(current);
-
-                        Advance(2);
-                        return NewCloseComment();
+                        var c = GetNext();
+                        return c.IsDigit() ? NumberStart(GetPrevious()) : NewDelimiter(GetPrevious());
                     }
+                case Symbols.Minus:
+                    {
+                        var c1 = GetNext();
+                        if (c1 != Symbols.EndOfFile)
+                        {
+                            var c2 = GetNext();
+                            Back(2);
+                            if (c1.IsDigit() || c1 == Symbols.Dot && c2.IsDigit()) return NumberStart(current);
+                            if (c1.IsNameStart()) return IdentStart(current);
+                            if (c1 == Symbols.ReverseSolidus && !c2.IsLineBreak() && c2 != Symbols.EndOfFile)
+                                return IdentStart(current);
+                            if (c1 != Symbols.Minus || c2 != Symbols.GreaterThan) return NewDelimiter(current);
 
-                    Back();
+                            Advance(2);
+                            return NewCloseComment();
+                        }
 
-                    return NewDelimiter(current);
-                }
+                        Back();
+
+                        return NewDelimiter(current);
+                    }
                 case Symbols.Solidus:
                     current = GetNext();
                     return current == Symbols.Asterisk
@@ -149,7 +149,7 @@ namespace PeachPDF.CSS
 
                         GetPrevious();
                         return NewDelimiter(GetPrevious());
-                    } 
+                    }
                     else if (current == Symbols.Equality)
                     {
                         Advance();

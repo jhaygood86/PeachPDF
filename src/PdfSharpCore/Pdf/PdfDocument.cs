@@ -27,6 +27,11 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachPDF.PdfSharpCore.Pdf.AcroForms;
+using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using PeachPDF.PdfSharpCore.Pdf.Internal;
+using PeachPDF.PdfSharpCore.Pdf.IO;
+using PeachPDF.PdfSharpCore.Pdf.Security;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -34,11 +39,6 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
-using PeachPDF.PdfSharpCore.Pdf.Advanced;
-using PeachPDF.PdfSharpCore.Pdf.Internal;
-using PeachPDF.PdfSharpCore.Pdf.IO;
-using PeachPDF.PdfSharpCore.Pdf.AcroForms;
-using PeachPDF.PdfSharpCore.Pdf.Security;
 
 // ReSharper disable ConvertPropertyToExpressionBody
 
@@ -836,16 +836,16 @@ namespace PeachPDF.PdfSharpCore.Pdf
                 img.XObjects.Elements[img.Item.Key] = mapMd5ToPdfItem[md5];
             }
         }
-        
+
         internal class ImageInfo
         {
             public PdfDictionary XObjects { get; }
-            public KeyValuePair<string, PdfItem> Item  { get; }
+            public KeyValuePair<string, PdfItem> Item { get; }
             public PdfDictionary XObject { get; }
             public string XObjectMD5 { get; }
 
             private static readonly MD5 Hasher = MD5.Create();
-            
+
             public ImageInfo(PdfDictionary xObjects, KeyValuePair<string, PdfItem> item, PdfDictionary xObject)
             {
                 XObjects = xObjects;
@@ -853,7 +853,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
                 XObject = xObject;
                 XObjectMD5 = ComputeMD5(xObject.Stream.Value);
             }
-            
+
             /// <summary>
             /// Get info for each image in the document.
             /// </summary>
@@ -869,7 +869,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
                         select new ImageInfo(xObjects, item, xObject)
                     )
                     .ToList();
-            
+
             /// <summary>
             /// Compute and return the MD5 hash of the input data.
             /// </summary>
@@ -881,13 +881,13 @@ namespace PeachPDF.PdfSharpCore.Pdf
                     hashBytes = Hasher.ComputeHash(input);
                     Hasher.Initialize();
                 }
-                
+
                 var sb = new StringBuilder();
                 foreach (var x in hashBytes)
                 {
                     sb.Append(x.ToString("x2"));
                 }
-        
+
                 return sb.ToString();
             }
         }

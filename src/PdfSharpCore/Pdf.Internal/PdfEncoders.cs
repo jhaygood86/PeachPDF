@@ -27,12 +27,12 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PdfSharpCore.Pdf.Security;
 using System;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
-using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Pdf.Security;
 
 namespace PeachPDF.PdfSharpCore.Pdf.Internal
 {
@@ -398,7 +398,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Internal
             }
             else
             {
-            Hex:
+                Hex:
                 if (hex)
                 {
                     pdf.Append(prefix ? "<FEFF" : "<");

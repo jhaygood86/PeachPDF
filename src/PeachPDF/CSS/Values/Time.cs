@@ -69,7 +69,7 @@ namespace PeachPDF.CSS
             return ToMilliseconds().CompareTo(other.ToMilliseconds());
         }
 
-       
+
         public static Unit GetUnit(string s)
         {
             switch (s)

@@ -1,8 +1,8 @@
 namespace PeachPDF.Tests.CSS
 {
     using PeachPDF.CSS;
-using Xunit;
     using System;
+    using Xunit;
 
     public class CssMediaListTests : CssConstructionFunctions
     {

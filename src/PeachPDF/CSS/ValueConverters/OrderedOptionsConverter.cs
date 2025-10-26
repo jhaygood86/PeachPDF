@@ -65,7 +65,7 @@ namespace PeachPDF.CSS
 
             IEnumerator<IPropertyValue> IEnumerable<IPropertyValue>.GetEnumerator()
             {
-                return ((IEnumerable<IPropertyValue>) _options).GetEnumerator();
+                return ((IEnumerable<IPropertyValue>)_options).GetEnumerator();
             }
 
             IEnumerator IEnumerable.GetEnumerator()

@@ -1,8 +1,4 @@
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 using PeachPDF.CSS;
-using Xunit;
 
 namespace PeachPDF.Tests.CSS;
 

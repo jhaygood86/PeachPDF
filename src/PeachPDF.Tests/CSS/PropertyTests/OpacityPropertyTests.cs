@@ -1,5 +1,4 @@
 using PeachPDF.CSS;
-using Xunit;
 
 namespace PeachPDF.Tests.CSS.PropertyTests
 {
@@ -19,7 +18,7 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.Equal("50%", result.Value);
         }
 
-        
+
         [Fact]
         public void OpacityVarianceTests()
         {

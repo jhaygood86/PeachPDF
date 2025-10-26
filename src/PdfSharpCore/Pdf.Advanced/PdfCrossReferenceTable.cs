@@ -27,11 +27,11 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachPDF.PdfSharpCore.Pdf.IO;
 using System;
-using System.Diagnostics;
 using System.Collections;
 using System.Collections.Generic;
-using PeachPDF.PdfSharpCore.Pdf.IO;
+using System.Diagnostics;
 
 namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 {
@@ -93,7 +93,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 
             if (ObjectTable.ContainsKey(value.ObjectID))
                 return;
-                // throw new InvalidOperationException("Object already in table.");
+            // throw new InvalidOperationException("Object already in table.");
 
             ObjectTable.Add(value.ObjectID, value.Reference);
         }
@@ -384,7 +384,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             Dictionary<PdfItem, object> objects = new Dictionary<PdfItem, object>();
             _overflow = new Dictionary<PdfItem, object>();
             TransitiveClosureImplementation(objects, pdfObject);
-        TryAgain:
+            TryAgain:
             if (_overflow.Count > 0)
             {
                 PdfObject[] array = new PdfObject[_overflow.Count];

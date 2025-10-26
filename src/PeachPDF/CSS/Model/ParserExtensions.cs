@@ -1,8 +1,8 @@
 ﻿#nullable disable
 
+using PeachPDF.CSS.Conditions;
 using System;
 using System.Collections.Generic;
-using PeachPDF.CSS.Conditions;
 
 namespace PeachPDF.CSS
 {
@@ -47,8 +47,8 @@ namespace PeachPDF.CSS
 
         public static TokenType GetTypeFromName(this string functionName)
         {
-            return FunctionTypes.TryGetValue(functionName, out _) 
-                ? TokenType.Url 
+            return FunctionTypes.TryGetValue(functionName, out _)
+                ? TokenType.Url
                 : TokenType.Function;
         }
 
@@ -60,7 +60,7 @@ namespace PeachPDF.CSS
 
         public static int GetCode(this ParseError code)
         {
-            return (int) code;
+            return (int)code;
         }
 
         public static bool Is(this Token token, TokenType a)
@@ -102,21 +102,21 @@ namespace PeachPDF.CSS
             switch (token.Type)
             {
                 case TokenType.Url:
-                {
-                    var functionName = ((UrlToken)token).FunctionName;
-                    FunctionTypes.TryGetValue(functionName, out var creator);
-                    return creator(token.Data);
-                }
-                case TokenType.Function when token.Data.Isi(FunctionNames.Regexp):
-                {
-                    var css = ((FunctionToken) token).ArgumentTokens.ToCssString();
-                    if (css != null)
                     {
-                        return new RegexpFunction(css);
+                        var functionName = ((UrlToken)token).FunctionName;
+                        FunctionTypes.TryGetValue(functionName, out var creator);
+                        return creator(token.Data);
                     }
+                case TokenType.Function when token.Data.Isi(FunctionNames.Regexp):
+                    {
+                        var css = ((FunctionToken)token).ArgumentTokens.ToCssString();
+                        if (css != null)
+                        {
+                            return new RegexpFunction(css);
+                        }
 
-                    break;
-                }
+                        break;
+                    }
             }
 
             return null;

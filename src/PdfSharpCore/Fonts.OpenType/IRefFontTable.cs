@@ -28,9 +28,6 @@
 #endregion
 
 using System;
-using Fixed = System.Int32;
-using FWord = System.Int16;
-using UFWord = System.UInt16;
 
 namespace PeachPDF.PdfSharpCore.Fonts.OpenType
 {

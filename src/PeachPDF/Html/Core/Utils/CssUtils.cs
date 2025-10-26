@@ -178,14 +178,14 @@ namespace PeachPDF.Html.Core.Utils
                     {
                         cssBox.BorderBottomWidth = value;
                     }
-                    
+
                     break;
                 case "border-left-width":
                     if (IsValidLengthProperty(value))
                     {
                         cssBox.BorderLeftWidth = value;
                     }
-                    
+
                     break;
                 case "border-right-width":
                     if (IsValidLengthProperty(value))
@@ -220,7 +220,7 @@ namespace PeachPDF.Html.Core.Utils
                     {
                         cssBox.BorderRightStyle = value;
                     }
-                    
+
                     break;
                 case "border-top-style":
                     if (IsValidBorderStyleProperty(value))
@@ -514,7 +514,7 @@ namespace PeachPDF.Html.Core.Utils
                     {
                         cssBox.ZIndex = value;
                     }
-                    
+
                     break;
                 case "unicode-bidi":
                 case "background-attachment":

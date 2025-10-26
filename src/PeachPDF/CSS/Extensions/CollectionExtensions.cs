@@ -22,7 +22,8 @@ namespace PeachPDF.CSS
             var i = 0;
 
             foreach (var item in items)
-            {   if (i++ == index)
+            {
+                if (i++ == index)
                 {
                     return item;
                 }

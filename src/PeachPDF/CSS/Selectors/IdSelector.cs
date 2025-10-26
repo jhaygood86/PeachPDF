@@ -8,7 +8,7 @@ namespace PeachPDF.CSS
         }
 
         public string Id { get; }
-        
+
         public static IdSelector Create(string name)
         {
             return new IdSelector(name);

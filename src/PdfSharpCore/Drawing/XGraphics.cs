@@ -27,10 +27,10 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using System;
-using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Drawing.Pdf;
+using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using System;
 
 #pragma warning disable 1587
 // ReSharper disable UseNullPropagation
@@ -49,8 +49,8 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufräumen
         DrawingPdfContent,
         DrawingBitmap,
     }
-    
-    
+
+
     /// <summary>
     /// Represents a drawing surface for a fixed size page.
     /// </summary>

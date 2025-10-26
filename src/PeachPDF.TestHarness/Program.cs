@@ -1,7 +1,6 @@
 // See https://aka.ms/new-console-template for more information
 
 using PeachPDF;
-using PeachPDF.Network;
 using PeachPDF.PdfSharpCore;
 
 var httpClient = new HttpClient();

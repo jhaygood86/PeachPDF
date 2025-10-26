@@ -27,8 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using PeachPDF.PdfSharpCore.Pdf.Annotations;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using PeachPDF.PdfSharpCore.Pdf.Annotations;
 
 namespace PeachPDF.PdfSharpCore.Pdf.AcroForms
 {

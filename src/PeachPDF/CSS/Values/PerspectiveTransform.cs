@@ -11,11 +11,7 @@
 
         public TransformMatrix ComputeMatrix()
         {
-            return new (
-                1f, 
-                0f, 
-                0f,
-                0f,
+            return new(
                 1f,
                 0f,
                 0f,
@@ -24,9 +20,13 @@
                 0f,
                 0f,
                 0f,
+                1f,
                 0f,
                 0f,
-                -1f/_distance.ToPixel());
+                0f,
+                0f,
+                0f,
+                -1f / _distance.ToPixel());
         }
     }
 }

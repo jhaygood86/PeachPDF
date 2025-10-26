@@ -1,8 +1,8 @@
 namespace PeachPDF.Tests.CSS
 {
     using PeachPDF.CSS;
-using Xunit;
-    
+    using Xunit;
+
     public class CssImportRuleTests
     {
         static ImportRule NewImportRule(string cssText)

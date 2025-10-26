@@ -133,7 +133,7 @@ namespace PeachPDF.Html.Core.Dom
                         };
                     }
                 }
-                
+
             }
 
             ApplyCounterResets(currentBox);
@@ -161,7 +161,7 @@ namespace PeachPDF.Html.Core.Dom
                 return (counterName, false);
             }
 
-            
+
         }
 
         private static CssBox? GetPreviousSibling(CssBox b)

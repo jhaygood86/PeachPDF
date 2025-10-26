@@ -27,16 +27,16 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using System;
-using System.Diagnostics;
-using System.Globalization;
-using System.IO;
-using System.Linq;
 using PeachPDF.PdfSharpCore.Exceptions;
 using PeachPDF.PdfSharpCore.Internal;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF.PdfSharpCore.Pdf.Internal;
 using PeachPDF.PdfSharpCore.Pdf.IO.enums;
+using System;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO;
+using System.Linq;
 
 namespace PeachPDF.PdfSharpCore.Pdf.IO
 {
@@ -1167,7 +1167,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
                                     idToUse = idChecked;
                                 else
                                     if (accuracy == PdfReadAccuracy.Strict)
-                                        ParserDiagnostics.ThrowParserException("Invalid entry in XRef table, ID=" + id + ", Generation=" + generation + ", Position=" + position + ", ID of referenced object=" + idChecked + ", Generation of referenced object=" + generationChecked);
+                                    ParserDiagnostics.ThrowParserException("Invalid entry in XRef table, ID=" + id + ", Generation=" + generation + ", Position=" + position + ", ID of referenced object=" + idChecked + ", Generation of referenced object=" + generationChecked);
                             }
 
                             // Even it is restricted, an object can exists in more than one subsection.
@@ -1366,7 +1366,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
                             //// (PDF Reference Implementation Notes 15).
 
                             int position = (int)item.Field2;
-                                objectID = ReadObjectNumber(position);
+                            objectID = ReadObjectNumber(position);
 #if DEBUG
                             if (objectID.ObjectNumber == 1074)
                                 GetType();

@@ -27,11 +27,11 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using System;
-using System.Diagnostics;
-using System.Collections.Generic;
 using PeachPDF.PdfSharpCore.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Pdf.Internal;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace PeachPDF.PdfSharpCore.Fonts
 {

@@ -10,13 +10,13 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using MimeKit.Text;
+using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Utils;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using MimeKit.Text;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Utils;
 using HtmlUtils = PeachPDF.Html.Core.Utils.HtmlUtils;
 
 namespace PeachPDF.Html.Core.Parse
@@ -49,27 +49,27 @@ namespace PeachPDF.Html.Core.Parse
                 switch (token.Kind)
                 {
                     case HtmlTokenKind.Tag:
-                    {
-                        var tag = (HtmlTagToken)token;
-                        ParseHtmlTag(tag, ref curBox);
-                        break;
-                    }
+                        {
+                            var tag = (HtmlTagToken)token;
+                            ParseHtmlTag(tag, ref curBox);
+                            break;
+                        }
                     case HtmlTokenKind.Data:
-                    {
-                        var text = (HtmlDataToken)token;
-
-                        if (curBox.HtmlTag?.Name is HtmlConstants.NoScript)
                         {
-                            curBox = ParseDocument(text.Data, curBox);
-                        }
-                        else
-                        {
-                            AddTextBox(text, ref curBox);
-                        }
+                            var text = (HtmlDataToken)token;
 
-                        break;
+                            if (curBox.HtmlTag?.Name is HtmlConstants.NoScript)
+                            {
+                                curBox = ParseDocument(text.Data, curBox);
+                            }
+                            else
+                            {
+                                AddTextBox(text, ref curBox);
+                            }
 
-                    }
+                            break;
+
+                        }
                     case HtmlTokenKind.CData:
                     case HtmlTokenKind.Comment:
                     case HtmlTokenKind.DocType:
@@ -164,7 +164,7 @@ namespace PeachPDF.Html.Core.Parse
 
         private static CssBox CloseElement(CssBox cssBox, string tagName)
         {
-            var currentBox =  DomUtils.FindParent(cssBox.ParentBox!, tagName, cssBox);
+            var currentBox = DomUtils.FindParent(cssBox.ParentBox!, tagName, cssBox);
 
 #if DEBUG
             Console.WriteLine($"parse token, closing: {cssBox}. current box is now: {currentBox}");

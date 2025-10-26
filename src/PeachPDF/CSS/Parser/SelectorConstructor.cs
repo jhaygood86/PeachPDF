@@ -287,24 +287,24 @@ namespace PeachPDF.CSS
                     _state = State.PseudoElement;
                     return;
                 case TokenType.Function:
-                {
-                    var sel = GetPseudoFunction(token as FunctionToken);
-                    if (sel != null)
                     {
-                        Insert(sel);
-                        return;
+                        var sel = GetPseudoFunction(token as FunctionToken);
+                        if (sel != null)
+                        {
+                            Insert(sel);
+                            return;
+                        }
                     }
-                }
                     break;
                 case TokenType.Ident:
-                {
-                    var sel = _pseudoClassSelector.Create(token.Data);
-                    if (sel != null)
                     {
-                        Insert(sel);
-                        return;
+                        var sel = _pseudoClassSelector.Create(token.Data);
+                        if (sel != null)
+                        {
+                            Insert(sel);
+                            return;
+                        }
                     }
-                }
                     break;
             }
 
@@ -365,7 +365,7 @@ namespace PeachPDF.CSS
             {
                 if (_combinators.Count == 0)
                 {
-                    var compound = _temp as CompoundSelector ?? new CompoundSelector {_temp};
+                    var compound = _temp as CompoundSelector ?? new CompoundSelector { _temp };
 
                     compound.Add(selector);
                     _temp = compound;
@@ -817,14 +817,14 @@ namespace PeachPDF.CSS
                     case TokenType.Number:
                         return OnOffset(token);
                     case TokenType.Dimension:
-                    {
-                        var dim = (UnitToken) token;
-                        _valid = _valid && dim.Unit.Isi("n") && int.TryParse(token.Data, out _step);
-                        _step *= _sign;
-                        _sign = 1;
-                        _state = ParseState.Offset;
-                        return false;
-                    }
+                        {
+                            var dim = (UnitToken)token;
+                            _valid = _valid && dim.Unit.Isi("n") && int.TryParse(token.Data, out _step);
+                            _step *= _sign;
+                            _sign = 1;
+                            _state = ParseState.Offset;
+                            return false;
+                        }
                     case TokenType.Ident when token.Data.Isi("n"):
                         _step = _sign;
                         _sign = 1;
@@ -877,7 +877,7 @@ namespace PeachPDF.CSS
                     case TokenType.Whitespace:
                         return false;
                     case TokenType.Number:
-                        _valid = _valid && ((NumberToken) token).IsInteger && int.TryParse(token.Data, out _offset);
+                        _valid = _valid && ((NumberToken)token).IsInteger && int.TryParse(token.Data, out _offset);
                         _offset *= _sign;
                         _state = ParseState.BeforeOf;
                         return false;

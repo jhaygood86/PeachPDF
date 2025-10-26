@@ -10,12 +10,12 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using System.Globalization;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
+using System.Globalization;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -351,7 +351,7 @@ namespace PeachPDF.Html.Core.Dom
                 }
 
                 return _display;
-            } 
+            }
             set => _display = value;
         }
 
@@ -978,7 +978,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (_actualFont is null)
                 {
-                    throw new HtmlRenderException($"Cannot find font: {FontFamily} and Default Font {CssConstants.DefaultFont} is not installed",HtmlRenderErrorType.General);
+                    throw new HtmlRenderException($"Cannot find font: {FontFamily} and Default Font {CssConstants.DefaultFont} is not installed", HtmlRenderErrorType.General);
                 }
 
                 return _actualFont!;
@@ -1083,7 +1083,7 @@ namespace PeachPDF.Html.Core.Dom
             var box = this;
             var parentBox = box.GetParent();
 
-            while(parentBox is not null)
+            while (parentBox is not null)
             {
                 box = parentBox;
                 parentBox = box.GetParent();

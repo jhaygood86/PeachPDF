@@ -27,11 +27,9 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using System;
-using System.IO;
-using PeachPDF.PdfSharpCore.Internal;
 using ICSharpCode.SharpZipLib.Zip.Compression;
 using ICSharpCode.SharpZipLib.Zip.Compression.Streams;
+using System.IO;
 
 namespace PeachPDF.PdfSharpCore.Pdf.Filters
 {

@@ -27,13 +27,13 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachPDF.PdfSharpCore.Pdf;
+using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using PeachPDF.PdfSharpCore.Pdf.Internal;
 using System;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
-using PeachPDF.PdfSharpCore.Pdf;
-using PeachPDF.PdfSharpCore.Pdf.Advanced;
-using PeachPDF.PdfSharpCore.Pdf.Internal;
 
 // ReSharper disable CompareOfFloatsByEqualityOperator
 

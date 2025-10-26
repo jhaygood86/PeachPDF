@@ -4,7 +4,7 @@
     {
         private static readonly IValueConverter StyleConverter = Converters.BoxSizingConverter.OrDefault(Keywords.ContentBox);
 
-        public BoxSizingProperty() 
+        public BoxSizingProperty()
             : base(PropertyNames.BoxSizing, PropertyFlags.None)
         { }
 

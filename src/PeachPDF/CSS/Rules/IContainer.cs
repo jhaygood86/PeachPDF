@@ -4,5 +4,5 @@
     {
         string Name { get; set; }
         MediaList Media { get; }
-  }
+    }
 }

@@ -27,16 +27,16 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachPDF.PdfSharpCore.Exceptions;
+using PeachPDF.PdfSharpCore.Internal;
+using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using PeachPDF.PdfSharpCore.Pdf.Internal;
+using PeachPDF.PdfSharpCore.Pdf.IO.enums;
+using PeachPDF.PdfSharpCore.Pdf.Security;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using PeachPDF.PdfSharpCore.Exceptions;
-using PeachPDF.PdfSharpCore.Pdf.Advanced;
-using PeachPDF.PdfSharpCore.Pdf.Security;
-using PeachPDF.PdfSharpCore.Pdf.Internal;
-using PeachPDF.PdfSharpCore.Internal;
-using PeachPDF.PdfSharpCore.Pdf.IO.enums;
 
 namespace PeachPDF.PdfSharpCore.Pdf.IO
 {
@@ -410,7 +410,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
                     encrypt.Reference = xrefEncrypt;
                     xrefEncrypt.Value = encrypt;
                     PdfStandardSecurityHandler securityHandler = document.SecurityHandler;
-                TryAgain:
+                    TryAgain:
                     PasswordValidity validity = securityHandler.ValidatePassword(password);
                     if (validity == PasswordValidity.Invalid)
                     {

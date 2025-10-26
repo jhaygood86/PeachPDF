@@ -10,10 +10,10 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.Html.Core.Utils;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using PeachPDF.Html.Core.Utils;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -77,7 +77,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <returns>attribute value or null if not found</returns>
         public string? TryGetAttribute(string attribute, string? defaultValue = null)
         {
-            if(Attributes is not null && Attributes.TryGetValue(attribute, out var value))
+            if (Attributes is not null && Attributes.TryGetValue(attribute, out var value))
             {
                 return value;
             }
@@ -97,7 +97,7 @@ namespace PeachPDF.Html.Core.Dom
                 var sb = new StringBuilder();
                 sb.Append('<').Append(Name);
 
-                foreach(var attribute in Attributes)
+                foreach (var attribute in Attributes)
                 {
                     sb.Append(' ').Append(attribute.Key).Append("=\"").Append(attribute.Value).Append('"');
                 }

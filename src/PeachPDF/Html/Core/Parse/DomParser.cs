@@ -10,6 +10,8 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.CSS;
+using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Handlers;
@@ -19,8 +21,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
-using PeachPDF.CSS;
-using PeachPDF.Html.Adapters;
 
 namespace PeachPDF.Html.Core.Parse
 {
@@ -88,7 +88,7 @@ namespace PeachPDF.Html.Core.Parse
 
             CorrectAnonymousTables(root);
 
-            return (root,cssData);
+            return (root, cssData);
         }
 
 
@@ -112,7 +112,7 @@ namespace PeachPDF.Html.Core.Parse
 
                     if (!isLoaded && fontFaceDefinition.Url is not null)
                     {
-                        
+
                         await adapter.AddFontFamilyFromUrl(fontFamilyName, fontFaceDefinition.Url, fontFaceDefinition.Format);
                     }
                 }
@@ -153,7 +153,7 @@ namespace PeachPDF.Html.Core.Parse
 
             foreach (var childBox in box.Boxes)
             {
-                (cssData,cssDataChanged) = await CascadeParseStyles(childBox, htmlContainer, cssData, cssDataChanged);
+                (cssData, cssDataChanged) = await CascadeParseStyles(childBox, htmlContainer, cssData, cssDataChanged);
             }
 
             return (cssData, cssDataChanged);
@@ -239,7 +239,7 @@ namespace PeachPDF.Html.Core.Parse
                     childBox.TextDecorationStyle = box.TextDecorationStyle;
                     childBox.TextDecorationColor = box.TextDecorationColor;
                 }
-                    
+
                 box.TextDecoration = string.Empty;
                 box.TextDecorationLine = string.Empty;
                 box.TextDecorationStyle = string.Empty;
@@ -260,7 +260,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="cssData">the css data to use to get the matching css blocks</param>
         /// <param name="media">The media type to apply styles for</param>
         /// <returns>The list of applied important property names</returns>
-        private static HashSet<string> AssignCssBlocks(CssValueParser valueParser, CssBox box, CssData cssData,string media)
+        private static HashSet<string> AssignCssBlocks(CssValueParser valueParser, CssBox box, CssData cssData, string media)
         {
             var combinedBlocks = new List<IStyleRule>();
             var styleRules = cssData.GetStyleRules(media, box);
@@ -306,7 +306,7 @@ namespace PeachPDF.Html.Core.Parse
 
                 if (value is not null && IsStyleOnElementAllowed(box, prop.Name, value))
                 {
-                    CssUtils.SetPropertyValue(valueParser ,box, prop.Name, value);
+                    CssUtils.SetPropertyValue(valueParser, box, prop.Name, value);
                 }
             }
         }

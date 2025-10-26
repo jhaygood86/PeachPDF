@@ -1,14 +1,10 @@
-using System;
-
 namespace PeachPDF.Tests.CSS
 {
     using PeachPDF.CSS;
-using Xunit;
     using System.IO;
     using System.Linq;
-
-    using PeachPDF.CSS;
-public class CssSheetTests : CssConstructionFunctions
+    using Xunit;
+    public class CssSheetTests : CssConstructionFunctions
     {
         [Fact]
         public void CssSheetOnEofDuringRuleWithoutSemicolon()
@@ -1276,7 +1272,7 @@ h1 {
             var rule = sheet.Rules[0] as StyleRule;
             Assert.IsType<ComplexSelector>(rule.Selector);
             var selector = (ComplexSelector)rule.Selector;
-            
+
             var parts = selector.ToList();
             Assert.Equal(2, parts.Count());
             Assert.IsType<IdSelector>(parts[0].Selector);

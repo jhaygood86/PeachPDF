@@ -28,9 +28,7 @@
 #endregion
 
 using System;
-using System.ComponentModel;
 using System.Threading;
-using PeachPDF.PdfSharpCore.Pdf.Internal;
 
 namespace PeachPDF.PdfSharpCore.Internal
 {

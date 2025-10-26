@@ -122,7 +122,7 @@ namespace PeachPDF.CSS
         public string GetPropertyPriority(string propertyName)
         {
             var property = GetProperty(propertyName);
-            if (property is {IsImportant: true}) return Keywords.Important;
+            if (property is { IsImportant: true }) return Keywords.Important;
             if (!IsStrictMode || !PropertyFactory.Instance.IsShorthand(propertyName)) return string.Empty;
 
             var longhands = PropertyFactory.Instance.GetLonghands(propertyName);

@@ -220,21 +220,21 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         // TODO: make own class
         internal PdfResourceMap Patterns
         {
-            get { return _patterns ?? (_patterns = (PdfResourceMap) Elements.GetValue(Keys.Pattern, VCF.Create)); }
+            get { return _patterns ?? (_patterns = (PdfResourceMap)Elements.GetValue(Keys.Pattern, VCF.Create)); }
         }
         PdfResourceMap _patterns;
 
         // TODO: make own class
         internal PdfResourceMap Shadings
         {
-            get { return _shadings ?? (_shadings = (PdfResourceMap) Elements.GetValue(Keys.Shading, VCF.Create)); }
+            get { return _shadings ?? (_shadings = (PdfResourceMap)Elements.GetValue(Keys.Shading, VCF.Create)); }
         }
         PdfResourceMap _shadings;
 
         // TODO: make own class
         internal PdfResourceMap Properties
         {
-            get {return _properties ?? (_properties = (PdfResourceMap) Elements.GetValue(Keys.Properties, VCF.Create));}
+            get { return _properties ?? (_properties = (PdfResourceMap)Elements.GetValue(Keys.Properties, VCF.Create)); }
         }
         PdfResourceMap _properties;
 

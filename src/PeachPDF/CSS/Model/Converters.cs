@@ -13,7 +13,7 @@ namespace PeachPDF.CSS
 
         public static readonly IValueConverter ResolutionConverter =
             new StructValueConverter<Resolution>(ValueExtensions.ToResolution);
-        
+
         public static readonly IValueConverter TimeConverter = new StructValueConverter<Time>(ValueExtensions.ToTime);
         public static readonly IValueConverter UrlConverter = new UrlValueConverter();
         public static readonly IValueConverter StringConverter = new StringValueConverter();

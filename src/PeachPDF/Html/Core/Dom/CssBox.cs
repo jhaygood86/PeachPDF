@@ -649,7 +649,7 @@ namespace PeachPDF.Html.Core.Dom
                         Location = new RPoint(left + ActualMarginLeft, top);
                         ActualBottom = top;
 
-                        
+
                         CssLayoutEngine.FloatBox(this);
                     }
 
@@ -731,7 +731,7 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
-            CssLayoutEngine.ApplyHeight(this); 
+            CssLayoutEngine.ApplyHeight(this);
             CssLayoutEngine.ApplyParentHeight(this);
 
             await CreateListItemBox(g);
@@ -938,30 +938,30 @@ namespace PeachPDF.Html.Core.Dom
                 case 0 when b.Boxes.Count == 0:
                     return null;
                 case > 0:
-                {
-                    foreach (CssRect word in b.Words)
                     {
-                        if (line.Words.Contains(word))
+                        foreach (CssRect word in b.Words)
                         {
-                            return word;
+                            if (line.Words.Contains(word))
+                            {
+                                return word;
+                            }
                         }
+                        return null;
                     }
-                    return null;
-                }
                 default:
-                {
-                    foreach (CssBox bb in b.Boxes)
                     {
-                        CssRect? w = FirstWordOccurence(bb, line);
-
-                        if (w != null)
+                        foreach (CssBox bb in b.Boxes)
                         {
-                            return w;
-                        }
-                    }
+                            CssRect? w = FirstWordOccurence(bb, line);
 
-                    return null;
-                }
+                            if (w != null)
+                            {
+                                return w;
+                            }
+                        }
+
+                        return null;
+                    }
             }
         }
 
@@ -1080,7 +1080,7 @@ namespace PeachPDF.Html.Core.Dom
 
             if (startBox.Height is not CssConstants.Auto)
             {
-                currentMaxBottom = Math.Max(currentMaxBottom,startBox.ActualBottom);
+                currentMaxBottom = Math.Max(currentMaxBottom, startBox.ActualBottom);
             }
 
             return currentMaxBottom;
@@ -1224,7 +1224,7 @@ namespace PeachPDF.Html.Core.Dom
             var remBottom = (ActualBottom - container.MarginTop) % container.PageSize.Height;
 
             if (!(remTop > remBottom)) return false;
-            
+
             var diff = container.PageSize.Height - remTop;
             Location = Location with { Y = Location.Y + diff + 1 };
 
@@ -1245,7 +1245,7 @@ namespace PeachPDF.Html.Core.Dom
             double additionalMarginRight;
 
             foreach (var box in Boxes)
-            { 
+            {
                 additionalMarginRight = box.BoxSizing switch
                 {
                     CssConstants.ContentBox => 0,
@@ -1550,7 +1550,7 @@ namespace PeachPDF.Html.Core.Dom
             var textDecorationColor = TextDecorationColor;
 
             var textDecorationParts = TextDecoration?.Split(' ') ?? [];
-            
+
 
             if (textDecorationParts.Length > 0)
             {

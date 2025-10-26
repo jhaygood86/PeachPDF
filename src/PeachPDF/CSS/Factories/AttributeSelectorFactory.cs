@@ -40,7 +40,7 @@ namespace PeachPDF.CSS
                 ? (IAttrSelector)Activator.CreateInstance(type, name, value)
                 : new AttrAvailableSelector(name, value);
         }
-        
+
         private static string FormFront(string prefix, string match)
         {
             return string.Concat(prefix, Combinators.Pipe, match);
