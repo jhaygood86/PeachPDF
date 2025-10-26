@@ -1,4 +1,4 @@
-﻿using PeachPDF.CSS;
+using PeachPDF.CSS;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
