@@ -284,6 +284,11 @@ namespace PeachPDF.Html.Core.Dom
         {
             foreach (var childBox in box.Boxes)
             {
+                if (childBox.IsPseudoElement)
+                {
+                    continue;
+                }
+
                 if (!string.IsNullOrEmpty(childBox.Text))
                 {
                     builder.Append(childBox.Text);

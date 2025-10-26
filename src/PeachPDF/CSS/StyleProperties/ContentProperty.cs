@@ -22,14 +22,15 @@ namespace PeachPDF.CSS
                 {Keywords.NoCloseQuote, new NoCloseQuoteContentMode()}
             };
 
-        private static readonly ContentMode[] Default = {new NormalContentMode()};
+        private static readonly ContentMode[] Default = [new NormalContentMode()];
 
         private static readonly IValueConverter StyleConverter = Assign(Keywords.Normal, Default).OrNone().Or(
             ContentModes.ToConverter().Or(
                 UrlConverter).Or(
                 StringConverter).Or(
                 AttrConverter).Or(
-                CounterConverter).Many()).OrDefault();
+                CounterConverter).Or(
+                new ContentFunctionConverter()).Many()).OrDefault();
 
         private abstract class ContentMode
         {
