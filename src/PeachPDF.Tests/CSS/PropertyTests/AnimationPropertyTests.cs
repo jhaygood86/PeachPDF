@@ -569,12 +569,10 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.IsType<AnimationProperty>(property);
             var concrete = (AnimationProperty)property;
         Assert.False(concrete.IsInherited);
- Assert.True(concrete.HasValue);
-      // When two numbers are provided without other context, the parser treats them as iteration count and delay/duration
-        // This is actually valid CSS - "animation: 10 20ms" would be "10 iterations, 20ms duration"
-// However, "10 20" (two unitless numbers) is ambiguous. Since the test name says "Illegal", 
-    // we need to verify the actual parser behavior
-    Assert.Equal("10 20", concrete.Value);
+         // Two unitless numbers is ambiguous and should not parse successfully
+        // ("10 20ms" would be valid: 10 iterations, 20ms duration)
+    // But "10 20" with two unitless numbers has no clear interpretation
+        Assert.False(concrete.HasValue);
         }
 
         [Fact]
@@ -606,6 +604,21 @@ namespace PeachPDF.Tests.CSS.PropertyTests
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

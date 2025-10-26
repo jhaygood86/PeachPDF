@@ -267,7 +267,7 @@ using Xunit;
             var concrete = (TransformOriginProperty)property;
             Assert.False(concrete.IsInherited);
             Assert.True(concrete.HasValue);
-            Assert.Equal("2px left", concrete.Value);
+            Assert.Equal("left 2px", concrete.Value); // Canonical order: x then y
         }
 
         [Fact]
@@ -337,7 +337,7 @@ using Xunit;
             var concrete = (TransformOriginProperty)property;
             Assert.False(concrete.IsInherited);
             Assert.True(concrete.HasValue);
-            Assert.Equal("2px left 10px", concrete.Value);
+            Assert.Equal("left 2px 10px", concrete.Value); // Canonical order: x y z
         }
 
         [Fact]
@@ -723,6 +723,42 @@ using Xunit;
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

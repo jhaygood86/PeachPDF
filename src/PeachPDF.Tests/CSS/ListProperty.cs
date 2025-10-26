@@ -334,13 +334,7 @@ namespace PeachPDF.Tests.CSS
             var concrete = (ListStyleProperty)property;
             Assert.False(concrete.IsInherited);
             Assert.True(concrete.HasValue);
-            Assert.Equal("none square", concrete.Value);
+            Assert.Equal("square none", concrete.Value);  // Canonical order: type, image, position
         }
     }
 }
-
-
-
-
-
-
