@@ -9,117 +9,131 @@ namespace PeachPDF.CSS
     {
         public IPropertyValue Convert(IEnumerable<Token> value)
         {
-            var perms = GetPermutations(converters).ToList();
+var indices = Enumerable.Range(0, converters.Length).ToArray();
             
+         // Try original order first to respect ordering constraints (e.g., duration before delay)
+      var list = new List<Token>(value);
+  var options = new IPropertyValue[indices.Length];
+        var success = TryOrder(indices, converters, list, options);
+      if (success && list.Count == 0)
+         {
+     return new OptionsValue(options, value);
+            }
+            
+     // Try other permutations if original order doesn't work
+            var perms = GetPermutations(indices).Skip(1).ToList(); // Skip first (original order) since we just tried it
+   
             foreach (var perm in perms)
-            {
-                var list = new List<Token>(value);
-                var options = new IPropertyValue[perm.Length];
-                var success = TryOrder(perm, list, options);
-                if (success && list.Count == 0)
-                {
-                    return new OptionsValue(options, value);
-                }
+   {
+     list = new List<Token>(value);
+     options = new IPropertyValue[perm.Length];
+     success = TryOrder(perm, converters, list, options);
+  if (success && list.Count == 0)
+   {
+    // Remap the options back to the original converter order
+     var reorderedOptions = new IPropertyValue[converters.Length];
+           for (var i = 0; i < perm.Length; i++)
+{
+    reorderedOptions[perm[i]] = options[i];
+         }
+         return new OptionsValue(reorderedOptions, value);
+     }
             }
 
-            // If none work, lenient with original order
-            var list2 = new List<Token>(value);
-            var options2 = new IPropertyValue[converters.Length];
-            TryOrder(converters, list2, options2);
-            return new OptionsValue(options2, value);
-        }
+       return null;
+     }
 
-        private static bool TryOrder(IValueConverter[] converters, List<Token> list, IPropertyValue[] options)
+        private static bool TryOrder(int[] indices, IValueConverter[] converters, List<Token> list, IPropertyValue[] options)
         {
-            for (var i = 0; i < converters.Length; i++)
+  for (var i = 0; i < indices.Length; i++)
             {
-                options[i] = converters[i].VaryAll(list);
-                if (options[i] == null) return false;
+           options[i] = converters[indices[i]].VaryStart(list);
+    if (options[i] == null) return false;
             }
             return true;
         }
 
-        private static IEnumerable<IValueConverter[]> GetPermutations(IValueConverter[] converters)
-        {
-            var list = new List<IValueConverter>(converters);
+        private static IEnumerable<int[]> GetPermutations(int[] indices)
+   {
+            var list = new List<int>(indices);
             return Permute(list, 0).Select(l => l.ToArray());
         }
 
-        private static IEnumerable<List<IValueConverter>> Permute(List<IValueConverter> list, int start)
+ private static IEnumerable<List<int>> Permute(List<int> list, int start)
         {
             if (start == list.Count - 1)
-            {
-                yield return [..list];
-            }
-            else
-            {
-                for (var i = start; i < list.Count; i++)
-                {
-                    Swap(list, start, i);
-                    foreach (var perm in Permute(list, start + 1))
-                    {
-                        yield return perm;
-                    }
-                    Swap(list, start, i); // backtrack
-                }
-            }
+     {
+          yield return [..list];
         }
+          else
+       {
+           for (var i = start; i < list.Count; i++)
+         {
+     Swap(list, start, i);
+ foreach (var perm in Permute(list, start + 1))
+  {
+       yield return perm;
+            }
+          Swap(list, start, i); // backtrack
+     }
+            }
+    }
 
         private static void Swap<T>(List<T> list, int i, int j)
         {
             (list[i], list[j]) = (list[j], list[i]);
         }
 
-        public IPropertyValue Construct(Property[] properties)
-        {
-            var result = properties.Guard<OptionsValue>();
+   public IPropertyValue Construct(Property[] properties)
+      {
+  var result = properties.Guard<OptionsValue>();
 
-            if (result != null) return result;
+ if (result != null) return result;
 
-            var values = new IPropertyValue[converters.Length];
+     var values = new IPropertyValue[converters.Length];
 
             for (var i = 0; i < converters.Length; i++)
             {
-                var value = converters[i].Construct(properties);
+var value = converters[i].Construct(properties);
 
-                if (value == null) return null;
+            if (value == null) return null;
 
-                values[i] = value;
+           values[i] = value;
             }
 
-            result = new OptionsValue(values, []);
+ result = new OptionsValue(values, []);
 
-            return result;
+          return result;
         }
 
         private sealed class OptionsValue(IPropertyValue[] options, IEnumerable<Token> tokens) : IPropertyValue
         {
-            public string CssText
-            {
-                get
-                {
-                    return string.Join(" ",
-                        options.Where(m => !string.IsNullOrEmpty(m.CssText)).Select(m => m.CssText));
-                }
+          public string CssText
+  {
+      get
+           {
+            return string.Join(" ",
+   options.Where(m => !string.IsNullOrEmpty(m.CssText)).Select(m => m.CssText));
+    }
             }
 
-            public TokenValue Original { get; } = new TokenValue(tokens);
+        public TokenValue Original { get; } = new TokenValue(tokens);
 
             public TokenValue ExtractFor(string name)
-            {
-                var tokens = new List<Token>();
+        {
+     var tokens = new List<Token>();
 
                 foreach (var option in options)
-                {
-                    var extracted = option.ExtractFor(name);
+    {
+       var extracted = option.ExtractFor(name);
 
-                    if (extracted is not { Count: > 0 }) continue;
-                    if (tokens.Count > 0) tokens.Add(Token.Whitespace);
-                    tokens.AddRange(extracted);
-                }
+            if (extracted is not { Count: > 0 }) continue;
+      if (tokens.Count > 0) tokens.Add(Token.Whitespace);
+    tokens.AddRange(extracted);
+     }
 
-                return new TokenValue(tokens);
+      return new TokenValue(tokens);
             }
-        }
+     }
     }
 }
