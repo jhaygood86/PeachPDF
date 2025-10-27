@@ -59,6 +59,20 @@ namespace PeachPDF.Html.Core.Dom
 
         private double[]? _columnMinWidths;
 
+        // Header repetition fields
+        private double _headerHeight;
+        private readonly List<CssBox> _headerRows = [];
+        private bool _shouldRepeatHeaders => _headerBox != null && _headerBox.Display == CssConstants.TableHeaderGroup;
+        private int _currentPageNumber = 0;
+
+        // Phase 2: Footer repetition fields
+        private double _footerHeight;
+        private readonly List<CssBox> _footerRows = [];
+        private bool _shouldRepeatFooters => _footerBox != null && _footerBox.Display == CssConstants.TableFooterGroup;
+
+        // Phase 2: Track header cell spans for complex headers
+        private readonly Dictionary<CssBox, (int rowSpan, int colSpan)> _headerCellSpans = [];
+
         /// <summary>
         /// Init.
         /// </summary>
@@ -467,7 +481,7 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// While table width is larger than it should, and width is reductable.<br/>
+        /// While table width is larger than it should, and width is reducible.<br/>
         /// If table max width is limited by we need to lower the columns width even if it will result in clipping<br/>
         /// </summary>
         private void EnforceMaximumSize()
@@ -595,6 +609,7 @@ namespace PeachPDF.Html.Core.Dom
                     {
                         _columnWidths[col + 1] -= diff;
                     }
+
                 }
             }
         }
@@ -612,11 +627,69 @@ namespace PeachPDF.Html.Core.Dom
             var maxBottom = 0d;
             var currentRow = 0;
 
+            var pageHeight = _tableBox.HtmlContainer?.PageSize.Height ?? double.MaxValue;
+            var marginTop = _tableBox.HtmlContainer?.MarginTop ?? 0;
+            var marginBottom = _tableBox.HtmlContainer?.MarginBottom ?? 0;
+
+            // First layout header to calculate its height and store for repetition
+            if (_shouldRepeatHeaders)
+            {
+                var headerMaxRight = maxRight;
+                _headerHeight = await LayoutHeaderSection(g, startX, currentY);
+                maxRight = Math.Max(maxRight, _tableBox.ActualRight);
+                currentY += _headerHeight;
+                if (_headerHeight > 0)
+                {
+                    currentY += GetVerticalSpacing();
+                }
+            }
+
+            // Phase 3: Layout footer to calculate its height (will be positioned at end or repeated)
+            if (_shouldRepeatFooters && _footerBox != null)
+            {
+                // Temporarily layout footer to get its height
+                var tempFooterY = currentY;
+                _footerHeight = await LayoutFooterSection(g, startX, tempFooterY);
+            }
+
             Dictionary<int, List<CssBox>> rowSpannedBoxes = new();
 
-            for (var i = 0; i < _allRows.Count; i++)
+            for (var i = 0; i < _bodyRows.Count; i++)
             {
-                var row = _allRows[i];
+                var row = _bodyRows[i];
+
+                // Check if we need to break to a new page before laying out this row
+                var estimatedRowHeight = EstimateRowHeight(row);
+
+                // Phase 3: Account for footer height when checking page boundaries
+                var availableHeight = pageHeight - _footerHeight - marginBottom;
+                var wouldCrossPageBoundary = WillCrossPageBoundary(currentY, currentY + estimatedRowHeight, pageHeight, marginTop, availableHeight);
+
+                if (wouldCrossPageBoundary && i > 0 && _tableBox.HtmlContainer != null)
+                {
+                    // Phase 3: Render footer at bottom of current page before page break
+                    if (_shouldRepeatFooters && _footerHeight > 0)
+                    {
+                        var footerY = CalculateFooterPositionAtPageBottom(currentY, pageHeight, marginTop, marginBottom);
+                        await RenderFooterOnPage(g, startX, footerY);
+                    }
+
+                    // Move to next page
+                    var pageBreakOffset = CalculatePageBreakOffset(currentY, pageHeight, marginTop, marginBottom);
+                    currentY += pageBreakOffset;
+                    _currentPageNumber++;
+
+                    // Repeat header on new page
+                    if (_shouldRepeatHeaders && _headerHeight > 0)
+                    {
+                        currentY = await RenderHeaderOnNewPage(g, startX, currentY);
+                        maxRight = Math.Max(maxRight, _tableBox.ActualRight);
+                        currentY += GetVerticalSpacing();
+                    }
+
+                    maxBottom = currentY;
+                }
+
                 var currentX = startX;
                 var currentColumn = 0;
                 var breakPage = false;
@@ -690,8 +763,8 @@ namespace PeachPDF.Html.Core.Dom
                         CssLayoutEngine.ApplyCellVerticalAlignment(g, spacer.ExtendedBox);
                     }
 
-                    // If one cell crosses page borders then don't need to check other cells in the row
-                    if (_tableBox.BreakInside is CssConstants.Avoid) continue;
+                    // Phase 3: Check for break-inside: avoid on table or thead
+                    if (ShouldAvoidBreak()) continue;
 
                     breakPage = cell.BreakPage();
                     if (!breakPage) continue;
@@ -724,11 +797,19 @@ namespace PeachPDF.Html.Core.Dom
                 currentRow++;
             }
 
+            // Phase 3: Render footer at final position (bottom of last page or after body)
+            if (_shouldRepeatFooters && _footerHeight > 0)
+            {
+                var finalFooterY = currentY;
+                await RenderFooterOnPage(g, startX, finalFooterY);
+                currentY += _footerHeight + GetVerticalSpacing();
+                maxBottom = Math.Max(maxBottom, currentY);
+            }
+
             maxRight = Math.Max(maxRight, _tableBox.Location.X + _tableBox.ActualWidth);
             _tableBox.ActualRight = maxRight + GetHorizontalSpacing() + _tableBox.ActualBorderRightWidth;
             _tableBox.ActualBottom = Math.Max(maxBottom, startY) + GetVerticalSpacing() + _tableBox.ActualBorderBottomWidth;
         }
-
         /// <summary>
         /// Gets the spanned width of a cell (With of all columns it spans minus one).
         /// </summary>
@@ -1028,6 +1109,386 @@ namespace PeachPDF.Html.Core.Dom
         private double GetVerticalSpacing()
         {
             return _tableBox.BorderCollapse == CssConstants.Collapse ? -1f : _tableBox.ActualBorderSpacingVertical;
+        }
+
+        /// <summary>
+        /// Layouts the header section and returns its height
+        /// </summary>
+        private async ValueTask<double> LayoutHeaderSection(RGraphics g, double startX, double startY)
+        {
+            if (_headerBox == null || _headerBox.Boxes.Count == 0)
+                return 0;
+
+            var headerStartY = startY;
+            var currentY = startY;
+            var maxRight = startX;
+
+            // Store header rows for later repetition
+            _headerRows.Clear();
+            _headerRows.AddRange(_headerBox.Boxes);
+
+            // Phase 2: Track cell spans for complex headers
+            _headerCellSpans.Clear();
+
+            foreach (var headerRow in _headerRows)
+            {
+                var currentX = startX;
+                var rowMaxBottom = currentY;
+
+                foreach (var cell in headerRow.Boxes)
+                {
+                    var columnIndex = GetCellRealColumnIndex(headerRow, cell);
+                    var width = GetCellWidth(columnIndex, cell);
+
+                    // Phase 2: Store cell span information
+                    var rowSpan = GetRowSpan(cell);
+                    var colSpan = GetColSpan(cell);
+                    _headerCellSpans[cell] = (rowSpan, colSpan);
+
+                    cell.Location = new RPoint(currentX, currentY);
+                    cell.ActualRight = cell.Location.X + width;
+
+                    await cell.PerformLayout(g);
+
+                    rowMaxBottom = Math.Max(rowMaxBottom, cell.ActualBottom);
+                    maxRight = Math.Max(maxRight, cell.ActualRight);
+                    currentX = cell.ActualRight + GetHorizontalSpacing();
+                }
+
+                // Align cells vertically
+                foreach (var cell in headerRow.Boxes)
+                {
+                    cell.ActualBottom = rowMaxBottom;
+                    CssLayoutEngine.ApplyCellVerticalAlignment(g, cell);
+                }
+
+                headerRow.Location = new RPoint(startX, currentY);
+                headerRow.ActualRight = headerRow.Boxes.Count > 0 ? headerRow.Boxes.Max(x => x.ActualRight) : startX;
+                headerRow.ActualBottom = rowMaxBottom;
+                currentY = rowMaxBottom + GetVerticalSpacing();
+            }
+
+            // Update table's actual right
+            _tableBox.ActualRight = Math.Max(_tableBox.ActualRight, maxRight);
+
+            return currentY - headerStartY;
+        }
+
+        /// <summary>
+        /// Renders a copy of the header at the top of a new page
+        /// </summary>
+        private async ValueTask<double> RenderHeaderOnNewPage(RGraphics g, double startX, double startY)
+        {
+            if (_headerRows.Count == 0)
+                return startY;
+
+            var currentY = startY;
+            var maxRight = startX;
+
+            foreach (var originalHeaderRow in _headerRows)
+            {
+                var currentX = startX;
+                var rowMaxBottom = currentY;
+
+                // Re-layout header cells at new position
+                foreach (var cell in originalHeaderRow.Boxes)
+                {
+                    var columnIndex = GetCellRealColumnIndex(originalHeaderRow, cell);
+                    var width = GetCellWidth(columnIndex, cell);
+
+                    // Calculate the height of the cell from original layout
+                    var cellHeight = cell.ActualBottom - cell.Location.Y;
+
+                    // Update cell position to new page location
+                    var oldLocation = cell.Location;
+                    cell.Location = new RPoint(currentX, currentY);
+                    cell.ActualRight = cell.Location.X + width;
+                    cell.ActualBottom = currentY + cellHeight;
+
+                    // Update word positions within the cell
+                    OffsetCellContentVertically(cell, oldLocation.Y, currentY);
+
+                    rowMaxBottom = Math.Max(rowMaxBottom, cell.ActualBottom);
+                    maxRight = Math.Max(maxRight, cell.ActualRight);
+                    currentX = cell.ActualRight + GetHorizontalSpacing();
+                }
+
+                // Update row position
+                originalHeaderRow.Location = new RPoint(startX, currentY);
+                originalHeaderRow.ActualRight = originalHeaderRow.Boxes.Count > 0 ? originalHeaderRow.Boxes.Max(x => x.ActualRight) : startX;
+                originalHeaderRow.ActualBottom = rowMaxBottom;
+                currentY = rowMaxBottom + GetVerticalSpacing();
+            }
+
+            // Update table's actual right
+            _tableBox.ActualRight = Math.Max(_tableBox.ActualRight, maxRight);
+
+            return currentY;
+        }
+
+        /// <summary>
+        /// Offsets the content within a cell vertically when header is repeated
+        /// </summary>
+        private void OffsetCellContentVertically(CssBox cell, double oldY, double newY)
+        {
+            var offset = newY - oldY;
+
+            if (Math.Abs(offset) < 0.01)
+                return;
+
+            // Update word positions
+            foreach (var word in cell.Words)
+            {
+                word.Top += offset;
+            }
+
+            // Recursively update child boxes
+            foreach (var childBox in cell.Boxes)
+            {
+                childBox.Location = childBox.Location with { Y = childBox.Location.Y + offset };
+                childBox.ActualBottom += offset;
+                OffsetCellContentVertically(childBox, oldY, newY);
+            }
+        }
+
+        /// <summary>
+        /// Determines if a row would cross a page boundary
+        /// </summary>
+        private bool WillCrossPageBoundary(double currentY, double estimatedBottom, double pageHeight, double marginTop)
+        {
+            if (pageHeight >= double.MaxValue - 1)
+                return false;
+
+            // Calculate which page we're on
+            var currentPageTop = (_currentPageNumber * pageHeight) + marginTop;
+            var currentPageBottom = currentPageTop + pageHeight;
+
+            // Check if the row would extend beyond the current page
+            return estimatedBottom > currentPageBottom;
+        }
+
+        /// <summary>
+        /// Phase 3: Determines if a row would cross a page boundary with available height consideration
+        /// </summary>
+        private bool WillCrossPageBoundary(double currentY, double estimatedBottom, double pageHeight, double marginTop, double availableHeight)
+        {
+            if (pageHeight >= double.MaxValue - 1)
+                return false;
+
+            // Calculate which page we're on
+            var currentPageTop = (_currentPageNumber * pageHeight) + marginTop;
+            var currentPageBottom = currentPageTop + availableHeight;
+
+            // Check if the row would extend beyond the available space (accounting for footer)
+            return estimatedBottom > currentPageBottom;
+        }
+
+        /// <summary>
+        /// Phase 3: Calculates the Y position for footer at the bottom of current page
+        /// </summary>
+        private double CalculateFooterPositionAtPageBottom(double currentY, double pageHeight, double marginTop, double marginBottom)
+        {
+            if (pageHeight >= double.MaxValue - 1)
+                return currentY;
+
+            var currentPageTop = (_currentPageNumber * pageHeight) + marginTop;
+            var currentPageBottom = currentPageTop + pageHeight;
+
+            // Position footer at bottom of page, accounting for margins and footer height
+            return currentPageBottom - _footerHeight - marginBottom;
+        }
+
+        /// <summary>
+        /// Phase 3: Check if break should be avoided based on CSS properties
+        /// </summary>
+        private bool ShouldAvoidBreak()
+        {
+            // Check table's break-inside property
+            if (_tableBox.BreakInside == CssConstants.Avoid)
+                return true;
+
+            // Phase 3: Check thead's break-inside property
+            if (_headerBox?.BreakInside == CssConstants.Avoid)
+                return true;
+
+            // Phase 3: Check thead's break-after property
+            if (_headerBox?.BreakAfter == CssConstants.Avoid)
+                return true;
+
+            return false;
+        }
+
+        /// <summary>
+        /// Phase 3: Check if header is taller than a single page (edge case)
+        /// </summary>
+        private bool IsHeaderTallerThanPage(double pageHeight, double marginTop, double marginBottom)
+        {
+            if (pageHeight >= double.MaxValue - 1)
+                return false;
+
+            var availablePageHeight = pageHeight - marginTop - marginBottom;
+            return _headerHeight > availablePageHeight;
+        }
+
+        /// <summary>
+        /// Phase 3: Handle oversized headers by clipping to page height
+        /// </summary>
+        private double ClipHeaderHeight(double pageHeight, double marginTop, double marginBottom)
+        {
+            if (pageHeight >= double.MaxValue - 1)
+                return _headerHeight;
+
+            var availablePageHeight = pageHeight - marginTop - marginBottom;
+            if (_headerHeight > availablePageHeight)
+            {
+                // Log warning that header is being clipped
+                _tableBox.HtmlContainer?.ReportError(
+                    HtmlRenderErrorType.Layout,
+                    $"Table header height ({_headerHeight:F2}) exceeds page height ({availablePageHeight:F2}). Header will be clipped.",
+                    null
+                );
+                return availablePageHeight;
+            }
+            return _headerHeight;
+        }
+
+        /// <summary>
+        /// Estimates the height a row will need (for page break detection)
+        /// </summary>
+        private double EstimateRowHeight(CssBox row)
+        {
+            // Quick estimation: use max of cell minimum heights
+            double maxHeight = 0;
+
+            foreach (var cell in row.Boxes)
+            {
+                // Use font height as minimum estimate
+                var estimatedHeight = cell.ActualFont?.Height ?? 12;
+                maxHeight = Math.Max(maxHeight, estimatedHeight);
+            }
+
+            return maxHeight + GetVerticalSpacing();
+        }
+
+        /// <summary>
+        /// Calculates offset needed to move to the next page
+        /// </summary>
+        private double CalculatePageBreakOffset(double currentY, double pageHeight, double marginTop, double marginBottom)
+        {
+            if (pageHeight >= double.MaxValue - 1)
+                return 0;
+
+            var currentPageNumber = (int)((currentY - marginTop) / pageHeight);
+            var nextPageStart = (currentPageNumber + 1) * pageHeight + marginTop;
+
+            return nextPageStart - currentY + marginTop;
+        }
+
+        /// <summary>
+        /// Layouts the footer section and returns its height (Phase 2)
+        /// </summary>
+        private async ValueTask<double> LayoutFooterSection(RGraphics g, double startX, double startY)
+        {
+            if (_footerBox == null || _footerBox.Boxes.Count == 0)
+                return 0;
+
+            var footerStartY = startY;
+            var currentY = startY;
+            var maxRight = startX;
+
+            // Store footer rows for later repetition
+            _footerRows.Clear();
+            _footerRows.AddRange(_footerBox.Boxes);
+
+            foreach (var footerRow in _footerRows)
+            {
+                var currentX = startX;
+                var rowMaxBottom = currentY;
+
+                foreach (var cell in footerRow.Boxes)
+                {
+                    var columnIndex = GetCellRealColumnIndex(footerRow, cell);
+                    var width = GetCellWidth(columnIndex, cell);
+
+                    cell.Location = new RPoint(currentX, currentY);
+                    cell.ActualRight = cell.Location.X + width;
+
+                    await cell.PerformLayout(g);
+
+                    rowMaxBottom = Math.Max(rowMaxBottom, cell.ActualBottom);
+                    maxRight = Math.Max(maxRight, cell.ActualRight);
+                    currentX = cell.ActualRight + GetHorizontalSpacing();
+                }
+
+                // Align cells vertically
+                foreach (var cell in footerRow.Boxes)
+                {
+                    cell.ActualBottom = rowMaxBottom;
+                    CssLayoutEngine.ApplyCellVerticalAlignment(g, cell);
+                }
+
+                footerRow.Location = new RPoint(startX, currentY);
+                footerRow.ActualRight = footerRow.Boxes.Count > 0 ? footerRow.Boxes.Max(x => x.ActualRight) : startX;
+                footerRow.ActualBottom = rowMaxBottom;
+                currentY = rowMaxBottom + GetVerticalSpacing();
+            }
+
+            // Update table's actual right
+            _tableBox.ActualRight = Math.Max(_tableBox.ActualRight, maxRight);
+
+            return currentY - footerStartY;
+        }
+
+        /// <summary>
+        /// Renders a copy of the footer at the bottom of a page (Phase 2)
+        /// </summary>
+        private async ValueTask<double> RenderFooterOnPage(RGraphics g, double startX, double startY)
+        {
+            if (_footerRows.Count == 0)
+                return startY;
+
+            var currentY = startY;
+            var maxRight = startX;
+
+            foreach (var originalFooterRow in _footerRows)
+            {
+                var currentX = startX;
+                var rowMaxBottom = currentY;
+
+                // Re-layout footer cells at new position
+                foreach (var cell in originalFooterRow.Boxes)
+                {
+                    var columnIndex = GetCellRealColumnIndex(originalFooterRow, cell);
+                    var width = GetCellWidth(columnIndex, cell);
+
+                    // Calculate the height of the cell from original layout
+                    var cellHeight = cell.ActualBottom - cell.Location.Y;
+
+                    // Update cell position to new page location
+                    var oldLocation = cell.Location;
+                    cell.Location = new RPoint(currentX, currentY);
+                    cell.ActualRight = cell.Location.X + width;
+                    cell.ActualBottom = currentY + cellHeight;
+
+                    // Update word positions within the cell
+                    OffsetCellContentVertically(cell, oldLocation.Y, currentY);
+
+                    rowMaxBottom = Math.Max(rowMaxBottom, cell.ActualBottom);
+                    maxRight = Math.Max(maxRight, cell.ActualRight);
+                    currentX = cell.ActualRight + GetHorizontalSpacing();
+                }
+
+                // Update row position
+                originalFooterRow.Location = new RPoint(startX, currentY);
+                originalFooterRow.ActualRight = originalFooterRow.Boxes.Count > 0 ? originalFooterRow.Boxes.Max(x => x.ActualRight) : startX;
+                originalFooterRow.ActualBottom = rowMaxBottom;
+                currentY = rowMaxBottom + GetVerticalSpacing();
+            }
+
+            // Update table's actual right
+            _tableBox.ActualRight = Math.Max(_tableBox.ActualRight, maxRight);
+
+            return currentY;
         }
 
         #endregion
