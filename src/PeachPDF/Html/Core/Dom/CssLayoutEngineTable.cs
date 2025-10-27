@@ -1343,10 +1343,10 @@ namespace PeachPDF.Html.Core.Dom
             {
                 // Log warning that header is being clipped
                 _tableBox.HtmlContainer?.ReportError(
-                      HtmlRenderErrorType.Layout,
-               $"Table header height ({_headerHeight:F2}) exceeds page height ({availablePageHeight:F2}). Header will be clipped.",
-             null
-                 );
+                    HtmlRenderErrorType.Layout,
+                    $"Table header height ({_headerHeight:F2}) exceeds page height ({availablePageHeight:F2}). Header will be clipped.",
+                    null
+                );
                 return availablePageHeight;
             }
             return _headerHeight;
