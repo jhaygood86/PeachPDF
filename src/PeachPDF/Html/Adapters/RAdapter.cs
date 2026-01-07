@@ -17,6 +17,7 @@ using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
@@ -43,12 +44,12 @@ namespace PeachPDF.Html.Adapters
         /// <summary>
         /// cache of brush color to brush instance
         /// </summary>
-        private readonly Dictionary<RColor, RBrush> _brushesCache = [];
+        private readonly ConcurrentDictionary<RColor, RBrush> _brushesCache = [];
 
         /// <summary>
         /// cache of pen color to pen instance
         /// </summary>
-        private readonly Dictionary<RColor, RPen> _penCache = [];
+        private readonly ConcurrentDictionary<RColor, RPen> _penCache = [];
 
         /// <summary>
         /// cache of all the font used not to create same font again and again
