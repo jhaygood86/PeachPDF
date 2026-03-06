@@ -18,7 +18,7 @@
     <Nullable>enable</Nullable>
 	</PropertyGroup>
 	<ItemGroup>
-	  <PackageReference Include="MimeKit" Version="4.14.0" />
+	  <PackageReference Include="MimeKit" Version="4.15.1" />
 	</ItemGroup>
 	<ItemGroup>
 	  <ProjectReference Include="..\PdfSharpCore\PeachPDF.PdfSharpCore.csproj" />
