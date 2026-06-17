@@ -761,7 +761,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (bottomRelativeToCurrentPage > pageHeight)
                 {
-                    var offset = pageHeight - topRelativeToCurrentPage + HtmlContainer.MarginBottom;
+                    var offset = pageHeight - topRelativeToCurrentPage + HtmlContainer.MarginTop;
                     OffsetTop(offset);
                 }
             }
