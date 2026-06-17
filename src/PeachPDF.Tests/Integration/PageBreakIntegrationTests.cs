@@ -173,8 +173,15 @@ namespace PeachPDF.Tests.Integration
 
         private CssBox? FindBoxByClass(CssBox root, string className)
         {
-            if (root.HtmlTag?.TryGetAttribute("class") == className)
-                return root;
+            var classAttr = root.HtmlTag?.TryGetAttribute("class", "");
+            if (!string.IsNullOrEmpty(classAttr))
+            {
+                foreach (var cls in classAttr.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    if (cls == className)
+                        return root;
+                }
+            }
 
             foreach (var child in root.Boxes)
             {
