@@ -617,13 +617,16 @@ namespace PeachPDF.Html.Core.Dom
                 CssNamedStringEngine.ApplyStringSet(this);
             }
 
-            if (BreakBefore is CssConstants.Page)
+            // Spec (css-break §3.1): a forced break occurs at a class A break point if
+            // the earlier sibling's break-after OR the later sibling's break-before has a
+            // forced break value — at least one is sufficient.
+            // Forced values include: page, always.
+            var previousSiblingForBreak = DomUtils.GetPreviousSibling(this, false);
+            if (IsForcedBreakValue(BreakBefore) || IsForcedBreakValue(previousSiblingForBreak?.BreakAfter))
             {
-                var previousSibling = DomUtils.GetPreviousSibling(this);
-
-                if (previousSibling is not null)
+                if (previousSiblingForBreak is not null)
                 {
-                    var bottomRelativeToCurrentPage = previousSibling.ActualBottom;
+                    var bottomRelativeToCurrentPage = previousSiblingForBreak.ActualBottom;
                     var pageHeight = HtmlContainer!.PageSize.Height;
 
                     while (bottomRelativeToCurrentPage > pageHeight)
@@ -632,7 +635,7 @@ namespace PeachPDF.Html.Core.Dom
                     }
 
                     var pixelsToNextPage = pageHeight - bottomRelativeToCurrentPage;
-                    previousSibling.ActualBottom += pixelsToNextPage + HtmlContainer.MarginTop;
+                    previousSiblingForBreak.ActualBottom += pixelsToNextPage + HtmlContainer.MarginTop;
                 }
             }
 
@@ -759,7 +762,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (bottomRelativeToCurrentPage > pageHeight)
                 {
-                    var offset = pageHeight - topRelativeToCurrentPage + HtmlContainer.MarginBottom;
+                    var offset = pageHeight - topRelativeToCurrentPage + HtmlContainer.MarginTop;
                     OffsetTop(offset);
                 }
             }
@@ -1020,6 +1023,13 @@ namespace PeachPDF.Html.Core.Dom
 
             return maxWidth + padding;
         }
+
+        /// <summary>
+        /// Returns true if the given break-before or break-after value is a forced page-break value
+        /// per CSS Fragmentation §3.1 (page, always).
+        /// </summary>
+        private static bool IsForcedBreakValue(string? value) =>
+            value is CssConstants.Page or CssConstants.Always;
 
         /// <summary>
         /// Gets the longest word (in width) inside the box, deeply.
