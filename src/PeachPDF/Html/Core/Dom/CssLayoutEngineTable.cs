@@ -629,27 +629,27 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private CssProxyBox? CreateHeaderProxy(double yPosition)
         {
-          if (_headerBox == null)
-         return null;
+            if (_headerBox == null)
+                return null;
 
-          var proxy = new CssProxyBox(_tableBox, _headerBox);
+            var proxy = new CssProxyBox(_tableBox, _headerBox);
             var startX = Math.Max(_tableBox.ClientLeft + GetHorizontalSpacing(), 0);
-        proxy.Location = new RPoint(startX, yPosition);
-   return proxy;
-   }
+            proxy.Location = new RPoint(startX, yPosition);
+            return proxy;
+        }
 
         /// <summary>
-      /// Create a proxy box for the footer at the specified Y position
-/// </summary>
+        /// Create a proxy box for the footer at the specified Y position
+        /// </summary>
         private CssProxyBox? CreateFooterProxy(double yPosition)
-   {
-  if (_footerBox == null)
-         return null;
+        {
+            if (_footerBox == null)
+                return null;
 
-     var proxy = new CssProxyBox(_tableBox, _footerBox);
+            var proxy = new CssProxyBox(_tableBox, _footerBox);
             var startX = Math.Max(_tableBox.ClientLeft + GetHorizontalSpacing(), 0);
-     proxy.Location = new RPoint(startX, yPosition);
-      return proxy;
+            proxy.Location = new RPoint(startX, yPosition);
+            return proxy;
         }
 
         /// <summary>
@@ -658,141 +658,144 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="g"></param>
         private async ValueTask LayoutCells(RGraphics g)
         {
-       var startX = Math.Max(_tableBox.ClientLeft + GetHorizontalSpacing(), 0);
+            var startX = Math.Max(_tableBox.ClientLeft + GetHorizontalSpacing(), 0);
             var startY = Math.Max(_tableBox.ClientTop + GetVerticalSpacing(), 0);
-       var currentY = startY;
-     var maxRight = startX;
+            var currentY = startY;
+            var maxRight = startX;
             var maxBottom = 0d;
 
-        var pageHeight = _tableBox.HtmlContainer?.PageSize.Height ?? double.MaxValue;
-       var marginTop = _tableBox.HtmlContainer?.MarginTop ?? 0;
+            var pageHeight = _tableBox.HtmlContainer?.PageSize.Height ?? double.MaxValue;
+            var marginTop = _tableBox.HtmlContainer?.MarginTop ?? 0;
             var marginBottom = _tableBox.HtmlContainer?.MarginBottom ?? 0;
 
 #if DEBUG
-      System.Console.WriteLine($"CssLayoutEngineTable.LayoutCells: pageHeight={pageHeight}, marginTop={marginTop}");
+            System.Console.WriteLine($"CssLayoutEngineTable.LayoutCells: pageHeight={pageHeight}, marginTop={marginTop}");
             System.Console.WriteLine($"  _headerBox={(_headerBox == null ? "NULL" : $"Display={_headerBox.Display}")}");
- System.Console.WriteLine($"  _footerBox={(_footerBox == null ? "NULL" : $"Display={_footerBox.Display}")}");
-     System.Console.WriteLine($"  _shouldRepeatHeaders={_shouldRepeatHeaders}");
+            System.Console.WriteLine($"  _footerBox={(_footerBox == null ? "NULL" : $"Display={_footerBox.Display}")}");
+            System.Console.WriteLine($"  _shouldRepeatHeaders={_shouldRepeatHeaders}");
             System.Console.WriteLine($"  _shouldRepeatFooters={_shouldRepeatFooters}");
             System.Console.WriteLine($"  _bodyRows.Count={_bodyRows.Count}");
 #endif
 
             // Step 1: Remove header/footer from document tree
-     RemoveHeaderFooterFromTree();
+            RemoveHeaderFooterFromTree();
 
             // Step 2: Layout header rows ONCE to calculate height
-     if (_shouldRepeatHeaders && _headerBox != null)
- {
-  // Layout header rows directly using table layout logic
-            var headerRowsLayoutY = currentY;
-        foreach (var row in _headerBox.Boxes)
-  {
-      if (row.Display != CssConstants.TableRow)
-  continue;
+            if (_shouldRepeatHeaders && _headerBox != null)
+            {
+                // Layout header rows directly using table layout logic
+                var headerRowsLayoutY = currentY;
+                foreach (var row in _headerBox.Boxes)
+                {
+                    if (row.Display != CssConstants.TableRow)
+                        continue;
 
-     var (newMaxRight, newMaxBottom) = await LayoutBodyRow(g, row, startX, headerRowsLayoutY, -1, new Dictionary<int, List<CssBox>>(), maxRight, headerRowsLayoutY);
-    maxRight = newMaxRight;
- headerRowsLayoutY = newMaxBottom + GetVerticalSpacing();
-    }
+                    var (newMaxRight, newMaxBottom) = await LayoutBodyRow(g, row, startX, headerRowsLayoutY, -1, new Dictionary<int, List<CssBox>>(), maxRight, headerRowsLayoutY);
+                    maxRight = newMaxRight;
+                    headerRowsLayoutY = newMaxBottom + GetVerticalSpacing();
+                }
 
-    // Set header box dimensions
-          _headerBox.Location = new RPoint(startX, currentY);
-  _headerBox.ActualRight = maxRight;
-    _headerBox.ActualBottom = headerRowsLayoutY - GetVerticalSpacing();
-             _headerHeight = _headerBox.ActualBottom - _headerBox.Location.Y;
+                // Set header box dimensions
+                _headerBox.Location = new RPoint(startX, currentY);
+                _headerBox.ActualRight = maxRight;
+                _headerBox.ActualBottom = headerRowsLayoutY - GetVerticalSpacing();
+                _headerHeight = _headerBox.ActualBottom - _headerBox.Location.Y;
 
 #if DEBUG
-      System.Console.WriteLine($"  Header laid out: Height={_headerHeight}, ActualBottom={_headerBox.ActualBottom}");
+                System.Console.WriteLine($"  Header laid out: Height={_headerHeight}, ActualBottom={_headerBox.ActualBottom}");
 #endif
 
-           // Now create proxy that references the already-laid-out header
-    var headerProxy = CreateHeaderProxy(currentY);
-   if (headerProxy != null)
-      {
-   _tableBox.Boxes.Add(headerProxy);  // Add at end instead of inserting at index
-   await headerProxy.PerformLayout(g);
+                // Now create proxy that references the already-laid-out header
+                var headerProxy = CreateHeaderProxy(currentY);
+                if (headerProxy != null)
+                {
+                    _tableBox.Boxes.Add(headerProxy);  // Add at end instead of inserting at index
+                    await headerProxy.PerformLayout(g);
 
-        currentY += _headerHeight + GetVerticalSpacing();
-   maxBottom = currentY;
-        }
-      }
+                    currentY += _headerHeight + GetVerticalSpacing();
+                    maxBottom = currentY;
+                }
+            }
 
-    // Step 3: Layout footer rows once to get dimensions (if needed)
-   if (_shouldRepeatFooters && _footerBox != null)
-     {
- // Layout footer rows directly
-    var footerRowsLayoutY = 0d;
-     foreach (var row in _footerBox.Boxes)
-         {
-   if (row.Display != CssConstants.TableRow)
-       continue;
+            // Step 3: Layout footer rows once to get dimensions (if needed)
+            if (_shouldRepeatFooters && _footerBox != null)
+            {
+                // Layout footer rows directly
+                var footerRowsLayoutY = 0d;
+                foreach (var row in _footerBox.Boxes)
+                {
+                    if (row.Display != CssConstants.TableRow)
+                        continue;
 
-           var (newMaxRight, newMaxBottom) = await LayoutBodyRow(g, row, startX, footerRowsLayoutY, -1, new Dictionary<int, List<CssBox>>(), maxRight, footerRowsLayoutY);
-     footerRowsLayoutY = newMaxBottom + GetVerticalSpacing();
-       }
+                    var (newMaxRight, newMaxBottom) = await LayoutBodyRow(g, row, startX, footerRowsLayoutY, -1, new Dictionary<int, List<CssBox>>(), maxRight, footerRowsLayoutY);
+                    footerRowsLayoutY = newMaxBottom + GetVerticalSpacing();
+                }
 
-        _footerBox.Location = new RPoint(startX, 0);
-    _footerBox.ActualBottom = footerRowsLayoutY - GetVerticalSpacing();
-    _footerHeight = _footerBox.ActualBottom - _footerBox.Location.Y;
-  }
+                _footerBox.Location = new RPoint(startX, 0);
+                _footerBox.ActualBottom = footerRowsLayoutY - GetVerticalSpacing();
+                _footerHeight = _footerBox.ActualBottom - _footerBox.Location.Y;
+            }
 
-   // Step 4: Layout body rows with page break detection
-       var currentPageNumber = 0;
+            // Step 4: Layout body rows with page break detection
+            var currentPageNumber = pageHeight < double.MaxValue - 1
+                ? (int)((startY - marginTop) / pageHeight)
+                : 0;
+
             Dictionary<int, List<CssBox>> rowSpannedBoxes = new();
 
             for (var i = 0; i < _bodyRows.Count; i++)
             {
-          var row = _bodyRows[i];
-       var estimatedRowHeight = EstimateRowHeight(row);
-     var availableHeight = pageHeight - _footerHeight - marginBottom;
+                var row = _bodyRows[i];
+                var estimatedRowHeight = EstimateRowHeight(row);
+                var availableHeight = pageHeight - _footerHeight - marginBottom;
 
-       // Check for page break
-             if (WillCrossPageBoundary(currentY, currentY + estimatedRowHeight, pageHeight, marginTop, availableHeight, currentPageNumber)
-         && i > 0 && _tableBox.HtmlContainer != null)
-          {
-     // Create footer proxy for current page
-      if (_shouldRepeatFooters && _footerHeight > 0)
-         {
-        var footerY = CalculateFooterPositionAtPageBottom(currentY, pageHeight, marginTop, marginBottom, currentPageNumber);
-         var footerProxy = CreateFooterProxy(footerY);
-            if (footerProxy != null)
-      {
-           _tableBox.Boxes.Add(footerProxy);  // Add at end
-          await footerProxy.PerformLayout(g);
-           }
-    }
+                // Check for page break
+                if (WillCrossPageBoundary(currentY, currentY + estimatedRowHeight, pageHeight, marginTop, availableHeight, currentPageNumber)
+            && i > 0 && _tableBox.HtmlContainer != null)
+                {
+                    // Create footer proxy for current page
+                    if (_shouldRepeatFooters && _footerHeight > 0)
+                    {
+                        var footerY = CalculateFooterPositionAtPageBottom(currentY, pageHeight, marginTop, marginBottom, currentPageNumber);
+                        var footerProxy = CreateFooterProxy(footerY);
+                        if (footerProxy != null)
+                        {
+                            _tableBox.Boxes.Add(footerProxy);  // Add at end
+                            await footerProxy.PerformLayout(g);
+                        }
+                    }
 
-    // Move to next page
-               var pageBreakOffset = CalculatePageBreakOffset(currentY, pageHeight, marginTop, marginBottom, currentPageNumber);
-            currentY += pageBreakOffset;
-     currentPageNumber++;
+                    // Move to next page
+                    var pageBreakOffset = CalculatePageBreakOffset(currentY, pageHeight, marginTop, marginBottom, currentPageNumber);
+                    currentY += pageBreakOffset;
+                    currentPageNumber++;
 
-                // Create new header proxy for new page
-          if (_shouldRepeatHeaders && _headerHeight > 0)
-      {
-            var headerProxy = CreateHeaderProxy(currentY);
-                 if (headerProxy != null)
-         {
-  _tableBox.Boxes.Add(headerProxy);  // Add at end
-     await headerProxy.PerformLayout(g);
-      currentY += _headerHeight + GetVerticalSpacing();
-maxRight = Math.Max(maxRight, headerProxy.ActualRight);
-             }
-    }
+                    // Create new header proxy for new page
+                    if (_shouldRepeatHeaders && _headerHeight > 0)
+                    {
+                        var headerProxy = CreateHeaderProxy(currentY);
+                        if (headerProxy != null)
+                        {
+                            _tableBox.Boxes.Add(headerProxy);  // Add at end
+                            await headerProxy.PerformLayout(g);
+                            currentY += _headerHeight + GetVerticalSpacing();
+                            maxRight = Math.Max(maxRight, headerProxy.ActualRight);
+                        }
+                    }
 
-  maxBottom = currentY;
-        }
+                    maxBottom = currentY;
+                }
 
-   // Layout body row
-  var (newMaxRight, newMaxBottom) = await LayoutBodyRow(g, row, startX, currentY, i, rowSpannedBoxes, maxRight, maxBottom);
-           maxRight = newMaxRight;
-   maxBottom = newMaxBottom;
+                // Layout body row
+                var (newMaxRight, newMaxBottom) = await LayoutBodyRow(g, row, startX, currentY, i, rowSpannedBoxes, maxRight, maxBottom);
+                maxRight = newMaxRight;
+                maxBottom = newMaxBottom;
 
-            currentY = maxBottom + GetVerticalSpacing();
+                currentY = maxBottom + GetVerticalSpacing();
 
-           row.Location = new RPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
- row.ActualRight = row.Boxes.Max(x => x.ActualRight);
-     row.ActualBottom = maxBottom;
+                row.Location = new RPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
+                row.ActualRight = row.Boxes.Max(x => x.ActualRight);
+                row.ActualBottom = maxBottom;
             }
 
             // Step 5: Create final footer proxy
@@ -815,12 +818,12 @@ maxRight = Math.Max(maxRight, headerProxy.ActualRight);
             _tableBox.ActualBottom = Math.Max(maxBottom, startY) + GetVerticalSpacing() + _tableBox.ActualBorderBottomWidth;
 
 #if DEBUG
-         System.Console.WriteLine($"CssLayoutEngineTable.LayoutCells: END - _tableBox.Boxes.Count={_tableBox.Boxes.Count}");
+            System.Console.WriteLine($"CssLayoutEngineTable.LayoutCells: END - _tableBox.Boxes.Count={_tableBox.Boxes.Count}");
             for (int i = 0; i < _tableBox.Boxes.Count; i++)
-       {
-    var box = _tableBox.Boxes[i];
-  System.Console.WriteLine($"  TableBox child {i}: Type={box.GetType().Name}, Display={box.Display}");
-          }
+            {
+                var box = _tableBox.Boxes[i];
+                System.Console.WriteLine($"  TableBox child {i}: Type={box.GetType().Name}, Display={box.Display}");
+            }
 #endif
         }
 

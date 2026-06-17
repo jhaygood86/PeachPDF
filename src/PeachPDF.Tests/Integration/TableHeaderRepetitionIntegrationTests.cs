@@ -385,6 +385,63 @@ Assert.True(tableBox.ActualBottom > pageHeight);
        Assert.True(pageSpan >= 2, $"Complex table should span at least 2 pages");
    }
 
+        [Fact]
+        public async Task MultipleTablesWithHeaders_EachTableHasCorrectHeaderProxies()
+        {
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        @page { size: A4; margin: 20mm; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        th, td { padding: 8px; border: 1px solid black; }
+        thead { background: #4CAF50; color: white; }
+    </style>
+</head>
+<body>";
+
+            // Table 1: spans multiple pages
+            html += @"<table><thead><tr><th>Table1 Col1</th><th>Table1 Col2</th></tr></thead><tbody>";
+            for (int i = 1; i <= 60; i++)
+                html += $"<tr><td>T1 Row {i} A</td><td>T1 Row {i} B</td></tr>";
+            html += "</tbody></table>";
+
+            // Table 2: also spans multiple pages
+            html += @"<table><thead><tr><th>Table2 ColA</th><th>Table2 ColB</th></tr></thead><tbody>";
+            for (int i = 1; i <= 60; i++)
+                html += $"<tr><td>T2 Row {i} A</td><td>T2 Row {i} B</td></tr>";
+            html += "</tbody></table>";
+
+            html += "</body></html>";
+
+            var (rootBox, container) = await BuildCssBoxTree(html);
+
+            var tablBoxes = FindAllTableBoxes(rootBox);
+            Assert.Equal(2, tablBoxes.Count);
+
+            var table1 = tablBoxes[0];
+            var table2 = tablBoxes[1];
+
+            // Each table should have header proxies
+            var table1Proxies = FindProxyBoxesByDisplay(table1, CssConstants.TableHeaderGroup);
+            var table2Proxies = FindProxyBoxesByDisplay(table2, CssConstants.TableHeaderGroup);
+
+            Assert.NotEmpty(table1Proxies);
+            Assert.NotEmpty(table2Proxies);
+
+            // Table 2 should start below Table 1
+            Assert.True(table2.Location.Y > table1.ActualBottom,
+                $"Table 2 (Y={table2.Location.Y}) should start below Table 1 (bottom={table1.ActualBottom})");
+
+            // Table 2's header proxies should all be within Table 2's Y range
+            foreach (var proxy in table2Proxies)
+            {
+                Assert.True(proxy.Location.Y >= table1.ActualBottom,
+                    $"Table 2 header proxy at Y={proxy.Location.Y} should be below Table 1 bottom={table1.ActualBottom}");
+            }
+        }
+
         #region Helper Methods
 
         private async Task<(CssBox root, HtmlContainerInt container)> BuildCssBoxTree(string html)
@@ -421,6 +478,20 @@ using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
             }
 
             return null;
+        }
+
+        private List<CssBox> FindAllTableBoxes(CssBox root)
+        {
+            var tables = new List<CssBox>();
+            void Collect(CssBox box)
+            {
+                if (box.Display == CssConstants.Table)
+                    tables.Add(box);
+                foreach (var child in box.Boxes)
+                    Collect(child);
+            }
+            Collect(root);
+            return tables;
         }
 
         private CssBox? FindBoxByDisplay(CssBox root, string display)
