@@ -620,8 +620,9 @@ namespace PeachPDF.Html.Core.Dom
             // Spec (css-break §3.1): a forced break occurs at a class A break point if
             // the earlier sibling's break-after OR the later sibling's break-before has a
             // forced break value — at least one is sufficient.
+            // Forced values include: page, always, left, right.
             var previousSiblingForBreak = DomUtils.GetPreviousSibling(this, false);
-            if (BreakBefore is CssConstants.Page || previousSiblingForBreak?.BreakAfter is CssConstants.Page)
+            if (IsForcedBreakValue(BreakBefore) || IsForcedBreakValue(previousSiblingForBreak?.BreakAfter))
             {
                 if (previousSiblingForBreak is not null)
                 {
@@ -1022,6 +1023,13 @@ namespace PeachPDF.Html.Core.Dom
 
             return maxWidth + padding;
         }
+
+        /// <summary>
+        /// Returns true if the given break-before or break-after value is a forced page-break value
+        /// per CSS Fragmentation §3.1 (page, always, left, right).
+        /// </summary>
+        private static bool IsForcedBreakValue(string? value) =>
+            value is CssConstants.Page or CssConstants.Always or CssConstants.Left or CssConstants.Right;
 
         /// <summary>
         /// Gets the longest word (in width) inside the box, deeply.
