@@ -617,13 +617,15 @@ namespace PeachPDF.Html.Core.Dom
                 CssNamedStringEngine.ApplyStringSet(this);
             }
 
-            if (BreakBefore is CssConstants.Page)
+            // Spec (css-break §3.1): a forced break occurs at a class A break point if
+            // the earlier sibling's break-after OR the later sibling's break-before has a
+            // forced break value — at least one is sufficient.
+            if (BreakBefore is CssConstants.Page || DomUtils.GetPreviousSibling(this)?.BreakAfter is CssConstants.Page)
             {
-                var previousSibling = DomUtils.GetPreviousSibling(this);
-
-                if (previousSibling is not null)
+                var previousSiblingForBreak = DomUtils.GetPreviousSibling(this);
+                if (previousSiblingForBreak is not null)
                 {
-                    var bottomRelativeToCurrentPage = previousSibling.ActualBottom;
+                    var bottomRelativeToCurrentPage = previousSiblingForBreak.ActualBottom;
                     var pageHeight = HtmlContainer!.PageSize.Height;
 
                     while (bottomRelativeToCurrentPage > pageHeight)
@@ -632,7 +634,7 @@ namespace PeachPDF.Html.Core.Dom
                     }
 
                     var pixelsToNextPage = pageHeight - bottomRelativeToCurrentPage;
-                    previousSibling.ActualBottom += pixelsToNextPage + HtmlContainer.MarginTop;
+                    previousSiblingForBreak.ActualBottom += pixelsToNextPage + HtmlContainer.MarginTop;
                 }
             }
 
