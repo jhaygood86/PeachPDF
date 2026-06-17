@@ -620,9 +620,9 @@ namespace PeachPDF.Html.Core.Dom
             // Spec (css-break §3.1): a forced break occurs at a class A break point if
             // the earlier sibling's break-after OR the later sibling's break-before has a
             // forced break value — at least one is sufficient.
-            if (BreakBefore is CssConstants.Page || DomUtils.GetPreviousSibling(this)?.BreakAfter is CssConstants.Page)
+            var previousSiblingForBreak = DomUtils.GetPreviousSibling(this, false);
+            if (BreakBefore is CssConstants.Page || previousSiblingForBreak?.BreakAfter is CssConstants.Page)
             {
-                var previousSiblingForBreak = DomUtils.GetPreviousSibling(this);
                 if (previousSiblingForBreak is not null)
                 {
                     var bottomRelativeToCurrentPage = previousSiblingForBreak.ActualBottom;
