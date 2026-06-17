@@ -140,12 +140,12 @@ namespace PeachPDF.Tests.Integration
 
             // When relocated to the next page, the box's Y offset within its page should
             // equal MarginTop (matching the BreakBefore positioning formula), not MarginBottom.
-            if (avoidBox.Location.Y >= pageHeight)
-            {
-                var offsetWithinPage = avoidBox.Location.Y % pageHeight;
-                Assert.True(Math.Abs(offsetWithinPage - marginTop) < 1.0,
-                    $"Relocated box should sit at MarginTop ({marginTop}) within its page, but offset is {offsetWithinPage}");
-            }
+            Assert.True(avoidBox.Location.Y >= pageHeight,
+                "Test setup expects the avoid box to be relocated to the next page to validate MarginTop positioning.");
+
+            var offsetWithinPage = avoidBox.Location.Y % pageHeight;
+            Assert.True(Math.Abs(offsetWithinPage - marginTop) < 1.0,
+                $"Relocated box should sit at MarginTop ({marginTop}) within its page, but offset is {offsetWithinPage}");
         }
 
         #region Helpers
