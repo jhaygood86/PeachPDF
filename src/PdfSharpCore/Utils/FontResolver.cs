@@ -2,7 +2,6 @@
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Fonts;
 using PeachPDF.PdfSharpCore.Internal;
-using SixLabors.Fonts;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -76,36 +75,26 @@ namespace PeachPDF.PdfSharpCore.Utils
 
         private readonly struct FontFileInfo
         {
-            private FontFileInfo(FontDescription fontDescription)
+            private FontFileInfo(TtfFontDescription fontDescription)
             {
                 this.FontDescription = fontDescription;
             }
 
-            public FontDescription FontDescription { get; }
+            public TtfFontDescription FontDescription { get; }
 
             public string FamilyName => this.FontDescription.FontFamilyInvariantCulture;
 
-
-            public XFontStyle GuessFontStyle()
-            {
-                return this.FontDescription.Style switch
-                {
-                    FontStyle.Bold => XFontStyle.Bold,
-                    FontStyle.Italic => XFontStyle.Italic,
-                    FontStyle.BoldItalic => XFontStyle.BoldItalic,
-                    _ => XFontStyle.Regular
-                };
-            }
+            public XFontStyle GuessFontStyle() => this.FontDescription.Style;
 
             public static FontFileInfo Load(string path)
             {
-                var fontDescription = FontDescription.LoadDescription(path);
+                var fontDescription = TtfFontDescription.LoadDescription(path);
                 return new FontFileInfo(fontDescription);
             }
 
             public static FontFileInfo Load(Stream stream)
             {
-                var fontDescription = FontDescription.LoadDescription(stream);
+                var fontDescription = TtfFontDescription.LoadDescription(stream);
                 return new FontFileInfo(fontDescription);
             }
         }

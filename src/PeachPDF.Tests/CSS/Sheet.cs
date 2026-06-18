@@ -918,37 +918,37 @@ p.info span::after {
         }
 
         [Fact(Timeout = 1000)]
-        public void CssParseSheetWithAtAndCommentDoesNotTakeForever()
+        public async Task CssParseSheetWithAtAndCommentDoesNotTakeForever()
         {
-            var sheet = ParseStyleSheet(@"
+            var sheet = await Task.Run(() => ParseStyleSheet(@"
             h3 {color: yellow;
             @media print {
                 h3 {color: black; }
                 }
-            ");
+            "));
             Assert.Equal(1, sheet.Rules.Length);
             Assert.Equal(RuleType.Style, sheet.Rules[0].Type);
         }
 
         [Fact(Timeout = 1000)]
-        public void CssParseSheetWithAtAndCommentDoesNotTakeForever2()
+        public async Task CssParseSheetWithAtAndCommentDoesNotTakeForever2()
         {
-            var sheet = ParseStyleSheet(@"
+            var sheet = await Task.Run(() => ParseStyleSheet(@"
 :root {
     --layout: {
     }
     --layout-horizontal: {
         @apply (--layout);
     }
-}");
+}"));
             Assert.Equal(1, sheet.Rules.Length);
             Assert.Equal(RuleType.Style, sheet.Rules[0].Type);
         }
 
         [Fact(Timeout = 1000)]
-        public void CssParseSheetWithAtAndCommentDoesNotTakeForever3()
+        public async Task CssParseSheetWithAtAndCommentDoesNotTakeForever3()
         {
-            var sheet = ParseStyleSheet(@"
+            var sheet = await Task.Run(() => ParseStyleSheet(@"
 @media (max-width: 991px) {
     body {
         background-color: #013668;
@@ -960,7 +960,7 @@ p.info span::after {
     body {
         background: #FFF;
     }
-}");
+}"));
             Assert.Equal(1, sheet.Rules.Length);
             Assert.Equal(RuleType.Media, sheet.Rules[0].Type);
         }

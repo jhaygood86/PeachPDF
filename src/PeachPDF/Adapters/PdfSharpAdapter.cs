@@ -19,7 +19,6 @@ using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Utils;
 using PeachPDF.Utilities;
-using SixLabors.Fonts;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -34,7 +33,6 @@ namespace PeachPDF.Adapters
     /// </summary>
     internal sealed class PdfSharpAdapter : RAdapter
     {
-        private readonly FontCollection _fontCollection;
         private readonly FontResolver _fontResolver;
 
         /// <summary>
@@ -49,17 +47,13 @@ namespace PeachPDF.Adapters
             AddFontFamilyMapping("Helvetica", "Arial");
 
             _fontResolver = new FontResolver();
-            var fonts = FontResolver.SupportedFonts;
 
-            _fontCollection = new FontCollection();
-            _fontCollection.AddSystemFonts();
-
-            foreach (var fontPath in fonts)
+            foreach (var fontPath in FontResolver.SupportedFonts)
             {
                 try
                 {
-                    var font = _fontCollection.Add(fontPath);
-                    AddFontFamily(new FontFamilyAdapter(new XFontFamily(font.Name)));
+                    var fontDesc = TtfFontDescription.LoadDescription(fontPath);
+                    AddFontFamily(new FontFamilyAdapter(new XFontFamily(fontDesc.FontFamilyInvariantCulture)));
                 }
                 catch (Exception)
                 {
@@ -109,8 +103,8 @@ namespace PeachPDF.Adapters
 
             memoryStream.Seek(0, SeekOrigin.Begin);
 
-            var font = _fontCollection.Add(memoryStream);
-            fontFamilyName ??= font.Name;
+            var fontDesc = TtfFontDescription.LoadDescription(memoryStream);
+            fontFamilyName ??= fontDesc.FontFamilyInvariantCulture;
 
             AddFontFamily(new FontFamilyAdapter(new XFontFamily(fontFamilyName)));
 
