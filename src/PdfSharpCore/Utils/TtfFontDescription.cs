@@ -5,7 +5,7 @@ using System.Text;
 
 namespace PeachPDF.PdfSharpCore.Utils
 {
-    internal readonly struct TtfFontDescription
+    public readonly struct TtfFontDescription
     {
         public string FontFamilyInvariantCulture { get; init; }
         public string FontNameInvariantCulture { get; init; }
