@@ -1408,7 +1408,33 @@ namespace PeachPDF.Html.Core.Dom
                 if (!IsRectVisible(actualRect, clip)) continue;
 
                 PaintBackground(g, actualRect, i == 0);
-                BordersDrawHandler.DrawBoxBorders(g, this, actualRect, i == 0, i == rects.Length - 1);
+
+                // For multi-page tables, cap the border rect bottom to the last row on the current
+                // page so the table's side borders don't extend into the inter-page margin gap.
+                var rectForBorders = actualRect;
+                if ((Display == CssConstants.Table || Display == CssConstants.InlineTable)
+                    && PageBreakBottoms != null && HtmlContainer != null)
+                {
+                    var pageHeight = HtmlContainer.PageSize.Height;
+                    if (pageHeight > 0)
+                    {
+                        var currentPageIndex = (int)(-offset.Y / pageHeight + 0.001);
+                        if (PageBreakBottoms.TryGetValue(currentPageIndex, out var pageBreakBottom))
+                        {
+                            var pageBreakBottomVisual = pageBreakBottom + offset.Y;
+                            if (pageBreakBottomVisual < rectForBorders.Bottom)
+                            {
+                                rectForBorders = new RRect(
+                                    rectForBorders.Left,
+                                    rectForBorders.Top,
+                                    rectForBorders.Width,
+                                    pageBreakBottomVisual - rectForBorders.Top);
+                            }
+                        }
+                    }
+                }
+
+                BordersDrawHandler.DrawBoxBorders(g, this, rectForBorders, i == 0, i == rects.Length - 1);
             }
 
             PaintWords(g, offset);
