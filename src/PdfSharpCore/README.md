@@ -6,7 +6,7 @@
 
 **PeachPDF.PdfSharpCore** is a partial port of [PdfSharp.Xamarin](https://github.com/roceh/PdfSharp.Xamarin/) for .NET Standard.
 Additionally MigraDoc has been ported as well (from version 1.32).
-Image support has been implemented with [SixLabors.ImageSharp](https://github.com/JimBobSquarePants/ImageSharp/) and Fonts support with [SixLabors.Fonts](https://github.com/SixLabors/Fonts).
+Image support has been implemented with [StbImageSharp](https://github.com/StbSharp/StbImageSharp/).
 
 
 ## Table of Contents
@@ -20,7 +20,7 @@ Image support has been implemented with [SixLabors.ImageSharp](https://github.co
 ## Example
 
 The following code snippet creates a simple PDF-file with the text 'Hello World!'.
-The code is written for a .NET 6 console app with top level statements.
+The code is written for a .NET 8 console app with top level statements.
 
 ```csharp
 using PeachPDF.PdfSharpCore.Drawing;
@@ -54,7 +54,8 @@ We appreciate feedback and contribution to this repo!
 
 This software is released under the MIT License. See the [LICENSE](LICENCE.md) file for more info.
 
-PeachPDF.PdfSharpCore relies on the following projects, that are not under the MIT license:
+PeachPDF.PdfSharpCore relies on the following MIT-licensed packages:
 
-* *SixLabors.ImageSharp* and *SixLabors.Fonts*
-  * SixLabors.ImageSharp and SixLabors.Fonts, libraries which PeachPDF.PdfSharpCore relies upon, are licensed under Apache 2.0 when distributed as part of PeachPDF.PdfSharpCore. The SixLabors.ImageSharp license covers all other usage, see https://github.com/SixLabors/ImageSharp/blob/master/LICENSE
+* *SharpZipLib*
+* *StbImageSharp*
+* *StbImageWriteSharp*
