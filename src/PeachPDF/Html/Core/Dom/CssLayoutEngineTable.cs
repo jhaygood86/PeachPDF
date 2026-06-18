@@ -677,6 +677,9 @@ namespace PeachPDF.Html.Core.Dom
             System.Console.WriteLine($"  _bodyRows.Count={_bodyRows.Count}");
 #endif
 
+            // Reset page-break tracking so re-layout doesn't accumulate stale entries
+            _tableBox.PageBreakBottoms = null;
+
             // Step 1: Remove header/footer from document tree
             RemoveHeaderFooterFromTree();
 
@@ -753,9 +756,8 @@ namespace PeachPDF.Html.Core.Dom
                 if (WillCrossPageBoundary(currentY, currentY + estimatedRowHeight, pageHeight, marginTop, availableHeight, currentPageNumber)
             && i > 0 && _tableBox.HtmlContainer != null)
                 {
-                    // Record the bottom of the last row on this page for border clipping during paint
-                    _tableBox.PageBreakBottoms ??= new Dictionary<int, double>();
-                    _tableBox.PageBreakBottoms[currentPageNumber] = maxBottom;
+                    // Start with the last body-row bottom; may be extended by the footer below.
+                    var pageBreakBottomY = maxBottom;
 
                     // Create footer proxy for current page
                     if (_shouldRepeatFooters && _footerHeight > 0)
@@ -766,8 +768,14 @@ namespace PeachPDF.Html.Core.Dom
                         {
                             _tableBox.Boxes.Add(footerProxy);  // Add at end
                             await footerProxy.PerformLayout(g);
+                            // Footer is part of this page's table slice — extend clip to cover it.
+                            pageBreakBottomY = footerProxy.ActualBottom;
                         }
                     }
+
+                    // Record after footer so the border clip includes the footer area.
+                    _tableBox.PageBreakBottoms ??= new Dictionary<int, double>();
+                    _tableBox.PageBreakBottoms[currentPageNumber] = pageBreakBottomY;
 
                     // Move to next page
                     var pageBreakOffset = CalculatePageBreakOffset(currentY, pageHeight, marginTop, marginBottom, currentPageNumber);

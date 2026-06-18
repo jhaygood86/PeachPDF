@@ -1422,13 +1422,14 @@ namespace PeachPDF.Html.Core.Dom
                         if (PageBreakBottoms.TryGetValue(currentPageIndex, out var pageBreakBottom))
                         {
                             var pageBreakBottomVisual = pageBreakBottom + offset.Y;
-                            if (pageBreakBottomVisual < rectForBorders.Bottom)
+                            var clippedHeight = pageBreakBottomVisual - rectForBorders.Top;
+                            if (clippedHeight > 0 && pageBreakBottomVisual < rectForBorders.Bottom)
                             {
                                 rectForBorders = new RRect(
                                     rectForBorders.Left,
                                     rectForBorders.Top,
                                     rectForBorders.Width,
-                                    pageBreakBottomVisual - rectForBorders.Top);
+                                    clippedHeight);
                             }
                         }
                     }

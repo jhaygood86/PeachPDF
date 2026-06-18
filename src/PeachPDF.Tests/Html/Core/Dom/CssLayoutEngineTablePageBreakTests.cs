@@ -299,6 +299,170 @@ namespace PeachPDF.Tests.Html.Core.Dom
 
         #endregion
 
+        #region Code-review fix tests
+
+        [Fact]
+        public async Task PageBreakBottoms_ResetOnReLayout_DoesNotRetainStaleEntries()
+        {
+            // Fix: PageBreakBottoms was never cleared between layout passes. A second call to
+            // PerformLayout would accumulate stale entries from the first pass, producing
+            // incorrect border clipping. After the fix, each layout pass resets the dictionary.
+            var pageHeight = 200.0;
+
+            var html = @"
+<!DOCTYPE html>
+<html>
+<body>
+    <table style='width:100%;border-collapse:collapse;'>
+        <tbody>
+" + string.Join("", Enumerable.Range(1, 20).Select(i =>
+    $"<tr><td style='border:1px solid black;padding:5px;'>Row {i}</td></tr>")) + @"
+        </tbody>
+    </table>
+</body>
+</html>";
+
+            var adapter = new PeachPDF.Adapters.PdfSharpAdapter();
+            var container = new HtmlContainerInt(adapter);
+            await container.SetHtml(html, null);
+            var size = new XSize(595, pageHeight);
+            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            container.MarginTop = 20;
+            container.MarginBottom = 20;
+            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
+            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+
+            // First layout pass
+            await container.PerformLayout(graphics);
+            var table1 = FindTableBox(container.Root!);
+            Assert.NotNull(table1);
+            var countAfterFirst = table1.PageBreakBottoms?.Count ?? 0;
+            _output.WriteLine($"PageBreakBottoms after first layout: {countAfterFirst} entries");
+
+            // Second layout pass (simulates resize / re-render)
+            await container.PerformLayout(graphics);
+            var table2 = FindTableBox(container.Root!);
+            Assert.NotNull(table2);
+            var countAfterSecond = table2.PageBreakBottoms?.Count ?? 0;
+            _output.WriteLine($"PageBreakBottoms after second layout: {countAfterSecond} entries");
+
+            // The count must not grow between passes — the dictionary was reset, not appended-to.
+            Assert.Equal(countAfterFirst, countAfterSecond);
+        }
+
+        [Fact]
+        public async Task PageBreakBottoms_WithRepeatingFooter_IncludesFooterInClipY()
+        {
+            // Fix: PageBreakBottoms was recorded BEFORE the footer proxy was laid out, so the
+            // stored Y was the last body-row bottom, not the footer bottom. Borders would be
+            // clipped above the footer, cutting off the table's side borders around it.
+            // After the fix, the stored Y equals the footer proxy's ActualBottom.
+            var pageHeight = 200.0;
+            var marginTop = 20.0;
+            var marginBottom = 20.0;
+
+            var html = @"
+<!DOCTYPE html>
+<html>
+<body>
+    <table style='width:100%;border-collapse:collapse;'>
+        <tbody>
+" + string.Join("", Enumerable.Range(1, 20).Select(i =>
+    $"<tr><td style='border:1px solid black;padding:5px;'>Row {i}</td></tr>")) + @"
+        </tbody>
+        <tfoot>
+            <tr><td style='border:1px solid black;padding:5px;font-weight:bold;'>Footer</td></tr>
+        </tfoot>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, container) = await BuildCssBoxTree(html, pageHeight);
+
+            var table = FindTableBox(rootBox);
+            Assert.NotNull(table);
+            Assert.NotNull(table.PageBreakBottoms);
+            Assert.NotEmpty(table.PageBreakBottoms);
+
+            // Find the footer proxy boxes that were injected into the table
+            var footerProxies = table.Boxes
+                .OfType<CssProxyBox>()
+                .Where(p => p.Display == CssConstants.TableFooterGroup)
+                .ToList();
+
+            _output.WriteLine($"Footer proxies found: {footerProxies.Count}");
+
+            foreach (var (pageNum, breakY) in table.PageBreakBottoms)
+            {
+                _output.WriteLine($"Page {pageNum}: breakY={breakY}");
+
+                // If a footer proxy exists for this page, the clip Y must be at or below
+                // the footer proxy's actual bottom — not above it.
+                var footerOnPage = footerProxies
+                    .FirstOrDefault(fp => fp.Location.Y >= pageNum * pageHeight + marginTop
+                                       && fp.Location.Y < (pageNum + 1) * pageHeight - marginBottom);
+
+                if (footerOnPage != null)
+                {
+                    _output.WriteLine($"  Footer on page {pageNum}: ActualBottom={footerOnPage.ActualBottom}");
+                    Assert.True(breakY >= footerOnPage.ActualBottom - 1,
+                        $"Page {pageNum} breakY={breakY} is above footer ActualBottom={footerOnPage.ActualBottom}. " +
+                        $"Footer area would be excluded from border clip.");
+                }
+            }
+        }
+
+        [Fact]
+        public async Task PageBreakBottoms_NegativeOrZeroClipHeight_DoesNotCrash()
+        {
+            // Fix: if pageBreakBottomVisual - rectForBorders.Top <= 0 (e.g. due to a page
+            // index mismatch), constructing a RRect with non-positive height could produce a
+            // degenerate rect and break downstream drawing code. The guard ensures the clipping
+            // path is simply skipped in that case.
+            //
+            // We exercise the guard indirectly: render a table that fits on exactly one page
+            // so PageBreakBottoms is null, then verify PDF generation doesn't throw. We also
+            // render a multi-page table and confirm generation completes without exception.
+            var generator = new PdfGenerator();
+
+            // Single-page table — PageBreakBottoms will be null, guard path not reached but
+            // paint code must handle it gracefully.
+            var htmlSingle = @"
+<!DOCTYPE html>
+<html>
+<body>
+    <table style='border:2px solid black;border-collapse:collapse;width:100%;'>
+        <tbody>
+            <tr><td style='border:1px solid black;padding:5px;'>Only row</td></tr>
+        </tbody>
+    </table>
+</body>
+</html>";
+            var ex1 = await Record.ExceptionAsync(() =>
+                generator.GeneratePdf(htmlSingle, PeachPDF.PdfSharpCore.PageSize.A4, margin: 20));
+            Assert.Null(ex1);
+
+            // Multi-page table — exercises the actual clipping path on every intermediate page.
+            var htmlMulti = @"
+<!DOCTYPE html>
+<html>
+<body>
+    <table style='border:2px solid black;border-collapse:collapse;width:100%;'>
+        <tbody>
+" + string.Join("", Enumerable.Range(1, 60).Select(i =>
+    $"<tr><td style='border:1px solid black;padding:5px;'>Row {i}</td></tr>")) + @"
+        </tbody>
+    </table>
+</body>
+</html>";
+            var ex2 = await Record.ExceptionAsync(() =>
+                generator.GeneratePdf(htmlMulti, PeachPDF.PdfSharpCore.PageSize.A4, margin: 20));
+            Assert.Null(ex2);
+        }
+
+        #endregion
+
         #region Helper Methods
 
         private async Task<(CssBox root, HtmlContainerInt container)> BuildCssBoxTree(
