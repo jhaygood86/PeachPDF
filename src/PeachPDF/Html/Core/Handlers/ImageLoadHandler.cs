@@ -14,7 +14,6 @@ using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
-using SixLabors.ImageSharp;
 using System;
 using System.IO;
 using System.Threading.Tasks;
@@ -226,7 +225,7 @@ namespace PeachPDF.Html.Core.Handlers
             {
                 Image = _htmlContainer.Adapter.ImageFromStream(stream);
             }
-            catch (UnknownImageFormatException)
+            catch (InvalidOperationException)
             {
                 Image = null;
             }
