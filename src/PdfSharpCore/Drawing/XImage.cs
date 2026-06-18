@@ -32,7 +32,6 @@ using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF.PdfSharpCore.Pdf.IO;
 using PeachPDF.PdfSharpCore.Pdf.IO.enums;
 using PeachPDF.PdfSharpCore.Utils;
-using SixLabors.ImageSharp.PixelFormats;
 using System;
 using System.Diagnostics;
 using System.IO;
