@@ -5,7 +5,7 @@ Peach PDF is a pure .NET HTML -> PDF rendering library. This library does not de
 
 - .NET 8
 
-_Note: This package depends on PeachPDF.PdfSharpCore and various SixLabors libraries. Both have their own licenses, but the end result is still open source_
+_Note: This package depends on PeachPDF.PdfSharpCore which has its own license, but the end result is still open source_
 
 ## Installing PeachPDF
 
@@ -36,25 +36,25 @@ document.Save(stream);
 
 ### Rendering an MHTML file
 
-You can generate PDF documents using self contained MHTML files (what Chrome calls "single page documents") by using the included MimeKitNetworkAdapter
+You can generate PDF documents using self contained MHTML files (what Chrome calls "single page documents") by using the included MimeKitNetworkLoader
 
 ```csharp
 PdfGenerateConfig pdfConfig = new(){
   PageSize = PageSize.Letter,
-  PageOrientation = PageOrientation.Portrait
-  NetworkAdapter = new MimeKitNetworkAdapter(File.OpenRead("example.mhtml"))
+  PageOrientation = PageOrientation.Portrait,
+  NetworkLoader = new MimeKitNetworkLoader(File.OpenRead("example.mhtml"))
 };
 
 PdfGenerator generator = new();
 
 var stream = new MemoryStream();
 
-// Passing null to GeneratePdf will load the HTML from the provided network adapter instance instead
+// Passing null to GeneratePdf will load the HTML from the provided network loader instance instead
 var document = await generator.GeneratePdf(null, pdfConfig);
 document.Save(stream);
 ```
 
-### Rending HTML from a URI
+### Rendering HTML from a URI
 
 You can also render HTML from the Internet to a PDF
 
@@ -63,15 +63,15 @@ HttpClient httpClient = new();
 
 PdfGenerateConfig pdfConfig = new(){
   PageSize = PageSize.Letter,
-  PageOrientation = PageOrientation.Portrait
-  NetworkAdapter = new HttpClientNetworkADapter(httpClient, new Uri("https://www.example.com"))
+  PageOrientation = PageOrientation.Portrait,
+  NetworkLoader = new HttpClientNetworkLoader(httpClient, new Uri("https://www.example.com"))
 };
 
 PdfGenerator generator = new();
 
 var stream = new MemoryStream();
 
-// Passing null to GeneratePdf will load the HTML from the provided network adapter instance instead
+// Passing null to GeneratePdf will load the HTML from the provided network loader instance instead
 var document = await generator.GeneratePdf(null, pdfConfig);
 document.Save(stream);
 ```
@@ -92,15 +92,15 @@ generator.AddFontFamilyMapping("Segoe UI","sans-serif"); // or any other system 
 The recommended way to install custom fonts is to install them into your operating system.
 PeachPDF by default picks up TrueType fonts from the operating system (%SystemRoot%\Fonts and %LOCALAPPDATA%\Microsoft\Windows\Fonts on Windows, /Library/Fonts on Mac, and /usr/share/fonts, /usr/local/share/fonts/, and $HOME/.fonts on Linux)
 
-You can also add a font at runtime by loading the ttf font into a Stream, and then using the AddFontFromStream API:
+You can also add a font at runtime by loading the font into a Stream, and then using the AddFontFromStream API:
 
 ```csharp
 PdfGenerator generator = new();
-await generator.AddFontFromStream(fontStream); // where fontStream is a System.IO.Stream of the loaded TTF file
+await generator.AddFontFromStream(fontStream); // Supports TrueType (TTF), CFF, WOFF, and WOFF2 formats
 ```
 
 Web fonts loaded via @font-face are also supported.
 
 ### Supported font formats
 
-We support any font supported by SixLabors.Fonts, currently TrueType, CFF, WOFF, and WOFF2 as of the time of this writing.
+We support TrueType, CFF, WOFF, and WOFF2 font formats.
