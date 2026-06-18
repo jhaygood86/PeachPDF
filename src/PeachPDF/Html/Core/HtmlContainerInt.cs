@@ -379,7 +379,7 @@ namespace PeachPDF.Html.Core
             g.PushClip(MaxSize.Height > 0
                 ? new RRect(Location.X, Location.Y, Math.Min(MaxSize.Width, PageSize.Width),
                     Math.Min(MaxSize.Height, PageSize.Height))
-                : new RRect(MarginLeft, MarginTop, PageSize.Width, PageSize.Height));
+                : new RRect(MarginLeft, MarginTop, PageSize.Width + MarginRight, PageSize.Height));
 
             if (Root is not null)
             {

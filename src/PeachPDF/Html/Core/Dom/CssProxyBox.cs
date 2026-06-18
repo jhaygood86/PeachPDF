@@ -52,32 +52,32 @@ namespace PeachPDF.Html.Core.Dom
         /// Performs layout by resetting source box, laying it out at this proxy's location,
         /// and capturing the resulting layout state.
         /// </summary>
-      protected override async ValueTask PerformLayoutImp(RGraphics g)
+        protected override async ValueTask PerformLayoutImp(RGraphics g)
         {
 #if DEBUG
-  System.Console.WriteLine($"CssProxyBox.PerformLayoutImp: START - Location={Location}, Display={Display}");
-       System.Console.WriteLine($"  Source already laid out: Location={_sourceBox.Location}, ActualBottom={_sourceBox.ActualBottom}, ActualRight={_sourceBox.ActualRight}");
+            System.Console.WriteLine($"CssProxyBox.PerformLayoutImp: START - Location={Location}, Display={Display}");
+            System.Console.WriteLine($"  Source already laid out: Location={_sourceBox.Location}, ActualBottom={_sourceBox.ActualBottom}, ActualRight={_sourceBox.ActualRight}");
 #endif
-            
-   // The source box has already been laid out by the table layout engine
+
+            // The source box has already been laid out by the table layout engine
             // We just need to:
             // 1. Position it at our location
-    // 2. Capture the snapshot
-     // 3. Copy dimensions
-            
-  // Update source box location to match proxy location
-          var deltaX = this.Location.X - _sourceBox.Location.X;
+            // 2. Capture the snapshot
+            // 3. Copy dimensions
+
+            // Update source box location to match proxy location
+            var deltaX = this.Location.X - _sourceBox.Location.X;
             var deltaY = this.Location.Y - _sourceBox.Location.Y;
-            
+
             if (deltaX != 0 || deltaY != 0)
-         {
+            {
                 // Offset the source box and all its children to the proxy's location
-       _sourceBox.Location = this.Location;
- foreach (var row in _sourceBox.Boxes)
-     {
-         row.OffsetLeft(deltaX);
-       row.OffsetTop(deltaY);
-          }
+                _sourceBox.Location = this.Location;
+                foreach (var row in _sourceBox.Boxes)
+                {
+                    row.OffsetLeft(deltaX);
+                    row.OffsetTop(deltaY);
+                }
             }
 
 #if DEBUG
@@ -85,16 +85,16 @@ namespace PeachPDF.Html.Core.Dom
 #endif
 
             // Capture the layout snapshot
-   _snapshot = LayoutSnapshot.Capture(_sourceBox);
+            _snapshot = LayoutSnapshot.Capture(_sourceBox);
 
 #if DEBUG
-  System.Console.WriteLine($"  Snapshot captured - BoxStates.Count={_snapshot.BoxStates.Count}");
+            System.Console.WriteLine($"  Snapshot captured - BoxStates.Count={_snapshot.BoxStates.Count}");
 #endif
 
             // Copy final dimensions from source to this proxy
             ActualBottom = _sourceBox.ActualBottom;
             ActualRight = _sourceBox.ActualRight;
-    Size = _sourceBox.Size;
+            Size = _sourceBox.Size;
 
 #if DEBUG
             System.Console.WriteLine($"CssProxyBox.PerformLayoutImp: END - Proxy: ActualBottom={ActualBottom}, ActualRight={ActualRight}, Size={Size}");
@@ -105,58 +105,58 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// Paints by applying the captured snapshot to the source box and delegating paint.
-    /// </summary>
-     protected override async ValueTask PaintImp(RGraphics g)
-   {
+        /// </summary>
+        protected override async ValueTask PaintImp(RGraphics g)
+        {
 #if DEBUG
-System.Console.WriteLine($"CssProxyBox.PaintImp: START - Location={Location}, Snapshot={(_snapshot == null ? "NULL" : "EXISTS")}");
+            System.Console.WriteLine($"CssProxyBox.PaintImp: START - Location={Location}, Snapshot={(_snapshot == null ? "NULL" : "EXISTS")}");
 #endif
 
-if (_snapshot == null)
-     {
+            if (_snapshot == null)
+            {
 #if DEBUG
-System.Console.WriteLine("CssProxyBox.PaintImp: No snapshot, returning");
+                System.Console.WriteLine("CssProxyBox.PaintImp: No snapshot, returning");
 #endif
-    return;
-}
+                return;
+            }
 
- // Step 1: Reset source box paint state before applying snapshot
-   _sourceBox.ResetPaint();
+            // Step 1: Reset source box paint state before applying snapshot
+            _sourceBox.ResetPaint();
 
-    // Step 2: Temporarily reparent source box to this proxy for painting
-   // This sets ParentBox AND adds to Boxes collection
- _sourceBox.ParentBox = this;
-
-#if DEBUG
-      System.Console.WriteLine($"CssProxyBox.PaintImp: After reparent - this.Boxes.Count={Boxes.Count}");
-#endif
-
-// Step 3: Apply our snapshot to source box
-  _snapshot.Apply(_sourceBox);
+            // Step 2: Temporarily reparent source box to this proxy for painting
+            // This sets ParentBox AND adds to Boxes collection
+            _sourceBox.ParentBox = this;
 
 #if DEBUG
-      System.Console.WriteLine($"CssProxyBox.PaintImp: After snapshot apply - Source.Location={_sourceBox.Location}");
+            System.Console.WriteLine($"CssProxyBox.PaintImp: After reparent - this.Boxes.Count={Boxes.Count}");
 #endif
 
-     // Step 4: Directly paint the source box (don't call base - we ARE the wrapper)
-   await _sourceBox.Paint(g);
+            // Step 3: Apply our snapshot to source box
+            _snapshot.Apply(_sourceBox);
 
 #if DEBUG
-System.Console.WriteLine("CssProxyBox.PaintImp: After source paint");
+            System.Console.WriteLine($"CssProxyBox.PaintImp: After snapshot apply - Source.Location={_sourceBox.Location}");
 #endif
 
- // Step 5: Remove from Boxes to avoid interference with other proxies
-     Boxes.Remove(_sourceBox);
+            // Step 4: Directly paint the source box (don't call base - we ARE the wrapper)
+            await _sourceBox.Paint(g);
 
 #if DEBUG
-     System.Console.WriteLine("CssProxyBox.PaintImp: END");
+            System.Console.WriteLine("CssProxyBox.PaintImp: After source paint");
 #endif
-   }
 
-   /// <summary>
-     /// Stores layout state for a box and all its descendants.
- /// </summary>
-    private sealed class LayoutSnapshot
+            // Step 5: Remove from Boxes to avoid interference with other proxies
+            Boxes.Remove(_sourceBox);
+
+#if DEBUG
+            System.Console.WriteLine("CssProxyBox.PaintImp: END");
+#endif
+        }
+
+        /// <summary>
+        /// Stores layout state for a box and all its descendants.
+        /// </summary>
+        private sealed class LayoutSnapshot
         {
             public Dictionary<CssBox, BoxLayoutState> BoxStates { get; } = new();
 

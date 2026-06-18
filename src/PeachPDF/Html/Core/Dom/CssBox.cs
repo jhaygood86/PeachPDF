@@ -200,6 +200,12 @@ namespace PeachPDF.Html.Core.Dom
 
         public virtual bool IsTableRowGroupBox => Display is CssConstants.TableRowGroup or CssConstants.TableHeaderGroup or CssConstants.TableFooterGroup;
 
+        /// <summary>
+        /// Maps page number → last row bottom Y on that page. Set by CssLayoutEngineTable when rows break across pages.
+        /// Used during paint to clip the table box border to the actual content height on each page.
+        /// </summary>
+        internal Dictionary<int, double>? PageBreakBottoms { get; set; }
+
         public virtual bool IsTableCell => Display is CssConstants.TableCell;
 
         /// <summary>
@@ -1402,7 +1408,34 @@ namespace PeachPDF.Html.Core.Dom
                 if (!IsRectVisible(actualRect, clip)) continue;
 
                 PaintBackground(g, actualRect, i == 0);
-                BordersDrawHandler.DrawBoxBorders(g, this, actualRect, i == 0, i == rects.Length - 1);
+
+                // For multi-page tables, draw the outer bottom border at the page-break Y on
+                // intermediate pages (instead of at actualRect.Bottom which is off-page).
+                // The PerformPaint clip already constrains the side-border top to MarginTop.
+                var rectForBorders = actualRect;
+                if ((Display == CssConstants.Table || Display == CssConstants.InlineTable)
+                    && PageBreakBottoms != null && HtmlContainer != null)
+                {
+                    var pageHeight = HtmlContainer.PageSize.Height;
+                    if (pageHeight > 0)
+                    {
+                        var currentPageIndex = (int)(-offset.Y / pageHeight + 0.001);
+                        if (PageBreakBottoms.TryGetValue(currentPageIndex, out var pageBreakBottom))
+                        {
+                            var pageBreakBottomVisual = pageBreakBottom + offset.Y;
+                            if (pageBreakBottomVisual < actualRect.Bottom)
+                            {
+                                rectForBorders = new RRect(
+                                    actualRect.Left,
+                                    actualRect.Top,
+                                    actualRect.Width,
+                                    pageBreakBottomVisual - actualRect.Top);
+                            }
+                        }
+                    }
+                }
+
+                BordersDrawHandler.DrawBoxBorders(g, this, rectForBorders, i == 0, i == rects.Length - 1);
             }
 
             PaintWords(g, offset);
