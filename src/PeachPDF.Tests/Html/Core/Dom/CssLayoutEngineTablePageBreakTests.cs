@@ -420,9 +420,10 @@ namespace PeachPDF.Tests.Html.Core.Dom
         [Fact]
         public async Task PageBreakBottoms_NegativeOrZeroClipHeight_GuardPreventsDegenerate()
         {
-            // Fix: CssBox.PaintImp guards against clippedHeight = pageBreakBottomVisual - clip.Top <= 0
-            // before calling g.PushClip. Without the guard, pushing a zero/negative-height clip rect
-            // would produce a degenerate clip region and break downstream border drawing.
+            // CssBox.PaintImp only applies the rectForBorders adjustment when pageBreakBottomVisual
+            // is less than actualRect.Bottom. If a stale or mismatched PageBreakBottoms entry puts
+            // pageBreakBottomVisual above the actual table bottom, the condition is false and no
+            // modification is made — DrawBoxBorders is called with the original rect unchanged.
             //
             // We inject a stale/mismatched PageBreakBottoms entry (Y below the table top) directly
             // onto the box after layout, then call PerformPaint to exercise the guard path.
@@ -473,17 +474,15 @@ namespace PeachPDF.Tests.Html.Core.Dom
         }
 
         [Fact]
-        public async Task TableBorderPaint_IntermediatePageBreak_PushesClipAtPageBreakY()
+        public async Task TableBorderPaint_IntermediatePageBreak_BottomBorderDrawnAtPageBreakY()
         {
-            // Regression: the previous implementation modified rectForBorders.Bottom to
-            // pageBreakBottomVisual and passed the truncated rect to DrawBoxBorders, causing
-            // the table's outer bottom border to be drawn at every page break (horizontal line
-            // artifact). The fix uses g.PushClip/g.PopClip so the drawing rect remains full-
-            // height and the bottom border at actualRect.Bottom falls outside the clip.
+            // On intermediate pages the outer table bottom border must be drawn at the page-break
+            // Y rather than at actualRect.Bottom (which is far below the current page). The fix
+            // computes rectForBorders with Bottom = pageBreakBottomVisual so that DrawBoxBorders
+            // places the bottom border line at the page-break boundary.
             //
-            // This test verifies the new mechanism: PushClip must be called with a rect whose
-            // bottom ≈ pageBreakBottomVisual, proving the clip-based approach is in use and that
-            // the calls are balanced with a matching PopClip.
+            // This test verifies: (a) a horizontal line is drawn near pageBreakBottom0, and
+            // (b) PushClip/PopClip calls are balanced.
             var pageHeight = 200.0;
 
             var html = @"
@@ -516,23 +515,126 @@ namespace PeachPDF.Tests.Html.Core.Dom
             container.ScrollOffset = new PeachPDF.Html.Adapters.Entities.RPoint(0, 0);
             await container.PerformPaint(recording);
 
-            _output.WriteLine($"PushClip calls: {recording.PushCount}, PopClip calls: {recording.PopCount}");
-            foreach (var r in recording.PushedClips)
-                _output.WriteLine($"  PushClip rect bottom={r.Bottom:F2}, height={r.Height:F2}");
-
-            // At least one PushClip must have been made with Bottom ≈ pageBreakBottom0.
-            // clippedHeight = pageBreakBottom0 - clip.Top, so rect.Bottom = clip.Top + clippedHeight = pageBreakBottom0.
+            // The outer table bottom border must be drawn at approximately pageBreakBottom0.
+            // DrawBoxBorders renders it at rectForBorders.Bottom - borderWidth/2; use the
+            // same tolerance to accommodate the border half-width offset.
             const double tolerance = 3.0;
-            var pageBreakClips = recording.PushedClips
-                .Where(r => Math.Abs(r.Bottom - pageBreakBottom0) < tolerance)
+            _output.WriteLine($"Horizontal lines: [{string.Join(", ", recording.HorizontalLines.Select(y => $"{y:F1}"))}]");
+            var bottomBorderLines = recording.HorizontalLines
+                .Where(y => Math.Abs(y - pageBreakBottom0) < tolerance)
                 .ToList();
-
-            Assert.True(pageBreakClips.Count > 0,
-                $"Expected at least one PushClip with Bottom ≈ {pageBreakBottom0} (tolerance {tolerance}), " +
-                $"but none found. PushClip bottoms: [{string.Join(", ", recording.PushedClips.Select(r => $"{r.Bottom:F1}"))}]");
+            Assert.True(bottomBorderLines.Count > 0,
+                $"Expected a horizontal line near Y={pageBreakBottom0} (outer table bottom border on page 0), " +
+                $"but none found. All lines: [{string.Join(", ", recording.HorizontalLines.Select(y => $"{y:F1}"))}]");
 
             // PushClip / PopClip must be balanced so subsequent paint calls are not corrupted.
             Assert.Equal(recording.PushCount, recording.PopCount);
+        }
+
+        [Fact]
+        public async Task TableBorderPaint_SubsequentPage_BottomBorderDrawnAtPageBreakY()
+        {
+            // On page 1 (the second page of a multi-page table), the outer table bottom border
+            // must be drawn at pageBreakBottom1 rather than at the true table bottom which is
+            // far below the page. Verifies that rectForBorders.Bottom is capped to the page-break
+            // Y on every intermediate page, not only the first.
+            var pageHeight = 200.0;
+            var marginTop = 20.0;
+
+            var html = @"
+<!DOCTYPE html>
+<html>
+<body>
+    <table style='width:100%;border-collapse:collapse;border:2px solid black;'>
+        <tbody>
+" + string.Join("", Enumerable.Range(1, 20).Select(i =>
+    $"<tr><td style='border:1px solid black;padding:5px;'>Row {i}</td></tr>")) + @"
+        </tbody>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, container) = await BuildCssBoxTree(html, pageHeight, marginTop: marginTop);
+
+            var table = FindTableBox(rootBox);
+            Assert.NotNull(table);
+            Assert.True(table.PageBreakBottoms?.ContainsKey(1) == true,
+                "Table must span at least 3 pages so page 1 is an intermediate page.");
+
+            var pageBreakBottom1 = table.PageBreakBottoms![1];
+            _output.WriteLine($"PageBreakBottoms[1]={pageBreakBottom1}, Table.ActualBottom={table.ActualBottom}");
+
+            // Paint page 1 (scroll offset = -pageHeight).
+            var adapter = new PeachPDF.Adapters.PdfSharpAdapter();
+            var recording = new RecordingGraphics(adapter);
+            container.ScrollOffset = new PeachPDF.Html.Adapters.Entities.RPoint(0, -pageHeight);
+            await container.PerformPaint(recording);
+
+            // rectForBorders.Bottom = pageBreakBottomVisual = pageBreakBottom1 + (-pageHeight).
+            var pageBreakBottomVisual = pageBreakBottom1 - pageHeight;
+            const double tolerance = 3.0;
+            _output.WriteLine($"Expected bottom border near Y={pageBreakBottomVisual:F1}");
+            _output.WriteLine($"Horizontal lines: [{string.Join(", ", recording.HorizontalLines.Select(y => $"{y:F1}"))}]");
+
+            var bottomBorderLines = recording.HorizontalLines
+                .Where(y => Math.Abs(y - pageBreakBottomVisual) < tolerance)
+                .ToList();
+            Assert.True(bottomBorderLines.Count > 0,
+                $"Expected a horizontal line near Y={pageBreakBottomVisual:F1} (outer table bottom border on page 1), " +
+                $"but none found. All lines: [{string.Join(", ", recording.HorizontalLines.Select(y => $"{y:F1}"))}]");
+        }
+
+        [Fact]
+        public async Task TableBorderPaint_LastPage_OuterBottomBorderIsDrawn()
+        {
+            // Verify that the outer table bottom border appears on the last page of the table.
+            // The fix clips from content-area top to actualRect.Bottom on the last page; the
+            // border must be drawn at actualRect.Bottom relative to that page's scroll offset.
+            var pageHeight = 200.0;
+
+            var html = @"
+<!DOCTYPE html>
+<html>
+<body>
+    <table style='width:100%;border-collapse:collapse;border:2px solid black;'>
+        <tbody>
+" + string.Join("", Enumerable.Range(1, 20).Select(i =>
+    $"<tr><td style='border:1px solid black;padding:5px;'>Row {i}</td></tr>")) + @"
+        </tbody>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, container) = await BuildCssBoxTree(html, pageHeight);
+
+            var table = FindTableBox(rootBox);
+            Assert.NotNull(table);
+
+            // Determine the last page: the page where the table's actual bottom resides.
+            var lastPageIndex = (int)(table.ActualBottom / pageHeight);
+            var lastScrollOffset = -(lastPageIndex * pageHeight);
+            _output.WriteLine($"Table.ActualBottom={table.ActualBottom}, lastPageIndex={lastPageIndex}, scrollOffset={lastScrollOffset}");
+
+            // The bottom border line sits at actualRect.Bottom - borderWidth/2 in visual coords.
+            // actualRect.Bottom = table.ActualBottom + scrollOffset (after Offset(offset)).
+            var expectedBottomBorderY = table.ActualBottom + lastScrollOffset;
+            _output.WriteLine($"Expected bottom border near Y={expectedBottomBorderY}");
+
+            var adapter = new PeachPDF.Adapters.PdfSharpAdapter();
+            var recording = new RecordingGraphics(adapter);
+            container.ScrollOffset = new PeachPDF.Html.Adapters.Entities.RPoint(0, lastScrollOffset);
+            await container.PerformPaint(recording);
+
+            _output.WriteLine($"Horizontal lines recorded: [{string.Join(", ", recording.HorizontalLines.Select(y => $"{y:F1}"))}]");
+
+            const double tolerance = 3.0;
+            var bottomBorderLines = recording.HorizontalLines
+                .Where(y => Math.Abs(y - expectedBottomBorderY) < tolerance)
+                .ToList();
+
+            Assert.True(bottomBorderLines.Count > 0,
+                $"Expected a horizontal line near Y={expectedBottomBorderY} (table outer bottom border on last page), " +
+                $"but found none. All lines: [{string.Join(", ", recording.HorizontalLines.Select(y => $"{y:F1}"))}]");
         }
 
         #endregion
@@ -541,7 +643,9 @@ namespace PeachPDF.Tests.Html.Core.Dom
 
         private async Task<(CssBox root, HtmlContainerInt container)> BuildCssBoxTree(
             string html,
-            double pageHeight = 842)
+            double pageHeight = 842,
+            double marginTop = 20,
+            double marginBottom = 20)
         {
             var adapter = new PdfSharpAdapter();
             var container = new HtmlContainerInt(adapter);
@@ -549,8 +653,8 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var size = new XSize(595, pageHeight);
             container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MarginTop = 20;
-            container.MarginBottom = 20;
+            container.MarginTop = marginTop;
+            container.MarginBottom = marginBottom;
             var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
             using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
@@ -578,8 +682,8 @@ namespace PeachPDF.Tests.Html.Core.Dom
         #region Recording Graphics Adapter
 
         /// <summary>
-        /// Minimal RGraphics implementation that records PushClip/PopClip calls so tests can
-        /// verify the clip-based page-break border fix without needing a full PDF rendering stack.
+        /// Minimal RGraphics implementation that records PushClip/PopClip calls and drawn lines
+        /// so tests can verify page-break border behavior without a full PDF rendering stack.
         /// </summary>
         private sealed class RecordingGraphics : PeachPDF.Html.Adapters.RGraphics
         {
