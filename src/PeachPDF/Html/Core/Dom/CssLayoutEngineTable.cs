@@ -1259,13 +1259,16 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private double EstimateRowHeight(CssBox row)
         {
-            // Quick estimation: use max of cell minimum heights
             double maxHeight = 0;
 
             foreach (var cell in row.Boxes)
             {
-                // Use font height as minimum estimate
-                var estimatedHeight = cell.ActualFont?.Height ?? 12;
+                // Include padding and border widths — these are computable from CSS properties
+                // before the cell is laid out, making the estimate more accurate and preventing
+                // page break detection from firing too late.
+                var estimatedHeight = (cell.ActualFont?.Height ?? 12)
+                    + cell.ActualPaddingTop + cell.ActualPaddingBottom
+                    + cell.ActualBorderTopWidth + cell.ActualBorderBottomWidth;
                 maxHeight = Math.Max(maxHeight, estimatedHeight);
             }
 

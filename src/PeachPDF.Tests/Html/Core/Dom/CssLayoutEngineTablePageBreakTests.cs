@@ -224,15 +224,19 @@ namespace PeachPDF.Tests.Html.Core.Dom
             foreach (var (pageNum, breakY) in table.PageBreakBottoms)
             {
                 var contentTop = pageNum * pageHeight + marginTop;
-                // The breakY is the actual row bottom on this page. Due to row-height estimation
-                // being approximate, the row can extend slightly past the ideal content bottom.
-                // We verify the looser property: the break was recorded for a row that started
-                // on or after the page content top (not before the page even began).
-                _output.WriteLine($"Page {pageNum}: breakY={breakY}, contentTop={contentTop}");
+                var contentBottom = (pageNum + 1) * pageHeight - marginBottom;
+
+                _output.WriteLine($"Page {pageNum}: breakY={breakY}, contentTop={contentTop}, contentBottom={contentBottom}");
 
                 Assert.True(breakY >= contentTop,
-                    $"PageBreakBottoms[{pageNum}]={breakY} is above content top {contentTop}. " +
-                    $"A break Y below contentTop would indicate a row placed before the page started.");
+                    $"PageBreakBottoms[{pageNum}]={breakY} is above content top {contentTop}.");
+
+                // With EstimateRowHeight including padding+border, the last row placed on each
+                // page should end at or before contentBottom. A small tolerance (5 units) covers
+                // minor discrepancies from font-metric vs. layout-height rounding.
+                Assert.True(breakY <= contentBottom + 5,
+                    $"PageBreakBottoms[{pageNum}]={breakY} exceeds content bottom {contentBottom} " +
+                    $"by more than 5 units, indicating EstimateRowHeight significantly underestimates row height.");
             }
         }
 
@@ -414,51 +418,58 @@ namespace PeachPDF.Tests.Html.Core.Dom
         }
 
         [Fact]
-        public async Task PageBreakBottoms_NegativeOrZeroClipHeight_DoesNotCrash()
+        public async Task PageBreakBottoms_NegativeOrZeroClipHeight_GuardPreventsDegenerate()
         {
-            // Fix: if pageBreakBottomVisual - rectForBorders.Top <= 0 (e.g. due to a page
-            // index mismatch), constructing a RRect with non-positive height could produce a
-            // degenerate rect and break downstream drawing code. The guard ensures the clipping
-            // path is simply skipped in that case.
+            // Fix: CssBox.PaintImp guards against clippedHeight = pageBreakBottomVisual - rectTop <= 0.
+            // Without the guard, constructing a RRect with non-positive height would produce a
+            // degenerate rect and break downstream border drawing.
             //
-            // We exercise the guard indirectly: render a table that fits on exactly one page
-            // so PageBreakBottoms is null, then verify PDF generation doesn't throw. We also
-            // render a multi-page table and confirm generation completes without exception.
-            var generator = new PdfGenerator();
+            // We inject a stale/mismatched PageBreakBottoms entry (Y below the table top) directly
+            // onto the box after layout, then call PerformPaint to exercise the guard path.
+            var pageHeight = 400.0;
 
-            // Single-page table — PageBreakBottoms will be null, guard path not reached but
-            // paint code must handle it gracefully.
-            var htmlSingle = @"
+            var html = @"
 <!DOCTYPE html>
 <html>
 <body>
     <table style='border:2px solid black;border-collapse:collapse;width:100%;'>
         <tbody>
-            <tr><td style='border:1px solid black;padding:5px;'>Only row</td></tr>
+            <tr><td style='border:1px solid black;padding:5px;'>Row A</td></tr>
+            <tr><td style='border:1px solid black;padding:5px;'>Row B</td></tr>
         </tbody>
     </table>
 </body>
 </html>";
-            var ex1 = await Record.ExceptionAsync(() =>
-                generator.GeneratePdf(htmlSingle, PeachPDF.PdfSharpCore.PageSize.A4, margin: 20));
-            Assert.Null(ex1);
 
-            // Multi-page table — exercises the actual clipping path on every intermediate page.
-            var htmlMulti = @"
-<!DOCTYPE html>
-<html>
-<body>
-    <table style='border:2px solid black;border-collapse:collapse;width:100%;'>
-        <tbody>
-" + string.Join("", Enumerable.Range(1, 60).Select(i =>
-    $"<tr><td style='border:1px solid black;padding:5px;'>Row {i}</td></tr>")) + @"
-        </tbody>
-    </table>
-</body>
-</html>";
-            var ex2 = await Record.ExceptionAsync(() =>
-                generator.GeneratePdf(htmlMulti, PeachPDF.PdfSharpCore.PageSize.A4, margin: 20));
-            Assert.Null(ex2);
+            var adapter = new PeachPDF.Adapters.PdfSharpAdapter();
+            var container = new HtmlContainerInt(adapter);
+            await container.SetHtml(html, null);
+            var size = new XSize(595, pageHeight);
+            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            container.MarginTop = 20;
+            container.MarginBottom = 20;
+            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
+            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+
+            await container.PerformLayout(graphics);
+
+            var table = FindTableBox(container.Root!);
+            Assert.NotNull(table);
+
+            _output.WriteLine($"Table Location.Y={table.Location.Y}, ActualBottom={table.ActualBottom}");
+
+            // Inject a PageBreakBottoms entry whose Y is BELOW the table's top (in absolute coords).
+            // On page 0 (scrollOffset=0), pageBreakBottomVisual = injectedY + 0 = injectedY.
+            // clippedHeight = injectedY - table.Location.Y < 0 → guard must skip clipping.
+            var injectedY = table.Location.Y - 5; // 5 units above the table top
+            table.PageBreakBottoms = new Dictionary<int, double> { [0] = injectedY };
+
+            _output.WriteLine($"Injected PageBreakBottoms[0]={injectedY} (below table top by 5 units)");
+
+            // PerformPaint must complete without throwing despite the degenerate entry.
+            var ex = await Record.ExceptionAsync(async () => await container.PerformPaint(graphics));
+            Assert.Null(ex);
         }
 
         #endregion
