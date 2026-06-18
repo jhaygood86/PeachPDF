@@ -271,7 +271,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
             }
 
             uint totalSize = woffPos;
-            byte[] woff = new byte[totalSize];
+            byte[] woff = new byte[checked((int)totalSize)];
             int p = 0;
 
             // WOFF header (44 bytes)
@@ -342,7 +342,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
             }
 
             // zlib-compress the first table
-            byte[] firstTableRaw = new byte[lengths[0]];
+            byte[] firstTableRaw = new byte[checked((int)lengths[0])];
             Array.Copy(ttf, (int)offsets[0], firstTableRaw, 0, (int)lengths[0]);
             byte[] firstTableCompressed = ZlibCompress(firstTableRaw);
 
@@ -368,7 +368,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
                 woffPos = (woffPos + 3u) & ~3u;
             }
 
-            byte[] woff = new byte[woffPos];
+            byte[] woff = new byte[checked((int)woffPos)];
             int p = 0;
 
             WriteUInt32BE(woff, p, 0x774F4646); p += 4;

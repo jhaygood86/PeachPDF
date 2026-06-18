@@ -244,7 +244,7 @@ body {{ font-family: '{familyName}', serif; font-size: 14pt; }}
                 woffPos = (woffPos + 3u) & ~3u;
             }
 
-            byte[] woff = new byte[woffPos];
+            byte[] woff = new byte[checked((int)woffPos)];
             int p = 0;
 
             WriteUInt32BE(woff, p, 0x774F4646); p += 4;

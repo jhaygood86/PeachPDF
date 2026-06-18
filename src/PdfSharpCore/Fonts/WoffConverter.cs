@@ -85,17 +85,18 @@ namespace PeachPDF.PdfSharpCore.Fonts
                 if (compLen < origLen)
                 {
                     // Decompress with zlib (raw deflate wrapped in zlib header)
+                    int origLenInt = checked((int)origLen);
                     using var compressed = new MemoryStream(woff, (int)offsets[i], (int)compLen);
                     using var inflater = new InflaterInputStream(compressed);
-                    var decompressed = new byte[origLen];
+                    var decompressed = new byte[origLenInt];
                     int totalRead = 0;
-                    while (totalRead < (int)origLen)
+                    while (totalRead < origLenInt)
                     {
-                        int read = inflater.Read(decompressed, totalRead, (int)origLen - totalRead);
+                        int read = inflater.Read(decompressed, totalRead, origLenInt - totalRead);
                         if (read == 0) break;
                         totalRead += read;
                     }
-                    if (totalRead != (int)origLen)
+                    if (totalRead != origLenInt)
                         throw new InvalidDataException(
                             $"WOFF: table {i} decompressed to {totalRead} bytes but expected {origLen}.");
                     tableData[i] = decompressed;
@@ -103,8 +104,9 @@ namespace PeachPDF.PdfSharpCore.Fonts
                 else
                 {
                     // Not compressed: copy verbatim (compLen == origLen per spec after the check above)
-                    var raw = new byte[origLen];
-                    Array.Copy(woff, (int)offsets[i], raw, 0, (int)origLen);
+                    int origLenInt = checked((int)origLen);
+                    var raw = new byte[origLenInt];
+                    Array.Copy(woff, (int)offsets[i], raw, 0, origLenInt);
                     tableData[i] = raw;
                 }
             }

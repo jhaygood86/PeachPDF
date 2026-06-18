@@ -532,10 +532,29 @@ namespace PeachPDF.PdfSharpCore.Fonts
             const byte oneMoreByteCode2 = 254;
             const int lowestUCode = 253;
 
+            if (pos >= src.Length)
+                throw new InvalidDataException("WOFF2: truncated 255UInt16 value.");
             byte b = src[pos++];
-            if (b == wordCode) { int v = src[pos++] << 8; v |= src[pos++]; return v; }
-            if (b == oneMoreByteCode1) return src[pos++] + lowestUCode;
-            if (b == oneMoreByteCode2) return src[pos++] + lowestUCode * 2;
+            if (b == wordCode)
+            {
+                if (pos + 1 >= src.Length)
+                    throw new InvalidDataException("WOFF2: truncated 255UInt16 value.");
+                int v = src[pos++] << 8;
+                v |= src[pos++];
+                return v;
+            }
+            if (b == oneMoreByteCode1)
+            {
+                if (pos >= src.Length)
+                    throw new InvalidDataException("WOFF2: truncated 255UInt16 value.");
+                return src[pos++] + lowestUCode;
+            }
+            if (b == oneMoreByteCode2)
+            {
+                if (pos >= src.Length)
+                    throw new InvalidDataException("WOFF2: truncated 255UInt16 value.");
+                return src[pos++] + lowestUCode * 2;
+            }
             return b;
         }
 
@@ -544,6 +563,8 @@ namespace PeachPDF.PdfSharpCore.Fonts
             uint result = 0;
             for (int i = 0; i < 5; i++)
             {
+                if (pos >= data.Length)
+                    throw new InvalidDataException("WOFF2: file truncated in base128 value.");
                 byte b = data[pos++];
                 if (i == 0 && b == 0x80) throw new InvalidDataException("WOFF2: base128 leading zero");
                 result = (result << 7) | (uint)(b & 0x7F);
