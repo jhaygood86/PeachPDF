@@ -99,11 +99,11 @@ namespace PeachPDF.Adapters
 
         public async Task AddFont(Stream stream, string? fontFamilyName)
         {
-            var memoryStream = new MemoryStream();
+            using var memoryStream = new MemoryStream();
             await stream.CopyToAsync(memoryStream);
 
             byte[] fontBytes = FontFormatConverter.ToOpenType(memoryStream.ToArray());
-            var convertedStream = new MemoryStream(fontBytes);
+            using var convertedStream = new MemoryStream(fontBytes);
 
             var fontDesc = TtfFontDescription.LoadDescription(convertedStream);
             fontFamilyName ??= fontDesc.FontFamilyInvariantCulture;

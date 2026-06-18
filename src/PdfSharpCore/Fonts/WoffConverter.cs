@@ -32,8 +32,15 @@ namespace PeachPDF.PdfSharpCore.Fonts
             // 36 privOffset  UInt32
             // 40 privLength  UInt32
 
+            if (woff.Length < 44)
+                throw new InvalidDataException("WOFF: file too short to contain a valid header.");
+
             uint flavor = ReadUInt32BE(woff, 4);
             int numTables = (int)ReadUInt16BE(woff, 12);
+
+            int minDirEnd = 44 + numTables * 20;
+            if (woff.Length < minDirEnd)
+                throw new InvalidDataException("WOFF: file truncated before end of table directory.");
 
             // Table directory entries start at offset 44, each 20 bytes:
             // 0  tag         UInt32
@@ -57,6 +64,15 @@ namespace PeachPDF.PdfSharpCore.Fonts
                 compLengths[i] = ReadUInt32BE(woff, e + 8);
                 origLengths[i] = ReadUInt32BE(woff, e + 12);
                 checksums[i] = ReadUInt32BE(woff, e + 16);
+
+                if (compLengths[i] > origLengths[i])
+                    throw new InvalidDataException(
+                        $"WOFF: table {i} has compLength ({compLengths[i]}) > origLength ({origLengths[i]}), which is invalid per spec.");
+
+                long tableEnd = (long)offsets[i] + compLengths[i];
+                if (tableEnd > woff.Length)
+                    throw new InvalidDataException(
+                        $"WOFF: table {i} data extends beyond end of file.");
             }
 
             // Decompress each table
@@ -79,11 +95,14 @@ namespace PeachPDF.PdfSharpCore.Fonts
                         if (read == 0) break;
                         totalRead += read;
                     }
+                    if (totalRead != (int)origLen)
+                        throw new InvalidDataException(
+                            $"WOFF: table {i} decompressed to {totalRead} bytes but expected {origLen}.");
                     tableData[i] = decompressed;
                 }
                 else
                 {
-                    // Not compressed: copy verbatim
+                    // Not compressed: copy verbatim (compLen == origLen per spec after the check above)
                     var raw = new byte[origLen];
                     Array.Copy(woff, (int)offsets[i], raw, 0, (int)origLen);
                     tableData[i] = raw;

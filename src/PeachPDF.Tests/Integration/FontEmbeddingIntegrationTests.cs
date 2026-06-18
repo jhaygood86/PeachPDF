@@ -21,12 +21,15 @@ namespace PeachPDF.Tests.Integration
     /// </summary>
     public class FontEmbeddingIntegrationTests
     {
+        private static string WindowsFontsDir =>
+            Path.Combine(Environment.GetEnvironmentVariable("SystemRoot") ?? @"C:\Windows", "Fonts");
+
         // -------------------------------------------------------------------------
         // TTF regression: must still embed as /FontFile2
         // -------------------------------------------------------------------------
 
         [Fact]
-        public async Task TtfFont_ViaFontFaceDataUri_EmbeddsAs_FontFile2()
+        public async Task TtfFont_ViaFontFaceDataUri_EmbedsAs_FontFile2()
         {
             var ttfPath = FontResolver.SupportedFonts
                 .FirstOrDefault(p => p.EndsWith(".ttf", StringComparison.OrdinalIgnoreCase));
@@ -55,9 +58,10 @@ body {{ font-family: 'TestTtf', serif; font-size: 14pt; }}
         // -------------------------------------------------------------------------
 
         [Fact]
-        public async Task CffFont_ViaFontFaceDataUri_EmbeddsAs_FontFile3_OpenType()
+        public async Task CffFont_ViaFontFaceDataUri_EmbedsAs_FontFile3_OpenType()
         {
-            var otfPath = Directory.GetFiles(@"C:\Windows\Fonts", "*.otf").FirstOrDefault();
+            if (!OperatingSystem.IsWindows()) return;
+            var otfPath = Directory.GetFiles(WindowsFontsDir, "*.otf").FirstOrDefault();
             if (otfPath == null) return;
 
             var otfBytes = File.ReadAllBytes(otfPath);
@@ -86,7 +90,8 @@ body {{ font-family: 'TestCff', serif; font-size: 14pt; }}
         [Fact]
         public async Task CffFont_EmbeddedStream_HasNo_Length1()
         {
-            var otfPath = Directory.GetFiles(@"C:\Windows\Fonts", "*.otf").FirstOrDefault();
+            if (!OperatingSystem.IsWindows()) return;
+            var otfPath = Directory.GetFiles(WindowsFontsDir, "*.otf").FirstOrDefault();
             if (otfPath == null) return;
 
             var otfBytes = File.ReadAllBytes(otfPath);
@@ -103,31 +108,28 @@ body {{ font-family: 'TestCffL', serif; font-size: 14pt; }}
             var generator = new PdfGenerator();
             var doc = await generator.GeneratePdf(html, PageSize.A4);
 
-            // Save to bytes and look at the raw PDF text to check for /Length1
-            // paired with /FontFile3 — we parse it object-by-object to avoid
-            // false positives from /Length1 on image streams.
             var ms = new MemoryStream();
             doc.Save(ms);
             var pdfText = Encoding.Latin1.GetString(ms.ToArray());
 
-            // Find the font descriptor dict containing /FontFile3
-            // If /Length1 appears in the same object block alongside /FontFile3 it's a bug.
-            // We check by locating each /FontFile3 occurrence and scanning its surrounding block.
+            // A CFF font must be embedded under /FontFile3; assert it was actually embedded.
+            Assert.Contains("/FontFile3", pdfText);
+
+            // Scan each PDF object block that contains /FontFile3 and assert /Length1 is absent.
+            // Use " obj" (with leading space) to avoid matching the "obj" inside "endobj".
             int searchFrom = 0;
             while (true)
             {
                 int idx = pdfText.IndexOf("/FontFile3", searchFrom, StringComparison.Ordinal);
                 if (idx < 0) break;
 
-                // Scan backward to find the start of the enclosing PDF object ("N 0 obj")
-                int objStart = pdfText.LastIndexOf("obj", idx, StringComparison.Ordinal);
-                // Scan forward to end of object ("endobj")
-                int objEnd = pdfText.IndexOf("endobj", idx, StringComparison.Ordinal);
+                int objStart = pdfText.LastIndexOf(" obj", idx, StringComparison.Ordinal);
+                int objEnd   = pdfText.IndexOf("endobj", idx, StringComparison.Ordinal);
                 if (objStart >= 0 && objEnd > objStart)
                 {
                     var block = pdfText.Substring(objStart, objEnd - objStart);
                     Assert.False(block.Contains("/Length1"),
-                        "A font stream embedded as /FontFile3 must not carry /Length1 (that key is only valid for /FontFile2).");
+                        "/Length1 must not appear in a /FontFile3 stream dictionary (it is only valid for /FontFile2).");
                 }
 
                 searchFrom = idx + 1;
@@ -162,7 +164,7 @@ body {{ font-family: 'TestWoff', serif; font-size: 14pt; }}
 
             Assert.NotNull(doc);
             Assert.True(doc.PageCount >= 1);
-            // PDF must have font data embedded (the WOFF was converted to OpenType)
+            // PDF must have font data embedded (the WOFF was converted to OpenType before embedding)
             var pdfText = GetPdfText(doc);
             Assert.Contains("/FontFile2", pdfText);
         }
@@ -179,8 +181,7 @@ body {{ font-family: 'TestWoff', serif; font-size: 14pt; }}
             if (ttfPath == null) return;
 
             var ttfBytes = File.ReadAllBytes(ttfPath);
-            var familyName = PeachPDF.PdfSharpCore.Utils.TtfFontDescription
-                .LoadDescription(ttfPath).FontFamilyInvariantCulture;
+            var familyName = TtfFontDescription.LoadDescription(ttfPath).FontFamilyInvariantCulture;
 
             var woffBytes = WrapTtfAsWoff(ttfBytes);
 

@@ -37,6 +37,9 @@ namespace PeachPDF.PdfSharpCore.Fonts
         public static byte[] Convert(byte[] woff2)
         {
             // Header (48 bytes)
+            if (woff2.Length < 48)
+                throw new InvalidDataException("WOFF2: file too short to contain a valid header.");
+
             uint flavor = ReadUInt32BE(woff2, 4);
             int numTables = (int)ReadUInt16BE(woff2, 12);
             uint totalCompressedSize = ReadUInt32BE(woff2, 20);
@@ -46,12 +49,17 @@ namespace PeachPDF.PdfSharpCore.Fonts
             var entries = new List<TableEntry>(numTables);
             for (int i = 0; i < numTables; i++)
             {
+                if (pos >= woff2.Length)
+                    throw new InvalidDataException($"WOFF2: file truncated while reading table directory entry {i}.");
+
                 var entry = new TableEntry();
                 byte flags = woff2[pos++];
                 int tagIndex = flags & 0x3F;
 
                 if (tagIndex == 63)
                 {
+                    if (pos + 4 > woff2.Length)
+                        throw new InvalidDataException("WOFF2: file truncated reading arbitrary tag.");
                     entry.Tag = ReadUInt32BE(woff2, pos); pos += 4;
                 }
                 else
@@ -59,13 +67,26 @@ namespace PeachPDF.PdfSharpCore.Fonts
                     entry.Tag = KnownTags[tagIndex];
                 }
 
-                // transformVersion bits 7:6 of the flags byte
+                // transformVersion: bits 7:6 of the flags byte
                 int transformVersion = (flags >> 6) & 0x3;
 
                 bool isGlyfOrLoca = (entry.Tag == GlyfTag || entry.Tag == LocaTag);
-                // For glyf/loca: transformVersion 0 = transformed, 3 = identity (no transform)
-                // For others:    transformVersion 0 = identity, 1/2/3 = reserved
-                entry.Transformed = isGlyfOrLoca ? (transformVersion == 0) : false;
+                if (isGlyfOrLoca)
+                {
+                    // For glyf/loca: 0 = transformed, 3 = identity; 1 and 2 are reserved.
+                    if (transformVersion == 1 || transformVersion == 2)
+                        throw new InvalidDataException(
+                            $"WOFF2: reserved transformVersion {transformVersion} for glyf/loca table.");
+                    entry.Transformed = (transformVersion == 0);
+                }
+                else
+                {
+                    // For all other tables: 0 = identity; 1, 2, 3 are reserved.
+                    if (transformVersion != 0)
+                        throw new InvalidDataException(
+                            $"WOFF2: reserved transformVersion {transformVersion} for non-glyf/loca table.");
+                    entry.Transformed = false;
+                }
 
                 entry.OrigLength = ReadBase128(woff2, ref pos);
 
@@ -79,6 +100,10 @@ namespace PeachPDF.PdfSharpCore.Fonts
 
             // Brotli-compressed table data starts right after the table directory
             int compressedStart = pos;
+            if ((long)compressedStart + totalCompressedSize > woff2.Length)
+                throw new InvalidDataException(
+                    "WOFF2: declared compressed block extends beyond end of file.");
+
             byte[] uncompressed;
             using (var cs = new MemoryStream(woff2, compressedStart, (int)totalCompressedSize))
             using (var brotli = new BrotliStream(cs, CompressionMode.Decompress))
@@ -93,7 +118,10 @@ namespace PeachPDF.PdfSharpCore.Fonts
             var rawTables = new byte[numTables][];
             for (int i = 0; i < numTables; i++)
             {
-                int len = (int)entries[i].TransformLength;
+                int len = checked((int)entries[i].TransformLength);
+                if (srcPos + len > uncompressed.Length)
+                    throw new InvalidDataException(
+                        $"WOFF2: table {i} extends beyond end of decompressed data.");
                 rawTables[i] = new byte[len];
                 Array.Copy(uncompressed, srcPos, rawTables[i], 0, len);
                 srcPos += len;
