@@ -1274,7 +1274,7 @@ namespace PeachPDF.Html.Core.Dom
 
             var nextPageStart = (currentPageNumber + 1) * pageHeight + marginTop;
 
-            return nextPageStart - currentY + marginTop;
+            return nextPageStart - currentY;
         }
 
         #endregion
