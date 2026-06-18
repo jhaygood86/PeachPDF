@@ -1409,9 +1409,12 @@ namespace PeachPDF.Html.Core.Dom
 
                 PaintBackground(g, actualRect, i == 0);
 
-                // For multi-page tables, cap the border rect bottom to the last row on the current
-                // page so the table's side borders don't extend into the inter-page margin gap.
-                var rectForBorders = actualRect;
+                // For multi-page tables, clip the graphics context to the last row's bottom on
+                // the current page so that the table's side borders don't extend into the
+                // inter-page margin gap.  We clip the *context* rather than the rect so that
+                // the table's outer bottom border (at actualRect.Bottom) is naturally excluded
+                // on intermediate pages — only the left/right side borders are restricted.
+                bool pushedPageClip = false;
                 if ((Display == CssConstants.Table || Display == CssConstants.InlineTable)
                     && PageBreakBottoms != null && HtmlContainer != null)
                 {
@@ -1422,20 +1425,20 @@ namespace PeachPDF.Html.Core.Dom
                         if (PageBreakBottoms.TryGetValue(currentPageIndex, out var pageBreakBottom))
                         {
                             var pageBreakBottomVisual = pageBreakBottom + offset.Y;
-                            var clippedHeight = pageBreakBottomVisual - rectForBorders.Top;
-                            if (clippedHeight > 0 && pageBreakBottomVisual < rectForBorders.Bottom)
+                            var clippedHeight = pageBreakBottomVisual - clip.Top;
+                            if (clippedHeight > 0 && pageBreakBottomVisual < actualRect.Bottom)
                             {
-                                rectForBorders = new RRect(
-                                    rectForBorders.Left,
-                                    rectForBorders.Top,
-                                    rectForBorders.Width,
-                                    clippedHeight);
+                                g.PushClip(new RRect(clip.Left, clip.Top, clip.Width, clippedHeight));
+                                pushedPageClip = true;
                             }
                         }
                     }
                 }
 
-                BordersDrawHandler.DrawBoxBorders(g, this, rectForBorders, i == 0, i == rects.Length - 1);
+                BordersDrawHandler.DrawBoxBorders(g, this, actualRect, i == 0, i == rects.Length - 1);
+
+                if (pushedPageClip)
+                    g.PopClip();
             }
 
             PaintWords(g, offset);

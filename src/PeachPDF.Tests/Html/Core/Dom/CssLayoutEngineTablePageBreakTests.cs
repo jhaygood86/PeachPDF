@@ -420,9 +420,9 @@ namespace PeachPDF.Tests.Html.Core.Dom
         [Fact]
         public async Task PageBreakBottoms_NegativeOrZeroClipHeight_GuardPreventsDegenerate()
         {
-            // Fix: CssBox.PaintImp guards against clippedHeight = pageBreakBottomVisual - rectTop <= 0.
-            // Without the guard, constructing a RRect with non-positive height would produce a
-            // degenerate rect and break downstream border drawing.
+            // Fix: CssBox.PaintImp guards against clippedHeight = pageBreakBottomVisual - clip.Top <= 0
+            // before calling g.PushClip. Without the guard, pushing a zero/negative-height clip rect
+            // would produce a degenerate clip region and break downstream border drawing.
             //
             // We inject a stale/mismatched PageBreakBottoms entry (Y below the table top) directly
             // onto the box after layout, then call PerformPaint to exercise the guard path.
@@ -472,6 +472,69 @@ namespace PeachPDF.Tests.Html.Core.Dom
             Assert.Null(ex);
         }
 
+        [Fact]
+        public async Task TableBorderPaint_IntermediatePageBreak_PushesClipAtPageBreakY()
+        {
+            // Regression: the previous implementation modified rectForBorders.Bottom to
+            // pageBreakBottomVisual and passed the truncated rect to DrawBoxBorders, causing
+            // the table's outer bottom border to be drawn at every page break (horizontal line
+            // artifact). The fix uses g.PushClip/g.PopClip so the drawing rect remains full-
+            // height and the bottom border at actualRect.Bottom falls outside the clip.
+            //
+            // This test verifies the new mechanism: PushClip must be called with a rect whose
+            // bottom ≈ pageBreakBottomVisual, proving the clip-based approach is in use and that
+            // the calls are balanced with a matching PopClip.
+            var pageHeight = 200.0;
+
+            var html = @"
+<!DOCTYPE html>
+<html>
+<body>
+    <table style='width:100%;border-collapse:collapse;border:2px solid black;'>
+        <tbody>
+" + string.Join("", Enumerable.Range(1, 20).Select(i =>
+    $"<tr><td style='border:1px solid black;padding:5px;'>Row {i}</td></tr>")) + @"
+        </tbody>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, container) = await BuildCssBoxTree(html, pageHeight);
+
+            var table = FindTableBox(rootBox);
+            Assert.NotNull(table);
+            Assert.NotNull(table.PageBreakBottoms);
+            Assert.True(table.PageBreakBottoms.ContainsKey(0),
+                "Table should have a PageBreakBottoms entry for page 0.");
+
+            var pageBreakBottom0 = table.PageBreakBottoms[0];
+            _output.WriteLine($"PageBreakBottoms[0]={pageBreakBottom0}, Table.ActualBottom={table.ActualBottom}");
+
+            // Paint page 0 using the recording graphics adapter (ScrollOffset = 0 so visual Y = absolute Y).
+            var adapter = new PeachPDF.Adapters.PdfSharpAdapter();
+            var recording = new RecordingGraphics(adapter);
+            container.ScrollOffset = new PeachPDF.Html.Adapters.Entities.RPoint(0, 0);
+            await container.PerformPaint(recording);
+
+            _output.WriteLine($"PushClip calls: {recording.PushCount}, PopClip calls: {recording.PopCount}");
+            foreach (var r in recording.PushedClips)
+                _output.WriteLine($"  PushClip rect bottom={r.Bottom:F2}, height={r.Height:F2}");
+
+            // At least one PushClip must have been made with Bottom ≈ pageBreakBottom0.
+            // clippedHeight = pageBreakBottom0 - clip.Top, so rect.Bottom = clip.Top + clippedHeight = pageBreakBottom0.
+            const double tolerance = 3.0;
+            var pageBreakClips = recording.PushedClips
+                .Where(r => Math.Abs(r.Bottom - pageBreakBottom0) < tolerance)
+                .ToList();
+
+            Assert.True(pageBreakClips.Count > 0,
+                $"Expected at least one PushClip with Bottom ≈ {pageBreakBottom0} (tolerance {tolerance}), " +
+                $"but none found. PushClip bottoms: [{string.Join(", ", recording.PushedClips.Select(r => $"{r.Bottom:F1}"))}]");
+
+            // PushClip / PopClip must be balanced so subsequent paint calls are not corrupted.
+            Assert.Equal(recording.PushCount, recording.PopCount);
+        }
+
         #endregion
 
         #region Helper Methods
@@ -508,6 +571,75 @@ namespace PeachPDF.Tests.Html.Core.Dom
             }
 
             return null;
+        }
+
+        #endregion
+
+        #region Recording Graphics Adapter
+
+        /// <summary>
+        /// Minimal RGraphics implementation that records PushClip/PopClip calls so tests can
+        /// verify the clip-based page-break border fix without needing a full PDF rendering stack.
+        /// </summary>
+        private sealed class RecordingGraphics : PeachPDF.Html.Adapters.RGraphics
+        {
+            /// <summary>All rects passed to PushClip during this paint pass.</summary>
+            public List<PeachPDF.Html.Adapters.Entities.RRect> PushedClips { get; } = [];
+            /// <summary>Total PushClip invocations.</summary>
+            public int PushCount { get; private set; }
+            /// <summary>Total PopClip invocations.</summary>
+            public int PopCount { get; private set; }
+            /// <summary>Y-coordinates of horizontal lines drawn (where y1 ≈ y2).</summary>
+            public List<double> HorizontalLines { get; } = [];
+
+            public RecordingGraphics(PeachPDF.Html.Adapters.RAdapter adapter)
+                : base(adapter, new PeachPDF.Html.Adapters.Entities.RRect(0, 0, double.MaxValue, double.MaxValue)) { }
+
+            public override void DrawLine(PeachPDF.Html.Adapters.RPen pen, double x1, double y1, double x2, double y2)
+            {
+                if (Math.Abs(y1 - y2) < 0.5)
+                    HorizontalLines.Add(y1);
+            }
+
+            public override void PushClip(PeachPDF.Html.Adapters.Entities.RRect rect)
+            {
+                _clipStack.Push(rect);
+                PushedClips.Add(rect);
+                PushCount++;
+            }
+
+            public override void PopClip()
+            {
+                if (_clipStack.Count > 1)
+                    _clipStack.Pop();
+                PopCount++;
+            }
+
+            public override void PushClipExclude(PeachPDF.Html.Adapters.Entities.RRect rect) { }
+            public override object SetAntiAliasSmoothingMode() => new object();
+            public override void ReturnPreviousSmoothingMode(object? prevMode) { }
+            public override PeachPDF.Html.Adapters.Entities.RSize MeasureString(string str, PeachPDF.Html.Adapters.RFont font) => new(0, 12);
+            public override void MeasureString(string str, PeachPDF.Html.Adapters.RFont font, double maxWidth, out int charFit, out double charFitWidth) { charFit = str?.Length ?? 0; charFitWidth = 0; }
+            public override void DrawString(string str, PeachPDF.Html.Adapters.RFont font, PeachPDF.Html.Adapters.Entities.RColor color, PeachPDF.Html.Adapters.Entities.RPoint point, PeachPDF.Html.Adapters.Entities.RSize size, bool rtl) { }
+            public override void DrawRectangle(PeachPDF.Html.Adapters.RPen pen, double x, double y, double width, double height) { }
+            public override void DrawRectangle(PeachPDF.Html.Adapters.RBrush brush, double x, double y, double width, double height) { }
+            public override void DrawImage(PeachPDF.Html.Adapters.RImage image, PeachPDF.Html.Adapters.Entities.RRect destRect, PeachPDF.Html.Adapters.Entities.RRect srcRect) { }
+            public override void DrawImage(PeachPDF.Html.Adapters.RImage image, PeachPDF.Html.Adapters.Entities.RRect destRect) { }
+            public override void DrawPath(PeachPDF.Html.Adapters.RPen pen, PeachPDF.Html.Adapters.RGraphicsPath path) { }
+            public override void DrawPath(PeachPDF.Html.Adapters.RBrush brush, PeachPDF.Html.Adapters.RGraphicsPath path) { }
+            public override void DrawPolygon(PeachPDF.Html.Adapters.RBrush brush, PeachPDF.Html.Adapters.Entities.RPoint[] points) { }
+            public override PeachPDF.Html.Adapters.RGraphicsPath GetGraphicsPath() => new RecordingGraphicsPath();
+            public override PeachPDF.Html.Adapters.RBrush GetTextureBrush(PeachPDF.Html.Adapters.RImage image, PeachPDF.Html.Adapters.Entities.RRect dstRect, PeachPDF.Html.Adapters.Entities.RPoint translateTransformLocation)
+                => GetSolidBrush(PeachPDF.Html.Adapters.Entities.RColor.Black);
+            public override void Dispose() { }
+        }
+
+        private sealed class RecordingGraphicsPath : PeachPDF.Html.Adapters.RGraphicsPath
+        {
+            public override void Start(double x, double y) { }
+            public override void LineTo(double x, double y) { }
+            public override void ArcTo(double x, double y, double size, Corner corner) { }
+            public override void Dispose() { }
         }
 
         #endregion
