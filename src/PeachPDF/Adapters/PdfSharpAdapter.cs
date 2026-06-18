@@ -17,6 +17,7 @@ using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Network;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
+using PeachPDF.PdfSharpCore.Fonts;
 using PeachPDF.PdfSharpCore.Utils;
 using PeachPDF.Utilities;
 using System;
@@ -98,19 +99,20 @@ namespace PeachPDF.Adapters
 
         public async Task AddFont(Stream stream, string? fontFamilyName)
         {
-            var memoryStream = new MemoryStream();
+            using var memoryStream = new MemoryStream();
             await stream.CopyToAsync(memoryStream);
 
-            memoryStream.Seek(0, SeekOrigin.Begin);
+            byte[] fontBytes = FontFormatConverter.ToOpenType(memoryStream.ToArray());
+            using var convertedStream = new MemoryStream(fontBytes);
 
-            var fontDesc = TtfFontDescription.LoadDescription(memoryStream);
+            var fontDesc = TtfFontDescription.LoadDescription(convertedStream);
             fontFamilyName ??= fontDesc.FontFamilyInvariantCulture;
 
             AddFontFamily(new FontFamilyAdapter(new XFontFamily(fontFamilyName)));
 
-            memoryStream.Seek(0, SeekOrigin.Begin);
+            convertedStream.Seek(0, SeekOrigin.Begin);
 
-            _fontResolver.AddFont(memoryStream, fontFamilyName);
+            _fontResolver.AddFont(convertedStream, fontFamilyName);
         }
 
         protected override RColor GetColorInt(string colorName)
