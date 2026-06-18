@@ -747,12 +747,16 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var row = _bodyRows[i];
                 var estimatedRowHeight = EstimateRowHeight(row);
-                var availableHeight = pageHeight - _footerHeight - marginBottom;
+                var availableHeight = pageHeight - _footerHeight - marginTop - marginBottom;
 
                 // Check for page break
                 if (WillCrossPageBoundary(currentY, currentY + estimatedRowHeight, pageHeight, marginTop, availableHeight, currentPageNumber)
             && i > 0 && _tableBox.HtmlContainer != null)
                 {
+                    // Record the bottom of the last row on this page for border clipping during paint
+                    _tableBox.PageBreakBottoms ??= new Dictionary<int, double>();
+                    _tableBox.PageBreakBottoms[currentPageNumber] = maxBottom;
+
                     // Create footer proxy for current page
                     if (_shouldRepeatFooters && _footerHeight > 0)
                     {

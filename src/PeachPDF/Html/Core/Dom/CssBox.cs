@@ -200,6 +200,12 @@ namespace PeachPDF.Html.Core.Dom
 
         public virtual bool IsTableRowGroupBox => Display is CssConstants.TableRowGroup or CssConstants.TableHeaderGroup or CssConstants.TableFooterGroup;
 
+        /// <summary>
+        /// Maps page number → last row bottom Y on that page. Set by CssLayoutEngineTable when rows break across pages.
+        /// Used during paint to clip the table box border to the actual content height on each page.
+        /// </summary>
+        internal Dictionary<int, double>? PageBreakBottoms { get; set; }
+
         public virtual bool IsTableCell => Display is CssConstants.TableCell;
 
         /// <summary>
