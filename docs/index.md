@@ -76,6 +76,10 @@ var document = await generator.GeneratePdf(null, pdfConfig);
 document.Save(stream);
 ```
 
+## HTML & CSS Support
+
+See [HTML & CSS Support](html-css-support.md) for a full list of supported HTML elements and CSS properties, including notes on gaps and PeachPDF-specific extensions.
+
 ## Fonts
 
 ### Default Font
