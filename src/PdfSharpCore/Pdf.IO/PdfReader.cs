@@ -165,7 +165,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
                     {
                         char major = header[ich + 4];
                         char minor = header[ich + 6];
-                        if (major >= '1' && major < '2' && minor >= '0' && minor <= '9')
+                        if (char.IsDigit(major) && char.IsDigit(minor))
                             return (major - '0') * 10 + (minor - '0');
                     }
                 }
@@ -186,7 +186,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
                     {
                         char major = header[ich + 4];
                         char minor = header[ich + 6];
-                        if (major >= '1' && major < '2' && minor >= '0' && minor <= '9')
+                        if (char.IsDigit(major) && char.IsDigit(minor))
                             return (major - '0') * 10 + (minor - '0');
                     }
                 }
@@ -398,7 +398,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
                     ParserDiagnostics.ThrowParserException("Invalid PDF file: no trailer found.");
 
                 Debug.Assert(document._irefTable.IsUnderConstruction);
-                document._irefTable.IsUnderConstruction = false;
 
                 // Is document encrypted?
                 PdfReference xrefEncrypt = document._trailer.Elements[PdfTrailer.Keys.Encrypt] as PdfReference;
@@ -562,6 +561,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
 
                 // Fix references of trailer values and then objects and irefs are consistent.
                 document._trailer.Finish();
+                document._irefTable.IsUnderConstruction = false;
 
 #if DEBUG_
     // Some tests...

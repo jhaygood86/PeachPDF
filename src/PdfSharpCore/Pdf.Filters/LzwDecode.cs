@@ -101,11 +101,12 @@ namespace PeachPDF.PdfSharpCore.Pdf.Filters
 
             if (outputStream.Length >= 0)
             {
+                outputStream.Capacity = (int)outputStream.Length;
                 if (parms.DecodeParms != null)
-                    return StreamDecoder.Decode(outputStream.ToArray(), parms.DecodeParms);
-                return outputStream.ToArray();
+                    return StreamDecoder.Decode(outputStream.GetBuffer(), parms.DecodeParms);
+                return outputStream.GetBuffer();
             }
-            return null;
+            return Array.Empty<byte>();
         }
 
         /// <summary>

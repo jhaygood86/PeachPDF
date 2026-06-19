@@ -42,7 +42,6 @@ PeachPDF.PdfSharpCore is a partial port of PdfSharp.Xamarin for .NET Core Additi
     <Folder Include="Resources\images\" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="SharpZipLib" Version="1.4.2" />
     <PackageReference Include="StbImageSharp" Version="2.30.15" />
     <PackageReference Include="StbImageWriteSharp" Version="1.16.7" />
   </ItemGroup>

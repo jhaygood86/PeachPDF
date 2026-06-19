@@ -1,4 +1,4 @@
-using ICSharpCode.SharpZipLib.Zip.Compression.Streams;
+using System.IO.Compression;
 using System;
 using System.IO;
 
@@ -87,7 +87,7 @@ namespace PeachPDF.PdfSharpCore.Fonts
                     // Decompress with zlib (raw deflate wrapped in zlib header)
                     int origLenInt = checked((int)origLen);
                     using var compressed = new MemoryStream(woff, (int)offsets[i], (int)compLen);
-                    using var inflater = new InflaterInputStream(compressed);
+                    using var inflater = new ZLibStream(compressed, CompressionMode.Decompress);
                     var decompressed = new byte[origLenInt];
                     int totalRead = 0;
                     while (totalRead < origLenInt)

@@ -23,18 +23,18 @@
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
 // THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
+// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using ICSharpCode.SharpZipLib.Zip.Compression;
-using ICSharpCode.SharpZipLib.Zip.Compression.Streams;
+using System;
 using System.IO;
+using System.IO.Compression;
 
 namespace PeachPDF.PdfSharpCore.Pdf.Filters
 {
     /// <summary>
-    /// Implements the FlateDecode filter by wrapping SharpZipLib.
+    /// Implements the FlateDecode filter using System.IO.Compression.ZLibStream.
     /// </summary>
     public class FlateDecode : Filter
     {
@@ -53,24 +53,16 @@ namespace PeachPDF.PdfSharpCore.Pdf.Filters
         /// </summary>
         public byte[] Encode(byte[] data, PdfFlateEncodeMode mode)
         {
-            MemoryStream ms = new MemoryStream();
-
-            // DeflateStream/GZipStream does not work immediately and I have not the leisure to work it out.
-            // So I keep on using SharpZipLib even with .NET 2.0.
-
-            int level = Deflater.DEFAULT_COMPRESSION;
-            switch (mode)
+            CompressionLevel compressionLevel = mode switch
             {
-                case PdfFlateEncodeMode.BestCompression:
-                    level = Deflater.BEST_COMPRESSION;
-                    break;
-                case PdfFlateEncodeMode.BestSpeed:
-                    level = Deflater.BEST_SPEED;
-                    break;
-            }
-            DeflaterOutputStream zip = new DeflaterOutputStream(ms, new Deflater(level, false));
-            zip.Write(data, 0, data.Length);
-            zip.Finish();
+                PdfFlateEncodeMode.BestCompression => CompressionLevel.SmallestSize,
+                PdfFlateEncodeMode.BestSpeed => CompressionLevel.Fastest,
+                _ => CompressionLevel.Optimal
+            };
+
+            var ms = new MemoryStream();
+            using (var zlib = new ZLibStream(ms, compressionLevel, leaveOpen: true))
+                zlib.Write(data, 0, data.Length);
             return ms.ToArray();
         }
 
@@ -81,28 +73,15 @@ namespace PeachPDF.PdfSharpCore.Pdf.Filters
         {
             if (data.Length == 0) return data;
 
-            MemoryStream msInput = new MemoryStream(data);
-            MemoryStream msOutput = new MemoryStream();
+            var msInput = new MemoryStream(data);
+            var msOutput = new MemoryStream();
 
-            InflaterInputStream iis = new InflaterInputStream(msInput, new Inflater(false));
-            int cbRead;
-            byte[] abResult = new byte[32768];
-            do
-            {
-                cbRead = iis.Read(abResult, 0, abResult.Length);
-                if (cbRead > 0)
-                    msOutput.Write(abResult, 0, cbRead);
-            }
-            while (cbRead > 0);
-            iis.Close();
-            msOutput.Flush();
-            if (msOutput.Length >= 0)
-            {
-                if (parms.DecodeParms != null)
-                    return StreamDecoder.Decode(msOutput.ToArray(), parms.DecodeParms);
-                return msOutput.ToArray();
-            }
-            return null;
+            using (var zlib = new ZLibStream(msInput, CompressionMode.Decompress))
+                zlib.CopyTo(msOutput);
+
+            if (parms.DecodeParms != null)
+                return StreamDecoder.Decode(msOutput.ToArray(), parms.DecodeParms);
+            return msOutput.ToArray();
         }
     }
 }

@@ -192,8 +192,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
                     break;
 
                 // Acrobat 6 Professional proudly presents: The Null object!
-                // Even with a one-digit object number an indirect reference «x 0 R» to this object is
-                // one character larger than the direct use of «null». Probable this is the reason why
+                // Even with a one-digit object number an indirect reference ï¿½x 0 Rï¿½ to this object is
+                // one character larger than the direct use of ï¿½nullï¿½. Probable this is the reason why
                 // it is true that Acrobat Web Capture 6.0 creates this object, but obviously never
                 // creates a reference to it!
                 case Symbol.Null:
@@ -372,7 +372,9 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
 
             if (!(value is PdfReference reference))
             {
-                throw new InvalidOperationException("Cannot retrieve stream length.");
+                // /Length is absent or has an unexpected type; return 0 so the caller's
+                // ScanUntilMarker fallback can locate endstream and recover.
+                return 0;
             }
 
             var state = SaveState();
@@ -427,7 +429,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
             int sp = _stack.SP;
             ParseObject(Symbol.EndDictionary);
             int count = _stack.SP - sp;
-            Debug.Assert(count % 2 == 0);
+            if (count % 2 != 0)
+                ParserDiagnostics.ThrowParserException("A PDF dictionary contains an odd number of PDF objects.");
             PdfItem[] items = _stack.ToArray(sp, count);
             _stack.Reduce(count);
             for (int idx = 0; idx < count; idx += 2)
@@ -1165,9 +1168,10 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
                                 // There is a tool where ID is off by one. In this case we use the ID from the object, not the ID from the XRef table.
                                 if (generation == generationChecked && id == idChecked + 1)
                                     idToUse = idChecked;
-                                else
-                                    if (accuracy == PdfReadAccuracy.Strict)
+                                else if (accuracy == PdfReadAccuracy.Strict)
                                     ParserDiagnostics.ThrowParserException("Invalid entry in XRef table, ID=" + id + ", Generation=" + generation + ", Position=" + position + ", ID of referenced object=" + idChecked + ", Generation of referenced object=" + generationChecked);
+                                else
+                                    idToUse = idChecked; // Recover from corrupt XRef by using the actual object ID found at the file position.
                             }
 
                             // Even it is restricted, an object can exists in more than one subsection.
@@ -1259,7 +1263,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
 
             int number = _lexer.TokenToInteger;
             int generation = ReadInteger();
-            Debug.Assert(generation == 0);
+            if (generation != 0)
+                Debug.WriteLine($"Cross-reference stream object {number} has unexpected generation number {generation} (should be 0).");
 
             ReadSymbol(Symbol.Obj);
             ReadSymbol(Symbol.BeginDictionary);
@@ -1301,7 +1306,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
             int prev = xrefStream.Elements.GetInteger(PdfCrossReferenceStream.Keys.Prev);
             PdfArray w = (PdfArray)xrefStream.Elements.GetValue(PdfCrossReferenceStream.Keys.W);
 
-            // E.g.: W[1 2 1] ¤ Index[7 12] ¤ Size 19
+            // E.g.: W[1 2 1] ï¿½ Index[7 12] ï¿½ Size 19
 
             // Setup subsections.
             int subsectionCount;
@@ -1332,9 +1337,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
             Debug.Assert(w.Elements.Count == 3);
             int[] wsize = { w.Elements.GetInteger(0), w.Elements.GetInteger(1), w.Elements.GetInteger(2) };
             int wsum = StreamHelper.WSize(wsize);
-            if (wsum * subsectionEntryCount != bytes.Length)
-                GetType();
-            Debug.Assert(wsum * subsectionEntryCount == bytes.Length, "Check implementation here.");
+            // The assertion "wsum * subsectionEntryCount == bytes.Length" was removed because
+            // it incorrectly fails on valid PDF 2.0 files (e.g. ISO 32000-2 specification).
             int testcount = subsections[0][1];
             int[] currentSubsection = subsections[0];
 
@@ -1444,11 +1448,12 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
                     datetime = new DateTime(year, month, day, hour, minute, second);
                     if (o != 'Z')
                     {
+                        // To convert local time to UTC: subtract the offset when positive (+), add it when negative (-).
                         TimeSpan ts = new TimeSpan(hh, mm, 0);
-                        if (o == '-')
-                            datetime = datetime.Add(ts);
-                        else
+                        if (o == '+')
                             datetime = datetime.Subtract(ts);
+                        else
+                            datetime = datetime.Add(ts);
                     }
                     // Now that we converted datetime to UTC, mark it as UTC.
                     datetime = DateTime.SpecifyKind(datetime, DateTimeKind.Utc);

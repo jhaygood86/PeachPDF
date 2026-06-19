@@ -375,6 +375,22 @@ namespace PeachPDF.PdfSharpCore.Pdf
             }
 
             /// <summary>
+            /// Tries to convert the specified value to boolean. Returns false if the key is missing or the value has the wrong type.
+            /// </summary>
+            public bool TryGetBoolean(string key, out bool value)
+            {
+                value = false;
+                object obj = this[key];
+                if (obj == null)
+                    return false;
+                if (obj is PdfReference)
+                    obj = ((PdfReference)obj).Value;
+                if (obj is PdfBoolean b) { value = b.Value; return true; }
+                if (obj is PdfBooleanObject bo) { value = bo.Value; return true; }
+                return false;
+            }
+
+            /// <summary>
             /// Sets the entry to a direct boolean value.
             /// </summary>
             public void SetBoolean(string key, bool value)
@@ -426,6 +442,25 @@ namespace PeachPDF.PdfSharpCore.Pdf
             public int GetInteger(string key)
             {
                 return GetInteger(key, false);
+            }
+
+            /// <summary>
+            /// Tries to convert the specified value to integer. Returns false if the key is missing or the value has the wrong type.
+            /// </summary>
+            public bool TryGetInteger(string key, out int value)
+            {
+                value = 0;
+                object obj = this[key];
+                if (obj == null)
+                    return false;
+                if (obj is PdfNull)
+                    return false;
+                if (obj is PdfReference r)
+                    obj = r.Value;
+                if (obj is PdfInteger i) { value = i.Value; return true; }
+                if (obj is PdfIntegerObject io) { value = io.Value; return true; }
+                if (obj is PdfUInteger u) { value = (int)u.Value; return true; }
+                return false;
             }
 
             /// <summary>
@@ -482,6 +517,24 @@ namespace PeachPDF.PdfSharpCore.Pdf
             public double GetReal(string key)
             {
                 return GetReal(key, false);
+            }
+
+            /// <summary>
+            /// Tries to convert the specified value to double. Returns false if the key is missing or the value has the wrong type.
+            /// </summary>
+            public bool TryGetReal(string key, out double value)
+            {
+                value = 0;
+                object obj = this[key];
+                if (obj == null)
+                    return false;
+                if (obj is PdfReference r)
+                    obj = r.Value;
+                if (obj is PdfReal re) { value = re.Value; return true; }
+                if (obj is PdfRealObject ro) { value = ro.Value; return true; }
+                if (obj is PdfInteger i) { value = i.Value; return true; }
+                if (obj is PdfIntegerObject io) { value = io.Value; return true; }
+                return false;
             }
 
             /// <summary>
@@ -684,6 +737,28 @@ namespace PeachPDF.PdfSharpCore.Pdf
             }
 
             /// <summary>
+            /// Tries to convert the specified value to PdfRectangle. Returns false if the key is missing or the value has the wrong type.
+            /// </summary>
+            public bool TryGetRectangle(string key, out PdfRectangle value)
+            {
+                value = new PdfRectangle();
+                object obj = this[key];
+                if (obj == null)
+                    return false;
+                if (obj is PdfReference r)
+                    obj = r.Value;
+                PdfArray array = obj as PdfArray;
+                if (array != null && array.Elements.Count == 4)
+                {
+                    value = new PdfRectangle(array.Elements.GetReal(0), array.Elements.GetReal(1),
+                        array.Elements.GetReal(2), array.Elements.GetReal(3));
+                    return true;
+                }
+                if (obj is PdfRectangle rect) { value = rect; return true; }
+                return false;
+            }
+
+            /// <summary>
             /// Sets the entry to a direct rectangle value, represented by an array with four values.
             /// </summary>
             public void SetRectangle(string key, PdfRectangle rect)
@@ -770,7 +845,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
                     if (stringObject != null)
                         strDate = stringObject.Value;
                     else
-                        throw new InvalidCastException("GetName: Object is not a name.");
+                        throw new InvalidCastException("GetDateTime: Object is not a string or date.");
                 }
 
                 if (strDate != "")

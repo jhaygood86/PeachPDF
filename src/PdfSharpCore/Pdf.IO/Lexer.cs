@@ -176,11 +176,17 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
             var pos = MoveToStartOfStream();
             _pdfSteam.Position = pos;
             byte[] bytes = new byte[length];
-            int read = _pdfSteam.Read(bytes, 0, length);
-            Debug.Assert(read == length);
+            int totalRead = 0;
+            while (totalRead < length)
+            {
+                int read = _pdfSteam.Read(bytes, totalRead, length - totalRead);
+                if (read == 0)
+                    break;
+                totalRead += read;
+            }
 
             // Synchronize idxChar etc.
-            Position = pos + length;
+            Position = pos + totalRead;
             return bytes;
         }
 
@@ -188,11 +194,11 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
         {
             long pos;
 
-            // Skip illegal blanks behind «stream».
+            // Skip illegal blanks behind ï¿½streamï¿½.
             while (_currChar == Chars.SP)
                 ScanNextChar(true);
 
-            // Skip new line behind «stream».
+            // Skip new line behind ï¿½streamï¿½.
             if (_currChar == Chars.CR)
             {
                 if (_nextChar == Chars.LF)
@@ -268,9 +274,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
                 if (ch == Chars.LF || ch == Chars.EOF)
                     break;
             }
-            // TODO: not correct
-            if (_token.ToString().StartsWith("%%EOF"))
-                return Symbol.Eof;
+            // %%EOF can appear mid-document inside a comment; don't treat it as actual end-of-file.
             return _symbol = Symbol.Comment;
         }
 
@@ -535,7 +539,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
             }
 
             // Phase 2: deal with UTF-16BE if necessary.
-            // UTF-16BE Unicode strings start with U+FEFF ("þÿ"). There can be empty strings with UTF-16BE prefix.
+            // UTF-16BE Unicode strings start with U+FEFF ("ï¿½ï¿½"). There can be empty strings with UTF-16BE prefix.
             Phase2:
             if (_token.Length >= 2 && _token[0] == '\xFE' && _token[1] == '\xFF')
             {
@@ -597,12 +601,22 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
                 if (IsHexChar(_currChar))
                 {
                     hex[0] = _currChar;
-                    hex[1] = IsHexChar(_nextChar) ? _nextChar : ' ';
-                    int ch = int.Parse(new string(hex), NumberStyles.HexNumber);
-                    _token.Append(Convert.ToChar(ch));
-                    ScanNextChar(true);
-                    if (_currChar != '>')
+                    if (IsHexChar(_nextChar))
+                    {
+                        hex[1] = _nextChar;
+                        int ch = int.Parse(new string(hex), NumberStyles.HexNumber);
+                        _token.Append(Convert.ToChar(ch));
                         ScanNextChar(true);
+                        if (_currChar != '>')
+                            ScanNextChar(true);
+                    }
+                    else
+                    {
+                        // Panose-style: single hex digit per byte, separated by whitespace.
+                        int ch = int.Parse(hex[0].ToString(), NumberStyles.HexNumber);
+                        _token.Append(Convert.ToChar(ch));
+                        ScanNextChar(true);
+                    }
                 }
                 else
                     // prevent endless loop in case _currChar is neither '>' nor a hex-char nor whitespace
@@ -635,7 +649,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
         {
             if (_pdfLength <= _idxChar)
             {
-                _currChar = Chars.EOF;
+                _currChar = _nextChar;
                 _nextChar = Chars.EOF;
             }
             else
@@ -749,12 +763,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
                     case Chars.SP:
                         ScanNextChar(true);
                         break;
-
-                    case (char)11:
-                    case (char)173:
-                        ScanNextChar(true);
-                        break;
-
 
                     default:
                         return _currChar;
