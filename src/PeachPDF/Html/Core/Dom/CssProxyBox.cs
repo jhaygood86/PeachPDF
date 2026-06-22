@@ -242,7 +242,7 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
-            public sealed class BoxLayoutState
+            internal sealed class BoxLayoutState
             {
                 public RPoint Location { get; init; }
                 public double ActualBottom { get; init; }
@@ -250,7 +250,7 @@ namespace PeachPDF.Html.Core.Dom
                 public Dictionary<CssLineBox, RRect> Rectangles { get; init; } = new();
                 public List<WordState> Words { get; init; } = new();
 
-                public sealed class WordState
+                internal sealed class WordState
                 {
                     public double Left { get; init; }
                     public double Top { get; init; }

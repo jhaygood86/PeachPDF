@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public interface ITimingFunction
+    internal interface ITimingFunction
     {
     }
 }

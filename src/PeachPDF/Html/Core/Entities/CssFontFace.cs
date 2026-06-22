@@ -1,4 +1,4 @@
-﻿namespace PeachPDF.Html.Core.Entities
+namespace PeachPDF.Html.Core.Entities
 {
-    public record CssFontFace(string? Url, string? Format, string? Tech, string? Local);
+    internal record CssFontFace(string? Url, string? Format, string? Tech, string? Local);
 }

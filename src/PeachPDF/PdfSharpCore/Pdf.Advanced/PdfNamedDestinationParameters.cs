@@ -1,4 +1,4 @@
-﻿// PDFsharp - A .NET library for processing PDF
+// PDFsharp - A .NET library for processing PDF
 // See the LICENSE file in the solution root for more information.
 
 using PeachPDF.PdfSharpCore.Drawing;
@@ -9,7 +9,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
     /// <summary>
     /// Creates the named destination parameters.
     /// </summary>
-    public class PdfNamedDestinationParameters
+    internal class PdfNamedDestinationParameters
     {
         readonly string _parameters;
 

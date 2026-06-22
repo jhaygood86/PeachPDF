@@ -19,7 +19,7 @@ namespace PeachPDF.Html.Core.Entities
     /// It can happen if some async event has occurred that requires re-paint and re-layout of the html.<br/>
     /// Example: async download of image is complete.
     /// </summary>
-    public sealed class HtmlRefreshEventArgs : EventArgs
+    internal sealed class HtmlRefreshEventArgs : EventArgs
     {
         /// <summary>
         /// is re-layout is required for the refresh

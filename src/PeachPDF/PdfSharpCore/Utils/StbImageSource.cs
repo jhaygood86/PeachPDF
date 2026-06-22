@@ -7,7 +7,7 @@ using WriteImageWriter = StbImageWriteSharp.ImageWriter;
 
 namespace PeachPDF.PdfSharpCore.Utils
 {
-    public class StbImageSharpImageSource : ImageSource
+    internal class StbImageSharpImageSource : ImageSource
     {
         protected override IImageSource FromBinaryImpl(string name, Func<byte[]> imageSource, int? quality = 75)
         {

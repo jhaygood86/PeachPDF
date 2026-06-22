@@ -10,7 +10,7 @@ namespace PeachPDF.Html.Adapters.Entities
     /// <summary>
     /// Represents an ARGB (alpha, red, green, blue) color.
     /// </summary>
-    public readonly struct RColor
+    internal readonly struct RColor
     {
         #region Fields and Consts
 

@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
     /// <summary>
     /// Determines the type of the password.
     /// </summary>
-    public enum PasswordValidity
+    internal enum PasswordValidity
     {
         /// <summary>
         /// Password is neither user nor owner password.

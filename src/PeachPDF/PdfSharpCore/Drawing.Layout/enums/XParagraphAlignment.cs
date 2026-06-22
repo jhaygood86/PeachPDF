@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Layout
     /// <summary>
     /// Specifies the alignment of a paragraph.
     /// </summary>
-    public enum XParagraphAlignment
+    internal enum XParagraphAlignment
     {
         /// <summary>
         /// Default alignment, typically left alignment.

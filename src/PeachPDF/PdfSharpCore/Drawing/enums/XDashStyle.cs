@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// <summary>
     /// Specifies the style of dashed lines drawn with an XPen object.
     /// </summary>
-    public enum XDashStyle  // Same values as System.Drawing.Drawing2D.DashStyle.
+    internal enum XDashStyle  // Same values as System.Drawing.Drawing2D.DashStyle.
     {
         /// <summary>
         /// Specifies a solid line.

@@ -35,7 +35,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// <summary>
     /// Base class for all dictionary Keys classes.
     /// </summary>
-    public class KeysBase
+    internal class KeysBase
     {
         internal static DictionaryMeta CreateMeta([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields)] Type type)
         {

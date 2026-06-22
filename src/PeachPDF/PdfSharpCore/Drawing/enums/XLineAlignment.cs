@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// <summary>
     /// Specifies the alignment of a text string relative to its layout rectangle
     /// </summary>
-    public enum XLineAlignment  // same values as System.Drawing.StringAlignment (except BaseLine)
+    internal enum XLineAlignment  // same values as System.Drawing.StringAlignment (except BaseLine)
     {
         /// <summary>
         /// Specifies the text be aligned near the layout.

@@ -37,7 +37,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// an external PDF file, the value is converted into a direct object.
     /// </summary>
     [DebuggerDisplay("({Value})")]
-    public sealed class PdfBooleanObject : PdfObject
+    internal sealed class PdfBooleanObject : PdfObject
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="PdfBooleanObject"/> class.
@@ -82,7 +82,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         }
 
         /// <summary>
-        /// Writes the keyword «false» or «true».
+        /// Writes the keyword ï¿½falseï¿½ or ï¿½trueï¿½.
         /// </summary>
         internal override void WriteObject(PdfWriter writer)
         {

@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum ScriptingState : byte
+    internal enum ScriptingState : byte
     {
         None,
         InitialOnly,

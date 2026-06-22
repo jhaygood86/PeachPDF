@@ -1,10 +1,10 @@
-﻿#nullable disable
+#nullable disable
 
 using System;
 
 namespace PeachPDF.CSS
 {
-    public struct Time : IEquatable<Time>, IComparable<Time>, IFormattable
+    internal struct Time : IEquatable<Time>, IComparable<Time>, IFormattable
     {
         public static readonly Time Zero = new(0f, Unit.Ms);
 
@@ -93,7 +93,7 @@ namespace PeachPDF.CSS
             return ToMilliseconds() == other.ToMilliseconds();
         }
 
-        public enum Unit : byte
+        internal enum Unit : byte
         {
             None,
             Ms,

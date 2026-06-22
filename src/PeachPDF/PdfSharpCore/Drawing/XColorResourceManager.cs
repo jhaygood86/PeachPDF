@@ -1,4 +1,4 @@
-﻿#region PDFsharp - A .NET library for processing PDF
+#region PDFsharp - A .NET library for processing PDF
 //
 // Authors:
 //   Stefan Lange
@@ -36,7 +36,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// <summary>
     /// Manages the localization of the color class.
     /// </summary>
-    public class XColorResourceManager
+    internal class XColorResourceManager
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="XColorResourceManager"/> class.

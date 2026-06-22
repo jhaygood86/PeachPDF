@@ -1,4 +1,4 @@
-﻿#region PDFsharp - A .NET library for processing PDF
+#region PDFsharp - A .NET library for processing PDF
 //
 // Authors:
 //   Stefan Lange
@@ -36,7 +36,7 @@ namespace PeachPDF.PdfSharpCore.Fonts
     /// <summary>
     /// Provides functionality to specify information about the handling of fonts in the current application domain.
     /// </summary>
-    public static class GlobalFontSettings
+    internal static class GlobalFontSettings
     {
         public const string DefaultFontName = "Arial";
 

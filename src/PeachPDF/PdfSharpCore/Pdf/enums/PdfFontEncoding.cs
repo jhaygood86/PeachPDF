@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// <summary>
     /// Specifies the encoding schema used for an XFont when converted into PDF.
     /// </summary>
-    public enum PdfFontEncoding
+    internal enum PdfFontEncoding
     {
         // TABLE
 

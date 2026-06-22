@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum UpdateFrequency : byte
+    internal enum UpdateFrequency : byte
     {
         None,
         Slow,

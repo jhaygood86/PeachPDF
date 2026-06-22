@@ -35,7 +35,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Filters
     /// <summary>
     /// Reserved for future extension.
     /// </summary>
-    public class FilterParms
+    internal class FilterParms
     {
         /// <summary>
         /// Gets the decoding-parameters for a filter. May be null
@@ -51,7 +51,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Filters
     /// <summary>
     /// Base class for all stream filters
     /// </summary>
-    public abstract class Filter
+    internal abstract class Filter
     {
         /// <summary>
         /// When implemented in a derived class encodes the specified data.

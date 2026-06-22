@@ -38,7 +38,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// Represents a long
     /// </summary>
     [DebuggerDisplay("({Value})")]
-    public sealed class PdfLong : PdfNumber, IConvertible
+    internal sealed class PdfLong : PdfNumber, IConvertible
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="PdfLong"/> class.

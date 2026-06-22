@@ -34,7 +34,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// <summary>
     /// Specifies details about how the font is used in PDF creation.
     /// </summary>
-    public class XPdfFontOptions
+    internal class XPdfFontOptions
     {
         internal XPdfFontOptions() { }
 

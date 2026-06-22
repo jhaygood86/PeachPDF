@@ -50,7 +50,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// Defines an object used to draw image files (bmp, png, jpeg, gif) and PDF forms.
     /// An abstract base class that provides functionality for the Bitmap and Metafile descended classes.
     /// </summary>
-    public class XImage : IDisposable
+    internal class XImage : IDisposable
     {
         // The hierarchy is adapted to WPF/Silverlight/WinRT
         //

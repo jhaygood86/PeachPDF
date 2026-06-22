@@ -36,7 +36,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// Represents an indirect real value. This type is not used by PeachPDF.PdfSharpCore. If it is imported from
     /// an external PDF file, the value is converted into a direct object.
     /// </summary>
-    public sealed class PdfRealObject : PdfNumberObject
+    internal sealed class PdfRealObject : PdfNumberObject
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="PdfRealObject"/> class.

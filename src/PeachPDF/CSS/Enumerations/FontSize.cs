@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum FontSize : byte
+    internal enum FontSize : byte
     {
         Custom,
         Tiny,

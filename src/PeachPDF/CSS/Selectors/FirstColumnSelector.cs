@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public sealed class FirstColumnSelector : ChildSelector
+    internal sealed class FirstColumnSelector : ChildSelector
     {
         public FirstColumnSelector()
             : base(PseudoClassNames.NthColumn)

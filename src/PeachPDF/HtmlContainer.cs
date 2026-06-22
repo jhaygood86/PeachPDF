@@ -27,7 +27,7 @@ namespace PeachPDF
     /// Low level handling of Html Renderer logic, this class is used by <see cref="PdfGenerator"/>.
     /// </summary>
     /// <seealso cref="HtmlContainerInt"/>
-    public sealed class HtmlContainer : IDisposable
+    internal sealed class HtmlContainer : IDisposable
     {
         /// <summary>
         /// Init.

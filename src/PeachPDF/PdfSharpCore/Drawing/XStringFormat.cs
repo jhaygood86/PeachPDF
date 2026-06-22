@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// <summary>
     /// Represents the text layout information.
     /// </summary>
-    public class XStringFormat
+    internal class XStringFormat
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="XStringFormat"/> class.

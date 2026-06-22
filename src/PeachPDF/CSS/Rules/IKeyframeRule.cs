@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public interface IKeyframeRule : IRule
+    internal interface IKeyframeRule : IRule
     {
         string KeyText { get; set; }
         StyleDeclaration Style { get; }

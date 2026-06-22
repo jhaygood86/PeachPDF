@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// <summary>
     /// Specifies the direction of a linear gradient.
     /// </summary>
-    public enum XLinearGradientMode  // same values as System.Drawing.LinearGradientMode
+    internal enum XLinearGradientMode  // same values as System.Drawing.LinearGradientMode
     {
         /// <summary>
         /// Specifies a gradient from left to right.

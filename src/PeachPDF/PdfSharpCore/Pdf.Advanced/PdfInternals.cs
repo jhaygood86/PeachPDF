@@ -40,7 +40,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
     /// Provides access to the internal document data structures. This class prevents the public
     /// interfaces from pollution with to much internal functions.
     /// </summary>
-    public class PdfInternals  // TODO: PdfDocumentInternals... PdfPageInterals etc.
+    internal class PdfInternals  // TODO: PdfDocumentInternals... PdfPageInterals etc.
     {
         internal PdfInternals(PdfDocument document)
         {

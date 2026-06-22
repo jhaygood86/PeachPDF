@@ -1,11 +1,11 @@
-﻿#nullable disable
+#nullable disable
 
 using System;
 using System.Collections.Generic;
 
 namespace PeachPDF.CSS
 {
-    public sealed class AttributeSelectorFactory
+    internal sealed class AttributeSelectorFactory
     {
         private static readonly Lazy<AttributeSelectorFactory> Lazy = new(() => new AttributeSelectorFactory());
 

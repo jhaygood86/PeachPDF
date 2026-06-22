@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public static class FeatureNames
+    internal static class FeatureNames
     {
         public static readonly string MinWidth = "min-width";
         public static readonly string MinHeight = "min-height";

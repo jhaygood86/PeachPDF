@@ -1,6 +1,6 @@
 namespace PeachPDF.CSS
 {
-    public sealed class TypeSelector : SelectorBase
+    internal sealed class TypeSelector : SelectorBase
     {
         private TypeSelector(string name) : base(Priority.OneTag, name)
         {

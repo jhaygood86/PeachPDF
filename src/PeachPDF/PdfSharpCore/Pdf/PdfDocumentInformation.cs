@@ -34,7 +34,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// <summary>
     /// Represents the PDF document information dictionary.
     /// </summary>
-    public sealed class PdfDocumentInformation : PdfDictionary
+    internal sealed class PdfDocumentInformation : PdfDictionary
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="PdfDocumentInformation"/> class.
@@ -128,7 +128,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         internal sealed class Keys : KeysBase
         {
             /// <summary>
-            /// (Optional; PDF 1.1) The document’s title.
+            /// (Optional; PDF 1.1) The documentï¿½s title.
             /// </summary>
             [KeyInfo(KeyType.String | KeyType.Optional)]
             public const string Title = "/Title";

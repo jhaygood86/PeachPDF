@@ -37,7 +37,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// <summary>
     /// Base class of all composite PDF objects.
     /// </summary>
-    public abstract class PdfObject : PdfItem
+    internal abstract class PdfObject : PdfItem
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="PdfObject"/> class.

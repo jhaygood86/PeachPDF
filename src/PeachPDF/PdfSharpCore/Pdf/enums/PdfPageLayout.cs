@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// <summary>
     /// Specifies the page layout to be used by a viewer when the document is opened.
     /// </summary>
-    public enum PdfPageLayout
+    internal enum PdfPageLayout
     {
         /// <summary>
         /// Display one page at a time.

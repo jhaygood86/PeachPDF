@@ -36,7 +36,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// <summary>
     /// Pens for all the pre-defined colors.
     /// </summary>
-    public static class XPens
+    internal static class XPens
     {
         /// <summary>Gets a pre-defined XPen object.</summary>
         public static XPen AliceBlue

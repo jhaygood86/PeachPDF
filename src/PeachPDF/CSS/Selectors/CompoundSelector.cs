@@ -1,8 +1,8 @@
-﻿using System.IO;
+using System.IO;
 
 namespace PeachPDF.CSS
 {
-    public sealed class CompoundSelector : Selectors, ISelector
+    internal sealed class CompoundSelector : Selectors, ISelector
     {
         public override void ToCss(TextWriter writer, IStyleFormatter formatter)
         {

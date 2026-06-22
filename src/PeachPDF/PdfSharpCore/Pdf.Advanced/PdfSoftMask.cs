@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
     /// <summary>
     /// Represents a PDF soft mask.
     /// </summary>
-    public class PdfSoftMask : PdfDictionary
+    internal class PdfSoftMask : PdfDictionary
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="PdfXObject"/> class.
@@ -47,7 +47,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// <summary>
         /// Predefined keys of this dictionary.
         /// </summary>
-        public class Keys : KeysBase
+        internal class Keys : KeysBase
         {
             /// <summary>
             /// (Optional) The type of PDF object that this dictionary describes;
@@ -59,8 +59,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             /// <summary>
             /// (Required) A subtype specifying the method to be used in deriving the mask values
             /// from the transparency group specified by the G entry:
-            /// Alpha: Use the group’s computed alpha, disregarding its color.
-            /// Luminosity: Convert the group’s computed color to a single-component luminosity value.
+            /// Alpha: Use the groupï¿½s computed alpha, disregarding its color.
+            /// Luminosity: Convert the groupï¿½s computed color to a single-component luminosity value.
             /// </summary>
             [KeyInfo(KeyType.Name | KeyType.Required)]
             public const string S = "/S";
@@ -80,7 +80,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             /// This entry is consulted only if the subtype S is Luminosity. The array consists of
             /// n numbers, where n is the number of components in the color space specified
             /// by the CS entry in the group attributes dictionary.
-            /// Default value: the color space’s initial value, representing black.
+            /// Default value: the color spaceï¿½s initial value, representing black.
             /// </summary>
             [KeyInfo(KeyType.Array | KeyType.Optional)]
             public const string BC = "/BC";

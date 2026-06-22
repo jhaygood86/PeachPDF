@@ -8,7 +8,7 @@ namespace PeachPDF.PdfSharpCore.Fonts
     /// <summary>
     /// Converts WOFF2 font data to OpenType/TrueType format (W3C WOFF2 spec).
     /// </summary>
-    public static class Woff2Converter
+    internal static class Woff2Converter
     {
         private const uint Woff2Signature = 0x774F4632; // 'wOF2'
 

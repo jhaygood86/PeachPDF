@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum HorizontalAlignment : byte
+    internal enum HorizontalAlignment : byte
     {
         Left,
         Center,

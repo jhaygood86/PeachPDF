@@ -1,4 +1,4 @@
-﻿#nullable disable
+#nullable disable
 
 using System;
 using System.IO;
@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace PeachPDF.CSS
 {
-    public sealed class TextSource : IDisposable
+    internal sealed class TextSource : IDisposable
     {
         private const int BufferSize = 4096;
         private readonly Stream _baseStream;

@@ -1,8 +1,8 @@
-﻿using System;
+using System;
 
 namespace PeachPDF.CSS
 {
-    public class StylesheetText
+    internal class StylesheetText
     {
         private readonly TextSource _source;
 

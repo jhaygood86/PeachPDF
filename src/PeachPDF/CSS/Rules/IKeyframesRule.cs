@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public interface IKeyframesRule : IRule
+    internal interface IKeyframesRule : IRule
     {
         string Name { get; set; }
         IRuleList Rules { get; }

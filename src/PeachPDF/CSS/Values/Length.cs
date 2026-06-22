@@ -1,4 +1,4 @@
-﻿#nullable disable
+#nullable disable
 
 using System;
 
@@ -7,7 +7,7 @@ using System;
 
 namespace PeachPDF.CSS
 {
-    public struct Length : IEquatable<Length>, IComparable<Length>, IFormattable
+    internal struct Length : IEquatable<Length>, IComparable<Length>, IFormattable
     {
         /// <summary>
         ///     Gets a zero pixel length value.
@@ -258,7 +258,7 @@ namespace PeachPDF.CSS
             return Value == other.Value && Type == other.Type;
         }
 
-        public enum Unit : byte
+        internal enum Unit : byte
         {
             None,
             Px,

@@ -1,4 +1,4 @@
-﻿#nullable disable
+#nullable disable
 
 using System;
 using System.Runtime.InteropServices;
@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 namespace PeachPDF.CSS
 {
     [StructLayout(LayoutKind.Explicit, Pack = 1, CharSet = CharSet.Unicode)]
-    public struct Priority : IEquatable<Priority>, IComparable<Priority>
+    internal struct Priority : IEquatable<Priority>, IComparable<Priority>
     {
         [FieldOffset(0)] private readonly uint _priority;
 

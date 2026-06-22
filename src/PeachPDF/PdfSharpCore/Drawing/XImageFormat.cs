@@ -34,7 +34,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// <summary>
     /// Specifies the format of the image.
     /// </summary>
-    public sealed class XImageFormat
+    internal sealed class XImageFormat
     {
         XImageFormat(Guid guid)
         {

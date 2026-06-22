@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum FontStyle : byte
+    internal enum FontStyle : byte
     {
         Normal,
         Italic,

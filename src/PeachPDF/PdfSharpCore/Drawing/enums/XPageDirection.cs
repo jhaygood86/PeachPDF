@@ -34,7 +34,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// <summary>
     /// Specifies the direction of the y-axis.
     /// </summary>
-    public enum XPageDirection
+    internal enum XPageDirection
     {
         /// <summary>
         /// Increasing Y values go downwards. This is the default.

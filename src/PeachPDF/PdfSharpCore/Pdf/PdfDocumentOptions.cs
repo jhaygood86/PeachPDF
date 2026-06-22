@@ -34,7 +34,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// <summary>
     /// Holds information how to handle the document when it is saved as PDF stream.
     /// </summary>
-    public sealed class PdfDocumentOptions
+    internal sealed class PdfDocumentOptions
     {
         internal PdfDocumentOptions(PdfDocument document)
         {

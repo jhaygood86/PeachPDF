@@ -1,8 +1,8 @@
-﻿using System.IO;
+using System.IO;
 
 namespace PeachPDF.CSS
 {
-    public static class FormatExtensions
+    internal static class FormatExtensions
     {
         public static string ToCss(this IStyleFormattable style)
         {

@@ -37,7 +37,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// Represents a direct date value.
     /// </summary>
     [DebuggerDisplay("({Value})")]
-    public sealed class PdfDate : PdfItem
+    internal sealed class PdfDate : PdfItem
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="PdfDate"/> class.

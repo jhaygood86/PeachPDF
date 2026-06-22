@@ -17,7 +17,7 @@ namespace PeachPDF.Html.Adapters
     /// <summary>
     /// Adapter for platform specific image object - used to render images.
     /// </summary>
-    public abstract class RImage : IDisposable
+    internal abstract class RImage : IDisposable
     {
         /// <summary>
         /// Get the width, in pixels, of the image.

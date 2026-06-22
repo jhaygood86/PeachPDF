@@ -9,7 +9,7 @@ using System.Text.RegularExpressions;
 
 namespace PeachPDF.PdfSharpCore.Utils
 {
-    public static class LinuxSystemFontResolver
+    internal static class LinuxSystemFontResolver
     {
         const string libfontconfig = "libfontconfig.so.1";
 
@@ -23,7 +23,7 @@ namespace PeachPDF.PdfSharpCore.Utils
         [DllImport(libfontconfig)] public static extern int FcPatternGetString(IntPtr p, [MarshalAs(UnmanagedType.LPStr)] string obj, int n, ref IntPtr s);
         [DllImport(libfontconfig)] public static extern void FcPatternDestroy(IntPtr pattern);
 
-        public class FcPatternHandle : SafeHandle
+        internal class FcPatternHandle : SafeHandle
         {
             FcPatternHandle() : base(IntPtr.Zero, true) { }
 
@@ -41,7 +41,7 @@ namespace PeachPDF.PdfSharpCore.Utils
         [DllImport(libfontconfig)] public static extern int FcObjectSetAdd(FcObjectSetHandle os, [MarshalAs(UnmanagedType.LPStr)] string obj);
         [DllImport(libfontconfig)] public static extern void FcObjectSetDestroy(IntPtr os);
 
-        public class FcObjectSetHandle : SafeHandle
+        internal class FcObjectSetHandle : SafeHandle
         {
             FcObjectSetHandle() : base(IntPtr.Zero, true) { }
 
@@ -67,14 +67,14 @@ namespace PeachPDF.PdfSharpCore.Utils
         [DllImport(libfontconfig)] public static extern FcFontSetHandle FcFontList(IntPtr config, FcPatternHandle pattern, FcObjectSetHandle os);
         [DllImport(libfontconfig)] public static extern void FcFontSetDestroy(IntPtr fs);
 
-        public struct FcFontSet
+        internal struct FcFontSet
         {
             public int nfont;
             public int sfont;
             public IntPtr fonts;
         }
 
-        public class FcFontSetHandle : SafeHandle
+        internal class FcFontSetHandle : SafeHandle
         {
             FcFontSetHandle() : base(IntPtr.Zero, true) { }
 

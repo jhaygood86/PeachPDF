@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// <summary>
     /// Specifies how to join consecutive line or curve segments in a figure or subpath.
     /// </summary>
-    public enum XLineJoin
+    internal enum XLineJoin
     {
         /// <summary>
         /// Specifies a mitered join. This produces a sharp corner or a clipped corner,

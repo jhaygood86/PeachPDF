@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum TextJustify : byte
+    internal enum TextJustify : byte
     {
         Auto,
         InterWord,

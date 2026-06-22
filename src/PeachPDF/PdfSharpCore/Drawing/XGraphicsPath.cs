@@ -35,7 +35,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// <summary>
     /// Represents a series of connected lines and curves.
     /// </summary>
-    public sealed class XGraphicsPath
+    internal sealed class XGraphicsPath
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="XGraphicsPath"/> class.

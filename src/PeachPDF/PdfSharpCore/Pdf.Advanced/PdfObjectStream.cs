@@ -35,7 +35,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
     /// Represents an object stream that contains compressed objects.
     /// PDF 1.5.
     /// </summary>
-    public class PdfObjectStream : PdfDictionary
+    internal class PdfObjectStream : PdfDictionary
     {
         // Reference: 3.4.6  Object Streams / Page 100
 
@@ -61,7 +61,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// <summary>
         /// Predefined keys common to all font dictionaries.
         /// </summary>
-        public class Keys : PdfStream.Keys
+        internal class Keys : PdfStream.Keys
         {
             // Reference: TABLE 3.14  Additional entries specific to an object stream dictionary / Page 101
 

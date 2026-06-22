@@ -39,7 +39,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// Determines the encoding of a PdfString or PdfStringObject.
     /// </summary>
     [Flags]
-    public enum PdfStringEncoding
+    internal enum PdfStringEncoding
     {
         /// <summary>
         /// The characters of the string are actually bytes with an unknown or context specific meaning or encoding.
@@ -106,7 +106,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// Represents a direct text string value.
     /// </summary>
     [DebuggerDisplay("({Value})")]
-    public sealed class PdfString : PdfItem
+    internal sealed class PdfString : PdfItem
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="PdfString"/> class.

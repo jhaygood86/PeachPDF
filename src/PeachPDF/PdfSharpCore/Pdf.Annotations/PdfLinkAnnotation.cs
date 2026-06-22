@@ -36,7 +36,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Annotations
     /// <summary>
     /// Represents a link annotation.
     /// </summary>
-    public sealed class PdfLinkAnnotation : PdfAnnotation
+    internal sealed class PdfLinkAnnotation : PdfAnnotation
     {
         // Just a hack to make MigraDoc work with this code.
         enum LinkType

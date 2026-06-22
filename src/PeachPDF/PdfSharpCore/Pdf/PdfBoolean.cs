@@ -36,7 +36,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// Represents a direct boolean value.
     /// </summary>
     [DebuggerDisplay("({Value})")]
-    public sealed class PdfBoolean : PdfItem
+    internal sealed class PdfBoolean : PdfItem
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="PdfBoolean"/> class.

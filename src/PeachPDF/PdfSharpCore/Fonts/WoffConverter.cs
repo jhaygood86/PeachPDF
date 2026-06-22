@@ -8,7 +8,7 @@ namespace PeachPDF.PdfSharpCore.Fonts
     /// Converts WOFF font data to OpenType/TrueType format.
     /// WOFF wraps OpenType tables with per-table zlib compression (W3C WOFF spec).
     /// </summary>
-    public static class WoffConverter
+    internal static class WoffConverter
     {
         private const uint WoffSignature = 0x774F4646; // 'wOFF'
 

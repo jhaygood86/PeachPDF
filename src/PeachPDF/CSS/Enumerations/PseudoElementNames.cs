@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public static class PseudoElementNames
+    internal static class PseudoElementNames
     {
         public static readonly string Before = "before";
         public static readonly string After = "after";

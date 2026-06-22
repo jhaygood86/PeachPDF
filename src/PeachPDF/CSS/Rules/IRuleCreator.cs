@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public interface IRuleCreator
+    internal interface IRuleCreator
     {
         IRule AddNewRule(RuleType ruleType);
     }

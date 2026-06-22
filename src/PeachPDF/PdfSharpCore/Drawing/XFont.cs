@@ -43,7 +43,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// Defines an object used to draw text.
     /// </summary>
     [DebuggerDisplay("{DebuggerDisplay}")]
-    public sealed class XFont
+    internal sealed class XFont
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="XFont"/> class.

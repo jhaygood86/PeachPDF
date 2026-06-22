@@ -34,7 +34,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// <summary>
     /// Defines a single color object used to fill shapes and draw text.
     /// </summary>
-    public sealed class XSolidBrush : XBrush
+    internal sealed class XSolidBrush : XBrush
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="XSolidBrush"/> class.

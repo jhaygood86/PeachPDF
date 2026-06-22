@@ -1,4 +1,4 @@
-﻿#nullable disable
+#nullable disable
 
 using System.Collections.Generic;
 using System.IO;
@@ -6,7 +6,7 @@ using System.Linq;
 
 namespace PeachPDF.CSS
 {
-    public sealed class Medium : StylesheetNode
+    internal sealed class Medium : StylesheetNode
     {
         public IEnumerable<MediaFeature> Features => Children.OfType<MediaFeature>();
         public string Type { get; internal set; }

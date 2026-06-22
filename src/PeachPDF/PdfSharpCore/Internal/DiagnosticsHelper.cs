@@ -93,7 +93,7 @@ namespace PeachPDF.PdfSharpCore.Internal
     /// <summary>
     /// Helper class around the Debugger class.
     /// </summary>
-    public static class DebugBreak
+    internal static class DebugBreak
     {
         /// <summary>
         /// Call Debugger.Break() if a debugger is attached.

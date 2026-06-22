@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public interface IContainerRule : IConditionRule
+    internal interface IContainerRule : IConditionRule
     {
         string Name { get; set; }
         MediaList Media { get; }

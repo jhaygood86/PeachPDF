@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum IntrinsicSizing : byte
+    internal enum IntrinsicSizing : byte
     {
         MaxContent,
         MinContent,

@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum TextAlignLast : byte
+    internal enum TextAlignLast : byte
     {
         Auto,
         Start,

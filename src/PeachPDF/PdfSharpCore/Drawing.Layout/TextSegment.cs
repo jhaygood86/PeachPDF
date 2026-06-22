@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.PdfSharpCore.Drawing.Layout
+namespace PeachPDF.PdfSharpCore.Drawing.Layout
 {
-    public class TextSegment
+    internal class TextSegment
     {
         public XFont Font { get; set; }
         public XBrush Brush { get; set; }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -7,7 +7,7 @@ using System.Text;
 
 namespace PeachPDF.CSS
 {
-    public static class TextEncoding
+    internal static class TextEncoding
     {
         public static HashSet<string> AvailableEncodings = new(from encoding in Encoding.GetEncodings()
                                                                select encoding.Name);

@@ -34,7 +34,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
     /// <summary>
     /// Represents a PDF resource object.
     /// </summary>
-    public sealed class PdfResources : PdfDictionary
+    internal sealed class PdfResources : PdfDictionary
     {
         // Resource management works roughly like this:
         // When the user creates an XFont and uses it in the XGraphics of a PdfPage, then at the first time
@@ -377,7 +377,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// <summary>
         /// Predefined keys of this dictionary.
         /// </summary>
-        public sealed class Keys : KeysBase
+        internal sealed class Keys : KeysBase
         {
             /// <summary>
             /// (Optional) A dictionary that maps resource names to graphics state 

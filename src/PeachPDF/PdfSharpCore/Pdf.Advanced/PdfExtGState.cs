@@ -34,7 +34,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
     /// <summary>
     /// Represents an extended graphics state object.
     /// </summary>
-    public sealed class PdfExtGState : PdfDictionary
+    internal sealed class PdfExtGState : PdfDictionary
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="PdfExtGState"/> class.
@@ -226,7 +226,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             public const string Type = "/Type";
 
             /// <summary>
-            /// (Optional; PDF 1.3) The line width (see “Line Width” on page 185).
+            /// (Optional; PDF 1.3) The line width (see ï¿½Line Widthï¿½ on page 185).
             /// </summary>
             [KeyInfo(KeyType.Real | KeyType.Optional)]
             public const string LW = "/LW";
@@ -367,7 +367,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             public const string ca = "/ca";
 
             /// <summary>
-            /// (Optional; PDF 1.4) The alpha source flag (“alpha is shape”), specifying whether 
+            /// (Optional; PDF 1.4) The alpha source flag (ï¿½alpha is shapeï¿½), specifying whether 
             /// the current soft mask and alpha constant are to be interpreted as shape values (true)
             /// or opacity values (false).
             /// </summary>

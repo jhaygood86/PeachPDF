@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum TextDecorationLine : byte
+    internal enum TextDecorationLine : byte
     {
         Underline,
         Overline,

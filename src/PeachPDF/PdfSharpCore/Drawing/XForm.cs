@@ -40,7 +40,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// Represents a graphical object that can be used to render retained graphics on it.
     /// In GDI+ it is represented by a Metafile, in WPF by a DrawingVisual, and in PDF by a Form XObjects.
     /// </summary>
-    public class XForm : XImage, IContentStream
+    internal class XForm : XImage, IContentStream
     {
         internal enum FormState
         {

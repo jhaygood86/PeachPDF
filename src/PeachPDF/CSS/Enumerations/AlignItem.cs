@@ -1,7 +1,7 @@
-﻿
+
 namespace PeachPDF.CSS
 {
-    public enum AlignItem : byte
+    internal enum AlignItem : byte
     {
         Normal,
         Stretch,

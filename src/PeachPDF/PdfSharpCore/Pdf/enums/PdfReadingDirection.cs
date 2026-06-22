@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// <summary>
     /// Specifies how the document should be displayed by a viewer when opened.
     /// </summary>
-    public enum PdfReadingDirection
+    internal enum PdfReadingDirection
     {
         /// <summary>
         /// Left to right.

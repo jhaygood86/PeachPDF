@@ -1,6 +1,6 @@
 namespace PeachPDF.PdfSharpCore.Drawing.Layout.enums
 {
-    public enum XVerticalAlignment
+    internal enum XVerticalAlignment
     {
         Top,
         Middle,

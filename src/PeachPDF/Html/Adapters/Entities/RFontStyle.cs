@@ -18,7 +18,7 @@ namespace PeachPDF.Html.Adapters.Entities
     /// Specifies style information applied to text.
     /// </summary>
     [Flags]
-    public enum RFontStyle
+    internal enum RFontStyle
     {
         Regular = 0,
         Bold = 1,

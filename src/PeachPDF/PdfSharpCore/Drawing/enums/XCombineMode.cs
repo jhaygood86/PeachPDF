@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// <summary>
     /// Specifies how different clipping regions can be combined.
     /// </summary>
-    public enum XCombineMode  // Same values as System.Drawing.Drawing2D.CombineMode.
+    internal enum XCombineMode  // Same values as System.Drawing.Drawing2D.CombineMode.
     {
         /// <summary>
         /// One clipping region is replaced by another.

@@ -54,7 +54,7 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
     /// <summary>
     /// Represents a drawing surface for a fixed size page.
     /// </summary>
-    public sealed class XGraphics : IDisposable
+    internal sealed class XGraphics : IDisposable
     {
         /// <summary>
         /// Initializes a new instance of the XGraphics class for drawing on a PDF page.
@@ -1863,7 +1863,7 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         /// <summary>
         /// Provides access to internal data structures of the XGraphics class.
         /// </summary>
-        public class XGraphicsInternals
+        internal class XGraphicsInternals
         {
             internal XGraphicsInternals(XGraphics gfx)
             {
@@ -1876,7 +1876,7 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         /// (This class is under construction.)
         /// Currently used in MigraDoc
         /// </summary>
-        public class SpaceTransformer
+        internal class SpaceTransformer
         {
             internal SpaceTransformer(XGraphics gfx)
             {

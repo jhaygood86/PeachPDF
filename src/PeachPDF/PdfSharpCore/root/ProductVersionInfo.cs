@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore
     /// <summary>
     /// Version info base for all PDFsharp related assemblies.
     /// </summary>
-    public static class ProductVersionInfo
+    internal static class ProductVersionInfo
     {
         /// <summary>
         /// The title of the product.
@@ -88,7 +88,7 @@ namespace PeachPDF.PdfSharpCore
         /// <summary>
         /// The copyright information.
         /// </summary>
-        public const string Copyright = "Copyright © 2005-2016 empira Software GmbH.";
+        public const string Copyright = "Copyright ï¿½ 2005-2016 empira Software GmbH.";
 
         /// <summary>
         /// The trademark the product.

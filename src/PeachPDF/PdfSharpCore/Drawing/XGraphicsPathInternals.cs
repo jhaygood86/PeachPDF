@@ -42,7 +42,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// Provides access to the internal data structures of XGraphicsPath.
     /// This class prevents the public interface from pollution with internal functions.
     /// </summary>
-    public sealed class XGraphicsPathInternals
+    internal sealed class XGraphicsPathInternals
     {
         internal XGraphicsPathInternals(XGraphicsPath path)
         {

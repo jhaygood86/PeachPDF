@@ -36,7 +36,7 @@ namespace PeachPDF.Html.Adapters
     /// It is best to have a singleton instance of this class for concrete implementation!<br/>
     /// This is because it holds caches of default CssData, Images, Fonts and Brushes.
     /// </remarks>
-    public abstract class RAdapter
+    internal abstract class RAdapter
     {
         #region Fields/Consts
 

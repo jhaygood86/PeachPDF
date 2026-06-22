@@ -36,7 +36,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Filters
     /// <summary>
     /// Implements the FlateDecode filter using System.IO.Compression.ZLibStream.
     /// </summary>
-    public class FlateDecode : Filter
+    internal class FlateDecode : Filter
     {
         // Reference: 3.3.3  LZWDecode and FlateDecode Filters / Page 71
 

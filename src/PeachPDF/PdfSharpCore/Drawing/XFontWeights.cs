@@ -49,7 +49,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// <summary>
     /// Defines a set of static predefined XFontWeight values.
     /// </summary>
-    public static class XFontWeights
+    internal static class XFontWeights
     {
         internal static bool FontWeightStringToKnownWeight(string s, IFormatProvider provider, ref XFontWeight fontWeight)
         {

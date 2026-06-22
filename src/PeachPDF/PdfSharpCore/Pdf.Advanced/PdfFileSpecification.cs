@@ -1,9 +1,9 @@
-﻿namespace PeachPDF.PdfSharpCore.Pdf.Advanced
+namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 {
     /// <summary>
     /// Represent a file stream embedded in the PDF document
     /// </summary>
-    public class PdfFileSpecification : PdfDictionary
+    internal class PdfFileSpecification : PdfDictionary
     {
         private readonly PdfDictionary embeddedFileDictionary;
 
@@ -56,7 +56,7 @@
         /// <summary>
         /// Predefined keys of this embedded file.
         /// </summary>
-        public class Keys : KeysBase
+        internal class Keys : KeysBase
         {
             /// <summary>
             /// (Required if an EF or RF entry is present; recommended always) 

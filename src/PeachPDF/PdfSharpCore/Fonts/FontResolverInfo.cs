@@ -1,4 +1,4 @@
-﻿#region PDFsharp - A .NET library for processing PDF
+#region PDFsharp - A .NET library for processing PDF
 //
 // Authors:
 //   Stefan Lange
@@ -72,7 +72,7 @@ namespace PeachPDF.PdfSharpCore.Fonts
     /// Describes the physical font that must be used to render a particular XFont.
     /// </summary>
     [DebuggerDisplay("{DebuggerDisplay}")]
-    public class FontResolverInfo
+    internal class FontResolverInfo
     {
         private const string KeyPrefix = "frik:";  // Font Resolver Info Key
 

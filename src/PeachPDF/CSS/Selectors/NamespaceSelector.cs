@@ -1,6 +1,6 @@
 namespace PeachPDF.CSS
 {
-    public sealed class NamespaceSelector : SelectorBase
+    internal sealed class NamespaceSelector : SelectorBase
     {
         private NamespaceSelector(string prefix) : base(Priority.Zero, prefix)
         {

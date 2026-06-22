@@ -1,4 +1,4 @@
-﻿// PDFsharp - A .NET library for processing PDF
+// PDFsharp - A .NET library for processing PDF
 // See the LICENSE file in the solution root for more information.
 
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
@@ -14,7 +14,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// Represents a name tree node.
     /// </summary>
     [DebuggerDisplay("({" + nameof(DebuggerDisplay) + "})")]
-    public sealed class PdfNameTreeNode : PdfDictionary
+    internal sealed class PdfNameTreeNode : PdfDictionary
     {
         // Reference: 3.8.5  Name Trees / Page 161
 

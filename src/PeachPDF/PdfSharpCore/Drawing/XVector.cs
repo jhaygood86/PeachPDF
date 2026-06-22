@@ -40,7 +40,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     [DebuggerDisplay("{DebuggerDisplay}")]
     [Serializable]
     [StructLayout(LayoutKind.Sequential)]
-    public struct XVector : IFormattable
+    internal struct XVector : IFormattable
     {
         public XVector(double x, double y)
         {

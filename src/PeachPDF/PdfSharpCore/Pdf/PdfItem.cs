@@ -35,7 +35,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// <summary>
     /// The base class of all PDF objects and simple PDF types.
     /// </summary>
-    public abstract class PdfItem : ICloneable
+    internal abstract class PdfItem : ICloneable
     {
         // All simple types (i.e. derived from PdfItem but not from PdfObject) must be immutable.
 

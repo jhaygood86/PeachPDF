@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// <summary>
     /// Specifies the unit of measure.
     /// </summary>
-    public enum XGraphicsUnit  // NOT the same values as System.Drawing.GraphicsUnit
+    internal enum XGraphicsUnit  // NOT the same values as System.Drawing.GraphicsUnit
     {
         /// <summary>
         /// Specifies a printer's point (1/72 inch) as the unit of measure.

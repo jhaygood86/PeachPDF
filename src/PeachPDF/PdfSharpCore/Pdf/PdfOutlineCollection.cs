@@ -39,7 +39,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// <summary>
     /// Represents a collection of outlines.
     /// </summary>
-    public class PdfOutlineCollection : PdfObject, IList<PdfOutline>
+    internal class PdfOutlineCollection : PdfObject, IList<PdfOutline>
     {
         /// <summary>
         /// Can only be created as part of PdfOutline.

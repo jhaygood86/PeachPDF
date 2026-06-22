@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// <summary>
     /// Holds PDF specific information of the document.
     /// </summary>
-    public sealed class PdfDocumentSettings
+    internal sealed class PdfDocumentSettings
     {
         internal PdfDocumentSettings(PdfDocument document)
         { }

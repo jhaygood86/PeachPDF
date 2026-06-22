@@ -37,7 +37,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// Specifies the font style for the outline (bookmark) text.
     ///  </summary>
     [Flags]
-    public enum PdfOutlineStyle  // Reference:  TABLE 8.5 Ouline Item flags / Page 587
+    internal enum PdfOutlineStyle  // Reference:  TABLE 8.5 Ouline Item flags / Page 587
     {
         /// <summary>
         /// Outline text is displayed using a regular font.

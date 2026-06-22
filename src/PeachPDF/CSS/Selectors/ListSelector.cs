@@ -1,8 +1,8 @@
-﻿using System.IO;
+using System.IO;
 
 namespace PeachPDF.CSS
 {
-    public sealed class ListSelector : Selectors, ISelector
+    internal sealed class ListSelector : Selectors, ISelector
     {
         public bool IsInvalid { get; internal set; }
 

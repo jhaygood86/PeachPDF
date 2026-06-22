@@ -37,7 +37,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
     /// <summary>
     /// Represents a PDF font.
     /// </summary>
-    public class PdfFont : PdfDictionary
+    internal class PdfFont : PdfDictionary
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="PdfFont"/> class.
@@ -121,7 +121,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// <summary>
         /// Predefined keys common to all font dictionaries.
         /// </summary>
-        public class Keys : KeysBase
+        internal class Keys : KeysBase
         {
             /// <summary>
             /// (Required) The type of PDF object that this dictionary describes;
@@ -144,7 +144,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 
             /// <summary>
             /// (Required except for the standard 14 fonts; must be an indirect reference)
-            /// A font descriptor describing the font’s metrics other than its glyph widths.
+            /// A font descriptor describing the fontï¿½s metrics other than its glyph widths.
             /// Note: For the standard 14 fonts, the entries FirstChar, LastChar, Widths, and 
             /// FontDescriptor must either all be present or all be absent. Ordinarily, they are
             /// absent; specifying them enables a standard font to be overridden.

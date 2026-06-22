@@ -41,7 +41,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
     /// Represents an indirect reference to a PdfObject.
     /// </summary>
     [DebuggerDisplay("iref({ObjectNumber}, {GenerationNumber})")]
-    public sealed class PdfReference : PdfItem
+    internal sealed class PdfReference : PdfItem
     {
         // About PdfReference 
         // 

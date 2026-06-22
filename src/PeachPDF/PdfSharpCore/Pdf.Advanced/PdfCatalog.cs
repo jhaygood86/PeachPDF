@@ -1,4 +1,4 @@
-﻿#region PDFsharp - A .NET library for processing PDF
+#region PDFsharp - A .NET library for processing PDF
 //
 // Authors:
 //   Stefan Lange
@@ -35,7 +35,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
     /// <summary>
     /// Represents the catalog dictionary.
     /// </summary>
-    public sealed class PdfCatalog : PdfDictionary
+    internal sealed class PdfCatalog : PdfDictionary
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="PdfCatalog"/> class.

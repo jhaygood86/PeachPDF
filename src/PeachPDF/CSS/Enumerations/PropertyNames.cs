@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public static class PropertyNames
+    internal static class PropertyNames
     {
         public static readonly string AlignContent = "align-content";
         public static readonly string AlignItems = "align-items";

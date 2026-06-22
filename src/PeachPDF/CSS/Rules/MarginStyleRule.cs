@@ -1,11 +1,11 @@
-﻿#nullable disable
+#nullable disable
 
 using System.IO;
 using System.Linq;
 
 namespace PeachPDF.CSS
 {
-    public sealed class MarginStyleRule : Rule, IStyleRule
+    internal sealed class MarginStyleRule : Rule, IStyleRule
     {
         public MarginStyleRule(StylesheetParser parser) : base(RuleType.Style, parser)
         {

@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public interface ISupportsRule : IConditionRule
+    internal interface ISupportsRule : IConditionRule
     {
         IConditionFunction Condition { get; }
     }

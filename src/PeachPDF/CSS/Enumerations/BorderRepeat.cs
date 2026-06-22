@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum BorderRepeat : byte
+    internal enum BorderRepeat : byte
     {
         Stretch,
         Repeat,

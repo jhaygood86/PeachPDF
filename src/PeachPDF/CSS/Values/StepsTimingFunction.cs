@@ -1,8 +1,8 @@
-﻿using System;
+using System;
 
 namespace PeachPDF.CSS
 {
-    public sealed class StepsTimingFunction : ITimingFunction
+    internal sealed class StepsTimingFunction : ITimingFunction
     {
         public StepsTimingFunction(int intervals, bool start = false)
         {

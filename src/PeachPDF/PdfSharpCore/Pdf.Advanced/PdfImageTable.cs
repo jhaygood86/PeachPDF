@@ -75,7 +75,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// <summary>
         /// A collection of information that uniquely identifies a particular PdfImage.
         /// </summary>
-        public class ImageSelector
+        internal class ImageSelector
         {
             /// <summary>
             /// Initializes a new instance of ImageSelector from an XImage.

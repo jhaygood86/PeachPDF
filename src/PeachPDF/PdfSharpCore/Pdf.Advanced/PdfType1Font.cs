@@ -72,7 +72,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// <summary>
         /// Predefined keys of this dictionary.
         /// </summary>
-        public new sealed class Keys : PdfFont.Keys
+        internal new sealed class Keys : PdfFont.Keys
         {
             /// <summary>
             /// (Required) The type of PDF object that this dictionary describes;
@@ -97,7 +97,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             /// <summary>
             /// (Required) The PostScript name of the font. For Type 1 fonts, this is usually
             /// the value of the FontName entry in the font program; for more information.
-            /// The Post-Script name of the font can be used to find the font’s definition in 
+            /// The Post-Script name of the font can be used to find the fontï¿½s definition in 
             /// the consumer application or its environment. It is also the name that is used when
             /// printing to a PostScript output device.
             /// </summary>
@@ -106,14 +106,14 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 
             /// <summary>
             /// (Required except for the standard 14 fonts) The first character code defined 
-            /// in the font’s Widths array.
+            /// in the fontï¿½s Widths array.
             /// </summary>
             [KeyInfo(KeyType.Integer)]
             public const string FirstChar = "/FirstChar";
 
             /// <summary>
             /// (Required except for the standard 14 fonts) The last character code defined
-            /// in the font’s Widths array.
+            /// in the fontï¿½s Widths array.
             /// </summary>
             [KeyInfo(KeyType.Integer)]
             public const string LastChar = "/LastChar";
@@ -132,7 +132,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 
             /// <summary>
             /// (Required except for the standard 14 fonts; must be an indirect reference)
-            /// A font descriptor describing the font’s metrics other than its glyph widths.
+            /// A font descriptor describing the fontï¿½s metrics other than its glyph widths.
             /// Note: For the standard 14 fonts, the entries FirstChar, LastChar, Widths, and 
             /// FontDescriptor must either all be present or all be absent. Ordinarily, they are
             /// absent; specifying them enables a standard font to be overridden.
@@ -141,10 +141,10 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             public new const string FontDescriptor = "/FontDescriptor";
 
             /// <summary>
-            /// (Optional) A specification of the font’s character encoding if different from its
+            /// (Optional) A specification of the fontï¿½s character encoding if different from its
             /// built-in encoding. The value of Encoding is either the name of a predefined
             /// encoding (MacRomanEncoding, MacExpertEncoding, or WinAnsiEncoding, as described in 
-            /// Appendix D) or an encoding dictionary that specifies differences from the font’s
+            /// Appendix D) or an encoding dictionary that specifies differences from the fontï¿½s
             /// built-in encoding or from a specified predefined encoding.
             /// </summary>
             [KeyInfo(KeyType.Name | KeyType.Dictionary)]

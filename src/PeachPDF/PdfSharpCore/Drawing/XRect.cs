@@ -40,7 +40,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// </summary>
     [DebuggerDisplay("{DebuggerDisplay}")]
     [Serializable, StructLayout(LayoutKind.Sequential)] // , ValueSerializer(typeof(RectValueSerializer)), TypeConverter(typeof(RectConverter))]
-    public struct XRect : IFormattable
+    internal struct XRect : IFormattable
     {
         /// <summary>
         /// Initializes a new instance of the XRect class.

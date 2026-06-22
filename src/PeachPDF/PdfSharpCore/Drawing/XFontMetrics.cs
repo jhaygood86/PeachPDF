@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// <summary>
     /// Collects information of a font.
     /// </summary>
-    public sealed class XFontMetrics
+    internal sealed class XFontMetrics
     {
         internal XFontMetrics(string name, int unitsPerEm, int ascent, int descent, int leading, int lineSpacing,
             int capHeight, int xHeight, int stemV, int stemH, int averageWidth, int maxWidth,

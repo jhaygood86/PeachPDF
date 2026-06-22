@@ -1,8 +1,8 @@
-﻿#nullable disable
+#nullable disable
 
 namespace PeachPDF.CSS
 {
-    public abstract class Rule : StylesheetNode, IRule
+    internal abstract class Rule : StylesheetNode, IRule
     {
         private IRule _parentRule;
 

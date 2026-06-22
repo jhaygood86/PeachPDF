@@ -33,7 +33,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// Represents a set of 141 pre-defined RGB colors. Incidentally the values are the same
     /// as in System.Drawing.Color.
     /// </summary>
-    public static class XColors
+    internal static class XColors
     {
         ///<summary>Gets a predefined color.</summary>
         public static XColor AliceBlue { get { return new XColor(XKnownColor.AliceBlue); } }

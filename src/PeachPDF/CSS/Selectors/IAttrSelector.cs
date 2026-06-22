@@ -1,6 +1,6 @@
 namespace PeachPDF.CSS
 {
-    public interface IAttrSelector : ISelector
+    internal interface IAttrSelector : ISelector
     {
         string Attribute { get; }
         string Value { get; }

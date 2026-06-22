@@ -1,6 +1,6 @@
 namespace PeachPDF.CSS
 {
-    public sealed class PseudoClassSelector : SelectorBase
+    internal sealed class PseudoClassSelector : SelectorBase
     {
         private PseudoClassSelector(string name) : base(Priority.OneClass, $"{PseudoClassNames.Separator}{name}")
         {

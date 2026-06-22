@@ -39,7 +39,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// Represents a RGB, CMYK, or gray scale color.
     /// </summary>
     [DebuggerDisplay("clr=(A={A}, R={R}, G={G}, B={B} C={C}, M={M}, Y={Y}, K={K})")]
-    public struct XColor
+    internal struct XColor
     {
         XColor(uint argb)
         {

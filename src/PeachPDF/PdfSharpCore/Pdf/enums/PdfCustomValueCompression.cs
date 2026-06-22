@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// <summary>
     /// This class is undocumented and may change or drop in future releases.
     /// </summary>
-    public enum PdfCustomValueCompressionMode
+    internal enum PdfCustomValueCompressionMode
     {
         /// <summary>
         /// Use document default to determine compression.

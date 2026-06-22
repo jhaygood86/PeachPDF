@@ -1,4 +1,4 @@
-﻿
+
 using System;
 using System.IO;
 
@@ -7,7 +7,7 @@ namespace MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes
 {
 
 
-    public abstract class ImageSource
+    internal abstract class ImageSource
     {
         /// <summary>
         /// Gets or sets the image source implementation to use for reading images.
@@ -15,7 +15,7 @@ namespace MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes
         /// <value>The image source impl.</value>
         public static ImageSource ImageSourceImpl { get; set; }
 
-        public interface IImageSource
+        internal interface IImageSource
         {
             int Width { get; }
             int Height { get; }

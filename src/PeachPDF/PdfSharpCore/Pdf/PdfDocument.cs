@@ -46,7 +46,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// Represents a PDF document.
     /// </summary>
     [DebuggerDisplay("(Name={Name})")] // A name makes debugging easier
-    public sealed class PdfDocument : PdfObject, IDisposable
+    internal sealed class PdfDocument : PdfObject, IDisposable
     {
         internal DocumentState _state;
         internal PdfDocumentOpenMode _openMode;

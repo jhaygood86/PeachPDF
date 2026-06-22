@@ -35,7 +35,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// Specifies style information applied to text.
     /// </summary>
     [Flags]
-    public enum XFontStyle  // Same values as System.Drawing.FontStyle.
+    internal enum XFontStyle  // Same values as System.Drawing.FontStyle.
     {
         /// <summary>
         /// Normal text.

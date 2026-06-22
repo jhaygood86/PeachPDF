@@ -35,7 +35,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// <summary>
     /// Defines a group of typefaces having a similar basic design and certain variations in styles.
     /// </summary>
-    public sealed class XFontFamily
+    internal sealed class XFontFamily
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="XFontFamily"/> class.

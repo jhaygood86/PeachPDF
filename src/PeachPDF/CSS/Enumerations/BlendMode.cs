@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum BlendMode : byte
+    internal enum BlendMode : byte
     {
         Normal,
         Multiply,

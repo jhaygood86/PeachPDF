@@ -1,4 +1,4 @@
-﻿#nullable disable
+#nullable disable
 
 using System;
 using System.Collections;
@@ -10,7 +10,7 @@ using System.Linq;
 
 namespace PeachPDF.CSS
 {
-    public sealed class StyleDeclaration : StylesheetNode, IProperties
+    internal sealed class StyleDeclaration : StylesheetNode, IProperties
     {
         private readonly Rule _parent;
         private readonly StylesheetParser _parser;

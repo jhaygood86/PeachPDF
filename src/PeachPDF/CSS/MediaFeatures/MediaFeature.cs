@@ -1,10 +1,10 @@
-﻿#nullable disable
+#nullable disable
 
 using System.IO;
 
 namespace PeachPDF.CSS
 {
-    public abstract class MediaFeature : StylesheetNode, IMediaFeature
+    internal abstract class MediaFeature : StylesheetNode, IMediaFeature
     {
         private TokenValue _tokenValue;
         private TokenType _constraintDelimiter;

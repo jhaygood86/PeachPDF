@@ -41,7 +41,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// </summary>
     [DebuggerDisplay("{DebuggerDisplay}")]
     [Serializable, StructLayout(LayoutKind.Sequential)] //, ValueSerializer(typeof(SizeValueSerializer)), TypeConverter(typeof(SizeConverter))]
-    public struct XSize : IFormattable
+    internal struct XSize : IFormattable
     {
         /// <summary>
         /// Initializes a new instance of the XPoint class with the specified values.

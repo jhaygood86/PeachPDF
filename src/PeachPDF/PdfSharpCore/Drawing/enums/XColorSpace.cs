@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     ///<summary>
     /// Currently not used. Only DeviceRGB is rendered in PDF.
     /// </summary>
-    public enum XColorSpace
+    internal enum XColorSpace
     {
         /// <summary>
         /// Identifies the RGB color space.

@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
     /// <summary>
     /// Base class for all PDF external objects.
     /// </summary>
-    public abstract class PdfXObject : PdfDictionary
+    internal abstract class PdfXObject : PdfDictionary
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="PdfXObject"/> class.
@@ -45,7 +45,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// <summary>
         /// Predefined keys of this dictionary.
         /// </summary>
-        public class Keys : PdfStream.Keys
+        internal class Keys : PdfStream.Keys
         { }
     }
 }

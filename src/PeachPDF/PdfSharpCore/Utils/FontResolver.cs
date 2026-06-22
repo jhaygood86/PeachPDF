@@ -1,4 +1,4 @@
-﻿
+
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Fonts;
 using PeachPDF.PdfSharpCore.Internal;
@@ -14,7 +14,7 @@ namespace PeachPDF.PdfSharpCore.Utils
 {
 
 
-    public class FontResolver : IFontResolver
+    internal class FontResolver : IFontResolver
     {
         private static readonly Dictionary<string, string> _SystemFontPaths = [];
 

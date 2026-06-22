@@ -1,4 +1,4 @@
-﻿#nullable disable
+#nullable disable
 
 using System.Collections;
 using System.Collections.Generic;
@@ -6,7 +6,7 @@ using System.IO;
 
 namespace PeachPDF.CSS
 {
-    public sealed class ComplexSelector : StylesheetNode, ISelector, IEnumerable<CombinatorSelector>
+    internal sealed class ComplexSelector : StylesheetNode, ISelector, IEnumerable<CombinatorSelector>
     {
         private readonly List<CombinatorSelector> _selectors;
 

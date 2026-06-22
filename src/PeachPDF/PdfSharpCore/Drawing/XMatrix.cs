@@ -1,4 +1,4 @@
-﻿#region PDFsharp - A .NET library for processing PDF
+#region PDFsharp - A .NET library for processing PDF
 //
 // Authors:
 //   Stefan Lange
@@ -42,7 +42,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// </summary>
     [DebuggerDisplay("{DebuggerDisplay}")]
     [Serializable, StructLayout(LayoutKind.Sequential)] //, TypeConverter(typeof(MatrixConverter)), ValueSerializer(typeof(MatrixValueSerializer))]
-    public struct XMatrix : IFormattable
+    internal struct XMatrix : IFormattable
     {
         [Flags]
         internal enum XMatrixTypes

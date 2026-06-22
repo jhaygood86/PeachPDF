@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum ParseError : byte
+    internal enum ParseError : byte
     {
         EOF = 0,
         InvalidCharacter = 16, // 0x10,

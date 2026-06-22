@@ -34,7 +34,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
     /// <summary>
     /// Exception thrown by PdfReader.
     /// </summary>
-    public class PdfReaderException : PdfSharpException
+    internal class PdfReaderException : PdfSharpException
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="PdfReaderException"/> class.

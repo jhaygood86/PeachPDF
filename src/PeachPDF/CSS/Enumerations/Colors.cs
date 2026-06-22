@@ -1,10 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace PeachPDF.CSS
 {
-    public static class Colors
+    internal static class Colors
     {
         private static readonly Dictionary<string, Color> NamedColors =
             new(StringComparer.OrdinalIgnoreCase)

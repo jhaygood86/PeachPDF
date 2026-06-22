@@ -38,7 +38,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
     /// <summary>
     /// Represents an array of PDF content streams of a page.
     /// </summary>
-    public sealed class PdfContents : PdfArray
+    internal sealed class PdfContents : PdfArray
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="PdfContents"/> class.

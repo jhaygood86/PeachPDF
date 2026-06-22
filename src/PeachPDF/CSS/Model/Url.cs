@@ -1,4 +1,4 @@
-﻿#nullable disable
+#nullable disable
 
 using System;
 using System.Collections.Generic;
@@ -9,7 +9,7 @@ namespace PeachPDF.CSS
     /// <summary>
     ///     Url class according to RFC3986. 
     /// </summary>
-    public sealed class Url : IEquatable<Url>
+    internal sealed class Url : IEquatable<Url>
     {
         private const string CurrentDirectory = ".";
         private const string CurrentDirectoryAlternative = "%2e";

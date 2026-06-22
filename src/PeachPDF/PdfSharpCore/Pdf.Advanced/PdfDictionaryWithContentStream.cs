@@ -37,7 +37,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
     /// Represents a base class for dictionaries with a content stream.
     /// Implement IContentStream for use with a content writer.
     /// </summary>
-    public abstract class PdfDictionaryWithContentStream : PdfDictionary, IContentStream
+    internal abstract class PdfDictionaryWithContentStream : PdfDictionary, IContentStream
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="PdfDictionaryWithContentStream"/> class.
@@ -149,7 +149,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// <summary>
         /// Predefined keys of this dictionary.
         /// </summary>
-        public class Keys : PdfDictionary.PdfStream.Keys
+        internal class Keys : PdfDictionary.PdfStream.Keys
         {
             /// <summary>
             /// (Optional but strongly recommended; PDF 1.2) A dictionary specifying any

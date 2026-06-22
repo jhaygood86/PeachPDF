@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
     /// <summary>
     /// Character table by name.
     /// </summary>
-    public sealed class Chars
+    internal sealed class Chars
     {
         // ReSharper disable InconsistentNaming
 
@@ -178,11 +178,11 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
         /// <summary>
         /// The soft hyphen.
         /// </summary>
-        public const char SoftHyphen = '­';  // char(173)
+        public const char SoftHyphen = 'ï¿½';  // char(173)
         /// <summary>
         /// The currency sign.
         /// </summary>
-        public const char Currency = '¤';
+        public const char Currency = 'ï¿½';
 
         // ReSharper restore InconsistentNaming
     }

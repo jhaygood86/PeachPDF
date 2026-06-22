@@ -21,7 +21,7 @@ namespace PeachPDF.Html.Adapters
     /// The core HTML Renderer components use this class for rendering logic, extending this
     /// class in different platform: WinForms, WPF, Metro, PDF, etc.
     /// </summary>
-    public abstract class RGraphics : IDisposable
+    internal abstract class RGraphics : IDisposable
     {
         #region Fields/Consts
 

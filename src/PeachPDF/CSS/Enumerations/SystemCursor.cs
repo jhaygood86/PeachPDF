@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum SystemCursor : byte
+    internal enum SystemCursor : byte
     {
         Auto,
         Default,

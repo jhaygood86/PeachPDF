@@ -1,4 +1,4 @@
-﻿#region PDFsharp - A .NET library for processing PDF
+#region PDFsharp - A .NET library for processing PDF
 //
 // Authors:
 //   Stefan Lange
@@ -43,7 +43,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// <summary>
     /// Represents an outline item in the outlines tree. An 'outline' is also known as a 'bookmark'.
     /// </summary>
-    public sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document Outline / Page 584
+    internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document Outline / Page 584
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="PdfOutline"/> class.

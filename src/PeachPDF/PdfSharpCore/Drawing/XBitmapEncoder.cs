@@ -35,7 +35,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// <summary>
     /// Provides functionality to save a bitmap image in a specific format.
     /// </summary>
-    public abstract class XBitmapEncoder
+    internal abstract class XBitmapEncoder
     {
         internal XBitmapEncoder()
         {

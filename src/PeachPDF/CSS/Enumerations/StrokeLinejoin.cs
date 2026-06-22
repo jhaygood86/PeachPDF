@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum StrokeLinejoin : byte
+    internal enum StrokeLinejoin : byte
     {
         Miter,
         Round,

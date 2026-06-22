@@ -47,7 +47,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// NYI. Reserved for future extensions of PeachPDF.PdfSharpCore.
     /// </summary>
     // [DebuggerDisplay("'{Name}', {Size}")]
-    public class XFontStretch
+    internal class XFontStretch
     { }
 #endif
 }

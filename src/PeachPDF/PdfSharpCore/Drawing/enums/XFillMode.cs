@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// <summary>
     /// Specifies how the interior of a closed path is filled.
     /// </summary>
-    public enum XFillMode  // Same values as System.Drawing.FillMode.
+    internal enum XFillMode  // Same values as System.Drawing.FillMode.
     {
         /// <summary>
         /// Specifies the alternate fill mode. Called the 'odd-even rule' in PDF terminology.

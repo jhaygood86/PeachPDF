@@ -142,7 +142,7 @@ namespace PeachPDF
         public async Task AddPdfPages(PeachPdfDocument document, string? html, PdfGenerateConfig config, PeachPdfCssContent? cssData = null)
         {
             // get the size of each page to layout the HTML in
-            var orgPageSize = config.PageSize != PageSize.Undefined ? PageSizeConverter.ToSize(config.PageSize) : config.ManualPageSize;
+            var orgPageSize = config.PageSize != PageSize.Undefined ? PageSizeConverter.ToSize(config.PageSize) : new XSize(config.ManualPageWidth, config.ManualPageHeight);
 
             if (config.PageOrientation == PageOrientation.Landscape)
             {

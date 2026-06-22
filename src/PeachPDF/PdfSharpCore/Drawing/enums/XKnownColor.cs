@@ -33,7 +33,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// Specifies all pre-defined colors. Used to identify the pre-defined colors and to 
     /// localize their names.
     /// </summary>
-    public enum XKnownColor
+    internal enum XKnownColor
     {
         /// <summary>A pre-defined color.</summary>
         AliceBlue = 0,

@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum ObjectFitting : byte
+    internal enum ObjectFitting : byte
     {
         None,
         Fill,

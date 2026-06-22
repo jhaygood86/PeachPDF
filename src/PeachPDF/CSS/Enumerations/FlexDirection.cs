@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum FlexDirection : byte
+    internal enum FlexDirection : byte
     {
         Row,
         RowReverse,

@@ -40,7 +40,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
     /// If an imported page has an array of content streams, the streams are concatenated to
     /// one single stream.
     /// </summary>
-    public sealed class PdfContent : PdfDictionary
+    internal sealed class PdfContent : PdfDictionary
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="PdfContent"/> class.

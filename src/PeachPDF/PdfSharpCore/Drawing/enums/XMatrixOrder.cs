@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// <summary>
     /// Specifies the order for matrix transform operations.
     /// </summary>
-    public enum XMatrixOrder
+    internal enum XMatrixOrder
     {
         /// <summary>
         /// The new operation is applied before the old operation.

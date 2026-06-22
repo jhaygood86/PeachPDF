@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.Html.Core.Entities
+namespace PeachPDF.Html.Core.Entities
 {
-    public class CssImage
+    internal class CssImage
     {
         protected CssImage()
         {
@@ -11,7 +11,7 @@
 
         public CssImageKind Kind { get; private set; }
 
-        public enum CssImageKind
+        internal enum CssImageKind
         {
             Url,
             Gradient,

@@ -37,7 +37,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// Represents a PDF object identifier, a pair of object and generation number.
     /// </summary>
     [DebuggerDisplay("{DebuggerDisplay}")]
-    public struct PdfObjectID : IComparable
+    internal struct PdfObjectID : IComparable
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="PdfObjectID"/> class.

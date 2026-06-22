@@ -38,7 +38,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// Represents a direct integer value.
     /// </summary>
     [DebuggerDisplay("({Value})")]
-    public sealed class PdfInteger : PdfNumber, IConvertible, IFormattable
+    internal sealed class PdfInteger : PdfNumber, IConvertible, IFormattable
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="PdfInteger"/> class.

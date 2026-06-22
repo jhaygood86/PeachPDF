@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum Overflow : byte
+    internal enum Overflow : byte
     {
         Auto,
         Visible,

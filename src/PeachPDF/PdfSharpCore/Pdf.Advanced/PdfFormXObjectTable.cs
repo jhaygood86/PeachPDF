@@ -154,7 +154,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// <summary>
         /// A collection of information that uniquely identifies a particular ImportedObjectTable.
         /// </summary>
-        public class Selector
+        internal class Selector
         {
             /// <summary>
             /// Initializes a new instance of FormSelector from an XPdfForm.

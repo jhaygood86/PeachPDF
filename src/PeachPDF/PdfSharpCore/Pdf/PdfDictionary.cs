@@ -1,4 +1,4 @@
-﻿#region PDFsharp - A .NET library for processing PDF
+#region PDFsharp - A .NET library for processing PDF
 //
 // Authors:
 //   Stefan Lange
@@ -47,7 +47,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// Value creation flags. Specifies whether and how a value that does not exist is created.
     /// </summary>
     // ReSharper disable InconsistentNaming
-    public enum VCF
+    internal enum VCF
     // ReSharper restore InconsistentNaming
     {
         /// <summary>
@@ -70,7 +70,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// Represents a PDF dictionary object.
     /// </summary>
     [DebuggerDisplay("{DebuggerDisplay}")]
-    public class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfItem>>
+    internal class PdfDictionary : PdfObject, IEnumerable<KeyValuePair<string, PdfItem>>
     {
         // Reference: 3.2.6  Dictionary Objects / Page 59
 
@@ -287,7 +287,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// Represents the interface to the elements of a PDF dictionary.
         /// </summary>
         [DebuggerDisplay("{DebuggerDisplay}")]
-        public sealed class DictionaryElements : IDictionary<string, PdfItem>, ICloneable
+        internal sealed class DictionaryElements : IDictionary<string, PdfItem>, ICloneable
         {
             internal DictionaryElements(PdfDictionary ownerDictionary)
             {
@@ -1531,7 +1531,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// The PDF stream objects.
         /// </summary>
-        public sealed class PdfStream
+        internal sealed class PdfStream
         {
             internal PdfStream(PdfDictionary ownerDictionary)
             {
@@ -1738,7 +1738,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
             /// <summary>
             /// Common keys for all streams.
             /// </summary>
-            public class Keys : KeysBase
+            internal class Keys : KeysBase
             {
                 // ReSharper disable InconsistentNaming
 

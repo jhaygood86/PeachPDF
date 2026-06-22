@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// <summary>
     /// Defines a pixel based bitmap image.
     /// </summary>
-    public sealed class XBitmapImage : XBitmapSource
+    internal sealed class XBitmapImage : XBitmapSource
     {
         // TODO: Move code from XImage to this class.
 

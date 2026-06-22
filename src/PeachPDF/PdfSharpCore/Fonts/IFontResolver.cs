@@ -1,4 +1,4 @@
-﻿#region PDFsharp - A .NET library for processing PDF
+#region PDFsharp - A .NET library for processing PDF
 //
 // Authors:
 //   Stefan Lange
@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Fonts
     /// <summary>
     /// Provides functionality that convertes a requested typeface into a physical font.
     /// </summary>
-    public interface IFontResolver
+    internal interface IFontResolver
     {
         /// <summary>
         /// Converts specified information about a required typeface into a specific font.

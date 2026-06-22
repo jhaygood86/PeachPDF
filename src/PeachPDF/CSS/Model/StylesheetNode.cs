@@ -1,4 +1,4 @@
-﻿#nullable disable
+#nullable disable
 
 using System.Collections.Generic;
 using System.IO;
@@ -6,7 +6,7 @@ using System.Linq;
 
 namespace PeachPDF.CSS
 {
-    public abstract class StylesheetNode : IStylesheetNode
+    internal abstract class StylesheetNode : IStylesheetNode
     {
         private readonly List<IStylesheetNode> _children = new();
 

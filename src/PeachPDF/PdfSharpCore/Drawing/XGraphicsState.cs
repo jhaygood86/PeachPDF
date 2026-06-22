@@ -33,7 +33,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// Represents the internal state of an XGraphics object.
     /// This class is used as a handle for restoring the context.
     /// </summary>
-    public sealed class XGraphicsState
+    internal sealed class XGraphicsState
     {
         // This class is simply a wrapper of InternalGraphicsState.
         internal InternalGraphicsState InternalState;

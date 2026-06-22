@@ -34,7 +34,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
     /// <summary>
     /// Base class for FontTable, ImageTable, FormXObjectTable etc.
     /// </summary>
-    public class PdfResourceTable
+    internal class PdfResourceTable
     {
         /// <summary>
         /// Base class for document wide resource tables.

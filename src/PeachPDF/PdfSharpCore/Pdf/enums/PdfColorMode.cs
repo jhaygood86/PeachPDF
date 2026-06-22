@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// <summary>
     /// Specifies what color model is used in a PDF document.
     /// </summary>
-    public enum PdfColorMode
+    internal enum PdfColorMode
     {
         /// <summary>
         /// All color values are written as specified in the XColor objects they come from.

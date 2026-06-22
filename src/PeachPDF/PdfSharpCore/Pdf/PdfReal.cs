@@ -37,7 +37,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// Represents a direct real value.
     /// </summary>
     [DebuggerDisplay("({Value})")]
-    public sealed class PdfReal : PdfNumber
+    internal sealed class PdfReal : PdfNumber
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="PdfReal"/> class.

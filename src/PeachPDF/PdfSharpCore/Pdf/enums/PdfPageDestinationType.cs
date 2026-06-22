@@ -34,7 +34,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// <summary>
     /// Specifies the type of a page destination in outline items, annotations, or actions..
     ///  </summary>
-    public enum PdfPageDestinationType  // Reference: TABLE 8.2  Destination Syntax / Page 582
+    internal enum PdfPageDestinationType  // Reference: TABLE 8.2  Destination Syntax / Page 582
     {
         // Except for FitR the documentation text is outdated.
 

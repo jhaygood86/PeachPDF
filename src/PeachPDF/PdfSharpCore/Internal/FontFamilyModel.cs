@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace PeachPDF.PdfSharpCore.Internal
 {
-    public class FontFamilyModel
+    internal class FontFamilyModel
     {
         public string Name { get; set; }
 

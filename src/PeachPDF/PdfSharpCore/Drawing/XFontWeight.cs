@@ -34,7 +34,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// Defines the density of a typeface, in terms of the lightness or heaviness of the strokes.
     /// </summary>
     [DebuggerDisplay("'{Weight}'")]
-    public class XFontWeight : IFormattable
+    internal class XFontWeight : IFormattable
     {
         internal XFontWeight(int weight)
         {

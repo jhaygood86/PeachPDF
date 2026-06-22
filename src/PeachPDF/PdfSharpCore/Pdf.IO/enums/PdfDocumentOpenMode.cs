@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
     /// <summary>
     /// Determines how a PDF document is opened. 
     /// </summary>
-    public enum PdfDocumentOpenMode
+    internal enum PdfDocumentOpenMode
     {
         /// <summary>
         /// The PDF stream is completely read into memory and can be modified. Pages can be deleted or

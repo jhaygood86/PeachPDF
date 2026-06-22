@@ -38,7 +38,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// Represents text that is written 'as it is' into the PDF stream. This class can lead to invalid PDF files.
     /// E.g. strings in a literal are not encrypted when the document is saved with a password.
     /// </summary>
-    public sealed class PdfLiteral : PdfItem
+    internal sealed class PdfLiteral : PdfItem
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="PdfLiteral"/> class.

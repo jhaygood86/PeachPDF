@@ -41,7 +41,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// Represents a PDF rectangle value, that is internally an array with 4 real values.
     /// </summary>
     [DebuggerDisplay("{DebuggerDisplay}")]
-    public sealed class PdfRectangle : PdfItem
+    internal sealed class PdfRectangle : PdfItem
     {
         // This class must behave like a value type. Therefore it cannot be changed (like System.String).
 
@@ -322,7 +322,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         }
 
         /// <summary>
-        /// Returns the rectangle as a string in the form «[x1 y1 x2 y2]».
+        /// Returns the rectangle as a string in the form ï¿½[x1 y1 x2 y2]ï¿½.
         /// </summary>
         public override string ToString()
         {

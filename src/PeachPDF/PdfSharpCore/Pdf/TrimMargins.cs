@@ -36,7 +36,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// Represents trim margins added to the page.
     /// </summary>
     [DebuggerDisplay("(Left={left.Millimeter}mm, Right={right.Millimeter}mm, Top={top.Millimeter}mm, Bottom={bottom.Millimeter}mm)")]
-    public sealed class TrimMargins
+    internal sealed class TrimMargins
     {
         ///// <summary>
         ///// Clones this instance.

@@ -17,7 +17,7 @@ namespace PeachPDF.Html.Core.Entities
     /// <summary>
     /// Exception thrown when client code subscribed to LinkClicked event thrown exception.
     /// </summary>
-    public sealed class HtmlLinkClickedException : Exception
+    internal sealed class HtmlLinkClickedException : Exception
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="T:System.Exception"/> class.

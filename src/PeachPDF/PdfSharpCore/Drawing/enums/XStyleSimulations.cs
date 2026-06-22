@@ -35,7 +35,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// Describes the simulation style of a font.
     /// </summary>
     [Flags]
-    public enum XStyleSimulations  // Identical to WpfStyleSimulations.
+    internal enum XStyleSimulations  // Identical to WpfStyleSimulations.
     {
         /// <summary>
         /// No font style simulation.

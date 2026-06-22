@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// <summary>
     /// Provides functionality to load a bitmap image encoded in a specific format.
     /// </summary>
-    public class XBitmapDecoder
+    internal class XBitmapDecoder
     {
         internal XBitmapDecoder()
         { }

@@ -1,10 +1,10 @@
-﻿#nullable disable
+#nullable disable
 
 using System.IO;
 
 namespace PeachPDF.CSS
 {
-    public sealed class CharsetRule : Rule, ICharsetRule
+    internal sealed class CharsetRule : Rule, ICharsetRule
     {
         internal CharsetRule(StylesheetParser parser)
             : base(RuleType.Charset, parser)

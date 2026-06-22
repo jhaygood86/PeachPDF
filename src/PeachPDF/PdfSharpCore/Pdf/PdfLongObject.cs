@@ -38,7 +38,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// an external PDF file, the value is converted into a direct object.
     /// </summary>
     [DebuggerDisplay("({Value})")]
-    public sealed class PdfLongObject : PdfNumberObject
+    internal sealed class PdfLongObject : PdfNumberObject
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="PdfLongObject"/> class.

@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public interface IProperty : IStylesheetNode
+    internal interface IProperty : IStylesheetNode
     {
         string Name { get; }
         string Value { get; }

@@ -34,7 +34,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// <summary>
     /// Defines a Brush with a linear gradient.
     /// </summary>
-    public sealed class XRadialGradientBrush : XBaseGradientBrush
+    internal sealed class XRadialGradientBrush : XBaseGradientBrush
     {
         //internal XRadialGradientBrush();
 

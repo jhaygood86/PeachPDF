@@ -1,10 +1,10 @@
-﻿#nullable disable
+#nullable disable
 
 using System.IO;
 
 namespace PeachPDF.CSS
 {
-    public abstract class ChildSelector : StylesheetNode, ISelector
+    internal abstract class ChildSelector : StylesheetNode, ISelector
     {
         private readonly string _name;
         public int Step { get; private set; }

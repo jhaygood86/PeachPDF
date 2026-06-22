@@ -36,7 +36,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
     /// <summary>
     /// Represents a shading pattern dictionary.
     /// </summary>
-    public sealed class PdfShadingPattern : PdfDictionaryWithContentStream
+    internal sealed class PdfShadingPattern : PdfDictionaryWithContentStream
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="PdfShadingPattern"/> class.

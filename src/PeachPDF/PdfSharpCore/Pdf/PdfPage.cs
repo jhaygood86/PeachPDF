@@ -42,7 +42,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// <summary>
     /// Represents a page in a PDF document.
     /// </summary>
-    public sealed class PdfPage : PdfDictionary, IContentStream
+    internal sealed class PdfPage : PdfDictionary, IContentStream
     {
         /// <summary>
         /// Initializes a new page. The page must be added to a document before it can be used.

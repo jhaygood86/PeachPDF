@@ -34,7 +34,7 @@ namespace PeachPDF.PdfSharpCore
     /// <summary>
     /// Base class of all exceptions in the PDFsharp frame work.
     /// </summary>
-    public class PdfSharpException : Exception
+    internal class PdfSharpException : Exception
     {
         // The class is not yet used
 

@@ -34,7 +34,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// <summary>
     /// Specifies how the document should be displayed by a viewer when opened.
     /// </summary>
-    public enum PdfPageMode
+    internal enum PdfPageMode
     {
         /// <summary>
         /// Neither document outline nor thumbnail images visible.

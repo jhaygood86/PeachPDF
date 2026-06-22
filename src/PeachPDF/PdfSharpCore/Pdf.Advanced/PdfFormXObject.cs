@@ -36,7 +36,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
     /// <summary>
     /// Represents an external form object (e.g. an imported page).
     /// </summary>
-    public sealed class PdfFormXObject : PdfXObject, IContentStream
+    internal sealed class PdfFormXObject : PdfXObject, IContentStream
     {
         internal PdfFormXObject(PdfDocument thisDocument)
             : base(thisDocument)
@@ -232,7 +232,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// <summary>
         /// Predefined keys of this dictionary.
         /// </summary>
-        public sealed new class Keys : PdfXObject.Keys
+        internal sealed new class Keys : PdfXObject.Keys
         {
             /// <summary>
             /// (Optional) The type of PDF object that this dictionary describes; if present,

@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// <summary>
     /// Specifies how the content of an existing PDF page and new content is combined.
     /// </summary>
-    public enum XGraphicsPdfPageOptions
+    internal enum XGraphicsPdfPageOptions
     {
         /// <summary>
         /// The new content is inserted behind the old content and any subsequent drawing in done above the existing graphic.

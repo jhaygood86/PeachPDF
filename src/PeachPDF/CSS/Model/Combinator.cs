@@ -1,8 +1,8 @@
-﻿#nullable disable
+#nullable disable
 
 namespace PeachPDF.CSS
 {
-    public abstract class Combinator
+    internal abstract class Combinator
     {
         public static readonly Combinator Child = new ChildCombinator();
         public static readonly Combinator Deep = new DeepCombinator();

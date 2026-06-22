@@ -35,7 +35,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// Represents an indirect null value. This type is not used by PDFsharp, but at least
     /// one tool from Adobe creates PDF files with a null object.
     /// </summary>
-    public sealed class PdfNullObject : PdfObject
+    internal sealed class PdfNullObject : PdfObject
     {
         // Reference: 3.2.8  Null Object / Page 63
 
@@ -62,7 +62,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         }
 
         /// <summary>
-        /// Writes the keyword «null».
+        /// Writes the keyword ï¿½nullï¿½.
         /// </summary>
         internal override void WriteObject(PdfWriter writer)
         {

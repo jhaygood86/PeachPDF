@@ -164,7 +164,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// <summary>
         /// Predefined keys of this dictionary.
         /// </summary>
-        public new sealed class Keys : PdfFont.Keys
+        internal new sealed class Keys : PdfFont.Keys
         {
             /// <summary>
             /// (Required) The type of PDF object that this dictionary describes;
@@ -185,9 +185,9 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             /// dictionary. The conventions described here ensure maximum compatibility
             /// with existing Acrobat products.
             /// If the descendant is a Type 0 CIDFont, this name should be the concatenation
-            /// of the CIDFont’s BaseFont name, a hyphen, and the CMap name given in the
+            /// of the CIDFontï¿½s BaseFont name, a hyphen, and the CMap name given in the
             /// Encoding entry (or the CMapName entry in the CMap). If the descendant is a
-            /// Type 2 CIDFont, this name should be the same as the CIDFont’s BaseFont name.
+            /// Type 2 CIDFont, this name should be the same as the CIDFontï¿½s BaseFont name.
             /// </summary>
             [KeyInfo(KeyType.Name | KeyType.Required)]
             public new const string BaseFont = "/BaseFont";

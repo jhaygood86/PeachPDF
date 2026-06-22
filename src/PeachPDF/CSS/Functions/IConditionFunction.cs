@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public interface IConditionFunction : IStylesheetNode
+    internal interface IConditionFunction : IStylesheetNode
     {
         bool Check();
     }

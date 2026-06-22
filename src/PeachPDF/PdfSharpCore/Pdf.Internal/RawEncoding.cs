@@ -40,7 +40,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Internal
     /// Raw encoded strings represent an array of bytes. Therefore a character greater than
     /// 255 is not valid in a raw encoded string.
     /// </remarks>
-    public sealed class RawEncoding : Encoding
+    internal sealed class RawEncoding : Encoding
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="RawEncoding"/> class.

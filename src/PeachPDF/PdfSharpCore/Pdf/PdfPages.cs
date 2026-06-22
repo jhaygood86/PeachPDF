@@ -41,7 +41,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// Represents the pages of the document.
     /// </summary>
     [DebuggerDisplay("(PageCount={Count})")]
-    public sealed class PdfPages : PdfDictionary, IEnumerable<PdfPage>
+    internal sealed class PdfPages : PdfDictionary, IEnumerable<PdfPage>
     {
         internal PdfPages(PdfDocument document)
             : base(document)

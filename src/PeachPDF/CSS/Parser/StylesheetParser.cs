@@ -1,4 +1,4 @@
-﻿#nullable disable
+#nullable disable
 
 using System;
 using System.Collections.Generic;
@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace PeachPDF.CSS
 {
-    public class StylesheetParser
+    internal class StylesheetParser
     {
         internal static readonly StylesheetParser Default = new();
 

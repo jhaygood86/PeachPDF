@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// <summary>
     /// Specifies the available cap styles with which an XPen object can start and end a line.
     /// </summary>
-    public enum XLineCap
+    internal enum XLineCap
     {
         /// <summary>
         /// Specifies a flat line cap.

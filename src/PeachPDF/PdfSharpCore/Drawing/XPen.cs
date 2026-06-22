@@ -35,7 +35,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// <summary>
     /// Defines an object used to draw lines and curves.
     /// </summary>
-    public sealed class XPen
+    internal sealed class XPen
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="XPen"/> class.

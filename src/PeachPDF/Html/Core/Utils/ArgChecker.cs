@@ -18,7 +18,7 @@ namespace PeachPDF.Html.Core.Utils
     /// <summary>
     /// Static class that contains argument-checking methods
     /// </summary>
-    public static class ArgChecker
+    internal static class ArgChecker
     {
         /// <summary>
         /// Validate given argument isn't Null or empty.

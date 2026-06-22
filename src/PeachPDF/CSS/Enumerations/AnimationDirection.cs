@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum AnimationDirection : byte
+    internal enum AnimationDirection : byte
     {
         Normal,
         Alternate,

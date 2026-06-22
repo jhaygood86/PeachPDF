@@ -1,4 +1,4 @@
-﻿#nullable disable
+#nullable disable
 
 using System.IO;
 
@@ -6,7 +6,7 @@ using System.IO;
 
 namespace PeachPDF.CSS
 {
-    public abstract class Property : StylesheetNode, IProperty
+    internal abstract class Property : StylesheetNode, IProperty
     {
         private readonly PropertyFlags _flags;
 

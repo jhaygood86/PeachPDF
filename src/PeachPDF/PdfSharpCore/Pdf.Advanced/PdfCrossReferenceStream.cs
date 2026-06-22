@@ -48,7 +48,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         public readonly List<CrossReferenceStreamEntry> Entries = new List<CrossReferenceStreamEntry>();
 
         [DebuggerDisplay("{Type} {Field2} {Field3}")]
-        public struct CrossReferenceStreamEntry
+        internal struct CrossReferenceStreamEntry
         {
             // Reference: TABLE 3.16  Entries in a cross-reference stream / Page 109
 
@@ -62,7 +62,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// <summary>
         /// Predefined keys for cross-reference dictionaries.
         /// </summary>
-        public new class Keys : PdfTrailer.Keys  // Reference: TABLE 3.15  Additional entries specific to a cross-refernece stream dictionary / Page 107
+        internal new class Keys : PdfTrailer.Keys  // Reference: TABLE 3.15  Additional entries specific to a cross-refernece stream dictionary / Page 107
         {
             /// <summary>
             /// (Required) The type of PDF object that this dictionary describes;

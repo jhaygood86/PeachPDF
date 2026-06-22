@@ -34,7 +34,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// <summary>
     /// This class is intended for empira internal use only and may change or drop in future releases.
     /// </summary>
-    public class PdfCustomValues : PdfDictionary
+    internal class PdfCustomValues : PdfDictionary
     {
         internal PdfCustomValues()
         { }

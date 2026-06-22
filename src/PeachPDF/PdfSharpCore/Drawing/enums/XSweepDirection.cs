@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// <summary>
     /// Defines the direction an elliptical arc is drawn.
     /// </summary>
-    public enum XSweepDirection // Same values as System.Windows.Media.SweepDirection.
+    internal enum XSweepDirection // Same values as System.Windows.Media.SweepDirection.
     {
         /// <summary>
         /// Specifies that arcs are drawn in a counter clockwise (negative-angle) direction.

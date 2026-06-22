@@ -34,7 +34,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// <summary>
     /// Represents a indirect reference that is not in the cross reference table.
     /// </summary>
-    public sealed class PdfNull : PdfItem
+    internal sealed class PdfNull : PdfItem
     {
         // Reference: 3.2.8  Null Object / Page 63
 

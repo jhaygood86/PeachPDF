@@ -1,10 +1,10 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace PeachPDF.CSS
 {
-    public abstract class Selectors : StylesheetNode, IEnumerable<ISelector>
+    internal abstract class Selectors : StylesheetNode, IEnumerable<ISelector>
     {
         protected readonly List<ISelector> _selectors;
 

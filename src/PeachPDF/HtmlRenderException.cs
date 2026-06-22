@@ -1,6 +1,5 @@
 ﻿#nullable enable
 
-using PeachPDF.Html.Core.Entities;
 using System;
 
 namespace PeachPDF

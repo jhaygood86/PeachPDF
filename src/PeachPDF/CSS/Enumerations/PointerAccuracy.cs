@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum PointerAccuracy : byte
+    internal enum PointerAccuracy : byte
     {
         None,
         Coarse,

@@ -17,7 +17,7 @@ namespace PeachPDF.Html.Adapters
     /// <summary>
     /// Adapter for platform specific pen objects - used to draw graphics (lines, rectangles and paths) 
     /// </summary>
-    public abstract class RPen
+    internal abstract class RPen
     {
         /// <summary>
         /// Gets or sets the width of this Pen, in units of the Graphics object used for drawing.

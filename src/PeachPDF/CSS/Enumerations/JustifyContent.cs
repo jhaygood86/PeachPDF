@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum JustifyContent : byte
+    internal enum JustifyContent : byte
     {
         Start,
         Center,

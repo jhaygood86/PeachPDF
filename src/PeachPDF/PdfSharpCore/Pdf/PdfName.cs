@@ -38,7 +38,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// Represents a PDF name value.
     /// </summary>
     [DebuggerDisplay("({Value})")]
-    public sealed class PdfName : PdfItem
+    internal sealed class PdfName : PdfItem
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="PdfName"/> class.
@@ -143,7 +143,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Implements a comparer that compares PdfName objects.
         /// </summary>
-        public class PdfXNameComparer : IComparer<PdfName>
+        internal class PdfXNameComparer : IComparer<PdfName>
         {
             /// <summary>
             /// Compares two objects and returns a value indicating whether one is less than, equal to, or greater than the other.

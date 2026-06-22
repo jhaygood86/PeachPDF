@@ -1,6 +1,6 @@
 namespace PeachPDF.CSS
 {
-    public sealed class AllSelector : SelectorBase
+    internal sealed class AllSelector : SelectorBase
     {
         public static AllSelector Create()
         {

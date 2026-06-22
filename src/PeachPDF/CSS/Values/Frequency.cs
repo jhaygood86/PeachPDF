@@ -1,4 +1,4 @@
-﻿#nullable disable
+#nullable disable
 
 using System;
 
@@ -6,7 +6,7 @@ using System;
 
 namespace PeachPDF.CSS
 {
-    public struct Frequency : IEquatable<Frequency>, IComparable<Frequency>, IFormattable
+    internal struct Frequency : IEquatable<Frequency>, IComparable<Frequency>, IFormattable
     {
         public Frequency(float value, Unit unit)
         {
@@ -99,7 +99,7 @@ namespace PeachPDF.CSS
             return Value == other.Value && Type == other.Type;
         }
 
-        public enum Unit : byte
+        internal enum Unit : byte
         {
             None,
             Hz,

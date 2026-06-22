@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// <summary>
     /// Sets the mode for the Deflater (FlateEncoder).
     /// </summary>
-    public enum PdfFlateEncodeMode
+    internal enum PdfFlateEncodeMode
     {
         /// <summary>
         /// The default mode.

@@ -34,7 +34,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Internal
     /// <summary>
     /// An encoder for PDF AnsiEncoding.
     /// </summary>
-    public sealed class AnsiEncoding : Encoding
+    internal sealed class AnsiEncoding : Encoding
     {
         /// <summary>
         /// Gets the byte count.
@@ -219,7 +219,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Internal
                 case '\u0178':
                     return '\u009F';
             }
-            return '\u00A4';  // Char 164 is ANSI value of '¤'.
+            return '\u00A4';  // Char 164 is ANSI value of 'ï¿½'.
         }
 
         /// <summary>

@@ -39,7 +39,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// names to save space, because an indirect reference to a name may be shorter than a long name.
     /// </summary>
     [DebuggerDisplay("({Value})")]
-    public sealed class PdfNameObject : PdfObject
+    internal sealed class PdfNameObject : PdfObject
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="PdfNameObject"/> class.

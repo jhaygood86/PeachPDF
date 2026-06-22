@@ -38,7 +38,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// double with a value measured in point.
     /// </summary>
     [DebuggerDisplay("{DebuggerDisplay}")]
-    public struct XUnit : IFormattable
+    internal struct XUnit : IFormattable
     {
         internal const double PointFactor = 1;
         internal const double InchFactor = 72;

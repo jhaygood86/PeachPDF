@@ -33,7 +33,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// Classes derived from this abstract base class define objects used to fill the 
     /// interiors of paths.
     /// </summary>
-    public abstract class XBrush
+    internal abstract class XBrush
     {
     }
 }

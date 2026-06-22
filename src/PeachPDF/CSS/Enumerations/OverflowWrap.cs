@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum OverflowWrap : byte
+    internal enum OverflowWrap : byte
     {
         Normal,
         BreakWord

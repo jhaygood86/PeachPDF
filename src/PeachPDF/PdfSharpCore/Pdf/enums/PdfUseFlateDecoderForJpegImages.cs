@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// <summary>
     /// Specifies whether to compress JPEG images with the FlateDecode filter.
     /// </summary>
-    public enum PdfUseFlateDecoderForJpegImages
+    internal enum PdfUseFlateDecoderForJpegImages
     {
         /// <summary>
         /// PDFsharp will try FlateDecode and use it if it leads to a reduction in PDF file size.

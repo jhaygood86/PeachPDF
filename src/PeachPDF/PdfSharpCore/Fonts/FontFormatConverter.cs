@@ -1,6 +1,6 @@
 namespace PeachPDF.PdfSharpCore.Fonts
 {
-    public static class FontFormatConverter
+    internal static class FontFormatConverter
     {
         public static byte[] ToOpenType(byte[] bytes)
         {

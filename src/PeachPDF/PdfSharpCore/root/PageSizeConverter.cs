@@ -36,7 +36,7 @@ namespace PeachPDF.PdfSharpCore
     /// <summary>
     /// Converter from <see cref="PageSize"/> to <see cref="XSize"/>.
     /// </summary>
-    public static class PageSizeConverter
+    internal static class PageSizeConverter
     {
         /// <summary>
         /// Converts the specified page size enumeration to a pair of values in point.

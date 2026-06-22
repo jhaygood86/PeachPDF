@@ -1,4 +1,4 @@
-﻿#region PDFsharp - A .NET library for processing PDF
+#region PDFsharp - A .NET library for processing PDF
 //
 // Authors:
 //   Stefan Lange
@@ -42,7 +42,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
     /// Represents a PDF array object.
     /// </summary>
     [DebuggerDisplay("{DebuggerDisplay}")]
-    public class PdfArray : PdfObject, IEnumerable<PdfItem>
+    internal class PdfArray : PdfObject, IEnumerable<PdfItem>
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="PdfArray"/> class.
@@ -160,7 +160,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Represents the elements of an PdfArray.
         /// </summary>
-        public sealed class ArrayElements : IList<PdfItem>, ICloneable
+        internal sealed class ArrayElements : IList<PdfItem>, ICloneable
         {
             internal ArrayElements(PdfArray array)
             {

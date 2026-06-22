@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// <summary>
     /// Represents predefined text layouts.
     /// </summary>
-    public static class XStringFormats
+    internal static class XStringFormats
     {
         /// <summary>
         /// Gets a new XStringFormat object that aligns the text left on the base line.

@@ -1,4 +1,4 @@
-﻿#region PDFsharp - A .NET library for processing PDF
+#region PDFsharp - A .NET library for processing PDF
 //
 // Authors:
 //   Stefan Lange
@@ -33,7 +33,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
     /// <summary>
     /// TODO
     /// </summary>
-    public static class PdfPageInterals
+    internal static class PdfPageInterals
     {
         // TODO
     }

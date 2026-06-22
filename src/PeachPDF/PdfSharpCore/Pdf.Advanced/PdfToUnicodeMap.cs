@@ -128,7 +128,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             }
         }
 
-        public sealed class Keys : PdfStream.Keys
+        internal sealed class Keys : PdfStream.Keys
         {
             // No new keys.
         }

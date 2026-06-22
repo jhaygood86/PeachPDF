@@ -35,7 +35,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// Makes fonts that are not installed on the system available within the current application domain.<br/>
     /// In Silverlight required for all fonts used in PDF documents.
     /// </summary>
-    public sealed class XPrivateFontCollection
+    internal sealed class XPrivateFontCollection
     {
         // This one is global and can only grow. It is not possible to remove fonts that have been added.
 

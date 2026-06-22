@@ -35,7 +35,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Filters
     /// <summary>
     /// Applies standard filters to streams.
     /// </summary>
-    public static class Filtering
+    internal static class Filtering
     {
         /// <summary>
         /// Gets the filter specified by the case sensitive name.

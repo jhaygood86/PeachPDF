@@ -1,4 +1,4 @@
-﻿#nullable disable
+#nullable disable
 
 using System;
 using System.Runtime.InteropServices;
@@ -9,7 +9,7 @@ using System.Runtime.InteropServices;
 namespace PeachPDF.CSS
 {
     [StructLayout(LayoutKind.Explicit, Pack = 1, CharSet = CharSet.Unicode)]
-    public struct Color : IEquatable<Color>, IComparable<Color>, IFormattable
+    internal struct Color : IEquatable<Color>, IComparable<Color>, IFormattable
     {
         [FieldOffset(0)] private readonly byte _alpha;
         [FieldOffset(1)] private readonly byte _red;

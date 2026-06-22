@@ -34,7 +34,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
     /// <summary>
     /// Contains all used ExtGState objects of a document.
     /// </summary>
-    public sealed class PdfExtGStateTable : PdfResourceTable
+    internal sealed class PdfExtGStateTable : PdfResourceTable
     {
         /// <summary>
         /// Initializes a new instance of this class, which is a singleton for each document.

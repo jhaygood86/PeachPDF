@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum TextAnchor : byte
+    internal enum TextAnchor : byte
     {
         Start,
         Middle,

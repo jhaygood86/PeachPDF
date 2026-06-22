@@ -40,7 +40,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Layout
     /// If this class does not satisfy your needs on formatting paragraphs I recommend to take a look
     /// at MigraDoc Foundation. Alternatively you should copy this class in your own source code and modify it.
     /// </summary>
-    public class XTextFormatter
+    internal class XTextFormatter
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="XTextFormatter"/> class.
@@ -377,7 +377,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Layout
         // - ...
     }
 
-    public class TextFormatAlignment
+    internal class TextFormatAlignment
     {
         public XParagraphAlignment Horizontal { get; set; } = XParagraphAlignment.Left;
         public XVerticalAlignment Vertical { get; set; } = XVerticalAlignment.Top;

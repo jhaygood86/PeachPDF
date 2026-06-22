@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum UnicodeMode : byte
+    internal enum UnicodeMode : byte
     {
         Normal,
         Embed,

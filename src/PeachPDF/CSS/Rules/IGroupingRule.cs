@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public interface IGroupingRule : IRule, IRuleCreator
+    internal interface IGroupingRule : IRule, IRuleCreator
     {
         IRuleList Rules { get; }
         int Insert(string rule, int index);

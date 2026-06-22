@@ -1,4 +1,4 @@
-﻿using PeachPDF.PdfSharpCore.Drawing.Layout.enums;
+using PeachPDF.PdfSharpCore.Drawing.Layout.enums;
 using PeachPDF.PdfSharpCore.Pdf.IO;
 using System;
 using System.Collections.Generic;
@@ -6,7 +6,7 @@ using System.Linq;
 
 namespace PeachPDF.PdfSharpCore.Drawing.Layout
 {
-    public class XTextSegmentFormatter
+    internal class XTextSegmentFormatter
     {
         private readonly XGraphics _gfx;
 

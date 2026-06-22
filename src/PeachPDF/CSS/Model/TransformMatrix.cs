@@ -1,10 +1,10 @@
-﻿#nullable disable
+#nullable disable
 
 using System;
 
 namespace PeachPDF.CSS
 {
-    public sealed class TransformMatrix : IEquatable<TransformMatrix>
+    internal sealed class TransformMatrix : IEquatable<TransformMatrix>
     {
         public static readonly TransformMatrix Zero = new();
         public static readonly TransformMatrix One = new(1f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 0f, 0f, 0f);

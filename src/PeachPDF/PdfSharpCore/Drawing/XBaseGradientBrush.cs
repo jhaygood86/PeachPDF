@@ -1,4 +1,4 @@
-﻿#region PDFsharp - A .NET library for processing PDF
+#region PDFsharp - A .NET library for processing PDF
 //
 // Authors:
 //   Ben Askren
@@ -30,7 +30,7 @@
 // ReSharper disable RedundantNameQualifier because it is required for hybrid build
 namespace PeachPDF.PdfSharpCore.Drawing
 {
-    public class XBaseGradientBrush : XBrush
+    internal class XBaseGradientBrush : XBrush
     {
         protected XBaseGradientBrush(XColor color1, XColor color2)
         {

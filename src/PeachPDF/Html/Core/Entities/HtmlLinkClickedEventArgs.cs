@@ -18,7 +18,7 @@ namespace PeachPDF.Html.Core.Entities
     /// <summary>
     /// Raised when the user clicks on a link in the html.
     /// </summary>
-    public sealed class HtmlLinkClickedEventArgs : EventArgs
+    internal sealed class HtmlLinkClickedEventArgs : EventArgs
     {
         /// <summary>
         /// the link href that was clicked

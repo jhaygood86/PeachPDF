@@ -38,7 +38,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Annotations
     /// <summary>
     /// Represents the annotations array of a page.
     /// </summary>
-    public sealed class PdfAnnotations : PdfArray
+    internal sealed class PdfAnnotations : PdfArray
     {
         internal PdfAnnotations(PdfDocument document)
             : base(document)
