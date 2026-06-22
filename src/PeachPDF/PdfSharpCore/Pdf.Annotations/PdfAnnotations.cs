@@ -114,14 +114,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Annotations
                     Debug.Assert(item is PdfDictionary, "Dictionary expected.");
                     dict = (PdfDictionary)item;
                 }
-                PdfAnnotation annotation = dict as PdfAnnotation;
-                if (annotation == null)
-                {
-                    annotation = new PdfGenericAnnotation(dict);
-                    if (iref == null)
-                        Elements[index] = annotation;
-                }
-                return annotation;
+                return dict as PdfAnnotation;
             }
         }
 
