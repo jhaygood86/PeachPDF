@@ -35,9 +35,6 @@ using System.Drawing.Drawing2D;
 using System.Windows;
 using System.Windows.Media;
 #endif
-#if NETFX_CORE
-using Windows.UI.Xaml.Media;
-#endif
 
 namespace PeachPDF.PdfSharpCore.Drawing
 {

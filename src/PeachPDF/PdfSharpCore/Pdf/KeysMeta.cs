@@ -186,7 +186,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
     {
         public DictionaryMeta([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields)] Type type)
         {
-#if NET5_0_OR_GREATER
             FieldInfo[] fields = type.GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
             foreach (FieldInfo field in fields)
             {
@@ -198,48 +197,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
                     _keyDescriptors[descriptor.KeyValue] = descriptor;
                 }
             }
-#else
-            // Rewritten for WinRT.
-            CollectKeyDescriptors(type);
-            //var fields = type.GetRuntimeFields();  // does not work
-            //fields2.GetType();
-            //foreach (FieldInfo field in fields)
-            //{
-            //    var attributes = field.GetCustomAttributes(typeof(KeyInfoAttribute), false);
-            //    foreach (var attribute in attributes)
-            //    {
-            //        KeyDescriptor descriptor = new KeyDescriptor((KeyInfoAttribute)attribute);
-            //        descriptor.KeyValue = (string)field.GetValue(null);
-            //        _keyDescriptors[descriptor.KeyValue] = descriptor;
-            //    }
-            //}
-#endif
         }
-
-#if !NET5_0_OR_GREATER
-        // Background: The function GetRuntimeFields gets constant fields only for the specified type,
-        // not for its base types. So we have to walk recursively through base classes.
-        // The docmentation says full trust for the immediate caller is required for property BaseClass.
-        // TODO: Rewrite this stuff for medium trust.
-        void CollectKeyDescriptors(Type type)
-        {
-            // Get fields of the specified type only.
-            var fields = type.GetTypeInfo().DeclaredFields;
-            foreach (FieldInfo field in fields)
-            {
-                var attributes = field.GetCustomAttributes(typeof(KeyInfoAttribute), false);
-                foreach (var attribute in attributes)
-                {
-                    KeyDescriptor descriptor = new KeyDescriptor((KeyInfoAttribute)attribute);
-                    descriptor.KeyValue = (string)field.GetValue(null);
-                    _keyDescriptors[descriptor.KeyValue] = descriptor;
-                }
-            }
-            type = type.GetTypeInfo().BaseType;
-            if (type != typeof(object) && type != typeof(PdfObject))
-                CollectKeyDescriptors(type);
-        }
-#endif
 
         /// <summary>
         /// Gets the KeyDescriptor of the specified key, or null if no such descriptor exits.

@@ -302,23 +302,6 @@ namespace PeachPDF.PdfSharpCore.Drawing
             return new XVector(point._x, point._y);
         }
 
-#if WPF || NETFX_CORE
-        /// <summary>
-        /// Performs an implicit conversion from XPoint to Point.
-        /// </summary>
-        public static implicit operator SysPoint(XPoint point)
-        {
-            return new SysPoint(point.X, point.Y);
-        }
-
-        /// <summary>
-        /// Performs an implicit conversion from Point to XPoint.
-        /// </summary>
-        public static implicit operator XPoint(SysPoint point)
-        {
-            return new XPoint(point.X, point.Y);
-        }
-#endif
 
         /// <summary>
         /// Gets the DebuggerDisplayAttribute text.

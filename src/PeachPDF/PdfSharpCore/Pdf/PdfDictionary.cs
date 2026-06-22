@@ -916,14 +916,12 @@ namespace PeachPDF.PdfSharpCore.Pdf
                         Type type = GetValueType(key);
                         if (type != null)
                         {
-                            // Rewritten WinRT style.
-                            TypeInfo typeInfo = type.GetTypeInfo();
-                            Debug.Assert(typeof(PdfItem).GetTypeInfo().IsAssignableFrom(typeInfo), "Type not allowed.");
-                            if (typeof(PdfDictionary).GetTypeInfo().IsAssignableFrom(typeInfo))
+                            Debug.Assert(typeof(PdfItem).IsAssignableFrom(type), "Type not allowed.");
+                            if (typeof(PdfDictionary).IsAssignableFrom(type))
                             {
                                 value = obj = CreateDictionary(type, null);
                             }
-                            else if (typeof(PdfArray).GetTypeInfo().IsAssignableFrom(typeInfo))
+                            else if (typeof(PdfArray).IsAssignableFrom(type))
                             {
                                 value = obj = CreateArray(type, null);
                             }
@@ -960,16 +958,14 @@ namespace PeachPDF.PdfSharpCore.Pdf
                             Type type = GetValueType(key);
                             Debug.Assert(type != null, "No value type specified in meta information. Please send this file to PDFsharp support.");
 
-                            // Rewritten WinRT style.
-                            TypeInfo typeInfo = type.GetTypeInfo();
                             if (type != null && type != value.GetType())
                             {
-                                if (typeof(PdfDictionary).GetTypeInfo().IsAssignableFrom(typeInfo))
+                                if (typeof(PdfDictionary).IsAssignableFrom(type))
                                 {
                                     Debug.Assert(value is PdfDictionary, "Bug in PeachPDF.PdfSharpCore. Please send this file to PDFsharp support.");
                                     value = CreateDictionary(type, (PdfDictionary)value);
                                 }
-                                else if (typeof(PdfArray).GetTypeInfo().IsAssignableFrom(typeInfo))
+                                else if (typeof(PdfArray).IsAssignableFrom(type))
                                 {
                                     Debug.Assert(value is PdfArray, "Bug in PeachPDF.PdfSharpCore. Please send this file to PDFsharp support.");
                                     value = CreateArray(type, (PdfArray)value);
@@ -1043,13 +1039,10 @@ namespace PeachPDF.PdfSharpCore.Pdf
 
             PdfArray CreateArray([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)] Type type, PdfArray oldArray)
             {
-                // Rewritten WinRT style.
                 PdfArray array = null;
                 if (oldArray == null)
                 {
-                    // Use contstructor with signature 'Ctor(PdfDocument owner)'.
-                    var ctorInfos = type.GetTypeInfo().DeclaredConstructors; //.GetConstructor(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-                    //null, new Type[] { typeof(PdfDocument) }, null);
+                    var ctorInfos = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                     foreach (var ctorInfo in ctorInfos)
                     {
                         var parameters = ctorInfo.GetParameters();
@@ -1063,9 +1056,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
                 }
                 else
                 {
-                    // Use contstructor with signature 'Ctor(PdfDictionary dict)'.
-                    var ctorInfos = type.GetTypeInfo().DeclaredConstructors; // .GetConstructor(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-                    //null, new Type[] { typeof(PdfArray) }, null);
+                    var ctorInfos = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                     foreach (var ctorInfo in ctorInfos)
                     {
                         var parameters = ctorInfo.GetParameters();
@@ -1083,13 +1074,10 @@ namespace PeachPDF.PdfSharpCore.Pdf
             PdfDictionary CreateDictionary([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)]
             Type type, PdfDictionary oldDictionary)
             {
-                // Rewritten WinRT style.
                 PdfDictionary dict = null;
                 if (oldDictionary == null)
                 {
-                    // Use contstructor with signature 'Ctor(PdfDocument owner)'.
-                    var ctorInfos = type.GetTypeInfo().DeclaredConstructors; //GetConstructor(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-                    //null, new Type[] { typeof(PdfDocument) }, null);
+                    var ctorInfos = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                     foreach (var ctorInfo in ctorInfos)
                     {
                         var parameters = ctorInfo.GetParameters();
@@ -1103,7 +1091,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
                 }
                 else
                 {
-                    var ctorInfos = type.GetTypeInfo().DeclaredConstructors; // GetConstructor(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, new Type[] { typeof(PdfDictionary) }, null);
+                    var ctorInfos = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                     foreach (var ctorInfo in ctorInfos)
                     {
                         var parameters = ctorInfo.GetParameters();
@@ -1120,10 +1108,8 @@ namespace PeachPDF.PdfSharpCore.Pdf
 
             PdfItem CreateValue([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)] Type type, PdfDictionary oldValue)
             {
-
-                // Rewritten WinRT style.
                 PdfObject obj = null;
-                var ctorInfos = type.GetTypeInfo().DeclaredConstructors; // GetConstructor(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, new Type[] { typeof(PdfDocument) }, null);
+                var ctorInfos = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                 foreach (var ctorInfo in ctorInfos)
                 {
                     var parameters = ctorInfo.GetParameters();
