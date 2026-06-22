@@ -27,7 +27,6 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using PeachPDF.PdfSharpCore.Pdf.Actions;
 using PeachPDF.PdfSharpCore.Pdf.Internal;
 using PeachPDF.PdfSharpCore.Pdf.IO;
 using System;
@@ -88,19 +87,24 @@ namespace PeachPDF.PdfSharpCore.Pdf.Annotations
         /// Creates a link within the current document using a named destination.
         /// </summary>
         /// <param name="rect">The link area in default page coordinates.</param>
-        /// <param name="destinationName">The named destination’s name.</param>
+        /// <param name="destinationName">The named destinationï¿½s name.</param>
         public static PdfLinkAnnotation CreateDocumentLink(PdfRectangle rect, string destinationName)
         {
+            var action = new PdfDictionary();
+            action.Elements.SetName("/Type", "/Action");
+            action.Elements.SetName("/S", "/GoTo");
+            action.Elements.SetString("/D", destinationName);
+
             var link = new PdfLinkAnnotation
             {
                 _linkType = LinkType.NamedDestination,
                 Rectangle = rect,
-                _action = PdfGoToAction.CreateGoToAction(destinationName)
+                _action = action
             };
             return link;
         }
 
-        PdfAction _action = default!;
+        PdfDictionary _action = default!;
 
         /// <summary>
         /// Creates a link to the web.
@@ -203,11 +207,11 @@ namespace PeachPDF.PdfSharpCore.Pdf.Annotations
             public const string Dest = "/Dest";
 
             /// <summary>
-            /// (Optional; PDF 1.2) The annotation’s highlighting mode, the visual effect to be
+            /// (Optional; PDF 1.2) The annotationï¿½s highlighting mode, the visual effect to be
             /// used when the mouse button is pressed or held down inside its active area:
             /// N (None) No highlighting.
             /// I (Invert) Invert the contents of the annotation rectangle.
-            /// O (Outline) Invert the annotation’s border.
+            /// O (Outline) Invert the annotationï¿½s border.
             /// P (Push) Display the annotation as if it were being pushed below the surface of the page.
             /// Default value: I.
             /// Note: In PDF 1.1, highlighting is always done by inverting colors inside the annotation rectangle.

@@ -27,7 +27,6 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using PeachPDF.PdfSharpCore.Pdf.AcroForms;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF.PdfSharpCore.Pdf.Internal;
 using PeachPDF.PdfSharpCore.Pdf.IO;
@@ -667,14 +666,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
         }
 
         /// <summary>
-        /// Get the AcroForm dictionary.
-        /// </summary>
-        public PdfAcroForm AcroForm
-        {
-            get { return Catalog.AcroForm; }
-        }
-
-        /// <summary>
         /// Gets or sets the default language of the document.
         /// </summary>
         public string Language
@@ -803,17 +794,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
 
         public void AddNamedDestination(string destinationName, int destinationPage, PdfNamedDestinationParameters parameters)
             => Internals.Catalog.Names.AddNamedDestination(destinationName, destinationPage, parameters);
-
-        /// <summary>
-        /// Marks the acroform fields readonly 
-        /// </summary>
-        public void MakeAcroFormsReadOnly()
-        {
-            for (var i = 0; i < AcroForm?.Fields.Count(); i++)
-            {
-                AcroForm.Fields[i].ReadOnly = true;
-            }
-        }
 
         public void ConsolidateImages()
         {

@@ -1,4 +1,4 @@
-#region PDFsharp - A .NET library for processing PDF
+ï»¿#region PDFsharp - A .NET library for processing PDF
 //
 // Authors:
 //   Stefan Lange
@@ -27,7 +27,6 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using PeachPDF.PdfSharpCore.Pdf.AcroForms;
 using PeachPDF.PdfSharpCore.Pdf.IO;
 using System;
 
@@ -158,21 +157,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         PdfNameDictionary? _names;
 
         /// <summary>
-        /// Gets the AcroForm dictionary of this document.
-        /// </summary>
-        public PdfAcroForm AcroForm
-        {
-            get { return (PdfAcroForm)Elements.GetValue(Keys.AcroForm); }
-            set
-            {
-                if (Elements.ContainsKey(Keys.AcroForm))
-                    Elements[Keys.AcroForm] = value;
-                else
-                    Elements.Add(Keys.AcroForm, value);
-            }
-        }
-
-        /// <summary>
         /// Gets or sets the language identifier specifying the natural language for all text in the document.
         /// Sample values are 'en-US' for 'English United States' or 'de-DE' for 'deutsch Deutschland' (i.e. 'German Germany').
         /// </summary>
@@ -226,7 +210,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 
             /// <summary>
             /// (Optional; PDF 1.4) The version of the PDF specification to which the document
-            /// conforms (for example, 1.4) if later than the version specified in the file’s header.
+            /// conforms (for example, 1.4) if later than the version specified in the fileï¿½s header.
             /// If the header specifies a later version, or if this entry is absent, the document 
             /// conforms to the version specified in the header. This entry enables a PDF producer 
             /// application to update the version using an incremental update.
@@ -236,7 +220,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 
             /// <summary>
             /// (Required; must be an indirect reference) The page tree node that is the root of 
-            /// the document’s page tree.
+            /// the documentï¿½s page tree.
             /// </summary>
             [KeyInfo(KeyType.Dictionary | KeyType.Required | KeyType.MustBeIndirect, typeof(PdfPages))]
             public const string Pages = "/Pages";
@@ -250,95 +234,35 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             [KeyInfo("1.3", KeyType.NumberTree | KeyType.Optional)]
             public const string PageLabels = "/PageLabels";
 
-            /// <summary>
-            /// (Optional; PDF 1.2) The document’s name dictionary.
-            /// </summary>
             [KeyInfo("1.2", KeyType.Dictionary | KeyType.Optional)]
             public const string Names = "/Names";
 
-            /// <summary>
-            /// (Optional; PDF 1.1; must be an indirect reference) A dictionary of names and 
-            /// corresponding destinations.
-            /// </summary>
             [KeyInfo("1.1", KeyType.Dictionary | KeyType.Optional)]
             public const string Dests = "/Dests";
 
-            /// <summary>
-            /// (Optional; PDF 1.2) A viewer preferences dictionary specifying the way the document 
-            /// is to be displayed on the screen. If this entry is absent, applications should use
-            /// their own current user preference settings.
-            /// </summary>
             [KeyInfo("1.2", KeyType.Dictionary | KeyType.Optional, typeof(PdfViewerPreferences))]
             public const string ViewerPreferences = "/ViewerPreferences";
 
-            /// <summary>
-            /// (Optional) A name object specifying the page layout to be used when the document is 
-            /// opened:
-            /// SinglePage - Display one page at a time.
-            /// OneColumn - Display the pages in one column.
-            /// TwoColumnLeft - Display the pages in two columns, with oddnumbered pages on the left.
-            /// TwoColumnRight - Display the pages in two columns, with oddnumbered pages on the right.
-            /// TwoPageLeft - (PDF 1.5) Display the pages two at a time, with odd-numbered pages on the left
-            /// TwoPageRight - (PDF 1.5) Display the pages two at a time, with odd-numbered pages on the right.
-            /// </summary>
             [KeyInfo(KeyType.Name | KeyType.Optional)]
             public const string PageLayout = "/PageLayout";
 
-            /// <summary>
-            /// (Optional) A name object specifying how the document should be displayed when opened:
-            /// UseNone - Neither document outline nor thumbnail images visible.
-            /// UseOutlines - Document outline visible.
-            /// UseThumbs - Thumbnail images visible.
-            /// FullScreen - Full-screen mode, with no menu bar, windowcontrols, or any other window visible.
-            /// UseOC - (PDF 1.5) Optional content group panel visible.
-            /// UseAttachments (PDF 1.6) Attachments panel visible.
-            /// Default value: UseNone.
-            /// </summary>
             [KeyInfo(KeyType.Name | KeyType.Optional)]
             public const string PageMode = "/PageMode";
 
-            /// <summary>
-            /// (Optional; must be an indirect reference) The outline dictionary that is the root 
-            /// of the document’s outline hierarchy.
-            /// </summary>
             [KeyInfo(KeyType.Dictionary | KeyType.Optional, typeof(PdfOutline))]
             public const string Outlines = "/Outlines";
 
-            /// <summary>
-            /// (Optional; PDF 1.1; must be an indirect reference) An array of thread dictionaries 
-            /// representing the document’s article threads.
-            /// </summary>
             [KeyInfo("1.1", KeyType.Array | KeyType.Optional)]
             public const string Threads = "/Threads";
 
-            /// <summary>
-            /// (Optional; PDF 1.1) A value specifying a destination to be displayed or an action to be 
-            /// performed when the document is opened. The value is either an array defining a destination 
-            /// or an action dictionary representing an action. If this entry is absent, the document
-            /// should be opened to the top of the first page at the default magnification factor.
-            /// </summary>
             [KeyInfo("1.1", KeyType.ArrayOrDictionary | KeyType.Optional)]
             public const string OpenAction = "/OpenAction";
 
-            /// <summary>
-            /// (Optional; PDF 1.4) An additional-actions dictionary defining the actions to be taken 
-            /// in response to various trigger events affecting the document as a whole.
-            /// </summary>
             [KeyInfo("1.4", KeyType.Dictionary | KeyType.Optional)]
             public const string AA = "/AA";
 
-            /// <summary>
-            /// (Optional; PDF 1.1) A URI dictionary containing document-level information for URI 
-            /// (uniform resource identifier) actions.
-            /// </summary>
             [KeyInfo("1.1", KeyType.Dictionary | KeyType.Optional)]
             public const string URI = "/URI";
-
-            /// <summary>
-            /// (Optional; PDF 1.2) The document’s interactive form (AcroForm) dictionary.
-            /// </summary>
-            [KeyInfo("1.2", KeyType.Dictionary | KeyType.Optional, typeof(PdfAcroForm))]
-            public const string AcroForm = "/AcroForm";
 
             /// <summary>
             /// (Optional; PDF 1.4; must be an indirect reference) A metadata stream 
@@ -348,14 +272,14 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             public const string Metadata = "/Metadata";
 
             /// <summary>
-            /// (Optional; PDF 1.3) The document’s structure tree root dictionary.
+            /// (Optional; PDF 1.3) The documentï¿½s structure tree root dictionary.
             /// </summary>
             [KeyInfo("1.3", KeyType.Dictionary | KeyType.Optional)]
             public const string StructTreeRoot = "/StructTreeRoot";
 
             /// <summary>
             /// (Optional; PDF 1.4) A mark information dictionary containing information
-            /// about the document’s usage of Tagged PDF conventions.
+            /// about the documentï¿½s usage of Tagged PDF conventions.
             /// </summary>
             [KeyInfo("1.4", KeyType.Dictionary | KeyType.Optional)]
             public const string MarkInfo = "/MarkInfo";
@@ -389,7 +313,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             public const string PieceInfo = "/PieceInfo";
 
             /// <summary>
-            /// (Optional; PDF 1.5; required if a document contains optional content) The document’s 
+            /// (Optional; PDF 1.5; required if a document contains optional content) The documentï¿½s 
             /// optional content properties dictionary.
             /// </summary>
             [KeyInfo("1.5", KeyType.Dictionary | KeyType.Optional)]

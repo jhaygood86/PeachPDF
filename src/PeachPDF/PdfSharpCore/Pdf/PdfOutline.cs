@@ -30,7 +30,6 @@
 // Review: Under construction - StL/14-10-05
 
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Pdf.Actions;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF.PdfSharpCore.Pdf.Internal;
 using PeachPDF.PdfSharpCore.Pdf.IO;
@@ -348,9 +347,9 @@ namespace PeachPDF.PdfSharpCore.Pdf
             {
                 // The dictionary should be a GoTo action.
                 PdfDictionary action = a as PdfDictionary;
-                if (action != null && action.Elements.GetName(PdfAction.Keys.S) == "/GoTo")
+                if (action != null && action.Elements.GetName("/S") == "/GoTo")
                 {
-                    dest = action.Elements[PdfGoToAction.Keys.D];
+                    dest = action.Elements["/D"];
                     if (dest is PdfArray destArray)
                     {
                         // Replace Action with /Dest entry.
