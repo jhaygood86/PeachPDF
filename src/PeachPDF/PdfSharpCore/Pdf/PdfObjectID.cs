@@ -102,7 +102,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Indicates whether this instance and a specified object are equal.
         /// </summary>
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             if (obj is PdfObjectID)
             {
@@ -156,7 +156,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Compares the current object id with another object.
         /// </summary>
-        public int CompareTo(object obj)
+        public int CompareTo(object? obj)
         {
             if (obj is PdfObjectID)
             {

@@ -145,7 +145,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Determines whether this instance and the specified object are equal.
         /// </summary>
-        public override bool Equals(object o)
+        public override bool Equals(object? o)
         {
             if (!(o is XRect))
                 return false;
@@ -198,7 +198,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Converts this XRect to a human readable string.
         /// </summary>
-        public string ToString(IFormatProvider provider)
+        public string ToString(IFormatProvider? provider)
         {
             return ConvertToString(null, provider);
         }
@@ -206,12 +206,12 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Converts this XRect to a human readable string.
         /// </summary>
-        string IFormattable.ToString(string format, IFormatProvider provider)
+        string IFormattable.ToString(string? format, IFormatProvider? provider)
         {
             return ConvertToString(format, provider);
         }
 
-        internal string ConvertToString(string format, IFormatProvider provider)
+        internal string ConvertToString(string? format, IFormatProvider? provider)
         {
             if (IsEmpty)
                 return "Empty";

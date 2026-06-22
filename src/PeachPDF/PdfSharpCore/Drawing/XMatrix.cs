@@ -957,7 +957,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Determines whether this matrix is equal to the specified object.
         /// </summary>
-        public override bool Equals(object o)
+        public override bool Equals(object? o)
         {
             if (!(o is XMatrix))
                 return false;
@@ -1012,7 +1012,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Converts this XMatrix to a human readable string.
         /// </summary>
-        public string ToString(IFormatProvider provider)
+        public string ToString(IFormatProvider? provider)
         {
             return ConvertToString(null, provider);
         }
@@ -1020,12 +1020,12 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Converts this XMatrix to a human readable string.
         /// </summary>
-        string IFormattable.ToString(string format, IFormatProvider provider)
+        string IFormattable.ToString(string? format, IFormatProvider? provider)
         {
             return ConvertToString(format, provider);
         }
 
-        internal string ConvertToString(string format, IFormatProvider provider)
+        internal string ConvertToString(string? format, IFormatProvider? provider)
         {
             if (IsIdentity)
                 return "Identity";

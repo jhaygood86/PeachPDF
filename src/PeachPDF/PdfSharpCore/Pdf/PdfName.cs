@@ -65,7 +65,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Determines whether the specified object is equal to this name.
         /// </summary>
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             return _value.Equals(obj);
         }
@@ -150,7 +150,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
             /// </summary>
             /// <param name="l">The first object to compare.</param>
             /// <param name="r">The second object to compare.</param>
-            public int Compare(PdfName l, PdfName r)
+            public int Compare(PdfName? l, PdfName? r)
             {
 
                 if (l != null)

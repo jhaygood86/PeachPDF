@@ -237,7 +237,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// Determines whether the specified object is a Color structure and is equivalent to this 
         /// Color structure.
         /// </summary>
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             // ReSharper disable CompareOfFloatsByEqualityOperator
             if (obj is XColor)

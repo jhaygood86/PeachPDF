@@ -98,7 +98,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             }
             string _path;
 
-            public override bool Equals(object obj)
+            public override bool Equals(object? obj)
             {
                 ImageSelector selector = obj as ImageSelector;
                 if (selector == null)

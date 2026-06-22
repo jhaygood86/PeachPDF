@@ -69,7 +69,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
             return false;
         }
 
-        public override bool Equals(object o)
+        public override bool Equals(object? o)
         {
             if (!(o is XVector))
                 return false;
@@ -116,17 +116,17 @@ namespace PeachPDF.PdfSharpCore.Drawing
             return ConvertToString(null, null);
         }
 
-        public string ToString(IFormatProvider provider)
+        public string ToString(IFormatProvider? provider)
         {
             return ConvertToString(null, provider);
         }
 
-        string IFormattable.ToString(string format, IFormatProvider provider)
+        string IFormattable.ToString(string? format, IFormatProvider? provider)
         {
             return ConvertToString(format, provider);
         }
 
-        internal string ConvertToString(string format, IFormatProvider provider)
+        internal string ConvertToString(string? format, IFormatProvider? provider)
         {
             const char numericListSeparator = ',';
             provider = provider ?? CultureInfo.InvariantCulture;

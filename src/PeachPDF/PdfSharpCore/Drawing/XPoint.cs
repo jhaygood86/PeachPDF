@@ -82,7 +82,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Indicates whether this instance and a specified object are equal.
         /// </summary>
-        public override bool Equals(object o)
+        public override bool Equals(object? o)
         {
             if (!(o is XPoint))
                 return false;
@@ -166,7 +166,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Converts this XPoint to a human readable string.
         /// </summary>
-        public string ToString(IFormatProvider provider)
+        public string ToString(IFormatProvider? provider)
         {
             return ConvertToString(null, provider);
         }
@@ -174,7 +174,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Converts this XPoint to a human readable string.
         /// </summary>
-        string IFormattable.ToString(string format, IFormatProvider provider)
+        string IFormattable.ToString(string? format, IFormatProvider? provider)
         {
             return ConvertToString(format, provider);
         }
@@ -182,7 +182,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Implements ToString.
         /// </summary>
-        internal string ConvertToString(string format, IFormatProvider provider)
+        internal string ConvertToString(string? format, IFormatProvider? provider)
         {
             char numericListSeparator = TokenizerHelper.GetNumericListSeparator(provider);
             provider = provider ?? CultureInfo.InvariantCulture;

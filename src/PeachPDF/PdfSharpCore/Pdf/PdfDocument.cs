@@ -867,7 +867,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
 
             public string ID;
 
-            public override bool Equals(object obj)
+            public override bool Equals(object? obj)
             {
                 DocumentHandle handle = obj as DocumentHandle;
                 if (!ReferenceEquals(handle, null))

@@ -188,7 +188,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             }
             string _path;
 
-            public override bool Equals(object obj)
+            public override bool Equals(object? obj)
             {
                 Selector selector = obj as Selector;
                 if (obj == null)

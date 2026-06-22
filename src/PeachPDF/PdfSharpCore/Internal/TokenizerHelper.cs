@@ -1,4 +1,4 @@
-﻿#region PDFsharp - A .NET library for processing PDF
+#region PDFsharp - A .NET library for processing PDF
 //
 // Authors:
 //   Microsoft
@@ -229,7 +229,7 @@ namespace PeachPDF.PdfSharpCore.Internal
             }
         }
 
-        public static char GetNumericListSeparator(IFormatProvider provider)
+        public static char GetNumericListSeparator(IFormatProvider? provider)
         {
             char numericSeparator = ',';
             NumberFormatInfo numberFormat = NumberFormatInfo.GetInstance(provider);

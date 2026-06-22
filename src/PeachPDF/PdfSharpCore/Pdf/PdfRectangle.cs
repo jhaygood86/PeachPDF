@@ -150,7 +150,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Tests whether the specified object is a PdfRectangle and has equal coordinates.
         /// </summary>
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             // ReSharper disable CompareOfFloatsByEqualityOperator
             PdfRectangle rectangle = obj as PdfRectangle;

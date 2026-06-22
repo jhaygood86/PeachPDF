@@ -124,7 +124,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Determines whether the specified <see cref="T:System.Object"/> is equal to the current <see cref="T:System.Object"/>.
         /// </summary>
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             return (obj is XFontWeight) && this == ((XFontWeight)obj);
         }
@@ -145,12 +145,12 @@ namespace PeachPDF.PdfSharpCore.Drawing
             return ConvertToString(null, null);
         }
 
-        string IFormattable.ToString(string format, IFormatProvider provider)
+        string IFormattable.ToString(string? format, IFormatProvider? provider)
         {
             return ConvertToString(format, provider);
         }
 
-        internal string ConvertToString(string format, IFormatProvider provider)
+        internal string ConvertToString(string? format, IFormatProvider? provider)
         {
             provider = provider ?? CultureInfo.InvariantCulture;
             string str;

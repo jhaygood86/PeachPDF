@@ -88,7 +88,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Converts the value of this instance to an equivalent 64-bit unsigned integer.
         /// </summary>
-        public ulong ToUInt64(IFormatProvider provider)
+        public ulong ToUInt64(IFormatProvider? provider)
         {
             return Convert.ToUInt64(_value);
         }
@@ -96,7 +96,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Converts the value of this instance to an equivalent 8-bit signed integer.
         /// </summary>
-        public sbyte ToSByte(IFormatProvider provider)
+        public sbyte ToSByte(IFormatProvider? provider)
         {
             throw new InvalidCastException();
         }
@@ -104,7 +104,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Converts the value of this instance to an equivalent double-precision floating-point number.
         /// </summary>
-        public double ToDouble(IFormatProvider provider)
+        public double ToDouble(IFormatProvider? provider)
         {
             return _value;
         }
@@ -112,7 +112,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Returns an undefined DateTime structure.
         /// </summary>
-        public DateTime ToDateTime(IFormatProvider provider)
+        public DateTime ToDateTime(IFormatProvider? provider)
         {
             // TODO:  Add PdfUInteger.ToDateTime implementation
             return new DateTime();
@@ -121,7 +121,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Converts the value of this instance to an equivalent single-precision floating-point number.
         /// </summary>
-        public float ToSingle(IFormatProvider provider)
+        public float ToSingle(IFormatProvider? provider)
         {
             return _value;
         }
@@ -129,7 +129,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Converts the value of this instance to an equivalent Boolean value.
         /// </summary>
-        public bool ToBoolean(IFormatProvider provider)
+        public bool ToBoolean(IFormatProvider? provider)
         {
             return Convert.ToBoolean(_value);
         }
@@ -137,7 +137,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Converts the value of this instance to an equivalent 32-bit signed integer.
         /// </summary>
-        public int ToInt32(IFormatProvider provider)
+        public int ToInt32(IFormatProvider? provider)
         {
             return Convert.ToInt32(_value);
         }
@@ -145,7 +145,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Converts the value of this instance to an equivalent 16-bit unsigned integer.
         /// </summary>
-        public ushort ToUInt16(IFormatProvider provider)
+        public ushort ToUInt16(IFormatProvider? provider)
         {
             return Convert.ToUInt16(_value);
         }
@@ -153,7 +153,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Converts the value of this instance to an equivalent 16-bit signed integer.
         /// </summary>
-        public short ToInt16(IFormatProvider provider)
+        public short ToInt16(IFormatProvider? provider)
         {
             return Convert.ToInt16(_value);
         }
@@ -161,7 +161,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Converts the value of this instance to an equivalent <see cref="T:System.String"></see>.
         /// </summary>
-        string IConvertible.ToString(IFormatProvider provider)
+        string IConvertible.ToString(IFormatProvider? provider)
         {
             return _value.ToString(provider);
         }
@@ -169,7 +169,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Converts the value of this instance to an equivalent 8-bit unsigned integer.
         /// </summary>
-        public byte ToByte(IFormatProvider provider)
+        public byte ToByte(IFormatProvider? provider)
         {
             return Convert.ToByte(_value);
         }
@@ -177,7 +177,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Converts the value of this instance to an equivalent Unicode character.
         /// </summary>
-        public char ToChar(IFormatProvider provider)
+        public char ToChar(IFormatProvider? provider)
         {
             return Convert.ToChar(_value);
         }
@@ -185,7 +185,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Converts the value of this instance to an equivalent 64-bit signed integer.
         /// </summary>
-        public long ToInt64(IFormatProvider provider)
+        public long ToInt64(IFormatProvider? provider)
         {
             return _value;
         }
@@ -201,7 +201,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Converts the value of this instance to an equivalent <see cref="T:System.Decimal"></see> number.
         /// </summary>
-        public decimal ToDecimal(IFormatProvider provider)
+        public decimal ToDecimal(IFormatProvider? provider)
         {
             return _value;
         }
@@ -209,7 +209,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Returns null.
         /// </summary>
-        public object ToType(Type conversionType, IFormatProvider provider)
+        public object ToType(Type conversionType, IFormatProvider? provider)
         {
             // TODO:  Add PdfUInteger.ToType implementation
             return null;
@@ -218,7 +218,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Converts the value of this instance to an equivalent 32-bit unsigned integer.
         /// </summary>
-        public uint ToUInt32(IFormatProvider provider)
+        public uint ToUInt32(IFormatProvider? provider)
         {
             return Convert.ToUInt32(_value);
         }

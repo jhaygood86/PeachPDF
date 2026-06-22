@@ -156,7 +156,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
             return (int)((Key >> 32) ^ Key);
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             XFontSource fontSource = obj as XFontSource;
             if (fontSource == null)

@@ -86,7 +86,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Indicates whether this instance and a specified object are equal.
         /// </summary>
-        public override bool Equals(object o)
+        public override bool Equals(object? o)
         {
             if (!(o is XSize))
                 return false;
@@ -155,7 +155,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Converts this XSize to a human readable string.
         /// </summary>
-        public string ToString(IFormatProvider provider)
+        public string ToString(IFormatProvider? provider)
         {
             return ConvertToString(null, provider);
         }
@@ -163,12 +163,12 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Converts this XSize to a human readable string.
         /// </summary>
-        string IFormattable.ToString(string format, IFormatProvider provider)
+        string IFormattable.ToString(string? format, IFormatProvider? provider)
         {
             return ConvertToString(format, provider);
         }
 
-        internal string ConvertToString(string format, IFormatProvider provider)
+        internal string ConvertToString(string? format, IFormatProvider? provider)
         {
             if (IsEmpty)
                 return "Empty";

@@ -279,7 +279,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// Returns the object as string using the specified format and format information.
         /// The unit of measure is appended to the end of the string.
         /// </summary>
-        string IFormattable.ToString(string format, IFormatProvider formatProvider)
+        string IFormattable.ToString(string? format, IFormatProvider? formatProvider)
         {
             string valuestring = _value.ToString(format, formatProvider) + GetSuffix();
             return valuestring;
@@ -501,7 +501,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Calls base class Equals.
         /// </summary>
-        public override bool Equals(Object obj)
+        public override bool Equals(object? obj)
         {
             if (obj is XUnit)
                 return this == (XUnit)obj;

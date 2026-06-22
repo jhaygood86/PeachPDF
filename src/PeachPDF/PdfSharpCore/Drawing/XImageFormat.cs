@@ -49,7 +49,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Determines whether the specified object is equal to the current object.
         /// </summary>
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             XImageFormat format = obj as XImageFormat;
             if (format == null)

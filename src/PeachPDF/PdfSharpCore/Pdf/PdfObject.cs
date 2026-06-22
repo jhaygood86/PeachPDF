@@ -98,7 +98,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Determines whether the specified object is equal to the current PdfObject.
         /// </summary>
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             if (obj is PdfObject)
             {

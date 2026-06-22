@@ -219,7 +219,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// </summary>
         internal class PdfReferenceComparer : IComparer<PdfReference>
         {
-            public int Compare(PdfReference x, PdfReference y)
+            public int Compare(PdfReference? x, PdfReference? y)
             {
                 PdfReference l = x;
                 PdfReference r = y;
