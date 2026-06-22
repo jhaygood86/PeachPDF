@@ -29,6 +29,7 @@
 
 using PeachPDF.PdfSharpCore.Drawing;
 using System;
+using PeachPDF;
 
 namespace PeachPDF.PdfSharpCore
 {
@@ -68,47 +69,47 @@ namespace PeachPDF.PdfSharpCore
                 PageSize.B4 => new XSize(709, 1001),
                 PageSize.B5 => new XSize(499, 709),
                 // The non-ISO sizes ...
-                PageSize.Quarto => // 8 x 10 inch²
+                PageSize.Quarto => // 8 x 10 inchï¿½
                     new XSize(576, 720),
-                PageSize.Foolscap => // 8 x 13 inch²
+                PageSize.Foolscap => // 8 x 13 inchï¿½
                     new XSize(576, 936),
-                PageSize.Executive => // 7.5 x 10 inch²
+                PageSize.Executive => // 7.5 x 10 inchï¿½
                     new XSize(540, 720),
-                PageSize.GovernmentLetter => // 8 x 10.5 inch²
+                PageSize.GovernmentLetter => // 8 x 10.5 inchï¿½
                     new XSize(576, 756),
-                PageSize.Letter => // 8.5 x 11 inch²
+                PageSize.Letter => // 8.5 x 11 inchï¿½
                     new XSize(612, 792),
-                PageSize.Legal => // 8.5 x 14 inch²
+                PageSize.Legal => // 8.5 x 14 inchï¿½
                     new XSize(612, 1008),
-                PageSize.Ledger => // 17 x 11 inch²
+                PageSize.Ledger => // 17 x 11 inchï¿½
                     new XSize(1224, 792),
-                PageSize.Tabloid => // 11 x 17 inch²
+                PageSize.Tabloid => // 11 x 17 inchï¿½
                     new XSize(792, 1224),
-                PageSize.Post => // 15.5 x 19.25 inch²
+                PageSize.Post => // 15.5 x 19.25 inchï¿½
                     new XSize(1126, 1386),
-                PageSize.Crown => // 20 x 15 inch²
+                PageSize.Crown => // 20 x 15 inchï¿½
                     new XSize(1440, 1080),
-                PageSize.LargePost => // 16.5 x 21 inch²
+                PageSize.LargePost => // 16.5 x 21 inchï¿½
                     new XSize(1188, 1512),
-                PageSize.Demy => // 17.5 x 22 inch²
+                PageSize.Demy => // 17.5 x 22 inchï¿½
                     new XSize(1260, 1584),
-                PageSize.Medium => // 18 x 23 inch²
+                PageSize.Medium => // 18 x 23 inchï¿½
                     new XSize(1296, 1656),
-                PageSize.Royal => // 20 x 25 inch²
+                PageSize.Royal => // 20 x 25 inchï¿½
                     new XSize(1440, 1800),
-                PageSize.Elephant => // 23 x 28 inch²
+                PageSize.Elephant => // 23 x 28 inchï¿½
                     new XSize(1565, 2016),
-                PageSize.DoubleDemy => // 23.5 x 35 inch²
+                PageSize.DoubleDemy => // 23.5 x 35 inchï¿½
                     new XSize(1692, 2520),
-                PageSize.QuadDemy => // 35 x 45 inch²
+                PageSize.QuadDemy => // 35 x 45 inchï¿½
                     new XSize(2520, 3240),
-                PageSize.STMT => // 5.5 x 8.5 inch²
+                PageSize.STMT => // 5.5 x 8.5 inchï¿½
                     new XSize(396, 612),
-                PageSize.Folio => // 8.5 x 13 inch²
+                PageSize.Folio => // 8.5 x 13 inchï¿½
                     new XSize(612, 936),
-                PageSize.Statement => // 5.5 x 8.5 inch²
+                PageSize.Statement => // 5.5 x 8.5 inchï¿½
                     new XSize(396, 612),
-                PageSize.Size10x14 => // 10 x 14 inch²
+                PageSize.Size10x14 => // 10 x 14 inchï¿½
                     new XSize(720, 1008),
                 _ => throw new ArgumentException("Invalid PageSize.", "value")
             };

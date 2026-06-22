@@ -1,33 +1,4 @@
-#region PDFsharp - A .NET library for processing PDF
-//
-// Authors:
-//   Stefan Lange
-//
-// Copyright (c) 2005-2016 empira Software GmbH, Cologne Area (Germany)
-//
-// http://www.PeachPDF.PdfSharpCore.com
-// http://sourceforge.net/projects/pdfsharp
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the "Software"),
-// to deal in the Software without restriction, including without limitation
-// the rights to use, copy, modify, merge, publish, distribute, sublicense,
-// and/or sell copies of the Software, and to permit persons to whom the
-// Software is furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included
-// in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
-// DEALINGS IN THE SOFTWARE.
-#endregion
-
-namespace PeachPDF.PdfSharpCore
+namespace PeachPDF
 {
     /// <summary>
     /// Identifies the most popular predefined page sizes.
@@ -137,39 +108,7 @@ namespace PeachPDF.PdfSharpCore
         /// </summary>
         A6 = 19,
 
-#if true_
-        /// <summary>
-        /// Identifies a paper sheet size of 917 mm times 1297 mm or 36.00 inch times 51.20 inch.
-        /// </summary>
-        C0 = 19,
-
-        /// <summary>
-        /// Identifies a paper sheet size of 648 mm times 917 mm or 25.60 inch times 36.00 inch.
-        /// </summary>
-        C1 = 20,
-
-        /// <summary>
-        /// Identifies a paper sheet size of 458 mm times 648 mm or 18.00 inch times 25.60 inch.
-        /// </summary>
-        C2 = 21,
-
-        /// <summary>
-        /// Identifies a paper sheet size of 324 mm times 458 mm or 12.80 inch times 18.00 inch.
-        /// </summary>
-        C3 = 22,
-
-        /// <summary>
-        /// Identifies a paper sheet size of 229 mm times 324 mm or 9.00 inch times 12.80 inch.
-        /// </summary>
-        C4 = 23,
-
-        /// <summary>
-        /// Identifies a paper sheet size of 162 mm times 229 mm or 6.40 inch times 9.0 inch.
-        /// </summary>
-        C5 = 24,
-#endif
-
-        // Current U.S. loose paper sizes 
+        // Current U.S. loose paper sizes
         // see http://www.reference.com/browse/wiki/Paper_size
 
         /// <summary>
@@ -218,7 +157,7 @@ namespace PeachPDF.PdfSharpCore
         Post = 108,
 
         /// <summary>
-        /// 20 ×Identifies a paper sheet size of 20 inch times 15 inch or 508 mm times 381 mm.
+        /// Identifies a paper sheet size of 20 inch times 15 inch or 508 mm times 381 mm.
         /// </summary>
         Crown = 109,
 
@@ -276,11 +215,5 @@ namespace PeachPDF.PdfSharpCore
         /// Identifies a paper sheet size of 10 inch times 14 inch.
         /// </summary>
         Size10x14 = 122,
-
-        //A 11 × 8.5 279 × 216
-        //B 17 × 11 432 × 279
-        //C 22 × 17 559 × 432
-        //D 34 × 22 864 × 559
-        //E 44 × 34 1118 × 864
     }
 }

@@ -66,9 +66,10 @@ namespace PeachPDF
         /// <param name="stylesheet">the stylesheet source to parse</param>
         /// <param name="combineWithDefault">true - combine the parsed css data with default css data, false - return only the parsed css data</param>
         /// <returns>the parsed css data</returns>
-        public async Task<CssData> ParseStyleSheet(string stylesheet, bool combineWithDefault = true)
+        public async Task<PeachPdfCssContent> ParseStyleSheet(string stylesheet, bool combineWithDefault = true)
         {
-            return await CssData.Parse(_pdfSharpAdapter, stylesheet, combineWithDefault);
+            var cssData = await CssData.Parse(_pdfSharpAdapter, stylesheet, combineWithDefault);
+            return new PeachPdfCssContent(cssData);
         }
 
         /// <summary>
@@ -79,7 +80,7 @@ namespace PeachPDF
         /// <param name="margin">the margin to use between the HTML and the edges of each page</param>
         /// <param name="cssData">optional: the style to use for html rendering (default - use W3 default style)</param>
         /// <returns>the generated image of the html</returns>
-        public async Task<PdfDocument> GeneratePdf(string html, PageSize pageSize, int margin = 20, CssData? cssData = null)
+        public async Task<PeachPdfDocument> GeneratePdf(string html, PageSize pageSize, int margin = 20, PeachPdfCssContent? cssData = null)
         {
             var config = new PdfGenerateConfig
             {
@@ -98,10 +99,10 @@ namespace PeachPDF
         /// <param name="config">the configuration to use for the PDF generation (page size/page orientation/margins/etc.)</param>
         /// <param name="cssData">optional: the style to use for html rendering (default - use W3 default style)</param>
         /// <returns>the generated image of the html</returns>
-        public async Task<PdfDocument> GeneratePdf(string? html, PdfGenerateConfig config, CssData? cssData = null)
+        public async Task<PeachPdfDocument> GeneratePdf(string? html, PdfGenerateConfig config, PeachPdfCssContent? cssData = null)
         {
             // create PDF document to render the HTML into
-            var document = new PdfDocument();
+            var document = new PeachPdfDocument(new PdfDocument());
 
             // add rendered PDF pages to document
             await AddPdfPages(document, html, config, cssData);
@@ -118,7 +119,7 @@ namespace PeachPDF
         /// <param name="margin">the margin to use between the HTML and the edges of each page</param>
         /// <param name="cssData">optional: the style to use for html rendering (default - use W3 default style)</param>
         /// <returns>the generated image of the html</returns>
-        public async Task AddPdfPages(PdfDocument document, string html, PageSize pageSize, int margin = 20, CssData? cssData = null)
+        public async Task AddPdfPages(PeachPdfDocument document, string html, PageSize pageSize, int margin = 20, PeachPdfCssContent? cssData = null)
         {
             var config = new PdfGenerateConfig
             {
@@ -138,7 +139,7 @@ namespace PeachPDF
         /// <param name="config">the configuration to use for the PDF generation (page size/page orientation/margins/etc.)</param>
         /// <param name="cssData">optional: the style to use for html rendering (default - use W3 default style)</param>
         /// <returns>the generated image of the html</returns>
-        public async Task AddPdfPages(PdfDocument document, string? html, PdfGenerateConfig config, CssData? cssData = null)
+        public async Task AddPdfPages(PeachPdfDocument document, string? html, PdfGenerateConfig config, PeachPdfCssContent? cssData = null)
         {
             // get the size of each page to layout the HTML in
             var orgPageSize = config.PageSize != PageSize.Undefined ? PageSizeConverter.ToSize(config.PageSize) : config.ManualPageSize;
@@ -200,7 +201,7 @@ namespace PeachPDF
             double scrollOffset = 0;
             while (scrollOffset > -container.ActualSize.Height)
             {
-                var page = document.AddPage();
+                var page = document.PdfDocument.AddPage();
                 page.Height = orgPageSize.Height;
                 page.Width = orgPageSize.Width;
 
@@ -213,28 +214,27 @@ namespace PeachPDF
             }
 
             // add web links and anchors
-            HandleLinks(document, container, orgPageSize, container.PageSize);
+            HandleLinks(document.PdfDocument, container, orgPageSize, container.PageSize);
 
             measure?.Dispose();
         }
 
-        private static async Task SetContent(HtmlContainer container, PdfGenerateConfig config, string html, CssData? cssData, XSize orgPageSize)
+        #region Private/Protected methods
+
+        private static async Task SetContent(HtmlContainer container, PdfGenerateConfig config, string html, PeachPdfCssContent? cssData, XSize orgPageSize)
         {
             container.MarginBottom = config.MarginBottom;
             container.MarginLeft = config.MarginLeft;
             container.MarginRight = config.MarginRight;
             container.MarginTop = config.MarginTop;
 
-            await container.SetHtml(html, cssData);
+            await container.SetHtml(html, cssData?.CssData);
 
             // Just in case @page rules got applied
             var pageSize = new XSize(orgPageSize.Width - container.MarginLeft - container.MarginRight, orgPageSize.Height - container.MarginTop - container.MarginBottom);
             container.PageSize = pageSize;
             container.Location = new XPoint(container.MarginLeft, container.MarginTop);
         }
-
-
-        #region Private/Protected methods
 
         /// <summary>
         /// Handle HTML links by create PDF Documents link either to external URL or to another page in the document.

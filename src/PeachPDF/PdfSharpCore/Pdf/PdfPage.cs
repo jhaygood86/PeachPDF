@@ -29,6 +29,7 @@
 
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using PeachPDF;
 using PeachPDF.PdfSharpCore.Pdf.Annotations;
 using PeachPDF.PdfSharpCore.Pdf.IO;
 using System;
@@ -437,7 +438,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// Adds an internal document link.
         /// </summary>
         /// <param name="rect">The link area in default page coordinates.</param>
-        /// <param name="destinationName">The Named Destination’s name.</param>
+        /// <param name="destinationName">The Named Destinationï¿½s name.</param>
         public PdfLinkAnnotation AddDocumentLink(PdfRectangle rect, string destinationName)
         {
             var annotation = PdfLinkAnnotation.CreateDocumentLink(rect, destinationName);
@@ -771,7 +772,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
 
             /// <summary>
             /// (Required if PieceInfo is present; optional otherwise; PDF 1.3) The date and time
-            /// when the page’s contents were most recently modified. If a page-piece dictionary
+            /// when the pageï¿½s contents were most recently modified. If a page-piece dictionary
             /// (PieceInfo) is present, the modification date is used to ascertain which of the 
             /// application data dictionaries that it contains correspond to the current content
             /// of the page.
@@ -797,8 +798,8 @@ namespace PeachPDF.PdfSharpCore.Pdf
 
             /// <summary>
             /// (Optional; PDF 1.3) A rectangle, expressed in default user space units, defining the
-            /// extent of the page’s meaningful content (including potential white space) as intended
-            /// by the page’s creator. Default value: the value of CropBox.
+            /// extent of the pageï¿½s meaningful content (including potential white space) as intended
+            /// by the pageï¿½s creator. Default value: the value of CropBox.
             /// </summary>
             [KeyInfo("1.3", KeyType.Rectangle | KeyType.Optional)]
             public const string ArtBox = "/ArtBox";
@@ -819,21 +820,21 @@ namespace PeachPDF.PdfSharpCore.Pdf
             /// in order, to form a single stream. This allows PDF producers to create image objects and
             /// other resources as they occur, even though they interrupt the content stream. The division
             /// between streams may occur only at the boundaries between lexical tokens but is unrelated
-            /// to the page’s logical content or organization. Applications that consume or produce PDF 
+            /// to the pageï¿½s logical content or organization. Applications that consume or produce PDF 
             /// files are not required to preserve the existing structure of the Contents array.
             /// </summary>
             [KeyInfo(KeyType.Array | KeyType.Stream | KeyType.Optional)]
             public const string Contents = "/Contents";
 
             /// <summary>
-            /// (Optional; PDF 1.4) A group attributes dictionary specifying the attributes of the page’s 
+            /// (Optional; PDF 1.4) A group attributes dictionary specifying the attributes of the pageï¿½s 
             /// page group for use in the transparent imaging model.
             /// </summary>
             [KeyInfo("1.4", KeyType.Dictionary | KeyType.Optional)]
             public const string Group = "/Group";
 
             /// <summary>
-            /// (Optional) A stream object defining the page’s thumbnail image.
+            /// (Optional) A stream object defining the pageï¿½s thumbnail image.
             /// </summary>
             [KeyInfo(KeyType.Stream | KeyType.Optional)]
             public const string Thumb = "/Thumb";
@@ -847,7 +848,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
             public const string B = "/B";
 
             /// <summary>
-            /// (Optional; PDF 1.1) The page’s display duration (also called its advance timing): the 
+            /// (Optional; PDF 1.1) The pageï¿½s display duration (also called its advance timing): the 
             /// maximum length of time, in seconds, that the page is displayed during presentations before
             /// the viewer application automatically advances to the next page. By default, the viewer does 
             /// not advance automatically.
@@ -890,20 +891,20 @@ namespace PeachPDF.PdfSharpCore.Pdf
 
             /// <summary>
             /// (Required if the page contains structural content items; PDF 1.3)
-            /// The integer key of the page’s entry in the structural parent tree.
+            /// The integer key of the pageï¿½s entry in the structural parent tree.
             /// </summary>
             [KeyInfo(KeyType.Integer | KeyType.Optional)]
             public const string StructParents = "/StructParents";
 
             /// <summary>
             /// (Optional; PDF 1.3; indirect reference preferred) The digital identifier of
-            /// the page’s parent Web Capture content set.
+            /// the pageï¿½s parent Web Capture content set.
             /// </summary>
             [KeyInfo("1.3", KeyType.String | KeyType.Optional)]
             public const string ID = "/ID";
 
             /// <summary>
-            /// (Optional; PDF 1.3) The page’s preferred zoom (magnification) factor: the factor 
+            /// (Optional; PDF 1.3) The pageï¿½s preferred zoom (magnification) factor: the factor 
             /// by which it should be scaled to achieve the natural display magnification.
             /// </summary>
             [KeyInfo("1.3", KeyType.Real | KeyType.Optional)]

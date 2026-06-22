@@ -25,9 +25,7 @@
 		<PackageReference Include="StbImageWriteSharp" Version="1.16.7" />
 	</ItemGroup>
 	<ItemGroup>
-		<None Remove="PdfSharpCore\Resources\Messages.de.restext" />
 		<None Remove="PdfSharpCore\Resources\Messages.restext" />
-		<EmbeddedResource Include="PdfSharpCore\Resources\Messages.de.restext" />
 		<EmbeddedResource Include="PdfSharpCore\Resources\Messages.restext" />
 	</ItemGroup>
 	<ItemGroup>

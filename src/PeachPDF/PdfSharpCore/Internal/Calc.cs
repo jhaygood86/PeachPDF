@@ -28,6 +28,7 @@
 #endregion
 
 using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF;
 using System;
 
 namespace PeachPDF.PdfSharpCore.Internal
