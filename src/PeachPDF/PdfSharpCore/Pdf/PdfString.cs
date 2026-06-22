@@ -254,8 +254,8 @@ namespace PeachPDF.PdfSharpCore.Pdf
 #if true
             PdfStringEncoding encoding = (PdfStringEncoding)(_flags & PdfStringFlags.EncodingMask);
             string pdf = (_flags & PdfStringFlags.HexLiteral) == 0 ?
-                PdfEncoders.ToStringLiteral(_value, encoding, null) :
-                PdfEncoders.ToHexStringLiteral(_value, encoding, null);
+                PdfEncoders.ToStringLiteral(_value, encoding) :
+                PdfEncoders.ToHexStringLiteral(_value, encoding);
             return pdf;
 #else
             return _value;

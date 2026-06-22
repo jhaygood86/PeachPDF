@@ -488,13 +488,13 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 s = sb.ToString();
 
                 byte[] bytes = PdfEncoders.RawUnicodeEncoding.GetBytes(s);
-                bytes = PdfEncoders.FormatStringLiteral(bytes, true, false, true, null);
+                bytes = PdfEncoders.FormatStringLiteral(bytes, true, false, true);
                 text = PdfEncoders.RawEncoding.GetString(bytes, 0, bytes.Length);
             }
             else
             {
                 byte[] bytes = PdfEncoders.WinAnsiEncoding.GetBytes(s);
-                text = PdfEncoders.ToStringLiteral(bytes, false, null);
+                text = PdfEncoders.ToStringLiteral(bytes, false);
             }
 
             // Map absolute position to PDF world space.

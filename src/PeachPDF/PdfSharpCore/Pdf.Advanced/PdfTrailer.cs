@@ -29,7 +29,6 @@
 
 using PeachPDF.PdfSharpCore.Pdf.Internal;
 using PeachPDF.PdfSharpCore.Pdf.IO;
-using PeachPDF.PdfSharpCore.Pdf.Security;
 using System;
 using System.Diagnostics;
 
@@ -147,31 +146,12 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             return array;
         }
 
-        /// <summary>
-        /// Gets the standard security handler.
-        /// </summary>
-        public PdfStandardSecurityHandler SecurityHandler
-        {
-            get
-            {
-                if (_securityHandler == null)
-                    _securityHandler = (PdfStandardSecurityHandler)Elements.GetValue(Keys.Encrypt, VCF.CreateIndirect);
-                return _securityHandler;
-            }
-        }
-        internal PdfStandardSecurityHandler _securityHandler;
-
         internal override void WriteObject(PdfWriter writer)
         {
             // Delete /XRefStm entry, if any.
-            // HACK: 
             _elements.Remove(Keys.XRefStm);
 
-            // Don't encrypt myself
-            PdfStandardSecurityHandler securityHandler = writer.SecurityHandler;
-            writer.SecurityHandler = null;
             base.WriteObject(writer);
-            writer.SecurityHandler = securityHandler;
         }
 
         /// <summary>
@@ -197,15 +177,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 _document._trailer.Elements[Keys.Info] = iref;
             }
 
-            // /Encrypt
-            iref = _document._trailer.Elements[Keys.Encrypt] as PdfReference;
-            if (iref != null)
-            {
-                _document._irefTable.Remove(_document._irefTable[iref.ObjectID]);
-                _document._irefTable.Add(_document._trailer._securityHandler);
-                _document._trailer.Elements[Keys.Encrypt] = _document._trailer._securityHandler;
-            }
-
             Elements.Remove(Keys.Prev);
 
             Debug.Assert(_document._irefTable.IsUnderConstruction == false);
@@ -218,7 +189,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         internal class Keys : KeysBase  // Reference: TABLE 3.13  Entries in the file trailer dictionary / Page 97
         {
             /// <summary>
-            /// (Required; must not be an indirect reference) The total number of entries in the file’s 
+            /// (Required; must not be an indirect reference) The total number of entries in the fileï¿½s 
             /// cross-reference table, as defined by the combination of the original section and all
             /// update sections. Equivalently, this value is 1 greater than the highest object number
             /// used in the file.
@@ -244,13 +215,13 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             public const string Root = "/Root";
 
             /// <summary>
-            /// (Required if document is encrypted; PDF 1.1) The document’s encryption dictionary.
+            /// (Required if document is encrypted; PDF 1.1) The documentï¿½s encryption dictionary.
             /// </summary>
-            [KeyInfo(KeyType.Dictionary | KeyType.Optional, typeof(PdfStandardSecurityHandler))]
+            [KeyInfo(KeyType.Dictionary | KeyType.Optional)]
             public const string Encrypt = "/Encrypt";
 
             /// <summary>
-            /// (Optional; must be an indirect reference) The document’s information dictionary.
+            /// (Optional; must be an indirect reference) The documentï¿½s information dictionary.
             /// </summary>
             [KeyInfo(KeyType.Dictionary | KeyType.Optional, typeof(PdfDocumentInformation))]
             public const string Info = "/Info";

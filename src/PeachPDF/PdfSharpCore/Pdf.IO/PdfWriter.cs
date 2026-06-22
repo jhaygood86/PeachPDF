@@ -29,7 +29,6 @@
 
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF.PdfSharpCore.Pdf.Internal;
-using PeachPDF.PdfSharpCore.Pdf.Security;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -44,11 +43,9 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
     /// </summary>
     internal class PdfWriter
     {
-        public PdfWriter(Stream pdfStream, PdfStandardSecurityHandler securityHandler)
+        public PdfWriter(Stream pdfStream)
         {
             _stream = pdfStream;
-            _securityHandler = securityHandler;
-            //System.Xml.XmlTextWriter
 #if DEBUG
             _layout = PdfWriterLayout.Verbose;
 #endif
@@ -198,8 +195,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
             WriteSeparator(CharCat.Delimiter);
             PdfStringEncoding encoding = (PdfStringEncoding)(value.Flags & PdfStringFlags.EncodingMask);
             string pdf = (value.Flags & PdfStringFlags.HexLiteral) == 0 ?
-                PdfEncoders.ToStringLiteral(value.EncryptionValue, encoding == PdfStringEncoding.Unicode, SecurityHandler) :
-                PdfEncoders.ToHexStringLiteral(value.EncryptionValue, encoding == PdfStringEncoding.Unicode, SecurityHandler);
+                PdfEncoders.ToStringLiteral(value.EncryptionValue, encoding == PdfStringEncoding.Unicode) :
+                PdfEncoders.ToHexStringLiteral(value.EncryptionValue, encoding == PdfStringEncoding.Unicode);
             WriteRaw(pdf);
 
             _lastCat = CharCat.Delimiter;
@@ -272,7 +269,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
                 bytes = PdfEncoders.DocEncoding.GetBytes(text);
             else
                 bytes = PdfEncoders.UnicodeEncoding.GetBytes(text);
-            bytes = PdfEncoders.FormatStringLiteral(bytes, unicode, true, false, _securityHandler);
+            bytes = PdfEncoders.FormatStringLiteral(bytes, unicode, true, false);
             Write(bytes);
             _lastCat = CharCat.Delimiter;
         }
@@ -282,7 +279,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
             WriteSeparator(CharCat.Delimiter);
             //WriteRaw(PdfEncoders.DocEncode(text, false));
             byte[] bytes = PdfEncoders.DocEncoding.GetBytes(text);
-            bytes = PdfEncoders.FormatStringLiteral(bytes, false, false, false, _securityHandler);
+            bytes = PdfEncoders.FormatStringLiteral(bytes, false, false, false);
             Write(bytes);
             _lastCat = CharCat.Delimiter;
         }
@@ -292,7 +289,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
             WriteSeparator(CharCat.Delimiter);
             //WriteRaw(PdfEncoders.DocEncodeHex(text));
             byte[] bytes = PdfEncoders.DocEncoding.GetBytes(text);
-            bytes = PdfEncoders.FormatStringLiteral(bytes, false, false, true, _securityHandler);
+            bytes = PdfEncoders.FormatStringLiteral(bytes, false, false, true);
             _stream.Write(bytes, 0, bytes.Length);
             _lastCat = CharCat.Delimiter;
         }
@@ -306,8 +303,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
             if (indirect)
             {
                 WriteObjectAddress(obj);
-                if (_securityHandler != null)
-                    _securityHandler.SetHashKey(obj.ObjectID);
             }
             _stack.Add(new StackItem(obj));
             if (indirect)
@@ -411,11 +406,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
                 byte[] bytes = value.Stream.Value;
                 if (bytes.Length != 0)
                 {
-                    if (_securityHandler != null)
-                    {
-                        bytes = (byte[])bytes.Clone();
-                        bytes = _securityHandler.EncryptBytes(bytes);
-                    }
                     Write(bytes);
                     if (_lastCat != CharCat.NewLine)
                         WriteRaw('\n');
@@ -622,13 +612,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
             get { return _stream; }
         }
         Stream _stream;
-
-        internal PdfStandardSecurityHandler SecurityHandler
-        {
-            get { return _securityHandler; }
-            set { _securityHandler = value; }
-        }
-        PdfStandardSecurityHandler _securityHandler;
 
         class StackItem
         {

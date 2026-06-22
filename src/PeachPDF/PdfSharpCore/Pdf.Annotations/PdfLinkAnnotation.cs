@@ -172,17 +172,13 @@ namespace PeachPDF.PdfSharpCore.Pdf.Annotations
                     break;
 
                 case LinkType.Web:
-                    //pdf.AppendFormat("/A<</S/URI/URI{0}>>\n", PdfEncoders.EncodeAsLiteral(url));
-                    Elements[PdfAnnotation.Keys.A] = new PdfLiteral("<</S/URI/URI{0}>>", //PdfEncoders.EncodeAsLiteral(url));
-                        PdfEncoders.ToStringLiteral(_url, PdfStringEncoding.WinAnsiEncoding, writer.SecurityHandler));
+                    Elements[PdfAnnotation.Keys.A] = new PdfLiteral("<</S/URI/URI{0}>>",
+                        PdfEncoders.ToStringLiteral(_url, PdfStringEncoding.WinAnsiEncoding));
                     break;
 
                 case LinkType.File:
-                    //pdf.AppendFormat("/A<</Type/Action/S/Launch/F<</Type/Filespec/F{0}>> >>\n", 
-                    //  PdfEncoders.EncodeAsLiteral(url));
                     Elements[PdfAnnotation.Keys.A] = new PdfLiteral("<</Type/Action/S/Launch/F<</Type/Filespec/F{0}>> >>",
-                        //PdfEncoders.EncodeAsLiteral(url));
-                        PdfEncoders.ToStringLiteral(_url, PdfStringEncoding.WinAnsiEncoding, writer.SecurityHandler));
+                        PdfEncoders.ToStringLiteral(_url, PdfStringEncoding.WinAnsiEncoding));
                     break;
             }
             base.WriteObject(writer);

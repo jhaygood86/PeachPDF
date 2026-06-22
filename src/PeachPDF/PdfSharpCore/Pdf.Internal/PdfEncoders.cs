@@ -28,7 +28,6 @@
 #endregion
 
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Pdf.Security;
 using System;
 using System.Diagnostics;
 using System.Globalization;
@@ -197,9 +196,9 @@ namespace PeachPDF.PdfSharpCore.Pdf.Internal
         //}
 
         /// <summary>
-        /// Converts a raw string into a raw string literal, possibly encrypted.
+        /// Converts a raw string into a raw string literal.
         /// </summary>
-        public static string ToStringLiteral(string text, PdfStringEncoding encoding, PdfStandardSecurityHandler securityHandler)
+        public static string ToStringLiteral(string text, PdfStringEncoding encoding)
         {
             if (String.IsNullOrEmpty(text))
                 return "()";
@@ -226,26 +225,26 @@ namespace PeachPDF.PdfSharpCore.Pdf.Internal
                 default:
                     throw new NotImplementedException(encoding.ToString());
             }
-            byte[] temp = FormatStringLiteral(bytes, encoding == PdfStringEncoding.Unicode, true, false, securityHandler);
+            byte[] temp = FormatStringLiteral(bytes, encoding == PdfStringEncoding.Unicode, true, false);
             return RawEncoding.GetString(temp, 0, temp.Length);
         }
 
         /// <summary>
-        /// Converts a raw string into a raw string literal, possibly encrypted.
+        /// Converts a raw string into a raw string literal.
         /// </summary>
-        public static string ToStringLiteral(byte[] bytes, bool unicode, PdfStandardSecurityHandler securityHandler)
+        public static string ToStringLiteral(byte[] bytes, bool unicode)
         {
             if (bytes == null || bytes.Length == 0)
                 return "()";
 
-            byte[] temp = FormatStringLiteral(bytes, unicode, true, false, securityHandler);
+            byte[] temp = FormatStringLiteral(bytes, unicode, true, false);
             return RawEncoding.GetString(temp, 0, temp.Length);
         }
 
         /// <summary>
-        /// Converts a raw string into a raw hexadecimal string literal, possibly encrypted.
+        /// Converts a raw string into a raw hexadecimal string literal.
         /// </summary>
-        public static string ToHexStringLiteral(string text, PdfStringEncoding encoding, PdfStandardSecurityHandler securityHandler)
+        public static string ToHexStringLiteral(string text, PdfStringEncoding encoding)
         {
             if (String.IsNullOrEmpty(text))
                 return "<>";
@@ -266,7 +265,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Internal
                     break;
 
                 case PdfStringEncoding.Unicode:
-                    //bytes = UnicodeEncoding.GetBytes(text);
                     bytes = RawUnicodeEncoding.GetBytes(text);
                     break;
 
@@ -274,19 +272,19 @@ namespace PeachPDF.PdfSharpCore.Pdf.Internal
                     throw new NotImplementedException(encoding.ToString());
             }
 
-            byte[] agTemp = FormatStringLiteral(bytes, encoding == PdfStringEncoding.Unicode, true, true, securityHandler);
+            byte[] agTemp = FormatStringLiteral(bytes, encoding == PdfStringEncoding.Unicode, true, true);
             return RawEncoding.GetString(agTemp, 0, agTemp.Length);
         }
 
         /// <summary>
-        /// Converts a raw string into a raw hexadecimal string literal, possibly encrypted.
+        /// Converts a raw string into a raw hexadecimal string literal.
         /// </summary>
-        public static string ToHexStringLiteral(byte[] bytes, bool unicode, PdfStandardSecurityHandler securityHandler)
+        public static string ToHexStringLiteral(byte[] bytes, bool unicode)
         {
             if (bytes == null || bytes.Length == 0)
                 return "<>";
 
-            byte[] agTemp = FormatStringLiteral(bytes, unicode, true, true, securityHandler);
+            byte[] agTemp = FormatStringLiteral(bytes, unicode, true, true);
             return RawEncoding.GetString(agTemp, 0, agTemp.Length);
         }
 
@@ -297,9 +295,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Internal
         /// <param name="unicode">Indicates whether one or two bytes are one character.</param>
         /// <param name="prefix">Indicates whether to use Unicode prefix.</param>
         /// <param name="hex">Indicates whether to create a hexadecimal string literal.</param>
-        /// <param name="securityHandler">Encrypts the bytes if specified.</param>
         /// <returns>The PDF bytes.</returns>
-        public static byte[] FormatStringLiteral(byte[] bytes, bool unicode, bool prefix, bool hex, PdfStandardSecurityHandler securityHandler)
+        public static byte[] FormatStringLiteral(byte[] bytes, bool unicode, bool prefix, bool hex)
         {
             if (bytes == null || bytes.Length == 0)
                 return hex ? new byte[] { (byte)'<', (byte)'>' } : new byte[] { (byte)'(', (byte)')' };
@@ -307,12 +304,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Internal
             Debug.Assert(!unicode || bytes.Length % 2 == 0, "Odd number of bytes in Unicode string.");
 
             bool encrypted = false;
-            if (securityHandler != null)
-            {
-                bytes = (byte[])bytes.Clone();
-                bytes = securityHandler.EncryptBytes(bytes);
-                encrypted = true;
-            }
 
             int count = bytes.Length;
             StringBuilder pdf = new StringBuilder();

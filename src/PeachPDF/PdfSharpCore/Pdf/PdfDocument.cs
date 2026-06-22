@@ -30,7 +30,6 @@
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF.PdfSharpCore.Pdf.Internal;
 using PeachPDF.PdfSharpCore.Pdf.IO;
-using PeachPDF.PdfSharpCore.Pdf.Security;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -204,12 +203,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
 
             if (_outStream != null)
             {
-                // Get security handler if document gets encrypted
-                PdfStandardSecurityHandler securityHandler = null;
-                if (SecuritySettings.DocumentSecurityLevel != PdfDocumentSecurityLevel.None)
-                    securityHandler = SecuritySettings.SecurityHandler;
-
-                PdfWriter writer = new PdfWriter(_outStream, securityHandler);
+                PdfWriter writer = new PdfWriter(_outStream);
                 try
                 {
                     DoSave(writer);
@@ -249,15 +243,10 @@ namespace PeachPDF.PdfSharpCore.Pdf
             if (!CanSave(ref message))
                 throw new PdfSharpException(message);
 
-            // Get security handler if document gets encrypted.
-            PdfStandardSecurityHandler securityHandler = null;
-            if (SecuritySettings.DocumentSecurityLevel != PdfDocumentSecurityLevel.None)
-                securityHandler = SecuritySettings.SecurityHandler;
-
             PdfWriter writer = null;
             try
             {
-                writer = new PdfWriter(stream, securityHandler);
+                writer = new PdfWriter(stream);
                 DoSave(writer);
             }
             finally
@@ -301,32 +290,12 @@ namespace PeachPDF.PdfSharpCore.Pdf
 
             try
             {
-                // HACK: Remove XRefTrailer
                 if (_trailer is PdfCrossReferenceStream)
-                {
-                    // HACK^2: Preserve the SecurityHandler.
-                    PdfStandardSecurityHandler securityHandler = _securitySettings.SecurityHandler;
                     _trailer = new PdfTrailer((PdfCrossReferenceStream)_trailer);
-                    _trailer._securityHandler = securityHandler;
-                }
 
-                bool encrypt = _securitySettings.DocumentSecurityLevel != PdfDocumentSecurityLevel.None;
-                if (encrypt)
-                {
-                    PdfStandardSecurityHandler securityHandler = _securitySettings.SecurityHandler;
-                    if (securityHandler.Reference == null)
-                        _irefTable.Add(securityHandler);
-                    else
-                        Debug.Assert(_irefTable.Contains(securityHandler.ObjectID));
-                    _trailer.Elements[PdfTrailer.Keys.Encrypt] = _securitySettings.SecurityHandler.Reference;
-                }
-                else
-                    _trailer.Elements.Remove(PdfTrailer.Keys.Encrypt);
+                _trailer.Elements.Remove(PdfTrailer.Keys.Encrypt);
 
                 PrepareForSave();
-
-                if (encrypt)
-                    _securitySettings.SecurityHandler.PrepareEncryption();
 
                 writer.WriteFileHeader(this);
                 PdfReference[] irefs = _irefTable.AllReferences;
@@ -414,9 +383,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// </summary>
         public bool CanSave(ref string message)
         {
-            if (!SecuritySettings.CanSave(ref message))
-                return false;
-
             return true;
         }
 
@@ -659,15 +625,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
         }
 
         /// <summary>
-        /// Gets the security settings of this document.
-        /// </summary>
-        public PdfSecuritySettings SecuritySettings
-        {
-            get { return _securitySettings ?? (_securitySettings = new PdfSecuritySettings(this)); }
-        }
-        internal PdfSecuritySettings _securitySettings;
-
-        /// <summary>
         /// Gets the document font table that holds all fonts used in the current document.
         /// </summary>
         internal PdfFontTable FontTable
@@ -852,14 +809,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
 
                 return sb.ToString();
             }
-        }
-
-        /// <summary>
-        /// Gets the security handler.
-        /// </summary>
-        public PdfStandardSecurityHandler SecurityHandler
-        {
-            get { return _trailer.SecurityHandler; }
         }
 
         internal PdfTrailer _trailer;

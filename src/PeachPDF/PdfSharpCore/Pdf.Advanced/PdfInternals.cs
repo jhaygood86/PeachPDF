@@ -266,7 +266,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         public void WriteObject(Stream stream, PdfItem item)
         {
             // Never write an encrypted object
-            PdfWriter writer = new PdfWriter(stream, null);
+            PdfWriter writer = new PdfWriter(stream);
             writer.Options = PdfWriterOptions.OmitStream;
             item.WriteObject(writer);
         }
