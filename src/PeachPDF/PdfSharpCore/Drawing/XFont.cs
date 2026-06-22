@@ -299,7 +299,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
                 return _fontMetrics;
             }
         }
-        XFontMetrics _fontMetrics;
+        XFontMetrics _fontMetrics = null!;
 
         /// <summary>
         /// Returns the line spacing, in pixels, of this font. The line spacing is the vertical distance
@@ -328,7 +328,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         {
             get { return _glyphTypeface; }
         }
-        XGlyphTypeface _glyphTypeface;
+        XGlyphTypeface _glyphTypeface = null!;
 
 
         internal OpenTypeDescriptor Descriptor
@@ -336,7 +336,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
             get { return _descriptor; }
             private set { _descriptor = value; }
         }
-        OpenTypeDescriptor _descriptor;
+        OpenTypeDescriptor _descriptor = null!;
 
 
         internal string FamilyName
@@ -372,7 +372,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
             get { return _selector; }
             set { _selector = value; }
         }
-        string _selector;
+        string _selector = null!;
 
         /// <summary>
         /// Gets the DebuggerDisplayAttribute text.

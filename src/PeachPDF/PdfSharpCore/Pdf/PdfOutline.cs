@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 // Review: Under construction - StL/14-10-05
 
 using PeachPDF.PdfSharpCore.Drawing;
@@ -161,7 +163,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
             get { return _parent; }
             internal set { _parent = value; }
         }
-        PdfOutline _parent;
+        PdfOutline _parent = null!;
 
         /// <summary>
         /// Gets or sets the title.
@@ -184,7 +186,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
             get { return _destinationPage; }
             set { _destinationPage = value; }
         }
-        PdfPage _destinationPage;
+        PdfPage _destinationPage = null!;
 
         /// <summary>
         /// Gets or sets the left position of the page positioned at the left side of the window.
@@ -296,7 +298,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         {
             get { return _outlines ?? (_outlines = new PdfOutlineCollection(Owner, this)); }
         }
-        PdfOutlineCollection _outlines;
+        PdfOutlineCollection _outlines = null!;
 
         /// <summary>
         /// Initializes this instance from an exisiting PDF document.
@@ -784,7 +786,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
             {
                 get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
             }
-            static DictionaryMeta _meta;
+            static DictionaryMeta _meta = null!;
 
             // ReSharper restore InconsistentNaming
         }

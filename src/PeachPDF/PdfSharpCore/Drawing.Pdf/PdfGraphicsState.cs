@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF.PdfSharpCore.Pdf.Internal;
@@ -66,7 +68,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
         internal int Level;
 
-        internal InternalGraphicsState InternalState;
+        internal InternalGraphicsState InternalState = null!;
 
         public void PushState()
         {
@@ -87,7 +89,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         int _realizedLineJoin = -1;
         double _realizedMiterLimit = -1;
         XDashStyle _realizedDashStyle = (XDashStyle)(-1);
-        string _realizedDashPattern;
+        string _realizedDashPattern = null!;
         XColor _realizedStrokeColor = XColor.Empty;
         bool _realizedStrokeOverPrint;
 
@@ -335,7 +337,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
         #region Text
 
-        internal PdfFont _realizedFont;
+        internal PdfFont _realizedFont = null!;
         string _realizedFontName = String.Empty;
         double _realizedFontSize;
         int _realizedRenderingMode;  // Reference: TABLE 5.2  Text state operators / Page 398

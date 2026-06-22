@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 using System;
 using System.Globalization;
 
@@ -249,7 +251,7 @@ namespace PeachPDF.PdfSharpCore.Internal
         int _currentTokenIndex;
         int _currentTokenLength;
         char _quoteChar;
-        string _str;
+        string _str = null!;
         int _strLen;
     }
 }

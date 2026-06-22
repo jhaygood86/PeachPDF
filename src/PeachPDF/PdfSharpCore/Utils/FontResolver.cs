@@ -1,3 +1,5 @@
+#nullable disable warnings
+
 
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Fonts;

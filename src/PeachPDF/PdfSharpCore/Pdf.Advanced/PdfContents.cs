@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 using PeachPDF.PdfSharpCore.Pdf.IO;
 using System;
 using System.Collections;
@@ -238,7 +240,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 {
                     if (_index == -1 || _index >= _contents.Elements.Count)
                         throw new InvalidOperationException(PSSR.ListEnumCurrentOutOfRange);
-                    return _currentElement;
+                    return _currentElement!;
                 }
             }
 
@@ -247,7 +249,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 // Nothing to do.
             }
 
-            PdfContent _currentElement;
+            PdfContent _currentElement = null!;
             int _index;
             readonly PdfContents _contents;
         }

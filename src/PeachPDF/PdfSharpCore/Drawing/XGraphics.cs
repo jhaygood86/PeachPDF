@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 using PeachPDF.PdfSharpCore.Drawing.Pdf;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
@@ -1781,7 +1783,7 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         {
             get { return _internals ?? (_internals = new XGraphicsInternals(this)); }
         }
-        XGraphicsInternals _internals;
+        XGraphicsInternals _internals = null!;
 
         /// <summary>
         /// (Under construction. May change in future versions.)
@@ -1790,7 +1792,7 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         {
             get { return _transformer ?? (_transformer = new SpaceTransformer(this)); }
         }
-        SpaceTransformer _transformer;
+        SpaceTransformer _transformer = null!;
 
         #endregion
 
@@ -1816,7 +1818,7 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
             get { return _associatedImage; }
             set { _associatedImage = value; }
         }
-        XImage _associatedImage;
+        XImage _associatedImage = null!;
 
         /// <summary>
         /// The transformation matrix from the XGraphics page space to the Graphics world space.
@@ -1830,12 +1832,12 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         /// </summary>
         bool _drawGraphics;
 
-        readonly XForm _form;
+        readonly XForm _form = null!;
 
         /// <summary>
         /// Interface to an (optional) renderer. Currently it is the XGraphicsPdfRenderer, if defined.
         /// </summary>
-        IXGraphicsRenderer _renderer;
+        IXGraphicsRenderer _renderer = null!;
 
         /// <summary>
         /// The transformation matrix from XGraphics world space to page unit space.

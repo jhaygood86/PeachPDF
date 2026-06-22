@@ -1,4 +1,4 @@
-﻿#region PDFsharp - A .NET library for processing PDF
+#region PDFsharp - A .NET library for processing PDF
 //
 // Authors:
 //   Thomas Hövel
@@ -26,6 +26,8 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
 // DEALINGS IN THE SOFTWARE.
 #endregion
+
+#nullable disable warnings
 
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
@@ -220,7 +222,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Internal
             get { return _data; }
             internal set { _data = value; }
         }
-        private byte[] _data;
+        private byte[] _data = null!;
 
         /// <summary>
         /// Gets the length.
@@ -240,7 +242,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Internal
             get { return _dataFax; }
             internal set { _dataFax = value; }
         }
-        private byte[] _dataFax;
+        private byte[] _dataFax = null!;
 
         /// <summary>
         /// Gets the length.
@@ -257,7 +259,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Internal
             get { return _alphaMask; }
             internal set { _alphaMask = value; }
         }
-        private byte[] _alphaMask;
+        private byte[] _alphaMask = null!;
 
         public int AlphaMaskLength
         {
@@ -271,7 +273,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Internal
             get { return _bitmapMask; }
             internal set { _bitmapMask = value; }
         }
-        private byte[] _bitmapMask;
+        private byte[] _bitmapMask = null!;
 
         public int BitmapMaskLength
         {
@@ -285,7 +287,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Internal
             get { return _paletteData; }
             set { _paletteData = value; }
         }
-        private byte[] _paletteData;
+        private byte[] _paletteData = null!;
 
         public int PaletteDataLength
         {
@@ -302,7 +304,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Internal
 
         public bool IsGray;
 
-        internal readonly PdfDocument _document;
+        internal readonly PdfDocument _document = null!;
     }
 
     /// <summary>

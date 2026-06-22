@@ -2,9 +2,9 @@ namespace PeachPDF.PdfSharpCore.Drawing.Layout
 {
     internal class TextSegment
     {
-        public XFont Font { get; set; }
-        public XBrush Brush { get; set; }
-        public string Text { get; set; }
+        public XFont Font { get; set; } = null!;
+        public XBrush Brush { get; set; } = null!;
+        public string Text { get; set; } = null!;
         public double LineIndent { get; set; }
         public bool SkipParagraphAlignment { get; set; }
 

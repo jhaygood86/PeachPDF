@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 using System.IO;
 
 namespace PeachPDF.PdfSharpCore.Fonts

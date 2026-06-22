@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF.PdfSharpCore.Pdf.Internal;
 using PeachPDF.PdfSharpCore.Pdf.IO;
@@ -161,7 +163,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
             get { return _tag; }
             set { _tag = value; }
         }
-        object _tag;
+        object _tag = null!;
 
         /// <summary>
         /// Gets or sets a value used to distinguish PdfDocument objects.
@@ -403,7 +405,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
                 return _options;
             }
         }
-        PdfDocumentOptions _options;
+        PdfDocumentOptions _options = null!;
 
         /// <summary>
         /// Gets PDF specific document settings.
@@ -417,7 +419,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
                 return _settings;
             }
         }
-        PdfDocumentSettings _settings;
+        PdfDocumentSettings _settings = null!;
 
         /// <summary>
         /// NYI Indicates whether large objects are written immediately to the output stream to relieve
@@ -496,7 +498,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
                 return _handle;
             }
         }
-        DocumentHandle _handle;
+        DocumentHandle _handle = null!;
 
         /// <summary>
         /// Returns a value indicating whether the document was newly created or opened from an existing document.
@@ -532,7 +534,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
                 return _info;
             }
         }
-        PdfDocumentInformation _info;  // never changes if once created
+        PdfDocumentInformation _info = null!;  // never changes if once created
 
         /// <summary>
         /// This function is intended to be undocumented.
@@ -553,7 +555,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
                 _customValues = null;
             }
         }
-        PdfCustomValues _customValues;
+        PdfCustomValues _customValues = null!;
 
         /// <summary>
         /// Get the pages dictionary.
@@ -567,7 +569,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
                 return _pages;
             }
         }
-        PdfPages _pages;  // never changes if once created
+        PdfPages _pages = null!;  // never changes if once created
 
         /// <summary>
         /// Gets or sets a value specifying the page layout to be used when the document is opened.
@@ -631,7 +633,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         {
             get { return _fontTable ?? (_fontTable = new PdfFontTable(this)); }
         }
-        PdfFontTable _fontTable;
+        PdfFontTable _fontTable = null!;
 
         /// <summary>
         /// Gets the document image table that holds all images used in the current document.
@@ -645,7 +647,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
                 return _imageTable;
             }
         }
-        PdfImageTable _imageTable;
+        PdfImageTable _imageTable = null!;
 
         /// <summary>
         /// Gets the document form table that holds all form external objects used in the current document.
@@ -654,7 +656,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         {
             get { return _formTable ?? (_formTable = new PdfFormXObjectTable(this)); }
         }
-        PdfFormXObjectTable _formTable;
+        PdfFormXObjectTable _formTable = null!;
 
         /// <summary>
         /// Gets the document ExtGState table that holds all form state objects used in the current document.
@@ -663,7 +665,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         {
             get { return _extGStateTable ?? (_extGStateTable = new PdfExtGStateTable(this)); }
         }
-        PdfExtGStateTable _extGStateTable;
+        PdfExtGStateTable _extGStateTable = null!;
 
         /// <summary>
         /// Gets the PdfCatalog of the current document.
@@ -672,7 +674,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         {
             get { return _catalog ?? (_catalog = _trailer.Root); }
         }
-        PdfCatalog _catalog;  // never changes if once created
+        PdfCatalog _catalog = null!;  // never changes if once created
 
         /// <summary>
         /// Gets the PdfInternals object of this document, that grants access to some internal structures
@@ -682,7 +684,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         {
             get { return _internals ?? (_internals = new PdfInternals(this)); }
         }
-        PdfInternals _internals;
+        PdfInternals _internals = null!;
 
         /// <summary>
         /// Creates a new page and adds it to this document.
@@ -811,9 +813,9 @@ namespace PeachPDF.PdfSharpCore.Pdf
             }
         }
 
-        internal PdfTrailer _trailer;
-        internal PdfCrossReferenceTable _irefTable;
-        internal Stream _outStream;
+        internal PdfTrailer _trailer = null!;
+        internal PdfCrossReferenceTable _irefTable = null!;
+        internal Stream _outStream = null!;
 
         internal DateTime _creation;
 
@@ -843,7 +845,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
             get { return tls ?? (tls = new ThreadLocalStorage()); }
         }
         [ThreadStatic]
-        static ThreadLocalStorage tls;
+        static ThreadLocalStorage tls = null!;
 
         [DebuggerDisplay("(ID={ID}, alive={IsAlive})")]
         internal class DocumentHandle

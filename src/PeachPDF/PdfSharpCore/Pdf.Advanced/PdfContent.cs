@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 using PeachPDF.PdfSharpCore.Drawing.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Filters;
 using PeachPDF.PdfSharpCore.Pdf.IO;
@@ -166,7 +168,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             base.WriteObject(writer);
         }
 
-        internal XGraphicsPdfRenderer _pdfRenderer;
+        internal XGraphicsPdfRenderer _pdfRenderer = null!;
 
         /// <summary>
         /// Predefined keys of this dictionary.
@@ -180,7 +182,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             {
                 get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
             }
-            static DictionaryMeta _meta;
+            static DictionaryMeta _meta = null!;
         }
 
         /// <summary>

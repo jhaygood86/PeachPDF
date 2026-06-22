@@ -72,7 +72,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 return _resources;
             }
         }
-        PdfResources _resources;
+        PdfResources _resources = null!;
 
         /// <summary>
         /// Implements the interface because the primary function is internal.

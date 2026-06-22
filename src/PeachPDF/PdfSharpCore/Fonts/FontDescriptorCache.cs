@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Internal;
@@ -164,7 +166,7 @@ namespace PeachPDF.PdfSharpCore.Fonts
                 return _singleton;
             }
         }
-        static volatile FontDescriptorCache _singleton;
+        static volatile FontDescriptorCache _singleton = null!;
 
         /// <summary>
         /// Maps font font descriptor key to font descriptor.

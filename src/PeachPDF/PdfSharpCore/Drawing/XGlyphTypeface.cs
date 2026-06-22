@@ -162,7 +162,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         {
             _familyName = _fontface.name.Name;
             if (string.IsNullOrEmpty(_faceName) || _faceName.StartsWith("?"))
-                _faceName = _familyName;
+                _faceName = _familyName = null!;
             _styleName = _fontface.name.Style;
             _displayName = _fontface.name.FullFontName;
             if (string.IsNullOrEmpty(_displayName))
@@ -187,7 +187,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         {
             get { return _faceName; }
         }
-        string _faceName;
+        string _faceName = null!;
 
         /// <summary>
         /// Gets the English family name of the font, for example "Arial".
@@ -196,7 +196,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         {
             get { return _familyName; }
         }
-        string _familyName;
+        string _familyName = null!;
 
         /// <summary>
         /// Gets the English subfamily name of the font,
@@ -206,7 +206,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         {
             get { return _styleName; }
         }
-        string _styleName;
+        string _styleName = null!;
 
         /// <summary>
         /// Gets the English display name of the font,
@@ -216,7 +216,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         {
             get { return _displayName; }
         }
-        string _displayName;
+        string _displayName = null!;
 
         /// <summary>
         /// Gets a value indicating whether the font weight is bold.

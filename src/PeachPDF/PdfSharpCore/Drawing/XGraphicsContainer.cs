@@ -34,6 +34,6 @@ namespace PeachPDF.PdfSharpCore.Drawing
     /// </summary>
     internal sealed class XGraphicsContainer
     {
-        internal InternalGraphicsState InternalState;
+        internal InternalGraphicsState InternalState = null!;
     }
 }

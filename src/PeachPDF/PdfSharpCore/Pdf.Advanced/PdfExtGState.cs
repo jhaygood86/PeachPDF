@@ -203,7 +203,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                          ((int)(1000 * _nonStrokeAlpha)).ToString(CultureInfo.InvariantCulture) +
                          (_strokeOverprint ? "S" : "s") + (_nonStrokeOverprint ? "N" : "n");
         }
-        string _key;
+        string _key = null!;
 
         internal static string MakeKey(double alpha, bool overPaint)
         {
@@ -390,7 +390,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             {
                 get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
             }
-            static DictionaryMeta _meta;
+            static DictionaryMeta _meta = null!;
         }
 
         /// <summary>

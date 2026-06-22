@@ -6,7 +6,7 @@ namespace PeachPDF.PdfSharpCore.Internal
 {
     internal class FontFamilyModel
     {
-        public string Name { get; set; }
+        public string Name { get; set; } = null!;
 
         public Dictionary<XFontStyle, TtfFontDescription> FontFiles = new();
 

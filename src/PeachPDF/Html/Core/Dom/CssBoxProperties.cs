@@ -942,7 +942,6 @@ namespace PeachPDF.Html.Core.Dom
 
                 double fsize;
                 double parentSize = CssConstants.FontSize;
-                double rootSize = CssConstants.FontSize;
                 double remSize;
 
                 var parentBox = GetParent();

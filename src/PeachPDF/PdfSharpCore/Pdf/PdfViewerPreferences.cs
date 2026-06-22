@@ -294,7 +294,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
             {
                 get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
             }
-            static DictionaryMeta _meta;
+            static DictionaryMeta _meta = null!;
         }
 
         /// <summary>

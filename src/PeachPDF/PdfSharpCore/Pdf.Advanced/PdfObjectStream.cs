@@ -50,13 +50,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// <summary>
         /// Initializes a new instance from an existing dictionary. Used for object type transformation.
         /// </summary>
-        /// <summary>
-        /// N pairs of integers.
-        /// The first integer represents the object number of the compressed object.
-        /// The second integer represents the absolute offset of that object in the decoded stream,
-        /// i.e. the byte offset plus First entry.
-        /// </summary>
-        private readonly int[][] _header;  // Reference: Page 102
 
         /// <summary>
         /// Predefined keys common to all font dictionaries.

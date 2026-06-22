@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF.PdfSharpCore.Pdf.Filters;
@@ -152,7 +154,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// The elements of the dictionary.
         /// </summary>
-        internal DictionaryElements _elements;
+        internal DictionaryElements _elements = null!;
 
         /// <summary>
         /// Returns an enumerator that iterates through the dictionary elements.
@@ -258,7 +260,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
             get { return _stream; }
             set { _stream = value; }
         }
-        PdfStream _stream;
+        PdfStream _stream = null!;
 
         /// <summary>
         /// Creates the stream of this dictionary and initializes it with the specified byte array.
@@ -1609,7 +1611,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
                     _ownerDictionary.Elements.SetInteger(Keys.Length, value.Length);
                 }
             }
-            byte[] _value;
+            byte[] _value = null!;
 
             /// <summary>
             /// Gets the value of the stream unfiltered. The stream content is not modified by this operation.

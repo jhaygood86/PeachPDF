@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 using System;
 
 namespace PeachPDF.PdfSharpCore.Drawing
@@ -122,7 +124,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
                 _color = XColor.Empty;
             }
         }
-        internal XBrush _brush;
+        internal XBrush _brush = null!;
 
         /// <summary>
         /// Gets or sets the color.
@@ -268,7 +270,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
                 _dashPattern = (double[])value.Clone();
             }
         }
-        internal double[] _dashPattern;
+        internal double[] _dashPattern = null!;
 
         /// <summary>
         /// Gets or sets a value indicating whether the pen enables overprint when used in a PDF document.

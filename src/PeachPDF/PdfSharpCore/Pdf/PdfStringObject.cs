@@ -116,7 +116,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
             get { return _value ?? ""; }
             set { _value = value ?? ""; }
         }
-        string _value;
+        string _value = null!;
 
         /// <summary>
         /// Gets or sets the string value for encryption purposes.

@@ -49,14 +49,14 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             get { return _mediaBox; }
             set { _mediaBox = value; }
         }
-        PdfRectangle _mediaBox;
+        PdfRectangle _mediaBox = null!;
 
         public PdfRectangle CropBox
         {
             get { return _cropBox; }
             set { _cropBox = value; }
         }
-        PdfRectangle _cropBox;
+        PdfRectangle _cropBox = null!;
 
         public int Rotate
         {

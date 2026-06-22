@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF.PdfSharpCore.Pdf.IO;
 using System;
@@ -146,7 +148,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
                 _iref.ObjectID = objectID;
             }
             _iref.Value = this;
-            _iref.Document = _document;
+            _iref.Document = _document = null!;
         }
 
         /// <summary>
@@ -174,7 +176,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
                 }
             }
         }
-        internal PdfDocument _document;
+        internal PdfDocument _document = null!;
 
         /// <summary>
         /// Indicates whether the object is an indirect object.
@@ -193,7 +195,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         {
             get { return _internals ?? (_internals = new PdfObjectInternals(this)); }
         }
-        PdfObjectInternals _internals;
+        PdfObjectInternals _internals = null!;
 
         /// <summary>
         /// When overridden in a derived class, prepares the object to get saved.
@@ -597,6 +599,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
             // Setting the reference outside PDFsharp is not considered as a valid operation.
             internal set { _iref = value; }
         }
-        PdfReference _iref;
+        PdfReference _iref = null!;
     }
 }

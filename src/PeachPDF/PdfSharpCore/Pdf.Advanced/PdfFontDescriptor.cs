@@ -337,7 +337,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                     return _meta;
                 }
             }
-            static DictionaryMeta _meta;
+            static DictionaryMeta _meta = null!;
         }
 
         /// <summary>

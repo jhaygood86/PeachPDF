@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Pdf.Filters;
@@ -223,7 +225,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             {
                 get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
             }
-            static DictionaryMeta _meta;
+            static DictionaryMeta _meta = null!;
         }
 
         /// <summary>
@@ -235,4 +237,3 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         }
     }
 }
-

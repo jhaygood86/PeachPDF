@@ -138,7 +138,7 @@ namespace PeachPDF.PdfSharpCore.Fonts
                                        + '/' + (_mustSimulateBold ? "b+" : "b-") + (_mustSimulateItalic ? "i+" : "i-"));
             }
         }
-        string _key;
+        string _key = null!;
 
         /// <summary>
         /// A name that uniquely identifies the font (not the family), e.g. the file name of the font. PDFsharp does not use this

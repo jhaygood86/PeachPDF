@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 using System;
 using System.Diagnostics;
 
@@ -77,7 +79,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Filters
         {
             get { return _flateDecode ?? (_flateDecode = new FlateDecode()); }
         }
-        static FlateDecode _flateDecode;
+        static FlateDecode _flateDecode = null!;
 
         //runLengthDecode
         //ccittFaxDecode

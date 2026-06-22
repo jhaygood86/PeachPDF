@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF.PdfSharpCore.Pdf.IO;
 using System;
@@ -542,7 +544,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
             /// <summary>
             /// The elements of the array.
             /// </summary>
-            List<PdfItem> _elements;
+            List<PdfItem> _elements = null!;
 
             /// <summary>
             /// The array this objects belongs to.
@@ -550,7 +552,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
             PdfArray _ownerArray;
         }
 
-        ArrayElements _elements;
+        ArrayElements _elements = null!;
 
         /// <summary>
         /// Gets the DebuggerDisplayAttribute text.

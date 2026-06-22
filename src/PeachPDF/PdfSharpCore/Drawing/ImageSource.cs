@@ -13,7 +13,7 @@ namespace MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes
         /// Gets or sets the image source implementation to use for reading images.
         /// </summary>
         /// <value>The image source impl.</value>
-        public static ImageSource ImageSourceImpl { get; set; }
+        public static ImageSource ImageSourceImpl { get; set; } = null!;
 
         internal interface IImageSource
         {

@@ -1,4 +1,4 @@
-﻿#region PDFsharp - A .NET library for processing PDF
+#region PDFsharp - A .NET library for processing PDF
 //
 // Authors:
 //   Stefan Lange
@@ -26,6 +26,8 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
 // DEALINGS IN THE SOFTWARE.
 #endregion
+
+#nullable disable warnings
 
 #define ITALIC_SIMULATION
 
@@ -235,7 +237,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
         // ----- DrawRectangle ------------------------------------------------------------------------
 
-        public void DrawRectangle(XPen pen, XBrush brush, double x, double y, double width, double height)
+        public void DrawRectangle(XPen? pen, XBrush? brush, double x, double y, double width, double height)
         {
             if (pen == null && brush == null)
                 throw new ArgumentNullException("pen and brush");
@@ -256,7 +258,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
         // ----- DrawRectangles -----------------------------------------------------------------------
 
-        public void DrawRectangles(XPen pen, XBrush brush, XRect[] rects)
+        public void DrawRectangles(XPen? pen, XBrush? brush, XRect[] rects)
         {
             int count = rects.Length;
             for (int idx = 0; idx < count; idx++)
@@ -268,7 +270,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
         // ----- DrawRoundedRectangle -----------------------------------------------------------------
 
-        public void DrawRoundedRectangle(XPen pen, XBrush brush, double x, double y, double width, double height, double ellipseWidth, double ellipseHeight)
+        public void DrawRoundedRectangle(XPen? pen, XBrush? brush, double x, double y, double width, double height, double ellipseWidth, double ellipseHeight)
         {
             XGraphicsPath path = new XGraphicsPath();
             path.AddRoundedRectangle(x, y, width, height, ellipseWidth, ellipseHeight);
@@ -277,7 +279,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
         // ----- DrawEllipse --------------------------------------------------------------------------
 
-        public void DrawEllipse(XPen pen, XBrush brush, double x, double y, double width, double height)
+        public void DrawEllipse(XPen? pen, XBrush? brush, double x, double y, double width, double height)
         {
             Realize(pen, brush);
 
@@ -308,7 +310,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
         // ----- DrawPolygon --------------------------------------------------------------------------
 
-        public void DrawPolygon(XPen pen, XBrush brush, XPoint[] points, XFillMode fillmode)
+        public void DrawPolygon(XPen? pen, XBrush? brush, XPoint[] points, XFillMode fillmode)
         {
             Realize(pen, brush);
 
@@ -326,7 +328,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
         // ----- DrawPie ------------------------------------------------------------------------------
 
-        public void DrawPie(XPen pen, XBrush brush, double x, double y, double width, double height,
+        public void DrawPie(XPen? pen, XBrush? brush, double x, double y, double width, double height,
           double startAngle, double sweepAngle)
         {
             Realize(pen, brush);
@@ -339,7 +341,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
         // ----- DrawClosedCurve ----------------------------------------------------------------------
 
-        public void DrawClosedCurve(XPen pen, XBrush brush, XPoint[] points, double tension, XFillMode fillmode)
+        public void DrawClosedCurve(XPen? pen, XBrush? brush, XPoint[] points, double tension, XFillMode fillmode)
         {
             int count = points.Length;
             if (count == 0)
@@ -372,7 +374,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
         // ----- DrawPath -----------------------------------------------------------------------------
 
-        public void DrawPath(XPen pen, XBrush brush, XGraphicsPath path)
+        public void DrawPath(XPen? pen, XBrush? brush, XGraphicsPath path)
         {
             if (pen == null && brush == null)
                 throw new ArgumentNullException("pen");
@@ -1682,8 +1684,8 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             return _form.GetFormName(form);
         }
 
-        internal PdfPage _page;
-        internal XForm _form;
+        internal PdfPage _page = null!;
+        internal XForm _form = null!;
         internal PdfColorMode _colorMode;
         XGraphicsPdfPageOptions _options;
         XGraphics _gfx;

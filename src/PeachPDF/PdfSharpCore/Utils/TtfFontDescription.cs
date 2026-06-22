@@ -1,3 +1,5 @@
+#nullable disable warnings
+
 using PeachPDF.PdfSharpCore.Drawing;
 using System;
 using System.IO;

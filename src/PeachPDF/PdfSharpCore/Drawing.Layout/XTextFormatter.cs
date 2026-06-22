@@ -62,7 +62,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Layout
             get { return _text; }
             set { _text = value; }
         }
-        string _text;
+        string _text = null!;
 
         /// <summary>
         /// Gets or sets the font.
@@ -85,7 +85,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Layout
                 _spaceWidth -= _gfx.MeasureString("xx", value).Width;
             }
         }
-        XFont _font;
+        XFont _font = null!;
         double _lineSpace;
         double _cyAscent;
         double _cyDescent;

@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 using MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF.PdfSharpCore.Pdf.IO;
@@ -292,7 +294,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         {
             get { return _format; }
         }
-        XImageFormat _format;
+        XImageFormat _format = null!;
 
         internal void AssociateWithGraphics(XGraphics gfx)
         {
@@ -322,18 +324,18 @@ namespace PeachPDF.PdfSharpCore.Drawing
             get { return _associatedGraphics; }
             set { _associatedGraphics = value; }
         }
-        XGraphics _associatedGraphics;
+        XGraphics _associatedGraphics = null!;
 
         /// <summary>
         /// If path starts with '*' the image is created from a stream and the path is a GUID.
         /// </summary>
-        internal string _path;
+        internal string _path = null!;
 
         /// <summary>
         /// Cache PdfImageTable.ImageSelector to speed up finding the right PdfImage
         /// if this image is used more than once.
         /// </summary>
-        internal PdfImageTable.ImageSelector _selector;
-        private IImageSource _source;
+        internal PdfImageTable.ImageSelector _selector = null!;
+        private IImageSource _source = null!;
     }
 }

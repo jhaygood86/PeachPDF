@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 using System.Collections.Generic;
 
 namespace PeachPDF.PdfSharpCore.Pdf.Advanced

@@ -1,4 +1,4 @@
-﻿using PeachPDF.PdfSharpCore.Drawing.Layout.enums;
+using PeachPDF.PdfSharpCore.Drawing.Layout.enums;
 
 namespace PeachPDF.PdfSharpCore.Drawing.Layout
 {
@@ -32,7 +32,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Layout
         /// <summary>
         /// The text represented by this block.
         /// </summary>
-        public string Text { get; set; }
+        public string Text { get; set; } = null!;
 
         /// <summary>
         /// The type of the block.
@@ -62,7 +62,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Layout
         /// <summary>
         /// Contains information about spacing of the font
         /// </summary>
-        public FormatterEnvironment Environment { get; set; }
+        public FormatterEnvironment Environment { get; set; } = null!;
 
         /// <summary>
         /// Indent of the text when a new line is started

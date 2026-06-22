@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF.PdfSharpCore.Pdf.Annotations;
 using PeachPDF.PdfSharpCore.Pdf.IO;
@@ -525,7 +527,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
                 return _pagesArray;
             }
         }
-        PdfArray _pagesArray;
+        PdfArray _pagesArray = null!;
 
         /// <summary>
         /// Replaces the page tree by a flat array of indirect references to the pages objects.
@@ -681,7 +683,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
                 {
                     if (_index == -1 || _index >= _list.Count)
                         throw new InvalidOperationException(PSSR.ListEnumCurrentOutOfRange);
-                    return _currentElement;
+                    return _currentElement!;
                 }
             }
 
@@ -690,7 +692,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
                 // Nothing to do.
             }
 
-            PdfPage _currentElement;
+            PdfPage? _currentElement;
             int _index;
             readonly PdfPages _list;
         }
@@ -735,7 +737,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
             {
                 get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
             }
-            static DictionaryMeta _meta;
+            static DictionaryMeta _meta = null!;
         }
 
         /// <summary>

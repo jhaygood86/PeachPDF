@@ -81,7 +81,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         {
             get { return _fontOptions; }
         }
-        readonly XPdfFontOptions _fontOptions;
+        readonly XPdfFontOptions _fontOptions = null!;
 
         public string BaseFont
         {
@@ -239,7 +239,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             {
                 get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
             }
-            static DictionaryMeta _meta;
+            static DictionaryMeta _meta = null!;
         }
 
         /// <summary>

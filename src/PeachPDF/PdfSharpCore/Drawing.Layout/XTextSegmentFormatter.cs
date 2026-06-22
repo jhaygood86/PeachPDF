@@ -1,3 +1,5 @@
+#nullable disable warnings
+
 using PeachPDF.PdfSharpCore.Drawing.Layout.enums;
 using PeachPDF.PdfSharpCore.Pdf.IO;
 using System;

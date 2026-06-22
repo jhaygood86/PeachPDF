@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF.PdfSharpCore.Pdf.IO;
 using System;
@@ -552,6 +554,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
                 return _deadObject.Reference;
             }
         }
-        PdfDictionary _deadObject;
+        PdfDictionary _deadObject = null!;
     }
 }

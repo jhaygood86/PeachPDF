@@ -130,13 +130,13 @@ namespace PeachPDF.PdfSharpCore.Pdf
         }
 
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)]
-        Type _objectType;
+        Type _objectType = null!;
 
         public string FixedValue
         {
             get { return _fixedValue; }
             set { _fixedValue = value; }
         }
-        string _fixedValue;
+        string _fixedValue = null!;
     }
 }

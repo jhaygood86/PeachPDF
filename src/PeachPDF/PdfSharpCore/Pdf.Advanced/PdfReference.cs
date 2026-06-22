@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 // With this define each iref object gets a unique number (uid) to make them distinguishable in the debugger
 #define UNIQUE_IREF_
 
@@ -181,7 +183,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 value.Reference = this;
             }
         }
-        PdfObject _value;
+        PdfObject _value = null!;
 
         /// <summary>
         /// Hack for dead objects.
@@ -199,7 +201,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             get { return _document; }
             set { _document = value; }
         }
-        PdfDocument _document;
+        PdfDocument _document = null!;
 
         /// <summary>
         /// Gets a string representing the object identifier.

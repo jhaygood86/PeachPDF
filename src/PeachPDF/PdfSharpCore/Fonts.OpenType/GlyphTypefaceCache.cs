@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Internal;
 using System;
@@ -88,7 +90,7 @@ namespace PeachPDF.PdfSharpCore.Fonts.OpenType
                 return _singleton;
             }
         }
-        static volatile GlyphTypefaceCache _singleton;
+        static volatile GlyphTypefaceCache _singleton = null!;
 
         internal static string GetCacheState()
         {

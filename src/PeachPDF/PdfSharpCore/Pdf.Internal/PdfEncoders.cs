@@ -47,7 +47,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Internal
         {
             get { return _rawEncoding ?? (_rawEncoding = new RawEncoding()); }
         }
-        static Encoding _rawEncoding;
+        static Encoding _rawEncoding = null!;
 
         /// <summary>
         /// Gets the raw Unicode encoding.
@@ -56,7 +56,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Internal
         {
             get { return _rawUnicodeEncoding ?? (_rawUnicodeEncoding = new RawUnicodeEncoding()); }
         }
-        static Encoding _rawUnicodeEncoding;
+        static Encoding _rawUnicodeEncoding = null!;
 
         /// <summary>
         /// Gets the Windows 1252 (ANSI) encoding.
@@ -73,7 +73,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Internal
                 return _winAnsiEncoding;
             }
         }
-        static Encoding _winAnsiEncoding;
+        static Encoding _winAnsiEncoding = null!;
 
         /// <summary>
         /// Gets the PDF DocEncoding encoding.
@@ -82,7 +82,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Internal
         {
             get { return _docEncoding ?? (_docEncoding = new DocEncoding()); }
         }
-        static Encoding _docEncoding;
+        static Encoding _docEncoding = null!;
 
         /// <summary>
         /// Gets the UNICODE little-endian encoding.
@@ -91,7 +91,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Internal
         {
             get { return _unicodeEncoding ?? (_unicodeEncoding = Encoding.Unicode); }
         }
-        static Encoding _unicodeEncoding;
+        static Encoding _unicodeEncoding = null!;
 
         ///// <summary>
         ///// Encodes a string from a byte array. Each character gets the code of the corresponding byte.

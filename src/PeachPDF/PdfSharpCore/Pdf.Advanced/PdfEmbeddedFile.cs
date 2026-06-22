@@ -1,3 +1,5 @@
+#nullable disable warnings
+
 namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 {
     /// <summary>
@@ -115,10 +117,10 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 {
                     if (Keys.meta == null)
                         Keys.meta = CreateMeta(typeof(Keys));
-                    return Keys.meta;
+                    return Keys.meta = null!;
                 }
             }
-            static DictionaryMeta meta;
+            static DictionaryMeta meta = null!;
         }
 
         /// <summary>

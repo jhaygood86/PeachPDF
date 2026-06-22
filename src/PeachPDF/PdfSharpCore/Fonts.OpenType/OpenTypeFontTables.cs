@@ -76,12 +76,12 @@ namespace PeachPDF.PdfSharpCore.Fonts.OpenType
         public ushort searchRange; // 2 x (2**floor(log2(segCount)))
         public ushort entrySelector; // log2(searchRange/2)
         public ushort rangeShift;
-        public ushort[] endCount; // [segCount] / End characterCode for each segment, last=0xFFFF.
-        public ushort[] startCount; // [segCount] / Start character code for each segment.
-        public short[] idDelta; // [segCount] / Delta for all character codes in segment.
-        public ushort[] idRangeOffs; // [segCount] / Offsets into glyphIdArray or 0
+        public ushort[] endCount = null!; // [segCount] / End characterCode for each segment, last=0xFFFF.
+        public ushort[] startCount = null!; // [segCount] / Start character code for each segment.
+        public short[] idDelta = null!; // [segCount] / Delta for all character codes in segment.
+        public ushort[] idRangeOffs = null!; // [segCount] / Offsets into glyphIdArray or 0
         public int glyphCount; // = (length - (16 + 4 * 2 * segCount)) / 2;
-        public ushort[] glyphIdArray;     // Glyph index array (arbitrary length)
+        public ushort[] glyphIdArray = null!;     // Glyph index array (arbitrary length)
 
         public CMap4(OpenTypeFontface fontData, WinEncodingId encodingId)
             : base(fontData, "----")
@@ -159,7 +159,7 @@ namespace PeachPDF.PdfSharpCore.Fonts.OpenType
         /// </summary>
         public bool symbol;
 
-        public CMap4 cmap4;
+        public CMap4 cmap4 = null!;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="CMapTable"/> class.
@@ -385,8 +385,8 @@ namespace PeachPDF.PdfSharpCore.Fonts.OpenType
     {
         public const string Tag = TableTagNames.HMtx;
 
-        public HorizontalMetrics[] Metrics;
-        public FWord[] LeftSideBearing;
+        public HorizontalMetrics[] Metrics = null!;
+        public FWord[] LeftSideBearing = null!;
 
         public HorizontalMetricsTable(OpenTypeFontface fontData)
             : base(fontData, Tag)
@@ -667,7 +667,7 @@ namespace PeachPDF.PdfSharpCore.Fonts.OpenType
         public ushort count;
         public ushort stringOffset;
 
-        byte[] bytes;
+        byte[] bytes = null!;
 
         public NameTable(OpenTypeFontface fontData)
             : base(fontData, Tag)
@@ -811,12 +811,12 @@ namespace PeachPDF.PdfSharpCore.Fonts.OpenType
         public short yStrikeoutSize;
         public short yStrikeoutPosition;
         public short sFamilyClass;
-        public byte[] panose; // = new byte[10];
+        public byte[] panose = null!; // = new byte[10];
         public uint ulUnicodeRange1; // Bits 0-31
         public uint ulUnicodeRange2; // Bits 32-63
         public uint ulUnicodeRange3; // Bits 64-95
         public uint ulUnicodeRange4; // Bits 96-127
-        public string achVendID; // = "";
+        public string achVendID = null!; // = "";
         public ushort fsSelection;
         public ushort usFirstCharIndex;
         public ushort usLastCharIndex;
@@ -962,7 +962,7 @@ namespace PeachPDF.PdfSharpCore.Fonts.OpenType
     {
         public const string Tag = TableTagNames.Cvt;
 
-        FWord[] array; // List of n values referenceable by instructions. n is the number of FWORD items that fit in the size of the table.
+        FWord[] array = null!; // List of n values referenceable by instructions. n is the number of FWORD items that fit in the size of the table.
 
         public ControlValueTable(OpenTypeFontface fontData)
             : base(fontData, Tag)
@@ -997,7 +997,7 @@ namespace PeachPDF.PdfSharpCore.Fonts.OpenType
     {
         public const string Tag = TableTagNames.Fpgm;
 
-        byte[] bytes; // Instructions. n is the number of BYTE items that fit in the size of the table.
+        byte[] bytes = null!; // Instructions. n is the number of BYTE items that fit in the size of the table.
 
         public FontProgram(OpenTypeFontface fontData)
             : base(fontData, Tag)
@@ -1033,7 +1033,7 @@ namespace PeachPDF.PdfSharpCore.Fonts.OpenType
     {
         public const string Tag = TableTagNames.Prep;
 
-        byte[] bytes; // Set of instructions executed whenever point size or font or transformation change. n is the number of BYTE items that fit in the size of the table.
+        byte[] bytes = null!; // Set of instructions executed whenever point size or font or transformation change. n is the number of BYTE items that fit in the size of the table.
 
         public ControlValueProgram(OpenTypeFontface fontData)
             : base(fontData, Tag)

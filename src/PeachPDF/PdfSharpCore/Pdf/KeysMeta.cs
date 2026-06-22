@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -78,7 +80,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
             get { return _keyValue; }
             set { _keyValue = value; }
         }
-        string _keyValue;
+        string _keyValue = null!;
 
         public string FixedValue
         {

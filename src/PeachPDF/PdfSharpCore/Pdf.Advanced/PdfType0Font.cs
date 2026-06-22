@@ -119,7 +119,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         {
             get { return _fontOptions; }
         }
-        XPdfFontOptions _fontOptions;
+        XPdfFontOptions _fontOptions = null!;
 
         public string BaseFont
         {
@@ -131,7 +131,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         {
             get { return _descendantFont; }
         }
-        readonly PdfCIDFont _descendantFont;
+        readonly PdfCIDFont _descendantFont = null!;
 
         internal override void PrepareForSave()
         {
@@ -224,10 +224,10 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 {
                     if (Keys._meta == null)
                         Keys._meta = CreateMeta(typeof(Keys));
-                    return Keys._meta;
+                    return Keys._meta = null!;
                 }
             }
-            static DictionaryMeta _meta;
+            static DictionaryMeta _meta = null!;
         }
 
         /// <summary>

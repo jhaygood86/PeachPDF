@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 using PeachPDF.PdfSharpCore.Internal;
 using System;
 using System.Collections.Generic;
@@ -101,7 +103,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
                 return _singleton;
             }
         }
-        static volatile FontFamilyCache _singleton;
+        static volatile FontFamilyCache _singleton = null!;
 
         internal static string GetCacheState()
         {

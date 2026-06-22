@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 using PeachPDF.PdfSharpCore.Fonts;
 using PeachPDF.PdfSharpCore.Fonts.OpenType;
 using System;
@@ -110,7 +112,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
                 _fontName = value.name.FullFontName;
             }
         }
-        OpenTypeFontface _fontface;
+        OpenTypeFontface _fontface = null!;
 
         /// <summary>
         /// Gets the key that uniquely identifies this font source.
@@ -140,7 +142,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         {
             get { return _fontName; }
         }
-        string _fontName;
+        string _fontName = null!;
 
         /// <summary>
         /// Gets the bytes of the font.

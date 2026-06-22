@@ -1,4 +1,4 @@
-﻿#region PDFsharp - A .NET library for processing PDF
+#region PDFsharp - A .NET library for processing PDF
 //
 // Authors:
 //   Thomas Hövel
@@ -189,7 +189,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
             get { if (!HasImageData) _imageData = PrepareImageData(); return _imageData; }
             private set { _imageData = value; }
         }
-        private ImageData _imageData;
+        private ImageData _imageData = null!;
 
         internal virtual ImageData PrepareImageData()
         {
@@ -290,7 +290,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
             get { return _image; }
             internal set { _image = value; }
         }
-        private ImportedImage _image;
+        private ImportedImage _image = null!;
     }
 
     /// <summary>

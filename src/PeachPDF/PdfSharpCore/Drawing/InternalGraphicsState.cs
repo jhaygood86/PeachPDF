@@ -72,7 +72,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         public InternalGraphicsState(XGraphics gfx, XGraphicsState state)
         {
             _gfx = gfx;
-            State = state;
+            State = State = null!;
             State.InternalState = this;
         }
 
@@ -111,6 +111,6 @@ namespace PeachPDF.PdfSharpCore.Drawing
 
         readonly XGraphics _gfx;
 
-        internal XGraphicsState State;
+        internal XGraphicsState State = null!;
     }
 }

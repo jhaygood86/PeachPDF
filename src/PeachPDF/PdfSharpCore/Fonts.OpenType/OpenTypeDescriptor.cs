@@ -254,7 +254,7 @@ namespace PeachPDF.PdfSharpCore.Fonts.OpenType
                 Widths[idx] = GlyphIndexToPdfWidth(glyphIndex);
             }
         }
-        public int[] Widths;
+        public int[] Widths = null!;
 
         /// <summary>
         /// Gets a value indicating whether this instance belongs to a bold font.

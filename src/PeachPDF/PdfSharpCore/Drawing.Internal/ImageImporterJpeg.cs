@@ -1,4 +1,4 @@
-﻿#region PDFsharp - A .NET library for processing PDF
+#region PDFsharp - A .NET library for processing PDF
 //
 // Authors:
 //   Thomas Hövel
@@ -26,6 +26,8 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
 // DEALINGS IN THE SOFTWARE.
 #endregion
+
+#nullable disable warnings
 
 using PeachPDF.PdfSharpCore.Pdf;
 using System;
@@ -312,7 +314,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Internal
             get { return _data; }
             internal set { _data = value; }
         }
-        private byte[] _data;
+        private byte[] _data = null!;
 
         /// <summary>
         /// Gets the length.

@@ -58,7 +58,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
             get { return _source; }
             set { _source = value; }
         }
-        XBitmapSource _source;
+        XBitmapSource _source = null!;
 
         /// <summary>
         /// When overridden in a derived class saves the image on the specified stream

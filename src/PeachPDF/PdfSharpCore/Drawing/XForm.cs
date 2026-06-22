@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 using PeachPDF.PdfSharpCore.Drawing.Pdf;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
@@ -161,9 +163,9 @@ namespace PeachPDF.PdfSharpCore.Drawing
 
             Debug.Assert(_formState == FormState.Created);
             _formState = FormState.UnderConstruction;
-            Gfx = gfx;
+            Gfx = Gfx = null!;
         }
-        internal XGraphics Gfx;
+        internal XGraphics Gfx = null!;
 
         /// <summary>
         /// Disposes this instance.
@@ -212,7 +214,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         {
             get { return _document; }
         }
-        PdfDocument _document;
+        PdfDocument _document = null!;
 
         /// <summary>
         /// Gets the color model used in the underlying PDF document.
@@ -458,9 +460,9 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// The PdfFormXObject gets invalid when PageNumber or transform changed. This is because a modification
         /// of an XPdfForm must not change objects that are already been drawn.
         /// </summary>
-        internal PdfFormXObject _pdfForm;  // TODO: make private
+        internal PdfFormXObject _pdfForm = null!;  // TODO: make private
 
-        internal XGraphicsPdfRenderer PdfRenderer;
+        internal XGraphicsPdfRenderer PdfRenderer = null!;
 
     }
 }

@@ -27,11 +27,13 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 namespace PeachPDF.PdfSharpCore.Drawing
 {
     internal class XKnownColorTable
     {
-        internal static uint[] ColorTable;
+        internal static uint[] ColorTable = null!;
 
         public static uint KnownColorToArgb(XKnownColor color)
         {

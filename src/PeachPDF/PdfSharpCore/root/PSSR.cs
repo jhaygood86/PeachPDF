@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Internal;
 using PeachPDF.PdfSharpCore.Pdf;
@@ -361,7 +363,7 @@ namespace PeachPDF.PdfSharpCore
                 return _resmngr;
             }
         }
-        static ResourceManager _resmngr;
+        static ResourceManager _resmngr = null!;
 
         /// <summary>
         /// Writes all messages defined by PSMsgID.

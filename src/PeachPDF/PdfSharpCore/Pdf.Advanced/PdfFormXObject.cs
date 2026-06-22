@@ -82,7 +82,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 return _resources;
             }
         }
-        PdfResources _resources;
+        PdfResources _resources = null!;
 
         PdfResources IContentStream.Resources
         {
@@ -309,7 +309,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             {
                 get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
             }
-            static DictionaryMeta _meta;
+            static DictionaryMeta _meta = null!;
         }
 
         /// <summary>

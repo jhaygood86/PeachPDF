@@ -210,7 +210,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
             // This class must behave like a value type. Therefore it cannot be changed (like System.String).
             get { return _value ?? ""; }
         }
-        string _value;
+        string _value = null!;
 
         /// <summary>
         /// Gets or sets the string value for encryption purposes.

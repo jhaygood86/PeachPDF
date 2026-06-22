@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF;
@@ -107,7 +109,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
             get { return _tag; }
             set { _tag = value; }
         }
-        object _tag;
+        object _tag = null!;
 
         /// <summary>
         /// Closes the page. A closes page cannot be modified anymore and it is not possible to
@@ -325,7 +327,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// The content stream currently used by an XGraphics object for rendering.
         /// </summary>
-        internal PdfContent RenderContent;
+        internal PdfContent RenderContent = null!;
 
         /// <summary>
         /// Gets the array of content streams of the page.
@@ -378,12 +380,12 @@ namespace PeachPDF.PdfSharpCore.Pdf
                     //  Document.xrefTable.Add(_content);
                     //}
                     Debug.Assert(_contents.Reference == null);
-                    Elements[Keys.Contents] = _contents;
+                    Elements[Keys.Contents] = _contents = null!;
                 }
                 return _contents;
             }
         }
-        PdfContents _contents;
+        PdfContents _contents = null!;
 
         #region Annotations
 
@@ -420,7 +422,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
                 return _annotations;
             }
         }
-        PdfAnnotations _annotations;
+        PdfAnnotations _annotations = null!;
 
         /// <summary>
         /// Adds an intra document link.
@@ -491,7 +493,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
                 _customValues = null;
             }
         }
-        PdfCustomValues _customValues;
+        PdfCustomValues _customValues = null!;
 
         /// <summary>
         /// Gets the PdfResources object of this page.
@@ -505,7 +507,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
                 return _resources;
             }
         }
-        PdfResources _resources;
+        PdfResources _resources = null!;
 
         /// <summary>
         /// Implements the interface because the primary function is internal.
@@ -960,7 +962,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
             {
                 get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
             }
-            static DictionaryMeta _meta;
+            static DictionaryMeta _meta = null!;
         }
 
         /// <summary>

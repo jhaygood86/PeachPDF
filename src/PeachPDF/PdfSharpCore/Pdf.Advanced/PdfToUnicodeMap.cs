@@ -59,7 +59,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             get { return _cmapInfo; }
             set { _cmapInfo = value; }
         }
-        CMapInfo _cmapInfo;
+        CMapInfo _cmapInfo = null!;
 
         /// <summary>
         /// Creates the ToUnicode map from the CMapInfo.

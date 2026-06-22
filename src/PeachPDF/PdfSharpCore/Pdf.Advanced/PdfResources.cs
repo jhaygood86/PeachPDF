@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 using System.Collections.Generic;
 
 namespace PeachPDF.PdfSharpCore.Pdf.Advanced
@@ -189,7 +191,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         {
             get { return _fonts ?? (_fonts = (PdfResourceMap)Elements.GetValue(Keys.Font, VCF.Create)); }
         }
-        PdfResourceMap _fonts;
+        PdfResourceMap _fonts = null!;
 
         /// <summary>
         /// Gets the external objects map.
@@ -198,7 +200,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         {
             get { return _xObjects ?? (_xObjects = (PdfResourceMap)Elements.GetValue(Keys.XObject, VCF.Create)); }
         }
-        PdfResourceMap _xObjects;
+        PdfResourceMap _xObjects = null!;
 
         // TODO: make own class
         internal PdfResourceMap ExtGStates
@@ -208,35 +210,35 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 return _extGStates ?? (_extGStates = (PdfResourceMap)Elements.GetValue(Keys.ExtGState, VCF.Create));
             }
         }
-        PdfResourceMap _extGStates;
+        PdfResourceMap _extGStates = null!;
 
         // TODO: make own class
         internal PdfResourceMap ColorSpaces
         {
             get { return _colorSpaces ?? (_colorSpaces = (PdfResourceMap)Elements.GetValue(Keys.ColorSpace, VCF.Create)); }
         }
-        PdfResourceMap _colorSpaces;
+        PdfResourceMap _colorSpaces = null!;
 
         // TODO: make own class
         internal PdfResourceMap Patterns
         {
             get { return _patterns ?? (_patterns = (PdfResourceMap)Elements.GetValue(Keys.Pattern, VCF.Create)); }
         }
-        PdfResourceMap _patterns;
+        PdfResourceMap _patterns = null!;
 
         // TODO: make own class
         internal PdfResourceMap Shadings
         {
             get { return _shadings ?? (_shadings = (PdfResourceMap)Elements.GetValue(Keys.Shading, VCF.Create)); }
         }
-        PdfResourceMap _shadings;
+        PdfResourceMap _shadings = null!;
 
         // TODO: make own class
         internal PdfResourceMap Properties
         {
             get { return _properties ?? (_properties = (PdfResourceMap)Elements.GetValue(Keys.Properties, VCF.Create)); }
         }
-        PdfResourceMap _properties;
+        PdfResourceMap _properties = null!;
 
         /// <summary>
         /// Gets a new local name for this resource.
@@ -367,7 +369,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// <summary>
         /// All the names of imported resources.
         /// </summary>
-        Dictionary<string, object> _importedResourceNames;
+        Dictionary<string, object> _importedResourceNames = null!;
 
         /// <summary>
         /// Maps all PDFsharp resources to their local resource names.
@@ -438,7 +440,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             {
                 get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
             }
-            static DictionaryMeta _meta;
+            static DictionaryMeta _meta = null!;
         }
 
         /// <summary>

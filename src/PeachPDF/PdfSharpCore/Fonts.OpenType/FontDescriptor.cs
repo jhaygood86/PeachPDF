@@ -83,7 +83,7 @@ namespace PeachPDF.PdfSharpCore.Fonts.OpenType
             get { return _fontName; }
             protected set { _fontName = value; }
         }
-        string _fontName;
+        string _fontName = null!;
 
         ///// <summary>
         ///// 
@@ -113,7 +113,7 @@ namespace PeachPDF.PdfSharpCore.Fonts.OpenType
             get { return _weight; }
             private set { _weight = value; }  // BUG: never set
         }
-        string _weight;
+        string _weight = null!;
 
         /// <summary>
         /// Gets a value indicating whether this instance belongs to a bold font.
@@ -241,7 +241,7 @@ namespace PeachPDF.PdfSharpCore.Fonts.OpenType
             get { return _version; }
             private set { _version = value; }  // BUG: never set
         }
-        string _version;
+        string _version = null!;
 
         ///// <summary>
         ///// 
@@ -260,7 +260,7 @@ namespace PeachPDF.PdfSharpCore.Fonts.OpenType
             get { return _encodingScheme; }
             private set { _encodingScheme = value; }  // BUG: never set
         }
-        string _encodingScheme;
+        string _encodingScheme = null!;
 
         /// <summary>
         /// 

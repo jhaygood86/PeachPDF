@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 using PeachPDF.PdfSharpCore.Drawing;
 using System;
 
@@ -89,7 +91,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Annotations
             get { return _parent; }
             set { _parent = value; }
         }
-        PdfAnnotations _parent;
+        PdfAnnotations _parent = null!;
 
         /// <summary>
         /// Gets or sets the annotation rectangle, defining the location of the annotation

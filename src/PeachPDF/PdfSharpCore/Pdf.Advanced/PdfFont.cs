@@ -55,7 +55,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             }
             set { _fontDescriptor = value; }
         }
-        PdfFontDescriptor _fontDescriptor;
+        PdfFontDescriptor _fontDescriptor = null!;
 
         internal PdfFontEncoding FontEncoding;
 
@@ -87,7 +87,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             get { return _cmapInfo; }
             set { _cmapInfo = value; }
         }
-        internal CMapInfo _cmapInfo;
+        internal CMapInfo _cmapInfo = null!;
 
         /// <summary>
         /// Gets or sets ToUnicodeMap.
@@ -97,7 +97,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             get { return _toUnicode; }
             set { _toUnicode = value; }
         }
-        internal PdfToUnicodeMap _toUnicode;
+        internal PdfToUnicodeMap _toUnicode = null!;
 
 
         /// <summary>

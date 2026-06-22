@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 using PeachPDF.PdfSharpCore.Pdf.Internal;
 using PeachPDF.PdfSharpCore.Pdf.IO;
 using System;
@@ -81,7 +83,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Annotations
         }
         int _destPage;
         LinkType _linkType;
-        string _url;
+        string _url = null!;
 
         /// <summary>
         /// Creates a link within the current document using a named destination.
@@ -233,7 +235,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Annotations
             {
                 get { return _meta ?? (_meta = CreateMeta(typeof(Keys))); }
             }
-            static DictionaryMeta _meta;
+            static DictionaryMeta _meta = null!;
         }
 
         /// <summary>

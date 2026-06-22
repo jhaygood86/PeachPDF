@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+#nullable disable warnings
+
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using System;
 using System.Collections;
@@ -142,7 +144,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Annotations
             get { return _page; }
             set { _page = value; }
         }
-        PdfPage _page;
+        PdfPage _page = null!;
 
         /// <summary>
         /// Fixes the /P element in imported annotation.

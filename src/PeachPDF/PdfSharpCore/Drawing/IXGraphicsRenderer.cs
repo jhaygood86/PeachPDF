@@ -71,42 +71,42 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Draws a rectangle.
         /// </summary>
-        void DrawRectangle(XPen pen, XBrush brush, double x, double y, double width, double height);
+        void DrawRectangle(XPen? pen, XBrush? brush, double x, double y, double width, double height);
 
         /// <summary>
         /// Draws a series of rectangles.
         /// </summary>
-        void DrawRectangles(XPen pen, XBrush brush, XRect[] rects);
+        void DrawRectangles(XPen? pen, XBrush? brush, XRect[] rects);
 
         /// <summary>
         /// Draws a rectangle with rounded corners.
         /// </summary>
-        void DrawRoundedRectangle(XPen pen, XBrush brush, double x, double y, double width, double height, double ellipseWidth, double ellipseHeight);
+        void DrawRoundedRectangle(XPen? pen, XBrush? brush, double x, double y, double width, double height, double ellipseWidth, double ellipseHeight);
 
         /// <summary>
         /// Draws an ellipse.
         /// </summary>
-        void DrawEllipse(XPen pen, XBrush brush, double x, double y, double width, double height);
+        void DrawEllipse(XPen? pen, XBrush? brush, double x, double y, double width, double height);
 
         /// <summary>
         /// Draws a polygon.
         /// </summary>
-        void DrawPolygon(XPen pen, XBrush brush, XPoint[] points, XFillMode fillmode);
+        void DrawPolygon(XPen? pen, XBrush? brush, XPoint[] points, XFillMode fillmode);
 
         /// <summary>
         /// Draws a pie.
         /// </summary>
-        void DrawPie(XPen pen, XBrush brush, double x, double y, double width, double height, double startAngle, double sweepAngle);
+        void DrawPie(XPen? pen, XBrush? brush, double x, double y, double width, double height, double startAngle, double sweepAngle);
 
         /// <summary>
         /// Draws a cardinal spline.
         /// </summary>
-        void DrawClosedCurve(XPen pen, XBrush brush, XPoint[] points, double tension, XFillMode fillmode);
+        void DrawClosedCurve(XPen? pen, XBrush? brush, XPoint[] points, double tension, XFillMode fillmode);
 
         /// <summary>
         /// Draws a graphical path.
         /// </summary>
-        void DrawPath(XPen pen, XBrush brush, XGraphicsPath path);
+        void DrawPath(XPen? pen, XBrush? brush, XGraphicsPath path);
 
         /// <summary>
         /// Draws a series of glyphs identified by the specified text and font.

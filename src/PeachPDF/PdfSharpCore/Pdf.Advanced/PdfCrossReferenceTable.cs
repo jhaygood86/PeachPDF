@@ -1,4 +1,4 @@
-﻿#region PDFsharp - A .NET library for processing PDF
+#region PDFsharp - A .NET library for processing PDF
 //
 // Authors:
 //   Stefan Lange
@@ -26,6 +26,8 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
 // DEALINGS IN THE SOFTWARE.
 #endregion
+
+#nullable disable warnings
 
 using PeachPDF.PdfSharpCore.Pdf.IO;
 using System;
@@ -500,7 +502,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 return _deadObject.Reference;
             }
         }
-        PdfDictionary _deadObject;
+        PdfDictionary _deadObject = null!;
     }
 
     ///// <summary>
