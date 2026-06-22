@@ -848,16 +848,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
                         throw new InvalidCastException("GetDateTime: Object is not a string or date.");
                 }
 
-                if (strDate != "")
-                {
-                    try
-                    {
-                        defaultValue = Parser.ParseDateTime(strDate, defaultValue);
-                    }
-                    // ReSharper disable EmptyGeneralCatchClause
-                    catch { }
-                    // ReSharper restore EmptyGeneralCatchClause
-                }
                 return defaultValue;
             }
 

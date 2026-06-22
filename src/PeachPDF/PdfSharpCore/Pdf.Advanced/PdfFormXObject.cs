@@ -70,172 +70,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         }
         double _dpiY = 72;
 
-        internal PdfFormXObject(PdfDocument thisDocument, PdfImportedObjectTable importedObjectTable, XPdfForm form)
-            : base(thisDocument)
-        {
-            Debug.Assert(ReferenceEquals(thisDocument, importedObjectTable.Owner));
-            Elements.SetName(Keys.Type, "/XObject");
-            Elements.SetName(Keys.Subtype, "/Form");
-
-            if (form.IsTemplate)
-            {
-                Debug.Assert(importedObjectTable == null);
-                // TODO more initialization here???
-                return;
-            }
-            Debug.Assert(importedObjectTable != null);
-
-            XPdfForm pdfForm = form;
-            // Get import page
-            PdfPages importPages = importedObjectTable.ExternalDocument.Pages;
-            if (pdfForm.PageNumber < 1 || pdfForm.PageNumber > importPages.Count)
-                PSSR.ImportPageNumberOutOfRange(pdfForm.PageNumber, importPages.Count, form._path);
-            PdfPage importPage = importPages[pdfForm.PageNumber - 1];
-
-            // Import resources
-            PdfItem res = importPage.Elements["/Resources"];
-            if (res != null) // unlikely but possible
-            {
-#if true
-                // Get root object
-                PdfObject root;
-                if (res is PdfReference)
-                    root = ((PdfReference)res).Value;
-                else
-                    root = (PdfDictionary)res;
-
-                root = ImportClosure(importedObjectTable, thisDocument, root);
-                // If the root was a direct object, make it indirect.
-                if (root.Reference == null)
-                    thisDocument._irefTable.Add(root);
-
-                Debug.Assert(root.Reference != null);
-                Elements["/Resources"] = root.Reference;
-#else
-                // Get transitive closure
-                PdfObject[] resources = importPage.Owner.Internals.GetClosure(resourcesRoot);
-                int count = resources.Length;
-#if DEBUG_
-                for (int idx = 0; idx < count; idx++)
-                {
-                    Debug.Assert(resources[idx].XRef != null);
-                    Debug.Assert(resources[idx].XRef.Document != null);
-                    Debug.Assert(resources[idx].Document != null);
-                    if (resources[idx].ObjectID.ObjectNumber == 12)
-                        GetType();
-                }
-#endif
-                // 1st step. Already imported objects are reused and new ones are cloned.
-                for (int idx = 0; idx < count; idx++)
-                {
-                    PdfObject obj = resources[idx];
-                    if (importedObjectTable.Contains(obj.ObjectID))
-                    {
-                        // external object was already imported
-                        PdfReference iref = importedObjectTable[obj.ObjectID];
-                        Debug.Assert(iref != null);
-                        Debug.Assert(iref.Value != null);
-                        Debug.Assert(iref.Document == Owner);
-                        // replace external object by the already clone counterpart
-                        resources[idx] = iref.Value;
-                    }
-                    else
-                    {
-                        // External object was not imported ealier and must be cloned
-                        PdfObject clone = obj.Clone();
-                        Debug.Assert(clone.Reference == null);
-                        clone.Document = Owner;
-                        if (obj.Reference != null)
-                        {
-                            // add it to this (the importer) document
-                            Owner.irefTable.Add(clone);
-                            Debug.Assert(clone.Reference != null);
-                            // save old object identifier
-                            importedObjectTable.Add(obj.ObjectID, clone.Reference);
-                            //Debug.WriteLine("Cloned: " + obj.ObjectID.ToString());
-                        }
-                        else
-                        {
-                            // The root object (the /Resources value) is not an indirect object
-                            Debug.Assert(idx == 0);
-                            // add it to this (the importer) document
-                            Owner.irefTable.Add(clone);
-                            Debug.Assert(clone.Reference != null);
-                        }
-                        // replace external object by its clone
-                        resources[idx] = clone;
-                    }
-                }
-#if DEBUG_
-        for (int idx = 0; idx < count; idx++)
-        {
-          Debug.Assert(resources[idx].XRef != null);
-          Debug.Assert(resources[idx].XRef.Document != null);
-          Debug.Assert(resources[idx].Document != null);
-          if (resources[idx].ObjectID.ObjectNumber == 12)
-            GetType();
-        }
-#endif
-
-                // 2nd step. Fix up indirect references that still refers to the import document.
-                for (int idx = 0; idx < count; idx++)
-                {
-                    PdfObject obj = resources[idx];
-                    Debug.Assert(obj.Owner != null);
-                    FixUpObject(importedObjectTable, importedObjectTable.Owner, obj);
-                }
-
-                // Set resources key to the root of the clones
-                Elements["/Resources"] = resources[0].Reference;
-#endif
-            }
-
-            // Take /Rotate into account
-            PdfRectangle rect = importPage.Elements.GetRectangle(PdfPage.Keys.MediaBox);
-            int rotate = importPage.Elements.GetInteger(PdfPage.Keys.Rotate);
-            //rotate = 0;
-            if (rotate == 0)
-            {
-                // Set bounding box to media box
-                Elements["/BBox"] = rect;
-            }
-            else
-            {
-                // TODO: Have to adjust bounding box? (I think not, but I'm not sure -> wait for problem)
-                Elements["/BBox"] = rect;
-
-                // Rotate the image such that it is upright
-                XMatrix matrix = new XMatrix();
-                double width = rect.Width;
-                double height = rect.Height;
-                matrix.RotateAtPrepend(-rotate, new XPoint(width / 2, height / 2));
-
-                // Translate the image such that its center lies on the center of the rotated bounding box
-                double offset = (height - width) / 2;
-                if (rotate == 90)
-                    matrix.TranslatePrepend(offset, offset);
-                else if (rotate == -90)
-                    matrix.TranslatePrepend(-offset, -offset);
-
-                //string item = "[" + PdfEncoders.ToString(matrix) + "]";
-                //Elements[Keys.Matrix] = new PdfLiteral(item);
-                Elements.SetMatrix(Keys.Matrix, matrix);
-            }
-
-            // Preserve filter because the content keeps unmodified
-            PdfContent content = importPage.Contents.CreateSingleContent();
-#if !DEBUG
-            content.Compressed = true;
-#endif
-            PdfItem filter = content.Elements["/Filter"];
-            if (filter != null)
-                Elements["/Filter"] = filter.Clone();
-
-            // (no cloning needed because the bytes keep untouched)
-            Stream = content.Stream; // new PdfStream(bytes, this);
-            Elements.SetInteger("/Length", content.Stream.Value.Length);
-        }
-
         /// <summary>
         /// Gets the PdfResources object of this form.
         /// </summary>
@@ -425,7 +259,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             /// <summary>
             /// (Required) An array of four numbers in the form coordinate system, giving the 
             /// coordinates of the left, bottom, right, and top edges, respectively, of the 
-            /// form XObject’s bounding box. These boundaries are used to clip the form XObject
+            /// form XObjectï¿½s bounding box. These boundaries are used to clip the form XObject
             /// and to determine its size for caching.
             /// </summary>
             [KeyInfo(KeyType.Rectangle | KeyType.Required)]
@@ -449,7 +283,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             /// <summary>
             /// (Optional; PDF 1.4) A group attributes dictionary indicating that the contents
             /// of the form XObject are to be treated as a group and specifying the attributes
-            /// of that group (see Section 4.9.2, “Group XObjects”).
+            /// of that group (see Section 4.9.2, ï¿½Group XObjectsï¿½).
             /// Note: If a Ref entry (see below) is present, the group attributes also apply to the
             /// external page imported by that entry, which allows such an imported page to be
             /// treated as a group without further modification.

@@ -28,7 +28,6 @@
 #endregion
 
 using PeachPDF.PdfSharpCore.Pdf.IO;
-using System.IO;
 
 namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 {
@@ -51,63 +50,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// <summary>
         /// Initializes a new instance from an existing dictionary. Used for object type transformation.
         /// </summary>
-        internal PdfObjectStream(PdfDictionary dict)
-            : base(dict)
-        {
-            // while objects inside an object-stream are not encrypted, the object-streams themself ARE !
-            // 7.5.7, Page 47: In an encrypted file (i.e., entire object stream is encrypted),
-            // strings occurring anywhere in an object stream shall not be separately encrypted.
-            if (_document._trailer.Elements[PdfTrailer.Keys.Encrypt] is PdfReference)
-                _document.SecurityHandler.EncryptObject(dict);
-
-            int n = Elements.GetInteger(Keys.N);
-            int first = Elements.GetInteger(Keys.First);
-            Stream.TryUnfilter();
-
-            Parser parser = new Parser(null, new MemoryStream(Stream.Value));
-            _header = parser.ReadObjectStreamHeader(n, first);
-        }
-
-        /// <summary>
-        /// Reads the compressed object with the specified index.
-        /// </summary>
-        internal void ReadReferences(PdfCrossReferenceTable xrefTable)
-        {
-            ////// Create parser for stream.
-            ////Parser parser = new Parser(_document, new MemoryStream(Stream.Value));
-            for (int idx = 0; idx < _header.Length; idx++)
-            {
-                int objectNumber = _header[idx][0];
-                int offset = _header[idx][1];
-
-                PdfObjectID objectID = new PdfObjectID(objectNumber);
-
-                // HACK: -1 indicates compressed object.
-                PdfReference iref = new PdfReference(objectID, -1);
-                ////iref.ObjectID = objectID;
-                ////iref.Value = xrefStream;
-                if (!xrefTable.Contains(iref.ObjectID))
-                {
-                    xrefTable.Add(iref);
-                }
-                else
-                {
-                    GetType();
-                }
-            }
-        }
-
-        /// <summary>
-        /// Reads the compressed object with the specified index.
-        /// </summary>
-        internal PdfReference ReadCompressedObject(int index)
-        {
-            Parser parser = new Parser(_document, new MemoryStream(Stream.Value));
-            int objectNumber = _header[index][0];
-            int offset = _header[index][1];
-            return parser.ReadCompressedObject(objectNumber, offset);
-        }
-
         /// <summary>
         /// N pairs of integers.
         /// The first integer represents the object number of the compressed object.

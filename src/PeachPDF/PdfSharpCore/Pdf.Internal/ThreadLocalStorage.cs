@@ -27,12 +27,9 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using PeachPDF.PdfSharpCore.Pdf.IO;
-using PeachPDF.PdfSharpCore.Pdf.IO.enums;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 
 namespace PeachPDF.PdfSharpCore.Pdf.Internal
 {
@@ -54,26 +51,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Internal
         public void RemoveDocument(string path)
         {
             _importedDocuments.Remove(path);
-        }
-
-        public PdfDocument GetDocument(string path, PdfReadAccuracy accuracy)
-        {
-            Debug.Assert(path.StartsWith("*") || Path.IsPathRooted(path), "Path must be full qualified.");
-
-            PdfDocument document = null;
-            PdfDocument.DocumentHandle handle;
-            if (_importedDocuments.TryGetValue(path, out handle))
-            {
-                document = handle.Target;
-                if (document == null)
-                    RemoveDocument(path);
-            }
-            if (document == null)
-            {
-                document = PdfReader.Open(path, PdfDocumentOpenMode.Import, accuracy);
-                _importedDocuments.Add(path, document.Handle);
-            }
-            return document;
         }
 
         public PdfDocument[] Documents

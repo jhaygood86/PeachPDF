@@ -404,7 +404,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
 
             if (omitStream)
             {
-                WriteRaw("  «...stream content omitted...»\n");  // useful for debugging only
+                WriteRaw("  ï¿½...stream content omitted...ï¿½\n");  // useful for debugging only
             }
             else
             {
@@ -597,7 +597,9 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
 
         CharCat GetCategory(char ch)
         {
-            if (Lexer.IsDelimiter(ch))
+            if (ch == '(' || ch == ')' || ch == '<' || ch == '>' ||
+                ch == '[' || ch == ']' || ch == '{' || ch == '}' ||
+                ch == '/' || ch == '%')
                 return CharCat.Delimiter;
             if (ch == Chars.LF)
                 return CharCat.NewLine;

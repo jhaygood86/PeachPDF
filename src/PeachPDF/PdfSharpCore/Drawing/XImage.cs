@@ -30,7 +30,6 @@
 using MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF.PdfSharpCore.Pdf.IO;
-using PeachPDF.PdfSharpCore.Pdf.IO.enums;
 using PeachPDF.PdfSharpCore.Utils;
 using System;
 using System.Diagnostics;
@@ -110,26 +109,12 @@ namespace PeachPDF.PdfSharpCore.Drawing
 
         /// <summary>
         /// Creates an image from the specified file.
-        /// For non-pdf files, this requires that an instance of an implementation of <see cref="T:MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes.ImageSource"/> be set on the `ImageSource.ImageSourceImpl` property.
+        /// Requires that an instance of an implementation of <see cref="T:MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes.ImageSource"/> be set on the `ImageSource.ImageSourceImpl` property.
         /// For .NetCore apps, if this property is null at this point, then <see cref="T:PeachPDF.PdfSharpCore.Utils.StbImageSharpImageSource"/> is used.
         /// </summary>
-        /// <param name="path">The path to a BMP, PNG, GIF, JPEG, TIFF, or PDF file.</param>
+        /// <param name="path">The path to a BMP, PNG, GIF, or JPEG file.</param>
         public static XImage FromFile(string path)
         {
-            return FromFile(path, PdfReadAccuracy.Strict);
-        }
-
-        /// <summary>
-        /// Creates an image from the specified file.
-        /// For non-pdf files, this requires that an instance of an implementation of <see cref="T:MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes.ImageSource"/> be set on the `ImageSource.ImageSourceImpl` property.
-        /// For .NetCore apps, if this property is null at this point, then <see cref="T:PeachPDF.PdfSharpCore.Utils.StbImageSharpImageSource"/> is used.
-        /// </summary>
-        /// <param name="path">The path to a BMP, PNG, GIF, JPEG, TIFF, or PDF file.</param>
-        /// <param name="accuracy">Moderate allows for broken references when using a PDF file.</param>
-        public static XImage FromFile(string path, PdfReadAccuracy accuracy)
-        {
-            if (PdfReader.TestPdfFile(path) > 0)
-                return new XPdfForm(path, accuracy);
             return new XImage(path);
         }
 
@@ -157,17 +142,11 @@ namespace PeachPDF.PdfSharpCore.Drawing
         }
 
         /// <summary>
-        /// Tests if a file exist. Supports PDF files with page number suffix.
+        /// Tests if a file exists.
         /// </summary>
-        /// <param name="path">The path to a BMP, PNG, GIF, JPEG, TIFF, or PDF file.</param>
+        /// <param name="path">The path to a BMP, PNG, GIF, or JPEG file.</param>
         public static bool ExistsFile(string path)
         {
-            // Support for "base64:" pseudo protocol is a MigraDoc feature, currently completely implemented in MigraDoc files. TODO: Does support for "base64:" make sense for PDFsharp? Probably not as PDFsharp can handle images from streams.
-            //if (path.StartsWith("base64:")) // The Image is stored in the string here, so the file exists.
-            //    return true;
-
-            if (PdfReader.TestPdfFile(path) > 0)
-                return true;
             return false;
         }
 

@@ -114,24 +114,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
             _outStream = outputStream;
         }
 
-        internal PdfDocument(Lexer lexer)
-        {
-            //PdfDocument.Gob.AttatchDocument(Handle);
-
-            _creation = DateTime.Now;
-            _state = DocumentState.Imported;
-
-            //_info = new PdfInfo(this);
-            //_pages = new PdfPages(this);
-            //_fontTable = new PdfFontTable();
-            //_catalog = new PdfCatalog(this);
-            ////_font = new PdfFont();
-            //_objects = new PdfObjectTable(this);
-            //_trailer = new PdfTrailer(this);
-            _irefTable = new PdfCrossReferenceTable(this);
-            _lexer = lexer;
-        }
-
         void Initialize()
         {
             //_info = new PdfInfo(this);
@@ -883,9 +865,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
         internal PdfTrailer _trailer;
         internal PdfCrossReferenceTable _irefTable;
         internal Stream _outStream;
-
-        // Imported Document
-        internal Lexer _lexer;
 
         internal DateTime _creation;
 

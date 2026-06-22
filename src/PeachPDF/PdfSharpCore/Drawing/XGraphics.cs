@@ -37,7 +37,7 @@ using System;
 // ReSharper disable RedundantNameQualifier
 // ReSharper disable UseNameofExpression
 
-namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufräumen
+namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufrï¿½umen
 {
     /// <summary>
     /// Holds information about the current state of the XGraphics object.
@@ -284,17 +284,6 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufräumen
         }
 
         /// <summary>
-        /// Creates a new instance of the XGraphics class from a PeachPDF.PdfSharpCore.Drawing.XPdfForm object.
-        /// </summary>
-        public static XGraphics FromPdfForm(XPdfForm form)
-        {
-            if (form.Gfx != null)
-                return form.Gfx;
-
-            return new XGraphics(form);
-        }
-
-        /// <summary>
         /// Creates a new instance of the XGraphics class from a PeachPDF.PdfSharpCore.Drawing.XForm object.
         /// </summary>
         public static XGraphics FromForm(XForm form)
@@ -531,7 +520,7 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufräumen
 
         // ----- DrawBezier ---------------------------------------------------------------------------
         /// <summary>
-        /// Draws a Bézier spline defined by four points.
+        /// Draws a Bï¿½zier spline defined by four points.
         /// </summary>
         public void DrawBezier(XPen pen, XPoint pt1, XPoint pt2, XPoint pt3, XPoint pt4)
         {
@@ -539,7 +528,7 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufräumen
         }
 
         /// <summary>
-        /// Draws a Bézier spline defined by four points.
+        /// Draws a Bï¿½zier spline defined by four points.
         /// </summary>
         public void DrawBezier(XPen pen, double x1, double y1, double x2, double y2,
           double x3, double y3, double x4, double y4)
@@ -555,7 +544,7 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufräumen
         // ----- DrawBeziers --------------------------------------------------------------------------
 
         /// <summary>
-        /// Draws a series of Bézier splines from an array of points.
+        /// Draws a series of Bï¿½zier splines from an array of points.
         /// </summary>
         public void DrawBeziers(XPen pen, XPoint[] points)
         {

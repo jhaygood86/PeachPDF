@@ -42,14 +42,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Initializes a new instance of the <see cref="PdfDate"/> class.
         /// </summary>
-        public PdfDate(string value)
-        {
-            _value = Parser.ParseDateTime(value, DateTime.MinValue);
-        }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="PdfDate"/> class.
-        /// </summary>
         public PdfDate(DateTime value)
         {
             _value = value;

@@ -635,24 +635,13 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
                 if (cx != 0 && cy != 0)
                 {
-                    XPdfForm xForm = image as XPdfForm;
                     if (_gfx.PageDirection == XPageDirection.Downwards)
                     {
-                        // If we have an XPdfForm, then we take the MediaBox into account.
-                        double xDraw = x;
-                        double yDraw = y;
-                        if (xForm != null)
-                        {
-                            // Yes, it is an XPdfForm - adjust the position where the page will be drawn.
-                            xDraw -= xForm.Page.MediaBox.X1;
-                            yDraw += xForm.Page.MediaBox.Y1;
-                        }
                         AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm 100 Tz {4} Do Q\n",
-                            xDraw, yDraw + height, cx, cy, name);
+                            x, y + height, cx, cy, name);
                     }
                     else
                     {
-                        // TODO Translation for MediaBox.
                         AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm {4} Do Q\n",
                             x, y, cx, cy, name);
                     }
@@ -698,23 +687,13 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
                 if (cx != 0 && cy != 0)
                 {
-                    XPdfForm xForm = image as XPdfForm;
                     if (_gfx.PageDirection == XPageDirection.Downwards)
                     {
-                        double xDraw = x;
-                        double yDraw = y;
-                        if (xForm != null)
-                        {
-                            // Yes, it is an XPdfForm - adjust the position where the page will be drawn.
-                            xDraw -= xForm.Page.MediaBox.X1;
-                            yDraw += xForm.Page.MediaBox.Y1;
-                        }
                         AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm {4} Do Q\n",
-                            xDraw, yDraw + height, cx, cy, name);
+                            x, y + height, cx, cy, name);
                     }
                     else
                     {
-                        // TODO Translation for MediaBox.
                         AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm {4} Do Q\n",
                             x, y, cx, cy, name);
                     }

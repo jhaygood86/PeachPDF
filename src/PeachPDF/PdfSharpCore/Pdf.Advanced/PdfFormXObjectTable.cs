@@ -72,28 +72,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 form._pdfForm = null;
             }
 
-            XPdfForm pdfForm = form as XPdfForm;
-            if (pdfForm != null)
-            {
-                // Is the external PDF file from which is imported already known for the current document?
-                Selector selector = new Selector(form);
-                PdfImportedObjectTable importedObjectTable;
-                if (!_forms.TryGetValue(selector, out importedObjectTable))
-                {
-                    // No: Get the external document from the form and create ImportedObjectTable.
-                    PdfDocument doc = pdfForm.ExternalDocument;
-                    importedObjectTable = new PdfImportedObjectTable(Owner, doc);
-                    _forms[selector] = importedObjectTable;
-                }
-
-                PdfFormXObject xObject = importedObjectTable.GetXObject(pdfForm.PageNumber);
-                if (xObject == null)
-                {
-                    xObject = new PdfFormXObject(Owner, importedObjectTable, pdfForm);
-                    importedObjectTable.SetXObject(pdfForm.PageNumber, xObject);
-                }
-                return xObject;
-            }
             Debug.Assert(form.GetType() == typeof(XForm));
             form._pdfForm = new PdfFormXObject(Owner, form);
             return form._pdfForm;
