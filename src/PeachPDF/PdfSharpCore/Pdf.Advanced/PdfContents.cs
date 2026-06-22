@@ -27,7 +27,6 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using PeachPDF.PdfSharpCore.Pdf.Content.Objects;
 using PeachPDF.PdfSharpCore.Pdf.IO;
 using System;
 using System.Collections;
@@ -120,17 +119,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             PdfContent content = new PdfContent(Owner);
             content.Stream = new PdfDictionary.PdfStream(bytes, content);
             return content;
-        }
-
-        /// <summary>
-        /// Replaces the current content of the page with the specified content sequence.
-        /// </summary>
-        public PdfContent ReplaceContent(CSequence cseq)
-        {
-            if (cseq == null)
-                throw new ArgumentException("cseq");
-
-            return ReplaceContent(cseq.ToContent());
         }
 
         /// <summary>
