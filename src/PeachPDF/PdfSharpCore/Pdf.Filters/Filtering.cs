@@ -48,52 +48,16 @@ namespace PeachPDF.PdfSharpCore.Pdf.Filters
             // Some tools use abbreviations
             switch (filterName)
             {
-                case "ASCIIHexDecode":
-                case "AHx":
-                    return _asciiHexDecode ?? (_asciiHexDecode = new AsciiHexDecode());
-
-                case "ASCII85Decode":
-                case "A85":
-                    return _ascii85Decode ?? (_ascii85Decode = new Ascii85Decode());
-
-                case "LZWDecode":
-                case "LZW":
-                    return _lzwDecode ?? (_lzwDecode = new LzwDecode());
-
                 case "FlateDecode":
                 case "Fl":
                     return _flateDecode ?? (_flateDecode = new FlateDecode());
 
-                //case "RunLengthDecode":
-                //  if (RunLengthDecode == null)
-                //    RunLengthDecode = new RunLengthDecode();
-                //  return RunLengthDecode;
-                //
-                //case "CCITTFaxDecode":
-                //  if (CCITTFaxDecode == null)
-                //    CCITTFaxDecode = new CCITTFaxDecode();
-                //  return CCITTFaxDecode;
-                //
-                //case "JBIG2Decode":
-                //  if (JBIG2Decode == null)
-                //    JBIG2Decode = new JBIG2Decode();
-                //  return JBIG2Decode;
-                //
-                //case "DCTDecode":
-                //  if (DCTDecode == null)
-                //    DCTDecode = new DCTDecode();
-                //  return DCTDecode;
-                //
-                //case "JPXDecode":
-                //  if (JPXDecode == null)
-                //    JPXDecode = new JPXDecode();
-                //  return JPXDecode;
-                //
-                //case "Crypt":
-                //  if (Crypt == null)
-                //    Crypt = new Crypt();
-                //  return Crypt;
-
+                case "ASCIIHexDecode":
+                case "AHx":
+                case "ASCII85Decode":
+                case "A85":
+                case "LZWDecode":
+                case "LZW":
                 case "RunLengthDecode":
                 case "CCITTFaxDecode":
                 case "JBIG2Decode":
@@ -105,35 +69,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Filters
             }
             throw new NotImplementedException("Unknown filter: " + filterName);
         }
-
-        /// <summary>
-        /// Gets the filter singleton.
-        /// </summary>
-        // ReSharper disable InconsistentNaming
-        public static AsciiHexDecode ASCIIHexDecode
-        // ReSharper restore InconsistentNaming
-        {
-            get { return _asciiHexDecode ?? (_asciiHexDecode = new AsciiHexDecode()); }
-        }
-        static AsciiHexDecode _asciiHexDecode;
-
-        /// <summary>
-        /// Gets the filter singleton.
-        /// </summary>
-        public static Ascii85Decode ASCII85Decode
-        {
-            get { return _ascii85Decode ?? (_ascii85Decode = new Ascii85Decode()); }
-        }
-        static Ascii85Decode _ascii85Decode;
-
-        /// <summary>
-        /// Gets the filter singleton.
-        /// </summary>
-        public static LzwDecode LzwDecode
-        {
-            get { return _lzwDecode ?? (_lzwDecode = new LzwDecode()); }
-        }
-        static LzwDecode _lzwDecode;
 
         /// <summary>
         /// Gets the filter singleton.
