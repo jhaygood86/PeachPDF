@@ -380,7 +380,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
                     //  Document.xrefTable.Add(_content);
                     //}
                     Debug.Assert(_contents.Reference == null);
-                    Elements[Keys.Contents] = _contents = null!;
+                    Elements[Keys.Contents] = _contents;
                 }
                 return _contents;
             }

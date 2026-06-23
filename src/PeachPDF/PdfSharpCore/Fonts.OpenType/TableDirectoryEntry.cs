@@ -54,7 +54,7 @@ namespace PeachPDF.PdfSharpCore.Fonts.OpenType
         public TableDirectoryEntry(string tag)
         {
             Debug.Assert(tag.Length == 4);
-            Tag = Tag = null!;
+            Tag = tag;
             //CheckSum = 0;
             //Offset = 0;
             //Length = 0;

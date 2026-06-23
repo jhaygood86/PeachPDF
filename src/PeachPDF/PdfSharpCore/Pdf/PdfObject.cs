@@ -148,7 +148,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
                 _iref.ObjectID = objectID;
             }
             _iref.Value = this;
-            _iref.Document = _document = null!;
+            _iref.Document = _document;
         }
 
         /// <summary>

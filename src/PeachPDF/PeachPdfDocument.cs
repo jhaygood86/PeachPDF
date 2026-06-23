@@ -14,6 +14,10 @@ public class PeachPdfDocument
 
     internal PdfDocument PdfDocument => _document;
 
+    public int PageCount => _document.PageCount;
+
+    internal PdfPages Pages => _document.Pages;
+
     public void Save(Stream stream)
     {
         _document.Save(stream);

@@ -162,7 +162,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         {
             _familyName = _fontface.name.Name;
             if (string.IsNullOrEmpty(_faceName) || _faceName.StartsWith("?"))
-                _faceName = _familyName = null!;
+                _faceName = _familyName;
             _styleName = _fontface.name.Style;
             _displayName = _fontface.name.FullFontName;
             if (string.IsNullOrEmpty(_displayName))

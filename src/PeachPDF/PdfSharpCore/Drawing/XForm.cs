@@ -163,7 +163,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
 
             Debug.Assert(_formState == FormState.Created);
             _formState = FormState.UnderConstruction;
-            Gfx = Gfx = null!;
+            Gfx = gfx;
         }
         internal XGraphics Gfx = null!;
 
