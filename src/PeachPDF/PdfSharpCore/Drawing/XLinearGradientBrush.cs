@@ -49,6 +49,14 @@ namespace PeachPDF.PdfSharpCore.Drawing
             _point2 = point2;
         }
 
+        public XLinearGradientBrush(XPoint point1, XPoint point2, XColor[] colors, double[] positions) : base(colors[0], colors[colors.Length - 1])
+        {
+            _point1 = point1;
+            _point2 = point2;
+            _colors = colors;
+            _positions = positions;
+        }
+
 
         /// <summary>
         /// Initializes a new instance of the <see cref="XLinearGradientBrush"/> class.
@@ -77,5 +85,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         internal XPoint _point1, _point2;
         internal XRect _rect;
         internal XLinearGradientMode _linearGradientMode;
+        internal XColor[]? _colors;
+        internal double[]? _positions;
     }
 }

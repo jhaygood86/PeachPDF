@@ -176,19 +176,69 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             const string format = Config.SignificantFigures3;
             Elements[Keys.Coords] = new PdfLiteral("[{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "}]", x1, y1, x2, y2);
 
-            //Elements[Keys.Background] = new PdfRawItem("[0 1 1]");
-            //Elements[Keys.Domain] = 
-            Elements[Keys.Function] = function;
-            //Elements[Keys.Extend] = new PdfRawItem("[true true]");
+            Elements[Keys.Extend] = new PdfLiteral("[true true]");
 
-            string clr1 = "[" + PdfEncoders.ToString(color1, colorMode, true) + "]";
-            string clr2 = "[" + PdfEncoders.ToString(color2, colorMode, true) + "]";
+            if (brush._colors != null && brush._colors.Length > 2 && brush._positions != null)
+            {
+                Elements[Keys.Function] = BuildStitchingFunction(brush._colors, brush._positions, colorMode);
+            }
+            else
+            {
+                string clr1 = "[" + PdfEncoders.ToString(color1, colorMode, true) + "]";
+                string clr2 = "[" + PdfEncoders.ToString(color2, colorMode, true) + "]";
 
-            function.Elements["/FunctionType"] = new PdfInteger(2);
-            function.Elements["/C0"] = new PdfLiteral(clr1);
-            function.Elements["/C1"] = new PdfLiteral(clr2);
-            function.Elements["/Domain"] = new PdfLiteral("[0 1]");
-            function.Elements["/N"] = new PdfInteger(1);
+                function.Elements["/FunctionType"] = new PdfInteger(2);
+                function.Elements["/C0"] = new PdfLiteral(clr1);
+                function.Elements["/C1"] = new PdfLiteral(clr2);
+                function.Elements["/Domain"] = new PdfLiteral("[0 1]");
+                function.Elements["/N"] = new PdfInteger(1);
+                Elements[Keys.Function] = function;
+            }
+        }
+
+        private static PdfDictionary BuildStitchingFunction(XColor[] colors, double[] positions, PdfColorMode colorMode)
+        {
+            int n = colors.Length;
+            var stitching = new PdfDictionary();
+            stitching.Elements["/FunctionType"] = new PdfInteger(3);
+            stitching.Elements["/Domain"] = new PdfLiteral("[0 1]");
+
+            // Bounds: intermediate stop positions (all except first and last)
+            var boundsBuilder = new System.Text.StringBuilder("[");
+            for (int i = 1; i < n - 1; i++)
+            {
+                if (i > 1) boundsBuilder.Append(' ');
+                boundsBuilder.Append(positions[i].ToString("G6", System.Globalization.CultureInfo.InvariantCulture));
+            }
+            boundsBuilder.Append(']');
+            stitching.Elements["/Bounds"] = new PdfLiteral(boundsBuilder.ToString());
+
+            // Encode: each sub-function maps its slice to [0 1]
+            var encodeBuilder = new System.Text.StringBuilder("[");
+            for (int i = 0; i < n - 1; i++)
+            {
+                if (i > 0) encodeBuilder.Append(' ');
+                encodeBuilder.Append("0 1");
+            }
+            encodeBuilder.Append(']');
+            stitching.Elements["/Encode"] = new PdfLiteral(encodeBuilder.ToString());
+
+            // Sub-functions: one Type 2 for each adjacent pair of stops
+            var functions = new PdfArray();
+            for (int i = 0; i < n - 1; i++)
+            {
+                XColor c0 = ColorSpaceHelper.EnsureColorMode(colorMode, colors[i]);
+                XColor c1 = ColorSpaceHelper.EnsureColorMode(colorMode, colors[i + 1]);
+                var fn = new PdfDictionary();
+                fn.Elements["/FunctionType"] = new PdfInteger(2);
+                fn.Elements["/Domain"] = new PdfLiteral("[0 1]");
+                fn.Elements["/C0"] = new PdfLiteral("[" + PdfEncoders.ToString(c0, colorMode, true) + "]");
+                fn.Elements["/C1"] = new PdfLiteral("[" + PdfEncoders.ToString(c1, colorMode, true) + "]");
+                fn.Elements["/N"] = new PdfInteger(1);
+                functions.Elements.Add(fn);
+            }
+            stitching.Elements["/Functions"] = functions;
+            return stitching;
         }
 
         /// <summary>

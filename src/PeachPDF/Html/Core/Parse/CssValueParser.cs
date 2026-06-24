@@ -20,6 +20,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 
 namespace PeachPDF.Html.Core.Parse
 {
@@ -411,6 +412,123 @@ namespace PeachPDF.Html.Core.Parse
             }
 
             return propValue;
+        }
+
+        public ParsedLinearGradient? ParseLinearGradient(string value)
+        {
+            var tokens = GetCssTokens(value);
+
+            var funcToken = tokens.OfType<FunctionToken>().FirstOrDefault(t =>
+                string.Equals(t.Data, FunctionNames.LinearGradient, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(t.Data, FunctionNames.RepeatingLinearGradient, StringComparison.OrdinalIgnoreCase));
+
+            if (funcToken == null)
+                return null;
+
+            bool isRepeating = string.Equals(funcToken.Data, FunctionNames.RepeatingLinearGradient, StringComparison.OrdinalIgnoreCase);
+
+            var args = funcToken.ArgumentTokens.ToList();
+            if (args.Count == 0)
+                return null;
+
+            double angleRad = Math.PI; // default: 180deg = top to bottom
+            int stopOffset = 0;
+
+            var firstGroup = args[0];
+            var firstIdents = firstGroup.Where(t => t.Type == TokenType.Ident).Select(t => t.Data.ToLowerInvariant()).ToList();
+
+            if (firstIdents.Count > 0 && firstIdents[0] == "to")
+            {
+                // keyword direction: "to right", "to bottom left", etc.
+                angleRad = SideKeywordsToAngleRad(firstIdents.Skip(1).ToList());
+                stopOffset = 1;
+            }
+            else
+            {
+                var angle = firstGroup.ToAngle();
+                if (angle.HasValue)
+                {
+                    angleRad = angle.Value.ToRadian();
+                    stopOffset = 1;
+                }
+                // else no angle token, stopOffset stays 0
+            }
+
+            var stopGroups = args.Skip(stopOffset).ToList();
+            if (stopGroups.Count < 2)
+                return null;
+
+            var stops = new List<(RColor Color, double? Position)>();
+
+            foreach (var group in stopGroups)
+            {
+                var items = group.ToItems();
+                if (items.Count == 0)
+                    continue;
+
+                double? position = null;
+                int colorItemCount = items.Count;
+
+                // Last item may be a length/percent position
+                var lastItem = items[items.Count - 1];
+                var positionValue = lastItem.ToDistance();
+                if (positionValue.HasValue)
+                {
+                    position = positionValue.Value.Type == Length.Unit.Percent
+                        ? positionValue.Value.Value / 100.0
+                        : null; // pixel stops: skip normalization for now
+                    colorItemCount--;
+                }
+
+                if (colorItemCount == 0)
+                    continue;
+
+                var colorText = BuildColorText(items.Take(colorItemCount));
+                if (string.IsNullOrWhiteSpace(colorText))
+                    continue;
+
+                var color = GetActualColor(colorText);
+                stops.Add((color, position));
+            }
+
+            if (stops.Count < 2)
+                return null;
+
+            return new ParsedLinearGradient
+            {
+                AngleRad = angleRad,
+                Stops = stops.ToArray(),
+                IsRepeating = isRepeating
+            };
+        }
+
+        private static double SideKeywordsToAngleRad(List<string> sides)
+        {
+            bool hasTop = sides.Contains("top");
+            bool hasBottom = sides.Contains("bottom");
+            bool hasLeft = sides.Contains("left");
+            bool hasRight = sides.Contains("right");
+
+            if (hasTop && hasRight) return Math.PI / 4;        // 45deg
+            if (hasBottom && hasRight) return 3 * Math.PI / 4; // 135deg
+            if (hasBottom && hasLeft) return 5 * Math.PI / 4;  // 225deg
+            if (hasTop && hasLeft) return 7 * Math.PI / 4;     // 315deg
+            if (hasTop) return 0;                               // 0deg
+            if (hasRight) return Math.PI / 2;                   // 90deg
+            if (hasBottom) return Math.PI;                      // 180deg
+            if (hasLeft) return 3 * Math.PI / 2;               // 270deg
+
+            return Math.PI; // default
+        }
+
+        private static string BuildColorText(IEnumerable<IEnumerable<Token>> itemGroups)
+        {
+            var sb = new StringBuilder();
+            foreach (var group in itemGroups)
+            {
+                sb.Append(group.ToText());
+            }
+            return sb.ToString().Trim();
         }
 
         #region Private methods

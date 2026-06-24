@@ -87,6 +87,11 @@ namespace PeachPDF.Html.Adapters
             return _adapter.GetLinearGradientBrush(rect, color1, color2, angle);
         }
 
+        public RBrush GetLinearGradientBrush(RPoint p1, RPoint p2, (RColor Color, double Position)[] stops)
+        {
+            return _adapter.GetLinearGradientBrush(p1, p2, stops);
+        }
+
         /// <summary>
         /// Gets a Rectangle structure that bounds the clipping region of this Graphics.
         /// </summary>

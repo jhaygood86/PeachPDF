@@ -197,13 +197,11 @@ The `background` shorthand is not supported. Use individual properties.
 | Property | MDN Reference | Notes |
 |----------|--------------|-------|
 | `background-color` | [background-color](https://developer.mozilla.org/en-US/docs/Web/CSS/background-color) | Full support |
-| `background-image` | [background-image](https://developer.mozilla.org/en-US/docs/Web/CSS/background-image) | URL and data URI values supported; CSS gradient functions (`linear-gradient`, etc.) are not — use `background-gradient` instead |
+| `background-image` | [background-image](https://developer.mozilla.org/en-US/docs/Web/CSS/background-image) | URL, data URI, and `linear-gradient()` supported; `radial-gradient()`, `repeating-linear-gradient()`, and other gradient functions are parsed but not rendered |
 | `background-position` | [background-position](https://developer.mozilla.org/en-US/docs/Web/CSS/background-position) | Full support |
 | `background-repeat` | [background-repeat](https://developer.mozilla.org/en-US/docs/Web/CSS/background-repeat) | Full support |
 | `background-attachment` | [background-attachment](https://developer.mozilla.org/en-US/docs/Web/CSS/background-attachment) | Parsed and accepted but has no effect |
 | `background-clip` | [background-clip](https://developer.mozilla.org/en-US/docs/Web/CSS/background-clip) | Parsed and accepted but has no effect |
-| `background-gradient` | _(PeachPDF extension)_ | Sets a linear gradient on the background; value is a color |
-| `background-gradient-angle` | _(PeachPDF extension)_ | Angle in degrees for `background-gradient` |
 
 ### Color & Typography
 

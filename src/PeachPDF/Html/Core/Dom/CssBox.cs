@@ -1514,9 +1514,11 @@ namespace PeachPDF.Html.Core.Dom
             {
                 RBrush? brush = null;
 
-                if (BackgroundGradient != CssConstants.None)
+                if (BackgroundLinearGradient is { } gradient)
                 {
-                    brush = g.GetLinearGradientBrush(rect, ActualBackgroundColor, ActualBackgroundGradient, ActualBackgroundGradientAngle);
+                    var (p1, p2) = ComputeGradientLine(rect, gradient.AngleRad);
+                    var stops = NormalizeGradientStops(gradient.Stops);
+                    brush = g.GetLinearGradientBrush(p1, p2, stops);
                 }
                 else if (RenderUtils.IsColorVisible(ActualBackgroundColor))
                 {
@@ -1732,6 +1734,73 @@ namespace PeachPDF.Html.Core.Dom
         protected override RColor GetActualColor(string colorStr)
         {
             return HtmlContainer!.CssParser.ParseColor(colorStr);
+        }
+
+        private static (RPoint p1, RPoint p2) ComputeGradientLine(RRect rect, double angleRad)
+        {
+            double dx = Math.Sin(angleRad);
+            double dy = -Math.Cos(angleRad);
+            double cx = rect.X + rect.Width / 2;
+            double cy = rect.Y + rect.Height / 2;
+            double halfLen = Math.Abs(dx) * rect.Width / 2 + Math.Abs(dy) * rect.Height / 2;
+            var p1 = new RPoint(cx - dx * halfLen, cy - dy * halfLen);
+            var p2 = new RPoint(cx + dx * halfLen, cy + dy * halfLen);
+            return (p1, p2);
+        }
+
+        private static (RColor Color, double Position)[] NormalizeGradientStops((RColor Color, double? Position)[] stops)
+        {
+            int n = stops.Length;
+            var result = new (RColor Color, double Position)[n];
+
+            // First stop defaults to 0, last to 1
+            double first = stops[0].Position ?? 0.0;
+            double last = stops[n - 1].Position ?? 1.0;
+            result[0] = (stops[0].Color, first);
+            result[n - 1] = (stops[n - 1].Color, last);
+
+            // Fill in nulls with evenly spaced values
+            int runStart = -1;
+            for (int i = 1; i < n - 1; i++)
+            {
+                if (stops[i].Position.HasValue)
+                {
+                    result[i] = (stops[i].Color, stops[i].Position!.Value);
+                    if (runStart >= 0)
+                    {
+                        // Back-fill the null run between runStart and i
+                        double posA = result[runStart - 1].Position;
+                        double posB = result[i].Position;
+                        int count = i - runStart + 1;
+                        for (int j = runStart; j < i; j++)
+                        {
+                            double t = (double)(j - runStart + 1) / count;
+                            result[j] = (stops[j].Color, posA + t * (posB - posA));
+                        }
+                        runStart = -1;
+                    }
+                }
+                else
+                {
+                    if (runStart < 0) runStart = i;
+                    result[i] = (stops[i].Color, 0); // placeholder, will be filled
+                }
+            }
+
+            // Handle trailing null run (between last known and the final stop)
+            if (runStart >= 0)
+            {
+                double posA = result[runStart - 1].Position;
+                double posB = result[n - 1].Position;
+                int count = n - 1 - runStart + 1;
+                for (int j = runStart; j < n - 1; j++)
+                {
+                    double t = (double)(j - runStart + 1) / count;
+                    result[j] = (stops[j].Color, posA + t * (posB - posA));
+                }
+            }
+
+            return result;
         }
 
 

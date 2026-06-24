@@ -155,6 +155,15 @@ namespace PeachPDF.Adapters
             return new BrushAdapter(new XLinearGradientBrush(Utils.Convert(rect, PixelsPerPoint), Utils.Convert(color1), Utils.Convert(color2), mode));
         }
 
+        protected override RBrush CreateLinearGradientBrush(RPoint p1, RPoint p2, (RColor Color, double Position)[] stops)
+        {
+            var xp1 = new XPoint(p1.X / PixelsPerPoint, p1.Y / PixelsPerPoint);
+            var xp2 = new XPoint(p2.X / PixelsPerPoint, p2.Y / PixelsPerPoint);
+            var colors = stops.Select(s => Utils.Convert(s.Color)).ToArray();
+            var positions = stops.Select(s => s.Position).ToArray();
+            return new BrushAdapter(new XLinearGradientBrush(xp1, xp2, colors, positions));
+        }
+
         protected override RImage? ConvertImageInt(object? image)
         {
             return image != null ? new ImageAdapter((XImage)image) : null;
