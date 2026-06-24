@@ -330,9 +330,9 @@ PeachPDF evaluates a subset of CSS selectors. Selectors that are parsed but not 
 | Exact match | `[attr=value]` | Attribute value exactly equals `value` |
 | Whitespace list | `[attr~=value]` | Attribute is a whitespace-separated list containing `value` |
 | Contains | `[attr*=value]` | Attribute value contains `value` as a substring |
-| Starts with | `[attr^=value]` | Parsed but not matched — rules are silently ignored |
-| Ends with | `[attr$=value]` | Parsed but not matched — rules are silently ignored |
-| Hyphen prefix | `[attr\|=value]` | Parsed but not matched — rules are silently ignored |
+| Starts with | `[attr^=value]` | Attribute value starts with `value` |
+| Ends with | `[attr$=value]` | Attribute value ends with `value` |
+| Hyphen prefix | `[attr\|=value]` | Attribute value equals `value` or starts with `value-` |
 
 ### Combinators
 
@@ -340,8 +340,8 @@ PeachPDF evaluates a subset of CSS selectors. Selectors that are parsed but not 
 |------------|--------|-------|
 | Descendant | `div p` | Matches `p` anywhere inside `div` |
 | Child | `div > p` | Matches `p` that is a direct child of `div` |
-| Adjacent sibling | `div + p` | Parsed but not matched — rules are silently ignored |
-| General sibling | `div ~ p` | Parsed but not matched — rules are silently ignored |
+| Adjacent sibling | `div + p` | Matches `p` immediately preceded by `div` at the same level |
+| General sibling | `div ~ p` | Matches `p` preceded by `div` anywhere at the same level |
 
 ### Pseudo-elements
 

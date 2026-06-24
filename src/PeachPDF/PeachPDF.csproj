@@ -3,7 +3,7 @@
 		<TargetFrameworks>net8.0</TargetFrameworks>
 		<AssemblyName>PeachPDF</AssemblyName>
 		<PackageId>PeachPDF</PackageId>
-		<PackageVersion>0.8.0</PackageVersion>
+		<PackageVersion>0.9.0-preview1</PackageVersion>
 		<IncludeSymbols>true</IncludeSymbols>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
@@ -15,7 +15,7 @@
 		<GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>
 		<GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
 		<RunCodeAnalysis>false</RunCodeAnalysis>
-    <Nullable>enable</Nullable>
+    	<Nullable>enable</Nullable>
 		<IsTrimmable>true</IsTrimmable>
 		<EnableTrimAnalyzer>true</EnableTrimAnalyzer>
 	</PropertyGroup>
