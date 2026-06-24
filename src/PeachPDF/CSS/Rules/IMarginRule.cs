@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public interface IMarginRule : IRule
+    internal interface IMarginRule : IRule
     {
         string Name { get; }
         StyleDeclaration Style { get; }

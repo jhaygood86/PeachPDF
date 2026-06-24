@@ -1,4 +1,4 @@
-﻿// "Therefore those skilled at the unorthodox
+// "Therefore those skilled at the unorthodox
 // are infinite as heaven and earth,
 // inexhaustible as the great rivers.
 // When they come to an end,
@@ -16,7 +16,7 @@ namespace PeachPDF.Html.Core.Entities
     /// Holds data on link element in HTML.<br/>
     /// Used to expose data outside of HTML Renderer internal structure.
     /// </summary>
-    public sealed class LinkElementData<T>
+    internal sealed class LinkElementData<T>
     {
         /// <summary>
         /// Init.

@@ -1,8 +1,8 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
 namespace PeachPDF.CSS
 {
-    public interface IStyleFormatter
+    internal interface IStyleFormatter
     {
         string Sheet(IEnumerable<IStyleFormattable> rules);
         string Block(IEnumerable<IStyleFormattable> rules);

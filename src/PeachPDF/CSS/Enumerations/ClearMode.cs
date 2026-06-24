@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum ClearMode : byte
+    internal enum ClearMode : byte
     {
         None,
         Left,

@@ -24,7 +24,7 @@ namespace PeachPDF.Network
         {
             _message ??= await _messageTask;
 
-            return _message.HtmlBody;
+            return _message.HtmlBody ?? string.Empty;
         }
 
         public override async Task<RNetworkResponse?> GetResourceStream(RUri uri)
@@ -37,7 +37,7 @@ namespace PeachPDF.Network
                 .OfType<MimePart>()
                 .FirstOrDefault(x => x.ContentLocation == uri.Uri || x.Headers["Content-Location"] == uri.OriginalString);
 
-            var stream = part?.Content.Open();
+            var stream = part?.Content?.Open();
             var headers = part?.Headers.ToDictionary(x => x.Field, x => new[] { x.Value });
 
             return new RNetworkResponse(stream, headers);

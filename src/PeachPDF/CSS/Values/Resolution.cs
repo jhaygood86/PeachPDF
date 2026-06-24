@@ -1,10 +1,10 @@
-﻿#nullable disable
+#nullable disable
 
 using System;
 
 namespace PeachPDF.CSS
 {
-    public struct Resolution : IEquatable<Resolution>, IComparable<Resolution>, IFormattable
+    internal struct Resolution : IEquatable<Resolution>, IComparable<Resolution>, IFormattable
     {
         public Resolution(float value, Unit unit)
         {
@@ -77,7 +77,7 @@ namespace PeachPDF.CSS
             return Value == other.Value && Type == other.Type;
         }
 
-        public enum Unit : byte
+        internal enum Unit : byte
         {
             None,
             Dpi,

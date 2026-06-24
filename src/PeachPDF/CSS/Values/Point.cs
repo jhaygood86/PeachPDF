@@ -1,8 +1,8 @@
-﻿// ReSharper disable UnusedMember.Global
+// ReSharper disable UnusedMember.Global
 
 namespace PeachPDF.CSS
 {
-    public struct Point
+    internal struct Point
     {
         /// <summary>
         ///     Gets the (50%, 50%) point.

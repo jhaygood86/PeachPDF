@@ -28,7 +28,7 @@ namespace PeachPDF.Html.Core
     /// <remarks>
     /// To learn more about CSS blocks visit CSS spec: http://www.w3.org/TR/CSS21/syndata.html#block
     /// </remarks>
-    public sealed class CssData
+    internal sealed class CssData
     {
         public List<Stylesheet> Stylesheets { get; } = [];
 

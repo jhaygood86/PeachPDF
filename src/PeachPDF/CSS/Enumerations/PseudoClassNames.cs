@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public static class PseudoClassNames
+    internal static class PseudoClassNames
     {
         public static readonly string Root = "root";
         public static readonly string Scope = "scope";

@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum VerticalAlignment : byte
+    internal enum VerticalAlignment : byte
     {
         Baseline,
         Sub,

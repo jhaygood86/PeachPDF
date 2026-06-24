@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum ListStyle : byte
+    internal enum ListStyle : byte
     {
         None,
         Disc,

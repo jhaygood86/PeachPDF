@@ -1,8 +1,8 @@
-﻿using System;
+using System;
 
 namespace PeachPDF.CSS
 {
-    public class ParseException : Exception
+    internal class ParseException : Exception
     {
         public ParseException(string message) : base(message)
         {

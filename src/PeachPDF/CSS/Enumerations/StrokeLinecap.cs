@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum StrokeLinecap : byte
+    internal enum StrokeLinecap : byte
     {
         Butt,
         Round,

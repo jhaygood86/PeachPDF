@@ -1,8 +1,8 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
 namespace PeachPDF.CSS
 {
-    public interface IStylesheetNode : IStyleFormattable
+    internal interface IStylesheetNode : IStyleFormattable
     {
         IEnumerable<IStylesheetNode> Children { get; }
         StylesheetText StylesheetText { get; }

@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum FontVariant : byte
+    internal enum FontVariant : byte
     {
         Normal,
         SmallCaps

@@ -17,7 +17,7 @@ namespace PeachPDF.Html.Adapters
     /// <summary>
     /// Adapter for platform specific graphics path object - used to render (draw/fill) path shape.
     /// </summary>
-    public abstract class RGraphicsPath : IDisposable
+    internal abstract class RGraphicsPath : IDisposable
     {
         /// <summary>
         /// Start path at the given point.
@@ -42,7 +42,7 @@ namespace PeachPDF.Html.Adapters
         /// <summary>
         /// The 4 corners that are handled in arc rendering.
         /// </summary>
-        public enum Corner
+        internal enum Corner
         {
             TopLeft,
             TopRight,

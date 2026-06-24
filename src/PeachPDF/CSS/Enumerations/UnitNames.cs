@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public static class UnitNames
+    internal static class UnitNames
     {
         public static readonly string Khz = "khz";
         public static readonly string Hz = "hz";

@@ -1,4 +1,4 @@
-﻿#nullable disable
+#nullable disable
 
 using System;
 
@@ -6,7 +6,7 @@ using System;
 
 namespace PeachPDF.CSS
 {
-    public struct Number : IEquatable<Number>, IComparable<Number>, IFormattable
+    internal struct Number : IEquatable<Number>, IComparable<Number>, IFormattable
     {
         /// <summary>
         ///     Gets a zero value.
@@ -64,7 +64,7 @@ namespace PeachPDF.CSS
             return Value == other.Value && _unit == other._unit;
         }
 
-        public enum Unit : byte
+        internal enum Unit : byte
         {
             Integer,
             Float,

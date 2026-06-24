@@ -1,10 +1,10 @@
-﻿#nullable disable
+#nullable disable
 
 using System.Collections.Generic;
 
 namespace PeachPDF.CSS
 {
-    public interface IProperties : IEnumerable<IProperty>
+    internal interface IProperties : IEnumerable<IProperty>
     {
         string this[string propertyName] { get; }
         int Length { get; }

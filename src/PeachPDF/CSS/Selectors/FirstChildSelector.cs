@@ -1,7 +1,7 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 
 {
-    public sealed class FirstChildSelector : ChildSelector
+    internal sealed class FirstChildSelector : ChildSelector
     {
         public FirstChildSelector()
             : base(PseudoClassNames.NthChild)

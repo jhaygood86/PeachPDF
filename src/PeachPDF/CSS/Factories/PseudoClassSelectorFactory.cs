@@ -1,4 +1,4 @@
-﻿#nullable disable
+#nullable disable
 
 using System;
 using System.Collections.Generic;
@@ -6,7 +6,7 @@ using System.Linq;
 
 namespace PeachPDF.CSS
 {
-    public sealed class PseudoClassSelectorFactory
+    internal sealed class PseudoClassSelectorFactory
     {
         private static readonly Lazy<PseudoClassSelectorFactory> Lazy =
             new(() =>

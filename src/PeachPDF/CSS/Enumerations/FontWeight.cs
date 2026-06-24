@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum FontWeight : byte
+    internal enum FontWeight : byte
     {
         Normal,
         Bold,

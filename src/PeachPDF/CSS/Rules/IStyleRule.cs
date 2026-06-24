@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public interface IStyleRule : IRule
+    internal interface IStyleRule : IRule
     {
         string SelectorText { get; set; }
         StyleDeclaration Style { get; }

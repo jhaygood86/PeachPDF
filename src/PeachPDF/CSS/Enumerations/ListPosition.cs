@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum ListPosition : byte
+    internal enum ListPosition : byte
     {
         Inside,
         Outside

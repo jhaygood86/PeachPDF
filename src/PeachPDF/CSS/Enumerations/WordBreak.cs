@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum WordBreak : byte
+    internal enum WordBreak : byte
     {
         Normal,
         BreakAll,

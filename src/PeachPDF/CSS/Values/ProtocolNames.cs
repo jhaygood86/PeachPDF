@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public static class ProtocolNames
+    internal static class ProtocolNames
     {
         public static readonly string Http = "http";
         public static readonly string Https = "https";

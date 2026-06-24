@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum HoverAbility : byte
+    internal enum HoverAbility : byte
     {
         None,
         OnDemand,

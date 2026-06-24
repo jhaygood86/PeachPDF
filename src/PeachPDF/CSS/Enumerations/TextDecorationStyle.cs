@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum TextDecorationStyle : byte
+    internal enum TextDecorationStyle : byte
     {
         Solid,
         Double,

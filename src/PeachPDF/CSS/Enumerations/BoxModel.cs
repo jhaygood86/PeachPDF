@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum BoxModel : byte
+    internal enum BoxModel : byte
     {
         BorderBox,
         PaddingBox,

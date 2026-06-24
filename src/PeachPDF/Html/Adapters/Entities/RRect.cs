@@ -17,7 +17,7 @@ namespace PeachPDF.Html.Adapters.Entities
     /// <summary>
     /// Stores a set of four floating-point numbers that represent the location and size of a rectangle. 
     /// </summary>
-    public struct RRect
+    internal struct RRect
     {
         #region Fields and Consts
 

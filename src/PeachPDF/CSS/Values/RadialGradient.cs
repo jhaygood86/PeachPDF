@@ -1,11 +1,11 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace PeachPDF.CSS
 {
-    public sealed class RadialGradient : IImageSource
+    internal sealed class RadialGradient : IImageSource
     {
-        public enum SizeMode : byte
+        internal enum SizeMode : byte
         {
             None,
             ClosestCorner,

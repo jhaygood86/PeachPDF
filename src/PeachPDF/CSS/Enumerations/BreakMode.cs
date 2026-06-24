@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum BreakMode : byte
+    internal enum BreakMode : byte
     {
         Auto,
         Always,

@@ -1,11 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
 namespace PeachPDF.CSS
 {
-    public sealed class CompressedStyleFormatter : IStyleFormatter
+    internal sealed class CompressedStyleFormatter : IStyleFormatter
     {
         public static readonly IStyleFormatter Instance = new CompressedStyleFormatter();
 

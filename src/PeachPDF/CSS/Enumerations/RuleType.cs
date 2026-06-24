@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum RuleType : byte
+    internal enum RuleType : byte
     {
         Unknown,
         Style,

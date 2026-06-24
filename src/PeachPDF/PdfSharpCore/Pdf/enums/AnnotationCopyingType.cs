@@ -1,0 +1,21 @@
+namespace PeachPDF.PdfSharpCore.Pdf
+{
+    /// <summary>
+    /// Defines how annotations should be copied.
+    /// </summary>
+    internal enum AnnotationCopyingType
+    {
+        /// <summary>
+        /// Skips annotation copying.
+        /// </summary>
+        DoNotCopy,
+        /// <summary>
+        /// Does a shallow copy.
+        /// </summary>
+        ShallowCopy,
+        /// <summary>
+        /// Performs deep copy.
+        /// </summary>
+        DeepCopy
+    }
+}

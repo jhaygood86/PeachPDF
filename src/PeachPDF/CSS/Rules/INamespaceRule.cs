@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public interface INamespaceRule : IRule
+    internal interface INamespaceRule : IRule
     {
         string NamespaceUri { get; set; }
         string Prefix { get; set; }

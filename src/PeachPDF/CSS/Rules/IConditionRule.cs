@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public interface IConditionRule : IGroupingRule
+    internal interface IConditionRule : IGroupingRule
     {
         string ConditionText { get; set; }
     }

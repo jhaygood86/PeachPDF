@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum TextTransform : byte
+    internal enum TextTransform : byte
     {
         None,
         Capitalize,

@@ -2,7 +2,7 @@ using System.IO;
 
 namespace PeachPDF.CSS
 {
-    public abstract class SelectorBase : StylesheetNode, ISelector
+    internal abstract class SelectorBase : StylesheetNode, ISelector
     {
         protected SelectorBase(Priority specificity, string text)
         {

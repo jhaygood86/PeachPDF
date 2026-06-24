@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum BackgroundAttachment : byte
+    internal enum BackgroundAttachment : byte
     {
         Fixed,
         Local,

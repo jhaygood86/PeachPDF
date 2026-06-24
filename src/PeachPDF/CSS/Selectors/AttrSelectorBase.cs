@@ -1,6 +1,6 @@
 namespace PeachPDF.CSS
 {
-    public abstract class AttrSelectorBase : SelectorBase, IAttrSelector
+    internal abstract class AttrSelectorBase : SelectorBase, IAttrSelector
     {
         protected AttrSelectorBase(string attribute, string value, string text) : base(Priority.OneClass, text)
         {

@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum PositionMode : byte
+    internal enum PositionMode : byte
     {
         Static,
         Relative,

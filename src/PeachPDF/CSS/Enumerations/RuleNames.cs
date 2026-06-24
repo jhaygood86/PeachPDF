@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public static class RuleNames
+    internal static class RuleNames
     {
         public static readonly string Supports = "supports";
         public static readonly string Charset = "charset";

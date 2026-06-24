@@ -1,10 +1,10 @@
-﻿#nullable disable
+#nullable disable
 
 using System;
 
 namespace PeachPDF.CSS
 {
-    public struct TextPosition : IEquatable<TextPosition>, IComparable<TextPosition>
+    internal struct TextPosition : IEquatable<TextPosition>, IComparable<TextPosition>
     {
         public static readonly TextPosition Empty = new();
 

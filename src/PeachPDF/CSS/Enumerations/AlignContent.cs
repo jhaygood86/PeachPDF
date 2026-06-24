@@ -1,7 +1,7 @@
-﻿
+
 namespace PeachPDF.CSS
 {
-    public enum AlignContent : byte
+    internal enum AlignContent : byte
     {
         Center,
         Start,

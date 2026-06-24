@@ -307,6 +307,68 @@ These properties control how content breaks across PDF pages. Both the legacy `p
 
 ---
 
+## CSS Selectors
+
+PeachPDF evaluates a subset of CSS selectors. Selectors that are parsed but not implemented are silently ignored — rules using them will not apply.
+
+### Basic Selectors
+
+| Selector | Syntax | Notes |
+|----------|--------|-------|
+| Universal | `*` | Matches all elements |
+| Type | `div` | Matches by element name |
+| Class | `.foo` | Matches by `class` attribute |
+| ID | `#foo` | Matches by `id` attribute |
+| Compound | `div.foo`, `.foo#bar` | Multiple simple selectors on the same element; all parts must match |
+| Selector list | `div, p` | Comma-separated; applies the rule to all matching elements |
+
+### Attribute Selectors
+
+| Selector | Syntax | Notes |
+|----------|--------|-------|
+| Presence | `[attr]` | Element has the named attribute |
+| Exact match | `[attr=value]` | Attribute value exactly equals `value` |
+| Whitespace list | `[attr~=value]` | Attribute is a whitespace-separated list containing `value` |
+| Contains | `[attr*=value]` | Attribute value contains `value` as a substring |
+| Starts with | `[attr^=value]` | Parsed but not matched — rules are silently ignored |
+| Ends with | `[attr$=value]` | Parsed but not matched — rules are silently ignored |
+| Hyphen prefix | `[attr\|=value]` | Parsed but not matched — rules are silently ignored |
+
+### Combinators
+
+| Combinator | Syntax | Notes |
+|------------|--------|-------|
+| Descendant | `div p` | Matches `p` anywhere inside `div` |
+| Child | `div > p` | Matches `p` that is a direct child of `div` |
+| Adjacent sibling | `div + p` | Parsed but not matched — rules are silently ignored |
+| General sibling | `div ~ p` | Parsed but not matched — rules are silently ignored |
+
+### Pseudo-elements
+
+Only `::before` and `::after` are supported. All other pseudo-elements are parsed but have no effect.
+
+| Pseudo-element | Notes |
+|----------------|-------|
+| `::before` | Full support; use with the `content` property |
+| `::after` | Full support; use with the `content` property |
+| All others | Parsed but ignored |
+
+Both the single-colon legacy syntax (`:before`, `:after`) and the modern double-colon syntax (`::before`, `::after`) are accepted.
+
+### Pseudo-classes
+
+Because PeachPDF renders a static PDF with no interactive or dynamic state, almost all pseudo-classes are parsed but not evaluated and will not match any elements.
+
+| Pseudo-class | Notes |
+|--------------|-------|
+| `:link` | Matches `<a>` elements that have an `href` attribute |
+| `:nth-child(an+b)` | Partially supported: the step value `a` is ignored; only the offset `b` is checked against the element's position among siblings |
+| All others | Parsed but not matched — rules are silently ignored |
+
+State-based pseudo-classes (`:hover`, `:focus`, `:active`, `:checked`, `:disabled`) and structural pseudo-classes (`:first-child`, `:last-child`, `:nth-of-type()`, `:not()`, etc.) are not applied.
+
+---
+
 ## Unsupported CSS Features
 
 The following CSS features are not supported:
@@ -326,6 +388,5 @@ The following CSS features are not supported:
 - **`word-wrap` / `overflow-wrap`**
 - **`outline`** and `outline-*` properties
 - **`max-height`**, **`min-width`**
-- **Pseudo-elements** other than `::before` and `::after`
-- **Pseudo-classes** other than `:focus` (default stylesheet only)
+- **CSS selectors** — see the [CSS Selectors](#css-selectors) section above for what is and is not supported
 - **Responsive design** — media queries and viewport units (`vw`, `vh`, etc.)

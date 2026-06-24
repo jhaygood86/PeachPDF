@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
@@ -6,7 +6,7 @@ using System.Linq;
 
 namespace PeachPDF.CSS
 {
-    public sealed class Stylesheet : StylesheetNode
+    internal sealed class Stylesheet : StylesheetNode
     {
         private readonly StylesheetParser _parser;
 

@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum DisplayMode : byte
+    internal enum DisplayMode : byte
     {
         None,
         Inline,

@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum ContainerType : byte
+    internal enum ContainerType : byte
     {
         Normal,
         Size,

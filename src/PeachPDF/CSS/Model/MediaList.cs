@@ -1,10 +1,10 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
 namespace PeachPDF.CSS
 {
-    public sealed class MediaList : StylesheetNode
+    internal sealed class MediaList : StylesheetNode
     {
         private readonly StylesheetParser _parser;
 

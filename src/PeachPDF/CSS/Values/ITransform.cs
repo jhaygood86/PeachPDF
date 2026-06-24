@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public interface ITransform
+    internal interface ITransform
     {
         TransformMatrix ComputeMatrix();
     }

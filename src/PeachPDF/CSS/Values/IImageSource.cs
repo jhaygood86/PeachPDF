@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public interface IImageSource
+    internal interface IImageSource
     {
     }
 }

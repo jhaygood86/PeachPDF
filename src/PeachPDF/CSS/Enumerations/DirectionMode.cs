@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum DirectionMode : byte
+    internal enum DirectionMode : byte
     {
         Ltr,
         Rtl

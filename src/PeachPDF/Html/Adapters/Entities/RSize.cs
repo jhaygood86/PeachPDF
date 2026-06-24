@@ -17,7 +17,7 @@ namespace PeachPDF.Html.Adapters.Entities
     /// <summary>
     /// Stores an ordered pair of floating-point numbers, typically the width and height of a rectangle.
     /// </summary>
-    public record struct RSize(double Width, double Height)
+    internal record struct RSize(double Width, double Height)
     {
         /// <summary>
         ///     Gets a <see cref="RSize" /> structure that has a

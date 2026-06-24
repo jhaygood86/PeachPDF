@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public struct GradientStop
+    internal struct GradientStop
     {
         public GradientStop(Color color, Length location)
         {

@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public static class Combinators
+    internal static class Combinators
     {
         public static readonly string Exactly = "=";
         public static readonly string Unlike = "!=";

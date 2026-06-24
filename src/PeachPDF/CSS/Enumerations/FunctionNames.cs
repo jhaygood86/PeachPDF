@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public static class FunctionNames
+    internal static class FunctionNames
     {
         public static readonly string Url = "url";
         public static readonly string UrlPrefix = "url-prefix";

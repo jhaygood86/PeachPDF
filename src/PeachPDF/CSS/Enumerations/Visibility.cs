@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum Visibility : byte
+    internal enum Visibility : byte
     {
         Visible,
         Hidden,

@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum FillRule : byte
+    internal enum FillRule : byte
     {
         Nonzero,
         Evenodd

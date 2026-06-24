@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum FontStretch : byte
+    internal enum FontStretch : byte
     {
         Normal,
         UltraCondensed,

@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public sealed class Shape
+    internal sealed class Shape
     {
         public Shape(Length top, Length right, Length bottom, Length left)
         {

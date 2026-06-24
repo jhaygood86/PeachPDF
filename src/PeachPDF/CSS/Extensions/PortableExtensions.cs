@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 
@@ -13,7 +14,7 @@ namespace PeachPDF.CSS
             return char.ConvertFromUtf32(utf32);
         }
 
-        public static PropertyInfo[] GetProperties(this Type type)
+        public static PropertyInfo[] GetProperties([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.NonPublicProperties)] this Type type)
         {
             return type.GetRuntimeProperties().ToArray();
         }

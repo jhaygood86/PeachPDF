@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum AnimationFillStyle : byte
+    internal enum AnimationFillStyle : byte
     {
         None,
         Forwards,

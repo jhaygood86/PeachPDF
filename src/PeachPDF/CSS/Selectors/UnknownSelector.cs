@@ -1,8 +1,8 @@
-﻿using System.IO;
+using System.IO;
 
 namespace PeachPDF.CSS
 {
-    public sealed class UnknownSelector : StylesheetNode, ISelector
+    internal sealed class UnknownSelector : StylesheetNode, ISelector
     {
         public Priority Specificity => Priority.Zero;
 

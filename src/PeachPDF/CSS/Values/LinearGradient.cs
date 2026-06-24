@@ -1,9 +1,9 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace PeachPDF.CSS
 {
-    public sealed class LinearGradient : IGradient
+    internal sealed class LinearGradient : IGradient
     {
         public LinearGradient(Angle angle, GradientStop[] stops, bool repeating = false)
         {

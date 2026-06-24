@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachPDF.PdfSharpCore;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Utils;
@@ -206,7 +207,7 @@ body {{ font-family: '{familyName}', serif; font-size: 14pt; }}
         // Helpers
         // -------------------------------------------------------------------------
 
-        private static string GetPdfText(PdfDocument doc)
+        private static string GetPdfText(PeachPdfDocument doc)
         {
             var ms = new MemoryStream();
             doc.Save(ms);

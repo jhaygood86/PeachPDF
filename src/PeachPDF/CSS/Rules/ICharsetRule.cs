@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public interface ICharsetRule : IRule
+    internal interface ICharsetRule : IRule
     {
         string CharacterSet { get; set; }
     }

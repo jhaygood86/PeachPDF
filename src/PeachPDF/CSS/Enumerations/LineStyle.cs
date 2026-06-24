@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum LineStyle : byte
+    internal enum LineStyle : byte
     {
         None,
         Hidden,

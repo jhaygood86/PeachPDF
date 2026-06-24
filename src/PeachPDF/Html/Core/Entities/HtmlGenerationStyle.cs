@@ -15,7 +15,7 @@ namespace PeachPDF.Html.Core.Entities
     /// <summary>
     /// Controls the way styles are generated when html is generated.
     /// </summary>
-    public enum HtmlGenerationStyle
+    internal enum HtmlGenerationStyle
     {
         /// <summary>
         /// styles are not generated at all

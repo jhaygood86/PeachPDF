@@ -1,6 +1,5 @@
-using ICSharpCode.SharpZipLib.Zip.Compression;
-using ICSharpCode.SharpZipLib.Zip.Compression.Streams;
 using PeachPDF.PdfSharpCore.Fonts;
+using System.IO.Compression;
 using PeachPDF.PdfSharpCore.Utils;
 using System;
 using System.IO;
@@ -406,17 +405,9 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
 
         private static byte[] ZlibCompress(byte[] data)
         {
-            var deflater = new Deflater(Deflater.DEFAULT_COMPRESSION, false);
-            deflater.SetInput(data);
-            deflater.Finish();
-
             using var ms = new MemoryStream();
-            var buf = new byte[4096];
-            while (!deflater.IsFinished)
-            {
-                int count = deflater.Deflate(buf);
-                ms.Write(buf, 0, count);
-            }
+            using (var zlib = new ZLibStream(ms, CompressionLevel.Optimal, leaveOpen: true))
+                zlib.Write(data, 0, data.Length);
             return ms.ToArray();
         }
     }

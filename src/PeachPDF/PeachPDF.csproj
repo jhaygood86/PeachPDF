@@ -16,12 +16,20 @@
 		<GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
 		<RunCodeAnalysis>false</RunCodeAnalysis>
     <Nullable>enable</Nullable>
+		<IsTrimmable>true</IsTrimmable>
+		<EnableTrimAnalyzer>true</EnableTrimAnalyzer>
 	</PropertyGroup>
 	<ItemGroup>
 		<PackageReference Include="MimeKit" Version="4.17.0" />
+		<PackageReference Include="StbImageSharp" Version="2.30.15" />
+		<PackageReference Include="StbImageWriteSharp" Version="1.16.7" />
 	</ItemGroup>
 	<ItemGroup>
-	  <ProjectReference Include="..\PdfSharpCore\PeachPDF.PdfSharpCore.csproj" />
+		<None Remove="PdfSharpCore\Resources\Messages.restext" />
+		<EmbeddedResource Include="PdfSharpCore\Resources\Messages.restext" />
+	</ItemGroup>
+	<ItemGroup>
+		<Folder Include="PdfSharpCore\Resources\images\" />
 	</ItemGroup>
 	<ItemGroup>
 		<InternalsVisibleTo Include="PeachPDF.Tests" />

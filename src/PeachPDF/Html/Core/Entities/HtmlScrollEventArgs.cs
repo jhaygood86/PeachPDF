@@ -19,7 +19,7 @@ namespace PeachPDF.Html.Core.Entities
     /// Raised when Html Renderer request scroll to specific location.<br/>
     /// This can occur on document anchor click.
     /// </summary>
-    public sealed class HtmlScrollEventArgs : EventArgs
+    internal sealed class HtmlScrollEventArgs : EventArgs
     {
         /// <summary>
         /// the location to scroll to

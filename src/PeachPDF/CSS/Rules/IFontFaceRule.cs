@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public interface IFontFaceRule : IRule, IProperties
+    internal interface IFontFaceRule : IRule, IProperties
     {
         string Family { get; set; }
         string Source { get; set; }

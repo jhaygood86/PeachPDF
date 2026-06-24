@@ -1,9 +1,9 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.IO;
 
 namespace PeachPDF.CSS
 {
-    public sealed class KeyframeSelector : StylesheetNode
+    internal sealed class KeyframeSelector : StylesheetNode
     {
         private readonly List<Percent> _stops;
 
@@ -28,7 +28,7 @@ namespace PeachPDF.CSS
         public string Text => this.ToCss();
     }
 
-    public sealed class PageSelector : StylesheetNode, ISelector
+    internal sealed class PageSelector : StylesheetNode, ISelector
     {
         private readonly string _name;
 

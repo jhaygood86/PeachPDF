@@ -15,7 +15,7 @@ namespace PeachPDF.Html.Adapters
     /// <summary>
     /// Adapter for platform specific font object - used to render text using specific font.
     /// </summary>
-    public abstract class RFont
+    internal abstract class RFont
     {
         /// <summary>
         /// Gets the em-size of this Font measured in the units specified by the Unit property.

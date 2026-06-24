@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public class TokenizerError
+    internal class TokenizerError
     {
         private readonly ParseError _code;
 

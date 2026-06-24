@@ -1,11 +1,11 @@
-﻿#nullable disable
+#nullable disable
 
 using System.IO;
 using System.Linq;
 
 namespace PeachPDF.CSS
 {
-    public sealed class StyleRule : Rule, IStyleRule
+    internal sealed class StyleRule : Rule, IStyleRule
     {
         public StyleRule(StylesheetParser parser) : base(RuleType.Style, parser)
         {

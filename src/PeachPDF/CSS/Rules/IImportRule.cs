@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public interface IImportRule : IRule
+    internal interface IImportRule : IRule
     {
         string Href { get; set; }
         MediaList Media { get; }

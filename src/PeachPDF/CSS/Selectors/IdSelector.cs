@@ -1,6 +1,6 @@
 namespace PeachPDF.CSS
 {
-    public sealed class IdSelector : SelectorBase
+    internal sealed class IdSelector : SelectorBase
     {
         private IdSelector(string name) : base(Priority.OneId, $"#{name}")
         {

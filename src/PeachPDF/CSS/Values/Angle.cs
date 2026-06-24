@@ -1,4 +1,4 @@
-﻿#nullable disable
+#nullable disable
 
 using System;
 
@@ -6,7 +6,7 @@ using System;
 
 namespace PeachPDF.CSS
 {
-    public struct Angle : IEquatable<Angle>, IComparable<Angle>, IFormattable
+    internal struct Angle : IEquatable<Angle>, IComparable<Angle>, IFormattable
     {
         public static readonly Angle Zero = new(0f, Unit.Rad);
         public static readonly Angle HalfQuarter = new(45f, Unit.Deg);
@@ -147,7 +147,7 @@ namespace PeachPDF.CSS
         /// <summary>
         ///     An enumeration of angle representations.
         /// </summary>
-        public enum Unit : byte
+        internal enum Unit : byte
         {
             None,
             Deg,

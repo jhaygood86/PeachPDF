@@ -1,10 +1,10 @@
-﻿#nullable disable
+#nullable disable
 
 using System;
 
 namespace PeachPDF.CSS
 {
-    public struct Percent : IEquatable<Percent>, IComparable<Percent>, IFormattable
+    internal struct Percent : IEquatable<Percent>, IComparable<Percent>, IFormattable
     {
         /// <summary>
         ///     Gets a zero percent value.

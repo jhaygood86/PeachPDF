@@ -15,7 +15,7 @@ namespace PeachPDF.Html.Adapters.Entities
     /// <summary>
     ///     Represents an ordered pair of floating-point x- and y-coordinates that defines a point in a two-dimensional plane.
     /// </summary>
-    public record struct RPoint(double X, double Y)
+    internal record struct RPoint(double X, double Y)
     {
         /// <summary>
         ///     Represents a new instance of the <see cref="RPoint" /> class with member data left uninitialized.

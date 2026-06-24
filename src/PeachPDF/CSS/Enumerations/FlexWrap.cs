@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public enum FlexWrap : byte
+    internal enum FlexWrap : byte
     {
         NoWrap,
         Wrap,

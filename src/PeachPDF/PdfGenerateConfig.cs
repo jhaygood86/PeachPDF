@@ -13,8 +13,6 @@
 #nullable enable
 
 using PeachPDF.Network;
-using PeachPDF.PdfSharpCore;
-using PeachPDF.PdfSharpCore.Drawing;
 
 namespace PeachPDF
 {
@@ -73,9 +71,14 @@ namespace PeachPDF
         public PageSize PageSize { get; set; }
 
         /// <summary>
-        /// if the page size is undefined this allow you to set manually the page size
+        /// if the page size is undefined this allows you to set manually the page width in points
         /// </summary>
-        public XSize ManualPageSize { get; set; }
+        public double ManualPageWidth { get; set; }
+
+        /// <summary>
+        /// if the page size is undefined this allows you to set manually the page height in points
+        /// </summary>
+        public double ManualPageHeight { get; set; }
 
         /// <summary>
         /// the orientation of each page of the generated pdf

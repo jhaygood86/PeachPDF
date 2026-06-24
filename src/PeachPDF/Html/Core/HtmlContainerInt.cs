@@ -1,4 +1,4 @@
-﻿// "Therefore those skilled at the unorthodox
+// "Therefore those skilled at the unorthodox
 // are infinite as heaven and earth,
 // inexhaustible as the great rivers.
 // When they come to an end,
@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
@@ -77,7 +78,7 @@ namespace PeachPDF.Html.Core
     /// Raised when an error occurred during html rendering.<br/>
     /// </para>
     /// </remarks>
-    public sealed class HtmlContainerInt : IDisposable
+    internal sealed class HtmlContainerInt : IDisposable
     {
         #region Fields and Consts
 

@@ -1,6 +1,6 @@
-﻿namespace PeachPDF.CSS
+namespace PeachPDF.CSS
 {
-    public sealed class Counter
+    internal sealed class Counter
     {
         public Counter(string identifier, string listStyle, string separator)
         {
