@@ -42,8 +42,11 @@ jobs:
           --title "v${{ steps.version.outputs.value }}" \
           --generate-notes
 
-    - name: Build and pack
-      run: dotnet pack src/PeachPDF/PeachPDF.csproj --configuration Release --output ./packages
+    - name: Build
+      run: dotnet build src/PeachPDF/PeachPDF.csproj --configuration Release
+
+    - name: Pack
+      run: dotnet pack src/PeachPDF/PeachPDF.csproj --configuration Release --no-build --output ./packages
 
     - name: Push to NuGet.org
       run: |
