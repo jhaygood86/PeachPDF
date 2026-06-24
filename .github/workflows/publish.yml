@@ -1,0 +1,63 @@
+name: Publish NuGet Package
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Read package version
+      id: version
+      run: |
+        VERSION=$(grep -oP '(?<=<PackageVersion>)[^<]+' src/PeachPDF/PeachPDF.csproj)
+        echo "value=$VERSION" >> $GITHUB_OUTPUT
+        echo "Version: $VERSION"
+
+    - name: Create and push tag
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git tag "v${{ steps.version.outputs.value }}"
+        git push origin "v${{ steps.version.outputs.value }}"
+
+    - name: Create GitHub Release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh release create "v${{ steps.version.outputs.value }}" \
+          --title "v${{ steps.version.outputs.value }}" \
+          --generate-notes
+
+    - name: Build and pack
+      run: dotnet pack src/PeachPDF/PeachPDF.csproj --configuration Release --output ./packages
+
+    - name: Push to NuGet.org
+      run: |
+        OIDC_TOKEN=$(curl -s \
+          -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+          "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=nuget.org" | jq -r '.value')
+
+        API_KEY=$(curl -s -X POST \
+          "https://www.nuget.org/api/v2/package/create-verification-key/PeachPDF/${{ steps.version.outputs.value }}" \
+          -H "Authorization: Bearer $OIDC_TOKEN" | jq -r '.Key')
+
+        echo "::add-mask::$API_KEY"
+
+        dotnet nuget push "./packages/*.nupkg" \
+          --api-key "$API_KEY" \
+          --source https://api.nuget.org/v3/index.json \
+          --skip-duplicate
