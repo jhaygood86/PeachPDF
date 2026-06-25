@@ -51,6 +51,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// <summary>
         /// Setups the shading pattern from the specified brush.
         /// </summary>
+        internal PdfExtGState? AlphaExtGState { get; private set; }
+
         internal void SetupFromBrush(XBaseGradientBrush brush, XMatrix matrix, XGraphicsPdfRenderer renderer)
         {
             if (brush == null)
@@ -59,8 +61,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             PdfShading shading = new PdfShading(_document);
             shading.SetupFromBrush(brush, renderer);
             Elements[Keys.Shading] = shading;
-            //Elements[Keys.Matrix] = new PdfLiteral("[" + PdfEncoders.ToString(matrix) + "]");
             Elements.SetMatrix(Keys.Matrix, matrix);
+            AlphaExtGState = shading.AlphaExtGState;
         }
 
         /// <summary>
@@ -74,8 +76,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             PdfShading shading = new PdfShading(_document);
             shading.SetupFromBrush(brush, renderer);
             Elements[Keys.Shading] = shading;
-            //Elements[Keys.Matrix] = new PdfLiteral("[" + PdfEncoders.ToString(matrix) + "]");
             Elements.SetMatrix(Keys.Matrix, matrix);
+            AlphaExtGState = shading.AlphaExtGState;
         }
 
         /// <summary>

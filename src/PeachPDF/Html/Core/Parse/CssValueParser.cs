@@ -608,7 +608,7 @@ namespace PeachPDF.Html.Core.Parse
             int r = -1;
             int g = -1;
             int b = -1;
-            int a = -1;
+            double a = -1d;
 
             if (length > 13)
             {
@@ -625,13 +625,13 @@ namespace PeachPDF.Html.Core.Parse
                 }
                 if (s < idx + length)
                 {
-                    a = ParseIntAtIndex(str, ref s);
+                    a = ParseDoubleAtIndex(str, ref s);
                 }
             }
 
-            if (r > -1 && g > -1 && b > -1 && a > -1)
+            if (r > -1 && g > -1 && b > -1 && a >= 0d)
             {
-                color = RColor.FromArgb(a, r, g, b);
+                color = RColor.FromArgb((int)Math.Round(a * 255), r, g, b);
                 return true;
             }
             color = RColor.Empty;
@@ -664,6 +664,20 @@ namespace PeachPDF.Html.Core.Parse
             while (char.IsDigit(str, startIdx + len))
                 len++;
             var val = ParseInt(str, startIdx, len);
+            startIdx = startIdx + len + 1;
+            return val;
+        }
+
+        private static double ParseDoubleAtIndex(string str, ref int startIdx)
+        {
+            int len = 0;
+            while (startIdx < str.Length && char.IsWhiteSpace(str, startIdx))
+                startIdx++;
+            while (startIdx + len < str.Length && (char.IsDigit(str, startIdx + len) || str[startIdx + len] == '.'))
+                len++;
+            if (len < 1) { startIdx++; return -1d; }
+            if (!double.TryParse(str.Substring(startIdx, len), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double val))
+                val = -1d;
             startIdx = startIdx + len + 1;
             return val;
         }

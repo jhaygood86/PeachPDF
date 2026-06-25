@@ -272,6 +272,15 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                     PdfShadingPattern pattern = new PdfShadingPattern(_renderer.Owner);
                     pattern.SetupFromBrush(gradientBrush, matrix, _renderer);
                     string name = _renderer.Resources.AddPattern(pattern);
+
+                    if (pattern.AlphaExtGState != null)
+                    {
+                        string gsName = _renderer.Resources.AddExtGState(pattern.AlphaExtGState);
+                        _renderer.AppendFormatString("{0} gs\n", gsName);
+                        if (_renderer._page != null)
+                            _renderer._page.TransparencyUsed = true;
+                    }
+
                     if (isForPen)
                     {
                         _renderer.AppendFormatString("/Pattern CS\n", name);

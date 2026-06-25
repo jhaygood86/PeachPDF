@@ -105,6 +105,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             function.Elements["/N"] = new PdfInteger(1);
         }
 
+        internal PdfExtGState? AlphaExtGState { get; private set; }
+
         /// <summary>
         /// Setups the shading from the specified brush.
         /// </summary>
@@ -178,6 +180,9 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 
             Elements[Keys.Extend] = new PdfLiteral("[true true]");
 
+            XColor[] allColors = brush._colors ?? new[] { brush._color1, brush._color2 };
+            double[]? allPositions = brush._positions;
+
             if (brush._colors != null && brush._colors.Length > 2 && brush._positions != null)
             {
                 Elements[Keys.Function] = BuildStitchingFunction(brush._colors, brush._positions, colorMode);
@@ -194,7 +199,126 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 function.Elements["/N"] = new PdfInteger(1);
                 Elements[Keys.Function] = function;
             }
+
+            BuildAlphaExtGStateIfNeeded(allColors, allPositions, x1, y1, x2, y2);
         }
+
+        private void BuildAlphaExtGStateIfNeeded(XColor[] colors, double[]? positions, double x1, double y1, double x2, double y2)
+        {
+            bool hasVaryingAlpha = false;
+            for (int i = 0; i < colors.Length; i++)
+            {
+                if (colors[i].A < 0.9995)
+                {
+                    hasVaryingAlpha = true;
+                    break;
+                }
+            }
+            if (!hasVaryingAlpha) return;
+
+            // Build DeviceGray alpha interpolation function
+            PdfDictionary alphaFn;
+            if (positions != null && colors.Length > 2)
+                alphaFn = BuildAlphaStitchingFunction(colors, positions);
+            else
+            {
+                alphaFn = new PdfDictionary();
+                alphaFn.Elements["/FunctionType"] = new PdfInteger(2);
+                alphaFn.Elements["/Domain"] = new PdfLiteral("[0 1]");
+                alphaFn.Elements["/C0"] = new PdfLiteral("[" + AlphaToString(colors[0].A) + "]");
+                alphaFn.Elements["/C1"] = new PdfLiteral("[" + AlphaToString(colors[colors.Length - 1].A) + "]");
+                alphaFn.Elements["/N"] = new PdfInteger(1);
+            }
+
+            // DeviceGray axial shading with same axis as color shading
+            const string fmt = Config.SignificantFigures3;
+            var grayShading = new PdfDictionary();
+            grayShading.Elements["/ShadingType"] = new PdfInteger(2);
+            grayShading.Elements["/ColorSpace"] = new PdfName("/DeviceGray");
+            grayShading.Elements["/Coords"] = new PdfLiteral(string.Format(
+                System.Globalization.CultureInfo.InvariantCulture,
+                "[{0:" + fmt + "} {1:" + fmt + "} {2:" + fmt + "} {3:" + fmt + "}]",
+                x1, y1, x2, y2));
+            grayShading.Elements["/Extend"] = new PdfLiteral("[true true]");
+            grayShading.Elements["/Function"] = alphaFn;
+
+            // Form XObject (transparency group) that paints the gray shading
+            var formXObj = new PdfDictionary(_document);
+            _document._irefTable.Add(formXObj);
+            formXObj.Elements["/Type"] = new PdfName("/XObject");
+            formXObj.Elements["/Subtype"] = new PdfName("/Form");
+            formXObj.Elements["/BBox"] = new PdfLiteral("[-100000 -100000 100000 100000]");
+
+            var group = new PdfDictionary();
+            group.Elements["/S"] = new PdfName("/Transparency");
+            group.Elements["/CS"] = new PdfName("/DeviceGray");
+            group.Elements["/I"] = new PdfBoolean(true);
+            group.Elements["/K"] = new PdfBoolean(false);
+            formXObj.Elements["/Group"] = group;
+
+            var shadingRes = new PdfDictionary();
+            shadingRes.Elements["/alphaShd"] = grayShading;
+            var resources = new PdfDictionary();
+            resources.Elements["/Shading"] = shadingRes;
+            formXObj.Elements["/Resources"] = resources;
+
+            formXObj.CreateStream(System.Text.Encoding.ASCII.GetBytes("/alphaShd sh"));
+
+            // Soft mask dict referencing the Form XObject
+            var softMask = new PdfSoftMask(_document);
+            softMask.Elements[PdfSoftMask.Keys.S] = new PdfName("/Luminosity");
+            softMask.Elements.SetReference(PdfSoftMask.Keys.G, formXObj);
+
+            // ExtGState carrying the soft mask
+            var extGState = new PdfExtGState(_document);
+            extGState.Elements["/SMask"] = softMask;
+            extGState.Elements["/AIS"] = new PdfBoolean(false);
+
+            AlphaExtGState = extGState;
+        }
+
+        private static PdfDictionary BuildAlphaStitchingFunction(XColor[] colors, double[] positions)
+        {
+            int n = colors.Length;
+            var stitching = new PdfDictionary();
+            stitching.Elements["/FunctionType"] = new PdfInteger(3);
+            stitching.Elements["/Domain"] = new PdfLiteral("[0 1]");
+
+            var bounds = new System.Text.StringBuilder("[");
+            for (int i = 1; i < n - 1; i++)
+            {
+                if (i > 1) bounds.Append(' ');
+                bounds.Append(positions[i].ToString("G6", System.Globalization.CultureInfo.InvariantCulture));
+            }
+            bounds.Append(']');
+            stitching.Elements["/Bounds"] = new PdfLiteral(bounds.ToString());
+
+            var encode = new System.Text.StringBuilder("[");
+            for (int i = 0; i < n - 1; i++)
+            {
+                if (i > 0) encode.Append(' ');
+                encode.Append("0 1");
+            }
+            encode.Append(']');
+            stitching.Elements["/Encode"] = new PdfLiteral(encode.ToString());
+
+            var functions = new PdfArray();
+            for (int i = 0; i < n - 1; i++)
+            {
+                var fn = new PdfDictionary();
+                fn.Elements["/FunctionType"] = new PdfInteger(2);
+                fn.Elements["/Domain"] = new PdfLiteral("[0 1]");
+                fn.Elements["/C0"] = new PdfLiteral("[" + AlphaToString(colors[i].A) + "]");
+                fn.Elements["/C1"] = new PdfLiteral("[" + AlphaToString(colors[i + 1].A) + "]");
+                fn.Elements["/N"] = new PdfInteger(1);
+                functions.Elements.Add(fn);
+            }
+            stitching.Elements["/Functions"] = functions;
+            return stitching;
+        }
+
+        private static string AlphaToString(double a) =>
+            a.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
 
         private static PdfDictionary BuildStitchingFunction(XColor[] colors, double[] positions, PdfColorMode colorMode)
         {
