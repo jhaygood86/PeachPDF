@@ -61,7 +61,6 @@ namespace PeachPDF.Html.Core.Dom
         private double _actualCornerSw = double.NaN;
         private double _actualCornerSe = double.NaN;
         private RColor _actualColor = RColor.Empty;
-        private double _actualBackgroundGradientAngle = double.NaN;
         private double _actualPaddingTop = double.NaN;
         private double _actualPaddingBottom = double.NaN;
         private double _actualPaddingRight = double.NaN;
@@ -79,7 +78,6 @@ namespace PeachPDF.Html.Core.Dom
         private double _actualTextIndent = double.NaN;
         private double _actualBorderSpacingHorizontal = double.NaN;
         private double _actualBorderSpacingVertical = double.NaN;
-        private RColor _actualBackgroundGradient = RColor.Empty;
         private RColor _actualBorderTopColor = RColor.Empty;
         private RColor _actualBorderLeftColor = RColor.Empty;
         private RColor _actualBorderBottomColor = RColor.Empty;
@@ -311,9 +309,11 @@ namespace PeachPDF.Html.Core.Dom
 
         public string BackgroundRepeat { get; set; } = "repeat";
 
-        public string BackgroundGradient { get; set; } = "none";
+        public ParsedLinearGradient? BackgroundLinearGradient { get; set; }
 
-        public string BackgroundGradientAngle { get; set; } = "90";
+        public ParsedRadialGradient? BackgroundRadialGradient { get; set; }
+
+        public ParsedConicGradient? BackgroundConicGradient { get; set; }
 
         public string Color
         {
@@ -872,37 +872,6 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Gets the second color that creates a gradient for the background
-        /// </summary>
-        public RColor ActualBackgroundGradient
-        {
-            get
-            {
-                if (_actualBackgroundGradient.IsEmpty)
-                {
-                    _actualBackgroundGradient = GetActualColor(BackgroundGradient);
-                }
-                return _actualBackgroundGradient;
-            }
-        }
-
-        /// <summary>
-        /// Gets the actual angle specified for the background gradient
-        /// </summary>
-        public double ActualBackgroundGradientAngle
-        {
-            get
-            {
-                if (double.IsNaN(_actualBackgroundGradientAngle))
-                {
-                    _actualBackgroundGradientAngle = CssValueParser.ParseNumber(BackgroundGradientAngle, 360f);
-                }
-
-                return _actualBackgroundGradientAngle;
-            }
-        }
-
-        /// <summary>
         /// Gets the font that should be actually used to paint the text of the box
         /// </summary>
         public RFont ActualFont
@@ -1172,8 +1141,9 @@ namespace PeachPDF.Html.Core.Dom
             if (!everything) return;
 
             BackgroundColor = p.BackgroundColor;
-            BackgroundGradient = p.BackgroundGradient;
-            BackgroundGradientAngle = p.BackgroundGradientAngle;
+            BackgroundLinearGradient = p.BackgroundLinearGradient;
+            BackgroundRadialGradient = p.BackgroundRadialGradient;
+            BackgroundConicGradient = p.BackgroundConicGradient;
             BackgroundImage = p.BackgroundImage;
             BackgroundPosition = p.BackgroundPosition;
             BackgroundRepeat = p.BackgroundRepeat;

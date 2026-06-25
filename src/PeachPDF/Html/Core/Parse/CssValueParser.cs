@@ -20,6 +20,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 
 namespace PeachPDF.Html.Core.Parse
 {
@@ -413,6 +414,596 @@ namespace PeachPDF.Html.Core.Parse
             return propValue;
         }
 
+        public ParsedLinearGradient? ParseLinearGradient(string value)
+        {
+            var tokens = GetCssTokens(value);
+
+            var funcToken = tokens.OfType<FunctionToken>().FirstOrDefault(t =>
+                string.Equals(t.Data, FunctionNames.LinearGradient, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(t.Data, FunctionNames.RepeatingLinearGradient, StringComparison.OrdinalIgnoreCase));
+
+            if (funcToken == null)
+                return null;
+
+            bool isRepeating = string.Equals(funcToken.Data, FunctionNames.RepeatingLinearGradient, StringComparison.OrdinalIgnoreCase);
+
+            var args = funcToken.ArgumentTokens.ToList();
+            if (args.Count == 0)
+                return null;
+
+            double angleRad = Math.PI; // default: 180deg = top to bottom
+            int stopOffset = 0;
+
+            var firstGroup = args[0];
+            var firstIdents = firstGroup.Where(t => t.Type == TokenType.Ident).Select(t => t.Data.ToLowerInvariant()).ToList();
+
+            // Phase D: detect "in <colorspace> [<hue-method>]"
+            var (linearColorSpace, linearHueMethod, nextIdentIdx) = TryParseInColorSpace(firstIdents);
+            if (nextIdentIdx >= 0)
+                stopOffset = 1; // first group is a modifier group
+
+            // Direction keyword or angle (may follow the "in" clause in the same first group)
+            var dirIdents = nextIdentIdx >= 0 ? firstIdents.Skip(nextIdentIdx).ToList() : firstIdents;
+            if (dirIdents.Count > 0 && dirIdents[0] == "to")
+            {
+                // keyword direction: "to right", "to bottom left", etc.
+                angleRad = SideKeywordsToAngleRad(dirIdents.Skip(1).ToList());
+                stopOffset = 1;
+            }
+            else
+            {
+                var angle = firstGroup.ToAngle();
+                if (angle.HasValue)
+                {
+                    angleRad = angle.Value.ToRadian();
+                    stopOffset = 1;
+                }
+                // else no angle token, stopOffset stays 0 (unless set by "in" detection above)
+            }
+
+            var stopGroups = args.Skip(stopOffset).ToList();
+            if (stopGroups.Count < 2)
+                return null;
+
+            var stops = new List<(RColor? Color, Length? Position, bool IsHint)>();
+
+            foreach (var group in stopGroups)
+            {
+                var items = group.ToItems();
+                if (items.Count == 0)
+                    continue;
+
+                Length? position1 = null;
+                Length? position2 = null;
+                int colorItemCount = items.Count;
+
+                // Last item may be a length/percent position
+                var lastItem = items[items.Count - 1];
+                var pv = lastItem.ToDistance();
+                if (pv.HasValue)
+                {
+                    position1 = pv.Value;
+                    colorItemCount--;
+
+                    // A2: check second-to-last for two-position shorthand (e.g. "red 0 50%")
+                    if (colorItemCount > 0)
+                    {
+                        var pv2 = items[colorItemCount - 1].ToDistance();
+                        if (pv2.HasValue)
+                        {
+                            position2 = position1;          // last position is the second one
+                            position1 = pv2.Value;          // second-to-last is the first one
+                            colorItemCount--;
+                        }
+                    }
+                }
+
+                if (colorItemCount == 0)
+                {
+                    // A3: hint — bare position with no color
+                    if (position1.HasValue && !position2.HasValue)
+                        stops.Add((null, position1, IsHint: true));
+                    continue;
+                }
+
+                var colorText = BuildColorText(items.Take(colorItemCount));
+                if (string.IsNullOrWhiteSpace(colorText))
+                    continue;
+
+                var color = GetActualColor(colorText);
+                stops.Add((color, position1, IsHint: false));
+                if (position2.HasValue)
+                    stops.Add((color, position2, IsHint: false));
+            }
+
+            if (stops.Count(s => !s.IsHint) < 2)
+                return null;
+
+            return new ParsedLinearGradient
+            {
+                AngleRad = angleRad,
+                Stops = stops.ToArray(),
+                IsRepeating = isRepeating,
+                ColorSpace = linearColorSpace,
+                HueMethod = linearHueMethod,
+            };
+        }
+
+        public ParsedRadialGradient? ParseRadialGradient(string value)
+        {
+            var tokens = GetCssTokens(value);
+
+            var funcToken = tokens.OfType<FunctionToken>().FirstOrDefault(t =>
+                string.Equals(t.Data, FunctionNames.RadialGradient, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(t.Data, FunctionNames.RepeatingRadialGradient, StringComparison.OrdinalIgnoreCase));
+
+            if (funcToken == null)
+                return null;
+
+            bool isRepeating = string.Equals(funcToken.Data, FunctionNames.RepeatingRadialGradient, StringComparison.OrdinalIgnoreCase);
+
+            var args = funcToken.ArgumentTokens.ToList();
+            if (args.Count == 0)
+                return null;
+
+            bool isCircle = false;
+            double centerX = 0.5, centerY = 0.5;
+            int stopOffset = 0;
+            Length? explicitRadiusX = null, explicitRadiusY = null;
+
+            var firstGroup = args[0];
+            var firstGroupItems = firstGroup.ToItems();
+            var firstIdents = firstGroupItems.SelectMany(i => i)
+                                            .Where(t => t.Type == TokenType.Ident)
+                                            .Select(t => t.Data.ToLowerInvariant())
+                                            .ToList();
+
+            // Phase D: detect "in <colorspace> [<hue-method>]"
+            var (radialColorSpace, radialHueMethod, _) = TryParseInColorSpace(firstIdents);
+
+            // A4: scan items before "at" for explicit length sizes (e.g. "20px" or "20px 30px")
+            // Guard: stop collecting once we see an ident that is not a known gradient modifier
+            // keyword, because it must be a CSS color name (e.g. "red" in "red 0 8px" followed
+            // by stop positions that would otherwise be misread as explicit radii).
+            static bool IsRadialModifierIdent(string id) =>
+                string.Equals(id, "circle", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(id, "ellipse", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(id, "in", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(id, "closest-side", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(id, "farthest-corner", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(id, "closest-corner", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(id, "farthest-side", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(id, "srgb", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(id, "srgb-linear", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(id, "oklab", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(id, "oklch", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(id, "lab", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(id, "lch", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(id, "hsl", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(id, "hwb", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(id, "display-p3", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(id, "xyz", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(id, "xyz-d50", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(id, "xyz-d65", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(id, "shorter", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(id, "longer", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(id, "increasing", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(id, "decreasing", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(id, "hue", StringComparison.OrdinalIgnoreCase);
+
+            var explicitSizeLengths = new List<Length>();
+            bool seenNonModifierIdent = false;
+            foreach (var item in firstGroupItems)
+            {
+                if (item.Count == 1 && item[0].Type == TokenType.Ident)
+                {
+                    var id = item[0].Data;
+                    if (id.Equals("at", StringComparison.OrdinalIgnoreCase)) break;
+                    if (!IsRadialModifierIdent(id)) seenNonModifierIdent = true;
+                    continue;
+                }
+                // A CSS color function (rgb(), rgba(), hsl(), etc.) means this group is a color stop.
+                if (item.Count == 1 && item[0].Type == TokenType.Function)
+                {
+                    seenNonModifierIdent = true;
+                    continue;
+                }
+                if (!seenNonModifierIdent)
+                {
+                    var dist = item.ToDistance();
+                    if (dist.HasValue) explicitSizeLengths.Add(dist.Value);
+                }
+            }
+
+            bool isShapeOrPositionGroup =
+                firstIdents.Contains("in") ||
+                firstIdents.Contains("circle") || firstIdents.Contains("ellipse") ||
+                firstIdents.Contains("at") || firstIdents.Contains("closest-side") ||
+                firstIdents.Contains("farthest-corner") || firstIdents.Contains("closest-corner") ||
+                firstIdents.Contains("farthest-side") || explicitSizeLengths.Count > 0;
+
+            var sizeKeyword = RadialGradientSize.FarthestCorner;
+
+            if (isShapeOrPositionGroup)
+            {
+                stopOffset = 1;
+                isCircle = firstIdents.Contains("circle");
+
+                if (firstIdents.Contains("closest-corner")) sizeKeyword = RadialGradientSize.ClosestCorner;
+                else if (firstIdents.Contains("farthest-side")) sizeKeyword = RadialGradientSize.FarthestSide;
+                else if (firstIdents.Contains("closest-side")) sizeKeyword = RadialGradientSize.ClosestSide;
+
+                // A4: store explicit size lengths
+                if (explicitSizeLengths.Count >= 1)
+                {
+                    explicitRadiusX = explicitSizeLengths[0];
+                    explicitRadiusY = explicitSizeLengths.Count >= 2 ? explicitSizeLengths[1] : explicitSizeLengths[0];
+                }
+
+                if (firstIdents.Contains("at"))
+                {
+                    bool inPosition = false;
+                    int posCount = 0;
+
+                    foreach (var item in firstGroup.ToItems())
+                    {
+                        if (item.Count == 1 && item[0].Type == TokenType.Ident)
+                        {
+                            string ident = item[0].Data.ToLowerInvariant();
+                            if (!inPosition)
+                            {
+                                if (ident == "at") inPosition = true;
+                                continue;
+                            }
+                            double pos = ident switch
+                            {
+                                "left" => 0.0,
+                                "right" => 1.0,
+                                "top" => 0.0,
+                                "bottom" => 1.0,
+                                "center" => 0.5,
+                                _ => 0.5
+                            };
+                            if (posCount == 0) centerX = pos;
+                            else if (posCount == 1) centerY = pos;
+                            posCount++;
+                        }
+                        else if (inPosition)
+                        {
+                            var dist = item.ToDistance();
+                            if (dist.HasValue && dist.Value.Type == Length.Unit.Percent)
+                            {
+                                double pos = dist.Value.Value / 100.0;
+                                if (posCount == 0) centerX = pos;
+                                else if (posCount == 1) centerY = pos;
+                                posCount++;
+                            }
+                        }
+                    }
+                }
+            }
+
+            var stopGroups = args.Skip(stopOffset).ToList();
+            if (stopGroups.Count < 2)
+                return null;
+
+            var stops = new List<(RColor? Color, Length? Position, bool IsHint)>();
+
+            foreach (var group in stopGroups)
+            {
+                var items = group.ToItems();
+                if (items.Count == 0)
+                    continue;
+
+                Length? position1 = null;
+                Length? position2 = null;
+                int colorItemCount = items.Count;
+
+                var lastItem = items[items.Count - 1];
+                var pv = lastItem.ToDistance();
+                if (pv.HasValue)
+                {
+                    position1 = pv.Value;
+                    colorItemCount--;
+
+                    // A2: two-position shorthand
+                    if (colorItemCount > 0)
+                    {
+                        var pv2 = items[colorItemCount - 1].ToDistance();
+                        if (pv2.HasValue)
+                        {
+                            position2 = position1;
+                            position1 = pv2.Value;
+                            colorItemCount--;
+                        }
+                    }
+                }
+
+                if (colorItemCount == 0)
+                {
+                    // A3: hint
+                    if (position1.HasValue && !position2.HasValue)
+                        stops.Add((null, position1, IsHint: true));
+                    continue;
+                }
+
+                var colorText = BuildColorText(items.Take(colorItemCount));
+                if (string.IsNullOrWhiteSpace(colorText))
+                    continue;
+
+                var color = GetActualColor(colorText);
+                stops.Add((color, position1, IsHint: false));
+                if (position2.HasValue)
+                    stops.Add((color, position2, IsHint: false));
+            }
+
+            if (stops.Count(s => !s.IsHint) < 2)
+                return null;
+
+            return new ParsedRadialGradient
+            {
+                IsCircle = isCircle,
+                CenterX = centerX,
+                CenterY = centerY,
+                Size = sizeKeyword,
+                ExplicitRadiusX = explicitRadiusX,
+                ExplicitRadiusY = explicitRadiusY,
+                Stops = stops.ToArray(),
+                IsRepeating = isRepeating,
+                ColorSpace = radialColorSpace,
+                HueMethod = radialHueMethod,
+            };
+        }
+
+        public ParsedConicGradient? ParseConicGradient(string value)
+        {
+            var tokens = GetCssTokens(value);
+
+            var funcToken = tokens.OfType<FunctionToken>().FirstOrDefault(t =>
+                string.Equals(t.Data, FunctionNames.ConicGradient, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(t.Data, FunctionNames.RepeatingConicGradient, StringComparison.OrdinalIgnoreCase));
+
+            if (funcToken == null)
+                return null;
+
+            bool isRepeating = string.Equals(funcToken.Data, FunctionNames.RepeatingConicGradient, StringComparison.OrdinalIgnoreCase);
+
+            var args = funcToken.ArgumentTokens.ToList();
+            if (args.Count == 0)
+                return null;
+
+            double fromAngleRad = 0.0;
+            double centerX = 0.5, centerY = 0.5;
+            int stopOffset = 0;
+
+            // First group: optionally "in <colorspace>", "from <angle>", and/or "at <x> <y>"
+            var firstGroup = args[0];
+            var firstIdents = firstGroup.Where(t => t.Type == TokenType.Ident)
+                                        .Select(t => t.Data.ToLowerInvariant()).ToList();
+
+            // Phase D: detect "in <colorspace> [<hue-method>]"
+            var (conicColorSpace, conicHueMethod, _) = TryParseInColorSpace(firstIdents);
+
+            bool hasFrom = firstIdents.Contains("from");
+            bool hasAt   = firstIdents.Contains("at");
+            bool hasIn   = firstIdents.Contains("in");
+
+            if (hasFrom || hasAt || hasIn)
+            {
+                stopOffset = 1;
+                var items = firstGroup.ToItems();
+                bool inFrom = false, inAt = false;
+                int atPosCount = 0;
+
+                foreach (var item in items)
+                {
+                    if (item.Count == 1 && item[0].Type == TokenType.Ident)
+                    {
+                        string kw = item[0].Data.ToLowerInvariant();
+                        if (kw == "from") { inFrom = true; inAt = false; continue; }
+                        if (kw == "at")   { inAt   = true; inFrom = false; continue; }
+
+                        if (inAt)
+                        {
+                            double kp = kw switch { "left" => 0.0, "right" => 1.0, "top" => 0.0, "bottom" => 1.0, _ => 0.5 };
+                            if (atPosCount == 0) centerX = kp;
+                            else if (atPosCount == 1) centerY = kp;
+                            atPosCount++;
+                        }
+                        continue;
+                    }
+
+                    if (inFrom)
+                    {
+                        var ang = item.ToAngle();
+                        if (ang.HasValue) fromAngleRad = ang.Value.ToRadian();
+                        inFrom = false;
+                        continue;
+                    }
+
+                    if (inAt)
+                    {
+                        var dist = item.ToDistance();
+                        if (dist.HasValue && dist.Value.Type == Length.Unit.Percent)
+                        {
+                            double pos = dist.Value.Value / 100.0;
+                            if (atPosCount == 0) centerX = pos;
+                            else if (atPosCount == 1) centerY = pos;
+                            atPosCount++;
+                        }
+                    }
+                }
+            }
+
+            var stopGroups = args.Skip(stopOffset).ToList();
+            if (stopGroups.Count < 2)
+                return null;
+
+            var stops = new List<(RColor? Color, double? PositionRad, bool IsHint)>();
+
+            foreach (var group in stopGroups)
+            {
+                var items = group.ToItems();
+                if (items.Count == 0) continue;
+
+                double? position1 = null, position2 = null;
+                int colorItemCount = items.Count;
+
+                // Last item may be an angle/percent position
+                var lastItem = items[colorItemCount - 1];
+                double? pv = TryParseConicAngle(lastItem);
+                if (pv.HasValue)
+                {
+                    position1 = pv.Value;
+                    colorItemCount--;
+
+                    // Two-position shorthand
+                    if (colorItemCount > 0)
+                    {
+                        double? pv2 = TryParseConicAngle(items[colorItemCount - 1]);
+                        if (pv2.HasValue)
+                        {
+                            position2 = position1;
+                            position1 = pv2.Value;
+                            colorItemCount--;
+                        }
+                    }
+                }
+
+                if (colorItemCount == 0)
+                {
+                    if (position1.HasValue && !position2.HasValue)
+                        stops.Add((null, position1, IsHint: true));
+                    continue;
+                }
+
+                var colorText = BuildColorText(items.Take(colorItemCount));
+                if (string.IsNullOrWhiteSpace(colorText)) continue;
+
+                var color = GetActualColor(colorText);
+                stops.Add((color, position1, IsHint: false));
+                if (position2.HasValue)
+                    stops.Add((color, position2, IsHint: false));
+            }
+
+            if (stops.Count(s => !s.IsHint) < 2)
+                return null;
+
+            return new ParsedConicGradient
+            {
+                FromAngleRad = fromAngleRad,
+                CenterX = centerX,
+                CenterY = centerY,
+                Stops = stops.ToArray(),
+                IsRepeating = isRepeating,
+                ColorSpace = conicColorSpace,
+                HueMethod = conicHueMethod,
+            };
+        }
+
+        private static double? TryParseConicAngle(List<Token> item)
+        {
+            var angle = item.ToAngle();
+            if (angle.HasValue) return angle.Value.ToRadian();
+
+            var dist = item.ToDistance();
+            if (dist.HasValue && dist.Value.Type == Length.Unit.Percent)
+                return dist.Value.Value / 100.0 * (2.0 * Math.PI);
+
+            // In CSS, bare 0 is a valid zero value for any dimension including angles.
+            if (item.Count == 1 && item[0].Type == TokenType.Number && ((NumberToken)item[0]).Value == 0f)
+                return 0.0;
+
+            return null;
+        }
+
+        private static GradientColorSpace ParseColorSpaceName(string name) => name switch
+        {
+            "srgb" => GradientColorSpace.Srgb,
+            "srgb-linear" => GradientColorSpace.SrgbLinear,
+            "display-p3" => GradientColorSpace.DisplayP3,
+            "lab" => GradientColorSpace.Lab,
+            "oklab" => GradientColorSpace.Oklab,
+            "xyz" or "xyz-d65" => GradientColorSpace.XyzD65,
+            "xyz-d50" => GradientColorSpace.XyzD50,
+            "hsl" => GradientColorSpace.Hsl,
+            "hwb" => GradientColorSpace.Hwb,
+            "lch" => GradientColorSpace.Lch,
+            "oklch" => GradientColorSpace.Oklch,
+            _ => GradientColorSpace.Srgb,
+        };
+
+        private static bool IsPolarColorSpace(GradientColorSpace cs) =>
+            cs is GradientColorSpace.Hsl or GradientColorSpace.Hwb
+                or GradientColorSpace.Lch or GradientColorSpace.Oklch;
+
+        private static HueInterpolationMethod ParseHueMethod(List<string> idents, int startIdx)
+        {
+            for (int i = startIdx; i + 1 < idents.Count; i++)
+            {
+                if (idents[i + 1] == "hue")
+                    return idents[i] switch
+                    {
+                        "longer" => HueInterpolationMethod.Longer,
+                        "increasing" => HueInterpolationMethod.Increasing,
+                        "decreasing" => HueInterpolationMethod.Decreasing,
+                        _ => HueInterpolationMethod.Shorter,
+                    };
+            }
+            return HueInterpolationMethod.Shorter;
+        }
+
+        // Detects "in <colorspace> [<hue-method>]" in an ident list; returns (colorSpace, hueMethod)
+        // and the index of the first ident after the "in" clause (or -1 if "in" not found).
+        private static (GradientColorSpace ColorSpace, HueInterpolationMethod HueMethod, int NextIdx)
+            TryParseInColorSpace(List<string> idents)
+        {
+            int inIdx = idents.IndexOf("in");
+            if (inIdx < 0 || inIdx + 1 >= idents.Count)
+                return (GradientColorSpace.Srgb, HueInterpolationMethod.Shorter, -1);
+
+            var cs = ParseColorSpaceName(idents[inIdx + 1]);
+            var hue = HueInterpolationMethod.Shorter;
+            int nextIdx = inIdx + 2;
+            if (IsPolarColorSpace(cs))
+            {
+                hue = ParseHueMethod(idents, nextIdx);
+                // consume up to 2 extra idents for hue method ("shorter hue" etc.)
+                if (nextIdx + 1 < idents.Count && idents[nextIdx + 1] == "hue")
+                    nextIdx += 2;
+            }
+            return (cs, hue, nextIdx);
+        }
+
+        private static double SideKeywordsToAngleRad(List<string> sides)
+        {
+            bool hasTop = sides.Contains("top");
+            bool hasBottom = sides.Contains("bottom");
+            bool hasLeft = sides.Contains("left");
+            bool hasRight = sides.Contains("right");
+
+            if (hasTop && hasRight) return Math.PI / 4;        // 45deg
+            if (hasBottom && hasRight) return 3 * Math.PI / 4; // 135deg
+            if (hasBottom && hasLeft) return 5 * Math.PI / 4;  // 225deg
+            if (hasTop && hasLeft) return 7 * Math.PI / 4;     // 315deg
+            if (hasTop) return 0;                               // 0deg
+            if (hasRight) return Math.PI / 2;                   // 90deg
+            if (hasBottom) return Math.PI;                      // 180deg
+            if (hasLeft) return 3 * Math.PI / 2;               // 270deg
+
+            return Math.PI; // default
+        }
+
+        private static string BuildColorText(IEnumerable<IEnumerable<Token>> itemGroups)
+        {
+            var sb = new StringBuilder();
+            foreach (var group in itemGroups)
+            {
+                sb.Append(group.ToText());
+            }
+            return sb.ToString().Trim();
+        }
+
         #region Private methods
 
         /// <summary>
@@ -490,7 +1081,7 @@ namespace PeachPDF.Html.Core.Parse
             int r = -1;
             int g = -1;
             int b = -1;
-            int a = -1;
+            double a = -1d;
 
             if (length > 13)
             {
@@ -507,13 +1098,13 @@ namespace PeachPDF.Html.Core.Parse
                 }
                 if (s < idx + length)
                 {
-                    a = ParseIntAtIndex(str, ref s);
+                    a = ParseDoubleAtIndex(str, ref s);
                 }
             }
 
-            if (r > -1 && g > -1 && b > -1 && a > -1)
+            if (r > -1 && g > -1 && b > -1 && a >= 0d)
             {
-                color = RColor.FromArgb(a, r, g, b);
+                color = RColor.FromArgb((int)Math.Round(a * 255), r, g, b);
                 return true;
             }
             color = RColor.Empty;
@@ -546,6 +1137,20 @@ namespace PeachPDF.Html.Core.Parse
             while (char.IsDigit(str, startIdx + len))
                 len++;
             var val = ParseInt(str, startIdx, len);
+            startIdx = startIdx + len + 1;
+            return val;
+        }
+
+        private static double ParseDoubleAtIndex(string str, ref int startIdx)
+        {
+            int len = 0;
+            while (startIdx < str.Length && char.IsWhiteSpace(str, startIdx))
+                startIdx++;
+            while (startIdx + len < str.Length && (char.IsDigit(str, startIdx + len) || str[startIdx + len] == '.'))
+                len++;
+            if (len < 1) { startIdx++; return -1d; }
+            if (!double.TryParse(str.Substring(startIdx, len), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double val))
+                val = -1d;
             startIdx = startIdx + len + 1;
             return val;
         }

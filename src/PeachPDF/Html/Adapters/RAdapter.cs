@@ -132,6 +132,11 @@ namespace PeachPDF.Html.Adapters
             return CreateLinearGradientBrush(rect, color1, color2, angle);
         }
 
+        public RBrush GetLinearGradientBrush(RPoint p1, RPoint p2, (RColor Color, double Position)[] stops, bool isRepeating = false)
+        {
+            return CreateLinearGradientBrush(p1, p2, stops, isRepeating);
+        }
+
         /// <summary>
         /// Convert image object returned from <see cref="HtmlImageLoadEventArgs"/> to <see cref="RImage"/>.
         /// </summary>
@@ -277,6 +282,22 @@ namespace PeachPDF.Html.Adapters
         /// <param name="angle">the angle to move the gradient from start color to end color in the rectangle</param>
         /// <returns>linear gradient color brush instance</returns>
         protected abstract RBrush CreateLinearGradientBrush(RRect rect, RColor color1, RColor color2, double angle);
+
+        protected abstract RBrush CreateLinearGradientBrush(RPoint p1, RPoint p2, (RColor Color, double Position)[] stops, bool isRepeating = false);
+
+        public RBrush GetRadialGradientBrush(RPoint center, double radiusX, double radiusY, (RColor Color, double Position)[] stops, bool isRepeating = false)
+        {
+            return CreateRadialGradientBrush(center, radiusX, radiusY, stops, isRepeating);
+        }
+
+        protected abstract RBrush CreateRadialGradientBrush(RPoint center, double radiusX, double radiusY, (RColor Color, double Position)[] stops, bool isRepeating = false);
+
+        public RBrush GetConicGradientBrush(RPoint center, double outerRadius, RColor[] colors, double[] anglesRad)
+        {
+            return CreateConicGradientBrush(center, outerRadius, colors, anglesRad);
+        }
+
+        protected abstract RBrush CreateConicGradientBrush(RPoint center, double outerRadius, RColor[] colors, double[] anglesRad);
 
         /// <summary>
         /// Convert image object returned from <see cref="HtmlImageLoadEventArgs"/> to <see cref="RImage"/>.

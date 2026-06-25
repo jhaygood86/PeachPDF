@@ -23,7 +23,7 @@
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
 // THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
+// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
@@ -32,12 +32,10 @@
 namespace PeachPDF.PdfSharpCore.Drawing
 {
     /// <summary>
-    /// Defines a Brush with a linear gradient.
+    /// Defines a Brush with a radial gradient.
     /// </summary>
     internal sealed class XRadialGradientBrush : XBaseGradientBrush
     {
-        //internal XRadialGradientBrush();
-
         /// <summary>
         /// Initializes a new instance of the <see cref="XRadialGradientBrush"/> class.
         /// </summary>
@@ -60,7 +58,28 @@ namespace PeachPDF.PdfSharpCore.Drawing
             _r2 = r2;
         }
 
+        /// <summary>
+        /// Initializes a multi-stop radial gradient brush supporting both circle and ellipse shapes.
+        /// radiusX and radiusY may differ for ellipses.
+        /// </summary>
+        public XRadialGradientBrush(XPoint center, double radiusX, double radiusY, XColor[] colors, double[] positions)
+            : base(colors[0], colors[colors.Length - 1])
+        {
+            _center1 = center;
+            _center2 = center;
+            _r1 = 0;
+            _r2 = System.Math.Max(radiusX, radiusY);
+            _radiusX = radiusX;
+            _radiusY = radiusY;
+            _colors = colors;
+            _positions = positions;
+        }
+
         internal XPoint _center1, _center2;
         internal double _r1, _r2;
+        internal double _radiusX, _radiusY;
+        internal XColor[]? _colors;
+        internal double[]? _positions;
+        internal bool IsRepeating;
     }
 }

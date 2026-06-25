@@ -51,16 +51,33 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// <summary>
         /// Setups the shading pattern from the specified brush.
         /// </summary>
+        internal PdfExtGState? AlphaExtGState { get; private set; }
+
         internal void SetupFromBrush(XBaseGradientBrush brush, XMatrix matrix, XGraphicsPdfRenderer renderer)
         {
             if (brush == null)
                 throw new ArgumentNullException("brush");
 
             PdfShading shading = new PdfShading(_document);
-            shading.SetupFromBrush(brush, renderer);
-            Elements[Keys.Shading] = shading;
-            //Elements[Keys.Matrix] = new PdfLiteral("[" + PdfEncoders.ToString(matrix) + "]");
-            Elements.SetMatrix(Keys.Matrix, matrix);
+
+            if (brush is XConicGradientBrush)
+            {
+                // Type 4 shading has binary stream content; PDF spec requires stream objects to be indirect.
+                _document._irefTable.Add(shading);
+                shading.SetupFromBrush(brush, renderer);
+                Elements.SetReference(Keys.Shading, shading);
+                Elements.SetMatrix(Keys.Matrix, matrix);
+            }
+            else
+            {
+                shading.SetupFromBrush(brush, renderer);
+                Elements[Keys.Shading] = shading;
+                // For elliptical radial gradients the shading is defined in a unit-circle space;
+                // use the precomputed ellipse matrix instead of the default view matrix.
+                Elements.SetMatrix(Keys.Matrix, shading.EllipsePatternMatrix ?? matrix);
+            }
+
+            AlphaExtGState = shading.AlphaExtGState;
         }
 
         /// <summary>
@@ -74,8 +91,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             PdfShading shading = new PdfShading(_document);
             shading.SetupFromBrush(brush, renderer);
             Elements[Keys.Shading] = shading;
-            //Elements[Keys.Matrix] = new PdfLiteral("[" + PdfEncoders.ToString(matrix) + "]");
             Elements.SetMatrix(Keys.Matrix, matrix);
+            AlphaExtGState = shading.AlphaExtGState;
         }
 
         /// <summary>

@@ -142,6 +142,10 @@ namespace PeachPDF.CSS
             new FunctionValueConverter(FunctionNames.RadialGradient, new RadialGradientConverter()).Or(
                 new FunctionValueConverter(FunctionNames.RepeatingRadialGradient, new RadialGradientConverter())));
 
+        public static readonly IValueConverter ConicGradientConverter = Construct(() =>
+            new FunctionValueConverter(FunctionNames.ConicGradient, new ConicGradientConverter()).Or(
+                new FunctionValueConverter(FunctionNames.RepeatingConicGradient, new ConicGradientConverter())));
+
         public static readonly IValueConverter RgbColorConverter = Construct(() =>
         {
             var number = RgbComponentConverter.Required();
@@ -386,7 +390,7 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter TransitionConverter = new DictionaryValueConverter<ITimingFunction>(
             Map.TimingFunctions).Or(StepsConverter).Or(CubicBezierConverter);
 
-        public static readonly IValueConverter GradientConverter = LinearGradientConverter.Or(RadialGradientConverter);
+        public static readonly IValueConverter GradientConverter = LinearGradientConverter.Or(RadialGradientConverter).Or(ConicGradientConverter);
 
         public static readonly IValueConverter TransformConverter = MatrixTransformConverter
             .Or(ScaleTransformConverter)

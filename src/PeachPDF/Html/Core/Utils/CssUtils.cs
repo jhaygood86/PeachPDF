@@ -102,8 +102,6 @@ namespace PeachPDF.Html.Core.Utils
                 "background-image" => cssBox.BackgroundImage,
                 "background-position" => cssBox.BackgroundPosition,
                 "background-repeat" => cssBox.BackgroundRepeat,
-                "background-gradient" => cssBox.BackgroundGradient,
-                "background-gradient-angle" => cssBox.BackgroundGradientAngle,
                 "content" => cssBox.Content,
                 "color" => cssBox.Color,
                 "display" => cssBox.Display,
@@ -399,18 +397,15 @@ namespace PeachPDF.Html.Core.Utils
                     break;
                 case "background-image":
                     cssBox.BackgroundImage = value;
+                    cssBox.BackgroundLinearGradient = valueParser.ParseLinearGradient(value);
+                    cssBox.BackgroundRadialGradient = valueParser.ParseRadialGradient(value);
+                    cssBox.BackgroundConicGradient = valueParser.ParseConicGradient(value);
                     break;
                 case "background-position":
                     cssBox.BackgroundPosition = value;
                     break;
                 case "background-repeat":
                     cssBox.BackgroundRepeat = value;
-                    break;
-                case "background-gradient":
-                    cssBox.BackgroundGradient = value;
-                    break;
-                case "background-gradient-angle":
-                    cssBox.BackgroundGradientAngle = value;
                     break;
                 case "color":
                     if (IsValidColorProperty(valueParser, value))

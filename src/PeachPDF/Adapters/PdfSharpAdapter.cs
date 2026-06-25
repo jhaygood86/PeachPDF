@@ -155,6 +155,33 @@ namespace PeachPDF.Adapters
             return new BrushAdapter(new XLinearGradientBrush(Utils.Convert(rect, PixelsPerPoint), Utils.Convert(color1), Utils.Convert(color2), mode));
         }
 
+        protected override RBrush CreateLinearGradientBrush(RPoint p1, RPoint p2, (RColor Color, double Position)[] stops, bool isRepeating = false)
+        {
+            var xp1 = new XPoint(p1.X / PixelsPerPoint, p1.Y / PixelsPerPoint);
+            var xp2 = new XPoint(p2.X / PixelsPerPoint, p2.Y / PixelsPerPoint);
+            var colors = stops.Select(s => Utils.Convert(s.Color)).ToArray();
+            var positions = stops.Select(s => s.Position).ToArray();
+            return new BrushAdapter(new XLinearGradientBrush(xp1, xp2, colors, positions) { IsRepeating = isRepeating });
+        }
+
+        protected override RBrush CreateRadialGradientBrush(RPoint center, double radiusX, double radiusY, (RColor Color, double Position)[] stops, bool isRepeating = false)
+        {
+            var xCenter = new XPoint(center.X / PixelsPerPoint, center.Y / PixelsPerPoint);
+            var rxPt = radiusX / PixelsPerPoint;
+            var ryPt = radiusY / PixelsPerPoint;
+            var colors = stops.Select(s => Utils.Convert(s.Color)).ToArray();
+            var positions = stops.Select(s => s.Position).ToArray();
+            return new BrushAdapter(new XRadialGradientBrush(xCenter, rxPt, ryPt, colors, positions) { IsRepeating = isRepeating });
+        }
+
+        protected override RBrush CreateConicGradientBrush(RPoint center, double outerRadius, RColor[] colors, double[] anglesRad)
+        {
+            var xCenter = new XPoint(center.X / PixelsPerPoint, center.Y / PixelsPerPoint);
+            var rPt = outerRadius / PixelsPerPoint;
+            var xColors = colors.Select(Utils.Convert).ToArray();
+            return new BrushAdapter(new XConicGradientBrush(xCenter, rPt, xColors, anglesRad));
+        }
+
         protected override RImage? ConvertImageInt(object? image)
         {
             return image != null ? new ImageAdapter((XImage)image) : null;
