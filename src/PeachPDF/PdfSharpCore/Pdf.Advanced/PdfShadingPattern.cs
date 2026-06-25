@@ -59,9 +59,24 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 throw new ArgumentNullException("brush");
 
             PdfShading shading = new PdfShading(_document);
-            shading.SetupFromBrush(brush, renderer);
-            Elements[Keys.Shading] = shading;
-            Elements.SetMatrix(Keys.Matrix, matrix);
+
+            if (brush is XConicGradientBrush)
+            {
+                // Type 4 shading has binary stream content; PDF spec requires stream objects to be indirect.
+                _document._irefTable.Add(shading);
+                shading.SetupFromBrush(brush, renderer);
+                Elements.SetReference(Keys.Shading, shading);
+                Elements.SetMatrix(Keys.Matrix, matrix);
+            }
+            else
+            {
+                shading.SetupFromBrush(brush, renderer);
+                Elements[Keys.Shading] = shading;
+                // For elliptical radial gradients the shading is defined in a unit-circle space;
+                // use the precomputed ellipse matrix instead of the default view matrix.
+                Elements.SetMatrix(Keys.Matrix, shading.EllipsePatternMatrix ?? matrix);
+            }
+
             AlphaExtGState = shading.AlphaExtGState;
         }
 

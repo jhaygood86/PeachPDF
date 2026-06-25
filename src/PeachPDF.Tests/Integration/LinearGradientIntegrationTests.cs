@@ -88,5 +88,42 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Contains("/ShadingType", pdfText);
         }
+
+        // ── Phase A: absolute-length stops ────────────────────────────────
+
+        [Fact]
+        public async Task AbsoluteLengthStop_RendersSuccessfully()
+        {
+            // red 0, blue 30px, green — absolute positions must not be discarded
+            var pdfText = await GetPdfText(GradientHtml("background-image: linear-gradient(to right, red 0, blue 30px, green);"));
+
+            Assert.Contains("/ShadingType", pdfText);
+            Assert.Contains("/FunctionType", pdfText);
+        }
+
+        // ── Phase A: two-position hard-stop shorthand ─────────────────────
+
+        [Fact]
+        public async Task HardStopShorthand_ExpandsToTwoStops()
+        {
+            // red 0 50%, blue 50% 100% — each stop with two positions should expand
+            var pdfText = await GetPdfText(GradientHtml("background-image: linear-gradient(to right, red 0 50%, blue 50% 100%);"));
+
+            Assert.Contains("/ShadingType", pdfText);
+            // Two-position shorthand expands to 4 stops, requiring a stitching function
+            Assert.Contains("/FunctionType", pdfText);
+        }
+
+        // ── Phase A: color hints ──────────────────────────────────────────
+
+        [Fact]
+        public async Task ColorHint_RendersMoreThanTwoSubFunctions()
+        {
+            // red, 30%, blue — hint at 30% shifts the midpoint; stitching function has >2 sub-functions
+            var pdfText = await GetPdfText(GradientHtml("background-image: linear-gradient(to right, red, 30%, blue);"));
+
+            Assert.Contains("/ShadingType", pdfText);
+            Assert.Contains("/FunctionType", pdfText);
+        }
     }
 }

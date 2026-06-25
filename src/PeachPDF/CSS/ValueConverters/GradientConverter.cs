@@ -46,7 +46,13 @@ namespace PeachPDF.CSS
             {
                 position = LengthOrPercentConverter.Convert(items[items.Count - 1]);
 
-                if (position != null) items.RemoveAt(items.Count - 1);
+                if (position != null)
+                {
+                    items.RemoveAt(items.Count - 1);
+                    // Two-position shorthand: "red 0 50%" — discard the extra position token
+                    if (items.Count != 0 && LengthOrPercentConverter.Convert(items[items.Count - 1]) != null)
+                        items.RemoveAt(items.Count - 1);
+                }
             }
 
             if (items.Count != 0)
@@ -91,6 +97,19 @@ namespace PeachPDF.CSS
             {
                 return Original;
             }
+        }
+
+        // Factory used by derived classes to return a placeholder IPropertyValue
+        // for "in <colorspace>" modifier groups that are otherwise unrecognized.
+        protected static IPropertyValue CreateInColorSpacePlaceholder(IEnumerable<Token> tokens)
+            => new PlaceholderValue(tokens);
+
+        private sealed class PlaceholderValue : IPropertyValue
+        {
+            public PlaceholderValue(IEnumerable<Token> tokens) { Original = new TokenValue(tokens); }
+            public string CssText => Original.Text;
+            public TokenValue Original { get; }
+            public TokenValue ExtractFor(string name) => Original;
         }
 
         private sealed class GradientValue : IPropertyValue
@@ -145,7 +164,32 @@ namespace PeachPDF.CSS
 
         protected override IPropertyValue ConvertFirstArgument(IEnumerable<Token> value)
         {
+            // "in <colorspace> [<direction>]" — accept the whole first group as a modifier
+            foreach (var t in value)
+            {
+                if (t.Type == TokenType.Ident &&
+                    string.Equals(t.Data, "in", System.StringComparison.OrdinalIgnoreCase))
+                    return CreateInColorSpacePlaceholder(value);
+            }
             return _converter.Convert(value);
+        }
+    }
+
+    // Permissive validator for conic-gradient — actual parsing is in CssValueParser.ParseConicGradient
+    internal sealed class ConicGradientConverter : IValueConverter
+    {
+        public IPropertyValue Convert(IEnumerable<Token> value) => new PassThroughValue(value);
+        public IPropertyValue Construct(Property[] properties) => null;
+
+        private sealed class PassThroughValue : IPropertyValue
+        {
+            public PassThroughValue(IEnumerable<Token> tokens)
+            {
+                Original = new TokenValue(tokens);
+            }
+            public string CssText => Original.Text;
+            public TokenValue Original { get; }
+            public TokenValue ExtractFor(string name) => Original;
         }
     }
 
@@ -172,6 +216,35 @@ namespace PeachPDF.CSS
 
         protected override IPropertyValue ConvertFirstArgument(IEnumerable<Token> value)
         {
+            // "in <colorspace> [...]" — accept the whole first group as a modifier
+            foreach (var t in value)
+            {
+                if (t.Type == TokenType.Ident &&
+                    string.Equals(t.Data, "in", System.StringComparison.OrdinalIgnoreCase))
+                    return CreateInColorSpacePlaceholder(value);
+            }
+
+            // If the first non-whitespace token is an ident that is not a known gradient
+            // shape/size keyword, it must be a CSS color name (e.g. "red" in "red 0 8px").
+            // In that case, this comma group is a color stop, not a shape/size modifier.
+            Token first = null;
+            foreach (var t in value)
+            {
+                if (t.Type != TokenType.Whitespace) { first = t; break; }
+            }
+            if (first != null && first.Type == TokenType.Ident)
+            {
+                var id = first.Data;
+                if (!string.Equals(id, "circle", System.StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(id, "ellipse", System.StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(id, "at", System.StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(id, "closest-side", System.StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(id, "farthest-corner", System.StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(id, "closest-corner", System.StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(id, "farthest-side", System.StringComparison.OrdinalIgnoreCase))
+                    return null;
+            }
+
             return _converter.Convert(value);
         }
     }

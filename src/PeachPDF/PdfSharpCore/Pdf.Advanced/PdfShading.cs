@@ -52,15 +52,27 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 SetupFromBrush(radialBrush, renderer);
             else if (brush is XLinearGradientBrush linearBrush)
                 SetupFromBrush(linearBrush, renderer);
+            else if (brush is XConicGradientBrush conicBrush)
+                SetupConicFromBrush(conicBrush, renderer);
             else
                 throw new ArgumentException("Unsupoorted XGradientBrush: " + brush);
         }
+
+        internal XMatrix? EllipsePatternMatrix { get; private set; }
 
         internal void SetupFromBrush(XRadialGradientBrush brush, XGraphicsPdfRenderer renderer)
         {
             if (brush == null)
                 throw new ArgumentNullException("brush");
 
+            // Multi-stop path (from CSS radial-gradient)
+            if (brush._colors != null)
+            {
+                SetupRadialMultiStop(brush, renderer);
+                return;
+            }
+
+            // Legacy 2-color path
             PdfColorMode colorMode = _document.Options.ColorMode;
             XColor color1 = ColorSpaceHelper.EnsureColorMode(colorMode, brush._color1);
             XColor color2 = ColorSpaceHelper.EnsureColorMode(colorMode, brush._color2);
@@ -90,10 +102,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             const string format = Config.SignificantFigures3;
             Elements[Keys.Coords] = new PdfLiteral("[{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "} {4:" + format + "} {5:" + format + "}]", p1.X, p1.Y, r1, p2.X, p2.Y, r2);
 
-            //Elements[Keys.Background] = new PdfRawItem("[0 1 1]");
-            //Elements[Keys.Domain] = 
             Elements[Keys.Function] = function;
-            //Elements[Keys.Extend] = new PdfRawItem("[true true]");
 
             string clr1 = "[" + PdfEncoders.ToString(color1, colorMode) + "]";
             string clr2 = "[" + PdfEncoders.ToString(color2, colorMode) + "]";
@@ -103,6 +112,147 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             function.Elements["/C1"] = new PdfLiteral(clr2);
             function.Elements["/Domain"] = new PdfLiteral("[0 1]");
             function.Elements["/N"] = new PdfInteger(1);
+        }
+
+        private void SetupRadialMultiStop(XRadialGradientBrush brush, XGraphicsPdfRenderer renderer)
+        {
+            PdfColorMode colorMode = _document.Options.ColorMode;
+
+            Elements[Keys.ShadingType] = new PdfInteger(3);
+            if (colorMode != PdfColorMode.Cmyk)
+                Elements[Keys.ColorSpace] = new PdfName("/DeviceRGB");
+            else
+                Elements[Keys.ColorSpace] = new PdfName("/DeviceCMYK");
+            Elements[Keys.Extend] = new PdfLiteral(brush.IsRepeating ? "[false false]" : "[true true]");
+
+            XPoint center_v = renderer.WorldToView(brush._center1);
+            XPoint rightEdge_v = renderer.WorldToView(new XPoint(brush._center1.X + brush._radiusX, brush._center1.Y));
+            XPoint topEdge_v = renderer.WorldToView(new XPoint(brush._center1.X, brush._center1.Y - brush._radiusY));
+
+            double rx_v = Math.Abs(rightEdge_v.X - center_v.X);
+            double ry_v = Math.Abs(topEdge_v.Y - center_v.Y);
+
+            bool isEllipse = Math.Abs(rx_v - ry_v) > 0.01;
+            const string fmt = Config.SignificantFigures3;
+
+            if (!isEllipse)
+            {
+                // Circle: define shading in page space
+                Elements[Keys.Coords] = new PdfLiteral(
+                    "[{0:" + fmt + "} {1:" + fmt + "} 0 {2:" + fmt + "} {3:" + fmt + "} {4:" + fmt + "}]",
+                    center_v.X, center_v.Y, center_v.X, center_v.Y, rx_v);
+            }
+            else
+            {
+                // Ellipse: unit circle at origin; pattern matrix applies scale + translate
+                Elements[Keys.Coords] = new PdfLiteral("[0 0 0 0 0 1]");
+                EllipsePatternMatrix = new XMatrix(rx_v, 0, 0, ry_v, center_v.X, center_v.Y);
+            }
+
+            XColor[] colors = brush._colors!;
+            double[]? positions = brush._positions;
+
+            if (colors.Length > 2 && positions != null)
+                Elements[Keys.Function] = BuildStitchingFunction(colors, positions, colorMode);
+            else
+            {
+                var fn = new PdfDictionary();
+                XColor c0 = ColorSpaceHelper.EnsureColorMode(colorMode, colors[0]);
+                XColor c1 = ColorSpaceHelper.EnsureColorMode(colorMode, colors[colors.Length - 1]);
+                fn.Elements["/FunctionType"] = new PdfInteger(2);
+                fn.Elements["/Domain"] = new PdfLiteral("[0 1]");
+                fn.Elements["/C0"] = new PdfLiteral("[" + PdfEncoders.ToString(c0, colorMode) + "]");
+                fn.Elements["/C1"] = new PdfLiteral("[" + PdfEncoders.ToString(c1, colorMode) + "]");
+                fn.Elements["/N"] = new PdfInteger(1);
+                Elements[Keys.Function] = fn;
+            }
+
+            BuildRadialAlphaExtGStateIfNeeded(colors, positions,
+                center_v.X, center_v.Y, rx_v, ry_v, isEllipse, brush.IsRepeating);
+        }
+
+        private void BuildRadialAlphaExtGStateIfNeeded(XColor[] colors, double[]? positions,
+            double cx, double cy, double rx, double ry, bool isEllipse, bool isRepeating = false)
+        {
+            bool hasVaryingAlpha = false;
+            for (int i = 0; i < colors.Length; i++)
+            {
+                if (colors[i].A < 0.9995) { hasVaryingAlpha = true; break; }
+            }
+            if (!hasVaryingAlpha) return;
+
+            PdfDictionary alphaFn;
+            if (positions != null && colors.Length > 2)
+                alphaFn = BuildAlphaStitchingFunction(colors, positions);
+            else
+            {
+                alphaFn = new PdfDictionary();
+                alphaFn.Elements["/FunctionType"] = new PdfInteger(2);
+                alphaFn.Elements["/Domain"] = new PdfLiteral("[0 1]");
+                alphaFn.Elements["/C0"] = new PdfLiteral("[" + AlphaToString(colors[0].A) + "]");
+                alphaFn.Elements["/C1"] = new PdfLiteral("[" + AlphaToString(colors[colors.Length - 1].A) + "]");
+                alphaFn.Elements["/N"] = new PdfInteger(1);
+            }
+
+            const string fmt = Config.SignificantFigures3;
+            var grayShading = new PdfDictionary();
+            grayShading.Elements["/ShadingType"] = new PdfInteger(3);
+            grayShading.Elements["/ColorSpace"] = new PdfName("/DeviceGray");
+            grayShading.Elements["/Extend"] = new PdfLiteral(isRepeating ? "[false false]" : "[true true]");
+            grayShading.Elements["/Function"] = alphaFn;
+
+            if (!isEllipse)
+            {
+                grayShading.Elements["/Coords"] = new PdfLiteral(string.Format(
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    "[{0:" + fmt + "} {1:" + fmt + "} 0 {2:" + fmt + "} {3:" + fmt + "} {4:" + fmt + "}]",
+                    cx, cy, cx, cy, rx));
+            }
+            else
+            {
+                // Unit circle; Form XObject matrix will scale to ellipse
+                grayShading.Elements["/Coords"] = new PdfLiteral("[0 0 0 0 0 1]");
+            }
+
+            var formXObj = new PdfDictionary(_document);
+            _document._irefTable.Add(formXObj);
+            formXObj.Elements["/Type"] = new PdfName("/XObject");
+            formXObj.Elements["/Subtype"] = new PdfName("/Form");
+            formXObj.Elements["/BBox"] = new PdfLiteral("[-100000 -100000 100000 100000]");
+
+            if (isEllipse)
+            {
+                // Matrix maps normalized (unit-circle) space to page space: scale then translate
+                formXObj.Elements["/Matrix"] = new PdfLiteral(string.Format(
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    "[{0:" + fmt + "} 0 0 {1:" + fmt + "} {2:" + fmt + "} {3:" + fmt + "}]",
+                    rx, ry, cx, cy));
+            }
+
+            var group = new PdfDictionary();
+            group.Elements["/S"] = new PdfName("/Transparency");
+            group.Elements["/CS"] = new PdfName("/DeviceGray");
+            group.Elements["/I"] = new PdfBoolean(true);
+            group.Elements["/K"] = new PdfBoolean(false);
+            formXObj.Elements["/Group"] = group;
+
+            var shadingRes = new PdfDictionary();
+            shadingRes.Elements["/alphaShd"] = grayShading;
+            var resources = new PdfDictionary();
+            resources.Elements["/Shading"] = shadingRes;
+            formXObj.Elements["/Resources"] = resources;
+
+            formXObj.CreateStream(System.Text.Encoding.ASCII.GetBytes("/alphaShd sh"));
+
+            var softMask = new PdfSoftMask(_document);
+            softMask.Elements[PdfSoftMask.Keys.S] = new PdfName("/Luminosity");
+            softMask.Elements.SetReference(PdfSoftMask.Keys.G, formXObj);
+
+            var extGState = new PdfExtGState(_document);
+            extGState.Elements["/SMask"] = softMask;
+            extGState.Elements["/AIS"] = new PdfBoolean(false);
+
+            AlphaExtGState = extGState;
         }
 
         internal PdfExtGState? AlphaExtGState { get; private set; }
@@ -178,7 +328,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             const string format = Config.SignificantFigures3;
             Elements[Keys.Coords] = new PdfLiteral("[{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "}]", x1, y1, x2, y2);
 
-            Elements[Keys.Extend] = new PdfLiteral("[true true]");
+            Elements[Keys.Extend] = new PdfLiteral(brush.IsRepeating ? "[false false]" : "[true true]");
 
             XColor[] allColors = brush._colors ?? new[] { brush._color1, brush._color2 };
             double[]? allPositions = brush._positions;
@@ -200,10 +350,10 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 Elements[Keys.Function] = function;
             }
 
-            BuildAlphaExtGStateIfNeeded(allColors, allPositions, x1, y1, x2, y2);
+            BuildAlphaExtGStateIfNeeded(allColors, allPositions, x1, y1, x2, y2, brush.IsRepeating);
         }
 
-        private void BuildAlphaExtGStateIfNeeded(XColor[] colors, double[]? positions, double x1, double y1, double x2, double y2)
+        private void BuildAlphaExtGStateIfNeeded(XColor[] colors, double[]? positions, double x1, double y1, double x2, double y2, bool isRepeating = false)
         {
             bool hasVaryingAlpha = false;
             for (int i = 0; i < colors.Length; i++)
@@ -239,7 +389,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 System.Globalization.CultureInfo.InvariantCulture,
                 "[{0:" + fmt + "} {1:" + fmt + "} {2:" + fmt + "} {3:" + fmt + "}]",
                 x1, y1, x2, y2));
-            grayShading.Elements["/Extend"] = new PdfLiteral("[true true]");
+            grayShading.Elements["/Extend"] = new PdfLiteral(isRepeating ? "[false false]" : "[true true]");
             grayShading.Elements["/Function"] = alphaFn;
 
             // Form XObject (transparency group) that paints the gray shading
@@ -364,6 +514,183 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             stitching.Elements["/Functions"] = functions;
             return stitching;
         }
+
+        // ── Conic gradient (Type 4 Gouraud-shaded free-form triangle mesh) ──────────────────────
+
+        private void SetupConicFromBrush(XConicGradientBrush brush, XGraphicsPdfRenderer renderer)
+        {
+            XPoint vc = renderer.WorldToView(brush.Center);
+            // Compute view-space radius by transforming a point on the x-axis
+            XPoint ve = renderer.WorldToView(new XPoint(brush.Center.X + brush.OuterRadius, brush.Center.Y));
+            double R = Math.Abs(ve.X - vc.X);
+            if (R < 1e-6) R = 1.0;
+
+            double xMin = vc.X - R, xMax = vc.X + R;
+            double yMin = vc.Y - R, yMax = vc.Y + R;
+
+            PdfColorMode colorMode = _document.Options.ColorMode;
+
+            Elements[Keys.ShadingType] = new PdfInteger(4);
+            Elements[Keys.ColorSpace] = new PdfName(colorMode != PdfColorMode.Cmyk ? "/DeviceRGB" : "/DeviceCMYK");
+            Elements["/BitsPerCoordinate"] = new PdfInteger(32);
+            Elements["/BitsPerComponent"] = new PdfInteger(8);
+            Elements["/BitsPerFlag"] = new PdfInteger(8);
+
+            var ci = System.Globalization.CultureInfo.InvariantCulture;
+            Elements["/Decode"] = new PdfLiteral(
+                "[" + xMin.ToString("G6", ci) + " " + xMax.ToString("G6", ci) + " " +
+                      yMin.ToString("G6", ci) + " " + yMax.ToString("G6", ci) + " 0 1 0 1 0 1]");
+
+            XColor[] colors = brush.Colors;
+            double[] angles = brush.AnglesRad;
+
+            var data = BuildConicMeshData(colors, angles, vc.X, vc.Y, R, xMin, xMax, yMin, yMax, alphaOnly: false);
+            CreateStream(data);
+
+            BuildConicAlphaExtGStateIfNeeded(colors, angles, vc.X, vc.Y, R, xMin, xMax, yMin, yMax);
+        }
+
+        private static byte[] BuildConicMeshData(XColor[] colors, double[] angles,
+            double cx, double cy, double R,
+            double xMin, double xMax, double yMin, double yMax,
+            bool alphaOnly)
+        {
+            var data = new System.Collections.Generic.List<byte>(4096);
+
+            for (int s = 0; s < colors.Length - 1; s++)
+            {
+                double a1 = angles[s], a2 = angles[s + 1];
+                XColor c1 = colors[s], c2 = colors[s + 1];
+                int nTri = Math.Max(1, (int)Math.Ceiling(Math.Abs(a2 - a1) * (180.0 / Math.PI)));
+                if (nTri > 180) nTri = 180;
+
+                for (int t = 0; t < nTri; t++)
+                {
+                    double tA = (double)t / nTri;
+                    double tB = (double)(t + 1) / nTri;
+                    double θA = a1 + (a2 - a1) * tA;
+                    double θB = a1 + (a2 - a1) * tB;
+
+                    XColor colorA = LerpXColor(c1, c2, tA);
+                    XColor colorB = LerpXColor(c1, c2, tB);
+
+                    // In PDF view space: 0=top, clockwise ↔ x=sin(θ), y=+cos(θ)
+                    double oAX = cx + R * Math.Sin(θA);
+                    double oAY = cy + R * Math.Cos(θA);
+                    double oBX = cx + R * Math.Sin(θB);
+                    double oBY = cy + R * Math.Cos(θB);
+
+                    AppendConicVertex(data, 0, cx, cy, colorA, xMin, xMax, yMin, yMax, alphaOnly);
+                    AppendConicVertex(data, 0, oAX, oAY, colorA, xMin, xMax, yMin, yMax, alphaOnly);
+                    AppendConicVertex(data, 0, oBX, oBY, colorB, xMin, xMax, yMin, yMax, alphaOnly);
+                }
+            }
+
+            return data.ToArray();
+        }
+
+        private static void AppendConicVertex(System.Collections.Generic.List<byte> data, int flag,
+            double x, double y, XColor color,
+            double xMin, double xMax, double yMin, double yMax,
+            bool alphaOnly)
+        {
+            data.Add((byte)flag);
+            AppendUInt32BE(data, EncodeCoordinate(x, xMin, xMax));
+            AppendUInt32BE(data, EncodeCoordinate(y, yMin, yMax));
+            if (alphaOnly)
+            {
+                data.Add((byte)Math.Round(color.A * 255));
+            }
+            else
+            {
+                data.Add(color.R);
+                data.Add(color.G);
+                data.Add(color.B);
+            }
+        }
+
+        private static uint EncodeCoordinate(double val, double min, double max)
+        {
+            if (max <= min) return 0;
+            double t = Math.Clamp((val - min) / (max - min), 0.0, 1.0);
+            return (uint)Math.Round(t * 4294967295.0);
+        }
+
+        private static void AppendUInt32BE(System.Collections.Generic.List<byte> data, uint value)
+        {
+            data.Add((byte)(value >> 24));
+            data.Add((byte)(value >> 16));
+            data.Add((byte)(value >> 8));
+            data.Add((byte)(value & 0xFF));
+        }
+
+        private static XColor LerpXColor(XColor a, XColor b, double t)
+        {
+            t = Math.Clamp(t, 0.0, 1.0);
+            return XColor.FromArgb(
+                (int)Math.Round(a.A * 255 + t * (b.A - a.A) * 255),
+                (int)Math.Round(a.R + t * (b.R - a.R)),
+                (int)Math.Round(a.G + t * (b.G - a.G)),
+                (int)Math.Round(a.B + t * (b.B - a.B)));
+        }
+
+        private void BuildConicAlphaExtGStateIfNeeded(XColor[] colors, double[] angles,
+            double cx, double cy, double R,
+            double xMin, double xMax, double yMin, double yMax)
+        {
+            bool hasAlpha = false;
+            foreach (var c in colors)
+                if (c.A < 0.9995) { hasAlpha = true; break; }
+            if (!hasAlpha) return;
+
+            var alphaData = BuildConicMeshData(colors, angles, cx, cy, R, xMin, xMax, yMin, yMax, alphaOnly: true);
+
+            var ci = System.Globalization.CultureInfo.InvariantCulture;
+            var grayShading = new PdfDictionary(_document);
+            _document._irefTable.Add(grayShading);
+            grayShading.Elements["/ShadingType"] = new PdfInteger(4);
+            grayShading.Elements["/ColorSpace"] = new PdfName("/DeviceGray");
+            grayShading.Elements["/BitsPerCoordinate"] = new PdfInteger(32);
+            grayShading.Elements["/BitsPerComponent"] = new PdfInteger(8);
+            grayShading.Elements["/BitsPerFlag"] = new PdfInteger(8);
+            grayShading.Elements["/Decode"] = new PdfLiteral(
+                "[" + xMin.ToString("G6", ci) + " " + xMax.ToString("G6", ci) + " " +
+                      yMin.ToString("G6", ci) + " " + yMax.ToString("G6", ci) + " 0 1]");
+            grayShading.CreateStream(alphaData);
+
+            var formXObj = new PdfDictionary(_document);
+            _document._irefTable.Add(formXObj);
+            formXObj.Elements["/Type"] = new PdfName("/XObject");
+            formXObj.Elements["/Subtype"] = new PdfName("/Form");
+            formXObj.Elements["/BBox"] = new PdfLiteral("[-100000 -100000 100000 100000]");
+
+            var group = new PdfDictionary();
+            group.Elements["/S"] = new PdfName("/Transparency");
+            group.Elements["/CS"] = new PdfName("/DeviceGray");
+            group.Elements["/I"] = new PdfBoolean(true);
+            group.Elements["/K"] = new PdfBoolean(false);
+            formXObj.Elements["/Group"] = group;
+
+            var shadingRes = new PdfDictionary();
+            // grayShading is indirect (has stream content); store a reference, not the object itself
+            shadingRes.Elements.SetReference("/alphaShd", grayShading);
+            var resources = new PdfDictionary();
+            resources.Elements["/Shading"] = shadingRes;
+            formXObj.Elements["/Resources"] = resources;
+            formXObj.CreateStream(System.Text.Encoding.ASCII.GetBytes("/alphaShd sh"));
+
+            var softMask = new PdfSoftMask(_document);
+            softMask.Elements[PdfSoftMask.Keys.S] = new PdfName("/Luminosity");
+            softMask.Elements.SetReference(PdfSoftMask.Keys.G, formXObj);
+
+            var extGState = new PdfExtGState(_document);
+            extGState.Elements["/SMask"] = softMask;
+            extGState.Elements["/AIS"] = new PdfBoolean(false);
+
+            AlphaExtGState = extGState;
+        }
+
+        // ────────────────────────────────────────────────────────────────────────────────────────
 
         /// <summary>
         /// Common keys for all streams.

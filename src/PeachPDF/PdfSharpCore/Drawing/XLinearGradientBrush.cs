@@ -87,5 +87,6 @@ namespace PeachPDF.PdfSharpCore.Drawing
         internal XLinearGradientMode _linearGradientMode;
         internal XColor[]? _colors;
         internal double[]? _positions;
+        internal bool IsRepeating;
     }
 }

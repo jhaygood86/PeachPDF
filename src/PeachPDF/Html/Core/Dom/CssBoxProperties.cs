@@ -311,6 +311,10 @@ namespace PeachPDF.Html.Core.Dom
 
         public ParsedLinearGradient? BackgroundLinearGradient { get; set; }
 
+        public ParsedRadialGradient? BackgroundRadialGradient { get; set; }
+
+        public ParsedConicGradient? BackgroundConicGradient { get; set; }
+
         public string Color
         {
             get => _color;
@@ -1138,6 +1142,8 @@ namespace PeachPDF.Html.Core.Dom
 
             BackgroundColor = p.BackgroundColor;
             BackgroundLinearGradient = p.BackgroundLinearGradient;
+            BackgroundRadialGradient = p.BackgroundRadialGradient;
+            BackgroundConicGradient = p.BackgroundConicGradient;
             BackgroundImage = p.BackgroundImage;
             BackgroundPosition = p.BackgroundPosition;
             BackgroundRepeat = p.BackgroundRepeat;

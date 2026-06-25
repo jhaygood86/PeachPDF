@@ -210,6 +210,74 @@ namespace PeachPDF.Tests.CSS
             Assert.False(backgroundImage.IsInitial);
         }
 
+        // ── Percentage-based positions (used by ParseRadialGradient renderer parser) ──
+
+        [Fact]
+        public void BackgroundImageRadialGradientAtPercentPosition()
+        {
+            var source = "background-image: radial-gradient(at 30% 70%, red, blue)";
+            var property = ParseDeclaration(source);
+            Assert.IsType<BackgroundImageProperty>(property);
+            var backgroundImage = property as BackgroundImageProperty;
+            Assert.True(backgroundImage.HasValue);
+            Assert.False(backgroundImage.IsInitial);
+        }
+
+        [Fact]
+        public void BackgroundImageRadialGradientEllipseAtPercentPosition()
+        {
+            var source = "background-image: radial-gradient(ellipse at 25% 75%, yellow, green)";
+            var property = ParseDeclaration(source);
+            Assert.IsType<BackgroundImageProperty>(property);
+            var backgroundImage = property as BackgroundImageProperty;
+            Assert.True(backgroundImage.HasValue);
+            Assert.False(backgroundImage.IsInitial);
+        }
+
+        [Fact]
+        public void BackgroundImageRadialGradientCircleAtPercentPosition()
+        {
+            var source = "background-image: radial-gradient(circle at 80% 20%, orange, crimson)";
+            var property = ParseDeclaration(source);
+            Assert.IsType<BackgroundImageProperty>(property);
+            var backgroundImage = property as BackgroundImageProperty;
+            Assert.True(backgroundImage.HasValue);
+            Assert.False(backgroundImage.IsInitial);
+        }
+
+        [Fact]
+        public void BackgroundImageRadialGradientAtCenterKeyword()
+        {
+            var source = "background-image: radial-gradient(at center, gold, navy)";
+            var property = ParseDeclaration(source);
+            Assert.IsType<BackgroundImageProperty>(property);
+            var backgroundImage = property as BackgroundImageProperty;
+            Assert.True(backgroundImage.HasValue);
+            Assert.False(backgroundImage.IsInitial);
+        }
+
+        [Fact]
+        public void BackgroundImageRadialGradientThreeStopsNoShape()
+        {
+            var source = "background-image: radial-gradient(red, yellow 50%, blue)";
+            var property = ParseDeclaration(source);
+            Assert.IsType<BackgroundImageProperty>(property);
+            var backgroundImage = property as BackgroundImageProperty;
+            Assert.True(backgroundImage.HasValue);
+            Assert.False(backgroundImage.IsInitial);
+        }
+
+        [Fact]
+        public void BackgroundImageRadialGradientRgbaTransparency()
+        {
+            var source = "background-image: radial-gradient(rgba(255,0,0,0), rgba(255,0,0,1))";
+            var property = ParseDeclaration(source);
+            Assert.IsType<BackgroundImageProperty>(property);
+            var backgroundImage = property as BackgroundImageProperty;
+            Assert.True(backgroundImage.HasValue);
+            Assert.False(backgroundImage.IsInitial);
+        }
+
         [Fact]
         public void BackgroundImageRepeatingLinearGradientRedBlue()
         {
@@ -242,6 +310,7 @@ namespace PeachPDF.Tests.CSS
             Assert.True(backgroundImage.HasValue);
             Assert.False(backgroundImage.IsInitial);
         }
+
     }
 }
 

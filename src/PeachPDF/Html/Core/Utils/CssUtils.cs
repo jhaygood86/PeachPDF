@@ -398,6 +398,8 @@ namespace PeachPDF.Html.Core.Utils
                 case "background-image":
                     cssBox.BackgroundImage = value;
                     cssBox.BackgroundLinearGradient = valueParser.ParseLinearGradient(value);
+                    cssBox.BackgroundRadialGradient = valueParser.ParseRadialGradient(value);
+                    cssBox.BackgroundConicGradient = valueParser.ParseConicGradient(value);
                     break;
                 case "background-position":
                     cssBox.BackgroundPosition = value;

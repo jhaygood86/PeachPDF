@@ -165,13 +165,21 @@ namespace PeachPDF.Adapters
             {
                 xTextureBrush.DrawRectangle(_g, x / PixelsPerPoint, y / PixelsPerPoint, width / PixelsPerPoint, height / PixelsPerPoint);
             }
-            else
+            else if (xBrush is XBaseGradientBrush)
             {
+                // Wrap in q/Q so the SMask applied for transparent gradients does not
+                // leak into subsequent operations (e.g. border drawing).
+                var state = _g.Save();
                 _g.DrawRectangle(xBrush, x / PixelsPerPoint, y / PixelsPerPoint, width / PixelsPerPoint, height / PixelsPerPoint);
+                _g.Restore(state);
 
                 // handle bug in PdfSharp that keeps the brush color for next string draw
                 if (xBrush is XLinearGradientBrush)
                     _g.DrawRectangle(XBrushes.White, 0, 0, 0.1 / PixelsPerPoint, 0.1 / PixelsPerPoint);
+            }
+            else
+            {
+                _g.DrawRectangle(xBrush, x / PixelsPerPoint, y / PixelsPerPoint, width / PixelsPerPoint, height / PixelsPerPoint);
             }
         }
 
@@ -192,7 +200,17 @@ namespace PeachPDF.Adapters
 
         public override void DrawPath(RBrush brush, RGraphicsPath path)
         {
-            _g.DrawPath(((BrushAdapter)brush).Brush, ((GraphicsPathAdapter)path).GraphicsPath);
+            var xBrush = ((BrushAdapter)brush).Brush;
+            if (xBrush is XBaseGradientBrush)
+            {
+                var state = _g.Save();
+                _g.DrawPath(xBrush, ((GraphicsPathAdapter)path).GraphicsPath);
+                _g.Restore(state);
+            }
+            else
+            {
+                _g.DrawPath(xBrush, ((GraphicsPathAdapter)path).GraphicsPath);
+            }
         }
 
         public override void DrawPolygon(RBrush brush, RPoint[] points)

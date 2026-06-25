@@ -47,5 +47,7 @@ namespace PeachPDF.CSS
         public static readonly string Perspective = "perspective";
         public static readonly string Gray = "gray";
         public static readonly string Hwb = "hwb";
+        public static readonly string ConicGradient = "conic-gradient";
+        public static readonly string RepeatingConicGradient = "repeating-conic-gradient";
     }
 }
