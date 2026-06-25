@@ -95,8 +95,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             Elements[Keys.Function] = function;
             //Elements[Keys.Extend] = new PdfRawItem("[true true]");
 
-            string clr1 = "[" + PdfEncoders.ToString(color1, colorMode, true) + "]";
-            string clr2 = "[" + PdfEncoders.ToString(color2, colorMode, true) + "]";
+            string clr1 = "[" + PdfEncoders.ToString(color1, colorMode) + "]";
+            string clr2 = "[" + PdfEncoders.ToString(color2, colorMode) + "]";
 
             function.Elements["/FunctionType"] = new PdfInteger(2);
             function.Elements["/C0"] = new PdfLiteral(clr1);
@@ -184,8 +184,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             }
             else
             {
-                string clr1 = "[" + PdfEncoders.ToString(color1, colorMode, true) + "]";
-                string clr2 = "[" + PdfEncoders.ToString(color2, colorMode, true) + "]";
+                string clr1 = "[" + PdfEncoders.ToString(color1, colorMode) + "]";
+                string clr2 = "[" + PdfEncoders.ToString(color2, colorMode) + "]";
 
                 function.Elements["/FunctionType"] = new PdfInteger(2);
                 function.Elements["/C0"] = new PdfLiteral(clr1);
@@ -232,8 +232,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 var fn = new PdfDictionary();
                 fn.Elements["/FunctionType"] = new PdfInteger(2);
                 fn.Elements["/Domain"] = new PdfLiteral("[0 1]");
-                fn.Elements["/C0"] = new PdfLiteral("[" + PdfEncoders.ToString(c0, colorMode, true) + "]");
-                fn.Elements["/C1"] = new PdfLiteral("[" + PdfEncoders.ToString(c1, colorMode, true) + "]");
+                fn.Elements["/C0"] = new PdfLiteral("[" + PdfEncoders.ToString(c0, colorMode) + "]");
+                fn.Elements["/C1"] = new PdfLiteral("[" + PdfEncoders.ToString(c1, colorMode) + "]");
                 fn.Elements["/N"] = new PdfInteger(1);
                 functions.Elements.Add(fn);
             }
