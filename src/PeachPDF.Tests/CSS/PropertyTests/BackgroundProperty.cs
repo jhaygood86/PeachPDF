@@ -736,6 +736,199 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.True(concrete.HasValue);
             Assert.Equal("url(\"" + url + "\")", concrete.Value);
         }
+
+        [Fact]
+        public void BackgroundTransparentLegal()
+        {
+            var snippet = "background: transparent";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("background", property.Name);
+            Assert.IsType<BackgroundProperty>(property);
+            var concrete = (BackgroundProperty)property;
+            Assert.True(concrete.HasValue);
+            Assert.Equal("rgba(0, 0, 0, 0)", concrete.Value);
+        }
+
+        [Fact]
+        public void BackgroundNoneLegal()
+        {
+            var snippet = "background: none";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("background", property.Name);
+            Assert.IsType<BackgroundProperty>(property);
+            var concrete = (BackgroundProperty)property;
+            Assert.True(concrete.HasValue);
+            Assert.Equal("none", concrete.Value);
+        }
+
+        [Fact]
+        public void BackgroundWithPositionLegal()
+        {
+            var snippet = "background: url(\"img.png\") center center no-repeat";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("background", property.Name);
+            Assert.IsType<BackgroundProperty>(property);
+            var concrete = (BackgroundProperty)property;
+            Assert.True(concrete.HasValue);
+        }
+
+        [Fact]
+        public void BackgroundWithPositionAndSizeLegal()
+        {
+            var snippet = "background: url(\"img.png\") center / cover no-repeat";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("background", property.Name);
+            Assert.IsType<BackgroundProperty>(property);
+            var concrete = (BackgroundProperty)property;
+            Assert.True(concrete.HasValue);
+        }
+
+        [Fact]
+        public void BackgroundLinearGradientLegal()
+        {
+            var snippet = "background: linear-gradient(to right, red, blue)";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("background", property.Name);
+            Assert.IsType<BackgroundProperty>(property);
+            var concrete = (BackgroundProperty)property;
+            Assert.True(concrete.HasValue);
+            Assert.Contains("linear-gradient", concrete.Value);
+        }
+
+        [Fact]
+        public void BackgroundHexColorLegal()
+        {
+            var snippet = "background: #ff0000";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("background", property.Name);
+            Assert.IsType<BackgroundProperty>(property);
+            var concrete = (BackgroundProperty)property;
+            Assert.True(concrete.HasValue);
+            Assert.Equal("rgb(255, 0, 0)", concrete.Value);
+        }
+
+        [Fact]
+        public void BackgroundRgbaColorLegal()
+        {
+            var snippet = "background: rgba(0, 128, 255, 0.5)";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("background", property.Name);
+            Assert.IsType<BackgroundProperty>(property);
+            var concrete = (BackgroundProperty)property;
+            Assert.True(concrete.HasValue);
+            Assert.Equal("rgba(0, 128, 255, 0.5)", concrete.Value);
+        }
+
+        [Fact]
+        public void BackgroundWithRepeatXLegal()
+        {
+            var snippet = "background: url(\"tile.png\") repeat-x top";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("background", property.Name);
+            Assert.IsType<BackgroundProperty>(property);
+            var concrete = (BackgroundProperty)property;
+            Assert.True(concrete.HasValue);
+        }
+
+        [Theory]
+        [InlineData("background: red", "rgb(255, 0, 0)")]
+        [InlineData("background: white url(\"pendant.png\")", "url(\"pendant.png\") rgb(255, 255, 255)")]
+        [InlineData("background: url(\"topbanner.png\") #00d repeat-y fixed", "url(\"topbanner.png\") repeat-y fixed rgb(0, 0, 221)")]
+        [InlineData("background: url(\"img_tree.png\") no-repeat right top", "url(\"img_tree.png\") right top no-repeat")]
+        public void BackgroundShorthandValues(string snippet, string expectedValue)
+        {
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("background", property.Name);
+            Assert.IsType<BackgroundProperty>(property);
+            var concrete = (BackgroundProperty)property;
+            Assert.True(concrete.HasValue);
+            Assert.Equal(expectedValue, concrete.Value);
+        }
+
+        [Fact]
+        public void BackgroundShorthand_Color_SetsBackgroundColor()
+        {
+            var style = ParseDeclarations("background: red");
+            Assert.Equal("rgb(255, 0, 0)", style.BackgroundColor);
+            Assert.Equal("initial", style.BackgroundImage);
+            Assert.Equal("initial", style.BackgroundRepeat);
+            Assert.Equal("initial", style.BackgroundPosition);
+            Assert.Equal("initial", style.BackgroundSize);
+            Assert.Equal("initial", style.BackgroundAttachment);
+        }
+
+        [Fact]
+        public void BackgroundShorthand_Transparent_SetsBackgroundColorToTransparent()
+        {
+            var style = ParseDeclarations("background: transparent");
+            Assert.Equal("rgba(0, 0, 0, 0)", style.BackgroundColor);
+            Assert.Equal("initial", style.BackgroundImage);
+        }
+
+        [Fact]
+        public void BackgroundShorthand_ImageAndColor_SetsBothLonghands()
+        {
+            var style = ParseDeclarations("background: white url(\"pendant.png\")");
+            Assert.Equal("rgb(255, 255, 255)", style.BackgroundColor);
+            Assert.Equal("url(\"pendant.png\")", style.BackgroundImage);
+            Assert.Equal("initial", style.BackgroundRepeat);
+            Assert.Equal("initial", style.BackgroundPosition);
+        }
+
+        [Fact]
+        public void BackgroundShorthand_ImageRepeatAttachmentColor_SetsAllFourLonghands()
+        {
+            var style = ParseDeclarations("background: url(\"topbanner.png\") #00d repeat-y fixed");
+            Assert.Equal("rgb(0, 0, 221)", style.BackgroundColor);
+            Assert.Equal("url(\"topbanner.png\")", style.BackgroundImage);
+            Assert.Equal("repeat-y", style.BackgroundRepeat);
+            Assert.Equal("fixed", style.BackgroundAttachment);
+            Assert.Equal("initial", style.BackgroundPosition);
+        }
+
+        [Fact]
+        public void BackgroundShorthand_ImageNoRepeatPosition_SetsImageRepeatPosition()
+        {
+            var style = ParseDeclarations("background: url(\"img_tree.png\") no-repeat right top");
+            Assert.Equal("url(\"img_tree.png\")", style.BackgroundImage);
+            Assert.Equal("no-repeat", style.BackgroundRepeat);
+            Assert.Equal("right top", style.BackgroundPosition);
+            Assert.Equal("initial", style.BackgroundColor);
+        }
+
+        [Fact]
+        public void BackgroundShorthand_LinearGradient_SetsBackgroundImage()
+        {
+            var style = ParseDeclarations("background: linear-gradient(to right, red, blue)");
+            Assert.Contains("linear-gradient", style.BackgroundImage);
+            Assert.Equal("initial", style.BackgroundColor);
+        }
+
+        [Fact]
+        public void BackgroundShorthand_ImagePositionSize_SetsPositionAndSize()
+        {
+            var style = ParseDeclarations("background: url(\"img.png\") center / cover no-repeat");
+            Assert.Equal("url(\"img.png\")", style.BackgroundImage);
+            Assert.Equal("center", style.BackgroundPosition);
+            Assert.Equal("cover", style.BackgroundSize);
+            Assert.Equal("no-repeat", style.BackgroundRepeat);
+        }
+
+        [Fact]
+        public void BackgroundShorthand_HexColor_SetsBackgroundColor()
+        {
+            var style = ParseDeclarations("background: #336699");
+            Assert.Equal("rgb(51, 102, 153)", style.BackgroundColor);
+            Assert.Equal("initial", style.BackgroundImage);
+        }
+
+        [Fact]
+        public void BackgroundShorthand_None_SetsBackgroundImageToNone()
+        {
+            var style = ParseDeclarations("background: none");
+            Assert.Equal("none", style.BackgroundImage);
+            Assert.Equal("initial", style.BackgroundColor);
+        }
     }
 }
 
