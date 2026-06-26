@@ -5,8 +5,6 @@ Peach PDF is a pure .NET HTML -> PDF rendering library. This library does not de
 
 - .NET 8
 
-_Note: This package depends on PeachPDF.PdfSharpCore which has its own license, but the end result is still open source_
-
 ## Installing PeachPDF
 
 Install the PeachPDF package from nuget.org
@@ -75,6 +73,10 @@ var stream = new MemoryStream();
 var document = await generator.GeneratePdf(null, pdfConfig);
 document.Save(stream);
 ```
+
+## Architecture
+
+See [Architecture](architecture.md) for an overview of how PeachPDF converts HTML to PDF, covering the HTML parser, DOM model, CSS parser, layout engine, painting layer, and PDF renderer.
 
 ## HTML & CSS Support
 
