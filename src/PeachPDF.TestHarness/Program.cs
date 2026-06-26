@@ -1,9 +1,5 @@
-// See https://aka.ms/new-console-template for more information
-
 using PeachPDF;
 using PeachPDF.PdfSharpCore;
-
-var httpClient = new HttpClient();
 
 PdfGenerateConfig pdfConfig = new()
 {
@@ -13,15 +9,257 @@ PdfGenerateConfig pdfConfig = new()
 };
 
 PdfGenerator generator = new();
-
 var stream = new MemoryStream();
 
-var html = """
-           <img width="auto" alt="signature" height="75" style="margin: 5px" src="data:image/png;base64,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">
-           """;
+static string Swatch(string desc, string css) =>
+    "<td>" +
+    $"<div class=\"box\" style=\"background-image: {css}\"></div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">{css}</div>" +
+    "</td>";
+
+static string RadiusSwatch(string desc, string borderRadiusCss, string boxCss = "") =>
+    "<td>" +
+    $"<div class=\"rbox\" style=\"{boxCss}border-radius: {borderRadiusCss}\"></div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">border-radius: {borderRadiusCss}</div>" +
+    "</td>";
+
+static string Row(params string[] cells) =>
+    $"<table class=\"sw\"><tr>{string.Join("", cells)}</tr></table>";
+
+const string Css = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    p.intro { margin: 0 0 0.7em; color: #555 }
+    table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
+    table.sw td { padding: 3px; vertical-align: top; width: 25% }
+    .box { height: 48px; border: 1px solid #000; margin-bottom: 3px }
+    .desc { font-size: 7pt; font-weight: bold; color: #444; margin-bottom: 1px }
+    .css { font-size: 6pt; color: #666; line-height: 1.3; word-break: break-all }
+    </style>
+    """;
+
+var html = "<!DOCTYPE html><html><head>" + Css + "</head><body>" +
+
+    "<h1>CSS Gradient Test Page</h1>" +
+
+    "<h2>1 — linear-gradient: Direction &amp; Angle</h2>" +
+    Row(
+        Swatch("default (to bottom)", "linear-gradient(red, blue)"),
+        Swatch("to top", "linear-gradient(to top, red, blue)"),
+        Swatch("to right", "linear-gradient(to right, red, blue)"),
+        Swatch("45deg", "linear-gradient(45deg, red, blue)")
+    ) +
+
+    "<h2>2 — linear-gradient: Multi-Stop &amp; Positions</h2>" +
+    Row(
+        Swatch("3 stops", "linear-gradient(to right, red, yellow, blue)"),
+        Swatch("abs lengths", "linear-gradient(to right, red 0, yellow 40px, blue 80px)"),
+        Swatch("hard stop", "linear-gradient(to right, red 0 50%, blue 50% 100%)"),
+        Swatch("color hint", "linear-gradient(to right, red, 30%, blue)")
+    ) +
+
+    "<h2>3 — linear-gradient: Alpha Transparency</h2>" +
+    Row(
+        Swatch("transparent → color", "linear-gradient(to right, rgba(255,0,0,0), red)"),
+        Swatch("color → transparent", "linear-gradient(to right, rgba(0,128,255,1), rgba(0,128,255,0))"),
+        Swatch("rgba() 80% opacity", "linear-gradient(to right, rgba(255,0,0,0.8), rgba(0,0,255,0.8))"),
+        Swatch("multi-stop alpha", "linear-gradient(to right, red, rgba(255,255,0,0.5), rgba(0,0,255,0))")
+    ) +
+
+    "<h2>4 — repeating-linear-gradient</h2>" +
+    Row(
+        Swatch("stripes 20px", "repeating-linear-gradient(to right, red 0 10px, blue 10px 20px)"),
+        Swatch("45deg stripes", "repeating-linear-gradient(45deg, red 0 8px, white 8px 16px)"),
+        Swatch("fade repeat", "repeating-linear-gradient(to right, red 0, blue 30px)"),
+        Swatch("full span = no repeat", "repeating-linear-gradient(to right, red, blue)")
+    ) +
+
+    "<h2>5 — radial-gradient: Basic</h2>" +
+    Row(
+        Swatch("default (ellipse center)", "radial-gradient(red, blue)"),
+        Swatch("circle", "radial-gradient(circle, red, blue)"),
+        Swatch("at 25% 25%", "radial-gradient(at 25% 25%, red, blue)"),
+        Swatch("circle at 50% 25%", "radial-gradient(circle at 50% 25%, yellow, orange, red)")
+    ) +
+
+    "<h2>6 — radial-gradient: Size Keywords &amp; Explicit</h2>" +
+    Row(
+        Swatch("farthest-corner", "radial-gradient(farthest-corner at 30% 30%, red, blue)"),
+        Swatch("closest-side", "radial-gradient(closest-side at 30% 30%, red, blue)"),
+        Swatch("farthest-side", "radial-gradient(farthest-side at 30% 30%, red, blue)"),
+        Swatch("explicit 30px", "radial-gradient(30px at center, red, blue)")
+    ) +
+
+    "<h2>7 — radial-gradient: Alpha</h2>" +
+    Row(
+        Swatch("transparent center", "radial-gradient(rgba(255,0,0,0), rgba(255,0,0,1))"),
+        Swatch("spotlight", "radial-gradient(circle, rgba(255,255,255,0.9), rgba(255,255,255,0))"),
+        Swatch("sunset", "radial-gradient(circle, #fff7e6, #ff6b35, #1a1a2e)"),
+        Swatch("multi-stop alpha", "radial-gradient(circle, rgba(255,0,0,1), rgba(255,255,0,0.5), rgba(0,0,255,0))")
+    ) +
+
+    "<h2>8 — repeating-radial-gradient</h2>" +
+    Row(
+        Swatch("rings", "repeating-radial-gradient(circle, red 0 10px, blue 10px 20px)"),
+        Swatch("fade rings", "repeating-radial-gradient(circle, red 0, blue 25px)"),
+        Swatch("ellipse rings", "repeating-radial-gradient(red 0 8px, white 8px 16px)"),
+        Swatch("with alpha", "repeating-radial-gradient(circle, rgba(255,0,0,0.8) 0 10px, rgba(0,0,255,0.8) 10px 20px)")
+    ) +
+
+    "<h2>9 — conic-gradient: Basic</h2>" +
+    Row(
+        Swatch("default", "conic-gradient(red, blue)"),
+        Swatch("3 stops", "conic-gradient(red, yellow, blue)"),
+        Swatch("from 90deg", "conic-gradient(from 90deg, red, blue)"),
+        Swatch("at 25% 75%", "conic-gradient(at 25% 75%, red, green, blue)")
+    ) +
+
+    "<h2>10 — conic-gradient: Stop Positions</h2>" +
+    Row(
+        Swatch("angle stops", "conic-gradient(red 0deg, blue 180deg, green 360deg)"),
+        Swatch("percent stops", "conic-gradient(red 0%, blue 50%, green 100%)"),
+        Swatch("hard stop", "conic-gradient(red 0 90deg, blue 90deg 180deg, green 180deg 360deg)"),
+        Swatch("pie chart", "conic-gradient(#e74c3c 0 25%, #3498db 25% 65%, #2ecc71 65% 100%)")
+    ) +
+
+    "<h2>11 — conic-gradient: Alpha &amp; From+At</h2>" +
+    Row(
+        Swatch("with alpha", "conic-gradient(rgba(255,0,0,0), red)"),
+        Swatch("from 45deg at 30% 70%", "conic-gradient(from 45deg at 30% 70%, red, blue)"),
+        Swatch("color wheel", "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)"),
+        Swatch("starburst", "conic-gradient(gold 0 10%, white 10% 20%, gold 20% 30%, white 30% 40%, gold 40% 50%, white 50% 60%, gold 60% 70%, white 70% 80%, gold 80% 90%, white 90% 100%)")
+    ) +
+
+    "<h2>12 — repeating-conic-gradient</h2>" +
+    Row(
+        Swatch("60deg tile", "repeating-conic-gradient(red 0deg 30deg, blue 30deg 60deg)"),
+        Swatch("from 45deg", "repeating-conic-gradient(from 45deg, red 0deg, blue 60deg)"),
+        Swatch("checkerboard-like", "repeating-conic-gradient(#000 0 25%, #fff 25% 50%)"),
+        Swatch("narrow slice", "repeating-conic-gradient(red 0 5deg, blue 5deg 10deg)")
+    ) +
+
+    "<h2>13 — Color Space Interpolation: in oklab</h2>" +
+    Row(
+        Swatch("sRGB red→blue", "linear-gradient(to right, red, blue)"),
+        Swatch("oklab red→blue", "linear-gradient(in oklab to right, red, blue)"),
+        Swatch("oklab red→green", "linear-gradient(in oklab to right, red, green)"),
+        Swatch("oklab red→yellow→blue", "linear-gradient(in oklab to right, red, yellow, blue)")
+    ) +
+
+    "<h2>14 — Color Space Interpolation: Polar (HSL, OKLch)</h2>" +
+    Row(
+        Swatch("hsl shorter red→blue", "linear-gradient(in hsl, red, blue)"),
+        Swatch("hsl longer red→blue", "linear-gradient(in hsl longer hue, red, blue)"),
+        Swatch("oklch shorter red→blue", "linear-gradient(in oklch, red, blue)"),
+        Swatch("oklch longer red→blue", "linear-gradient(in oklch longer hue, red, blue)")
+    ) +
+
+    "<h2>15 — Color Space Interpolation: Lab, LCH, sRGB-linear</h2>" +
+    Row(
+        Swatch("lab red→blue", "linear-gradient(in lab to right, red, blue)"),
+        Swatch("lch red→blue", "linear-gradient(in lch to right, red, blue)"),
+        Swatch("srgb-linear red→blue", "linear-gradient(in srgb-linear to right, red, blue)"),
+        Swatch("display-p3 red→blue", "linear-gradient(in display-p3 to right, red, blue)")
+    ) +
+
+    "<h2>16 — Color Space: Radial &amp; Conic</h2>" +
+    Row(
+        Swatch("radial oklab", "radial-gradient(in oklab circle, red, blue)"),
+        Swatch("radial oklch", "radial-gradient(in oklch circle, red, blue)"),
+        Swatch("conic oklab", "conic-gradient(in oklab, red, blue)"),
+        Swatch("conic oklch longer", "conic-gradient(in oklch longer hue, red, blue)")
+    ) +
+
+    "</body></html>";
 
 var document = await generator.GeneratePdf(html, pdfConfig);
 document.Save(stream);
 
-File.Delete("test_flyer.pdf");
-File.WriteAllBytes("test_flyer.pdf", stream.ToArray());
+File.Delete("test_gradients.pdf");
+File.WriteAllBytes("test_gradients.pdf", stream.ToArray());
+Console.WriteLine("Saved test_gradients.pdf");
+
+// --- Border-radius showcase ---
+
+const string RadiusCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    p.intro { margin: 0 0 0.7em; color: #555 }
+    table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
+    table.sw td { padding: 3px; vertical-align: top; width: 25% }
+    .rbox { height: 60px; background: steelblue; border: 2px solid #1a6b8a; margin-bottom: 3px }
+    .desc { font-size: 7pt; font-weight: bold; color: #444; margin-bottom: 1px }
+    .css { font-size: 6pt; color: #666; line-height: 1.3; word-break: break-all }
+    </style>
+    """;
+
+var radiusHtml = "<!DOCTYPE html><html><head>" + RadiusCss + "</head><body>" +
+
+    "<h1>CSS border-radius Test Page</h1>" +
+
+    "<h2>1 — Shorthand: 1–4 values</h2>" +
+    Row(
+        RadiusSwatch("1 value — all equal", "20px"),
+        RadiusSwatch("2 values — opposite pairs", "10px 30px"),
+        RadiusSwatch("3 values — TL / TR+BL / BR", "8px 20px 35px"),
+        RadiusSwatch("4 values — each corner", "5px 15px 30px 45px")
+    ) +
+
+    "<h2>2 — Individual Longhands</h2>" +
+    Row(
+        RadiusSwatch("top-left only", "0", "border-top-left-radius: 30px; "),
+        RadiusSwatch("bottom-right only", "0", "border-bottom-right-radius: 30px; "),
+        RadiusSwatch("TL + BR set", "0", "border-top-left-radius: 25px; border-bottom-right-radius: 25px; "),
+        RadiusSwatch("all 4 longhands", "0", "border-top-left-radius: 10px; border-top-right-radius: 20px; border-bottom-right-radius: 30px; border-bottom-left-radius: 15px; ")
+    ) +
+
+    "<h2>3 — Elliptical Corners (/ syntax)</h2>" +
+    Row(
+        RadiusSwatch("flat wide (40px / 10px)", "40px / 10px"),
+        RadiusSwatch("tall narrow (10px / 40px)", "10px / 40px"),
+        RadiusSwatch("uniform ellipse (30px / 20px)", "30px / 20px"),
+        RadiusSwatch("asymmetric", "20px 0 / 0 20px")
+    ) +
+
+    "<h2>4 — Percentage Values</h2>" +
+    Row(
+        RadiusSwatch("50% — pill/ellipse", "50%"),
+        RadiusSwatch("25% — quarter round", "25%"),
+        RadiusSwatch("50% / 25%", "50% / 25%"),
+        RadiusSwatch("25% / 50%", "25% / 50%")
+    ) +
+
+    "<h2>5 — Overlapping Radii Reduction</h2>" +
+    "<p class=\"intro\">Each box is 80px wide. A radius larger than half the box is automatically scaled down.</p>" +
+    Row(
+        RadiusSwatch("60px on 80px box", "60px", "width: 80px; "),
+        RadiusSwatch("100px (auto-capped)", "100px", "width: 80px; "),
+        RadiusSwatch("50% on tall box", "50%", "width: 80px; height: 80px; "),
+        RadiusSwatch("no overlap — 20px", "20px", "width: 80px; ")
+    ) +
+
+    "<h2>6 — Combined Styles</h2>" +
+    Row(
+        RadiusSwatch("solid border + bg", "15px"),
+        RadiusSwatch("dashed border", "15px", "border-style: dashed; "),
+        RadiusSwatch("dotted border", "15px", "border-style: dotted; "),
+        RadiusSwatch("no border, bg only", "15px", "border: none; ")
+    ) +
+
+    "</body></html>";
+
+var radiusStream = new MemoryStream();
+var radiusDocument = await generator.GeneratePdf(radiusHtml, pdfConfig);
+radiusDocument.Save(radiusStream);
+
+File.Delete("test_border_radius.pdf");
+File.WriteAllBytes("test_border_radius.pdf", radiusStream.ToArray());
+Console.WriteLine("Saved test_border_radius.pdf");

@@ -70,11 +70,10 @@ namespace PeachPDF.Html.Core.Utils
                 "break-after" => cssBox.BreakAfter,
                 "break-before" => cssBox.BreakBefore,
                 "break-inside" => cssBox.BreakInside,
-                "corner-radius" => cssBox.CornerRadius,
-                "corner-nw-radius" => cssBox.CornerNwRadius,
-                "corner-ne-radius" => cssBox.CornerNeRadius,
-                "corner-se-radius" => cssBox.CornerSeRadius,
-                "corner-sw-radius" => cssBox.CornerSwRadius,
+                "border-top-left-radius" => cssBox.BorderTopLeftRadius,
+                "border-top-right-radius" => cssBox.BorderTopRightRadius,
+                "border-bottom-right-radius" => cssBox.BorderBottomRightRadius,
+                "border-bottom-left-radius" => cssBox.BorderBottomLeftRadius,
                 "counter-increment" => cssBox.CounterIncrement,
                 "counter-reset" => cssBox.CounterReset,
                 "counter-set" => cssBox.CounterSet,
@@ -269,20 +268,20 @@ namespace PeachPDF.Html.Core.Utils
                     }
 
                     break;
-                case "corner-radius":
-                    cssBox.CornerRadius = value;
+                case "border-radius":
+                    cssBox.BorderRadius = value;
                     break;
-                case "corner-nw-radius":
-                    cssBox.CornerNwRadius = value;
+                case "border-top-left-radius":
+                    cssBox.BorderTopLeftRadius = value;
                     break;
-                case "corner-ne-radius":
-                    cssBox.CornerNeRadius = value;
+                case "border-top-right-radius":
+                    cssBox.BorderTopRightRadius = value;
                     break;
-                case "corner-se-radius":
-                    cssBox.CornerSeRadius = value;
+                case "border-bottom-right-radius":
+                    cssBox.BorderBottomRightRadius = value;
                     break;
-                case "corner-sw-radius":
-                    cssBox.CornerSwRadius = value;
+                case "border-bottom-left-radius":
+                    cssBox.BorderBottomLeftRadius = value;
                     break;
                 case "counter-increment":
                     cssBox.CounterIncrement = value;

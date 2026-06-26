@@ -742,7 +742,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
         {
             public override void Start(double x, double y) { }
             public override void LineTo(double x, double y) { }
-            public override void ArcTo(double x, double y, double size, Corner corner) { }
+            public override void ArcTo(double x, double y, double radiusX, double radiusY, Corner corner) { }
             public override void Dispose() { }
         }
 

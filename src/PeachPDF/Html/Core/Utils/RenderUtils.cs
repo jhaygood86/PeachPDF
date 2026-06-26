@@ -70,44 +70,40 @@ namespace PeachPDF.Html.Core.Utils
 
 
         /// <summary>
-        /// Creates a rounded rectangle using the specified corner radius<br/>
+        /// Creates a rounded rectangle path. Each corner has separate horizontal (X) and vertical (Y) radii,
+        /// supporting elliptical corners per the CSS border-radius spec.
+        /// <code>
         /// NW-----NE
         ///  |       |
-        ///  |       |
         /// SW-----SE
+        /// </code>
         /// </summary>
-        /// <param name="g">the device to draw into</param>
-        /// <param name="rect">Rectangle to round</param>
-        /// <param name="nwRadius">Radius of the north east corner</param>
-        /// <param name="neRadius">Radius of the north west corner</param>
-        /// <param name="seRadius">Radius of the south east corner</param>
-        /// <param name="swRadius">Radius of the south west corner</param>
-        /// <returns>GraphicsPath with the lines of the rounded rectangle ready to be painted</returns>
-        public static RGraphicsPath GetRoundRect(RGraphics g, RRect rect, double nwRadius, double neRadius, double seRadius, double swRadius)
+        public static RGraphicsPath GetRoundRect(RGraphics g, RRect rect,
+            double nwX, double nwY, double neX, double neY,
+            double seX, double seY, double swX, double swY)
         {
             var path = g.GetGraphicsPath();
 
-            path.Start(rect.Left + nwRadius, rect.Top);
+            // Top edge: start after NW corner, end before NE corner.
+            path.Start(rect.Left + nwX, rect.Top);
+            path.LineTo(rect.Right - neX, rect.Top);
+            if (neX > 0 || neY > 0)
+                path.ArcTo(rect.Right, rect.Top + neY, neX, neY, RGraphicsPath.Corner.TopRight);
 
-            path.LineTo(rect.Right - neRadius, rect.Y);
+            // Right edge.
+            path.LineTo(rect.Right, rect.Bottom - seY);
+            if (seX > 0 || seY > 0)
+                path.ArcTo(rect.Right - seX, rect.Bottom, seX, seY, RGraphicsPath.Corner.BottomRight);
 
-            if (neRadius > 0f)
-                path.ArcTo(rect.Right, rect.Top + neRadius, neRadius, RGraphicsPath.Corner.TopRight);
+            // Bottom edge.
+            path.LineTo(rect.Left + swX, rect.Bottom);
+            if (swX > 0 || swY > 0)
+                path.ArcTo(rect.Left, rect.Bottom - swY, swX, swY, RGraphicsPath.Corner.BottomLeft);
 
-            path.LineTo(rect.Right, rect.Bottom - seRadius);
-
-            if (seRadius > 0f)
-                path.ArcTo(rect.Right - seRadius, rect.Bottom, seRadius, RGraphicsPath.Corner.BottomRight);
-
-            path.LineTo(rect.Left + swRadius, rect.Bottom);
-
-            if (swRadius > 0f)
-                path.ArcTo(rect.Left, rect.Bottom - swRadius, swRadius, RGraphicsPath.Corner.BottomLeft);
-
-            path.LineTo(rect.Left, rect.Top + nwRadius);
-
-            if (nwRadius > 0f)
-                path.ArcTo(rect.Left + nwRadius, rect.Top, nwRadius, RGraphicsPath.Corner.TopLeft);
+            // Left edge.
+            path.LineTo(rect.Left, rect.Top + nwY);
+            if (nwX > 0 || nwY > 0)
+                path.ArcTo(rect.Left + nwX, rect.Top, nwX, nwY, RGraphicsPath.Corner.TopLeft);
 
             return path;
         }

@@ -1631,7 +1631,10 @@ namespace PeachPDF.Html.Core.Dom
                     RGraphicsPath? roundrect = null;
                     if (IsRounded)
                     {
-                        roundrect = RenderUtils.GetRoundRect(g, rect, ActualCornerNw, ActualCornerNe, ActualCornerSe, ActualCornerSw);
+                        var radii = ComputeRadii(rect);
+                        roundrect = RenderUtils.GetRoundRect(g, rect,
+                            radii.TLX, radii.TLY, radii.TRX, radii.TRY,
+                            radii.BRX, radii.BRY, radii.BLX, radii.BLY);
                     }
 
                     Object? prevMode = null;

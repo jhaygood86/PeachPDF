@@ -16,6 +16,7 @@ using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
+using System;
 using System.Globalization;
 
 namespace PeachPDF.Html.Core.Dom
@@ -41,7 +42,6 @@ namespace PeachPDF.Html.Core.Dom
         private string _borderLeftColor = "black";
         private string? _bottom;
         private string _color = "black";
-        private string _cornerRadius = "0";
         private string _fontSize = "medium";
         private string _paddingLeft = "0";
         private string _paddingBottom = "0";
@@ -56,10 +56,14 @@ namespace PeachPDF.Html.Core.Dom
 
         #region Fields
 
-        private double _actualCornerNw = double.NaN;
-        private double _actualCornerNe = double.NaN;
-        private double _actualCornerSw = double.NaN;
-        private double _actualCornerSe = double.NaN;
+        private double _actualBorderTopLeftRadiusX = double.NaN;
+        private double _actualBorderTopLeftRadiusY = double.NaN;
+        private double _actualBorderTopRightRadiusX = double.NaN;
+        private double _actualBorderTopRightRadiusY = double.NaN;
+        private double _actualBorderBottomRightRadiusX = double.NaN;
+        private double _actualBorderBottomRightRadiusY = double.NaN;
+        private double _actualBorderBottomLeftRadiusX = double.NaN;
+        private double _actualBorderBottomLeftRadiusY = double.NaN;
         private RColor _actualColor = RColor.Empty;
         private double _actualPaddingTop = double.NaN;
         private double _actualPaddingBottom = double.NaN;
@@ -184,51 +188,88 @@ namespace PeachPDF.Html.Core.Dom
         public string BorderCollapse { get; set; } = "separate";
         public string BoxSizing { get; set; } = CssConstants.ContentBox;
 
-        public string CornerRadius
+        public string BorderRadius
         {
-            get => _cornerRadius;
             set
             {
-                var r = RegexParserUtils.CssLengthRegex().Matches(value);
+                var slash = value.IndexOf('/');
+                var hGroup = (slash >= 0 ? value[..slash] : value).Trim();
+                var vGroup = slash >= 0 ? value[(slash + 1)..].Trim() : hGroup;
 
-                switch (r.Count)
-                {
-                    case 1:
-                        CornerNeRadius = r[0].Value;
-                        CornerNwRadius = r[0].Value;
-                        CornerSeRadius = r[0].Value;
-                        CornerSwRadius = r[0].Value;
-                        break;
-                    case 2:
-                        CornerNeRadius = r[0].Value;
-                        CornerNwRadius = r[0].Value;
-                        CornerSeRadius = r[1].Value;
-                        CornerSwRadius = r[1].Value;
-                        break;
-                    case 3:
-                        CornerNeRadius = r[0].Value;
-                        CornerNwRadius = r[1].Value;
-                        CornerSeRadius = r[2].Value;
-                        break;
-                    case 4:
-                        CornerNeRadius = r[0].Value;
-                        CornerNwRadius = r[1].Value;
-                        CornerSeRadius = r[2].Value;
-                        CornerSwRadius = r[3].Value;
-                        break;
-                }
+                var h = ExpandRadiusShorthand(hGroup);
+                var v = ExpandRadiusShorthand(vGroup);
 
-                _cornerRadius = value;
+                // Store each corner as "hValue vValue" so the computed properties
+                // can extract both axes independently.
+                BorderTopLeftRadius = $"{h[0]} {v[0]}";
+                BorderTopRightRadius = $"{h[1]} {v[1]}";
+                BorderBottomRightRadius = $"{h[2]} {v[2]}";
+                BorderBottomLeftRadius = $"{h[3]} {v[3]}";
             }
         }
 
-        public string CornerNwRadius { get; set; } = "0";
+        // Expands a 1–4 value group into [TL, TR, BR, BL] per CSS shorthand rules.
+        private static string[] ExpandRadiusShorthand(string group)
+        {
+            var tokens = group.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            return tokens.Length switch
+            {
+                1 => [tokens[0], tokens[0], tokens[0], tokens[0]],
+                2 => [tokens[0], tokens[1], tokens[0], tokens[1]],
+                3 => [tokens[0], tokens[1], tokens[2], tokens[1]],
+                4 => [tokens[0], tokens[1], tokens[2], tokens[3]],
+                _ => ["0", "0", "0", "0"]
+            };
+        }
 
-        public string CornerNeRadius { get; set; } = "0";
+        private string _borderTopLeftRadius = "0";
+        private string _borderTopRightRadius = "0";
+        private string _borderBottomRightRadius = "0";
+        private string _borderBottomLeftRadius = "0";
 
-        public string CornerSeRadius { get; set; } = "0";
+        public string BorderTopLeftRadius
+        {
+            get => _borderTopLeftRadius;
+            set
+            {
+                _borderTopLeftRadius = value;
+                _actualBorderTopLeftRadiusX = double.NaN;
+                _actualBorderTopLeftRadiusY = double.NaN;
+            }
+        }
 
-        public string CornerSwRadius { get; set; } = "0";
+        public string BorderTopRightRadius
+        {
+            get => _borderTopRightRadius;
+            set
+            {
+                _borderTopRightRadius = value;
+                _actualBorderTopRightRadiusX = double.NaN;
+                _actualBorderTopRightRadiusY = double.NaN;
+            }
+        }
+
+        public string BorderBottomRightRadius
+        {
+            get => _borderBottomRightRadius;
+            set
+            {
+                _borderBottomRightRadius = value;
+                _actualBorderBottomRightRadiusX = double.NaN;
+                _actualBorderBottomRightRadiusY = double.NaN;
+            }
+        }
+
+        public string BorderBottomLeftRadius
+        {
+            get => _borderBottomLeftRadius;
+            set
+            {
+                _borderBottomLeftRadius = value;
+                _actualBorderBottomLeftRadiusX = double.NaN;
+                _actualBorderBottomLeftRadiusY = double.NaN;
+            }
+        }
         public string CounterIncrement { get; set; } = CssConstants.None;
         public string CounterReset { get; set; } = CssConstants.None;
         public string CounterSet { get; set; } = CssConstants.None;
@@ -768,70 +809,133 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        /// <summary>
-        /// Gets the actual length of the north west corner
-        /// </summary>
-        public double ActualCornerNw
+        public double ActualBorderTopLeftRadiusX
         {
             get
             {
-                if (double.IsNaN(_actualCornerNw))
-                {
-                    _actualCornerNw = CssValueParser.ParseLength(CornerNwRadius, 0, this);
-                }
-                return _actualCornerNw;
+                if (double.IsNaN(_actualBorderTopLeftRadiusX))
+                    _actualBorderTopLeftRadiusX = CssValueParser.ParseLength(FirstCssValue(BorderTopLeftRadius), ActualBoxSizingWidth, this);
+                return _actualBorderTopLeftRadiusX;
             }
         }
 
-        /// <summary>
-        /// Gets the actual length of the north east corner
-        /// </summary>
-        public double ActualCornerNe
+        public double ActualBorderTopLeftRadiusY
         {
             get
             {
-                if (double.IsNaN(_actualCornerNe))
-                {
-                    _actualCornerNe = CssValueParser.ParseLength(CornerNeRadius, 0, this);
-                }
-                return _actualCornerNe;
+                if (double.IsNaN(_actualBorderTopLeftRadiusY))
+                    _actualBorderTopLeftRadiusY = CssValueParser.ParseLength(SecondCssValue(BorderTopLeftRadius), ActualBoxSizingHeight, this);
+                return _actualBorderTopLeftRadiusY;
             }
         }
 
-        /// <summary>
-        /// Gets the actual length of the south east corner
-        /// </summary>
-        public double ActualCornerSe
+        public double ActualBorderTopRightRadiusX
         {
             get
             {
-                if (double.IsNaN(_actualCornerSe))
-                {
-                    _actualCornerSe = CssValueParser.ParseLength(CornerSeRadius, 0, this);
-                }
-                return _actualCornerSe;
+                if (double.IsNaN(_actualBorderTopRightRadiusX))
+                    _actualBorderTopRightRadiusX = CssValueParser.ParseLength(FirstCssValue(BorderTopRightRadius), ActualBoxSizingWidth, this);
+                return _actualBorderTopRightRadiusX;
             }
         }
 
-        /// <summary>
-        /// Gets the actual length of the south west corner
-        /// </summary>
-        public double ActualCornerSw
+        public double ActualBorderTopRightRadiusY
         {
             get
             {
-                if (double.IsNaN(_actualCornerSw))
-                {
-                    _actualCornerSw = CssValueParser.ParseLength(CornerSwRadius, 0, this);
-                }
-                return _actualCornerSw;
+                if (double.IsNaN(_actualBorderTopRightRadiusY))
+                    _actualBorderTopRightRadiusY = CssValueParser.ParseLength(SecondCssValue(BorderTopRightRadius), ActualBoxSizingHeight, this);
+                return _actualBorderTopRightRadiusY;
             }
         }
 
+        public double ActualBorderBottomRightRadiusX
+        {
+            get
+            {
+                if (double.IsNaN(_actualBorderBottomRightRadiusX))
+                    _actualBorderBottomRightRadiusX = CssValueParser.ParseLength(FirstCssValue(BorderBottomRightRadius), ActualBoxSizingWidth, this);
+                return _actualBorderBottomRightRadiusX;
+            }
+        }
+
+        public double ActualBorderBottomRightRadiusY
+        {
+            get
+            {
+                if (double.IsNaN(_actualBorderBottomRightRadiusY))
+                    _actualBorderBottomRightRadiusY = CssValueParser.ParseLength(SecondCssValue(BorderBottomRightRadius), ActualBoxSizingHeight, this);
+                return _actualBorderBottomRightRadiusY;
+            }
+        }
+
+        public double ActualBorderBottomLeftRadiusX
+        {
+            get
+            {
+                if (double.IsNaN(_actualBorderBottomLeftRadiusX))
+                    _actualBorderBottomLeftRadiusX = CssValueParser.ParseLength(FirstCssValue(BorderBottomLeftRadius), ActualBoxSizingWidth, this);
+                return _actualBorderBottomLeftRadiusX;
+            }
+        }
+
+        public double ActualBorderBottomLeftRadiusY
+        {
+            get
+            {
+                if (double.IsNaN(_actualBorderBottomLeftRadiusY))
+                    _actualBorderBottomLeftRadiusY = CssValueParser.ParseLength(SecondCssValue(BorderBottomLeftRadius), ActualBoxSizingHeight, this);
+                return _actualBorderBottomLeftRadiusY;
+            }
+        }
+
+        // Returns the first whitespace-delimited token in a CSS value string.
+        private static string FirstCssValue(string value)
+        {
+            var space = value.IndexOf(' ');
+            return space < 0 ? value : value[..space];
+        }
+
+        // Returns the second whitespace-delimited token, or the first if there is no second (spec: omitted v-radius = h-radius).
+        private static string SecondCssValue(string value)
+        {
+            var space = value.IndexOf(' ');
+            return space < 0 ? value : value[(space + 1)..].TrimStart();
+        }
+
         /// <summary>
-        /// Gets a value indicating if at least one of the corners of the box is rounded
+        /// Computes overlap-reduced radii for the given rendering rectangle, per CSS spec §4.
+        /// Horizontal and vertical axes are reduced independently.
         /// </summary>
-        public bool IsRounded => ActualCornerNe > 0f || ActualCornerNw > 0f || ActualCornerSe > 0f || ActualCornerSw > 0f;
+        internal BorderRadii ComputeRadii(RRect rect)
+        {
+            double tlX = ActualBorderTopLeftRadiusX,     tlY = ActualBorderTopLeftRadiusY;
+            double trX = ActualBorderTopRightRadiusX,    trY = ActualBorderTopRightRadiusY;
+            double brX = ActualBorderBottomRightRadiusX, brY = ActualBorderBottomRightRadiusY;
+            double blX = ActualBorderBottomLeftRadiusX,  blY = ActualBorderBottomLeftRadiusY;
+
+            // Horizontal reduction: check top side and bottom side independently.
+            double fTop = tlX + trX > 0 && rect.Width > 0 ? rect.Width / (tlX + trX) : 1.0;
+            double fBot = blX + brX > 0 && rect.Width > 0 ? rect.Width / (blX + brX) : 1.0;
+            double fX = Math.Min(1.0, Math.Min(fTop, fBot));
+
+            // Vertical reduction: check left side and right side independently.
+            double fLeft  = tlY + blY > 0 && rect.Height > 0 ? rect.Height / (tlY + blY) : 1.0;
+            double fRight = trY + brY > 0 && rect.Height > 0 ? rect.Height / (trY + brY) : 1.0;
+            double fY = Math.Min(1.0, Math.Min(fLeft, fRight));
+
+            return new BorderRadii(tlX * fX, tlY * fY, trX * fX, trY * fY,
+                                   brX * fX, brY * fY, blX * fX, blY * fY);
+        }
+
+        /// <summary>
+        /// Gets a value indicating if at least one of the corners of the box is rounded.
+        /// </summary>
+        public bool IsRounded =>
+            ActualBorderTopLeftRadiusX > 0 || ActualBorderTopLeftRadiusY > 0 ||
+            ActualBorderTopRightRadiusX > 0 || ActualBorderTopRightRadiusY > 0 ||
+            ActualBorderBottomRightRadiusX > 0 || ActualBorderBottomRightRadiusY > 0 ||
+            ActualBorderBottomLeftRadiusX > 0 || ActualBorderBottomLeftRadiusY > 0;
 
         /// <summary>
         /// Gets the actual width of whitespace between words.
@@ -1160,11 +1264,10 @@ namespace PeachPDF.Html.Core.Dom
             BorderBottomStyle = p.BorderBottomStyle;
             BorderLeftStyle = p.BorderLeftStyle;
             _bottom = p._bottom;
-            CornerNwRadius = p.CornerNwRadius;
-            CornerNeRadius = p.CornerNeRadius;
-            CornerSeRadius = p.CornerSeRadius;
-            CornerSwRadius = p.CornerSwRadius;
-            _cornerRadius = p._cornerRadius;
+            BorderTopLeftRadius = p.BorderTopLeftRadius;
+            BorderTopRightRadius = p.BorderTopRightRadius;
+            BorderBottomRightRadius = p.BorderBottomRightRadius;
+            BorderBottomLeftRadius = p.BorderBottomLeftRadius;
             Display = p.Display;
             Float = p.Float;
             Height = p.Height;
@@ -1190,5 +1293,25 @@ namespace PeachPDF.Html.Core.Dom
             MaxWidth = p.MaxWidth;
             _wordSpacing = p._wordSpacing;
         }
+    }
+
+    /// <summary>
+    /// Holds the eight computed (overlap-reduced) corner radii for a box rectangle.
+    /// </summary>
+    internal readonly struct BorderRadii
+    {
+        public readonly double TLX, TLY, TRX, TRY, BRX, BRY, BLX, BLY;
+
+        public BorderRadii(double tlX, double tlY, double trX, double trY,
+                           double brX, double brY, double blX, double blY)
+        {
+            TLX = tlX; TLY = tlY;
+            TRX = trX; TRY = trY;
+            BRX = brX; BRY = brY;
+            BLX = blX; BLY = blY;
+        }
+
+        public bool IsRounded => TLX > 0 || TLY > 0 || TRX > 0 || TRY > 0 ||
+                                 BRX > 0 || BRY > 0 || BLX > 0 || BLY > 0;
     }
 }

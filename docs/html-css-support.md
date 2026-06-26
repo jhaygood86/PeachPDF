@@ -178,17 +178,17 @@ Form elements are rendered as static boxes. There is no interactive behavior —
 | `border-collapse` | [border-collapse](https://developer.mozilla.org/en-US/docs/Web/CSS/border-collapse) | Full support for tables |
 | `border-spacing` | [border-spacing](https://developer.mozilla.org/en-US/docs/Web/CSS/border-spacing) | Full support for tables |
 
-### Border Radius (PeachPDF Extension)
+### Border Radius
 
-PeachPDF uses custom property names for border radius rather than the standard `border-radius`. Standard `border-radius` is not recognized.
+| Property | MDN Reference | Notes |
+|----------|--------------|-------|
+| `border-radius` | [border-radius](https://developer.mozilla.org/en-US/docs/Web/CSS/border-radius) | Shorthand; supports 1–4 values with optional `/` for elliptical radii (e.g. `10px / 20px`) |
+| `border-top-left-radius` | [border-top-left-radius](https://developer.mozilla.org/en-US/docs/Web/CSS/border-top-left-radius) | Accepts `<length>` or `<percentage>`; optional second value sets the vertical radius independently |
+| `border-top-right-radius` | [border-top-right-radius](https://developer.mozilla.org/en-US/docs/Web/CSS/border-top-right-radius) | Same as above |
+| `border-bottom-right-radius` | [border-bottom-right-radius](https://developer.mozilla.org/en-US/docs/Web/CSS/border-bottom-right-radius) | Same as above |
+| `border-bottom-left-radius` | [border-bottom-left-radius](https://developer.mozilla.org/en-US/docs/Web/CSS/border-bottom-left-radius) | Same as above |
 
-| Property | Equivalent standard CSS | Notes |
-|----------|------------------------|-------|
-| `corner-radius` | [`border-radius`](https://developer.mozilla.org/en-US/docs/Web/CSS/border-radius) | Sets all four corners |
-| `corner-nw-radius` | [`border-top-left-radius`](https://developer.mozilla.org/en-US/docs/Web/CSS/border-top-left-radius) | Top-left corner |
-| `corner-ne-radius` | [`border-top-right-radius`](https://developer.mozilla.org/en-US/docs/Web/CSS/border-top-right-radius) | Top-right corner |
-| `corner-se-radius` | [`border-bottom-right-radius`](https://developer.mozilla.org/en-US/docs/Web/CSS/border-bottom-right-radius) | Bottom-right corner |
-| `corner-sw-radius` | [`border-bottom-left-radius`](https://developer.mozilla.org/en-US/docs/Web/CSS/border-bottom-left-radius) | Bottom-left corner |
+Percentages are relative to the border-box width (horizontal radius) and height (vertical radius). Overlapping adjacent radii are automatically reduced proportionally per the CSS spec.
 
 ### Backgrounds
 
@@ -379,7 +379,6 @@ The following CSS features are not supported:
 - **Filters and effects** — `filter`, `backdrop-filter`, `mix-blend-mode`, `opacity`
 - **CSS variables** — `var()` and `--custom-properties`
 - **`calc()` expressions**
-- **`border-radius`** — use the [PeachPDF extension properties](#border-radius-peachpdf-extension) instead
 - **`background` shorthand** — use individual `background-*` properties
 - **`letter-spacing`**
 - **`text-transform`** — `uppercase`, `lowercase`, `capitalize`
