@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
     - name: Checkout
@@ -26,7 +26,7 @@ jobs:
       run: dotnet build src/PeachPDF.Tests/PeachPDF.Tests.csproj --no-restore --configuration Release
 
     - name: Install Playwright browsers
-      run: pwsh src/PeachPDF.Tests/bin/Release/net8.0/playwright.ps1 install --with-deps chromium
+      run: pwsh src/PeachPDF.Tests/bin/Release/net8.0/playwright.ps1 install chromium
 
     - name: Test
       run: dotnet test src/PeachPDF.Tests/PeachPDF.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=test-results.trx"
