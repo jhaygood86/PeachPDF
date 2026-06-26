@@ -38,7 +38,7 @@ The core rendering engine originally derived from [HtmlRenderer](https://github.
 
 ## Resource Loading
 
-**Key types:** `RNetworkLoader` ([Network/RNetworkLoader.cs](src/PeachPDF/Network/RNetworkLoader.cs)), `RNetworkResponse` ([Network/RNetworkResponse.cs](src/PeachPDF/Network/RNetworkResponse.cs)), `RUri` ([Network/RUri.cs](src/PeachPDF/Network/RUri.cs))
+**Key types:** `RNetworkLoader` ([Network/RNetworkLoader.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Network/RNetworkLoader.cs)), `RNetworkResponse` ([Network/RNetworkResponse.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Network/RNetworkResponse.cs)), `RUri` ([Network/RUri.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Network/RUri.cs))
 
 Resource loading is a cross-cutting concern that spans multiple pipeline phases: the HTML document itself must be fetched before parsing begins, external stylesheets are fetched during stylesheet collection, and images are fetched during painting. All three use the same `RNetworkLoader` abstraction, which means the caller controls how every byte of external content enters the rendering pipeline.
 
@@ -79,15 +79,15 @@ public abstract class RNetworkLoader
 
 PeachPDF ships three concrete loaders:
 
-#### `DataUriNetworkLoader` ([Network/DataUriNetworkLoader.cs](src/PeachPDF/Network/DataUriNetworkLoader.cs))
+#### `DataUriNetworkLoader` ([Network/DataUriNetworkLoader.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Network/DataUriNetworkLoader.cs))
 
 The default loader when no `NetworkLoader` is set in `PdfGenerateConfig`. It handles only `data:` URIs, decoding the base64 payload into a `MemoryStream`. Any other URI scheme returns `null`, meaning external resources (remote stylesheets, external images) are silently skipped. This is the safest default for server-side environments where network access must be controlled explicitly.
 
-#### `MimeKitNetworkLoader` ([Network/MimeKitNetworkLoader.cs](src/PeachPDF/Network/MimeKitNetworkLoader.cs))
+#### `MimeKitNetworkLoader` ([Network/MimeKitNetworkLoader.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Network/MimeKitNetworkLoader.cs))
 
 Wraps a MimeKit-parsed MHTML archive. `GetPrimaryContents()` returns `MimeMessage.HtmlBody`. `GetResourceStream(uri)` walks the MIME body parts and finds the part whose `Content-Location` matches the requested URI. This allows a fully self-contained `.mhtml` file to be rendered without any network access: all resources are read from the archive. `BaseUri` is `null` because the base URL is embedded in the document itself.
 
-#### `HttpClientNetworkLoader` ([Network/HttpClientNetworkLoader.cs](src/PeachPDF/Network/HttpClientNetworkLoader.cs))
+#### `HttpClientNetworkLoader` ([Network/HttpClientNetworkLoader.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Network/HttpClientNetworkLoader.cs))
 
 Fetches resources over HTTP using a caller-supplied `HttpClient`. The `primaryContentsUri` passed to the constructor sets `BaseUri` and is used by `GetPrimaryContents()` to download the root HTML. All subsequent resource requests (stylesheets, images) resolve against that base. The caller controls the `HttpClient` lifetime, so custom headers, authentication, proxies, timeouts, and `HttpMessageHandler` chains are all supported without any PeachPDF-specific API.
 
@@ -119,7 +119,7 @@ public class MyLoader : RNetworkLoader
 
 **Library:** [MimeKit](https://github.com/jstedfast/MimeKit)
 
-**Entry point:** `HtmlParser.ParseDocument` ([Html/Core/Parse/HtmlParser.cs](src/PeachPDF/Html/Core/Parse/HtmlParser.cs))
+**Entry point:** `HtmlParser.ParseDocument` ([Html/Core/Parse/HtmlParser.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Parse/HtmlParser.cs))
 
 Raw HTML is tokenized by MimeKit's `HtmlTokenizer`, which produces a flat stream of `HtmlTagToken` and `HtmlDataToken` objects. `HtmlParser` walks that stream and builds a `CssBox` tree in a single pass.
 
@@ -142,7 +142,7 @@ MimeKit also drives MHTML ingestion. `MimeKitNetworkLoader` opens the MIME multi
 
 ## 2. DOM Model — CssBox
 
-**Key types:** `CssBox` ([Html/Core/Dom/CssBox.cs](src/PeachPDF/Html/Core/Dom/CssBox.cs)), `CssBoxProperties` ([Html/Core/Dom/CssBoxProperties.cs](src/PeachPDF/Html/Core/Dom/CssBoxProperties.cs))
+**Key types:** `CssBox` ([Html/Core/Dom/CssBox.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Dom/CssBox.cs)), `CssBoxProperties` ([Html/Core/Dom/CssBoxProperties.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Dom/CssBoxProperties.cs))
 
 Each HTML element becomes a `CssBox`. The tree mirrors the source HTML structure and is the central data structure that all subsequent phases read from and write to. Every box is assigned a monotonically increasing `Id` so boxes can be identified and ordered throughout the pipeline.
 
@@ -203,7 +203,7 @@ Because the output is paginated, `CssBox` carries a `PageBreakBottoms` dictionar
 
 **Library:** ExCSS (forked and merged into PeachPDF)
 
-**Entry point:** `CssParser.ParseStyleSheet` ([Html/Core/Parse/CssParser.cs](src/PeachPDF/Html/Core/Parse/CssParser.cs))
+**Entry point:** `CssParser.ParseStyleSheet` ([Html/Core/Parse/CssParser.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Parse/CssParser.cs))
 
 CSS is parsed by a fork of [ExCSS](https://github.com/TylerBrinks/ExCSS) merged directly into the PeachPDF source tree under `src/PeachPDF/CSS/`. The fork exists for two reasons:
 
@@ -213,7 +213,7 @@ CSS is parsed by a fork of [ExCSS](https://github.com/TylerBrinks/ExCSS) merged 
 
 ### Rule types
 
-The parsed output is a `Stylesheet` object containing a typed collection of at-rules and style rules. The rule types are defined under [src/PeachPDF/CSS/Rules/](src/PeachPDF/CSS/Rules/):
+The parsed output is a `Stylesheet` object containing a typed collection of at-rules and style rules. The rule types are defined under [src/PeachPDF/CSS/Rules/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachPDF/CSS/Rules/):
 
 | Rule class | CSS construct |
 |---|---|
@@ -228,17 +228,17 @@ The parsed output is a `Stylesheet` object containing a typed collection of at-r
 
 ### Property definitions
 
-Every CSS property PeachPDF understands has a corresponding class under [src/PeachPDF/CSS/StyleProperties/](src/PeachPDF/CSS/StyleProperties/), organised by category (Background, Border, Font, Text, etc.). Each property class declares the property name, whether it is inherited, its initial value, and a value converter that validates and normalises the parsed token stream.
+Every CSS property PeachPDF understands has a corresponding class under [src/PeachPDF/CSS/StyleProperties/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachPDF/CSS/StyleProperties/), organised by category (Background, Border, Font, Text, etc.). Each property class declares the property name, whether it is inherited, its initial value, and a value converter that validates and normalises the parsed token stream.
 
 ### Value parsing
 
-`CssValueParser` ([Html/Core/Parse/CssValueParser.cs](src/PeachPDF/Html/Core/Parse/CssValueParser.cs)) translates raw CSS value strings into the numeric/computed forms that `CssBoxProperties` stores in its `_actual*` fields. It handles length resolution (px, em, rem, %, vw/vh), colour parsing, and shorthand expansion.
+`CssValueParser` ([Html/Core/Parse/CssValueParser.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Parse/CssValueParser.cs)) translates raw CSS value strings into the numeric/computed forms that `CssBoxProperties` stores in its `_actual*` fields. It handles length resolution (px, em, rem, %, vw/vh), colour parsing, and shorthand expansion.
 
 ---
 
 ## 4. Stylesheet Application
 
-**Key types:** `CssData` ([Html/Core/CssData.cs](src/PeachPDF/Html/Core/CssData.cs)), `DomParser` ([Html/Core/Parse/DomParser.cs](src/PeachPDF/Html/Core/Parse/DomParser.cs))
+**Key types:** `CssData` ([Html/Core/CssData.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/CssData.cs)), `DomParser` ([Html/Core/Parse/DomParser.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Parse/DomParser.cs))
 
 `DomParser.GenerateCssTree` orchestrates both the HTML parse and the full stylesheet application in a single method call, returning the styled `CssBox` root ready for layout.
 
@@ -291,7 +291,7 @@ After the cascade, `DomParser` runs a series of correction passes to make the tr
 
 ## 5. Layout
 
-**Key types:** `CssLayoutEngine` ([Html/Core/Dom/CssLayoutEngine.cs](src/PeachPDF/Html/Core/Dom/CssLayoutEngine.cs)), `CssLayoutEngineTable` ([Html/Core/Dom/CssLayoutEngineTable.cs](src/PeachPDF/Html/Core/Dom/CssLayoutEngineTable.cs))
+**Key types:** `CssLayoutEngine` ([Html/Core/Dom/CssLayoutEngine.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Dom/CssLayoutEngine.cs)), `CssLayoutEngineTable` ([Html/Core/Dom/CssLayoutEngineTable.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Dom/CssLayoutEngineTable.cs))
 
 Layout computes the position and size of every box. It runs in two sub-passes: word measurement and box layout.
 
@@ -340,7 +340,7 @@ After layout every `CssBox` has a final bounding rectangle and each `CssLineBox`
 
 ## 6. Painting
 
-**Key types:** `RGraphics` ([Html/Adapters/RGraphics.cs](src/PeachPDF/Html/Adapters/RGraphics.cs)), `BordersDrawHandler` ([Html/Core/Handlers/BordersDrawHandler.cs](src/PeachPDF/Html/Core/Handlers/BordersDrawHandler.cs)), `BackgroundImageDrawHandler` ([Html/Core/Handlers/BackgroundImageDrawHandler.cs](src/PeachPDF/Html/Core/Handlers/BackgroundImageDrawHandler.cs))
+**Key types:** `RGraphics` ([Html/Adapters/RGraphics.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Adapters/RGraphics.cs)), `BordersDrawHandler` ([Html/Core/Handlers/BordersDrawHandler.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Handlers/BordersDrawHandler.cs)), `BackgroundImageDrawHandler` ([Html/Core/Handlers/BackgroundImageDrawHandler.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Handlers/BackgroundImageDrawHandler.cs))
 
 ### Graphics abstraction
 
@@ -386,13 +386,13 @@ Images are loaded on demand by `ImageLoadHandler`. Supported sources include fil
 
 **Library:** PdfSharpCore (forked and merged into PeachPDF)
 
-**Source location:** [src/PeachPDF/PdfSharpCore/](src/PeachPDF/PdfSharpCore/)
+**Source location:** [src/PeachPDF/PdfSharpCore/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachPDF/PdfSharpCore/)
 
 The final phase writes the PDF file. PeachPDF embeds a custom fork of [PdfSharpCore](https://github.com/ststeiger/PdfSharpCore) directly in the source tree. The fork has been optimised specifically for PeachPDF's usage patterns and trimming requirements.
 
 ### Adapter bridge
 
-The adapters in [src/PeachPDF/Adapters/](src/PeachPDF/Adapters/) implement the abstract types that the rendering engine uses (`RGraphics`, `RBrush`, `RPen`, `RFont`, `RFontFamily`, `RImage`, `RGraphicsPath`, `XTextureBrush`). They translate every `RGraphics` drawing call into the corresponding `XGraphics` call in PdfSharpCore, keeping the core rendering logic completely decoupled from the PDF format.
+The adapters in [src/PeachPDF/Adapters/](https://github.com/jhaygood86/PeachPDF/tree/main/src/PeachPDF/Adapters/) implement the abstract types that the rendering engine uses (`RGraphics`, `RBrush`, `RPen`, `RFont`, `RFontFamily`, `RImage`, `RGraphicsPath`, `XTextureBrush`). They translate every `RGraphics` drawing call into the corresponding `XGraphics` call in PdfSharpCore, keeping the core rendering logic completely decoupled from the PDF format.
 
 ### Font pipeline
 
