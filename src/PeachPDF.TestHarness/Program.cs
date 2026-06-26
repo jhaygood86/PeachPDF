@@ -184,6 +184,10 @@ File.Delete("test_gradients.pdf");
 File.WriteAllBytes("test_gradients.pdf", stream.ToArray());
 Console.WriteLine("Saved test_gradients.pdf");
 
+File.Delete("test_gradients.html");
+File.WriteAllText("test_gradients.html", html);
+Console.WriteLine("Saved test_gradients.html");
+
 // --- Border-radius showcase ---
 
 const string RadiusCss = """
@@ -263,3 +267,7 @@ radiusDocument.Save(radiusStream);
 File.Delete("test_border_radius.pdf");
 File.WriteAllBytes("test_border_radius.pdf", radiusStream.ToArray());
 Console.WriteLine("Saved test_border_radius.pdf");
+
+File.Delete("test_border_radius.html");
+File.WriteAllText("test_border_radius.html", radiusHtml);
+Console.WriteLine("Saved test_border_radius.html");
