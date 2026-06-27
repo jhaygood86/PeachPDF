@@ -18,6 +18,8 @@ namespace PeachPDF.CSS
 
         internal RuleList Rules { get; }
 
+        internal bool IsUserAgent { get; set; }
+
         public IEnumerable<ICharsetRule> CharacterSetRules => Rules.Where(r => r is CharsetRule).Cast<ICharsetRule>();
         public IEnumerable<IFontFaceRule> FontfaceSetRules => Rules.Where(r => r is FontFaceRule).Cast<IFontFaceRule>();
         public IEnumerable<IMediaRule> MediaRules => Rules.Where(r => r is MediaRule).Cast<IMediaRule>();

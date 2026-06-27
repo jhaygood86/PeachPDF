@@ -201,29 +201,33 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="media">The media type to apply styles to</param>
         private static void CascadeApplyStyles(CssValueParser valueParser, CssBox box, CssData cssData, string media)
         {
-            // Set initial styles
+            // 1. Set CSS spec initial values
             foreach (var style in CssDefaults.InitialValues)
-            {
                 CssUtils.SetPropertyValue(valueParser, box, style.Key, style.Value);
-            }
 
+            // 2. Inherit inheritable properties from parent
             box.InheritStyle();
 
-            // try assign style using all wildcard
-            var importantPropertyNames = AssignCssBlocks(valueParser, box, cssData, media);
+            // 3. UA pass — user-agent stylesheet rules only
+            var importantPropertyNames = AssignCssBlocks(valueParser, box, cssData.GetUserAgentStyleRules(media, box), null, null);
+
+            // 4. Author pass — author stylesheet rules; revert target is the UA-applied state
+            var uaSnapshot = CssUtils.SnapshotProperties(box);
+            importantPropertyNames = AssignCssBlocks(valueParser, box, cssData.GetAuthorStyleRules(media, box), importantPropertyNames, uaSnapshot);
 
             if (box.HtmlTag != null)
             {
                 TranslateAttributes(box.HtmlTag, box);
 
-                // Check for the style="" attribute
+                // 5. Inline styles; revert target is the author-applied state
                 if (box.HtmlTag.HasAttribute("style"))
                 {
                     var styleAttributeText = box.HtmlTag.TryGetAttribute("style");
                     var stylesheet = "* { " + styleAttributeText + " }";
 
+                    var authorSnapshot = CssUtils.SnapshotProperties(box);
                     var block = CssParser.ParseStyleSheet(stylesheet);
-                    AssignCssBlock(valueParser, box, block.StyleRules.Single(), importantPropertyNames);
+                    AssignCssBlock(valueParser, box, block.StyleRules.Single(), importantPropertyNames, authorSnapshot);
                 }
             }
 
@@ -254,61 +258,66 @@ namespace PeachPDF.Html.Core.Parse
         }
 
         /// <summary>
-        /// Assigns the given css style blocks to the given css box checking if matching.
+        /// Assigns the given css style rules to the given css box.
         /// </summary>
-        /// <param name="valueParser">the css value parser to use</param>
-        /// <param name="box">the css box to assign css to</param>
-        /// <param name="cssData">the css data to use to get the matching css blocks</param>
-        /// <param name="media">The media type to apply styles for</param>
-        /// <returns>The list of applied important property names</returns>
-        private static HashSet<string> AssignCssBlocks(CssValueParser valueParser, CssBox box, CssData cssData, string media)
+        private static HashSet<string> AssignCssBlocks(
+            CssValueParser valueParser,
+            CssBox box,
+            IEnumerable<IStyleRule> rules,
+            HashSet<string>? importantPropertyNames,
+            IReadOnlyDictionary<string, string?>? revertTarget)
         {
-            var combinedBlocks = new List<IStyleRule>();
-            var styleRules = cssData.GetStyleRules(media, box);
-            combinedBlocks.AddRange(styleRules);
-
-            HashSet<string> importantPropertyNames = [];
-
-            foreach (var block in combinedBlocks)
-            {
-                AssignCssBlock(valueParser, box, block, importantPropertyNames);
-            }
-
+            importantPropertyNames ??= [];
+            foreach (var rule in rules)
+                AssignCssBlock(valueParser, box, rule, importantPropertyNames, revertTarget);
             return importantPropertyNames;
         }
 
         /// <summary>
         /// Assigns the given css style block properties to the given css box.
+        /// Handles all five CSS global keywords: inherit, initial, unset, revert, revert-layer.
         /// </summary>
         /// <param name="valueParser">the css value parser to use</param>
         /// <param name="box">the css box to assign css to</param>
         /// <param name="stylesheetRule">the stylesheet rule to assign</param>
         /// <param name="importantPropertyNames">Carries the property names that have been marked important so they don't get re-applied</param>
-        private static void AssignCssBlock(CssValueParser valueParser, CssBox box, IStyleRule stylesheetRule, HashSet<string> importantPropertyNames)
+        /// <param name="revertTarget">Property snapshot representing the prior cascade origin, used for revert/revert-layer</param>
+        private static void AssignCssBlock(
+            CssValueParser valueParser,
+            CssBox box,
+            IStyleRule stylesheetRule,
+            HashSet<string> importantPropertyNames,
+            IReadOnlyDictionary<string, string?>? revertTarget = null)
         {
             foreach (var prop in stylesheetRule.Style)
             {
                 var value = prop.Value switch
                 {
-                    CssConstants.Inherit when box.ParentBox != null => CssUtils.GetPropertyValue(box.ParentBox, prop.Name),
-                    CssConstants.Initial => CssDefaults.InitialValues[prop.Name],
+                    CssConstants.Inherit when box.ParentBox != null
+                        => CssUtils.GetPropertyValue(box.ParentBox, prop.Name),
+                    CssConstants.Inherit
+                        => CssDefaults.GetInitialValue(prop.Name),
+                    CssConstants.Initial
+                        => CssDefaults.GetInitialValue(prop.Name),
+                    CssConstants.Unset when CssDefaults.InheritedProperties.Contains(prop.Name) && box.ParentBox != null
+                        => CssUtils.GetPropertyValue(box.ParentBox, prop.Name),
+                    CssConstants.Unset
+                        => CssDefaults.GetInitialValue(prop.Name),
+                    CssConstants.Revert or CssConstants.RevertLayer
+                        => revertTarget is not null && revertTarget.TryGetValue(prop.Name, out var rv)
+                            ? rv
+                            : CssDefaults.GetInitialValue(prop.Name),
                     _ => prop.Value
                 };
 
                 if (importantPropertyNames.Contains(prop.Name.ToLowerInvariant()))
-                {
                     continue;
-                }
 
                 if (prop.IsImportant)
-                {
                     importantPropertyNames.Add(prop.Name.ToLowerInvariant());
-                }
 
                 if (value is not null && IsStyleOnElementAllowed(box, prop.Name, value))
-                {
                     CssUtils.SetPropertyValue(valueParser, box, prop.Name, value);
-                }
             }
         }
 

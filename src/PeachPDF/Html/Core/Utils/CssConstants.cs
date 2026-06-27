@@ -49,6 +49,9 @@ namespace PeachPDF.Html.Core.Utils
         public const string Hide = "hide";
         public const string Inherit = "inherit";
         public const string Initial = "initial";
+        public const string Revert = "revert";
+        public const string RevertLayer = "revert-layer";
+        public const string Unset = "unset";
         public const string Inline = "inline";
         public const string InlineTable = "inline-table";
         public const string Inside = "inside";

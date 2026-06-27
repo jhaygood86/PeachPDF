@@ -135,6 +135,53 @@ namespace PeachPDF.Html.Core.Utils
             };
         }
 
+        private static readonly string[] _knownPropertyNames =
+        [
+            "background-attachment", "background-clip", "background-color", "background-image",
+            "background-origin", "background-position", "background-repeat", "background-size",
+            "border-bottom-color", "border-bottom-style", "border-bottom-width",
+            "border-bottom-left-radius", "border-bottom-right-radius",
+            "border-collapse",
+            "border-left-color", "border-left-style", "border-left-width",
+            "border-right-color", "border-right-style", "border-right-width",
+            "border-spacing",
+            "border-top-color", "border-top-style", "border-top-width",
+            "border-top-left-radius", "border-top-right-radius",
+            "bottom", "box-sizing",
+            "break-after", "break-before", "break-inside",
+            "clear", "color", "content",
+            "counter-increment", "counter-reset", "counter-set",
+            "direction", "display",
+            "empty-cells", "float",
+            "font-family", "font-size", "font-style", "font-variant", "font-weight",
+            "height",
+            "left", "line-height",
+            "list-style-image", "list-style-position", "list-style-type",
+            "margin-bottom", "margin-left", "margin-right", "margin-top",
+            "max-width", "min-height",
+            "overflow",
+            "padding-bottom", "padding-left", "padding-right", "padding-top",
+            "position",
+            "right", "string-set",
+            "text-align", "text-decoration", "text-decoration-color", "text-decoration-line", "text-decoration-style",
+            "text-indent", "top",
+            "vertical-align", "visibility",
+            "white-space", "width", "word-break", "word-spacing",
+            "z-index",
+        ];
+
+        /// <summary>
+        /// Snapshots all known property values from a CssBox into a dictionary.
+        /// Used to capture the revert target between cascade origin phases.
+        /// </summary>
+        public static Dictionary<string, string?> SnapshotProperties(CssBox box)
+        {
+            var snapshot = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            foreach (var name in _knownPropertyNames)
+                snapshot[name] = GetPropertyValue(box, name);
+            return snapshot;
+        }
+
         /// <summary>
         /// Set CSS box property value by the CSS name.<br/>
         /// Used as a mapping between CSS property and the class property.

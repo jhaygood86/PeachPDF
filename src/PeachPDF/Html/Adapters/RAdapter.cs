@@ -74,7 +74,16 @@ namespace PeachPDF.Html.Adapters
         /// <summary>
         /// Get the default CSS stylesheet data.
         /// </summary>
-        public async Task<CssData> GetDefaultCssData() => _defaultCssData ??= await CssData.Parse(this, CssDefaults.DefaultStyleSheet, false);
+        public async Task<CssData> GetDefaultCssData()
+        {
+            if (_defaultCssData is null)
+            {
+                _defaultCssData = await CssData.Parse(this, CssDefaults.DefaultStyleSheet, false);
+                foreach (var s in _defaultCssData.Stylesheets)
+                    s.IsUserAgent = true;
+            }
+            return _defaultCssData;
+        }
 
         public abstract RUri? BaseUri { get; }
 

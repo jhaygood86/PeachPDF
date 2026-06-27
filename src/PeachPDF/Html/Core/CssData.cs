@@ -55,10 +55,22 @@ namespace PeachPDF.Html.Core
             return await parser.ParseStyleSheet(stylesheet, combineWithDefault);
         }
 
-        internal IEnumerable<IStyleRule> GetStyleRules(string media, CssBox box)
+        internal IEnumerable<IStyleRule> GetStyleRules(string media, CssBox box) =>
+            GetStyleRulesByOrigin(media, box, userAgentOnly: null);
+
+        internal IEnumerable<IStyleRule> GetUserAgentStyleRules(string media, CssBox box) =>
+            GetStyleRulesByOrigin(media, box, userAgentOnly: true);
+
+        internal IEnumerable<IStyleRule> GetAuthorStyleRules(string media, CssBox box) =>
+            GetStyleRulesByOrigin(media, box, userAgentOnly: false);
+
+        private IEnumerable<IStyleRule> GetStyleRulesByOrigin(string media, CssBox box, bool? userAgentOnly)
         {
             foreach (var stylesheet in Stylesheets)
             {
+                if (userAgentOnly.HasValue && stylesheet.IsUserAgent != userAgentOnly.Value)
+                    continue;
+
                 foreach (var rule in GetStyleRules(stylesheet.StyleRules, box))
                 {
                     yield return rule;
@@ -76,7 +88,6 @@ namespace PeachPDF.Html.Core
                         }
                     }
                 }
-
             }
         }
 
