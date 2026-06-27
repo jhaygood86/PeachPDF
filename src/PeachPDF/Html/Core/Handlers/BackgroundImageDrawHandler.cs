@@ -29,24 +29,25 @@ namespace PeachPDF.Html.Core.Handlers
         /// <param name="g">the device to draw into</param>
         /// <param name="box">the box to draw its background image</param>
         /// <param name="imageLoadHandler">the handler that loads image to draw</param>
-        /// <param name="rectangle">the rectangle to draw image in</param>
-        public static void DrawBackgroundImage(RGraphics g, CssBox box, ImageLoadHandler imageLoadHandler, RRect rectangle)
+        /// <param name="positioningRect">the background positioning area (background-origin)</param>
+        /// <param name="clipRect">the background painting area (background-clip)</param>
+        public static void DrawBackgroundImage(RGraphics g, CssBox box, ImageLoadHandler imageLoadHandler, RRect positioningRect, RRect clipRect)
         {
             // image size depends if specific rectangle given in image loader
             var imgSize = new RSize(imageLoadHandler.Image!.Width, imageLoadHandler.Image!.Height);
 
-            // get the location by BackgroundPosition value
-            var location = GetLocation(box.BackgroundPosition, rectangle, imgSize);
+            // get the location by BackgroundPosition value, relative to the positioning area
+            var location = GetLocation(box.BackgroundPosition, positioningRect, imgSize);
 
             var srcRect = new RRect(0, 0, imgSize.Width, imgSize.Height);
 
             // initial image destination rectangle
             var destRect = new RRect(location, imgSize);
 
-            // need to clip so repeated image will be cut on rectangle
-            var lRectangle = rectangle;
-            lRectangle.Intersect(g.GetClip());
-            g.PushClip(lRectangle);
+            // clip to the painting area (background-clip) intersected with the current graphics clip
+            var lClipRect = clipRect;
+            lClipRect.Intersect(g.GetClip());
+            g.PushClip(lClipRect);
 
             switch (box.BackgroundRepeat)
             {
@@ -54,13 +55,13 @@ namespace PeachPDF.Html.Core.Handlers
                     g.DrawImage(imageLoadHandler.Image, destRect, srcRect);
                     break;
                 case "repeat-x":
-                    DrawRepeatX(g, imageLoadHandler, rectangle, srcRect, destRect, imgSize);
+                    DrawRepeatX(g, imageLoadHandler, positioningRect, srcRect, destRect, imgSize);
                     break;
                 case "repeat-y":
-                    DrawRepeatY(g, imageLoadHandler, rectangle, srcRect, destRect, imgSize);
+                    DrawRepeatY(g, imageLoadHandler, positioningRect, srcRect, destRect, imgSize);
                     break;
                 default:
-                    DrawRepeat(g, imageLoadHandler, rectangle, srcRect, destRect, imgSize);
+                    DrawRepeat(g, imageLoadHandler, positioningRect, srcRect, destRect, imgSize);
                     break;
             }
 

@@ -101,6 +101,8 @@ namespace PeachPDF.Html.Core.Utils
                 "background-image" => cssBox.BackgroundImage,
                 "background-position" => cssBox.BackgroundPosition,
                 "background-repeat" => cssBox.BackgroundRepeat,
+                "background-origin" => cssBox.BackgroundOrigin,
+                "background-clip" => cssBox.BackgroundClip,
                 "content" => cssBox.Content,
                 "color" => cssBox.Color,
                 "display" => cssBox.Display,
@@ -561,9 +563,14 @@ namespace PeachPDF.Html.Core.Utils
                     }
 
                     break;
+                case "background-origin":
+                    cssBox.BackgroundOrigin = value;
+                    break;
+                case "background-clip":
+                    cssBox.BackgroundClip = value;
+                    break;
                 case "unicode-bidi":
                 case "background-attachment":
-                case "background-clip":
                 case "overflow-wrap":
                     break;
             }
