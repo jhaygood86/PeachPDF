@@ -350,6 +350,10 @@ namespace PeachPDF.Html.Core.Dom
 
         public string BackgroundRepeat { get; set; } = "repeat";
 
+        public string BackgroundOrigin { get; set; } = CssConstants.PaddingBox;
+
+        public string BackgroundClip { get; set; } = CssConstants.BorderBox;
+
         public ParsedLinearGradient? BackgroundLinearGradient { get; set; }
 
         public ParsedRadialGradient? BackgroundRadialGradient { get; set; }
@@ -1251,6 +1255,8 @@ namespace PeachPDF.Html.Core.Dom
             BackgroundImage = p.BackgroundImage;
             BackgroundPosition = p.BackgroundPosition;
             BackgroundRepeat = p.BackgroundRepeat;
+            BackgroundOrigin = p.BackgroundOrigin;
+            BackgroundClip = p.BackgroundClip;
             _borderTopWidth = p._borderTopWidth;
             _borderRightWidth = p._borderRightWidth;
             _borderBottomWidth = p._borderBottomWidth;

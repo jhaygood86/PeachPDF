@@ -25,6 +25,13 @@ static string RadiusSwatch(string desc, string borderRadiusCss, string boxCss = 
     $"<div class=\"css\">border-radius: {borderRadiusCss}</div>" +
     "</td>";
 
+static string OriginSwatch(string desc, string inlineCss, string cssLabel = "") =>
+    "<td>" +
+    $"<div class=\"obox\" style=\"{inlineCss}\"></div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">{(string.IsNullOrEmpty(cssLabel) ? inlineCss : cssLabel)}</div>" +
+    "</td>";
+
 static string Row(params string[] cells) =>
     $"<table class=\"sw\"><tr>{string.Join("", cells)}</tr></table>";
 
@@ -271,3 +278,117 @@ Console.WriteLine("Saved test_border_radius.pdf");
 File.Delete("test_border_radius.html");
 File.WriteAllText("test_border_radius.html", radiusHtml);
 Console.WriteLine("Saved test_border_radius.html");
+
+// --- background-origin + background-clip showcase ---
+
+const string OriginCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
+    table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
+    table.sw td { padding: 3px; vertical-align: top; width: 25% }
+    .obox { height: 60px; border: 8px solid #333; padding: 12px; margin-bottom: 3px; box-sizing: border-box }
+    .desc { font-size: 7pt; font-weight: bold; color: #444; margin-bottom: 1px }
+    .css { font-size: 6pt; color: #666; line-height: 1.3; word-break: break-all }
+    </style>
+    """;
+
+var originHtml = "<!DOCTYPE html><html><head>" + OriginCss + "</head><body>" +
+
+    "<h1>CSS background-origin &amp; background-clip Test Page</h1>" +
+    "<p class=\"intro\">Each box has border: 8px solid #333 and padding: 12px. Three regions: border-box (full), padding-box (inside border), content-box (inside padding).</p>" +
+
+    "<h2>1 — background-origin: Solid Color</h2>" +
+    "<p class=\"intro\">Solid colors fill the clip area regardless of origin — this verifies no rendering errors.</p>" +
+    Row(
+        OriginSwatch("default (padding-box)", "background-color: steelblue"),
+        OriginSwatch("border-box", "background-color: steelblue; background-origin: border-box", "background-origin: border-box"),
+        OriginSwatch("padding-box", "background-color: steelblue; background-origin: padding-box", "background-origin: padding-box"),
+        OriginSwatch("content-box", "background-color: steelblue; background-origin: content-box", "background-origin: content-box")
+    ) +
+
+    "<h2>2 — background-origin: Linear Gradient</h2>" +
+    "<p class=\"intro\">Gradient coordinate space shifts with origin. border-box spans the full box; content-box spans only the content area.</p>" +
+    Row(
+        OriginSwatch("default (padding-box)", "background: linear-gradient(to right, red, blue)"),
+        OriginSwatch("border-box", "background: linear-gradient(to right, red, blue); background-origin: border-box", "background-origin: border-box"),
+        OriginSwatch("padding-box", "background: linear-gradient(to right, red, blue); background-origin: padding-box", "background-origin: padding-box"),
+        OriginSwatch("content-box", "background: linear-gradient(to right, red, blue); background-origin: content-box", "background-origin: content-box")
+    ) +
+
+    "<h2>3 — background-origin: Radial Gradient</h2>" +
+    "<p class=\"intro\">Radial center and radius are computed from the origin rect. content-box produces a more compressed gradient.</p>" +
+    Row(
+        OriginSwatch("default (padding-box)", "background: radial-gradient(circle, yellow, navy)"),
+        OriginSwatch("border-box", "background: radial-gradient(circle, yellow, navy); background-origin: border-box", "background-origin: border-box"),
+        OriginSwatch("padding-box", "background: radial-gradient(circle, yellow, navy); background-origin: padding-box", "background-origin: padding-box"),
+        OriginSwatch("content-box", "background: radial-gradient(circle, yellow, navy); background-origin: content-box", "background-origin: content-box")
+    ) +
+
+    "<h2>4 — background-clip: Solid Color</h2>" +
+    "<p class=\"intro\">background-clip controls where the background is painted. padding-box: no color behind border. content-box: color only in content area.</p>" +
+    Row(
+        OriginSwatch("default (border-box)", "background-color: coral"),
+        OriginSwatch("border-box", "background-color: coral; background-clip: border-box", "background-clip: border-box"),
+        OriginSwatch("padding-box", "background-color: coral; background-clip: padding-box", "background-clip: padding-box"),
+        OriginSwatch("content-box", "background-color: coral; background-clip: content-box", "background-clip: content-box")
+    ) +
+
+    "<h2>5 — background-clip: Linear Gradient</h2>" +
+    "<p class=\"intro\">Gradient fills the origin area but is clipped to the clip area.</p>" +
+    Row(
+        OriginSwatch("default (border-box)", "background: linear-gradient(to right, orange, purple)"),
+        OriginSwatch("border-box", "background: linear-gradient(to right, orange, purple); background-clip: border-box", "background-clip: border-box"),
+        OriginSwatch("padding-box", "background: linear-gradient(to right, orange, purple); background-clip: padding-box", "background-clip: padding-box"),
+        OriginSwatch("content-box", "background: linear-gradient(to right, orange, purple); background-clip: content-box", "background-clip: content-box")
+    ) +
+
+    "<h2>6 — background-origin + background-clip: Combinations</h2>" +
+    Row(
+        OriginSwatch("origin: border, clip: border", "background: linear-gradient(to right, teal, gold); background-origin: border-box; background-clip: border-box", "origin: border-box; clip: border-box"),
+        OriginSwatch("origin: padding, clip: padding", "background: linear-gradient(to right, teal, gold); background-origin: padding-box; background-clip: padding-box", "origin: padding-box; clip: padding-box"),
+        OriginSwatch("origin: content, clip: content", "background: linear-gradient(to right, teal, gold); background-origin: content-box; background-clip: content-box", "origin: content-box; clip: content-box"),
+        OriginSwatch("origin: border, clip: padding", "background: linear-gradient(to right, teal, gold); background-origin: border-box; background-clip: padding-box", "origin: border-box; clip: padding-box")
+    ) +
+
+    "<h2>7 — background-origin + background-clip: More Combinations</h2>" +
+    Row(
+        OriginSwatch("origin: border, clip: content", "background: linear-gradient(to right, crimson, lime); background-origin: border-box; background-clip: content-box", "origin: border-box; clip: content-box"),
+        OriginSwatch("origin: padding, clip: content", "background: linear-gradient(to right, crimson, lime); background-origin: padding-box; background-clip: content-box", "origin: padding-box; clip: content-box"),
+        OriginSwatch("origin: content, clip: padding", "background: linear-gradient(to right, crimson, lime); background-origin: content-box; background-clip: padding-box", "origin: content-box; clip: padding-box"),
+        OriginSwatch("origin: content, clip: border", "background: linear-gradient(to right, crimson, lime); background-origin: content-box; background-clip: border-box", "origin: content-box; clip: border-box")
+    ) +
+
+    "<h2>8 — Shorthand with Origin/Clip Tokens</h2>" +
+    "<p class=\"intro\">A single box-model keyword in the shorthand sets both origin and clip; two keywords set origin then clip.</p>" +
+    Row(
+        OriginSwatch("single keyword — padding", "background: steelblue padding-box", "background: steelblue padding-box"),
+        OriginSwatch("single keyword — content", "background: coral content-box", "background: coral content-box"),
+        OriginSwatch("gradient padding-box content-box", "background: linear-gradient(to right, teal, gold) padding-box content-box", "linear-gradient padding-box content-box"),
+        OriginSwatch("gradient border-box padding-box", "background: linear-gradient(to right, teal, gold) border-box padding-box", "linear-gradient border-box padding-box")
+    ) +
+
+    "<h2>9 — Radial Gradient + Clip Combinations</h2>" +
+    Row(
+        OriginSwatch("radial, clip: border-box", "background: radial-gradient(circle at center, yellow, navy); background-clip: border-box", "radial; clip: border-box"),
+        OriginSwatch("radial, clip: padding-box", "background: radial-gradient(circle at center, yellow, navy); background-clip: padding-box", "radial; clip: padding-box"),
+        OriginSwatch("radial, clip: content-box", "background: radial-gradient(circle at center, yellow, navy); background-clip: content-box", "radial; clip: content-box"),
+        OriginSwatch("radial, origin+clip: content", "background: radial-gradient(circle at center, yellow, navy); background-origin: content-box; background-clip: content-box", "origin: content-box; clip: content-box")
+    ) +
+
+    "</body></html>";
+
+var originStream = new MemoryStream();
+var originDocument = await generator.GeneratePdf(originHtml, pdfConfig);
+originDocument.Save(originStream);
+
+File.Delete("test_background_origin_clip.pdf");
+File.WriteAllBytes("test_background_origin_clip.pdf", originStream.ToArray());
+Console.WriteLine("Saved test_background_origin_clip.pdf");
+
+File.Delete("test_background_origin_clip.html");
+File.WriteAllText("test_background_origin_clip.html", originHtml);
+Console.WriteLine("Saved test_background_origin_clip.html");

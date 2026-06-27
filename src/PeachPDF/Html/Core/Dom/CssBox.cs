@@ -1513,11 +1513,29 @@ namespace PeachPDF.Html.Core.Dom
         {
             if (rect is { Width: > 0, Height: > 0 })
             {
+                RRect BoxModelRect(string value) => value switch
+                {
+                    CssConstants.BorderBox => rect,
+                    CssConstants.ContentBox => new RRect(
+                        rect.X + ActualBorderLeftWidth + ActualPaddingLeft,
+                        rect.Y + ActualBorderTopWidth  + ActualPaddingTop,
+                        rect.Width  - ActualBorderLeftWidth - ActualBorderRightWidth  - ActualPaddingLeft - ActualPaddingRight,
+                        rect.Height - ActualBorderTopWidth  - ActualBorderBottomWidth - ActualPaddingTop  - ActualPaddingBottom),
+                    _ => new RRect(
+                        rect.X + ActualBorderLeftWidth,
+                        rect.Y + ActualBorderTopWidth,
+                        rect.Width  - ActualBorderLeftWidth - ActualBorderRightWidth,
+                        rect.Height - ActualBorderTopWidth  - ActualBorderBottomWidth),
+                };
+
+                var originRect = BoxModelRect(BackgroundOrigin);
+                var clipRect   = BoxModelRect(BackgroundClip);
+
                 RBrush? brush = null;
 
                 if (BackgroundLinearGradient is { } gradient)
                 {
-                    var (p1, p2) = ComputeGradientLine(rect, gradient.AngleRad);
+                    var (p1, p2) = ComputeGradientLine(originRect, gradient.AngleRad);
                     double gdx = p2.X - p1.X, gdy = p2.Y - p1.Y;
                     double gradientLength = Math.Sqrt(gdx * gdx + gdy * gdy);
                     var stops = NormalizeGradientStops(gradient.Stops, gradientLength, gradient.ColorSpace, gradient.HueMethod);
@@ -1527,28 +1545,28 @@ namespace PeachPDF.Html.Core.Dom
                 else if (BackgroundRadialGradient is { } radialGradient)
                 {
                     var center = new RPoint(
-                        rect.X + radialGradient.CenterX * rect.Width,
-                        rect.Y + radialGradient.CenterY * rect.Height);
+                        originRect.X + radialGradient.CenterX * originRect.Width,
+                        originRect.Y + radialGradient.CenterY * originRect.Height);
 
-                    double cx = radialGradient.CenterX * rect.Width;
-                    double cy = radialGradient.CenterY * rect.Height;
-                    double dxNear = Math.Min(cx, rect.Width - cx);
-                    double dxFar  = Math.Max(cx, rect.Width - cx);
-                    double dyNear = Math.Min(cy, rect.Height - cy);
-                    double dyFar  = Math.Max(cy, rect.Height - cy);
+                    double cx = radialGradient.CenterX * originRect.Width;
+                    double cy = radialGradient.CenterY * originRect.Height;
+                    double dxNear = Math.Min(cx, originRect.Width - cx);
+                    double dxFar  = Math.Max(cx, originRect.Width - cx);
+                    double dyNear = Math.Min(cy, originRect.Height - cy);
+                    double dyFar  = Math.Max(cy, originRect.Height - cy);
 
                     double radiusX, radiusY;
                     if (radialGradient.ExplicitRadiusX.HasValue)
                     {
                         var rx = radialGradient.ExplicitRadiusX.Value;
                         radiusX = rx.Type == Length.Unit.Percent
-                            ? rx.Value / 100.0 * rect.Width
+                            ? rx.Value / 100.0 * originRect.Width
                             : rx.ToPixel();
                         if (radialGradient.ExplicitRadiusY.HasValue)
                         {
                             var ry = radialGradient.ExplicitRadiusY.Value;
                             radiusY = ry.Type == Length.Unit.Percent
-                                ? ry.Value / 100.0 * rect.Height
+                                ? ry.Value / 100.0 * originRect.Height
                                 : ry.ToPixel();
                         }
                         else
@@ -1604,14 +1622,14 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 else if (BackgroundConicGradient is { } conicGradient)
                 {
-                    double cx = rect.X + conicGradient.CenterX * rect.Width;
-                    double cy = rect.Y + conicGradient.CenterY * rect.Height;
+                    double cx = originRect.X + conicGradient.CenterX * originRect.Width;
+                    double cy = originRect.Y + conicGradient.CenterY * originRect.Height;
                     var conicCenter = new RPoint(cx, cy);
 
-                    double dxFar = Math.Max(conicGradient.CenterX * rect.Width,
-                                            (1.0 - conicGradient.CenterX) * rect.Width);
-                    double dyFar = Math.Max(conicGradient.CenterY * rect.Height,
-                                            (1.0 - conicGradient.CenterY) * rect.Height);
+                    double dxFar = Math.Max(conicGradient.CenterX * originRect.Width,
+                                            (1.0 - conicGradient.CenterX) * originRect.Width);
+                    double dyFar = Math.Max(conicGradient.CenterY * originRect.Height,
+                                            (1.0 - conicGradient.CenterY) * originRect.Height);
                     double outerRadius = Math.Sqrt(dxFar * dxFar + dyFar * dyFar);
 
                     var (conicColors, conicAngles) = NormalizeConicStops(conicGradient);
@@ -1631,8 +1649,8 @@ namespace PeachPDF.Html.Core.Dom
                     RGraphicsPath? roundrect = null;
                     if (IsRounded)
                     {
-                        var radii = ComputeRadii(rect);
-                        roundrect = RenderUtils.GetRoundRect(g, rect,
+                        var radii = ComputeRadii(clipRect);
+                        roundrect = RenderUtils.GetRoundRect(g, clipRect,
                             radii.TLX, radii.TLY, radii.TRX, radii.TRY,
                             radii.BRX, radii.BRY, radii.BLX, radii.BLY);
                     }
@@ -1649,7 +1667,7 @@ namespace PeachPDF.Html.Core.Dom
                     }
                     else
                     {
-                        g.DrawRectangle(brush, rect.X, rect.Y, rect.Width, rect.Height);
+                        g.DrawRectangle(brush, clipRect.X, clipRect.Y, clipRect.Width, clipRect.Height);
                     }
 
                     g.ReturnPreviousSmoothingMode(prevMode);
@@ -1660,7 +1678,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (_imageLoadHandler is { Image: not null } && isFirst)
                 {
-                    BackgroundImageDrawHandler.DrawBackgroundImage(g, this, _imageLoadHandler, rect);
+                    BackgroundImageDrawHandler.DrawBackgroundImage(g, this, _imageLoadHandler, originRect, clipRect);
                 }
             }
         }
