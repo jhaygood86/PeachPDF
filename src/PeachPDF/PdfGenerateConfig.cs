@@ -145,6 +145,13 @@ namespace PeachPDF
         }
 
         /// <summary>
+        /// Gets or sets whether PDF content streams are compressed with FlateDecode.
+        /// Defaults to <c>true</c>. Set to <c>false</c> to produce human-readable PDF streams,
+        /// which is useful for testing or debugging.
+        /// </summary>
+        public bool CompressContentStreams { get; set; } = true;
+
+        /// <summary>
         /// Set all 4 margins to the given value.
         /// </summary>
         /// <param name="value"></param>
