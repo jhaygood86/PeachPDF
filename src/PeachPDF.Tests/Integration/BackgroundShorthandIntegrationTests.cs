@@ -15,7 +15,9 @@ namespace PeachPDF.Tests.Integration
         private static async Task<string> GetPdfText(string html)
         {
             var generator = new PdfGenerator();
-            var doc = await generator.GeneratePdf(html, PageSize.A4);
+            var config = new PdfGenerateConfig { PageSize = PageSize.A4, CompressContentStreams = false };
+            config.SetMargins(20);
+            var doc = await generator.GeneratePdf(html, config);
             var ms = new MemoryStream();
             doc.Save(ms);
             return Encoding.Latin1.GetString(ms.ToArray());

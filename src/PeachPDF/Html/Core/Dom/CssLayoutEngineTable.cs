@@ -745,6 +745,33 @@ namespace PeachPDF.Html.Core.Dom
                 ? (int)((startY - marginTop) / pageHeight)
                 : 0;
 
+            // Pre-check: move the entire table to the next page when the first body row
+            // would cross a page boundary AND the full table body fits on one page.
+            // The per-row page-break check uses `i > 0` so it never fires for single-row
+            // tables; this pre-check handles that case by adjusting the table's location.
+            // Restricted to tables without repeating headers/footers to avoid repositioning
+            // proxy boxes that were already placed above.
+            if (_bodyRows.Count > 0
+                && pageHeight < double.MaxValue - 1
+                && _tableBox.HtmlContainer != null
+                && !_shouldRepeatHeaders
+                && !_shouldRepeatFooters)
+            {
+                var firstRowHeight = EstimateRowHeight(_bodyRows[0]);
+                var availableHeight = pageHeight - _footerHeight - marginTop - marginBottom;
+                var estimatedBodyHeight = _bodyRows.Sum(EstimateRowHeight);
+
+                if (WillCrossPageBoundary(currentY, currentY + firstRowHeight, pageHeight, marginTop, availableHeight, currentPageNumber)
+                    && estimatedBodyHeight <= availableHeight)
+                {
+                    var pageBreakOffset = CalculatePageBreakOffset(currentY, pageHeight, marginTop, marginBottom, currentPageNumber);
+                    _tableBox.Location = _tableBox.Location with { Y = _tableBox.Location.Y + pageBreakOffset };
+                    startY = Math.Max(_tableBox.ClientTop + GetVerticalSpacing(), 0);
+                    currentY = startY;
+                    currentPageNumber = (int)((startY - marginTop) / pageHeight);
+                }
+            }
+
             Dictionary<int, List<CssBox>> rowSpannedBoxes = new();
 
             for (var i = 0; i < _bodyRows.Count; i++)

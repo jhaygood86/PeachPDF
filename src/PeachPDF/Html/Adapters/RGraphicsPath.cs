@@ -30,9 +30,14 @@ namespace PeachPDF.Html.Adapters
         public abstract void LineTo(double x, double y);
 
         /// <summary>
+        /// Add elliptical arc with separate horizontal and vertical radii to the given point.
+        /// </summary>
+        public abstract void ArcTo(double x, double y, double radiusX, double radiusY, Corner corner);
+
+        /// <summary>
         /// Add circular arc of the given size to the given point from the last point.
         /// </summary>
-        public abstract void ArcTo(double x, double y, double size, Corner corner);
+        public void ArcTo(double x, double y, double size, Corner corner) => ArcTo(x, y, size, size, corner);
 
         /// <summary>
         /// Release path resources.

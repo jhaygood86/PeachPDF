@@ -152,6 +152,8 @@ namespace PeachPDF
 
             if (string.IsNullOrEmpty(html) && config.NetworkLoader is null) return;
 
+            document.PdfDocument.Options.CompressContentStreams = config.CompressContentStreams;
+
             _pdfSharpAdapter.NetworkLoader = config.NetworkLoader ?? new DataUriNetworkLoader();
             _pdfSharpAdapter.PixelsPerPoint = config.PixelsPerInch / 72d;
 
