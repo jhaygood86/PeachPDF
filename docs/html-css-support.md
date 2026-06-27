@@ -368,6 +368,22 @@ State-based pseudo-classes (`:hover`, `:focus`, `:active`, `:checked`, `:disable
 
 ---
 
+## CSS-wide Keywords
+
+All five CSS-wide keywords are supported on every CSS property. They are resolved during the cascade, before a property value reaches the rendering engine.
+
+| Keyword | Behavior |
+|---------|----------|
+| `inherit` | Uses the parent element's computed value for the property. On the root element (no parent), falls back to the initial value. |
+| `initial` | Resets the property to its CSS specification initial value, ignoring inheritance. |
+| `unset` | Acts as `inherit` for inherited properties (e.g. `color`, `font-size`) and as `initial` for non-inherited properties (e.g. `margin`, `padding`). |
+| `revert` | Rolls back to the value from the previous cascade origin. In an author stylesheet rule, reverts to the user-agent (UA) stylesheet value. In an inline style, reverts to the author stylesheet value. |
+| `revert-layer` | Without `@layer` support, behaves identically to `revert`. |
+
+All five keywords can be combined with `!important`.
+
+---
+
 ## Unsupported CSS Features
 
 The following CSS features are not supported:

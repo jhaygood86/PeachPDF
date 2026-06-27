@@ -134,12 +134,15 @@ namespace PeachPDF.CSS
 
         public static IValueConverter OrDefault(this IValueConverter primary)
         {
-            return primary.OrInherit().Or(Keywords.Initial);
+            return primary.OrGlobalValue();
         }
 
         public static IValueConverter OrDefault<T>(this IValueConverter primary, T value)
         {
-            return primary.OrInherit().Or(Keywords.Initial, value);
+            return primary.OrInherit().Or(Keywords.Initial, value)
+                          .Or(Keywords.Revert)
+                          .Or(Keywords.RevertLayer)
+                          .Or(Keywords.Unset);
         }
 
         public static IValueConverter OrInherit(this IValueConverter primary)

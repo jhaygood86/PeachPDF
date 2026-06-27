@@ -167,5 +167,120 @@ namespace PeachPDF.Html.Core
             { "text-decoration-style", CssConstants.Solid },
             { "z-index", CssConstants.Auto }
         };
+
+        /// <summary>
+        /// CSS properties that are inherited from a parent element (per CSS spec and PeachPDF's InheritStyle implementation).
+        /// </summary>
+        public static readonly HashSet<string> InheritedProperties = new(System.StringComparer.OrdinalIgnoreCase)
+        {
+            "border-collapse", "border-spacing",
+            "box-sizing",
+            "color",
+            "direction",
+            "empty-cells",
+            "font-family", "font-size", "font-style", "font-variant", "font-weight",
+            "line-height",
+            "list-style-image", "list-style-position", "list-style-type",
+            "text-align", "text-indent",
+            "vertical-align",
+            "visibility",
+            "white-space",
+            "word-break",
+        };
+
+        /// <summary>
+        /// Comprehensive CSS spec initial values for every property handled by PeachPDF.
+        /// Used only for resolving the <c>initial</c>, <c>unset</c>, and <c>revert</c> global keywords.
+        /// </summary>
+        private static readonly Dictionary<string, string?> _allInitialValues = new(System.StringComparer.OrdinalIgnoreCase)
+        {
+            { PropertyNames.BackgroundAttachment, CssConstants.Scroll },
+            { PropertyNames.BackgroundClip, CssConstants.BorderBox },
+            { PropertyNames.BackgroundColor, CssConstants.Transparent },
+            { PropertyNames.BackgroundImage, CssConstants.None },
+            { PropertyNames.BackgroundOrigin, CssConstants.PaddingBox },
+            { PropertyNames.BackgroundPosition, "0% 0%" },
+            { "background-repeat", CssConstants.Repeat },
+            { "background-size", $"{CssConstants.Auto} {CssConstants.Auto}" },
+            { "border-bottom-color", CssConstants.CurrentColor },
+            { "border-bottom-style", CssConstants.None },
+            { "border-bottom-width", CssConstants.Medium },
+            { "border-bottom-left-radius", "0" },
+            { "border-bottom-right-radius", "0" },
+            { "border-collapse", "separate" },
+            { "border-left-color", CssConstants.CurrentColor },
+            { "border-left-style", CssConstants.None },
+            { "border-left-width", CssConstants.Medium },
+            { "border-right-color", CssConstants.CurrentColor },
+            { "border-right-style", CssConstants.None },
+            { "border-right-width", CssConstants.Medium },
+            { "border-spacing", "0" },
+            { "border-top-color", CssConstants.CurrentColor },
+            { "border-top-style", CssConstants.None },
+            { "border-top-width", CssConstants.Medium },
+            { "border-top-left-radius", "0" },
+            { "border-top-right-radius", "0" },
+            { "bottom", CssConstants.Auto },
+            { "box-sizing", CssConstants.ContentBox },
+            { "break-after", CssConstants.Auto },
+            { "break-before", CssConstants.Auto },
+            { "break-inside", CssConstants.Auto },
+            { "clear", CssConstants.None },
+            { "color", "black" },
+            { "content", CssConstants.Normal },
+            { "counter-increment", CssConstants.None },
+            { "counter-reset", CssConstants.None },
+            { "counter-set", CssConstants.None },
+            { "direction", "ltr" },
+            { "display", CssConstants.Inline },
+            { "empty-cells", "show" },
+            { "float", CssConstants.None },
+            { "font-family", "serif" },
+            { "font-size", CssConstants.Medium },
+            { "font-stretch", CssConstants.Normal },
+            { "font-style", CssConstants.Normal },
+            { "font-variant", CssConstants.Normal },
+            { "font-weight", CssConstants.Normal },
+            { "height", CssConstants.Auto },
+            { "left", CssConstants.Auto },
+            { "line-height", CssConstants.Normal },
+            { "list-style-image", CssConstants.None },
+            { "list-style-position", CssConstants.Outside },
+            { "list-style-type", "disc" },
+            { "margin-bottom", "0" },
+            { "margin-left", "0" },
+            { "margin-right", "0" },
+            { "margin-top", "0" },
+            { "max-width", CssConstants.None },
+            { "min-height", "0" },
+            { "overflow", "visible" },
+            { "padding-bottom", "0" },
+            { "padding-left", "0" },
+            { "padding-right", "0" },
+            { "padding-top", "0" },
+            { "position", "static" },
+            { "right", CssConstants.Auto },
+            { "string-set", CssConstants.None },
+            { "text-align", "left" },
+            { "text-decoration", CssConstants.None },
+            { "text-decoration-color", CssConstants.CurrentColor },
+            { "text-decoration-line", CssConstants.None },
+            { "text-decoration-style", CssConstants.Solid },
+            { "text-indent", "0" },
+            { "top", CssConstants.Auto },
+            { "vertical-align", "baseline" },
+            { "visibility", "visible" },
+            { "white-space", CssConstants.Normal },
+            { "width", CssConstants.Auto },
+            { "word-break", CssConstants.Normal },
+            { "word-spacing", CssConstants.Normal },
+            { "z-index", CssConstants.Auto },
+        };
+
+        /// <summary>
+        /// Returns the CSS spec initial value for the given property name, or null if unknown.
+        /// </summary>
+        public static string? GetInitialValue(string propertyName) =>
+            _allInitialValues.TryGetValue(propertyName, out var v) ? v : null;
     }
 }
