@@ -93,11 +93,12 @@ namespace PeachPDF.PdfSharpCore.Pdf
         }
 
         /// <summary>
-        /// Gets the producer application (for example, PDFsharp).
+        /// Gets or sets the producer application (for example, PDFsharp).
         /// </summary>
         public string Producer
         {
             get { return Elements.GetString(Keys.Producer); }
+            internal set { Elements.SetString(Keys.Producer, value, PdfStringEncoding.Unicode); }
         }
 
         /// <summary>

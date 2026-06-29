@@ -52,12 +52,15 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="htmlContainer">the html container to use for reference resolve</param>
         /// <param name="cssData">the css data to use</param>
         /// <returns>the root of the generated tree</returns>
-        public async Task<(CssBox cssBox, CssData cssData)> GenerateCssTree(string html, HtmlContainerInt htmlContainer, CssData cssData)
+        public async Task<(CssBox cssBox, CssData cssData, HtmlDocumentMetadata metadata)> GenerateCssTree(string html, HtmlContainerInt htmlContainer, CssData cssData)
         {
             CssBox.ClearCounter();
             var root = HtmlParser.ParseDocument(html);
             root.IsRoot = true;
             root.HtmlContainer = htmlContainer;
+
+            var metadata = ExtractMetadata(root);
+
             const bool cssDataChanged = false;
 
             (cssData, _) = await CascadeParseStyles(root, htmlContainer, cssData, cssDataChanged);
@@ -89,7 +92,7 @@ namespace PeachPDF.Html.Core.Parse
 
             CorrectAnonymousTables(root);
 
-            return (root, cssData);
+            return (root, cssData, metadata);
         }
 
 
@@ -1061,6 +1064,54 @@ namespace PeachPDF.Html.Core.Parse
             }
 
             return hasBlock && hasInline;
+        }
+
+        private static HtmlDocumentMetadata ExtractMetadata(CssBox root)
+        {
+            string? title = null;
+            string? author = null;
+            string? subject = null;
+            string? keywords = null;
+            DateTime? date = null;
+            string? generator = null;
+
+            var titleBox = DomUtils.GetBoxByTagName(root, "title");
+            if (titleBox != null)
+            {
+                var raw = string.Concat(titleBox.Boxes.Select(b => b.Text ?? string.Empty)).Trim();
+                if (!string.IsNullOrEmpty(raw)) title = raw;
+            }
+
+            var metaBoxes = new List<CssBox>();
+            CollectBoxesByTagName(root, "meta", metaBoxes);
+
+            foreach (var meta in metaBoxes)
+            {
+                var name = meta.HtmlTag?.TryGetAttribute("name")?.ToLowerInvariant();
+                var content = meta.HtmlTag?.TryGetAttribute("content");
+                if (name is null || content is null) continue;
+
+                switch (name)
+                {
+                    case "author":    author    = content; break;
+                    case "subject":   subject   = content; break;
+                    case "keywords":  keywords  = content; break;
+                    case "generator": generator = content; break;
+                    case "date":
+                        if (DateTime.TryParse(content, out var dt)) date = dt;
+                        break;
+                }
+            }
+
+            return new HtmlDocumentMetadata(title, author, subject, keywords, date, generator);
+        }
+
+        private static void CollectBoxesByTagName(CssBox box, string tagName, List<CssBox> results)
+        {
+            if (box.HtmlTag?.Name.Equals(tagName, StringComparison.OrdinalIgnoreCase) == true)
+                results.Add(box);
+            foreach (var child in box.Boxes)
+                CollectBoxesByTagName(child, tagName, results);
         }
 
         #endregion

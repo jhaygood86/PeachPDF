@@ -12,6 +12,7 @@
 
 using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
+using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
 using PeachPDF.PdfSharpCore;
@@ -199,6 +200,8 @@ namespace PeachPDF
             // layout the HTML with the page width restriction to know how many pages are required
             await container.PerformLayout(measure);
 
+            ApplyDocumentMetadata(document.PdfDocument, container.DocumentMetadata);
+
             // while there is un-rendered HTML, create another PDF page and render with proper offset for the next page
             double scrollOffset = 0;
             while (scrollOffset > -container.ActualSize.Height)
@@ -222,6 +225,20 @@ namespace PeachPDF
         }
 
         #region Private/Protected methods
+
+        private static void ApplyDocumentMetadata(PdfDocument pdfDocument, HtmlDocumentMetadata? metadata)
+        {
+            var info = pdfDocument.Info;
+            info.Producer = PeachPdfProductInfo.Generator;
+            info.Creator  = metadata?.Generator ?? PeachPdfProductInfo.Generator;
+
+            if (metadata is null) return;
+            if (!string.IsNullOrEmpty(metadata.Title))    info.Title    = metadata.Title;
+            if (!string.IsNullOrEmpty(metadata.Author))   info.Author   = metadata.Author;
+            if (!string.IsNullOrEmpty(metadata.Subject))  info.Subject  = metadata.Subject;
+            if (!string.IsNullOrEmpty(metadata.Keywords)) info.Keywords = metadata.Keywords;
+            if (metadata.Date.HasValue)                   info.CreationDate = metadata.Date.Value;
+        }
 
         private static async Task SetContent(HtmlContainer container, PdfGenerateConfig config, string html, PeachPdfCssContent? cssData, XSize orgPageSize)
         {

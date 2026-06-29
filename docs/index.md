@@ -74,6 +74,39 @@ var document = await generator.GeneratePdf(null, pdfConfig);
 document.Save(stream);
 ```
 
+## PDF Metadata
+
+PeachPDF automatically extracts standard HTML metadata elements and writes them to the PDF info dictionary. No additional configuration is required — just include the elements in your HTML `<head>`.
+
+| HTML source | PDF info field |
+|---|---|
+| `<title>` inner text | Title |
+| `<meta name="author" content="...">` | Author |
+| `<meta name="subject" content="...">` | Subject |
+| `<meta name="keywords" content="...">` | Keywords |
+| `<meta name="date" content="...">` | Creation date (parsed via `DateTime.TryParse`) |
+| `<meta name="generator" content="...">` | Creator |
+
+The **Producer** and **Creator** fields both default to `PeachPDF {version}` when no `<meta name="generator">` is present. The Producer field always identifies PeachPDF as the PDF converter regardless of any generator meta tag.
+
+Example:
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Quarterly Report</title>
+  <meta name="author" content="Finance Team">
+  <meta name="subject" content="Q1 2025 Results">
+  <meta name="keywords" content="finance, quarterly, report">
+  <meta name="date" content="2025-04-01">
+</head>
+<body>
+  <!-- document content -->
+</body>
+</html>
+```
+
 ## Architecture
 
 See [Architecture](architecture.md) for an overview of how PeachPDF converts HTML to PDF, covering the HTML parser, DOM model, CSS parser, layout engine, painting layer, and PDF renderer.
