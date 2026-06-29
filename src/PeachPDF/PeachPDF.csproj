@@ -34,5 +34,14 @@
 	<ItemGroup>
 		<InternalsVisibleTo Include="PeachPDF.Tests" />
 	</ItemGroup>
+	<Target Name="GeneratePeachPdfProductInfo" BeforeTargets="BeforeBuild">
+		<WriteLinesToFile
+			File="$(IntermediateOutputPath)PeachPdfProductInfo.g.cs"
+			Lines="namespace PeachPDF { internal static class PeachPdfProductInfo { public const string Generator = &quot;PeachPDF $(PackageVersion)&quot;%3B } }"
+			Overwrite="true" />
+		<ItemGroup>
+			<Compile Include="$(IntermediateOutputPath)PeachPdfProductInfo.g.cs" />
+		</ItemGroup>
+	</Target>
 </Project>
 

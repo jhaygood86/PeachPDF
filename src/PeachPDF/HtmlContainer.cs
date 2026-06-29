@@ -12,6 +12,7 @@
 
 using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
+using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
@@ -147,6 +148,8 @@ namespace PeachPDF
         }
 
         internal double PixelsPerPoint => ((PdfSharpAdapter)HtmlContainerInt.Adapter).PixelsPerPoint;
+
+        internal HtmlDocumentMetadata? DocumentMetadata => HtmlContainerInt.DocumentMetadata;
 
         /// <summary>
         /// Init with optional document and stylesheet.

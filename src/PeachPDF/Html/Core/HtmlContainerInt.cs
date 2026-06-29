@@ -257,6 +257,11 @@ namespace PeachPDF.Html.Core
         internal CssBox? Root { get; private set; }
 
         /// <summary>
+        /// Metadata extracted from the HTML head elements.
+        /// </summary>
+        internal HtmlDocumentMetadata? DocumentMetadata { get; private set; }
+
+        /// <summary>
         /// Init with optional document and stylesheet.
         /// </summary>
         /// <param name="htmlSource">the html to init with, init empty if not given</param>
@@ -269,7 +274,7 @@ namespace PeachPDF.Html.Core
             CssData = baseCssData ?? await Adapter.GetDefaultCssData();
 
             DomParser parser = new(CssParser);
-            (Root, CssData) = await parser.GenerateCssTree(htmlSource, this, CssData);
+            (Root, CssData, DocumentMetadata) = await parser.GenerateCssTree(htmlSource, this, CssData);
         }
 
         /// <summary>

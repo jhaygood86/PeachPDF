@@ -20,8 +20,8 @@ PeachPDF renders a subset of the HTML and CSS specifications. This page document
 |---------|--------------|-------|
 | `style` | [style](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/style) | Inline stylesheets are applied |
 | `link` | [link](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/link) | Only `rel="stylesheet"` is processed; other link types are ignored |
-| `meta` | [meta](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/meta) | Ignored at render time |
-| `title` | [title](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/title) | Ignored; the PDF document title must be set via `PdfGenerateConfig` |
+| `meta` | [meta](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/meta) | `name="author"`, `name="subject"`, `name="keywords"`, `name="date"`, and `name="generator"` are extracted and written to the PDF info dictionary; all other meta names are ignored |
+| `title` | [title](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/title) | Text content is written to the PDF document title in the info dictionary |
 
 ### Sections
 
