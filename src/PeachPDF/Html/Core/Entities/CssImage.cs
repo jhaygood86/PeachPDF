@@ -1,38 +1,35 @@
+using PeachPDF;
+using PeachPDF.Html.Adapters;
+using PeachPDF.Html.Core.Handlers;
+using System;
+using System.Threading.Tasks;
+
 namespace PeachPDF.Html.Core.Entities
 {
-    internal class CssImage
+    internal abstract record CssImage : IDisposable
     {
-        protected CssImage()
+        public virtual void Dispose() { }
+
+        internal virtual ValueTask EnsureLoadedAsync(HtmlContainerInt container) => ValueTask.CompletedTask;
+
+        internal sealed record Url(string Href) : CssImage
         {
+            private ImageLoadHandler? _handler;
 
-        }
+            public RImage? Image => _handler?.Image;
 
-        public string? Url { get; private set; }
-
-        public CssImageKind Kind { get; private set; }
-
-        internal enum CssImageKind
-        {
-            Url,
-            Gradient,
-            Element,
-            Image,
-            ImageFragment,
-            SolidColor,
-            CrossFade,
-            ImageSet,
-            Paint
-        }
-
-        public static CssImage GetUrl(string url)
-        {
-            CssImage image = new()
+            internal override async ValueTask EnsureLoadedAsync(HtmlContainerInt container)
             {
-                Kind = CssImageKind.Url,
-                Url = url
-            };
+                if (Image != null) return;
+                _handler ??= new ImageLoadHandler(container);
+                await _handler.LoadImage(Href);
+            }
 
-            return image;
+            public override void Dispose() => _handler?.Dispose();
         }
+
+        internal sealed record LinearGradient(ParsedLinearGradient Gradient) : CssImage;
+        internal sealed record RadialGradient(ParsedRadialGradient Gradient) : CssImage;
+        internal sealed record ConicGradient(ParsedConicGradient Gradient) : CssImage;
     }
 }

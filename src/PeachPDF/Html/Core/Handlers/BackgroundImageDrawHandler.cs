@@ -1,4 +1,4 @@
-﻿// "Therefore those skilled at the unorthodox
+// "Therefore those skilled at the unorthodox
 // are infinite as heaven and earth,
 // inexhaustible as the great rivers.
 // When they come to an end,
@@ -6,13 +6,12 @@
 // like the days and months;
 // they die and are reborn,
 // like the four seasons."
-// 
+//
 // - Sun Tsu,
 // "The Art of War"
 
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
-using PeachPDF.Html.Core.Dom;
 using System;
 
 namespace PeachPDF.Html.Core.Handlers
@@ -27,21 +26,18 @@ namespace PeachPDF.Html.Core.Handlers
         /// Handle background-repeat and background-position values.
         /// </summary>
         /// <param name="g">the device to draw into</param>
-        /// <param name="box">the box to draw its background image</param>
-        /// <param name="imageLoadHandler">the handler that loads image to draw</param>
+        /// <param name="image">the image to draw</param>
+        /// <param name="backgroundPosition">the background-position CSS value</param>
+        /// <param name="backgroundRepeat">the background-repeat CSS value</param>
         /// <param name="positioningRect">the background positioning area (background-origin)</param>
         /// <param name="clipRect">the background painting area (background-clip)</param>
-        public static void DrawBackgroundImage(RGraphics g, CssBox box, ImageLoadHandler imageLoadHandler, RRect positioningRect, RRect clipRect)
+        public static void DrawBackgroundImage(RGraphics g, RImage image, string backgroundPosition, string backgroundRepeat, RRect positioningRect, RRect clipRect)
         {
-            // image size depends if specific rectangle given in image loader
-            var imgSize = new RSize(imageLoadHandler.Image!.Width, imageLoadHandler.Image!.Height);
+            var imgSize = new RSize(image.Width, image.Height);
 
-            // get the location by BackgroundPosition value, relative to the positioning area
-            var location = GetLocation(box.BackgroundPosition, positioningRect, imgSize);
+            var location = GetLocation(backgroundPosition, positioningRect, imgSize);
 
             var srcRect = new RRect(0, 0, imgSize.Width, imgSize.Height);
-
-            // initial image destination rectangle
             var destRect = new RRect(location, imgSize);
 
             // clip to the painting area (background-clip) intersected with the current graphics clip
@@ -49,19 +45,19 @@ namespace PeachPDF.Html.Core.Handlers
             lClipRect.Intersect(g.GetClip());
             g.PushClip(lClipRect);
 
-            switch (box.BackgroundRepeat)
+            switch (backgroundRepeat)
             {
                 case "no-repeat":
-                    g.DrawImage(imageLoadHandler.Image, destRect, srcRect);
+                    g.DrawImage(image, destRect, srcRect);
                     break;
                 case "repeat-x":
-                    DrawRepeatX(g, imageLoadHandler, positioningRect, srcRect, destRect, imgSize);
+                    DrawRepeatX(g, image, positioningRect, srcRect, destRect, imgSize);
                     break;
                 case "repeat-y":
-                    DrawRepeatY(g, imageLoadHandler, positioningRect, srcRect, destRect, imgSize);
+                    DrawRepeatY(g, image, positioningRect, srcRect, destRect, imgSize);
                     break;
                 default:
-                    DrawRepeat(g, imageLoadHandler, positioningRect, srcRect, destRect, imgSize);
+                    DrawRepeat(g, image, positioningRect, srcRect, destRect, imgSize);
                     break;
             }
 
@@ -74,10 +70,6 @@ namespace PeachPDF.Html.Core.Handlers
         /// <summary>
         /// Get top-left location to start drawing the image at depending on background-position value.
         /// </summary>
-        /// <param name="backgroundPosition">the background-position value</param>
-        /// <param name="rectangle">the rectangle to position image in</param>
-        /// <param name="imgSize">the size of the image</param>
-        /// <returns>the top-left location</returns>
         private static RPoint GetLocation(string backgroundPosition, RRect rectangle, RSize imgSize)
         {
             double left = rectangle.Left;
@@ -112,49 +104,43 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         /// <summary>
-        /// Draw the background image at the required location repeating it over the X axis.<br/>
+        /// Draw the background image repeating it over the X axis.<br/>
         /// Adjust location to left if starting location doesn't include all the range (adjusted to center or right).
         /// </summary>
-        private static void DrawRepeatX(RGraphics g, ImageLoadHandler imageLoadHandler, RRect rectangle, RRect srcRect, RRect destRect, RSize imgSize)
+        private static void DrawRepeatX(RGraphics g, RImage image, RRect rectangle, RRect srcRect, RRect destRect, RSize imgSize)
         {
             while (destRect.X > rectangle.X)
                 destRect.X -= imgSize.Width;
 
-            if (imageLoadHandler.Image is null) return;
-
-            using var brush = g.GetTextureBrush(imageLoadHandler.Image, srcRect, destRect.Location);
+            using var brush = g.GetTextureBrush(image, srcRect, destRect.Location);
             g.DrawRectangle(brush, rectangle.X, destRect.Y, rectangle.Width, srcRect.Height);
         }
 
         /// <summary>
-        /// Draw the background image at the required location repeating it over the Y axis.<br/>
+        /// Draw the background image repeating it over the Y axis.<br/>
         /// Adjust location to top if starting location doesn't include all the range (adjusted to center or bottom).
         /// </summary>
-        private static void DrawRepeatY(RGraphics g, ImageLoadHandler imageLoadHandler, RRect rectangle, RRect srcRect, RRect destRect, RSize imgSize)
+        private static void DrawRepeatY(RGraphics g, RImage image, RRect rectangle, RRect srcRect, RRect destRect, RSize imgSize)
         {
             while (destRect.Y > rectangle.Y)
                 destRect.Y -= imgSize.Height;
 
-            if (imageLoadHandler.Image is null) return;
-
-            using var brush = g.GetTextureBrush(imageLoadHandler.Image, srcRect, destRect.Location);
+            using var brush = g.GetTextureBrush(image, srcRect, destRect.Location);
             g.DrawRectangle(brush, destRect.X, rectangle.Y, srcRect.Width, rectangle.Height);
         }
 
         /// <summary>
-        /// Draw the background image at the required location repeating it over the X and Y axis.<br/>
+        /// Draw the background image repeating it over both X and Y axes.<br/>
         /// Adjust location to left-top if starting location doesn't include all the range (adjusted to center or bottom/right).
         /// </summary>
-        private static void DrawRepeat(RGraphics g, ImageLoadHandler imageLoadHandler, RRect rectangle, RRect srcRect, RRect destRect, RSize imgSize)
+        private static void DrawRepeat(RGraphics g, RImage image, RRect rectangle, RRect srcRect, RRect destRect, RSize imgSize)
         {
             while (destRect.X > rectangle.X)
                 destRect.X -= imgSize.Width;
             while (destRect.Y > rectangle.Y)
                 destRect.Y -= imgSize.Height;
 
-            if (imageLoadHandler.Image is null) return;
-
-            using var brush = g.GetTextureBrush(imageLoadHandler.Image, srcRect, destRect.Location);
+            using var brush = g.GetTextureBrush(image, srcRect, destRect.Location);
             g.DrawRectangle(brush, rectangle.X, rectangle.Y, rectangle.Width, rectangle.Height);
         }
 

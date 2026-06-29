@@ -415,7 +415,7 @@ namespace PeachPDF.Html.Core.Parse
 
                         break;
                     case HtmlConstants.Background:
-                        box.BackgroundImage = value.ToLower();
+                        box.BackgroundImages = [new CssImage.Url(value.ToLower())];
                         break;
                     case HtmlConstants.Bgcolor:
                         box.BackgroundColor = value.ToLower();

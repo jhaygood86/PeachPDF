@@ -12,6 +12,7 @@
 
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
 using System;
 using System.Collections.Generic;
@@ -98,7 +99,7 @@ namespace PeachPDF.Html.Core.Utils
                 "height" => cssBox.Height,
                 "min-height" => cssBox.MinHeight,
                 "background-color" => cssBox.BackgroundColor,
-                "background-image" => cssBox.BackgroundImage,
+                "background-image" => null,
                 "background-position" => cssBox.BackgroundPosition,
                 "background-repeat" => cssBox.BackgroundRepeat,
                 "background-origin" => cssBox.BackgroundOrigin,
@@ -129,7 +130,7 @@ namespace PeachPDF.Html.Core.Utils
                 "font-variant" => cssBox.FontVariant,
                 "font-weight" => cssBox.FontWeight,
                 "list-style-position" => cssBox.ListStylePosition,
-                "list-style-image" => cssBox.ListStyleImage,
+                "list-style-image" => null,
                 "list-style-type" => cssBox.ListStyleType,
                 "overflow" => cssBox.Overflow,
                 "z-index" => cssBox.ZIndex,
@@ -444,10 +445,7 @@ namespace PeachPDF.Html.Core.Utils
 
                     break;
                 case "background-image":
-                    cssBox.BackgroundImage = value;
-                    cssBox.BackgroundLinearGradient = valueParser.ParseLinearGradient(value);
-                    cssBox.BackgroundRadialGradient = valueParser.ParseRadialGradient(value);
-                    cssBox.BackgroundConicGradient = valueParser.ParseConicGradient(value);
+                    cssBox.BackgroundImages = valueParser.ParseImages(value);
                     break;
                 case "background-position":
                     cssBox.BackgroundPosition = value;
@@ -542,13 +540,13 @@ namespace PeachPDF.Html.Core.Utils
                     cssBox.FontWeight = value;
                     break;
                 case "list-style":
-                    SetListStyle(cssBox, value);
+                    SetListStyle(valueParser, cssBox, value);
                     break;
                 case "list-style-position":
                     cssBox.ListStylePosition = value;
                     break;
                 case "list-style-image":
-                    cssBox.ListStyleImage = value;
+                    cssBox.ListStyleImage = valueParser.ParseImage(value);
                     break;
                 case "list-style-type":
                     cssBox.ListStyleType = value;
@@ -798,12 +796,12 @@ namespace PeachPDF.Html.Core.Utils
             }
         }
 
-        private static void SetListStyle(CssBox box, string propValue)
+        private static void SetListStyle(CssValueParser valueParser, CssBox box, string propValue)
         {
             var values = SplitValues(propValue);
 
             var listStyleType = CssConstants.None;
-            var listStyleImage = CssConstants.None;
+            CssImage? listStyleImage = null;
             var listStylePosition = CssConstants.Outside;
 
             foreach (var value in values)
@@ -811,18 +809,15 @@ namespace PeachPDF.Html.Core.Utils
                 if (value is CssConstants.Inside or CssConstants.Outside)
                 {
                     listStylePosition = value;
+                    continue;
                 }
 
-                var imageValue = CssValueParser.GetImagePropertyValue(value);
+                var imageValue = valueParser.ParseImage(value);
 
                 if (imageValue is null)
-                {
                     listStyleType = value;
-                }
                 else
-                {
-                    listStyleImage = value;
-                }
+                    listStyleImage = imageValue;
             }
 
             box.ListStyleType = listStyleType;
