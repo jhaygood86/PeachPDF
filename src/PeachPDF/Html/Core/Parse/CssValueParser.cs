@@ -365,7 +365,7 @@ namespace PeachPDF.Html.Core.Parse
 
             var urlToken = tokens.OfType<UrlToken>().SingleOrDefault();
 
-            return urlToken is not null ? CssImage.GetUrl(urlToken.Data) : null;
+            return urlToken is not null ? new CssImage.Url(urlToken.Data) : null;
         }
 
         public static CssFontFace GetFontFacePropertyValue(string propValue)
@@ -414,7 +414,7 @@ namespace PeachPDF.Html.Core.Parse
             return propValue;
         }
 
-        public ParsedLinearGradient? ParseLinearGradient(string value)
+        private ParsedLinearGradient? ParseLinearGradient(string value)
         {
             var tokens = GetCssTokens(value);
 
@@ -529,7 +529,7 @@ namespace PeachPDF.Html.Core.Parse
             };
         }
 
-        public ParsedRadialGradient? ParseRadialGradient(string value)
+        private ParsedRadialGradient? ParseRadialGradient(string value)
         {
             var tokens = GetCssTokens(value);
 
@@ -755,7 +755,7 @@ namespace PeachPDF.Html.Core.Parse
             };
         }
 
-        public ParsedConicGradient? ParseConicGradient(string value)
+        private ParsedConicGradient? ParseConicGradient(string value)
         {
             var tokens = GetCssTokens(value);
 
@@ -899,6 +899,79 @@ namespace PeachPDF.Html.Core.Parse
                 ColorSpace = conicColorSpace,
                 HueMethod = conicHueMethod,
             };
+        }
+
+        public CssImage? ParseImage(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value) ||
+                value.Equals("none", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            var tokens = GetCssTokens(value);
+
+            var urlToken = tokens.OfType<UrlToken>().FirstOrDefault();
+            if (urlToken != null)
+                return new CssImage.Url(urlToken.Data);
+
+            var funcToken = tokens.OfType<FunctionToken>().FirstOrDefault();
+            if (funcToken == null) return null;
+
+            var name = funcToken.Data;
+            if (name.Equals(FunctionNames.LinearGradient, StringComparison.OrdinalIgnoreCase) ||
+                name.Equals(FunctionNames.RepeatingLinearGradient, StringComparison.OrdinalIgnoreCase))
+            {
+                var g = ParseLinearGradient(value);
+                return g != null ? new CssImage.LinearGradient(g) : null;
+            }
+
+            if (name.Equals(FunctionNames.RadialGradient, StringComparison.OrdinalIgnoreCase) ||
+                name.Equals(FunctionNames.RepeatingRadialGradient, StringComparison.OrdinalIgnoreCase))
+            {
+                var g = ParseRadialGradient(value);
+                return g != null ? new CssImage.RadialGradient(g) : null;
+            }
+
+            if (name.Equals(FunctionNames.ConicGradient, StringComparison.OrdinalIgnoreCase) ||
+                name.Equals(FunctionNames.RepeatingConicGradient, StringComparison.OrdinalIgnoreCase))
+            {
+                var g = ParseConicGradient(value);
+                return g != null ? new CssImage.ConicGradient(g) : null;
+            }
+
+            return null;
+        }
+
+        public IReadOnlyList<CssImage>? ParseImages(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value) ||
+                value.Equals("none", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            var result = new List<CssImage>();
+            foreach (var segment in SplitTopLevelCommas(value))
+            {
+                var image = ParseImage(segment.Trim());
+                if (image != null) result.Add(image);
+            }
+
+            return result.Count > 0 ? result : null;
+        }
+
+        private static IEnumerable<string> SplitTopLevelCommas(string value)
+        {
+            int depth = 0, start = 0;
+            for (int i = 0; i < value.Length; i++)
+            {
+                char c = value[i];
+                if (c == '(') depth++;
+                else if (c == ')') depth--;
+                else if (c == ',' && depth == 0)
+                {
+                    yield return value.Substring(start, i - start);
+                    start = i + 1;
+                }
+            }
+            yield return value.Substring(start);
         }
 
         private static double? TryParseConicAngle(List<Token> item)

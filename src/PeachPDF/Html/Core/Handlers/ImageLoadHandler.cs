@@ -12,7 +12,6 @@
 
 using PeachPDF;
 using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
 using System;
@@ -80,16 +79,6 @@ namespace PeachPDF.Html.Core.Handlers
         /// the image instance of the loaded image
         /// </summary>
         public RImage? Image { get; private set; }
-
-        /// <summary>
-        /// Sets image of this image box from a CSS image definition
-        /// </summary>
-        /// <param name="image"></param>
-        /// <returns></returns>
-        public async ValueTask LoadImage(CssImage image)
-        {
-            if (image.Kind == CssImage.CssImageKind.Url) await LoadImage(image.Url!);
-        }
 
         /// <summary>
         /// Set image of this image box by analyzing the src attribute.<br/>

@@ -1,4 +1,5 @@
 using PeachPDF.CSS;
+using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
@@ -17,6 +18,22 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             var tokens = CssValueParser.GetCssTokens(cssBox.Content);
+
+            // Detect image content (url() or gradient functions) before building text
+            if (tokens.Count > 0 && cssBox.HtmlContainer?.Adapter is RAdapter adapter)
+            {
+                var first = tokens[0];
+                if (first is UrlToken ||
+                    (first is FunctionToken ft && IsGradientFunctionName(ft.Data)))
+                {
+                    var image = new CssValueParser(adapter).ParseImage(cssBox.Content);
+                    if (image != null)
+                    {
+                        cssBox.ContentImage = image;
+                        return;
+                    }
+                }
+            }
 
             var contentText = new StringBuilder();
 
@@ -88,6 +105,11 @@ namespace PeachPDF.Html.Core.Dom
 
             cssBox.Text = contentText.ToString();
         }
+
+        private static bool IsGradientFunctionName(string name) =>
+            name is "linear-gradient" or "repeating-linear-gradient"
+                 or "radial-gradient" or "repeating-radial-gradient"
+                 or "conic-gradient" or "repeating-conic-gradient";
 
         private static string? ExtractStringValue(CssBox cssBox, FunctionToken stringFunctionToken)
         {

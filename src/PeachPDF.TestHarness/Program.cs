@@ -392,3 +392,198 @@ Console.WriteLine("Saved test_background_origin_clip.pdf");
 File.Delete("test_background_origin_clip.html");
 File.WriteAllText("test_background_origin_clip.html", originHtml);
 Console.WriteLine("Saved test_background_origin_clip.html");
+
+// --- list-style-image showcase ---
+
+static string ListSwatch(string desc, string listCss, string itemLabel = "Item") =>
+    "<td>" +
+    $"<ul style=\"margin: 0; padding-left: 2em; {listCss}\">" +
+    $"<li>{itemLabel} one</li><li>{itemLabel} two</li><li>{itemLabel} three</li>" +
+    "</ul>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">{listCss}</div>" +
+    "</td>";
+
+const string ListCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
+    table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
+    table.sw td { padding: 3px; vertical-align: top; width: 25% }
+    .desc { font-size: 7pt; font-weight: bold; color: #444; margin: 2px 0 1px }
+    .css { font-size: 5.5pt; color: #666; line-height: 1.3; word-break: break-all }
+    </style>
+    """;
+
+var listHtml = "<!DOCTYPE html><html><head>" + ListCss + "</head><body>" +
+
+    "<h1>CSS list-style-image Test Page</h1>" +
+
+    "<h2>1 — URL image (graceful fallback when missing)</h2>" +
+    "<p class=\"intro\">A missing URL should produce no marker and no crash. The list items are still indented normally.</p>" +
+    Row(
+        ListSwatch("missing URL", "list-style-image: url('nonexistent.png');"),
+        ListSwatch("none (baseline)", "list-style-image: none;"),
+        ListSwatch("disc (no image)", "list-style-type: disc;"),
+        ListSwatch("decimal (no image)", "list-style-type: decimal;")
+    ) +
+
+    "<h2>2 — linear-gradient markers</h2>" +
+    "<p class=\"intro\">Each list item marker is a gradient-filled square, sized to the current font height.</p>" +
+    Row(
+        ListSwatch("to right red→blue", "list-style-image: linear-gradient(to right, red, blue);"),
+        ListSwatch("to bottom green→yellow", "list-style-image: linear-gradient(to bottom, green, yellow);"),
+        ListSwatch("45deg multi-stop", "list-style-image: linear-gradient(45deg, red, yellow, blue);"),
+        ListSwatch("hard-stop stripes", "list-style-image: linear-gradient(to right, red 50%, blue 50%);")
+    ) +
+
+    "<h2>3 — radial-gradient markers</h2>" +
+    Row(
+        ListSwatch("circle center", "list-style-image: radial-gradient(circle, white, navy);"),
+        ListSwatch("ellipse default", "list-style-image: radial-gradient(red, blue);"),
+        ListSwatch("at 30% 30%", "list-style-image: radial-gradient(circle at 30% 30%, yellow, orange, red);"),
+        ListSwatch("closest-side", "list-style-image: radial-gradient(closest-side circle at 50% 50%, lime, teal);")
+    ) +
+
+    "<h2>4 — conic-gradient markers</h2>" +
+    Row(
+        ListSwatch("default sweep", "list-style-image: conic-gradient(red, blue);"),
+        ListSwatch("pie chart", "list-style-image: conic-gradient(#e74c3c 0 25%, #3498db 25% 65%, #2ecc71 65% 100%);"),
+        ListSwatch("from 90deg", "list-style-image: conic-gradient(from 90deg, red, yellow, blue);"),
+        ListSwatch("color wheel", "list-style-image: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);")
+    ) +
+
+    "<h2>5 — list-style shorthand with gradient</h2>" +
+    "<p class=\"intro\">A single list-style shorthand value setting both position and image.</p>" +
+    Row(
+        ListSwatch("inside linear", "list-style: inside linear-gradient(to right, purple, orange);"),
+        ListSwatch("inside radial", "list-style: inside radial-gradient(circle, gold, crimson);"),
+        ListSwatch("inside conic", "list-style: inside conic-gradient(red 0 33%, blue 33% 66%, green 66% 100%);"),
+        ListSwatch("outside linear", "list-style: outside linear-gradient(45deg, teal, pink);")
+    ) +
+
+    "<h2>6 — Gradient marker alongside typed bullets</h2>" +
+    "<p class=\"intro\">Left column uses a gradient list-style-image; right uses list-style-type only. Neither should interfere.</p>" +
+    Row(
+        ListSwatch("gradient image", "list-style-image: linear-gradient(to right, red, blue);"),
+        ListSwatch("disc (no image)", "list-style-type: disc; list-style-image: none;"),
+        ListSwatch("circle (no image)", "list-style-type: circle; list-style-image: none;"),
+        ListSwatch("square (no image)", "list-style-type: square; list-style-image: none;")
+    ) +
+
+    "</body></html>";
+
+var listStream = new MemoryStream();
+var listDocument = await generator.GeneratePdf(listHtml, pdfConfig);
+listDocument.Save(listStream);
+
+File.Delete("test_list_style_image.pdf");
+File.WriteAllBytes("test_list_style_image.pdf", listStream.ToArray());
+Console.WriteLine("Saved test_list_style_image.pdf");
+
+File.Delete("test_list_style_image.html");
+File.WriteAllText("test_list_style_image.html", listHtml);
+Console.WriteLine("Saved test_list_style_image.html");
+
+// --- content image showcase ---
+
+static string ContentSwatch(string desc, string contentValue, string pseudoElement = "before") =>
+    "<td>" +
+    $"<style>.ci-{pseudoElement}-{desc.GetHashCode() & 0x7FFFFFFF}::{ pseudoElement} {{ content: {contentValue}; display: inline-block; width: 40px; height: 28px; }}</style>" +
+    $"<div class=\"ci-{pseudoElement}-{desc.GetHashCode() & 0x7FFFFFFF}\"></div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">::{pseudoElement} {{ content: {contentValue} }}</div>" +
+    "</td>";
+
+static string ContentSwatchInline(string desc, string pseudoElement, string inlineCss) =>
+    "<td>" +
+    $"<style>.cci-{desc.GetHashCode() & 0x7FFFFFFF}::{pseudoElement} {{ {inlineCss} }}</style>" +
+    $"<p class=\"cci-{desc.GetHashCode() & 0x7FFFFFFF}\">Text</p>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">::{pseudoElement} {{ {inlineCss} }}</div>" +
+    "</td>";
+
+const string ContentCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
+    table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
+    table.sw td { padding: 3px; vertical-align: top; width: 25% }
+    .desc { font-size: 7pt; font-weight: bold; color: #444; margin: 2px 0 1px }
+    .css { font-size: 5.5pt; color: #666; line-height: 1.3; word-break: break-all }
+    </style>
+    """;
+
+var contentHtml = "<!DOCTYPE html><html><head>" + ContentCss + "</head><body>" +
+
+    "<h1>CSS content Image Test Page</h1>" +
+    "<p class=\"intro\">Demonstrates url() and gradient functions in the CSS content property on ::before and ::after pseudo-elements. Image values require display: inline-block with explicit width/height.</p>" +
+
+    "<h2>1 — ::before linear-gradient</h2>" +
+    Row(
+        ContentSwatch("to right red→blue", "linear-gradient(to right, red, blue)"),
+        ContentSwatch("to bottom green→yellow", "linear-gradient(to bottom, green, yellow)"),
+        ContentSwatch("45deg multi-stop", "linear-gradient(45deg, red, yellow, blue)"),
+        ContentSwatch("hard-stop stripes", "linear-gradient(to right, red 50%, blue 50%)")
+    ) +
+
+    "<h2>2 — ::before radial-gradient</h2>" +
+    Row(
+        ContentSwatch("circle center", "radial-gradient(circle, white, navy)"),
+        ContentSwatch("ellipse default", "radial-gradient(red, blue)"),
+        ContentSwatch("at 30% 30%", "radial-gradient(circle at 30% 30%, yellow, orange, red)"),
+        ContentSwatch("closest-side", "radial-gradient(closest-side circle at 50% 50%, lime, teal)")
+    ) +
+
+    "<h2>3 — ::before conic-gradient</h2>" +
+    Row(
+        ContentSwatch("default sweep", "conic-gradient(red, blue)"),
+        ContentSwatch("pie chart", "conic-gradient(#e74c3c 0 25%, #3498db 25% 65%, #2ecc71 65% 100%)"),
+        ContentSwatch("from 90deg", "conic-gradient(from 90deg, red, yellow, blue)"),
+        ContentSwatch("color wheel", "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)")
+    ) +
+
+    "<h2>4 — ::after gradients and URL fallback</h2>" +
+    Row(
+        ContentSwatch("::after linear", "linear-gradient(to bottom, purple, orange)", "after"),
+        ContentSwatch("::after radial", "radial-gradient(circle, gold, crimson)", "after"),
+        ContentSwatch("::after conic", "conic-gradient(red 0 33%, blue 33% 66%, green 66% 100%)", "after"),
+        ContentSwatch("missing URL (no crash)", "url('nonexistent.png')")
+    ) +
+
+    "<h2>5 — Repeating variants</h2>" +
+    Row(
+        ContentSwatch("repeating-linear", "repeating-linear-gradient(45deg, red, blue 10px)"),
+        ContentSwatch("repeating-radial", "repeating-radial-gradient(circle, red, blue 10px)"),
+        ContentSwatch("repeating-conic", "repeating-conic-gradient(red 0 10deg, blue 10deg 20deg)"),
+        ContentSwatch("linear baseline", "linear-gradient(to right, teal, pink)")
+    ) +
+
+    "<h2>6 — Mixed: text content regression and image side-by-side</h2>" +
+    "<p class=\"intro\">Text content (string literals, counters) must still work correctly alongside the new image code path.</p>" +
+    Row(
+        ContentSwatchInline("text bullet", "before", "content: \"• \"; color: red;"),
+        ContentSwatchInline("gradient + text", "before", "content: linear-gradient(to right, red, blue); display: inline-block; width: 40px; height: 20px;"),
+        ContentSwatchInline("::after text", "after", "content: \" ★\"; color: orange;"),
+        ContentSwatchInline("none (no output)", "before", "content: none;")
+    ) +
+
+    "</body></html>";
+
+var contentStream = new MemoryStream();
+var contentDocument = await generator.GeneratePdf(contentHtml, pdfConfig);
+contentDocument.Save(contentStream);
+
+File.Delete("test_content_image.pdf");
+File.WriteAllBytes("test_content_image.pdf", contentStream.ToArray());
+Console.WriteLine("Saved test_content_image.pdf");
+
+File.Delete("test_content_image.html");
+File.WriteAllText("test_content_image.html", contentHtml);
+Console.WriteLine("Saved test_content_image.html");

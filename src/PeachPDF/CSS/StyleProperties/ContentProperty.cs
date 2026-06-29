@@ -27,6 +27,7 @@ namespace PeachPDF.CSS
         private static readonly IValueConverter StyleConverter = Assign(Keywords.Normal, Default).OrNone().Or(
             ContentModes.ToConverter().Or(
                 UrlConverter).Or(
+                Converters.GradientConverter).Or(
                 StringConverter).Or(
                 AttrConverter).Or(
                 CounterConverter).Or(

@@ -17,6 +17,7 @@ using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 
 namespace PeachPDF.Html.Core.Dom
@@ -344,7 +345,7 @@ namespace PeachPDF.Html.Core.Dom
 
         public string BackgroundColor { get; set; } = "transparent";
 
-        public string BackgroundImage { get; set; } = "none";
+        public IReadOnlyList<CssImage>? BackgroundImages { get; set; }
 
         public string BackgroundPosition { get; set; } = "0% 0%";
 
@@ -353,12 +354,6 @@ namespace PeachPDF.Html.Core.Dom
         public string BackgroundOrigin { get; set; } = CssConstants.PaddingBox;
 
         public string BackgroundClip { get; set; } = CssConstants.BorderBox;
-
-        public ParsedLinearGradient? BackgroundLinearGradient { get; set; }
-
-        public ParsedRadialGradient? BackgroundRadialGradient { get; set; }
-
-        public ParsedConicGradient? BackgroundConicGradient { get; set; }
 
         public string Color
         {
@@ -490,7 +485,7 @@ namespace PeachPDF.Html.Core.Dom
 
         public string ListStylePosition { get; set; } = "outside";
 
-        public string ListStyleImage { get; set; } = string.Empty;
+        public CssImage? ListStyleImage { get; set; }
 
         public string ListStyleType { get; set; } = "disc";
 
@@ -1249,10 +1244,7 @@ namespace PeachPDF.Html.Core.Dom
             if (!everything) return;
 
             BackgroundColor = p.BackgroundColor;
-            BackgroundLinearGradient = p.BackgroundLinearGradient;
-            BackgroundRadialGradient = p.BackgroundRadialGradient;
-            BackgroundConicGradient = p.BackgroundConicGradient;
-            BackgroundImage = p.BackgroundImage;
+            BackgroundImages = p.BackgroundImages;
             BackgroundPosition = p.BackgroundPosition;
             BackgroundRepeat = p.BackgroundRepeat;
             BackgroundOrigin = p.BackgroundOrigin;

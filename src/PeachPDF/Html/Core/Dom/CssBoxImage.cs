@@ -12,6 +12,7 @@
 
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
@@ -116,9 +117,9 @@ namespace PeachPDF.Html.Core.Dom
                     {
                         var imageContent = CssValueParser.GetImagePropertyValue(Content);
 
-                        if (imageContent is not null)
+                        if (imageContent is CssImage.Url urlImage)
                         {
-                            await _imageLoadHandler.LoadImage(imageContent);
+                            await _imageLoadHandler.LoadImage(urlImage.Href);
                         }
 
                     }
