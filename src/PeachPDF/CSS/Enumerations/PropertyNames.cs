@@ -240,5 +240,6 @@ namespace PeachPDF.CSS
         public static readonly string Src = "src";
         public static readonly string ObjectFit = "object-fit";
         public static readonly string ObjectPosition = "object-position";
+        public static readonly string Size = "size";
     }
 }

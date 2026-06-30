@@ -607,7 +607,9 @@ namespace PeachPDF.CSS
                         var marginToken = new Token(TokenType.Ident, token.Data, token.Position);
                         var marginStyle = CreateMarginStyle(ref marginToken);
                         parentPageRule.AppendChild(marginStyle);
-                        token = marginToken;
+                        // FillDeclarations inside CreateMarginStyle consumed through the closing }
+                        // of the margin box. Advance past it to pick up the next token in @page {}.
+                        token = NextToken();
                     }
                     else
                     {

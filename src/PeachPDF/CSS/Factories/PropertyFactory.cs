@@ -338,6 +338,7 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.ZIndex, () => new ZIndexProperty(), true);
             AddLonghand(PropertyNames.ObjectFit, () => new ObjectFitProperty());
             AddLonghand(PropertyNames.ObjectPosition, () => new ObjectPositionProperty(), true);
+            AddLonghand(PropertyNames.Size, () => new PageSizeProperty());
 
             _fonts.Add(PropertyNames.Src, () => new SrcProperty());
             _fonts.Add(PropertyNames.UnicodeRange, () => new UnicodeRangeProperty());

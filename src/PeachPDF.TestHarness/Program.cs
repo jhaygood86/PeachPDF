@@ -587,3 +587,139 @@ Console.WriteLine("Saved test_content_image.pdf");
 File.Delete("test_content_image.html");
 File.WriteAllText("test_content_image.html", contentHtml);
 Console.WriteLine("Saved test_content_image.html");
+
+// ─── CSS Paged Media showcase ───────────────────────────────────────────────
+
+var pagedMediaHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    @page {
+      size: A4 portrait;
+      margin: 25mm 20mm 25mm 20mm;
+      @top-left   { content: "Acme Corp"; font-size: 8pt; font-family: Arial; color: #555; }
+      @top-center { content: "Annual Report 2025"; font-size: 8pt; font-family: Arial; font-weight: bold; }
+      @top-right  { content: "Confidential"; font-size: 8pt; font-family: Arial; color: #cc0000; }
+      @bottom-left   { content: "\A9 2025 Acme Corp"; font-size: 7pt; font-family: Arial; color: #888; }
+      @bottom-center { content: "Page " counter(page) " of " counter(pages); font-size: 8pt; font-family: Arial; }
+      @bottom-right  { content: "Internal Use Only"; font-size: 7pt; font-family: Arial; color: #888; }
+    }
+    @page :first {
+      @top-left   { content: none; }
+      @top-center { content: none; }
+      @top-right  { content: none; }
+    }
+    body { font: 10pt Arial, sans-serif; margin: 0; }
+    h1 { font-size: 28pt; text-align: center; margin: 60pt 0 20pt; }
+    h2 { font-size: 16pt; margin: 24pt 0 8pt; border-bottom: 1px solid #999; padding-bottom: 4pt; }
+    p  { margin: 0 0 8pt; line-height: 1.5; }
+    .cover-subtitle { font-size: 14pt; text-align: center; color: #555; margin-bottom: 60pt; }
+    .page-break { page-break-after: always; }
+    </style>
+    </head>
+    <body>
+
+    <!-- Cover page (page :first — no header) -->
+    <div class="page-break">
+      <h1>Annual Report 2025</h1>
+      <p class="cover-subtitle">Acme Corporation — Confidential</p>
+      <p style="text-align:center; color:#888; font-size:9pt;">
+        This document demonstrates CSS Paged Media support in PeachPDF.<br/>
+        The cover page has no running header; pages 2+ show header and footer.
+      </p>
+    </div>
+
+    <!-- Page 2 -->
+    <div class="page-break">
+      <h2>Executive Summary</h2>
+      <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.</p>
+      <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim.</p>
+      <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta.</p>
+      <p>Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum.</p>
+      <p>At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident.</p>
+    </div>
+
+    <!-- Page 3 -->
+    <div>
+      <h2>Financial Highlights</h2>
+      <p>Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut et voluptates repudiandae sint et molestiae non recusandae.</p>
+      <p>Itaque earum rerum hic tenetur a sapiente delectus, ut aut reiciendis voluptatibus maiores alias consequatur aut perferendis doloribus asperiores repellat.</p>
+      <p>Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus, omnis voluptas assumenda est, omnis dolor repellendus.</p>
+      <p>Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur.</p>
+    </div>
+
+    </body>
+    </html>
+    """;
+
+var pagedMediaStream = new MemoryStream();
+var pagedMediaDocument = await generator.GeneratePdf(pagedMediaHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+pagedMediaDocument.Save(pagedMediaStream);
+
+File.Delete("test_paged_media.pdf");
+File.WriteAllBytes("test_paged_media.pdf", pagedMediaStream.ToArray());
+Console.WriteLine("Saved test_paged_media.pdf");
+
+File.Delete("test_paged_media.html");
+File.WriteAllText("test_paged_media.html", pagedMediaHtml);
+Console.WriteLine("Saved test_paged_media.html");
+
+// ─── CSS Paged Media showcase — named strings (string-set / string()) ──────
+
+var namedStringsHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    @page {
+      size: A4 portrait;
+      margin: 25mm 20mm 25mm 20mm;
+      @top-left   { content: string(chapter); font-size: 8pt; font-family: Arial; color: #333; font-style: italic; }
+      @top-right  { content: string(section); font-size: 8pt; font-family: Arial; color: #555; }
+      @bottom-center { content: "Page " counter(page) " of " counter(pages); font-size: 8pt; font-family: Arial; }
+    }
+    body { font: 10pt Arial, sans-serif; margin: 0; }
+    h1 { font-size: 20pt; margin: 0 0 12pt; string-set: chapter content(); }
+    h2 { font-size: 13pt; margin: 18pt 0 6pt; string-set: section content(); }
+    p  { margin: 0 0 8pt; line-height: 1.5; }
+    .page-break { page-break-after: always; }
+    </style>
+    </head>
+    <body>
+
+    <div class="page-break">
+      <h1>Chapter 1: Introduction</h1>
+      <h2>1.1 Background</h2>
+      <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. String-set captures the heading text and string() displays it in the top margin.</p>
+      <p>Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. The chapter title appears top-left; the section title top-right.</p>
+      <h2>1.2 Scope</h2>
+      <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+      <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.</p>
+    </div>
+
+    <div>
+      <h1>Chapter 2: Methodology</h1>
+      <h2>2.1 Approach</h2>
+      <p>Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
+      <p>At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti.</p>
+      <h2>2.2 Results</h2>
+      <p>Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut et voluptates.</p>
+      <p>Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime.</p>
+    </div>
+
+    </body>
+    </html>
+    """;
+
+var namedStringsStream = new MemoryStream();
+var namedStringsDocument = await generator.GeneratePdf(namedStringsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+namedStringsDocument.Save(namedStringsStream);
+
+File.Delete("test_paged_media_named_strings.pdf");
+File.WriteAllBytes("test_paged_media_named_strings.pdf", namedStringsStream.ToArray());
+Console.WriteLine("Saved test_paged_media_named_strings.pdf");
+
+File.Delete("test_paged_media_named_strings.html");
+File.WriteAllText("test_paged_media_named_strings.html", namedStringsHtml);
+Console.WriteLine("Saved test_paged_media_named_strings.html");

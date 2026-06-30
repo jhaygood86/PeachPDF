@@ -1683,5 +1683,11 @@ namespace PeachPDF.CSS
             get => GetPropertyValue(PropertyNames.Zoom);
             set => SetPropertyValue(PropertyNames.Zoom, value);
         }
+
+        public string Size
+        {
+            get => GetPropertyValue(PropertyNames.Size);
+            set => SetPropertyValue(PropertyNames.Size, value);
+        }
     }
 }

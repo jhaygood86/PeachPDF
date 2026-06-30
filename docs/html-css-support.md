@@ -298,6 +298,7 @@ These properties control how content breaks across PDF pages. Both the legacy `p
 | At-rule | Notes |
 |---------|-------|
 | `@font-face` | Full support; see [Fonts](index.md#fonts) |
+| `@page` | Full support; see [CSS Paged Media](#css-paged-media) below |
 | `@media` | Not supported |
 | `@keyframes` | Not supported |
 | `@supports` | Not supported |
@@ -365,6 +366,168 @@ Because PeachPDF renders a static PDF with no interactive or dynamic state, almo
 | All others | Parsed but not matched — rules are silently ignored |
 
 State-based pseudo-classes (`:hover`, `:focus`, `:active`, `:checked`, `:disabled`) and structural pseudo-classes (`:first-child`, `:last-child`, `:nth-of-type()`, `:not()`, etc.) are not applied.
+
+---
+
+## CSS Paged Media
+
+PeachPDF supports the [CSS Paged Media](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Paged_media) specification, which controls page dimensions, margins, and running headers/footers.
+
+### `@page` rule
+
+The `@page` at-rule targets PDF pages. A rule without a selector applies to all pages; pseudo-selector rules override it for specific pages.
+
+```css
+@page {
+  size: A4 portrait;
+  margin: 25mm 20mm;
+}
+
+@page :first {
+  margin-top: 40mm;   /* extra space on the cover page */
+}
+```
+
+| Feature | Support | Notes |
+|---------|---------|-------|
+| `@page { }` — base rule | Full | Applies to all pages |
+| `@page :first { }` | Full | Applies only to page 1 |
+| `@page :left { }` | Full | Applies to even-numbered pages |
+| `@page :right { }` | Full | Applies to odd-numbered pages |
+
+**Cascade order:** the base rule is the fallback; a matching pseudo-selector rule overrides it. When both `:first` and `:right` match page 1, the last matching rule in the stylesheet wins.
+
+### `size` property
+
+```css
+@page { size: A4 landscape; }
+@page { size: 200mm 150mm; }
+```
+
+| Syntax | Example | Notes |
+|--------|---------|-------|
+| Named keyword | `A4`, `A5`, `A3`, `B4`, `B5`, `letter`, `legal`, `ledger`, `tabloid` | Sets width and height from the standard paper size |
+| Orientation only | `portrait`, `landscape` | Rotates the configured page size |
+| Keyword + orientation | `A4 landscape` | Named size with explicit orientation |
+| Explicit lengths | `210mm 297mm`, `595pt 842pt` | Any two CSS length values; units: `pt`, `px`, `in`, `cm`, `mm`, `pc` |
+
+When `@page { size: ... }` is present it overrides the `PageSize` or `ManualPageWidth`/`ManualPageHeight` configured via `PdfGenerateConfig`.
+
+### Margin boxes
+
+Margin boxes are sub-rules of `@page` that place text inside the page margins (outside the content area). There are 16 standard boxes arranged around the four margins:
+
+```css
+@page {
+  margin: 25mm 20mm;
+
+  @top-left    { content: "Company Name"; font-size: 8pt; }
+  @top-center  { content: "Document Title"; font-size: 8pt; font-weight: bold; }
+  @top-right   { content: "Page " counter(page) " of " counter(pages); font-size: 8pt; }
+  @bottom-left { content: "© 2025 Acme Corp"; font-size: 7pt; color: #888; }
+}
+```
+
+**Available boxes:**
+
+| Row / Column | Left | Center | Right |
+|---|---|---|---|
+| Top corners | `@top-left-corner` | — | `@top-right-corner` |
+| Top margin | `@top-left` | `@top-center` | `@top-right` |
+| Bottom margin | `@bottom-left` | `@bottom-center` | `@bottom-right` |
+| Bottom corners | `@bottom-left-corner` | — | `@bottom-right-corner` |
+| Left margin | `@left-top` | `@left-middle` | `@left-bottom` |
+| Right margin | `@right-top` | `@right-middle` | `@right-bottom` |
+
+**Supported `content` values:**
+
+| Value | Example | Notes |
+|-------|---------|-------|
+| String literal | `content: "Header text"` | Rendered as-is |
+| `counter(page)` | `content: counter(page)` | Current 1-based page number |
+| `counter(pages)` | `content: counter(pages)` | Total page count |
+| `string(name)` | `content: string(chapter)` | Named string captured via `string-set`; see below |
+| Mixed | `content: "Page " counter(page) " of " counter(pages)` | Concatenated |
+| `none` | `content: none` | Suppresses the box (useful in `:first` to hide the header on the cover page) |
+
+**Supported style properties in margin boxes:**
+
+| Property | Notes |
+|----------|-------|
+| `color` | Text color; hex and `rgb()` supported |
+| `font-family` | Font name; falls back to Arial |
+| `font-size` | Any CSS length; e.g. `8pt`, `10px` |
+| `font-weight` | `bold` or `normal` |
+| `font-style` | `italic` or `normal` |
+| `text-align` | `left`, `center`, `right`; default is inferred from box position |
+| `vertical-align` | `top`, `middle`, `bottom`; default is `middle` |
+
+### Named strings (`string-set` / `string()`)
+
+Named strings capture element content as the document is laid out and replay it in margin boxes. This is the standard mechanism for running headers that show the current chapter or section title.
+
+```css
+/* Capture the heading text whenever an h1 or h2 is encountered */
+h1 { string-set: chapter content(); }
+h2 { string-set: section  content(); }
+
+@page {
+  @top-left   { content: string(chapter); font-size: 8pt; font-style: italic; }
+  @top-right  { content: string(section);  font-size: 8pt; }
+}
+```
+
+**`string()` keyword variants:**
+
+| Keyword | Behavior |
+|---------|---------|
+| `string(name)` / `string(name, first)` | First assignment of `name` that appears on this page; if none, the last assignment from a previous page |
+| `string(name, last)` | Last assignment of `name` that appears on this page; if none, the last from a previous page |
+| `string(name, start)` | Last assignment of `name` that started before this page (running header — the value in effect at the top of the page) |
+| `string(name, first-except)` | Empty on the page where `name` is first assigned; otherwise same as `first` |
+
+### Headers and footers — complete example
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+@page {
+  size: A4 portrait;
+  margin: 25mm 20mm 25mm 20mm;
+
+  @top-left   { content: "Acme Corp"; font-size: 8pt; font-family: Arial; color: #555; }
+  @top-center { content: string(chapter); font-size: 8pt; font-family: Arial; font-weight: bold; }
+  @top-right  { content: "Confidential"; font-size: 8pt; font-family: Arial; color: #c00; }
+
+  @bottom-left   { content: "© 2025 Acme Corp"; font-size: 7pt; font-family: Arial; color: #888; }
+  @bottom-center { content: "Page " counter(page) " of " counter(pages); font-size: 8pt; font-family: Arial; }
+}
+
+/* Suppress the header on the cover page */
+@page :first {
+  @top-left   { content: none; }
+  @top-center { content: none; }
+  @top-right  { content: none; }
+}
+
+h1 { string-set: chapter content(); }
+</style>
+</head>
+<body>
+  <!-- Cover (page 1 — no header) -->
+  <div style="page-break-after: always;">
+    <h1>Annual Report 2025</h1>
+    <p>Cover page — header is suppressed by @page :first</p>
+  </div>
+
+  <!-- Chapter 1 (page 2+) -->
+  <h1>Introduction</h1>
+  <p>Running header now shows "Introduction" in the top-center margin.</p>
+</body>
+</html>
+```
 
 ---
 

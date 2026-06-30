@@ -11,12 +11,14 @@
 // "The Art of War"
 
 using PeachPDF;
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
+using PeachPDF.PdfSharpCore.Drawing;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -198,6 +200,17 @@ namespace PeachPDF.Html.Core
         public RSize ActualSize { get; set; }
 
         public RSize PageSize { get; set; }
+
+        /// <summary>
+        /// Page size (width × height) in PDF points derived from the CSS @page { size: ... } rule.
+        /// Null when no size rule is present. Stored in PDF points, not internal pixel units.
+        /// </summary>
+        public XSize? CssPageSize { get; set; }
+
+        /// <summary>
+        /// All @page rules parsed from the document's stylesheets, in cascade order.
+        /// </summary>
+        public IReadOnlyList<PageRule> PageRules { get; internal set; } = [];
 
         /// <summary>
         /// the top margin between the page start and the text

@@ -11,14 +11,18 @@
 // "The Art of War"
 
 using PeachPDF.Adapters;
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
+using System;
+using System.Linq;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
 using PeachPDF.PdfSharpCore;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 
@@ -164,6 +168,13 @@ namespace PeachPDF
 
             await SetContent(container, config, html, cssData, orgPageSize);
 
+            // If CSS @page { size: ... } overrides the configured page size, re-apply with the CSS size
+            if (container.CssPageSize.HasValue && container.CssPageSize.Value != orgPageSize)
+            {
+                orgPageSize = container.CssPageSize.Value;
+                await SetContent(container, config, html, cssData, orgPageSize);
+            }
+
             var measure = XGraphics.CreateMeasureContext(container.PageSize, XGraphicsUnit.Point, XPageDirection.Downwards);
 
             var basePixelsPerPoint = config.PixelsPerInch / 72d;
@@ -204,8 +215,12 @@ namespace PeachPDF
 
             // while there is un-rendered HTML, create another PDF page and render with proper offset for the next page
             double scrollOffset = 0;
+            int pageNumber = 0;
+            var totalPages = (int)Math.Ceiling(container.ActualSize.Height / container.PageSize.Height);
             while (scrollOffset > -container.ActualSize.Height)
             {
+                pageNumber++;
+
                 var page = document.PdfDocument.AddPage();
                 page.Height = orgPageSize.Height;
                 page.Width = orgPageSize.Width;
@@ -215,6 +230,25 @@ namespace PeachPDF
 
                 container.ScrollOffset = new XPoint(0, scrollOffset);
                 await container.PerformPaint(g);
+
+                var applicableRule = SelectPageRule(container.PageRules, pageNumber);
+                if (applicableRule?.Margins.Any() == true)
+                {
+                    MarginBoxRenderer.Render(
+                        g,
+                        orgPageSize,
+                        container.MarginLeft,
+                        container.MarginTop,
+                        container.MarginRight,
+                        container.MarginBottom,
+                        applicableRule,
+                        pageNumber,
+                        totalPages,
+                        -scrollOffset,
+                        container.NamedStrings,
+                        _pdfSharpAdapter);
+                }
+
                 scrollOffset -= container.PageSize.Height;
             }
 
@@ -296,6 +330,44 @@ namespace PeachPDF
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// Selects the most specific @page rule that applies to the given page number.
+        /// Priority: base rule → :right/:left → :first (last wins).
+        /// Returns a synthesized rule merging base + override margins when a pseudo-rule exists,
+        /// or just the base rule. Returns null if no rules are defined.
+        /// </summary>
+        private static PageRule? SelectPageRule(IReadOnlyList<PageRule> rules, int pageNumber)
+        {
+            if (rules.Count == 0)
+                return null;
+
+            PageRule? baseRule = null;
+            PageRule? overrideRule = null;
+
+            foreach (var rule in rules)
+            {
+                var selector = rule.Selector?.Text?.Trim().ToLowerInvariant();
+                if (string.IsNullOrEmpty(selector))
+                {
+                    baseRule = rule;
+                }
+                else if (selector == ":first" && pageNumber == 1)
+                {
+                    overrideRule = rule;
+                }
+                else if (selector == ":right" && pageNumber % 2 != 0)
+                {
+                    overrideRule = rule;
+                }
+                else if (selector == ":left" && pageNumber % 2 == 0)
+                {
+                    overrideRule = rule;
+                }
+            }
+
+            return overrideRule ?? baseRule;
         }
 
         #endregion

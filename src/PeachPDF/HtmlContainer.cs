@@ -11,6 +11,7 @@
 // "The Art of War"
 
 using PeachPDF.Adapters;
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
@@ -94,6 +95,22 @@ namespace PeachPDF
             get => Utils.Convert(HtmlContainerInt.PageSize, PixelsPerPoint);
             set => HtmlContainerInt.PageSize = Utils.Convert(value, PixelsPerPoint);
         }
+
+        /// <summary>
+        /// Page size in PDF points derived from the CSS @page { size: ... } rule.
+        /// Null when no size rule is present.
+        /// </summary>
+        public XSize? CssPageSize => HtmlContainerInt.CssPageSize;
+
+        /// <summary>
+        /// All @page rules parsed from the document's stylesheets, in cascade order.
+        /// </summary>
+        public IReadOnlyList<CSS.PageRule> PageRules => HtmlContainerInt.PageRules;
+
+        /// <summary>
+        /// Named strings captured from the document via string-set, in document order.
+        /// </summary>
+        internal IReadOnlyList<Html.Core.Entities.NamedString> NamedStrings => HtmlContainerInt.NamedStrings;
 
         /// <summary>
         /// the top margin between the page start and the text
