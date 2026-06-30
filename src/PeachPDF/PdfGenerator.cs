@@ -11,14 +11,20 @@
 // "The Art of War"
 
 using PeachPDF.Adapters;
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Entities;
+using PeachPDF.Html.Core.Parse;
+using System;
+using System.Linq;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
 using PeachPDF.PdfSharpCore;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 
@@ -164,6 +170,13 @@ namespace PeachPDF
 
             await SetContent(container, config, html, cssData, orgPageSize);
 
+            // If CSS @page { size: ... } overrides the configured page size, re-apply with the CSS size
+            if (container.CssPageSize.HasValue && container.CssPageSize.Value != orgPageSize)
+            {
+                orgPageSize = container.CssPageSize.Value;
+                await SetContent(container, config, html, cssData, orgPageSize);
+            }
+
             var measure = XGraphics.CreateMeasureContext(container.PageSize, XGraphicsUnit.Point, XPageDirection.Downwards);
 
             var basePixelsPerPoint = config.PixelsPerInch / 72d;
@@ -204,17 +217,66 @@ namespace PeachPDF
 
             // while there is un-rendered HTML, create another PDF page and render with proper offset for the next page
             double scrollOffset = 0;
+            int pageNumber = 0;
+            var totalPages = (int)Math.Ceiling(container.ActualSize.Height / container.PageSize.Height);
             while (scrollOffset > -container.ActualSize.Height)
             {
+                pageNumber++;
+
+                var pageY = -scrollOffset;
+                var applicableRule = SelectPageRule(
+                    container.PageRules,
+                    pageNumber,
+                    container.NamedPageElements,
+                    pageY,
+                    container.PageSize.Height);
+
+                var (mL, mT, mR, mB) = ResolvePageMargins(
+                    applicableRule,
+                    container.MarginLeft,
+                    container.MarginTop,
+                    container.MarginRight,
+                    container.MarginBottom);
+
                 var page = document.PdfDocument.AddPage();
                 page.Height = orgPageSize.Height;
                 page.Width = orgPageSize.Width;
 
                 using var g = XGraphics.FromPdfPage(page);
-                g.IntersectClip(new XRect(0, 0, page.Width, page.Height));
+
+                // Save state so the content transform can be undone for margin box rendering
+                var preContentState = g.Save();
+
+                g.IntersectClip(new XRect(mL, mT, page.Width - mL - mR, page.Height - mT - mB));
+
+                var deltaX = mL - container.MarginLeft;
+                var deltaY = mT - container.MarginTop;
+                if (deltaX != 0 || deltaY != 0)
+                    g.TranslateTransform(deltaX, deltaY);
 
                 container.ScrollOffset = new XPoint(0, scrollOffset);
                 await container.PerformPaint(g);
+
+                // Restore to pre-content state so margin boxes render in absolute page coordinates
+                g.Restore(preContentState);
+
+                if (applicableRule?.Margins.Any() == true)
+                {
+                    MarginBoxRenderer.Render(
+                        g,
+                        orgPageSize,
+                        mL,
+                        mT,
+                        mR,
+                        mB,
+                        applicableRule,
+                        pageNumber,
+                        totalPages,
+                        pageY,
+                        container.NamedStrings,
+                        _pdfSharpAdapter);
+                }
+
                 scrollOffset -= container.PageSize.Height;
             }
 
@@ -296,6 +358,72 @@ namespace PeachPDF
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// Selects the most specific @page rule for the given page.
+        /// Priority (last wins): base → named page → :right/:left → :first.
+        /// </summary>
+        private static PageRule? SelectPageRule(
+            IReadOnlyList<PageRule> rules,
+            int pageNumber,
+            IReadOnlyList<NamedPageElement> namedPageElements,
+            double pageY,
+            double pageHeight)
+        {
+            if (rules.Count == 0)
+                return null;
+
+            PageRule? baseRule = null;
+            PageRule? overrideRule = null;
+
+            foreach (var rule in rules)
+            {
+                var selector = rule.Selector?.Text?.Trim() ?? "";
+                var selectorLower = selector.ToLowerInvariant();
+
+                if (string.IsNullOrEmpty(selector))
+                {
+                    baseRule = rule;
+                }
+                else if (!selector.StartsWith(":"))
+                {
+                    // Named page rule — matches if any element with page: <name> is on this page
+                    var elementOnPage = namedPageElements.Any(e =>
+                        e.Name == selectorLower &&
+                        e.Y >= pageY &&
+                        e.Y < pageY + pageHeight);
+                    if (elementOnPage)
+                        overrideRule = rule;
+                }
+                else if (selectorLower == ":right" && pageNumber % 2 != 0)
+                {
+                    overrideRule = rule;
+                }
+                else if (selectorLower == ":left" && pageNumber % 2 == 0)
+                {
+                    overrideRule = rule;
+                }
+                else if (selectorLower == ":first" && pageNumber == 1)
+                {
+                    overrideRule = rule;
+                }
+            }
+
+            return overrideRule ?? baseRule;
+        }
+
+        private static (double L, double T, double R, double B) ResolvePageMargins(
+            PageRule? rule, double baseL, double baseT, double baseR, double baseB)
+        {
+            if (rule == null) return (baseL, baseT, baseR, baseB);
+            var s = rule.Style;
+            return (
+                DomParser.ParseLengthToPdfPoints(s.MarginLeft)   ?? baseL,
+                DomParser.ParseLengthToPdfPoints(s.MarginTop)    ?? baseT,
+                DomParser.ParseLengthToPdfPoints(s.MarginRight)  ?? baseR,
+                DomParser.ParseLengthToPdfPoints(s.MarginBottom) ?? baseB
+            );
         }
 
         #endregion

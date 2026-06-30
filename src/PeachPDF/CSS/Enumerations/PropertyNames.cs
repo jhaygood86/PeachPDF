@@ -174,6 +174,7 @@ namespace PeachPDF.CSS
         public static readonly string PageBreakAfter = "page-break-after";
         public static readonly string PageBreakBefore = "page-break-before";
         public static readonly string PageBreakInside = "page-break-inside";
+        public static readonly string PageName = "page";
         public static readonly string Perspective = "perspective";
         public static readonly string PerspectiveOrigin = "perspective-origin";
         public static readonly string PointerEvents = "pointer-events";
@@ -240,5 +241,6 @@ namespace PeachPDF.CSS
         public static readonly string Src = "src";
         public static readonly string ObjectFit = "object-fit";
         public static readonly string ObjectPosition = "object-position";
+        public static readonly string Size = "size";
     }
 }

@@ -39,7 +39,7 @@ namespace PeachPDF.Html.Core.Dom
                     {
                         // Evaluate and store the current named string
                         var value = EvaluateContentList(cssBox, contentItems);
-                        var namedString = new NamedString(currentName, value);
+                        var namedString = new NamedString(currentName, value, cssBox.Location.Y);
                         cssBox.NamedStrings[currentName] = namedString;
 
                         // Register with document-level storage if container is available
@@ -76,7 +76,7 @@ namespace PeachPDF.Html.Core.Dom
             if (currentName != null && contentItems.Count > 0)
             {
                 var value = EvaluateContentList(cssBox, contentItems);
-                var namedString = new NamedString(currentName, value);
+                var namedString = new NamedString(currentName, value, cssBox.Location.Y);
                 cssBox.NamedStrings[currentName] = namedString;
 
                 // Register with document-level storage if container is available

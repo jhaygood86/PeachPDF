@@ -294,6 +294,7 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.StrokeOpacity, () => new StrokeOpacityProperty(), true);
             AddLonghand(PropertyNames.StrokeWidth, () => new StrokeWidthProperty(), true);
             AddLonghand(PropertyNames.StringSet, () => new StringSetProperty());
+            AddLonghand(PropertyNames.PageName, () => new PageNameProperty());
             AddLonghand(PropertyNames.TableLayout, () => new TableLayoutProperty());
             AddLonghand(PropertyNames.TextAlign, () => new TextAlignProperty());
             AddLonghand(PropertyNames.TextAlignLast, () => new TextAlignLastProperty());
@@ -338,6 +339,7 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.ZIndex, () => new ZIndexProperty(), true);
             AddLonghand(PropertyNames.ObjectFit, () => new ObjectFitProperty());
             AddLonghand(PropertyNames.ObjectPosition, () => new ObjectPositionProperty(), true);
+            AddLonghand(PropertyNames.Size, () => new PageSizeProperty());
 
             _fonts.Add(PropertyNames.Src, () => new SrcProperty());
             _fonts.Add(PropertyNames.UnicodeRange, () => new UnicodeRangeProperty());

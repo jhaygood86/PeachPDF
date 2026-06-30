@@ -17,6 +17,7 @@ using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Utils;
+using PeachPDF.PdfSharpCore.Drawing;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -73,6 +74,9 @@ namespace PeachPDF.Html.Core.Parse
             await CascadeApplyStyleFonts(cssData, htmlContainer.Adapter);
 
             CascadeApplyPageStyles(htmlContainer, root, cssData);
+            htmlContainer.PageRules = cssData.Stylesheets
+                .SelectMany(s => s.Rules.OfType<PageRule>())
+                .ToList();
 
             CascadeApplyStyles(cssValueParser, root, cssData, media);
 
@@ -167,8 +171,15 @@ namespace PeachPDF.Html.Core.Parse
         {
             foreach (var style in cssData.Stylesheets)
             {
-                foreach (var pageRule in style.PageRules)
+                foreach (var pageRuleInterface in style.PageRules)
                 {
+                    if (pageRuleInterface is not PageRule pageRule)
+                        continue;
+
+                    // Only base @page rules (no selector) affect global margins and size
+                    if (pageRule.Selector != null)
+                        continue;
+
                     if (pageRule.Style.MarginLeft.Length > 0)
                     {
                         htmlContainer.MarginLeft = CssValueParser.ParseLength(pageRule.Style.MarginLeft, htmlContainer.PageSize.Width, root);
@@ -188,8 +199,113 @@ namespace PeachPDF.Html.Core.Parse
                     {
                         htmlContainer.MarginRight = CssValueParser.ParseLength(pageRule.Style.MarginRight, htmlContainer.PageSize.Width, root);
                     }
+
+                    if (pageRule.Style.Size.Length > 0)
+                    {
+                        htmlContainer.CssPageSize = ParsePageSizeToPdfPoints(pageRule.Style.Size);
+                    }
                 }
             }
+        }
+
+        private static readonly Dictionary<string, XSize> NamedPageSizes = new(StringComparer.OrdinalIgnoreCase)
+        {
+            { "a0",      new XSize(2383.94, 3370.39) },
+            { "a1",      new XSize(1683.78, 2383.94) },
+            { "a2",      new XSize(1190.55, 1683.78) },
+            { "a3",      new XSize(841.89,  1190.55) },
+            { "a4",      new XSize(595.28,   841.89) },
+            { "a5",      new XSize(419.53,   595.28) },
+            { "a6",      new XSize(297.64,   419.53) },
+            { "b4",      new XSize(708.66,  1000.63) },
+            { "b5",      new XSize(498.90,   708.66) },
+            { "letter",  new XSize(612,       792)   },
+            { "legal",   new XSize(612,      1008)   },
+            { "ledger",  new XSize(1224,      792)   },
+            { "tabloid", new XSize(792,      1224)   },
+        };
+
+        private static XSize? ParsePageSizeToPdfPoints(string sizeValue)
+        {
+            var parts = sizeValue.Trim().Split(Array.Empty<char>(), StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0)
+                return null;
+
+            XSize? namedSize = null;
+            bool? landscape = null;
+
+            foreach (var part in parts)
+            {
+                if (part.Equals("portrait", StringComparison.OrdinalIgnoreCase))
+                {
+                    landscape = false;
+                }
+                else if (part.Equals("landscape", StringComparison.OrdinalIgnoreCase))
+                {
+                    landscape = true;
+                }
+                else if (NamedPageSizes.TryGetValue(part, out var known))
+                {
+                    namedSize = known;
+                }
+            }
+
+            if (namedSize.HasValue)
+            {
+                var size = namedSize.Value;
+                if (landscape == true && size.Width < size.Height)
+                    size = new XSize(size.Height, size.Width);
+                else if (landscape == false && size.Width > size.Height)
+                    size = new XSize(size.Height, size.Width);
+                return size;
+            }
+
+            // landscape/portrait keyword alone — caller will handle orientation after we return null
+            if (landscape.HasValue)
+                return null;
+
+            // Try parsing explicit length values
+            double? width = null, height = null;
+            foreach (var part in parts)
+            {
+                var pt = ParseLengthToPdfPoints(part);
+                if (pt.HasValue)
+                {
+                    if (width == null) width = pt;
+                    else if (height == null) { height = pt; break; }
+                }
+            }
+
+            if (width.HasValue)
+                return new XSize(width.Value, height ?? width.Value);
+
+            return null;
+        }
+
+        internal static double? ParseLengthToPdfPoints(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            // Find where the unit starts
+            var i = value.Length - 1;
+            while (i >= 0 && (char.IsLetter(value[i]) || value[i] == '%'))
+                i--;
+
+            var unitStr = value.Substring(i + 1).ToLowerInvariant();
+            if (!double.TryParse(value.Substring(0, i + 1), NumberStyles.Any, CultureInfo.InvariantCulture, out var number))
+                return null;
+
+            return unitStr switch
+            {
+                "pt"          => number,
+                "px"          => number * (72.0 / 96.0),
+                "in"          => number * 72.0,
+                "cm"          => number * (72.0 / 2.54),
+                "mm"          => number * (72.0 / 25.4),
+                "pc"          => number * 12.0,
+                _             => (double?)null,
+            };
         }
 
         /// <summary>
