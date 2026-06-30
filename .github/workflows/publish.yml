@@ -26,6 +26,11 @@ jobs:
         VERSION=$(grep -oP '(?<=<PackageVersion>)[^<]+' src/PeachPDF/PeachPDF.csproj)
         echo "value=$VERSION" >> $GITHUB_OUTPUT
         echo "Version: $VERSION"
+        if [[ "$VERSION" == *"preview"* ]]; then
+          echo "prerelease=true" >> $GITHUB_OUTPUT
+        else
+          echo "prerelease=false" >> $GITHUB_OUTPUT
+        fi
 
     - name: Create and push tag
       run: |
@@ -38,9 +43,14 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
+        PRERELEASE_FLAG=""
+        if [[ "${{ steps.version.outputs.prerelease }}" == "true" ]]; then
+          PRERELEASE_FLAG="--prerelease"
+        fi
         gh release create "v${{ steps.version.outputs.value }}" \
           --title "v${{ steps.version.outputs.value }}" \
-          --generate-notes
+          --generate-notes \
+          $PRERELEASE_FLAG
 
     - name: Build
       run: dotnet build src/PeachPDF/PeachPDF.csproj --configuration Release
