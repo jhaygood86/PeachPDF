@@ -14,6 +14,8 @@ using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Entities;
+using PeachPDF.Html.Core.Parse;
 using System;
 using System.Linq;
 using PeachPDF.Html.Core.Utils;
@@ -221,30 +223,56 @@ namespace PeachPDF
             {
                 pageNumber++;
 
+                var pageY = -scrollOffset;
+                var applicableRule = SelectPageRule(
+                    container.PageRules,
+                    pageNumber,
+                    container.NamedPageElements,
+                    pageY,
+                    container.PageSize.Height);
+
+                var (mL, mT, mR, mB) = ResolvePageMargins(
+                    applicableRule,
+                    container.MarginLeft,
+                    container.MarginTop,
+                    container.MarginRight,
+                    container.MarginBottom);
+
                 var page = document.PdfDocument.AddPage();
                 page.Height = orgPageSize.Height;
                 page.Width = orgPageSize.Width;
 
                 using var g = XGraphics.FromPdfPage(page);
-                g.IntersectClip(new XRect(0, 0, page.Width, page.Height));
+
+                // Save state so the content transform can be undone for margin box rendering
+                var preContentState = g.Save();
+
+                g.IntersectClip(new XRect(mL, mT, page.Width - mL - mR, page.Height - mT - mB));
+
+                var deltaX = mL - container.MarginLeft;
+                var deltaY = mT - container.MarginTop;
+                if (deltaX != 0 || deltaY != 0)
+                    g.TranslateTransform(deltaX, deltaY);
 
                 container.ScrollOffset = new XPoint(0, scrollOffset);
                 await container.PerformPaint(g);
 
-                var applicableRule = SelectPageRule(container.PageRules, pageNumber);
+                // Restore to pre-content state so margin boxes render in absolute page coordinates
+                g.Restore(preContentState);
+
                 if (applicableRule?.Margins.Any() == true)
                 {
                     MarginBoxRenderer.Render(
                         g,
                         orgPageSize,
-                        container.MarginLeft,
-                        container.MarginTop,
-                        container.MarginRight,
-                        container.MarginBottom,
+                        mL,
+                        mT,
+                        mR,
+                        mB,
                         applicableRule,
                         pageNumber,
                         totalPages,
-                        -scrollOffset,
+                        pageY,
                         container.NamedStrings,
                         _pdfSharpAdapter);
                 }
@@ -333,12 +361,15 @@ namespace PeachPDF
         }
 
         /// <summary>
-        /// Selects the most specific @page rule that applies to the given page number.
-        /// Priority: base rule → :right/:left → :first (last wins).
-        /// Returns a synthesized rule merging base + override margins when a pseudo-rule exists,
-        /// or just the base rule. Returns null if no rules are defined.
+        /// Selects the most specific @page rule for the given page.
+        /// Priority (last wins): base → named page → :right/:left → :first.
         /// </summary>
-        private static PageRule? SelectPageRule(IReadOnlyList<PageRule> rules, int pageNumber)
+        private static PageRule? SelectPageRule(
+            IReadOnlyList<PageRule> rules,
+            int pageNumber,
+            IReadOnlyList<NamedPageElement> namedPageElements,
+            double pageY,
+            double pageHeight)
         {
             if (rules.Count == 0)
                 return null;
@@ -348,26 +379,51 @@ namespace PeachPDF
 
             foreach (var rule in rules)
             {
-                var selector = rule.Selector?.Text?.Trim().ToLowerInvariant();
+                var selector = rule.Selector?.Text?.Trim() ?? "";
+                var selectorLower = selector.ToLowerInvariant();
+
                 if (string.IsNullOrEmpty(selector))
                 {
                     baseRule = rule;
                 }
-                else if (selector == ":first" && pageNumber == 1)
+                else if (!selector.StartsWith(":"))
+                {
+                    // Named page rule — matches if any element with page: <name> is on this page
+                    var elementOnPage = namedPageElements.Any(e =>
+                        e.Name == selectorLower &&
+                        e.Y >= pageY &&
+                        e.Y < pageY + pageHeight);
+                    if (elementOnPage)
+                        overrideRule = rule;
+                }
+                else if (selectorLower == ":right" && pageNumber % 2 != 0)
                 {
                     overrideRule = rule;
                 }
-                else if (selector == ":right" && pageNumber % 2 != 0)
+                else if (selectorLower == ":left" && pageNumber % 2 == 0)
                 {
                     overrideRule = rule;
                 }
-                else if (selector == ":left" && pageNumber % 2 == 0)
+                else if (selectorLower == ":first" && pageNumber == 1)
                 {
                     overrideRule = rule;
                 }
             }
 
             return overrideRule ?? baseRule;
+        }
+
+        private static (double L, double T, double R, double B) ResolvePageMargins(
+            PageRule? rule, double baseL, double baseT, double baseR, double baseB)
+        {
+            if (rule == null) return (baseL, baseT, baseR, baseB);
+            var s = rule.Style;
+            return (
+                DomParser.ParseLengthToPdfPoints(s.MarginLeft)   ?? baseL,
+                DomParser.ParseLengthToPdfPoints(s.MarginTop)    ?? baseT,
+                DomParser.ParseLengthToPdfPoints(s.MarginRight)  ?? baseR,
+                DomParser.ParseLengthToPdfPoints(s.MarginBottom) ?? baseB
+            );
         }
 
         #endregion

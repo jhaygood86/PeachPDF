@@ -248,6 +248,96 @@ namespace PeachPDF.Tests.Integration
             Assert.Null(ex);
         }
 
+        // ── per-page margin variation ──────────────────────────────────────────
+
+        [Fact]
+        public async Task AtPage_FirstPseudoSelector_ChangesTopMargin_NoError()
+        {
+            const string html = """
+                <!DOCTYPE html>
+                <html>
+                <head>
+                <style>
+                @page {
+                    size: A4;
+                    margin: 20mm;
+                    @top-center { content: "Header"; }
+                }
+                @page :first {
+                    margin-top: 40mm;
+                    @top-center { content: none; }
+                }
+                </style>
+                </head>
+                <body><p>Page 1</p></body>
+                </html>
+                """;
+
+            var ex = await Record.ExceptionAsync(() =>
+                new PdfGenerator().GeneratePdf(html, PageSize.A4));
+
+            Assert.Null(ex);
+        }
+
+        // ── named pages ────────────────────────────────────────────────────────
+
+        [Fact]
+        public async Task AtPage_NamedPage_SelectorApplied_NoError()
+        {
+            var html = """
+                <!DOCTYPE html>
+                <html>
+                <head>
+                <style>
+                @page { size: A4; margin: 20mm; }
+                @page chapter { @top-right { content: "Chapter"; font-size: 8pt; } }
+                </style>
+                </head>
+                <body>
+                """ +
+                string.Concat(Enumerable.Range(1, 3).Select(i =>
+                    $"<h1 style=\"page: chapter\">Chapter {i}</h1>" +
+                    string.Concat(Enumerable.Range(1, 15).Select(j => $"<p>Paragraph {j}</p>")))) +
+                """
+                </body>
+                </html>
+                """;
+
+            var ex = await Record.ExceptionAsync(() =>
+                new PdfGenerator().GeneratePdf(html, PageSize.A4));
+
+            Assert.Null(ex);
+        }
+
+        // ── margin box explicit width ───────────────────────────────────────────
+
+        [Fact]
+        public async Task AtPage_MarginBoxExplicitWidth_NoError()
+        {
+            const string html = """
+                <!DOCTYPE html>
+                <html>
+                <head>
+                <style>
+                @page {
+                    size: A4;
+                    margin: 20mm;
+                    @top-left   { content: "Left"; width: 80pt; font-size: 8pt; }
+                    @top-center { content: "Center"; font-size: 8pt; }
+                    @top-right  { content: "Right"; width: 60pt; font-size: 8pt; }
+                }
+                </style>
+                </head>
+                <body><p>Hello World</p></body>
+                </html>
+                """;
+
+            var ex = await Record.ExceptionAsync(() =>
+                new PdfGenerator().GeneratePdf(html, PageSize.A4));
+
+            Assert.Null(ex);
+        }
+
         // ── regression: existing page layout unaffected ───────────────────────
 
         [Fact]

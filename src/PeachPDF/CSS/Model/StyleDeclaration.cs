@@ -1689,5 +1689,11 @@ namespace PeachPDF.CSS
             get => GetPropertyValue(PropertyNames.Size);
             set => SetPropertyValue(PropertyNames.Size, value);
         }
+
+        public string PageName
+        {
+            get => GetPropertyValue(PropertyNames.PageName);
+            set => SetPropertyValue(PropertyNames.PageName, value);
+        }
     }
 }

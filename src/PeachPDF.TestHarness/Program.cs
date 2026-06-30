@@ -1,5 +1,6 @@
 using PeachPDF;
 using PeachPDF.PdfSharpCore;
+using System.Linq;
 
 PdfGenerateConfig pdfConfig = new()
 {
@@ -723,3 +724,122 @@ Console.WriteLine("Saved test_paged_media_named_strings.pdf");
 File.Delete("test_paged_media_named_strings.html");
 File.WriteAllText("test_paged_media_named_strings.html", namedStringsHtml);
 Console.WriteLine("Saved test_paged_media_named_strings.html");
+
+// ── Per-page margin variation showcase ─────────────────────────────────────
+var perPageMarginsHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    @page {
+        size: A4;
+        margin: 20mm;
+        @top-center { content: "Running Header"; font: bold 9pt Arial; }
+        @bottom-center { content: "Page " counter(page) " of " counter(pages); font: 8pt Arial; }
+    }
+    @page :first {
+        margin-top: 50mm;
+        @top-center { content: none; }
+    }
+    body { font: 11pt Arial; }
+    h1 { font-size: 22pt; text-align: center; margin-top: 30mm; }
+    </style>
+    </head>
+    <body>
+      <h1>Per-Page Margin Variation</h1>
+      <p style="text-align:center; font-size: 10pt; color: #555;">Page 1 has 50mm top margin (no header). Pages 2+ have 20mm.</p>
+    """ +
+    string.Concat(Enumerable.Range(1, 50).Select(i =>
+        $"<p>Paragraph {i}: Lorem ipsum dolor sit amet, consectetur adipiscing elit. " +
+        "Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>")) +
+    """
+    </body>
+    </html>
+    """;
+
+var perPageMarginsStream = new MemoryStream();
+var perPageMarginsDoc = await generator.GeneratePdf(perPageMarginsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+perPageMarginsDoc.Save(perPageMarginsStream);
+
+File.Delete("test_paged_media_per_page_margins.pdf");
+File.WriteAllBytes("test_paged_media_per_page_margins.pdf", perPageMarginsStream.ToArray());
+Console.WriteLine("Saved test_paged_media_per_page_margins.pdf");
+
+// ── Named pages showcase ────────────────────────────────────────────────────
+var namedPagesHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    @page {
+        size: A4;
+        margin: 20mm;
+        @bottom-center { content: "Page " counter(page); font: 8pt Arial; }
+    }
+    @page chapter {
+        @top-right { content: "Chapter Section"; font: italic 8pt Arial; color: #335; }
+    }
+    body { font: 11pt Arial; }
+    h1 { font-size: 18pt; border-bottom: 2pt solid #336; padding-bottom: 4pt; }
+    </style>
+    </head>
+    <body>
+    """ +
+    string.Concat(Enumerable.Range(1, 3).Select(i =>
+        $"<div style=\"page: chapter\">" +
+        $"<h1>Chapter {i}: Section Title</h1>" +
+        string.Concat(Enumerable.Range(1, 18).Select(j =>
+            $"<p>Chapter {i}, paragraph {j}: Lorem ipsum dolor sit amet, consectetur adipiscing elit. " +
+            "Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>")) +
+        "</div>")) +
+    """
+    </body>
+    </html>
+    """;
+
+var namedPagesStream = new MemoryStream();
+var namedPagesDoc = await generator.GeneratePdf(namedPagesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+namedPagesDoc.Save(namedPagesStream);
+
+File.Delete("test_paged_media_named_pages.pdf");
+File.WriteAllBytes("test_paged_media_named_pages.pdf", namedPagesStream.ToArray());
+Console.WriteLine("Saved test_paged_media_named_pages.pdf");
+
+// ── Margin box explicit sizing showcase ────────────────────────────────────
+var marginBoxSizingHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    @page {
+        size: A4;
+        margin: 25mm 20mm;
+        @top-left   { content: "Narrow Left"; width: 80pt; font: 8pt Arial; }
+        @top-center { content: "Wide Center (auto)"; font: bold 8pt Arial; }
+        @top-right  { content: "Right"; width: 60pt; font: 8pt Arial; }
+        @bottom-left  { content: "© 2025"; font: 7pt Arial; color: #888; }
+        @bottom-center { content: "Page " counter(page) " of " counter(pages); font: 8pt Arial; }
+        @bottom-right { content: "Confidential"; width: 70pt; font: 7pt Arial; color: #c00; }
+    }
+    body { font: 11pt Arial; }
+    </style>
+    </head>
+    <body>
+      <h1>Margin Box Sizing</h1>
+      <p>Top row: left=80pt fixed, center=auto (gets remaining space), right=60pt fixed.</p>
+      <p>Bottom row: left and center auto, right=70pt fixed.</p>
+    """ +
+    string.Concat(Enumerable.Range(1, 30).Select(i =>
+        $"<p>Line {i}: Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>")) +
+    """
+    </body>
+    </html>
+    """;
+
+var marginBoxSizingStream = new MemoryStream();
+var marginBoxSizingDoc = await generator.GeneratePdf(marginBoxSizingHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+marginBoxSizingDoc.Save(marginBoxSizingStream);
+
+File.Delete("test_paged_media_margin_box_sizing.pdf");
+File.WriteAllBytes("test_paged_media_margin_box_sizing.pdf", marginBoxSizingStream.ToArray());
+Console.WriteLine("Saved test_paged_media_margin_box_sizing.pdf");

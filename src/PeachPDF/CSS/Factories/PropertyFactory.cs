@@ -294,6 +294,7 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.StrokeOpacity, () => new StrokeOpacityProperty(), true);
             AddLonghand(PropertyNames.StrokeWidth, () => new StrokeWidthProperty(), true);
             AddLonghand(PropertyNames.StringSet, () => new StringSetProperty());
+            AddLonghand(PropertyNames.PageName, () => new PageNameProperty());
             AddLonghand(PropertyNames.TableLayout, () => new TableLayoutProperty());
             AddLonghand(PropertyNames.TextAlign, () => new TextAlignProperty());
             AddLonghand(PropertyNames.TextAlignLast, () => new TextAlignLastProperty());

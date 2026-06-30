@@ -627,6 +627,12 @@ namespace PeachPDF.Html.Core.Dom
                 CssNamedStringEngine.ApplyStringSet(this);
             }
 
+            // Register named page element if page property is set
+            if (!string.IsNullOrEmpty(PageName) && PageName != "auto")
+            {
+                HtmlContainer?.RegisterNamedPageElement(PageName, Location.Y);
+            }
+
             // Spec (css-break §3.1): a forced break occurs at a class A break point if
             // the earlier sibling's break-after OR the later sibling's break-before has a
             // forced break value — at least one is sufficient.

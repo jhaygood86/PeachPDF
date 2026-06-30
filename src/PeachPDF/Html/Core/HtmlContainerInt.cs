@@ -111,6 +111,8 @@ namespace PeachPDF.Html.Core
         /// </summary>
         private readonly List<NamedString> _namedStrings = new();
 
+        private readonly List<NamedPageElement> _namedPageElements = new();
+
         #endregion
 
 
@@ -168,6 +170,13 @@ namespace PeachPDF.Html.Core
         {
             _namedStrings.Clear();
         }
+
+        internal IReadOnlyList<NamedPageElement> NamedPageElements => _namedPageElements;
+
+        internal void RegisterNamedPageElement(string name, double y) =>
+            _namedPageElements.Add(new NamedPageElement(name, y));
+
+        internal void ClearNamedPageElements() => _namedPageElements.Clear();
 
         /// <summary>
         /// The scroll offset of the html.<br/>
@@ -300,6 +309,7 @@ namespace PeachPDF.Html.Core
             Root.Dispose();
             Root = null;
             ClearNamedStrings();
+            ClearNamedPageElements();
         }
 
         /// <summary>

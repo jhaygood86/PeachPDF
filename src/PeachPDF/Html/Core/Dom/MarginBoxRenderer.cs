@@ -45,7 +45,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (text == null)
                     continue;
 
-                var rect = GetMarginBoxRect(boxName, pageSize, marginLeft, marginTop, marginRight, marginBottom);
+                var rect = GetMarginBoxRect(boxName, pageSize, marginLeft, marginTop, marginRight, marginBottom, rule);
                 if (rect.Width <= 0 || rect.Height <= 0)
                     continue;
 
@@ -143,9 +143,9 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// Returns the rectangle (in PDF points) for a named margin box.
-        /// The 16 standard boxes are positioned within the page margins.
+        /// Uses explicit width/height from each box's CSS rule if present; falls back to equal thirds.
         /// </summary>
-        private static XRect GetMarginBoxRect(string name, XSize page, double mL, double mT, double mR, double mB)
+        private static XRect GetMarginBoxRect(string name, XSize page, double mL, double mT, double mR, double mB, PageRule? rule)
         {
             var contentLeft   = mL;
             var contentRight  = page.Width - mR;
@@ -153,37 +153,120 @@ namespace PeachPDF.Html.Core.Dom
             var contentTop    = mT;
             var contentBottom = page.Height - mB;
             var contentHeight = contentBottom - contentTop;
-            var third         = contentWidth / 3.0;
-            var thirdH        = contentHeight / 3.0;
+
+            var tlR = FindMargin(rule, "top-left");
+            var tcR = FindMargin(rule, "top-center");
+            var trR = FindMargin(rule, "top-right");
+            var (tL, tC, tR) = ComputeThreeBoxSizes(contentWidth,
+                PW(tlR), PMinW(tlR), PMaxW(tlR),
+                PW(tcR), PMinW(tcR), PMaxW(tcR),
+                PW(trR), PMinW(trR), PMaxW(trR));
+
+            var blR = FindMargin(rule, "bottom-left");
+            var bcR = FindMargin(rule, "bottom-center");
+            var brR = FindMargin(rule, "bottom-right");
+            var (bL, bC, bR) = ComputeThreeBoxSizes(contentWidth,
+                PW(blR), PMinW(blR), PMaxW(blR),
+                PW(bcR), PMinW(bcR), PMaxW(bcR),
+                PW(brR), PMinW(brR), PMaxW(brR));
+
+            var rtR = FindMargin(rule, "right-top");
+            var rmR = FindMargin(rule, "right-middle");
+            var rbR = FindMargin(rule, "right-bottom");
+            var (rT, rM, rB) = ComputeThreeBoxSizes(contentHeight,
+                PH(rtR), PMinH(rtR), PMaxH(rtR),
+                PH(rmR), PMinH(rmR), PMaxH(rmR),
+                PH(rbR), PMinH(rbR), PMaxH(rbR));
+
+            var ltR = FindMargin(rule, "left-top");
+            var lmR = FindMargin(rule, "left-middle");
+            var lbR = FindMargin(rule, "left-bottom");
+            var (lT, lM, lB) = ComputeThreeBoxSizes(contentHeight,
+                PH(ltR), PMinH(ltR), PMaxH(ltR),
+                PH(lmR), PMinH(lmR), PMaxH(lmR),
+                PH(lbR), PMinH(lbR), PMaxH(lbR));
 
             return name switch
             {
                 // ── top row ──
-                "top-left-corner"   => new XRect(0,             0,   mL,     mT),
-                "top-left"          => new XRect(contentLeft,   0,   third,  mT),
-                "top-center"        => new XRect(contentLeft + third, 0, third, mT),
-                "top-right"         => new XRect(contentLeft + third * 2, 0, third, mT),
-                "top-right-corner"  => new XRect(contentRight,  0,   mR,     mT),
+                "top-left-corner"   => new XRect(0,              0, mL,  mT),
+                "top-left"          => new XRect(contentLeft,    0, tL,  mT),
+                "top-center"        => new XRect(contentLeft + tL, 0, tC, mT),
+                "top-right"         => new XRect(contentLeft + tL + tC, 0, tR, mT),
+                "top-right-corner"  => new XRect(contentRight,   0, mR,  mT),
 
                 // ── right column ──
-                "right-top"         => new XRect(contentRight, contentTop,               mR, thirdH),
-                "right-middle"      => new XRect(contentRight, contentTop + thirdH,      mR, thirdH),
-                "right-bottom"      => new XRect(contentRight, contentTop + thirdH * 2,  mR, thirdH),
+                "right-top"         => new XRect(contentRight, contentTop,          mR, rT),
+                "right-middle"      => new XRect(contentRight, contentTop + rT,     mR, rM),
+                "right-bottom"      => new XRect(contentRight, contentTop + rT + rM, mR, rB),
 
                 // ── bottom row ──
-                "bottom-right-corner" => new XRect(contentRight,            contentBottom, mR,     mB),
-                "bottom-right"        => new XRect(contentLeft + third * 2, contentBottom, third,  mB),
-                "bottom-center"       => new XRect(contentLeft + third,     contentBottom, third,  mB),
-                "bottom-left"         => new XRect(contentLeft,             contentBottom, third,  mB),
-                "bottom-left-corner"  => new XRect(0,                       contentBottom, mL,     mB),
+                "bottom-right-corner" => new XRect(contentRight,              contentBottom, mR,  mB),
+                "bottom-right"        => new XRect(contentLeft + bL + bC,     contentBottom, bR,  mB),
+                "bottom-center"       => new XRect(contentLeft + bL,          contentBottom, bC,  mB),
+                "bottom-left"         => new XRect(contentLeft,               contentBottom, bL,  mB),
+                "bottom-left-corner"  => new XRect(0,                         contentBottom, mL,  mB),
 
                 // ── left column ──
-                "left-bottom"       => new XRect(0, contentTop + thirdH * 2, mL, thirdH),
-                "left-middle"       => new XRect(0, contentTop + thirdH,     mL, thirdH),
-                "left-top"          => new XRect(0, contentTop,              mL, thirdH),
+                "left-top"          => new XRect(0, contentTop,          mL, lT),
+                "left-middle"       => new XRect(0, contentTop + lT,     mL, lM),
+                "left-bottom"       => new XRect(0, contentTop + lT + lM, mL, lB),
 
                 _ => XRect.Empty,
             };
+        }
+
+        private static MarginStyleRule? FindMargin(PageRule? rule, string name) =>
+            rule?.Margins.FirstOrDefault(m =>
+                (m.Selector?.Text?.Trim().ToLowerInvariant() ?? "") == name);
+
+        private static double? PW(MarginStyleRule? r)  => r == null ? null : DomParser.ParseLengthToPdfPoints(r.Style.Width);
+        private static double? PMinW(MarginStyleRule? r) => r == null ? null : DomParser.ParseLengthToPdfPoints(r.Style.MinWidth);
+        private static double? PMaxW(MarginStyleRule? r) => r == null ? null : DomParser.ParseLengthToPdfPoints(r.Style.MaxWidth);
+        private static double? PH(MarginStyleRule? r)  => r == null ? null : DomParser.ParseLengthToPdfPoints(r.Style.Height);
+        private static double? PMinH(MarginStyleRule? r) => r == null ? null : DomParser.ParseLengthToPdfPoints(r.Style.MinHeight);
+        private static double? PMaxH(MarginStyleRule? r) => r == null ? null : DomParser.ParseLengthToPdfPoints(r.Style.MaxHeight);
+
+        /// <summary>
+        /// Distributes <paramref name="available"/> space among three boxes (a, b, c).
+        /// Explicit sizes are honoured and clamped to min/max; remaining space is split equally
+        /// among auto (null) boxes. Returns equal thirds if all are auto.
+        /// </summary>
+        private static (double a, double b, double c) ComputeThreeBoxSizes(
+            double available,
+            double? sizeA, double? minA, double? maxA,
+            double? sizeB, double? minB, double? maxB,
+            double? sizeC, double? minC, double? maxC)
+        {
+            static double Clamp(double v, double? min, double? max) =>
+                Math.Max(min ?? 0, Math.Min(max ?? double.MaxValue, v));
+
+            // All auto → equal thirds
+            if (sizeA == null && sizeB == null && sizeC == null)
+            {
+                var third = available / 3.0;
+                return (third, third, third);
+            }
+
+            double fixedSum = 0;
+            int autoCount = 0;
+
+            double a = sizeA.HasValue ? Clamp(sizeA.Value, minA, maxA) : 0;
+            double b = sizeB.HasValue ? Clamp(sizeB.Value, minB, maxB) : 0;
+            double c = sizeC.HasValue ? Clamp(sizeC.Value, minC, maxC) : 0;
+
+            if (sizeA != null) fixedSum += a; else autoCount++;
+            if (sizeB != null) fixedSum += b; else autoCount++;
+            if (sizeC != null) fixedSum += c; else autoCount++;
+
+            var remaining = Math.Max(0, available - fixedSum);
+            var autoShare = autoCount > 0 ? remaining / autoCount : 0;
+
+            if (sizeA == null) a = autoShare;
+            if (sizeB == null) b = autoShare;
+            if (sizeC == null) c = autoShare;
+
+            return (a, b, c);
         }
 
         private static XFont BuildFont(StyleDeclaration style, RAdapter adapter)

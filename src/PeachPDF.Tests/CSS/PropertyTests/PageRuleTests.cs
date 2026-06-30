@@ -133,6 +133,57 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.Equal(3, rule.Margins.Count());
         }
 
+        // ── per-page margin variation ──────────────────────────────────────────
+
+        [Fact]
+        public void AtPage_FirstPseudoSelector_MarginTopIsParseable()
+        {
+            var sheet = ParseStyleSheet("@page :first { margin-top: 40mm; }");
+            var rule = sheet.Rules.OfType<PageRule>().FirstOrDefault();
+            Assert.NotNull(rule);
+            Assert.Equal(":first", rule.SelectorText);
+
+            var pt = PeachPDF.Html.Core.Parse.DomParser.ParseLengthToPdfPoints(rule.Style.MarginTop);
+            Assert.NotNull(pt);
+            // 40mm = 40 * 72 / 25.4 ≈ 113.4pt
+            Assert.Equal(113.4, pt!.Value, 0);
+        }
+
+        // ── named pages ────────────────────────────────────────────────────────
+
+        [Fact]
+        public void PageNameProperty_Identifier_ParsesCorrectly()
+        {
+            var sheet = ParseStyleSheet("div { page: chapter; }");
+            var block = sheet.Rules.OfType<StyleRule>().FirstOrDefault();
+            Assert.NotNull(block);
+            Assert.Equal("chapter", block.Style.PageName);
+        }
+
+        [Fact]
+        public void PageNameProperty_Auto_ParsesCorrectly()
+        {
+            var sheet = ParseStyleSheet("div { page: auto; }");
+            var block = sheet.Rules.OfType<StyleRule>().FirstOrDefault();
+            Assert.NotNull(block);
+            Assert.Equal("auto", block.Style.PageName);
+        }
+
+        // ── margin box explicit width ───────────────────────────────────────────
+
+        [Fact]
+        public void AtPage_MarginBox_ExplicitWidthIsParsedFromStyle()
+        {
+            var sheet = ParseStyleSheet(
+                "@page { @top-left { content: \"L\"; width: 100pt; } }");
+            var rule = sheet.Rules.OfType<PageRule>().FirstOrDefault();
+            Assert.NotNull(rule);
+            var margin = rule.Margins.FirstOrDefault(m =>
+                m.Selector?.Text?.Contains("top-left") == true);
+            Assert.NotNull(margin);
+            Assert.Equal("100pt", margin.Style.Width);
+        }
+
         // ── ParseLengthToPdfPoints ─────────────────────────────────────────────
 
         [Theory]

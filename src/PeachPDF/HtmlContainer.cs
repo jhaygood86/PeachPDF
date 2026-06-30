@@ -112,6 +112,8 @@ namespace PeachPDF
         /// </summary>
         internal IReadOnlyList<Html.Core.Entities.NamedString> NamedStrings => HtmlContainerInt.NamedStrings;
 
+        internal IReadOnlyList<Html.Core.Entities.NamedPageElement> NamedPageElements => HtmlContainerInt.NamedPageElements;
+
         /// <summary>
         /// the top margin between the page start and the text
         /// </summary>

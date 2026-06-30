@@ -290,6 +290,7 @@ These properties control how content breaks across PDF pages. Both the legacy `p
 | `counter-increment` | [counter-increment](https://developer.mozilla.org/en-US/docs/Web/CSS/counter-increment) | Full support |
 | `counter-set` | [counter-set](https://developer.mozilla.org/en-US/docs/Web/CSS/counter-set) | Full support |
 | `string-set` | [string-set](https://developer.mozilla.org/en-US/docs/Web/CSS/string-set) | CSS Paged Media property for running headers/footers |
+| `page` | [page](https://developer.mozilla.org/en-US/docs/Web/CSS/page) | Activates a named `@page` rule for pages containing the element |
 
 ---
 
@@ -394,8 +395,11 @@ The `@page` at-rule targets PDF pages. A rule without a selector applies to all 
 | `@page :first { }` | Full | Applies only to page 1 |
 | `@page :left { }` | Full | Applies to even-numbered pages |
 | `@page :right { }` | Full | Applies to odd-numbered pages |
+| `@page name { }` — named page | Full | Activated by `page: name` on elements; see [Named pages](#named-pages) |
 
-**Cascade order:** the base rule is the fallback; a matching pseudo-selector rule overrides it. When both `:first` and `:right` match page 1, the last matching rule in the stylesheet wins.
+**Cascade order:** the base rule is the fallback; a matching named-page rule overrides it; pseudo-selector rules override named-page rules. When both `:first` and `:right` match page 1, the last matching rule in the stylesheet wins.
+
+**Per-page margin variation:** when a pseudo-selector or named-page rule sets `margin-top`, `margin-left`, etc., those values override the base margins for that page at render time. The content layout is computed once using the base margins, so changing left/right margins shifts the content position but does not reflow text to a different width.
 
 ### `size` property
 
@@ -461,6 +465,35 @@ Margin boxes are sub-rules of `@page` that place text inside the page margins (o
 | `font-style` | `italic` or `normal` |
 | `text-align` | `left`, `center`, `right`; default is inferred from box position |
 | `vertical-align` | `top`, `middle`, `bottom`; default is `middle` |
+| `width` / `min-width` / `max-width` | Controls the width of top/bottom margin boxes; boxes with explicit widths are honoured; remaining space is distributed equally among `auto` boxes |
+| `height` / `min-height` / `max-height` | Controls the height of left/right margin boxes |
+
+### Named pages
+
+The CSS `page` property on an element activates a named `@page` rule for all PDF pages that contain that element. This lets different parts of a document use different page styles (e.g., wider margins for an appendix, or a different running header for each chapter).
+
+```css
+@page chapter {
+  @top-right { content: "Chapter Section"; font-size: 8pt; }
+}
+
+/* Elements with page: chapter activate @page chapter */
+div.chapter { page: chapter; }
+```
+
+```html
+<div class="chapter">
+  <h1>Chapter 1</h1>
+  <p>Content...</p>
+</div>
+```
+
+| Value | Behavior |
+|-------|---------|
+| `page: auto` (default) | Uses the base `@page { }` rule |
+| `page: <ident>` | Activates `@page <ident> { }` for pages containing this element |
+
+If multiple elements with different `page` values appear on the same page, the last one in document order wins.
 
 ### Named strings (`string-set` / `string()`)
 
