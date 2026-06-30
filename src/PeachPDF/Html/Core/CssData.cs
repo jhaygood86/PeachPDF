@@ -80,7 +80,9 @@ namespace PeachPDF.Html.Core
                 {
                     foreach (var medium in mediaRule.Media)
                     {
-                        if (medium.Type != media) continue;
+                        var typeMatches = medium.Type == media || medium.Type == "all";
+                        var matches = medium.IsInverse ? !typeMatches : typeMatches;
+                        if (!matches) continue;
 
                         foreach (var rule in GetStyleRules(mediaRule.Rules.OfType<IStyleRule>(), box))
                         {

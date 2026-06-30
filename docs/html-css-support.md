@@ -300,7 +300,7 @@ These properties control how content breaks across PDF pages. Both the legacy `p
 |---------|-------|
 | `@font-face` | Full support; see [Fonts](index.md#fonts) |
 | `@page` | Full support; see [CSS Paged Media](#css-paged-media) below |
-| `@media` | Not supported |
+| `@media` | Partial support; `print` and `all` media types apply, `screen` is ignored; see [CSS Media Queries](#css-media-queries) below |
 | `@keyframes` | Not supported |
 | `@supports` | Not supported |
 | `@layer` | Not supported |
@@ -367,6 +367,40 @@ Because PeachPDF renders a static PDF with no interactive or dynamic state, almo
 | All others | Parsed but not matched — rules are silently ignored |
 
 State-based pseudo-classes (`:hover`, `:focus`, `:active`, `:checked`, `:disabled`) and structural pseudo-classes (`:first-child`, `:last-child`, `:nth-of-type()`, `:not()`, etc.) are not applied.
+
+---
+
+## CSS Media Queries
+
+PeachPDF renders to PDF, so only media queries that target the `print` medium (or the universal `all` medium) are evaluated. Rules inside `@media screen` are ignored entirely, which lets web stylesheets that separate screen and print styles work correctly out of the box.
+
+```css
+/* applied — print medium matches */
+@media print {
+  body { font-size: 12pt; }
+}
+
+/* applied — "all" matches every medium */
+@media all {
+  p { line-height: 1.5; }
+}
+
+/* ignored — screen-only rules are skipped */
+@media screen {
+  body { font-size: 16px; }
+}
+```
+
+| Media query | Applied in PDF? | Notes |
+|-------------|-----------------|-------|
+| `@media print { }` | Yes | Directly targets the print medium |
+| `@media all { }` | Yes | Applies to every medium, including print |
+| `@media only print { }` | Yes | Equivalent to `@media print` |
+| `@media screen { }` | No | Screen-only rules are skipped |
+| `@media not print { }` | No | Explicitly excluded from the print medium |
+| `@media not screen { }` | Yes | Applies to any non-screen medium |
+| Comma-separated list | Partial | Applied if **any** entry in the list matches print (e.g. `@media print, screen` applies) |
+| Media features (`min-width`, `color`, etc.) | No | Features are parsed but not evaluated; the block is treated as if the feature condition were met |
 
 ---
 
