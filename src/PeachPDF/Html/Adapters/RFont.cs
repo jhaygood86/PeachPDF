@@ -33,6 +33,12 @@ namespace PeachPDF.Html.Adapters
         public abstract double UnderlineOffset { get; }
 
         /// <summary>
+        /// Get the ascent, in pixels, of the font — the distance from the top of the font's
+        /// line box down to its baseline.
+        /// </summary>
+        public abstract double Ascent { get; }
+
+        /// <summary>
         /// Get the left padding, in pixels, of the font.
         /// </summary>
         public abstract double LeftPadding { get; }

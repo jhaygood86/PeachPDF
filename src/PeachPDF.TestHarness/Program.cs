@@ -897,7 +897,11 @@ var flexHtml = "<!DOCTYPE html><html><head>" + FlexCss + "</head><body>" +
         FContainer("flex-start", "align-items:flex-start;height:80px;gap:4px;",  FItems3("width:50px;height:28px;")) +
         FContainer("center",     "align-items:center;height:80px;gap:4px;",       FItems3("width:50px;height:28px;")) +
         FContainer("flex-end",   "align-items:flex-end;height:80px;gap:4px;",     FItems3("width:50px;height:28px;")) +
-        FContainer("stretch",    "align-items:stretch;height:80px;gap:4px;",      FItems3("width:50px;"))
+        FContainer("stretch",    "align-items:stretch;height:80px;gap:4px;",      FItems3("width:50px;")) +
+        FContainer("baseline (varying font sizes)", "align-items:baseline;gap:4px;",
+            FItem("A", "#e74c3c", "font-size:8pt;width:50px;") +
+            FItem("B", "#3498db", "font-size:16pt;width:50px;") +
+            FItem("C", "#27ae60", "font-size:24pt;width:50px;"))
     ) +
 
     FSection("4 — flex-grow",

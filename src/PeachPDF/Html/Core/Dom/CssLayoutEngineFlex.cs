@@ -533,6 +533,30 @@ namespace PeachPDF.Html.Core.Dom
 
         private async ValueTask ComputeCrossOffsets(RGraphics g, FlexLine line)
         {
+            // Pre-compute baseline offsets for items using baseline alignment. Per spec §8.5,
+            // baseline alignment only applies when the cross axis is vertical (row-direction
+            // flex); column-direction flex has no text-baseline concept on its cross axis and
+            // falls through to the flex-start fallback below. An item's offset is omitted when
+            // it has no line-box content anywhere (e.g. an empty or image-only item), which
+            // also falls back to flex-start.
+            double maxBaseline = 0;
+            Dictionary<FlexItem, double>? baselineOffsets = null;
+            if (_isRow)
+            {
+                foreach (var item in line.Items)
+                {
+                    var itemAlign = item.Box.AlignSelf is "auto" or "" ? _flexBox.AlignItems : item.Box.AlignSelf;
+                    if (itemAlign != CssConstants.Baseline) continue;
+
+                    var offset = GetItemBaselineOffset(item.Box);
+                    if (offset is null) continue;
+
+                    baselineOffsets ??= [];
+                    baselineOffsets[item] = offset.Value;
+                    maxBaseline = Math.Max(maxBaseline, offset.Value);
+                }
+            }
+
             foreach (var item in line.Items)
             {
                 var align = item.Box.AlignSelf is "auto" or "" ? _flexBox.AlignItems : item.Box.AlignSelf;
@@ -600,11 +624,51 @@ namespace PeachPDF.Html.Core.Dom
                         item.CrossOffset = crossMarginBefore;
                         break;
                     }
-                    default: // flex-start / start / baseline (simplified)
+                    case CssConstants.Baseline when baselineOffsets != null && baselineOffsets.TryGetValue(item, out var itemBaseline):
+                        item.CrossOffset = crossMarginBefore + (maxBaseline - itemBaseline);
+                        break;
+                    default: // flex-start / start / baseline fallback (column-direction, or no discoverable baseline)
                         item.CrossOffset = crossMarginBefore;
                         break;
                 }
             }
+        }
+
+        /// <summary>
+        /// Finds the first line box within <paramref name="box"/>'s subtree, in document order
+        /// (depth-first, skipping out-of-flow and display:none descendants), per CSS Flexbox
+        /// §8.5's "first in-flow child" baseline search.
+        /// </summary>
+        private static CssLineBox? FindFirstLineBox(CssBox box)
+        {
+            if (box.LineBoxes.Count > 0)
+                return box.LineBoxes[0];
+
+            foreach (var child in box.Boxes)
+            {
+                if (child.Display == CssConstants.None || child.IsOutOfFlow) continue;
+
+                var found = FindFirstLineBox(child);
+                if (found != null) return found;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Computes a flex item's baseline offset from its own cross-start (top) edge — the
+        /// first font baseline of its content, per CSS Flexbox §8.5. Returns null if the item
+        /// has no line-box content anywhere, in which case it falls back to flex-start.
+        /// </summary>
+        private static double? GetItemBaselineOffset(CssBox box)
+        {
+            var lineBox = FindFirstLineBox(box);
+            if (lineBox == null) return null;
+
+            var word = CssBox.FirstWordOccurence(lineBox.OwnerBox, lineBox);
+            if (word == null) return null;
+
+            return (word.Top - box.Location.Y) + word.OwnerBox.ActualFont.Ascent;
         }
 
         // ─── Phase 9: final locations ─────────────────────────────────────────────

@@ -244,6 +244,75 @@ namespace PeachPDF.Tests.Integration
             Assert.InRange(item.Location.Y, expectedY - 2, expectedY + 2);
         }
 
+        // ─── align-items: baseline ───────────────────────────────────────────────
+
+        [Fact]
+        public async Task AlignItems_Baseline_LargerFontStaysAtTop_SmallerFontPushedDown()
+        {
+            // With true baseline alignment, the item with the larger font (larger ascent) stays
+            // at the line's top, while the smaller-font item is pushed down so their text
+            // baselines line up. Under the old flex-start fallback both would sit at Y=0.
+            var html = Wrap(@"
+                <div id='container' style='display:flex; align-items:baseline;'>
+                    <div id='small' style='font:10pt Arial;'>Small</div>
+                    <div id='big' style='font:30pt Arial;'>Big</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var small = FindById(root, "small")!;
+            var big = FindById(root, "big")!;
+            Assert.True(big.Location.Y < small.Location.Y,
+                $"Larger-font item should stay higher: big.Y={big.Location.Y}, small.Y={small.Location.Y}");
+        }
+
+        [Fact]
+        public async Task AlignSelfBaseline_OverridesAlignItems()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:flex; align-items:flex-start;'>
+                    <div id='small' style='font:10pt Arial; align-self:baseline;'>Small</div>
+                    <div id='big' style='font:30pt Arial; align-self:baseline;'>Big</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var small = FindById(root, "small")!;
+            var big = FindById(root, "big")!;
+            Assert.True(big.Location.Y < small.Location.Y,
+                $"align-self:baseline should override align-items:flex-start: big.Y={big.Location.Y}, small.Y={small.Location.Y}");
+        }
+
+        [Fact]
+        public async Task AlignItems_Baseline_ItemWithNoContent_FallsBackToFlexStart()
+        {
+            // An item with no line-box content anywhere (no discoverable baseline) must not
+            // throw, and falls back to flex-start per spec's synthesized-baseline allowance.
+            var html = Wrap(@"
+                <div id='container' style='display:flex; align-items:baseline;'>
+                    <div id='empty' style='width:20px; height:20px;'></div>
+                    <div id='text' style='font:14pt Arial;'>Text</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var empty = FindById(root, "empty")!;
+            Assert.InRange(empty.Location.Y, container.ClientTop - 2, container.ClientTop + 2);
+        }
+
+        [Fact]
+        public async Task AlignItems_Baseline_ColumnDirection_FallsBackToFlexStart()
+        {
+            // Column-direction flex has no vertical text-baseline concept on its (horizontal)
+            // cross axis, so align-items:baseline falls back to flex-start per spec §8.5.
+            var html = Wrap(@"
+                <div id='container' style='display:flex; flex-direction:column; align-items:baseline;'>
+                    <div id='a' style='width:30px; height:20px;'></div>
+                    <div id='b' style='width:60px; height:20px;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            Assert.InRange(a.Location.X, container.ClientLeft - 2, container.ClientLeft + 2);
+            Assert.InRange(b.Location.X, container.ClientLeft - 2, container.ClientLeft + 2);
+        }
+
         // ─── flex-wrap ───────────────────────────────────────────────────────────
 
         [Fact]
