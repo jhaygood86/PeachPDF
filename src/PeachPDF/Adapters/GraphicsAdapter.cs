@@ -109,7 +109,8 @@ namespace PeachPDF.Adapters
             var height = realFont.Height;
             var fontResolver = ((PdfSharpAdapter)_adapter).FontResolver;
             var descent = realFont.Size * realFont.FontFamily.GetCellDescent(realFont.Style, fontResolver) / realFont.FontFamily.GetEmHeight(realFont.Style, fontResolver);
-            fontAdapter.SetMetrics(height, (int)Math.Round((height - descent + 1f)));
+            var ascent = realFont.Size * realFont.FontFamily.GetCellAscent(realFont.Style, fontResolver) / realFont.FontFamily.GetEmHeight(realFont.Style, fontResolver);
+            fontAdapter.SetMetrics(height, (int)Math.Round((height - descent + 1f)), (int)Math.Round(ascent));
 
             return Utils.Convert(size, PixelsPerPoint);
         }

@@ -340,8 +340,10 @@ namespace PeachPDF.Html.Core.Dom
         public string Width { get; set; } = "auto";
 
         public string MaxWidth { get; set; } = "none";
+        public string MinWidth { get; set; } = "0";
 
         public string Height { get; set; } = "auto";
+        public string MaxHeight { get; set; } = "none";
         public string MinHeight { get; set; } = "auto";
 
         public string BackgroundColor { get; set; } = "transparent";
@@ -1133,6 +1135,23 @@ namespace PeachPDF.Html.Core.Dom
 
         public string ZIndex { get; set; } = CssConstants.Auto;
 
+        // Flex container properties
+        public string FlexDirection  { get; set; } = "row";
+        public string FlexWrap       { get; set; } = "nowrap";
+        public string JustifyContent { get; set; } = "normal";
+        public string AlignItems     { get; set; } = "normal";
+        public string AlignContent   { get; set; } = "normal";
+
+        // Flex item properties
+        public string FlexGrow   { get; set; } = "0";
+        public string FlexShrink { get; set; } = "1";
+        public string FlexBasis  { get; set; } = "auto";
+        public string AlignSelf      { get; set; } = "auto";
+        public string Order          { get; set; } = "0";
+        // Gap between flex items (column-gap = main-axis gap for row direction)
+        public string FlexRowGap    { get; set; } = "0";
+        public string FlexColumnGap { get; set; } = "0";
+
         /// <summary>
         /// Get the parent of this css properties instance.
         /// </summary>
@@ -1270,6 +1289,7 @@ namespace PeachPDF.Html.Core.Dom
             Display = p.Display;
             Float = p.Float;
             Height = p.Height;
+            MaxHeight = p.MaxHeight;
             MarginBottom = p.MarginBottom;
             MarginLeft = p.MarginLeft;
             MarginRight = p.MarginRight;
@@ -1290,6 +1310,7 @@ namespace PeachPDF.Html.Core.Dom
             Position = p.Position;
             Width = p.Width;
             MaxWidth = p.MaxWidth;
+            MinWidth = p.MinWidth;
             _wordSpacing = p._wordSpacing;
         }
     }

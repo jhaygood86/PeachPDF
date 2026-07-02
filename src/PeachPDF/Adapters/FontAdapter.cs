@@ -31,6 +31,11 @@ namespace PeachPDF.Adapters
         private double _height = -1;
 
         /// <summary>
+        /// Cached font ascent.
+        /// </summary>
+        private double _ascent = -1;
+
+        /// <summary>
         /// Cached font whitespace width.
         /// </summary>
         private double _whitespaceWidth = -1;
@@ -58,6 +63,8 @@ namespace PeachPDF.Adapters
 
         public override double Height => _height * PixelsPerPoint;
 
+        public override double Ascent => _ascent * PixelsPerPoint;
+
         public override double LeftPadding => Height / 6f;
 
 
@@ -76,10 +83,12 @@ namespace PeachPDF.Adapters
         /// </summary>
         /// <param name="height">the full height of the font</param>
         /// <param name="underlineOffset">the vertical offset of the font underline location from the top of the font.</param>
-        internal void SetMetrics(int height, int underlineOffset)
+        /// <param name="ascent">the distance from the top of the font's line box down to its baseline</param>
+        internal void SetMetrics(int height, int underlineOffset, int ascent)
         {
             _height = height;
             _underlineOffset = underlineOffset;
+            _ascent = ascent;
         }
     }
 }

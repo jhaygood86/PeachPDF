@@ -435,11 +435,14 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     if (orgNumOfNans > 0)
                     {
-                        // spread extra width between all non width specified columns
+                        // Spread extra width between all non width specified columns, but never
+                        // past a column's own explicit CSS max-width (unset columns are uncapped,
+                        // matching the normal "auto columns fill remaining space" behavior).
+                        var explicitMaxWidths = GetColumnExplicitMaxWidths();
                         var extWidth = (availCellSpace - occupiedSpace) / orgNumOfNans;
                         for (var i = 0; i < _columnWidths.Length; i++)
                             if (orgColWidths == null || double.IsNaN(orgColWidths[i]))
-                                _columnWidths[i] += extWidth;
+                                _columnWidths[i] = Math.Min(_columnWidths[i] + extWidth, explicitMaxWidths[i]);
                     }
                     else
                     {
@@ -1134,17 +1137,32 @@ namespace PeachPDF.Html.Core.Dom
             maxFullWidths = new double[_columnWidths!.Length];
             minFullWidths = new double[_columnWidths.Length];
 
+            var availCellWidth = GetAvailableCellWidth();
+
             foreach (var row in _allRows)
             {
                 for (var i = 0; i < row.Boxes.Count; i++)
                 {
-                    var col = GetCellRealColumnIndex(row, row.Boxes[i]);
+                    var cell = row.Boxes[i];
+                    var col = GetCellRealColumnIndex(row, cell);
                     col = _columnWidths.Length > col ? col : _columnWidths.Length - 1;
 
                     if ((onlyNans && !double.IsNaN(_columnWidths[col])) || i >= row.Boxes.Count) continue;
-                    row.Boxes[i].GetMinMaxWidth(out var minWidth, out var maxWidth);
+                    cell.GetMinMaxWidth(out var minWidth, out var maxWidth);
 
-                    var colSpan = GetColSpan(row.Boxes[i]);
+                    // Clamp by the cell's own CSS min-width/max-width, if explicitly set, so a cell
+                    // can cap or raise the column's content-driven bounds independent of its content.
+                    if (CssValueParser.IsValidLength(cell.MaxWidth))
+                    {
+                        maxWidth = Math.Min(maxWidth, CssValueParser.ParseLength(cell.MaxWidth, availCellWidth, cell));
+                    }
+                    if (cell.MinWidth != "0" && CssValueParser.IsValidLength(cell.MinWidth))
+                    {
+                        minWidth = Math.Max(minWidth, CssValueParser.ParseLength(cell.MinWidth, availCellWidth, cell));
+                    }
+                    maxWidth = Math.Max(maxWidth, minWidth);
+
+                    var colSpan = GetColSpan(cell);
                     minWidth /= colSpan;
                     maxWidth /= colSpan;
 
@@ -1155,6 +1173,39 @@ namespace PeachPDF.Html.Core.Dom
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// Gets each column's explicit CSS max-width, if any cell in that column has one set.
+        /// Columns with no explicit max-width are uncapped (<see cref="double.PositiveInfinity"/>),
+        /// distinct from <see cref="GetColumnsMinMaxWidthByContent"/>'s intrinsic content-based max,
+        /// so that columns without an explicit max-width still fill available table width normally.
+        /// </summary>
+        private double[] GetColumnExplicitMaxWidths()
+        {
+            var explicitMaxWidths = new double[_columnWidths!.Length];
+            for (var i = 0; i < explicitMaxWidths.Length; i++)
+                explicitMaxWidths[i] = double.PositiveInfinity;
+
+            var availCellWidth = GetAvailableCellWidth();
+
+            foreach (var row in _allRows)
+            {
+                foreach (var cell in row.Boxes)
+                {
+                    if (!CssValueParser.IsValidLength(cell.MaxWidth)) continue;
+
+                    var col = GetCellRealColumnIndex(row, cell);
+                    col = explicitMaxWidths.Length > col ? col : explicitMaxWidths.Length - 1;
+                    var colSpan = GetColSpan(cell);
+                    var cellMaxWidth = CssValueParser.ParseLength(cell.MaxWidth, availCellWidth, cell) / colSpan;
+
+                    for (var j = 0; j < colSpan && col + j < explicitMaxWidths.Length; j++)
+                        explicitMaxWidths[col + j] = Math.Min(explicitMaxWidths[col + j], cellMaxWidth);
+                }
+            }
+
+            return explicitMaxWidths;
         }
 
         /// <summary>
@@ -1213,6 +1264,8 @@ namespace PeachPDF.Html.Core.Dom
             if (_columnMinWidths != null) return _columnMinWidths;
             _columnMinWidths = new double[_columnWidths!.Length];
 
+            var availCellWidth = GetAvailableCellWidth();
+
             foreach (var row in _allRows)
             {
                 foreach (var cell in row.Boxes)
@@ -1222,7 +1275,13 @@ namespace PeachPDF.Html.Core.Dom
                     var affectColumn = Math.Min(col + colspan, _columnMinWidths.Length) - 1;
                     var spannedWidth = GetSpannedMinWidth(row, col, colspan) + (colspan - 1) * GetHorizontalSpacing();
 
-                    _columnMinWidths[affectColumn] = Math.Max(_columnMinWidths[affectColumn], cell.GetMinimumWidth() - spannedWidth);
+                    var cellMinWidth = cell.GetMinimumWidth();
+                    if (cell.MinWidth != "0" && CssValueParser.IsValidLength(cell.MinWidth))
+                    {
+                        cellMinWidth = Math.Max(cellMinWidth, CssValueParser.ParseLength(cell.MinWidth, availCellWidth, cell));
+                    }
+
+                    _columnMinWidths[affectColumn] = Math.Max(_columnMinWidths[affectColumn], cellMinWidth - spannedWidth);
                 }
             }
 

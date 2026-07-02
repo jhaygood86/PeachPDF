@@ -97,7 +97,9 @@ namespace PeachPDF.Html.Core.Utils
                 "bottom" => cssBox.Bottom,
                 "width" => cssBox.Width,
                 "max-width" => cssBox.MaxWidth,
+                "min-width" => cssBox.MinWidth,
                 "height" => cssBox.Height,
+                "max-height" => cssBox.MaxHeight,
                 "min-height" => cssBox.MinHeight,
                 "background-color" => cssBox.BackgroundColor,
                 "background-image" => null,
@@ -135,6 +137,18 @@ namespace PeachPDF.Html.Core.Utils
                 "list-style-type" => cssBox.ListStyleType,
                 "overflow" => cssBox.Overflow,
                 "z-index" => cssBox.ZIndex,
+                "flex-direction"  => cssBox.FlexDirection,
+                "flex-wrap"       => cssBox.FlexWrap,
+                "justify-content" => cssBox.JustifyContent,
+                "align-items"     => cssBox.AlignItems,
+                "align-content"   => cssBox.AlignContent,
+                "flex-grow"       => cssBox.FlexGrow,
+                "flex-shrink"     => cssBox.FlexShrink,
+                "flex-basis"      => cssBox.FlexBasis,
+                "align-self"      => cssBox.AlignSelf,
+                "order"           => cssBox.Order,
+                "row-gap"         => cssBox.FlexRowGap,
+                "column-gap"      => cssBox.FlexColumnGap,
                 _ => null
             };
         }
@@ -162,7 +176,7 @@ namespace PeachPDF.Html.Core.Utils
             "left", "line-height",
             "list-style-image", "list-style-position", "list-style-type",
             "margin-bottom", "margin-left", "margin-right", "margin-top",
-            "max-width", "min-height",
+            "max-width", "min-width", "max-height", "min-height",
             "overflow",
             "padding-bottom", "padding-left", "padding-right", "padding-top",
             "position",
@@ -172,6 +186,10 @@ namespace PeachPDF.Html.Core.Utils
             "vertical-align", "visibility",
             "white-space", "width", "word-break", "word-spacing",
             "z-index",
+            "align-content", "align-items", "align-self",
+            "flex", "flex-basis", "flex-direction", "flex-flow", "flex-grow", "flex-shrink", "flex-wrap",
+            "justify-content", "order",
+            "gap", "row-gap", "column-gap",
         ];
 
         /// <summary>
@@ -427,10 +445,24 @@ namespace PeachPDF.Html.Core.Utils
                     }
 
                     break;
+                case "min-width":
+                    if (IsValidLengthProperty(value) || value == "0")
+                    {
+                        cssBox.MinWidth = value;
+                    }
+
+                    break;
                 case "height":
                     if (IsValidLengthProperty(value))
                     {
                         cssBox.Height = value;
+                    }
+
+                    break;
+                case "max-height":
+                    if (IsValidLengthProperty(value))
+                    {
+                        cssBox.MaxHeight = value;
                     }
 
                     break;
@@ -571,11 +603,105 @@ namespace PeachPDF.Html.Core.Utils
                 case "background-clip":
                     cssBox.BackgroundClip = value;
                     break;
+                case "flex-direction":
+                    cssBox.FlexDirection = value;
+                    break;
+                case "flex-wrap":
+                    cssBox.FlexWrap = value;
+                    break;
+                case "justify-content":
+                    cssBox.JustifyContent = value;
+                    break;
+                case "align-items":
+                    cssBox.AlignItems = value;
+                    break;
+                case "align-content":
+                    cssBox.AlignContent = value;
+                    break;
+                case "flex-grow":
+                    cssBox.FlexGrow = value;
+                    break;
+                case "flex-shrink":
+                    cssBox.FlexShrink = value;
+                    break;
+                case "flex-basis":
+                    cssBox.FlexBasis = value;
+                    break;
+                case "align-self":
+                    cssBox.AlignSelf = value;
+                    break;
+                case "order":
+                    cssBox.Order = value;
+                    break;
+                case "flex":
+                    SetFlexShorthand(cssBox, value);
+                    break;
+                case "flex-flow":
+                    SetFlexFlowShorthand(cssBox, value);
+                    break;
+                case "gap":
+                    SetFlexGapShorthand(cssBox, value);
+                    break;
+                case "row-gap":
+                    cssBox.FlexRowGap = value;
+                    break;
+                case "column-gap":
+                    cssBox.FlexColumnGap = value;
+                    break;
                 case "unicode-bidi":
                 case "background-attachment":
                 case "overflow-wrap":
                     break;
             }
+        }
+
+        private static void SetFlexShorthand(CssBox cssBox, string value)
+        {
+            switch (value)
+            {
+                case "none": cssBox.FlexGrow = "0"; cssBox.FlexShrink = "0"; cssBox.FlexBasis = "auto"; return;
+                case "auto": cssBox.FlexGrow = "1"; cssBox.FlexShrink = "1"; cssBox.FlexBasis = "auto"; return;
+            }
+            var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 1 && float.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _))
+                cssBox.FlexGrow = parts[0];
+            if (parts.Length >= 2 && float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _))
+                cssBox.FlexShrink = parts[1];
+            if (parts.Length >= 3)
+                cssBox.FlexBasis = parts[2];
+            else if (parts.Length == 1)
+            {
+                cssBox.FlexShrink = "1";
+                cssBox.FlexBasis = "0";
+            }
+        }
+
+        private static void SetFlexFlowShorthand(CssBox cssBox, string value)
+        {
+            foreach (var part in value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            {
+                switch (part)
+                {
+                    case "row":
+                    case "row-reverse":
+                    case "column":
+                    case "column-reverse":
+                        cssBox.FlexDirection = part;
+                        break;
+                    case "nowrap":
+                    case "wrap":
+                    case "wrap-reverse":
+                        cssBox.FlexWrap = part;
+                        break;
+                }
+            }
+        }
+
+        private static void SetFlexGapShorthand(CssBox cssBox, string value)
+        {
+            var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            cssBox.FlexRowGap    = parts[0];
+            cssBox.FlexColumnGap = parts.Length > 1 ? parts[1] : parts[0];
         }
 
         public static void ApplyCurrentColor(CssBox box, CssValueParser valueParser)

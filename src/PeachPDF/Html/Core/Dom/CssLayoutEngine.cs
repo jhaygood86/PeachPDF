@@ -84,6 +84,26 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
+            var minWidth = new CssLength(imageWord.OwnerBox.MinWidth);
+            if (minWidth.Number > 0)
+            {
+                double minWidthVal = -1;
+                if (minWidth.Unit == CssUnit.Pixels)
+                {
+                    minWidthVal = minWidth.Number;
+                }
+                else if (minWidth.IsPercentage)
+                {
+                    minWidthVal = minWidth.Number * imageWord.OwnerBox.ContainingBlock.Size.Width;
+                }
+
+                if (minWidthVal > -1 && imageWord.Width < minWidthVal)
+                {
+                    imageWord.Width = minWidthVal;
+                    scaleImageHeight = !hasImageTagHeight;
+                }
+            }
+
             if (hasImageTagHeight)
             {
                 imageWord.Height = height.Number;
@@ -112,6 +132,54 @@ namespace PeachPDF.Html.Core.Dom
                     // Divide the given tag height with the actual image height, to get the ratio.
                     var ratio = imageWord.Height / imageWord.Image.Height;
                     imageWord.Width = imageWord.Image.Width * ratio;
+                }
+            }
+
+            // Apply max-height / min-height constraints, rescaling width by the image's aspect
+            // ratio (mirroring the max-width/min-width handling above).
+            var maxHeight = new CssLength(imageWord.OwnerBox.MaxHeight);
+            if (maxHeight.Number > 0)
+            {
+                double maxHeightVal = -1;
+                if (maxHeight.Unit == CssUnit.Pixels)
+                {
+                    maxHeightVal = maxHeight.Number;
+                }
+                else if (maxHeight.IsPercentage && imageWord.OwnerBox.ContainingBlock.IsHeightCalculated)
+                {
+                    maxHeightVal = maxHeight.Number * imageWord.OwnerBox.ContainingBlock.Size.Height;
+                }
+
+                if (maxHeightVal > -1 && imageWord.Height > maxHeightVal)
+                {
+                    if (imageWord.Image != null && imageWord.Height > 0)
+                    {
+                        imageWord.Width *= maxHeightVal / imageWord.Height;
+                    }
+                    imageWord.Height = maxHeightVal;
+                }
+            }
+
+            var minHeight = new CssLength(imageWord.OwnerBox.MinHeight);
+            if (minHeight.Number > 0)
+            {
+                double minHeightVal = -1;
+                if (minHeight.Unit == CssUnit.Pixels)
+                {
+                    minHeightVal = minHeight.Number;
+                }
+                else if (minHeight.IsPercentage && imageWord.OwnerBox.ContainingBlock.IsHeightCalculated)
+                {
+                    minHeightVal = minHeight.Number * imageWord.OwnerBox.ContainingBlock.Size.Height;
+                }
+
+                if (minHeightVal > -1 && imageWord.Height < minHeightVal)
+                {
+                    if (imageWord.Image != null && imageWord.Height > 0)
+                    {
+                        imageWord.Width *= minHeightVal / imageWord.Height;
+                    }
+                    imageWord.Height = minHeightVal;
                 }
             }
 
@@ -356,6 +424,20 @@ namespace PeachPDF.Html.Core.Dom
                 width = await GetFitContentWidth(g, box, box.ContainingBlock.Size.Width);
             }
 
+            // Apply max-width constraint (before min-width, so min wins on conflict per CSS 2.1 §10.4)
+            if (CssValueParser.IsValidLength(box.MaxWidth))
+            {
+                var maxW = CssValueParser.ParseLength(box.MaxWidth, box.ContainingBlock.Size.Width, box);
+                width = Math.Min(width, maxW);
+            }
+
+            // Apply min-width constraint
+            if (box.MinWidth != "0" && CssValueParser.IsValidLength(box.MinWidth))
+            {
+                var minW = CssValueParser.ParseLength(box.MinWidth, box.ContainingBlock.Size.Width, box);
+                width = Math.Max(width, minW);
+            }
+
             return width;
         }
 
@@ -373,7 +455,8 @@ namespace PeachPDF.Html.Core.Dom
                 height = Math.Max(height, box.Words.Sum(w => w.Height));
             }
 
-            if (CssValueParser.IsValidLength(box.MinHeight))
+            if (CssValueParser.IsValidLength(box.MinHeight) &&
+                (box.ContainingBlock.IsHeightCalculated || !box.MinHeight.EndsWith('%')))
             {
                 var minHeight = CssValueParser.ParseLength(box.MinHeight, box.ContainingBlock.Size.Height, box) + box.ActualBoxSizeIncludedHeight;
 
@@ -416,6 +499,35 @@ namespace PeachPDF.Html.Core.Dom
             var height = boxHeight ?? 0;
             box.ActualBottom = Math.Max(box.ActualBottom, box.Location.Y + height);
             box.IsHeightCalculated = boxHeight is not null;
+
+            // Apply max-height constraint. Unlike min-height/explicit-height above (which only ever
+            // grow ActualBottom), max-height must be able to shrink the box below its content's
+            // natural extent — content simply overflows past ActualBottom, mirroring the existing
+            // overflow:hidden clip elsewhere in this engine.
+            if (CssValueParser.IsValidLength(box.MaxHeight) &&
+                (box.ContainingBlock.IsHeightCalculated || !box.MaxHeight.EndsWith('%')))
+            {
+                var maxHeight = CssValueParser.ParseLength(box.MaxHeight, box.ContainingBlock.Size.Height, box) + box.ActualBoxSizeIncludedHeight;
+                var maxBottom = box.Location.Y + maxHeight;
+
+                if (box.ActualBottom > maxBottom)
+                {
+                    box.ActualBottom = maxBottom;
+
+                    // min-height wins over max-height on conflict (CSS 2.1 §10.7)
+                    if (CssValueParser.IsValidLength(box.MinHeight) &&
+                        (box.ContainingBlock.IsHeightCalculated || !box.MinHeight.EndsWith('%')))
+                    {
+                        var minHeight = CssValueParser.ParseLength(box.MinHeight, box.ContainingBlock.Size.Height, box) + box.ActualBoxSizeIncludedHeight;
+                        var minBottom = box.Location.Y + minHeight;
+
+                        if (box.ActualBottom < minBottom)
+                        {
+                            box.ActualBottom = minBottom;
+                        }
+                    }
+                }
+            }
         }
 
         #region Private methods
@@ -685,6 +797,30 @@ namespace PeachPDF.Html.Core.Dom
                         word.Left += box.ActualMarginLeft;
                         word.Top += box.ActualMarginTop;
                     }
+                }
+                else if (b.Display == CssConstants.InlineFlex)
+                {
+                    // Treat inline-flex as an atomic inline element: run flex layout then advance the
+                    // cursor by the box's outer size.  coordinates.CurrentX is already past the left
+                    // margin+border+padding (leftSpacing was added above), so Location.X sits at the
+                    // border-left edge (after margin).
+                    b.Location = new RPoint(
+                        coordinates.CurrentX - b.ActualPaddingLeft - b.ActualBorderLeftWidth,
+                        coordinates.CurrentY);
+                    b.ActualBottom = b.Location.Y;
+                    b.FirstHostingLineBox = coordinates.Line;
+                    b.LastHostingLineBox  = coordinates.Line;
+
+                    await CssLayoutEngineFlex.PerformLayout(g, b);
+
+                    // Advance to content-right so that the outer rightSpacing addition lands correctly.
+                    coordinates.CurrentX = b.ClientRight;
+                    coordinates.MaxRight  = Math.Max(coordinates.MaxRight,  b.Location.X + b.ActualBoxSizingWidth);
+                    coordinates.MaxBottom = Math.Max(coordinates.MaxBottom, b.Location.Y + b.ActualBoxSizingHeight);
+
+                    // Register the box in the parent line so its border/background is painted.
+                    coordinates.Line.Rectangles[b] = new RRect(
+                        b.Location.X, b.Location.Y, b.ActualBoxSizingWidth, b.ActualBoxSizingHeight);
                 }
                 else
                 {
