@@ -299,7 +299,16 @@ Layout computes the position and size of every box. It runs in two sub-passes: w
 
 ### Word measurement
 
-`CssLayoutEngine.MeasureWords` does a depth-first walk of the tree and calls `CssBox.MeasureWordsSize` on each box. This calls `RGraphics.MeasureString` to ask the PDF graphics context for the pixel width of each word using the box's resolved font. Image sizes are resolved by `MeasureImageSize`, which respects `width`, `height`, `max-width`, and aspect-ratio constraints.
+`CssLayoutEngine.MeasureWords` does a depth-first walk of the tree and calls `CssBox.MeasureWordsSize` on each box. This calls `RGraphics.MeasureString` to ask the PDF graphics context for the pixel width of each word using the box's resolved font. Image sizes are resolved by `MeasureImageSize`, which respects `width`, `height`, `min-width`, `max-width`, `min-height`, `max-height`, and aspect-ratio constraints.
+
+### Box sizing constraints (min/max-width, min/max-height)
+
+`min-width`/`max-width`/`min-height`/`max-height` are enforced differently for each axis, because width and height are resolved in opposite directions:
+
+- **Width is resolved top-down, before children lay out.** `CssLayoutEngine.GetBoxWidth` computes a box's width and hard-sets `ActualRight` *before* recursing into its children, so a `max-width`/`min-width` clamp there (max applied first, then min — min wins on conflict per CSS §10.4) correctly constrains how children wrap and position themselves, matching real browsers.
+- **Height is resolved bottom-up, after children lay out.** A box's natural height comes from its already-laid-out children. `CssLayoutEngine.ApplyHeight` (called for every box right after its children finish) only *grows* a box to fit `min-height`/explicit `height` via `Math.Max`. `max-height` is applied as a separate, final hard-set step that can shrink `ActualBottom` below the content's natural extent — content simply overflows past the box's bottom edge, the same behavior already used for `overflow: hidden` clipping elsewhere in this engine. `min-height` is re-applied afterward so it wins if it conflicts with `max-height`.
+- **Percentages against an indefinite containing block are ignored** (treated as unset) via the box's `IsHeightCalculated` flag, avoiding resolving `min-height`/`max-height`/`height` percentages against a not-yet-known ancestor height.
+- These constraints apply uniformly to general blocks, replaced elements (images, via `MeasureImageSize`), absolutely/fixed positioned boxes, and flex items (flex items are additionally clamped on the main axis by `CssLayoutEngineFlex.ClampMainAxis`). Table cells apply `min-width`/`max-width` to the table's auto column-width distribution in `CssLayoutEngineTable`.
 
 ### Block formatting context
 

@@ -253,6 +253,7 @@ namespace PeachPDF.Html.Core
             { "margin-top", "0" },
             { "max-width", CssConstants.None },
             { "max-height", CssConstants.None },
+            { "min-width", "0" },
             { "min-height", "0" },
             { "overflow", "visible" },
             { "padding-bottom", "0" },
