@@ -721,6 +721,158 @@ namespace PeachPDF.Tests.Integration
                 $"Container too wide: {container.ActualBoxSizingWidth}px");
         }
 
+        // ─── max-width / max-height clamping ────────────────────────────────────
+
+        [Fact]
+        public async Task MaxWidth_ClampsGrownItem_Row()
+        {
+            var html = Wrap(@"
+                <div style='display:flex; width:300px;'>
+                    <div id='a' style='flex-grow:1; max-width:80px; height:20px;'></div>
+                    <div id='b' style='flex-grow:1; height:20px;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            Assert.InRange(a.ActualBoxSizingWidth, 76, 84);
+            Assert.True(b.ActualBoxSizingWidth > a.ActualBoxSizingWidth,
+                $"B should absorb more than clamped A: A={a.ActualBoxSizingWidth}, B={b.ActualBoxSizingWidth}");
+        }
+
+        [Fact]
+        public async Task MaxHeight_ClampsGrownItem_Column()
+        {
+            var html = Wrap(@"
+                <div style='display:flex; flex-direction:column; height:200px;'>
+                    <div id='a' style='flex-grow:1; max-height:50px; width:50px;'></div>
+                    <div id='b' style='flex-grow:1; width:50px;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            Assert.InRange(a.ActualBoxSizingHeight, 46, 54);
+            Assert.True(b.ActualBoxSizingHeight > a.ActualBoxSizingHeight,
+                $"B should absorb more than clamped A: A={a.ActualBoxSizingHeight}, B={b.ActualBoxSizingHeight}");
+        }
+
+        [Fact]
+        public async Task MinWidth_OverridesShrink_EvenBeyondContainer()
+        {
+            // flex-shrink would otherwise reduce the item to container width (50px);
+            // min-width:80px must win, causing the item to overflow the container.
+            var html = Wrap(@"
+                <div style='display:flex; width:50px;'>
+                    <div id='item' style='flex-basis:200px; flex-shrink:1; min-width:80px; height:20px;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var item = FindById(root, "item")!;
+            Assert.InRange(item.ActualBoxSizingWidth, 78, 82);
+        }
+
+        // ─── Percentage flex-basis ───────────────────────────────────────────────
+
+        [Fact]
+        public async Task FlexBasis_Percentage_ResolvesAgainstDefiniteContainerWidth()
+        {
+            var html = Wrap(@"
+                <div style='display:flex; width:300px;'>
+                    <div id='item' style='flex-basis:50%; flex-grow:0; flex-shrink:0; height:20px;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var item = FindById(root, "item")!;
+            Assert.InRange(item.ActualBoxSizingWidth, 148, 152);
+        }
+
+        [Fact]
+        public async Task FlexBasis_Percentage_OnIndefiniteMainAxis_FallsBackToContentSize()
+        {
+            // Column direction with auto container height: the main axis is indefinite, so a
+            // percentage flex-basis must behave like "auto" (content-based) instead of resolving to 0.
+            var html = Wrap(@"
+                <div style='display:flex; flex-direction:column; width:100px;'>
+                    <div id='item' style='flex-basis:50%;'>Some content that needs height</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var item = FindById(root, "item")!;
+            Assert.True(item.ActualBoxSizingHeight > 5,
+                $"Item should size to its content, not collapse to ~0: {item.ActualBoxSizingHeight}");
+        }
+
+        // ─── flex-basis: content ─────────────────────────────────────────────────
+
+        [Fact]
+        public async Task FlexBasis_Content_IgnoresExplicitWidth()
+        {
+            // flex-basis:content must ignore the conflicting explicit width and size to content instead.
+            var html = Wrap(@"
+                <div style='display:flex; width:300px;'>
+                    <div id='item' style='flex-basis:content; width:250px; flex-grow:0; flex-shrink:0; padding:0 5px;'>Hi</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var item = FindById(root, "item")!;
+            Assert.True(item.ActualBoxSizingWidth < 50,
+                $"Item should be content-sized (narrow), not use the explicit 250px width: {item.ActualBoxSizingWidth}");
+        }
+
+        // ─── Auto margins (main axis) ────────────────────────────────────────────
+
+        [Fact]
+        public async Task AutoMargin_MarginLeft_PushesItemToEnd()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:flex; width:300px;'>
+                    <div id='item' style='width:50px; height:20px; margin-left:auto;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var item = FindById(root, "item")!;
+            Assert.InRange(item.ActualRight, container.ClientRight - 2, container.ClientRight + 2);
+        }
+
+        [Fact]
+        public async Task AutoMargin_ShorthandLeftRight_CentersSingleItem()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:flex; width:300px;'>
+                    <div id='item' style='width:50px; height:20px; margin:0 auto;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var item = FindById(root, "item")!;
+            double expectedX = container.ClientLeft + (300 - 50) / 2.0;
+            Assert.InRange(item.Location.X, expectedX - 2, expectedX + 2);
+        }
+
+        [Fact]
+        public async Task AutoMargin_OnSecondItem_PushesItApartFromFirst()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:flex; width:300px;'>
+                    <div id='a' style='width:50px; height:20px;'></div>
+                    <div id='b' style='width:50px; height:20px; margin-left:auto;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            Assert.InRange(a.Location.X, container.ClientLeft - 2, container.ClientLeft + 2);
+            Assert.InRange(b.ActualRight, container.ClientRight - 2, container.ClientRight + 2);
+        }
+
+        [Fact]
+        public async Task AutoMargin_TakesPrecedenceOverJustifyContent()
+        {
+            // Even with justify-content:center, an auto margin must absorb the free space instead.
+            var html = Wrap(@"
+                <div id='container' style='display:flex; width:300px; justify-content:center;'>
+                    <div id='item' style='width:50px; height:20px; margin-left:auto;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var item = FindById(root, "item")!;
+            Assert.InRange(item.ActualRight, container.ClientRight - 2, container.ClientRight + 2);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>

@@ -984,6 +984,37 @@ var flexHtml = "<!DOCTYPE html><html><head>" + FlexCss + "</head><body>" +
         "</td></tr>"
     ) +
 
+    FSection("11 — max-width / max-height clamping",
+        FContainer("A max-width:80px, both grow:1", "gap:4px;",
+            FItem("A", "#e74c3c", "flex-grow:1;max-width:80px;") +
+            FItem("B", "#3498db", "flex-grow:1;")) +
+        FContainer("column: A max-height:50px, both grow:1 (160px tall)", "flex-direction:column;height:160px;gap:4px;width:80px;",
+            FItem("A", "#e74c3c", "flex-grow:1;max-height:50px;") +
+            FItem("B", "#3498db", "flex-grow:1;"))
+    ) +
+
+    FSection("12 — Percentage flex-basis",
+        FContainer("flex-basis:50% (240px container)", "width:240px;",
+            FItem("A 50%", "#e74c3c", "flex-basis:50%;flex-grow:0;flex-shrink:0;")) +
+        FContainer("column, auto height: flex-basis:50% falls back to content", "flex-direction:column;width:80px;",
+            FItem("A 50%", "#e74c3c", "flex-basis:50%;"))
+    ) +
+
+    FSection("13 — flex-basis: content",
+        FContainer("flex-basis:content ignores explicit width:150px", "gap:4px;",
+            FItem("Hi", "#e74c3c", "flex-basis:content;width:150px;flex-grow:0;flex-shrink:0;"))
+    ) +
+
+    FSection("14 — Auto margins (main axis)",
+        FContainer("margin-left:auto pushes item to the end", "width:240px;",
+            FItem("A", "#e74c3c", "margin-left:auto;width:50px;")) +
+        FContainer("margin:0 auto centers a single item", "width:240px;",
+            FItem("A", "#e74c3c", "margin:0 auto;width:50px;")) +
+        FContainer("second item margin-left:auto pushes items apart", "width:240px;",
+            FItem("A", "#e74c3c", "width:50px;") +
+            FItem("B", "#3498db", "margin-left:auto;width:50px;"))
+    ) +
+
     "</body></html>";
 
 var flexStream = new MemoryStream();

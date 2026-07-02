@@ -343,6 +343,7 @@ namespace PeachPDF.Html.Core.Dom
         public string MinWidth { get; set; } = "0";
 
         public string Height { get; set; } = "auto";
+        public string MaxHeight { get; set; } = "none";
         public string MinHeight { get; set; } = "auto";
 
         public string BackgroundColor { get; set; } = "transparent";
@@ -1288,6 +1289,7 @@ namespace PeachPDF.Html.Core.Dom
             Display = p.Display;
             Float = p.Float;
             Height = p.Height;
+            MaxHeight = p.MaxHeight;
             MarginBottom = p.MarginBottom;
             MarginLeft = p.MarginLeft;
             MarginRight = p.MarginRight;

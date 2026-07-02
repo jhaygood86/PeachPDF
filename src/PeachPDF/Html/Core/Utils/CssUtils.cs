@@ -99,6 +99,7 @@ namespace PeachPDF.Html.Core.Utils
                 "max-width" => cssBox.MaxWidth,
                 "min-width" => cssBox.MinWidth,
                 "height" => cssBox.Height,
+                "max-height" => cssBox.MaxHeight,
                 "min-height" => cssBox.MinHeight,
                 "background-color" => cssBox.BackgroundColor,
                 "background-image" => null,
@@ -175,7 +176,7 @@ namespace PeachPDF.Html.Core.Utils
             "left", "line-height",
             "list-style-image", "list-style-position", "list-style-type",
             "margin-bottom", "margin-left", "margin-right", "margin-top",
-            "max-width", "min-width", "min-height",
+            "max-width", "min-width", "max-height", "min-height",
             "overflow",
             "padding-bottom", "padding-left", "padding-right", "padding-top",
             "position",
@@ -455,6 +456,13 @@ namespace PeachPDF.Html.Core.Utils
                     if (IsValidLengthProperty(value))
                     {
                         cssBox.Height = value;
+                    }
+
+                    break;
+                case "max-height":
+                    if (IsValidLengthProperty(value))
+                    {
+                        cssBox.MaxHeight = value;
                     }
 
                     break;

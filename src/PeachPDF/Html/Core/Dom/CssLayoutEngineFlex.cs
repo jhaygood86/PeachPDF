@@ -86,7 +86,15 @@ namespace PeachPDF.Html.Core.Dom
             var items = new List<FlexItem>(rawItems.Count);
             foreach (var box in rawItems)
             {
-                var item = await MeasureItem(g, box, mainSize);
+                var item = await MeasureItem(g, box, mainSize, mainSizeIndefinite);
+
+                // Resolve main-axis margins up front: 0 for "auto" until Phase 7 distributes
+                // free space into it, otherwise the item's actual parsed margin.
+                item.MarginBeforeAuto = IsMainMarginBeforeAuto(box);
+                item.MarginAfterAuto  = IsMainMarginAfterAuto(box);
+                item.MarginBefore = item.MarginBeforeAuto ? 0 : MainMarginBefore(box);
+                item.MarginAfter  = item.MarginAfterAuto  ? 0 : MainMarginAfter(box);
+
                 items.Add(item);
             }
 
@@ -95,7 +103,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 double mainGapCol = ParseMainGap(0);
                 int nc = items.Count;
-                mainSize = items.Sum(i => i.HypotheticalMainSize + MainMarginBefore(i.Box) + MainMarginAfter(i.Box))
+                mainSize = items.Sum(i => i.HypotheticalMainSize + i.MarginBefore + i.MarginAfter)
                     + (nc > 1 ? mainGapCol * (nc - 1) : 0);
             }
 
@@ -112,7 +120,12 @@ namespace PeachPDF.Html.Core.Dom
             {
                 foreach (var line in lines)
                     foreach (var item in line.Items)
-                        item.FinalMainSize = item.HypotheticalMainSize;
+                    {
+                        double final = ClampMainAxis(item.Box, item.HypotheticalMainSize, mainSize);
+                        item.FinalMainSize = final;
+                        if (Math.Abs(final - item.NaturalMainSize) > 0.5)
+                            await ResizeItem(g, item, final);
+                    }
             }
 
             // Phase 5: line cross sizes; for single-line, respect container cross size if set
@@ -173,7 +186,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 double contentMainEnd = lines.Max(l =>
                     l.Items.Count > 0
-                        ? l.Items.Last().MainOffset + l.Items.Last().FinalMainSize + MainMarginAfter(l.Items.Last().Box)
+                        ? l.Items.Last().MainOffset + l.Items.Last().FinalMainSize + l.Items.Last().MarginAfter
                         : 0.0);
                 _flexBox.ActualRight = _flexBox.ClientLeft + contentMainEnd
                     + _flexBox.ActualPaddingRight + _flexBox.ActualBorderRightWidth;
@@ -182,21 +195,24 @@ namespace PeachPDF.Html.Core.Dom
 
         // ─── Phase 2: measurement ────────────────────────────────────────────────
 
-        private async ValueTask<FlexItem> MeasureItem(RGraphics g, CssBox box, double mainSize)
+        private async ValueTask<FlexItem> MeasureItem(RGraphics g, CssBox box, double mainSize, bool mainSizeIndefinite)
         {
             // Derive hypothetical main size from CSS properties (don't rely on PerformLayout result,
             // since auto-width block boxes fill the entire containing block instead of their intrinsic size).
+            // A percentage flex-basis against an indefinite main axis resolves to nothing per spec
+            // (§4.5), so it must fall through to auto/content-based sizing rather than resolving to 0.
+            bool isIndefinitePercentageBasis = mainSizeIndefinite && box.FlexBasis.EndsWith('%');
             double hypothetical;
-            if (box.FlexBasis is not ("auto" or "content" or ""))
+            if (box.FlexBasis is not ("auto" or "content" or "") && !isIndefinitePercentageBasis)
             {
                 // CSS flex-basis = content size; hypothetical = outer size = content + padding + border
                 hypothetical = CssValueParser.ParseLength(box.FlexBasis, mainSize, box) + MainPaddingBorder(box);
             }
-            else if (_isRow && CssValueParser.IsValidLength(box.Width))
+            else if (box.FlexBasis != "content" && _isRow && CssValueParser.IsValidLength(box.Width))
             {
                 hypothetical = CssValueParser.ParseLength(box.Width, mainSize, box) + MainPaddingBorder(box);
             }
-            else if (!_isRow && CssValueParser.IsValidLength(box.Height))
+            else if (box.FlexBasis != "content" && !_isRow && CssValueParser.IsValidLength(box.Height))
             {
                 hypothetical = CssValueParser.ParseLength(box.Height, mainSize, box) + MainPaddingBorder(box);
             }
@@ -296,7 +312,7 @@ namespace PeachPDF.Html.Core.Dom
             foreach (var item in items)
             {
                 double itemMain = item.HypotheticalMainSize
-                    + MainMarginBefore(item.Box) + MainMarginAfter(item.Box);
+                    + item.MarginBefore + item.MarginAfter;
                 if (current.Count > 0 && used + mainGap + itemMain > mainSize)
                 {
                     lines.Add(new FlexLine(current));
@@ -321,7 +337,7 @@ namespace PeachPDF.Html.Core.Dom
             double mainGap = ParseMainGap(mainSize);
             double totalGapSpace = line.Items.Count > 1 ? mainGap * (line.Items.Count - 1) : 0;
             double usedSpace = line.Items.Sum(i =>
-                i.HypotheticalMainSize + MainMarginBefore(i.Box) + MainMarginAfter(i.Box));
+                i.HypotheticalMainSize + i.MarginBefore + i.MarginAfter);
             double freeSpace = mainSize - usedSpace - totalGapSpace;
 
             foreach (var item in line.Items)
@@ -349,6 +365,7 @@ namespace PeachPDF.Html.Core.Dom
                     final = item.HypotheticalMainSize;
                 }
 
+                final = ClampMainAxis(item.Box, final, mainSize);
                 item.FinalMainSize = final;
 
                 // Re-layout only when the final size differs from what was used during measurement
@@ -466,9 +483,23 @@ namespace PeachPDF.Html.Core.Dom
             double totalGapSpace = line.Items.Count > 1 ? mainGap * (line.Items.Count - 1) : 0;
 
             double usedSpace = line.Items.Sum(i =>
-                i.FinalMainSize + MainMarginBefore(i.Box) + MainMarginAfter(i.Box));
+                i.FinalMainSize + i.MarginBefore + i.MarginAfter);
             double freeSpace = indefiniteMainSize ? 0 : mainSize - usedSpace - totalGapSpace;
             int n = line.Items.Count;
+
+            // Auto margins on the main axis absorb free space before justify-content runs
+            // (spec §8.1). A negative freeSpace (overflow) leaves auto margins at zero.
+            int autoMarginCount = line.Items.Sum(i => (i.MarginBeforeAuto ? 1 : 0) + (i.MarginAfterAuto ? 1 : 0));
+            if (autoMarginCount > 0 && freeSpace > 0)
+            {
+                double share = freeSpace / autoMarginCount;
+                foreach (var i in line.Items)
+                {
+                    if (i.MarginBeforeAuto) i.MarginBefore = share;
+                    if (i.MarginAfterAuto)  i.MarginAfter  = share;
+                }
+                freeSpace = 0;
+            }
 
             double startOffset, spacing;
             switch (_flexBox.JustifyContent)
@@ -493,8 +524,8 @@ namespace PeachPDF.Html.Core.Dom
             double cursor = startOffset;
             foreach (var item in line.Items)
             {
-                item.MainOffset = cursor + MainMarginBefore(item.Box);
-                cursor += item.FinalMainSize + MainMarginBefore(item.Box) + MainMarginAfter(item.Box) + mainGap + spacing;
+                item.MainOffset = cursor + item.MarginBefore;
+                cursor += item.FinalMainSize + item.MarginBefore + item.MarginAfter + mainGap + spacing;
             }
         }
 
@@ -644,10 +675,31 @@ namespace PeachPDF.Html.Core.Dom
         private double MainMarginAfter(CssBox box) =>
             _isRow ? box.ActualMarginRight : box.ActualMarginBottom;
 
+        private bool IsMainMarginBeforeAuto(CssBox box) =>
+            (_isRow ? box.MarginLeft : box.MarginTop) == CssConstants.Auto;
+
+        private bool IsMainMarginAfterAuto(CssBox box) =>
+            (_isRow ? box.MarginRight : box.MarginBottom) == CssConstants.Auto;
+
         private double MainPaddingBorder(CssBox box) =>
             _isRow
                 ? box.ActualPaddingLeft + box.ActualPaddingRight + box.ActualBorderLeftWidth  + box.ActualBorderRightWidth
                 : box.ActualPaddingTop  + box.ActualPaddingBottom + box.ActualBorderTopWidth + box.ActualBorderBottomWidth;
+
+        // Clamps an outer main-axis size against the item's min/max constraints for the main axis
+        // (min/max-width for row, min/max-height for column). Per spec, min wins over max on conflict.
+        private double ClampMainAxis(CssBox box, double outerSize, double mainSize)
+        {
+            var maxRaw = _isRow ? box.MaxWidth : box.MaxHeight;
+            if (CssValueParser.IsValidLength(maxRaw))
+                outerSize = Math.Min(outerSize, CssValueParser.ParseLength(maxRaw, mainSize, box) + MainPaddingBorder(box));
+
+            var minRaw = _isRow ? box.MinWidth : box.MinHeight;
+            if (CssValueParser.IsValidLength(minRaw))
+                outerSize = Math.Max(outerSize, CssValueParser.ParseLength(minRaw, mainSize, box) + MainPaddingBorder(box));
+
+            return outerSize;
+        }
 
         // ─── Gap helpers ──────────────────────────────────────────────────────────
 
@@ -708,6 +760,13 @@ namespace PeachPDF.Html.Core.Dom
             public double  FinalMainSize        { get; set; } = hypotheticalMainSize;
             public double  MainOffset           { get; set; }
             public double  CrossOffset          { get; set; }
+
+            // Resolved main-axis margins: 0 for an "auto" margin until Phase 7 distributes
+            // free space into it (spec §8.1); otherwise the item's actual parsed margin.
+            public bool    MarginBeforeAuto     { get; set; }
+            public bool    MarginAfterAuto      { get; set; }
+            public double  MarginBefore         { get; set; }
+            public double  MarginAfter          { get; set; }
         }
 
         private sealed class FlexLine(List<FlexItem> items)
