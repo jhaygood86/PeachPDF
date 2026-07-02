@@ -356,6 +356,13 @@ namespace PeachPDF.Html.Core.Dom
                 width = await GetFitContentWidth(g, box, box.ContainingBlock.Size.Width);
             }
 
+            // Apply min-width constraint
+            if (box.MinWidth != "0" && CssValueParser.IsValidLength(box.MinWidth))
+            {
+                var minW = CssValueParser.ParseLength(box.MinWidth, box.ContainingBlock.Size.Width, box);
+                width = Math.Max(width, minW);
+            }
+
             return width;
         }
 
@@ -685,6 +692,30 @@ namespace PeachPDF.Html.Core.Dom
                         word.Left += box.ActualMarginLeft;
                         word.Top += box.ActualMarginTop;
                     }
+                }
+                else if (b.Display == CssConstants.InlineFlex)
+                {
+                    // Treat inline-flex as an atomic inline element: run flex layout then advance the
+                    // cursor by the box's outer size.  coordinates.CurrentX is already past the left
+                    // margin+border+padding (leftSpacing was added above), so Location.X sits at the
+                    // border-left edge (after margin).
+                    b.Location = new RPoint(
+                        coordinates.CurrentX - b.ActualPaddingLeft - b.ActualBorderLeftWidth,
+                        coordinates.CurrentY);
+                    b.ActualBottom = b.Location.Y;
+                    b.FirstHostingLineBox = coordinates.Line;
+                    b.LastHostingLineBox  = coordinates.Line;
+
+                    await CssLayoutEngineFlex.PerformLayout(g, b);
+
+                    // Advance to content-right so that the outer rightSpacing addition lands correctly.
+                    coordinates.CurrentX = b.ClientRight;
+                    coordinates.MaxRight  = Math.Max(coordinates.MaxRight,  b.Location.X + b.ActualBoxSizingWidth);
+                    coordinates.MaxBottom = Math.Max(coordinates.MaxBottom, b.Location.Y + b.ActualBoxSizingHeight);
+
+                    // Register the box in the parent line so its border/background is painted.
+                    coordinates.Line.Rectangles[b] = new RRect(
+                        b.Location.X, b.Location.Y, b.ActualBoxSizingWidth, b.ActualBoxSizingHeight);
                 }
                 else
                 {

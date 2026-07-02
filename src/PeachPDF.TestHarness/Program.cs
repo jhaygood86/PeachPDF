@@ -843,3 +843,157 @@ marginBoxSizingDoc.Save(marginBoxSizingStream);
 File.Delete("test_paged_media_margin_box_sizing.pdf");
 File.WriteAllBytes("test_paged_media_margin_box_sizing.pdf", marginBoxSizingStream.ToArray());
 Console.WriteLine("Saved test_paged_media_margin_box_sizing.pdf");
+
+// ─── CSS Flexbox showcase ──────────────────────────────────────────────────
+
+static string FItem(string label, string color, string extraCss = "") =>
+    $"<div style=\"background:{color};color:#fff;font:bold 7pt Arial;padding:4px 6px;min-width:28px;text-align:center;{extraCss}\">{label}</div>";
+
+static string FContainer(string desc, string containerCss, string itemsHtml) =>
+    $"<tr><td style=\"font:7pt Arial;color:#333;padding:2px 4px 2px 0;white-space:nowrap\">{desc}</td>" +
+    $"<td style=\"padding:2px\"><div style=\"display:flex;border:1px solid #bbb;background:#f8f8f8;min-height:22px;{containerCss}\">{itemsHtml}</div></td>" +
+    $"<td style=\"font:5.5pt Arial;color:#888;padding:2px 4px;word-break:break-all\">{containerCss}</td></tr>";
+
+static string FSection(string title, string rows) =>
+    $"<h2>{title}</h2>" +
+    "<table style=\"width:100%;border-collapse:collapse;margin-bottom:6px\">" +
+    "<col style=\"width:90px\"><col><col style=\"width:100px\">" +
+    rows + "</table>";
+
+static string FItems3(string extraCss = "") =>
+    FItem("A", "#e74c3c", extraCss) + FItem("B", "#3498db", extraCss) + FItem("C", "#27ae60", extraCss);
+
+
+const string FlexCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 9pt; margin: 0.7em 0 0.2em; padding-bottom: 2px; border-bottom: 1px solid #ccc; color: #333 }
+    </style>
+    """;
+
+var flexHtml = "<!DOCTYPE html><html><head>" + FlexCss + "</head><body>" +
+
+    "<h1>CSS Flexbox Test Page</h1>" +
+
+    FSection("1 — flex-direction",
+        FContainer("row (default)", "flex-direction:row;gap:4px;", FItems3()) +
+        FContainer("row-reverse", "flex-direction:row-reverse;gap:4px;", FItems3()) +
+        FContainer("column", "flex-direction:column;gap:2px;width:60px;", FItems3()) +
+        FContainer("column-reverse", "flex-direction:column-reverse;gap:2px;width:60px;", FItems3())
+    ) +
+
+    FSection("2 — justify-content (row, 240px container)",
+        FContainer("flex-start", "justify-content:flex-start;width:240px;gap:4px;",   FItems3("width:50px;")) +
+        FContainer("center",     "justify-content:center;width:240px;gap:4px;",        FItems3("width:50px;")) +
+        FContainer("flex-end",   "justify-content:flex-end;width:240px;gap:4px;",      FItems3("width:50px;")) +
+        FContainer("space-between","justify-content:space-between;width:240px;",       FItems3("width:50px;")) +
+        FContainer("space-around", "justify-content:space-around;width:240px;",        FItems3("width:50px;")) +
+        FContainer("space-evenly", "justify-content:space-evenly;width:240px;",        FItems3("width:50px;"))
+    ) +
+
+    FSection("3 — align-items (row, 80px container height)",
+        FContainer("flex-start", "align-items:flex-start;height:80px;gap:4px;",  FItems3("width:50px;height:28px;")) +
+        FContainer("center",     "align-items:center;height:80px;gap:4px;",       FItems3("width:50px;height:28px;")) +
+        FContainer("flex-end",   "align-items:flex-end;height:80px;gap:4px;",     FItems3("width:50px;height:28px;")) +
+        FContainer("stretch",    "align-items:stretch;height:80px;gap:4px;",      FItems3("width:50px;"))
+    ) +
+
+    FSection("4 — flex-grow",
+        FContainer("grow:0,0,0 (none)", "gap:4px;",
+            FItem("A grow:0", "#e74c3c", "flex-grow:0;width:50px;") +
+            FItem("B grow:0", "#3498db", "flex-grow:0;width:50px;") +
+            FItem("C grow:0", "#27ae60", "flex-grow:0;width:50px;")) +
+        FContainer("grow:1,1,1 (equal)", "gap:4px;",
+            FItem("A 1", "#e74c3c", "flex-grow:1;") +
+            FItem("B 1", "#3498db", "flex-grow:1;") +
+            FItem("C 1", "#27ae60", "flex-grow:1;")) +
+        FContainer("grow:1,2,3 (ratio)", "gap:4px;",
+            FItem("A 1", "#e74c3c", "flex-grow:1;") +
+            FItem("B 2", "#3498db", "flex-grow:2;") +
+            FItem("C 3", "#27ae60", "flex-grow:3;"))
+    ) +
+
+    FSection("5 — flex-shrink &amp; flex-basis",
+        FContainer("shrink:1,1 basis:120px (overflows 240px)", "width:240px;",
+            FItem("A 120", "#e74c3c", "flex-basis:120px;flex-shrink:1;") +
+            FItem("B 120", "#3498db", "flex-basis:120px;flex-shrink:1;") +
+            FItem("C 120", "#27ae60", "flex-basis:120px;flex-shrink:1;")) +
+        FContainer("shrink:1,0 (C does not shrink)", "width:240px;",
+            FItem("A shr:1", "#e74c3c", "flex-basis:120px;flex-shrink:1;") +
+            FItem("B shr:1", "#3498db", "flex-basis:120px;flex-shrink:1;") +
+            FItem("C shr:0", "#27ae60", "flex-basis:80px;flex-shrink:0;")) +
+        FContainer("flex:1 shorthand", "gap:4px;",
+            FItem("flex:1", "#e74c3c", "flex:1;") +
+            FItem("flex:2", "#3498db", "flex:2;") +
+            FItem("flex:none", "#27ae60", "flex:none;width:50px;"))
+    ) +
+
+    FSection("6 — flex-wrap",
+        FContainer("nowrap (overflow)", "flex-wrap:nowrap;width:200px;",
+            FItems3("width:90px;")) +
+        FContainer("wrap", "flex-wrap:wrap;width:200px;gap:4px;",
+            FItems3("width:90px;height:24px;")) +
+        FContainer("wrap-reverse", "flex-wrap:wrap-reverse;width:200px;gap:4px;",
+            FItems3("width:90px;height:24px;"))
+    ) +
+
+    FSection("7 — align-self (overrides align-items)",
+        FContainer("align-items:flex-start, item B → flex-end",
+            "align-items:flex-start;height:80px;gap:4px;",
+            FItem("A start", "#e74c3c", "width:50px;height:28px;") +
+            FItem("B end", "#3498db", "width:50px;height:28px;align-self:flex-end;") +
+            FItem("C center", "#27ae60", "width:50px;height:28px;align-self:center;"))
+    ) +
+
+    FSection("8 — order",
+        FContainer("DOM order: A B C (order: 3 1 2)", "gap:4px;",
+            FItem("A order:3", "#e74c3c", "order:3;width:50px;") +
+            FItem("B order:1", "#3498db", "order:1;width:50px;") +
+            FItem("C order:2", "#27ae60", "order:2;width:50px;"))
+    ) +
+
+    FSection("9 — Nested flex containers",
+        "<tr><td colspan='3' style='padding:2px'>" +
+        "<div style='display:flex;gap:8px;'>" +
+        "  <div style='display:flex;flex-direction:column;gap:4px;flex:1;border:1px solid #bbb;padding:4px;background:#f8f8f8;'>" +
+        "    <div style='background:#e74c3c;color:#fff;font:7pt Arial;padding:3px;text-align:center'>Col A row 1</div>" +
+        "    <div style='background:#c0392b;color:#fff;font:7pt Arial;padding:3px;text-align:center'>Col A row 2</div>" +
+        "  </div>" +
+        "  <div style='display:flex;flex-direction:column;gap:4px;flex:2;border:1px solid #bbb;padding:4px;background:#f8f8f8;'>" +
+        "    <div style='display:flex;gap:4px;'>" +
+        "      <div style='background:#3498db;color:#fff;font:7pt Arial;padding:3px;flex:1;text-align:center'>B1</div>" +
+        "      <div style='background:#2980b9;color:#fff;font:7pt Arial;padding:3px;flex:1;text-align:center'>B2</div>" +
+        "    </div>" +
+        "    <div style='background:#1abc9c;color:#fff;font:7pt Arial;padding:3px;text-align:center'>Col B row 2 (full width)</div>" +
+        "  </div>" +
+        "</div>" +
+        "</td></tr>"
+    ) +
+
+    FSection("10 — inline-flex",
+        "<tr><td colspan='3' style='padding:2px;font:8pt Arial'>" +
+        "Text before " +
+        "<span style='display:inline-flex;gap:3px;vertical-align:middle;border:1px solid #bbb;padding:2px;'>" +
+        "  <span style='background:#e74c3c;color:#fff;font:6pt Arial;padding:2px 4px;'>R</span>" +
+        "  <span style='background:#3498db;color:#fff;font:6pt Arial;padding:2px 4px;'>G</span>" +
+        "  <span style='background:#27ae60;color:#fff;font:6pt Arial;padding:2px 4px;'>B</span>" +
+        "</span>" +
+        " text after — inline-flex sits in the text flow." +
+        "</td></tr>"
+    ) +
+
+    "</body></html>";
+
+var flexStream = new MemoryStream();
+var flexDocument = await generator.GeneratePdf(flexHtml, pdfConfig);
+flexDocument.Save(flexStream);
+
+File.Delete("test_flexbox.pdf");
+File.WriteAllBytes("test_flexbox.pdf", flexStream.ToArray());
+Console.WriteLine("Saved test_flexbox.pdf");
+
+File.Delete("test_flexbox.html");
+File.WriteAllText("test_flexbox.html", flexHtml);
+Console.WriteLine("Saved test_flexbox.html");

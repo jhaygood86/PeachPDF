@@ -142,6 +142,19 @@ namespace PeachPDF.Html.Core.Utils
         public const string Wavy = "wavy";
         public const string PeachBaselineMiddle = "-peachpdf-baseline-middle"; // same as -webkit-baseline-middle
 
+        public const string Flex          = "flex";
+        public const string InlineFlex    = "inline-flex";
+        public const string FlexStart     = "flex-start";
+        public const string FlexEnd       = "flex-end";
+        public const string SpaceBetween  = "space-between";
+        public const string SpaceAround   = "space-around";
+        public const string SpaceEvenly   = "space-evenly";
+        public const string Stretch       = "stretch";
+        public const string RowReverse    = "row-reverse";
+        public const string Column        = "column";
+        public const string ColumnReverse = "column-reverse";
+        public const string WrapReverse   = "wrap-reverse";
+
         /// <summary>
         /// Centimeters
         /// </summary>
