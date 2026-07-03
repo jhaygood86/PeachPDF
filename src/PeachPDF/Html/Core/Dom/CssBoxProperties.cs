@@ -52,6 +52,12 @@ namespace PeachPDF.Html.Core.Dom
         private string _textIndent = "0";
         private string _wordSpacing = "normal";
 
+        /// <summary>
+        /// Specified (not var()-resolved) values of this box's CSS custom properties (--foo), keyed by
+        /// their case-sensitive name. Lazily created; null when no custom property has been declared or inherited.
+        /// </summary>
+        internal Dictionary<string, string>? CustomProperties;
+
         #endregion
 
 
@@ -1238,6 +1244,12 @@ namespace PeachPDF.Html.Core.Dom
         protected void InheritStyle(CssBox? p, bool everything)
         {
             if (p == null) return;
+
+            // Custom properties are always inherited, regardless of the `everything` special case.
+            // Cloned (not shared) so a child's local override never mutates the parent's or a sibling's dictionary.
+            CustomProperties = p.CustomProperties is { Count: > 0 }
+                ? new Dictionary<string, string>(p.CustomProperties)
+                : null;
 
             BorderSpacing = p.BorderSpacing;
             BorderCollapse = p.BorderCollapse;

@@ -22,6 +22,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Parse
@@ -327,12 +328,18 @@ namespace PeachPDF.Html.Core.Parse
             // 2. Inherit inheritable properties from parent
             box.InheritStyle();
 
+            // Regular property declarations whose value contains var(...) are deferred here and resolved
+            // once, after the whole cascade (all phases below) has finished, so var() sees this box's
+            // FINAL custom property values regardless of which phase declared them.
+            var pendingVarProperties = new Dictionary<string, string>();
+
             // 3. UA pass — user-agent stylesheet rules only
-            var importantPropertyNames = AssignCssBlocks(valueParser, box, cssData.GetUserAgentStyleRules(media, box), null, null);
+            var importantPropertyNames = AssignCssBlocks(valueParser, box, cssData.GetUserAgentStyleRules(media, box), null, null, null, pendingVarProperties);
 
             // 4. Author pass — author stylesheet rules; revert target is the UA-applied state
             var uaSnapshot = CssUtils.SnapshotProperties(box);
-            importantPropertyNames = AssignCssBlocks(valueParser, box, cssData.GetAuthorStyleRules(media, box), importantPropertyNames, uaSnapshot);
+            var uaCustomSnapshot = CssUtils.SnapshotCustomProperties(box);
+            importantPropertyNames = AssignCssBlocks(valueParser, box, cssData.GetAuthorStyleRules(media, box), importantPropertyNames, uaSnapshot, uaCustomSnapshot, pendingVarProperties);
 
             if (box.HtmlTag != null)
             {
@@ -345,10 +352,14 @@ namespace PeachPDF.Html.Core.Parse
                     var stylesheet = "* { " + styleAttributeText + " }";
 
                     var authorSnapshot = CssUtils.SnapshotProperties(box);
+                    var authorCustomSnapshot = CssUtils.SnapshotCustomProperties(box);
                     var block = CssParser.ParseStyleSheet(stylesheet);
-                    AssignCssBlock(valueParser, box, block.StyleRules.Single(), importantPropertyNames, authorSnapshot);
+                    AssignCssBlock(valueParser, box, block.StyleRules.Single(), importantPropertyNames, authorSnapshot, authorCustomSnapshot, pendingVarProperties);
                 }
             }
+
+            // 6. Resolve var() references now that every custom property's final cascaded value is known
+            ResolveDeferredVarProperties(valueParser, box, pendingVarProperties);
 
             // Correct current color
             CssUtils.ApplyCurrentColor(box, valueParser);
@@ -384,32 +395,48 @@ namespace PeachPDF.Html.Core.Parse
             CssBox box,
             IEnumerable<IStyleRule> rules,
             HashSet<string>? importantPropertyNames,
-            IReadOnlyDictionary<string, string?>? revertTarget)
+            IReadOnlyDictionary<string, string?>? revertTarget,
+            IReadOnlyDictionary<string, string>? customPropertyRevertTarget,
+            Dictionary<string, string> pendingVarProperties)
         {
             importantPropertyNames ??= [];
             foreach (var rule in rules)
-                AssignCssBlock(valueParser, box, rule, importantPropertyNames, revertTarget);
+                AssignCssBlock(valueParser, box, rule, importantPropertyNames, revertTarget, customPropertyRevertTarget, pendingVarProperties);
             return importantPropertyNames;
         }
 
         /// <summary>
         /// Assigns the given css style block properties to the given css box.
         /// Handles all five CSS global keywords: inherit, initial, unset, revert, revert-layer.
+        /// Custom property declarations (--foo) are routed to <see cref="AssignCustomPropertyDeclaration"/> instead,
+        /// since those keywords mean something different for an open-ended, case-sensitive property store.
+        /// Regular declarations whose value contains var(...) are deferred into <paramref name="pendingVarProperties"/>
+        /// rather than applied immediately — see <see cref="ResolveDeferredVarProperties"/> for why.
         /// </summary>
         /// <param name="valueParser">the css value parser to use</param>
         /// <param name="box">the css box to assign css to</param>
         /// <param name="stylesheetRule">the stylesheet rule to assign</param>
         /// <param name="importantPropertyNames">Carries the property names that have been marked important so they don't get re-applied</param>
         /// <param name="revertTarget">Property snapshot representing the prior cascade origin, used for revert/revert-layer</param>
+        /// <param name="customPropertyRevertTarget">Case-sensitive custom-property snapshot for revert/revert-layer</param>
+        /// <param name="pendingVarProperties">Accumulates regular declarations whose value contains var(...), keyed by property name</param>
         private static void AssignCssBlock(
             CssValueParser valueParser,
             CssBox box,
             IStyleRule stylesheetRule,
             HashSet<string> importantPropertyNames,
-            IReadOnlyDictionary<string, string?>? revertTarget = null)
+            IReadOnlyDictionary<string, string?>? revertTarget,
+            IReadOnlyDictionary<string, string>? customPropertyRevertTarget,
+            Dictionary<string, string> pendingVarProperties)
         {
             foreach (var prop in stylesheetRule.Style)
             {
+                if (PropertyFactory.IsCustomPropertyName(prop.Name))
+                {
+                    AssignCustomPropertyDeclaration(box, prop, importantPropertyNames, customPropertyRevertTarget);
+                    continue;
+                }
+
                 var value = prop.Value switch
                 {
                     CssConstants.Inherit when box.ParentBox != null
@@ -435,9 +462,341 @@ namespace PeachPDF.Html.Core.Parse
                 if (prop.IsImportant)
                     importantPropertyNames.Add(prop.Name.ToLowerInvariant());
 
-                if (value is not null && IsStyleOnElementAllowed(box, prop.Name, value))
-                    CssUtils.SetPropertyValue(valueParser, box, prop.Name, value);
+                if (value is null) continue;
+
+                if (value.Contains("var(", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Overwrites any earlier pending entry for this name (last write wins).
+                    pendingVarProperties[prop.Name] = value;
+                }
+                else
+                {
+                    // A later plain value supersedes an earlier deferred var() value for the same property.
+                    pendingVarProperties.Remove(prop.Name);
+                    if (IsStyleOnElementAllowed(box, prop.Name, value))
+                        CssUtils.SetPropertyValue(valueParser, box, prop.Name, value);
+                }
             }
+        }
+
+        /// <summary>
+        /// Assigns a single custom property (--foo) declaration to the box's custom-property store.
+        /// Unlike regular properties, custom properties are always inherited, their names are case-sensitive,
+        /// and their global keywords resolve against the custom-property dictionary rather than the fixed,
+        /// known-property switch used by <see cref="AssignCssBlock"/>. The stored value is left unresolved
+        /// (it may itself contain var(...)) — resolution happens once, later, in <see cref="ResolveDeferredVarProperties"/>,
+        /// which is what makes multi-hop var() graph resolution correct regardless of declaration order.
+        /// </summary>
+        private static void AssignCustomPropertyDeclaration(
+            CssBox box,
+            IProperty prop,
+            HashSet<string> importantPropertyNames,
+            IReadOnlyDictionary<string, string>? customPropertyRevertTarget)
+        {
+            if (importantPropertyNames.Contains(prop.Name)) return; // case-sensitive: no ToLowerInvariant
+            if (prop.IsImportant) importantPropertyNames.Add(prop.Name);
+
+            var rawValue = prop.Value switch
+            {
+                CssConstants.Inherit or CssConstants.Unset // custom properties are always inherited
+                    => box.ParentBox?.CustomProperties != null &&
+                       box.ParentBox.CustomProperties.TryGetValue(prop.Name, out var pv)
+                        ? pv
+                        : null,
+                CssConstants.Initial
+                    => null, // guaranteed-invalid value => property becomes absent
+                CssConstants.Revert or CssConstants.RevertLayer
+                    => customPropertyRevertTarget != null &&
+                       customPropertyRevertTarget.TryGetValue(prop.Name, out var rv)
+                        ? rv
+                        : null,
+                _ => prop.Value
+            };
+
+            box.CustomProperties ??= new Dictionary<string, string>();
+            if (rawValue is not null)
+                box.CustomProperties[prop.Name] = rawValue;
+            else
+                box.CustomProperties.Remove(prop.Name);
+        }
+
+        /// <summary>
+        /// Result of attempting to resolve every var() reference in a declaration's value. Success is false
+        /// only when a reference is "guaranteed-invalid" (no matching custom property, no fallback, or a
+        /// cyclic reference) — per spec this invalidates the whole value, not just the failing substring.
+        /// </summary>
+        private readonly record struct VarResolution(bool Success, string? Value);
+
+        /// <summary>
+        /// Resolves every regular property deferred during the cascade's three phases (see
+        /// <see cref="AssignCssBlock"/>) now that this box's custom properties reflect their FINAL cascaded
+        /// (though not yet var()-resolved) values. Resolution is graph-based and memoized per box via a shared
+        /// `resolvedCache`/`resolving`/`cyclic` triple, so multi-hop cyclic references (e.g. --a: var(--b);
+        /// --b: var(--c); --c: var(--a);) are detected correctly regardless of which pending property triggers
+        /// the lookup first.
+        /// </summary>
+        private static void ResolveDeferredVarProperties(CssValueParser valueParser, CssBox box, Dictionary<string, string> pendingVarProperties)
+        {
+            if (pendingVarProperties.Count == 0) return;
+
+            var resolvedCache = new Dictionary<string, string>();
+            var resolving = new HashSet<string>();
+            var cyclic = new HashSet<string>();
+
+            foreach (var (name, rawValue) in pendingVarProperties)
+            {
+                var result = SubstituteVarReferences(box, rawValue, resolvedCache, resolving, cyclic);
+                var finalValue = result.Success ? result.Value : GetGuaranteedInvalidFallback(box, name);
+
+                if (finalValue is not null)
+                    ApplyResolvedPropertyValue(valueParser, box, name, finalValue);
+            }
+        }
+
+        /// <summary>
+        /// Applies a fully var()-resolved property value to the box. Shorthand properties (e.g. "background")
+        /// are re-parsed through the real CSS-OM shorthand converter and expanded into longhands here, because
+        /// unlike margin/padding/border/font/flex/list-style, not every shorthand has a "whole string" case in
+        /// <see cref="CssUtils.SetPropertyValue"/> — that switch normally only ever receives longhands, since
+        /// shorthands are expanded into them at parse time (<c>StyleDeclaration.SetShorthand</c>), a step
+        /// var()-containing shorthands deliberately skip (see <c>StylesheetComposer.FillDeclarations</c>)
+        /// because they can't be split into per-longhand slices until their var() references are resolved,
+        /// which has only just happened here.
+        /// </summary>
+        private static void ApplyResolvedPropertyValue(CssValueParser valueParser, CssBox box, string name, string value)
+        {
+            if (PropertyFactory.Instance.CreateShorthand(name) is not null)
+            {
+                var reparsed = StylesheetParser.Default.ParseDeclaration($"{name}: {value}");
+                if (reparsed is ShorthandProperty { HasValue: true } shorthand)
+                {
+                    var longhands = PropertyFactory.Instance.CreateLonghandsFor(name);
+                    shorthand.Export(longhands);
+
+                    foreach (var longhand in longhands)
+                    {
+                        if (longhand.HasValue && IsStyleOnElementAllowed(box, longhand.Name, longhand.Value))
+                            CssUtils.SetPropertyValue(valueParser, box, longhand.Name, longhand.Value);
+                    }
+
+                    return;
+                }
+            }
+
+            if (IsStyleOnElementAllowed(box, name, value))
+                CssUtils.SetPropertyValue(valueParser, box, name, value);
+        }
+
+        /// <summary>
+        /// Resolves every var(...) occurrence in <paramref name="value"/> to plain text. Quote-aware (so
+        /// `content: "var(--x)"` is left untouched) and paren-depth-aware (so a fallback containing nested
+        /// commas, e.g. `var(--a, var(--b, red))` or a fallback with a comma-taking function, splits correctly).
+        /// </summary>
+        private static VarResolution SubstituteVarReferences(CssBox box, string value, Dictionary<string, string> resolvedCache, HashSet<string> resolving, HashSet<string> cyclic)
+        {
+            if (value.IndexOf("var(", StringComparison.OrdinalIgnoreCase) < 0)
+                return new VarResolution(true, value);
+
+            var sb = new StringBuilder();
+            var i = 0;
+            while (i < value.Length)
+            {
+                if (TryMatchVarCall(value, i, out var argsStart, out var callEnd))
+                {
+                    var (name, fallback) = SplitFirstTopLevelComma(value, argsStart, callEnd - 1);
+
+                    if (TryResolveCustomProperty(box, name, resolvedCache, resolving, cyclic, out var found))
+                    {
+                        sb.Append(found);
+                    }
+                    else if (fallback != null)
+                    {
+                        var fallbackResult = SubstituteVarReferences(box, fallback, resolvedCache, resolving, cyclic);
+                        if (!fallbackResult.Success) return new VarResolution(false, null);
+                        sb.Append(fallbackResult.Value);
+                    }
+                    else
+                    {
+                        return new VarResolution(false, null); // guaranteed-invalid
+                    }
+
+                    i = callEnd;
+                }
+                else if (value[i] is '"' or '\'')
+                {
+                    var quoteEnd = SkipQuotedString(value, i);
+                    sb.Append(value, i, quoteEnd - i);
+                    i = quoteEnd;
+                }
+                else
+                {
+                    sb.Append(value[i]);
+                    i++;
+                }
+            }
+
+            return new VarResolution(true, sb.ToString());
+        }
+
+        /// <summary>
+        /// Recursive + memoized: resolves box.CustomProperties[name]'s own var() references first (so a custom
+        /// property may reference another custom property, in any declaration order), using `resolving` as a
+        /// visited-set for cycle detection across the whole reference graph for this box.
+        /// <paramref name="cyclic"/> permanently marks a property that was found to (directly or transitively)
+        /// reference itself. This is distinct from a plain "not found" — per the CSS spec, a property that
+        /// references itself is guaranteed-invalid regardless of any fallback written inside that same
+        /// reference (e.g. `--self: var(--self, red);` must NOT resolve to "red": writing var(--self, ...)
+        /// inside --self's own definition is a self-reference, full stop, matching real browsers). Without
+        /// this permanent marker, the fallback used to locally satisfy the mid-cycle lookup would get cached
+        /// as if it were --self's legitimately resolved value.
+        /// </summary>
+        private static bool TryResolveCustomProperty(CssBox box, string name, Dictionary<string, string> resolvedCache, HashSet<string> resolving, HashSet<string> cyclic, out string? value)
+        {
+            if (cyclic.Contains(name))
+            {
+                value = null;
+                return false;
+            }
+
+            if (resolvedCache.TryGetValue(name, out value)) return true;
+
+            if (box.CustomProperties == null || !box.CustomProperties.TryGetValue(name, out var rawValue))
+            {
+                value = null;
+                return false;
+            }
+
+            if (!resolving.Add(name))
+            {
+                cyclic.Add(name); // name is referenced while already being resolved — a cycle
+                value = null;
+                return false;
+            }
+
+            var result = SubstituteVarReferences(box, rawValue, resolvedCache, resolving, cyclic);
+            resolving.Remove(name);
+
+            if (cyclic.Contains(name) || !result.Success)
+            {
+                cyclic.Add(name);
+                value = null;
+                return false;
+            }
+
+            resolvedCache[name] = value = result.Value!;
+            return true;
+        }
+
+        /// <summary>
+        /// Matches a case-insensitive "var(" starting at <paramref name="start"/> and scans forward for the
+        /// matching close paren. On success, <paramref name="argsStart"/> is the index of the first argument
+        /// character and <paramref name="callEnd"/> is the index just past the closing paren.
+        /// </summary>
+        private static bool TryMatchVarCall(string value, int start, out int argsStart, out int callEnd)
+        {
+            argsStart = 0;
+            callEnd = 0;
+
+            if (start + 4 > value.Length) return false;
+            if (string.Compare(value, start, "var(", 0, 4, StringComparison.OrdinalIgnoreCase) != 0) return false;
+
+            var depth = 1;
+            var i = start + 4;
+            while (i < value.Length)
+            {
+                var c = value[i];
+                if (c is '"' or '\'')
+                {
+                    i = SkipQuotedString(value, i);
+                    continue;
+                }
+
+                if (c == '(') depth++;
+                else if (c == ')')
+                {
+                    depth--;
+                    if (depth == 0)
+                    {
+                        argsStart = start + 4;
+                        callEnd = i + 1;
+                        return true;
+                    }
+                }
+
+                i++;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Splits a var() argument list at the first top-level (paren-depth 0, outside quotes) comma.
+        /// The text before it is the custom property name (trimmed); everything after — commas and all —
+        /// is the fallback, per spec.
+        /// </summary>
+        private static (string Name, string? Fallback) SplitFirstTopLevelComma(string value, int start, int end)
+        {
+            var depth = 0;
+            var i = start;
+            while (i < end)
+            {
+                var c = value[i];
+                if (c is '"' or '\'')
+                {
+                    i = SkipQuotedString(value, i);
+                    continue;
+                }
+
+                if (c == '(') depth++;
+                else if (c == ')') depth--;
+                else if (c == ',' && depth == 0)
+                {
+                    var name = value[start..i].Trim();
+                    var fallback = value[(i + 1)..end].Trim();
+                    return (name, fallback.Length > 0 ? fallback : null);
+                }
+
+                i++;
+            }
+
+            return (value[start..end].Trim(), null);
+        }
+
+        /// <summary>
+        /// Advances past a quoted string literal starting at <paramref name="start"/> (which must point at the
+        /// opening quote), honoring backslash escapes so an escaped quote doesn't end the string early.
+        /// Returns the index just past the closing quote (or the string's end, if unterminated).
+        /// </summary>
+        private static int SkipQuotedString(string value, int start)
+        {
+            var quote = value[start];
+            var i = start + 1;
+            while (i < value.Length)
+            {
+                if (value[i] == '\\' && i + 1 < value.Length)
+                {
+                    i += 2;
+                    continue;
+                }
+
+                if (value[i] == quote)
+                    return i + 1;
+
+                i++;
+            }
+
+            return i;
+        }
+
+        /// <summary>
+        /// The value a property falls back to when a var() reference in it is guaranteed-invalid — reuses
+        /// the exact same expression as the `unset` keyword arm in <see cref="AssignCssBlock"/>, for consistency.
+        /// </summary>
+        private static string? GetGuaranteedInvalidFallback(CssBox box, string propName)
+        {
+            return CssDefaults.InheritedProperties.Contains(propName) && box.ParentBox != null
+                ? CssUtils.GetPropertyValue(box.ParentBox, propName)
+                : CssDefaults.GetInitialValue(propName);
         }
 
         /// <summary>

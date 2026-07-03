@@ -485,6 +485,20 @@ namespace PeachPDF.CSS
             return string.Join(string.Empty, value.Select(m => m.ToValue()));
         }
 
+        public static bool ContainsFunction(this IEnumerable<Token> tokens, string functionName)
+        {
+            foreach (var token in tokens)
+            {
+                if (token is FunctionToken function &&
+                    (function.Data.Isi(functionName) || function.ArgumentTokens.ContainsFunction(functionName)))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         public static Color? ToColor(this IEnumerable<Token> value)
         {
             var element = value.OnlyOrDefault();

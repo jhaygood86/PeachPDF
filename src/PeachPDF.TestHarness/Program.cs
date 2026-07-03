@@ -1032,3 +1032,129 @@ Console.WriteLine("Saved test_flexbox.pdf");
 File.Delete("test_flexbox.html");
 File.WriteAllText("test_flexbox.html", flexHtml);
 Console.WriteLine("Saved test_flexbox.html");
+
+// ─── CSS Custom Properties (var()) showcase ─────────────────────────────────
+
+static string VarSwatch(string desc, string boxCss, string valueLabel, string cssLabel) =>
+    "<td>" +
+    $"<div class=\"vbox\" style=\"{boxCss}\">Aa</div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"val\">{valueLabel}</div>" +
+    $"<div class=\"css\">{cssLabel}</div>" +
+    "</td>";
+
+const string VarCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
+    table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
+    table.sw td { padding: 3px; vertical-align: top; width: 25% }
+    .vbox { height: 44px; display: flex; align-items: center; justify-content: center; font: bold 9pt Arial; margin-bottom: 3px }
+    .desc { font-size: 7pt; font-weight: bold; color: #444; margin-bottom: 1px }
+    .val { font-size: 6pt; font-family: monospace; color: #b8860b; font-weight: bold; margin-bottom: 2px; word-break: break-all }
+    .css { font-size: 5.5pt; color: #666; line-height: 1.3; word-break: break-all }
+    .card { border-radius: 8px; padding: 14px }
+    .card h3 { margin: 0 0 6px; font-size: 11pt }
+    .card p { margin: 0 0 8px; font-size: 8pt; line-height: 1.4 }
+    .card button { border: none; border-radius: 4px; padding: 6px 14px; font: bold 8pt Arial }
+    .cardval { font-size: 6pt; font-family: monospace; color: #b8860b; font-weight: bold; margin-bottom: 2px }
+    </style>
+    """;
+
+var varHtml = "<!DOCTYPE html><html><head>" + VarCss + "</head><body>" +
+
+    "<h1>CSS Custom Properties &amp; var() Test Page</h1>" +
+
+    "<h2>1 — Basic Declaration &amp; Usage</h2>" +
+    "<p class=\"intro\">--main-bg, --main-color and --main-border are declared once on the surrounding container and consumed via var() on each box.</p>" +
+    "<div style=\"--main-bg: #2c3e50; --main-color: white; --main-border: 3px solid #1a252f;\">" +
+    Row(
+        VarSwatch("background + color + border", "background: var(--main-bg); color: var(--main-color); border: var(--main-border);", "--main-bg: #2c3e50 · --main-color: white · --main-border: 3px solid #1a252f", "background: var(--main-bg); color: var(--main-color); border: var(--main-border)"),
+        VarSwatch("reused for border only", "border: var(--main-border); color: var(--main-bg); background: white;", "--main-border: 3px solid #1a252f", "border: var(--main-border)"),
+        VarSwatch("reused for text color", "color: var(--main-bg); border: 1px solid #ccc; background: white;", "--main-bg: #2c3e50", "color: var(--main-bg)"),
+        VarSwatch("literal (no var, for comparison)", "background: #2c3e50; color: white; border: 3px solid #1a252f;", "(no custom property used)", "background: #2c3e50 (literal)")
+    ) +
+    "</div>" +
+
+    "<h2>2 — Fallback Values</h2>" +
+    "<p class=\"intro\">Each box references a custom property that was never declared; the fallback (second argument to var()) is used instead.</p>" +
+    Row(
+        VarSwatch("color fallback", "background: var(--undefined-bg, #8e44ad); color: white;", "--undefined-bg: (not declared) → fallback #8e44ad", "background: var(--undefined-bg, #8e44ad)"),
+        VarSwatch("length fallback", "background: #16a085; color: white; padding: var(--undefined-padding, 16px);", "--undefined-padding: (not declared) → fallback 16px", "padding: var(--undefined-padding, 16px)"),
+        VarSwatch("nested fallback chain", "background: var(--undefined-a, var(--undefined-b, #d35400)); color: white;", "--undefined-a, --undefined-b: (not declared) → fallback #d35400", "var(--a, var(--b, #d35400))"),
+        VarSwatch("no fallback (uses initial)", "background: var(--totally-undefined); border: 1px dashed #999;", "--totally-undefined: (not declared) → initial value", "background: var(--totally-undefined)")
+    ) +
+
+    "<h2>3 — Inheritance &amp; Local Override</h2>" +
+    "<p class=\"intro\">--accent is declared once on the outer container. The second box overrides it locally; the override does not leak to its siblings.</p>" +
+    "<div style=\"--accent: #2980b9;\">" +
+    Row(
+        VarSwatch("inherited (no override)", "background: var(--accent); color: white;", "--accent: #2980b9 (inherited)", "background: var(--accent) → inherited"),
+        VarSwatch("local override", "--accent: #c0392b; background: var(--accent); color: white;", "--accent: #c0392b (local override)", "--accent: #c0392b (local)"),
+        VarSwatch("sibling still inherits original", "background: var(--accent); color: white;", "--accent: #2980b9 (inherited, unaffected)", "background: var(--accent) → unaffected"),
+        VarSwatch("--accent: unset (still inherits)", "--accent: unset; background: var(--accent); color: white;", "--accent: #2980b9 (via unset → inherit)", "--accent: unset; background: var(--accent)")
+    ) +
+    "</div>" +
+
+    "<h2>4 — Cyclic References Resolve Safely</h2>" +
+    "<p class=\"intro\">Per spec, a custom property that references itself (directly or through a chain) becomes invalid instead of looping forever; a fallback or the property's initial value is used.</p>" +
+    Row(
+        VarSwatch("direct cycle, with fallback", "--loop-a: var(--loop-b); --loop-b: var(--loop-a); background: var(--loop-a, #7f8c8d); color: white;", "--loop-a ↔ --loop-b: cyclic → invalid → fallback #7f8c8d", "--loop-a: var(--loop-b); --loop-b: var(--loop-a); background: var(--loop-a, #7f8c8d)"),
+        VarSwatch("self-reference — always invalid", "--self: var(--self, #e74c3c); background: var(--self); border: 1px dashed #999;", "--self: self-referential → invalid (the fallback inside --self's OWN definition does not rescue it — matches Chrome/Firefox)", "--self: var(--self, #e74c3c); background: var(--self) (no fallback here)"),
+        VarSwatch("one-directional chain (not cyclic)", "--chain-a: var(--chain-b); --chain-b: #27ae60; background: var(--chain-a); color: white;", "--chain-a → --chain-b: #27ae60 (resolved, not cyclic)", "--a: var(--b); --b: #27ae60 → resolves"),
+        VarSwatch("multi-hop chain", "--x1: var(--x2); --x2: var(--x3); --x3: #f39c12; background: var(--x1); color: white;", "--x1 → --x2 → --x3: #f39c12 (resolved)", "--x1→--x2→--x3: #f39c12")
+    ) +
+
+    "<h2>5 — Real-World Example: Themeable Card Component</h2>" +
+    "<p class=\"intro\">The same card markup and CSS rules render two different themes purely by changing custom property values on the wrapping element — no duplicated rules.</p>" +
+    """
+    <style>
+    .card {
+      --card-bg: white;
+      --card-fg: #222;
+      --card-accent: #2c3e50;
+      --card-muted: #666;
+      background: var(--card-bg);
+      color: var(--card-fg);
+      border: 1px solid var(--card-accent);
+    }
+    .card h3 { color: var(--card-accent); }
+    .card p { color: var(--card-muted); }
+    .card button { background: var(--card-accent); color: var(--card-bg); }
+    </style>
+    """ +
+    "<table class=\"sw\"><tr>" +
+    "<td style=\"width:50%\">" +
+        "<div class=\"card\">" +
+            "<h3>Light Theme</h3>" +
+            "<p>This card uses the component's default custom property values.</p>" +
+            "<button>Learn More</button>" +
+        "</div>" +
+        "<div class=\"cardval\">--card-bg: white · --card-fg: #222 · --card-accent: #2c3e50 · --card-muted: #666 (defaults)</div>" +
+    "</td>" +
+    "<td style=\"width:50%\">" +
+        "<div class=\"card\" style=\"--card-bg: #1a1a2e; --card-fg: #eee; --card-accent: #e94560; --card-muted: #aaa;\">" +
+            "<h3>Dark Theme</h3>" +
+            "<p>Same markup and rules — only the custom property values differ.</p>" +
+            "<button>Learn More</button>" +
+        "</div>" +
+        "<div class=\"cardval\">--card-bg: #1a1a2e · --card-fg: #eee · --card-accent: #e94560 · --card-muted: #aaa (overridden inline)</div>" +
+    "</td>" +
+    "</tr></table>" +
+
+    "</body></html>";
+
+var varStream = new MemoryStream();
+var varDocument = await generator.GeneratePdf(varHtml, pdfConfig);
+varDocument.Save(varStream);
+
+File.Delete("test_custom_properties.pdf");
+File.WriteAllBytes("test_custom_properties.pdf", varStream.ToArray());
+Console.WriteLine("Saved test_custom_properties.pdf");
+
+File.Delete("test_custom_properties.html");
+File.WriteAllText("test_custom_properties.html", varHtml);
+Console.WriteLine("Saved test_custom_properties.html");

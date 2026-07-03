@@ -364,7 +364,17 @@ namespace PeachPDF.CSS
 
         public Property Create(string name)
         {
-            return CreateLonghand(name) ?? CreateShorthand(name);
+            return CreateLonghand(name) ?? CreateShorthand(name) ?? CreateCustomProperty(name);
+        }
+
+        private static Property CreateCustomProperty(string name)
+        {
+            return IsCustomPropertyName(name) ? new CustomProperty(name) : null;
+        }
+
+        internal static bool IsCustomPropertyName(string name)
+        {
+            return name is { Length: > 2 } && name[0] == '-' && name[1] == '-';
         }
 
         public Property CreateFont(string name)

@@ -631,8 +631,19 @@ namespace PeachPDF.CSS
                         // Example 2: "margin: 5px !important; text-align:center; margin-left: 3px;";
                         if (sourceProperty is ShorthandProperty shorthandProperty)
                         {
-                            resolvedProperties = PropertyFactory.Instance.CreateLonghandsFor(shorthandProperty.Name);
-                            shorthandProperty.Export(resolvedProperties);
+                            if (shorthandProperty.DeclaredValue.Original.ContainsFunction(FunctionNames.Var))
+                            {
+                                // A var() reference can't be split into per-longhand slices at parse time —
+                                // the referenced custom property's value is only known per-element, at cascade
+                                // time. Keep the shorthand declaration whole so cascade-time substitution +
+                                // shorthand expansion (CssUtils.SetPropertyValue) can handle it once resolved.
+                                resolvedProperties = new Property[] { shorthandProperty };
+                            }
+                            else
+                            {
+                                resolvedProperties = PropertyFactory.Instance.CreateLonghandsFor(shorthandProperty.Name);
+                                shorthandProperty.Export(resolvedProperties);
+                            }
                         }
 
                         foreach (var resolvedProperty in resolvedProperties)

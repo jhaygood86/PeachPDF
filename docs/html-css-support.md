@@ -637,6 +637,35 @@ All five keywords can be combined with `!important`.
 
 ---
 
+## CSS Custom Properties
+
+PeachPDF supports [CSS custom properties](https://developer.mozilla.org/en-US/docs/Web/CSS/--*) (`--foo: value`) and the [`var()`](https://developer.mozilla.org/en-US/docs/Web/CSS/var) function, including inheritance, fallback values, and interaction with the CSS-wide keywords above.
+
+```css
+.card {
+  --brand-color: #2c3e50;
+  background: var(--brand-color);
+  border: 1px solid var(--accent-color, #333); /* fallback used since --accent-color is undefined */
+}
+```
+
+| Feature | Support | Notes |
+|---------|---------|-------|
+| Declaration (`--name: value`) | Full | Custom property names are case-sensitive (`--Foo` and `--foo` are distinct) and accept almost any token sequence as a value |
+| `var(--name)` | Full | Substituted with the custom property's cascaded value before the containing declaration is applied |
+| `var(--name, fallback)` | Full | The fallback (which may itself contain `var()`, including further fallbacks) is used when `--name` is undefined |
+| Inheritance | Full | Custom properties are always inherited, regardless of whether the property they're used in is normally inherited |
+| Shorthand properties | Full | `var()` inside a shorthand (e.g. `margin: var(--a) var(--b)`) is resolved before the shorthand is expanded into its longhands |
+| `inherit` / `unset` on a custom property | Full | Pulls the parent element's value, since custom properties are always inherited |
+| `initial` on a custom property | Full | Clears the property to the guaranteed-invalid value (absent) |
+| `revert` / `revert-layer` on a custom property | Full | Restores the value from the previous cascade origin, same as for built-in properties |
+| Cyclic references | Handled | A custom property that references itself, directly or through a chain (`--a: var(--b); --b: var(--a);`), resolves to the guaranteed-invalid value instead of looping |
+| `@property` (typed/registered custom properties) | Not supported | All custom properties are untyped |
+
+When a `var()` reference can't be resolved and no fallback is given, the containing declaration falls back the same way `unset` does: to the parent's value for an inherited property, or to the property's initial value otherwise.
+
+---
+
 ## Unsupported CSS Features
 
 The following CSS features are not supported:
@@ -645,7 +674,6 @@ The following CSS features are not supported:
 - **Transforms** — `transform`, `transform-origin`
 - **Transitions and animations** — `transition`, `animation`, `@keyframes`
 - **Filters and effects** — `filter`, `backdrop-filter`, `mix-blend-mode`, `opacity`
-- **CSS variables** — `var()` and `--custom-properties`
 - **`calc()` expressions**
 - **`background` shorthand** — use individual `background-*` properties
 - **`letter-spacing`**
