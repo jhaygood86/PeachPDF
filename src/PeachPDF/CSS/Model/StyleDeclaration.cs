@@ -276,6 +276,15 @@ namespace PeachPDF.CSS
 
         private void SetShorthand(ShorthandProperty shorthand)
         {
+            if (shorthand.DeclaredValue.Original.ContainsFunction(FunctionNames.Var))
+            {
+                // A var() reference can't be split into per-longhand slices here — the referenced custom
+                // property's value is only known per-element, at cascade time. Keep the shorthand
+                // declaration whole so cascade-time substitution + shorthand expansion can handle it once resolved.
+                SetLonghand(shorthand);
+                return;
+            }
+
             var properties = PropertyFactory.Instance.CreateLonghandsFor(shorthand.Name);
             shorthand.Export(properties);
 

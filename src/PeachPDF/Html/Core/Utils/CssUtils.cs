@@ -205,6 +205,16 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         /// <summary>
+        /// Snapshots this box's custom property values, for use as the revert/revert-layer target of a
+        /// later cascade phase. Custom property names are case-sensitive, unlike <see cref="SnapshotProperties"/>'s
+        /// known-property snapshot, so this uses a separate, ordinal-case-sensitive dictionary.
+        /// </summary>
+        public static Dictionary<string, string>? SnapshotCustomProperties(CssBox box)
+        {
+            return box.CustomProperties is { Count: > 0 } ? new Dictionary<string, string>(box.CustomProperties) : null;
+        }
+
+        /// <summary>
         /// Set CSS box property value by the CSS name.<br/>
         /// Used as a mapping between CSS property and the class property.
         /// </summary>

@@ -270,10 +270,11 @@ Before style cascading begins, `CascadeApplyPageStyles` reads `@page` rules from
 3. **Matching rules** — `CssData.GetStyleRules` yields every `IStyleRule` from every stylesheet (filtered to the `print` media type) whose selector matches the current box.
 4. **`!important` tracking** — property names marked `!important` are recorded in a `HashSet<string>`. Subsequent rules cannot overwrite them.
 5. **`inherit` / `initial` keywords** — resolved at assignment time: `inherit` reads the property value from the parent box; `initial` reads from `CssDefaults.InitialValues`.
-6. **Presentational attributes** — `TranslateAttributes` maps HTML attributes such as `align`, `width`, `border`, `bgcolor`, `valign`, `cellspacing`, and `cellpadding` to their CSS equivalents so they participate in the cascade.
-7. **Inline `style` attribute** — parsed on the fly and applied last (with highest author specificity).
-8. **`currentColor`** — `CssUtils.ApplyCurrentColor` resolves any `currentColor` keyword references.
-9. **Text decoration propagation** — because `text-decoration` does not inherit through the CSS `inherit` mechanism but does visually propagate to inline children, it is explicitly copied down to child boxes that contain actual text.
+6. **Custom properties and `var()`** — `--foo` declarations are kept in a per-box dictionary, cloned (not shared) from the parent at inheritance time so a child's local override never leaks to its parent or siblings. Regular declarations whose value contains `var()` are deferred until the box's entire cascade (UA, author, inline) has finished, then resolved in one pass via a graph-based, memoized, cycle-safe substitution against the box's final custom-property values — this makes resolution correct regardless of declaration order and safely short-circuits cyclic references (`--a: var(--b); --b: var(--a);`) instead of looping.
+7. **Presentational attributes** — `TranslateAttributes` maps HTML attributes such as `align`, `width`, `border`, `bgcolor`, `valign`, `cellspacing`, and `cellpadding` to their CSS equivalents so they participate in the cascade.
+8. **Inline `style` attribute** — parsed on the fly and applied last (with highest author specificity).
+9. **`currentColor`** — `CssUtils.ApplyCurrentColor` resolves any `currentColor` keyword references.
+10. **Text decoration propagation** — because `text-decoration` does not inherit through the CSS `inherit` mechanism but does visually propagate to inline children, it is explicitly copied down to child boxes that contain actual text.
 
 ### Post-styling corrections
 

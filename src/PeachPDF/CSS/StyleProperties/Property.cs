@@ -24,7 +24,9 @@ namespace PeachPDF.CSS
 
         internal bool TrySetValue(TokenValue newTokenValue)
         {
-            var value = Converter.Convert(newTokenValue ?? TokenValue.Initial);
+            var tokenValue = newTokenValue ?? TokenValue.Initial;
+            var converter = tokenValue.ContainsFunction(FunctionNames.Var) ? Converters.Any : Converter;
+            var value = converter.Convert(tokenValue);
 
             if (value == null) return false;
             DeclaredValue = value;

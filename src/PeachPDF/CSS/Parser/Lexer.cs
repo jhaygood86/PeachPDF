@@ -101,10 +101,19 @@ namespace PeachPDF.CSS
                             if (c1.IsNameStart()) return IdentStart(current);
                             if (c1 == Symbols.ReverseSolidus && !c2.IsLineBreak() && c2 != Symbols.EndOfFile)
                                 return IdentStart(current);
-                            if (c1 != Symbols.Minus || c2 != Symbols.GreaterThan) return NewDelimiter(current);
 
-                            Advance(2);
-                            return NewCloseComment();
+                            if (c1 == Symbols.Minus)
+                            {
+                                if (c2 == Symbols.GreaterThan)
+                                {
+                                    Advance(2);
+                                    return NewCloseComment();
+                                }
+
+                                return IdentStart(current);
+                            }
+
+                            return NewDelimiter(current);
                         }
 
                         Back();
@@ -458,7 +467,7 @@ namespace PeachPDF.CSS
             if (current == Symbols.Minus)
             {
                 current = GetNext();
-                if (current.IsNameStart() || IsValidEscape(current))
+                if (current.IsNameStart() || current == Symbols.Minus || IsValidEscape(current))
                 {
                     StringBuffer.Append(Symbols.Minus);
                     return IdentRest(current);
