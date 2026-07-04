@@ -83,6 +83,19 @@ namespace PeachPDF.Adapters
         public override void PushClipExclude(RRect rect)
         { }
 
+        public override void PushTransform(RMatrix matrix)
+        {
+            _g.Save();
+            _g.MultiplyTransform(new XMatrix(
+                matrix.M11, matrix.M12, matrix.M21, matrix.M22,
+                matrix.OffsetX / PixelsPerPoint, matrix.OffsetY / PixelsPerPoint));
+        }
+
+        public override void PopTransform()
+        {
+            _g.Restore();
+        }
+
         public override object SetAntiAliasSmoothingMode()
         {
             var prevMode = _g.SmoothingMode;

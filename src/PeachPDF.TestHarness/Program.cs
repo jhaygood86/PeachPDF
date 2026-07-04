@@ -1158,3 +1158,109 @@ Console.WriteLine("Saved test_custom_properties.pdf");
 File.Delete("test_custom_properties.html");
 File.WriteAllText("test_custom_properties.html", varHtml);
 Console.WriteLine("Saved test_custom_properties.html");
+
+// --- CSS transform / transform-origin showcase ---
+
+static string TransformSwatch(string desc, string transformCss, string extraCss = "") =>
+    "<td>" +
+    $"<div class=\"tbox\" style=\"transform: {transformCss};{extraCss}\"></div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">transform: {transformCss}</div>" +
+    "</td>";
+
+const string TransformCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    p.intro { margin: 0 0 0.7em; color: #555 }
+    table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
+    table.sw td { padding: 3px; padding-bottom: 90px; vertical-align: top; width: 25%; text-align: center }
+    .tbox { width: 60px; height: 34px; background: steelblue; border: 2px solid #1a6b8a; margin: 45px auto 3px }
+    .desc { font-size: 7pt; font-weight: bold; color: #444; margin-bottom: 1px }
+    .css { font-size: 6pt; color: #666; line-height: 1.3; word-break: break-all }
+    </style>
+    """;
+
+var transformHtml = "<!DOCTYPE html><html><head>" + TransformCss + "</head><body>" +
+
+    "<h1>CSS transform / transform-origin Test Page</h1>" +
+
+    "<h2>1 — Individual 2D Functions</h2>" +
+    Row(
+        TransformSwatch("translate", "translate(20px, 10px)"),
+        TransformSwatch("scale", "scale(1.4)"),
+        TransformSwatch("rotate", "rotate(25deg)"),
+        TransformSwatch("skew", "skew(15deg, 5deg)")
+    ) +
+
+    "<h2>2 — Composition Order Matters</h2>" +
+    "<p class=\"intro\">The same two functions, written in opposite order, produce visibly different results — the last-written function is applied first (closest to the element), the first-written function is applied last.</p>" +
+    Row(
+        TransformSwatch("translate then rotate — spins in place, then shifts", "translate(30px, 0) rotate(45deg)"),
+        TransformSwatch("rotate then translate — orbits around the origin", "rotate(45deg) translate(30px, 0)"),
+        TransformSwatch("scale then translate", "scale(1.3) translate(15px, 0)"),
+        TransformSwatch("translate then scale", "translate(15px, 0) scale(1.3)")
+    ) +
+
+    "<h2>3 — transform-origin Pivot Point</h2>" +
+    "<p class=\"intro\">The same rotate(45deg) pivoting around different origins.</p>" +
+    Row(
+        TransformSwatch("origin: center (default)", "rotate(45deg)"),
+        TransformSwatch("origin: top left", "rotate(45deg)", "transform-origin: 0 0;"),
+        TransformSwatch("origin: bottom right", "rotate(45deg)", "transform-origin: 100% 100%;"),
+        TransformSwatch("origin: 25% 75%", "rotate(45deg)", "transform-origin: 25% 75%;")
+    ) +
+
+    "<h2>4 — matrix() Passthrough</h2>" +
+    Row(
+        TransformSwatch("identity matrix", "matrix(1, 0, 0, 1, 0, 0)"),
+        TransformSwatch("translate via matrix", "matrix(1, 0, 0, 1, 20, 10)"),
+        TransformSwatch("scale via matrix", "matrix(1.3, 0, 0, 1.3, 0, 0)"),
+        TransformSwatch("skew via matrix", "matrix(1, 0.3, 0, 1, 0, 0)")
+    ) +
+
+    "<h2>5 — 3D Rotations (no perspective)</h2>" +
+    "<p class=\"intro\">Without a perspective() function, 3D rotations project exactly onto the flat page as an axis-aligned foreshortening (narrower/shorter), with no vanishing point.</p>" +
+    Row(
+        TransformSwatch("rotateX(50deg)", "rotateX(50deg)"),
+        TransformSwatch("rotateY(50deg)", "rotateY(50deg)"),
+        TransformSwatch("rotate3d(1,1,0,45deg)", "rotate3d(1, 1, 0, 45deg)"),
+        TransformSwatch("translateZ (no visible effect)", "translateZ(300px)")
+    ) +
+
+    "<h2>6 — perspective() Approximation</h2>" +
+    "<p class=\"intro\">PDF content streams only support 2D affine transforms, so perspective() is approximated as a local linear fit at the element's own transform-origin rather than true per-pixel foreshortening. A shorter perspective distance narrows the element more; a very large distance approaches the no-perspective rotateY result.</p>" +
+    Row(
+        TransformSwatch("rotateY(45deg), no perspective", "rotateY(45deg)"),
+        TransformSwatch("perspective(600px) rotateY(45deg)", "perspective(600px) rotateY(45deg)"),
+        TransformSwatch("perspective(200px) rotateY(45deg)", "perspective(200px) rotateY(45deg)"),
+        TransformSwatch("perspective(5000px) rotateY(45deg) — nearly flat", "perspective(5000px) rotateY(45deg)")
+    ) +
+
+    "<h2>7 — Combined With Other Features</h2>" +
+    Row(
+        TransformSwatch("+ border-radius", "rotate(15deg)", "border-radius: 12px;"),
+        TransformSwatch("+ gradient background", "rotate(-10deg) scale(1.2)", "background: linear-gradient(to right, #e74c3c, #3498db);"),
+        "<td>" +
+            "<div class=\"tbox\" style=\"transform: rotate(12deg); color: white; font-size: 7pt;\">Hello</div>" +
+            "<div class=\"desc\">+ text content (whole subtree transforms)</div>" +
+            "<div class=\"css\">transform: rotate(12deg)</div>" +
+        "</td>",
+        TransformSwatch("multi-function chain", "translate(10px, 0) rotate(20deg) scale(1.2)")
+    ) +
+
+    "</body></html>";
+
+var transformStream = new MemoryStream();
+var transformDocument = await generator.GeneratePdf(transformHtml, pdfConfig);
+transformDocument.Save(transformStream);
+
+File.Delete("test_transform.pdf");
+File.WriteAllBytes("test_transform.pdf", transformStream.ToArray());
+Console.WriteLine("Saved test_transform.pdf");
+
+File.Delete("test_transform.html");
+File.WriteAllText("test_transform.html", transformHtml);
+Console.WriteLine("Saved test_transform.html");

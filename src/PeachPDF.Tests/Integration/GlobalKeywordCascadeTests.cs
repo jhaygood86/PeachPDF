@@ -335,6 +335,108 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal("rgb(0, 0, 255)", el!.Color);
         }
 
+        // ── transform (non-inherited) ────────────────────────────────────────────
+
+        [Fact]
+        public async Task Initial_Transform_ResetsToNone()
+        {
+            // "initial" for transform is "none", regardless of an author rule.
+            var html = """
+                <!DOCTYPE html><html><head><style>
+                  div { transform: rotate(45deg); }
+                </style></head><body>
+                <div id="el" style="transform: initial">text</div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var el = FindById(root, "el");
+
+            Assert.NotNull(el);
+            Assert.Equal("none", el!.Transform);
+        }
+
+        [Fact]
+        public async Task Unset_Transform_BehavesLikeInitial()
+        {
+            // transform is NOT inherited, so "unset" must act like "initial" ("none"),
+            // even though the parent has a non-default transform.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <div id="parent" style="transform: rotate(45deg)">
+                  <div id="child" style="transform: unset">text</div>
+                </div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var child = FindById(root, "child");
+
+            Assert.NotNull(child);
+            Assert.Equal("none", child!.Transform);
+        }
+
+        [Fact]
+        public async Task Revert_Transform_InInlineStyle_RestoresAuthorValue()
+        {
+            // "revert" in an inline style rolls back to the author-set value, NOT all the
+            // way to the UA/initial value ("none").
+            var html = """
+                <!DOCTYPE html><html><head><style>
+                  div { transform: rotate(30deg); }
+                </style></head><body>
+                <div id="el" style="transform: revert">text</div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var el = FindById(root, "el");
+
+            Assert.NotNull(el);
+            Assert.Equal("rotate(30deg)", el!.Transform);
+        }
+
+        [Fact]
+        public async Task Revert_Transform_InAuthorRule_RestoresUaValue()
+        {
+            // "revert" within the author phase itself rolls back to the pre-author (UA/initial)
+            // value. Plain divs get no transform from the UA stylesheet, so this is "none".
+            var html = """
+                <!DOCTYPE html><html><head><style>
+                  div { transform: rotate(30deg); }
+                  #el { transform: revert; }
+                </style></head><body>
+                <div id="el">text</div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var el = FindById(root, "el");
+
+            Assert.NotNull(el);
+            Assert.Equal("none", el!.Transform);
+        }
+
+        [Fact]
+        public async Task Inherit_Transform_ForcesChildToPickUpParentValue()
+        {
+            // transform is not inherited by default, but an explicit "inherit" keyword
+            // must still force the child to pick up the parent's computed value.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <div id="parent" style="transform: scale(2)">
+                  <div id="child" style="transform: inherit">text</div>
+                </div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var child = FindById(root, "child");
+
+            Assert.NotNull(child);
+            Assert.Equal("scale(2)", child!.Transform);
+        }
+
         // ── regression: 3-phase cascade must not break existing behaviour ──────
 
         [Fact]

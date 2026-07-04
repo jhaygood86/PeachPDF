@@ -20,6 +20,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Numerics;
 using System.Text;
 
 namespace PeachPDF.Html.Core.Parse
@@ -412,6 +413,290 @@ namespace PeachPDF.Html.Core.Parse
             }
 
             return propValue;
+        }
+
+        /// <summary>
+        /// Parses a CSS <c>transform</c> value (a space-separated list of 2D and/or 3D transform
+        /// functions) together with <c>transform-origin</c>, and reduces the result to a single
+        /// 2D affine matrix suitable for painting via a PDF content-stream 'cm' operator.
+        /// </summary>
+        /// <remarks>
+        /// 3D functions are composed as a genuine 4x4 matrix (see <see cref="BuildFunctionMatrix"/>) and then
+        /// projected onto the box's own z=0 plane. When no <c>perspective()</c> function is present in the chain
+        /// this projection is mathematically exact (the flattened result is a true 2D affine transform, with no
+        /// approximation) - see <see cref="ProjectTo2D"/>. When <c>perspective()</c> is present, the result is a
+        /// local linear approximation of the true (non-affine) projection, evaluated at the transform-origin point.
+        /// </remarks>
+        public static RMatrix ParseTransform(string transformValue, string transformOriginValue, CssBoxProperties box)
+        {
+            if (string.IsNullOrWhiteSpace(transformValue) ||
+                string.Equals(transformValue.Trim(), CssConstants.None, StringComparison.OrdinalIgnoreCase))
+            {
+                return RMatrix.Identity;
+            }
+
+            List<Token> tokens;
+            try
+            {
+                tokens = GetCssTokens(transformValue);
+            }
+            catch
+            {
+                return RMatrix.Identity;
+            }
+
+            var functionTokens = tokens.OfType<FunctionToken>().ToList();
+            if (functionTokens.Count == 0)
+                return RMatrix.Identity;
+
+            var combined = Matrix4x4.Identity;
+            var hasAny = false;
+
+            foreach (var funcToken in functionTokens)
+            {
+                Matrix4x4? functionMatrix;
+                try
+                {
+                    functionMatrix = BuildFunctionMatrix(funcToken, box);
+                }
+                catch
+                {
+                    functionMatrix = null;
+                }
+
+                if (functionMatrix is not { } m)
+                    continue;
+
+                // Last-written function is applied first (innermost); first-written applied last (outermost).
+                combined = m * combined;
+                hasAny = true;
+            }
+
+            if (!hasAny)
+                return RMatrix.Identity;
+
+            var (ox, oy, oz) = ParseTransformOrigin(transformOriginValue, box);
+
+            var final4 =
+                Matrix4x4.CreateTranslation((float)-ox, (float)-oy, (float)-oz) *
+                combined *
+                Matrix4x4.CreateTranslation((float)ox, (float)oy, (float)oz);
+
+            return ProjectTo2D(final4, ox, oy);
+        }
+
+        /// <summary>
+        /// Builds the 4x4 matrix for a single CSS transform function. Returns null for unrecognized functions
+        /// (which contribute identity - i.e. are silently skipped rather than invalidating the whole declaration).
+        /// </summary>
+        private static Matrix4x4? BuildFunctionMatrix(FunctionToken funcToken, CssBoxProperties box)
+        {
+            var name = funcToken.Data;
+            var args = funcToken.ArgumentTokens.ToList();
+
+            double LengthArg(int index, double hundredPercent) =>
+                index < args.Count ? ParseLength(SingleTokenText(args[index]), hundredPercent, box) : 0;
+
+            float NumberArg(int index) =>
+                index < args.Count ? (args[index].ToSingle() ?? 0f) : 0f;
+
+            float AngleArg(int index) =>
+                index < args.Count ? (args[index].ToAngle()?.ToRadian() ?? 0f) : 0f;
+
+            if (Named(name, FunctionNames.Translate))
+            {
+                var tx = LengthArg(0, box.ActualWidth);
+                var ty = args.Count > 1 ? LengthArg(1, box.ActualHeight) : 0;
+                return Matrix4x4.CreateTranslation((float)tx, (float)ty, 0);
+            }
+            if (Named(name, FunctionNames.TranslateX))
+                return Matrix4x4.CreateTranslation((float)LengthArg(0, box.ActualWidth), 0, 0);
+            if (Named(name, FunctionNames.TranslateY))
+                return Matrix4x4.CreateTranslation(0, (float)LengthArg(0, box.ActualHeight), 0);
+            if (Named(name, FunctionNames.TranslateZ))
+                return Matrix4x4.CreateTranslation(0, 0, (float)LengthArg(0, 0));
+            if (Named(name, FunctionNames.Translate3d))
+            {
+                var tx = LengthArg(0, box.ActualWidth);
+                var ty = LengthArg(1, box.ActualHeight);
+                var tz = LengthArg(2, 0);
+                return Matrix4x4.CreateTranslation((float)tx, (float)ty, (float)tz);
+            }
+
+            if (Named(name, FunctionNames.Scale))
+            {
+                var sx = NumberArg(0);
+                var sy = args.Count > 1 ? NumberArg(1) : sx;
+                return Matrix4x4.CreateScale(sx, sy, 1);
+            }
+            if (Named(name, FunctionNames.ScaleX))
+                return Matrix4x4.CreateScale(NumberArg(0), 1, 1);
+            if (Named(name, FunctionNames.ScaleY))
+                return Matrix4x4.CreateScale(1, NumberArg(0), 1);
+            if (Named(name, FunctionNames.ScaleZ))
+                return Matrix4x4.CreateScale(1, 1, NumberArg(0));
+            if (Named(name, FunctionNames.Scale3d))
+                return Matrix4x4.CreateScale(NumberArg(0), NumberArg(1), NumberArg(2));
+
+            if (Named(name, FunctionNames.Rotate) || Named(name, FunctionNames.RotateZ))
+                return Matrix4x4.CreateRotationZ(AngleArg(0));
+            if (Named(name, FunctionNames.RotateX))
+                return Matrix4x4.CreateRotationX(AngleArg(0));
+            if (Named(name, FunctionNames.RotateY))
+                return Matrix4x4.CreateRotationY(AngleArg(0));
+            if (Named(name, FunctionNames.Rotate3d))
+            {
+                var axis = new Vector3(NumberArg(0), NumberArg(1), NumberArg(2));
+                if (axis.LengthSquared() < 1e-12f)
+                    return Matrix4x4.Identity;
+                return Matrix4x4.CreateFromAxisAngle(Vector3.Normalize(axis), AngleArg(3));
+            }
+
+            if (Named(name, FunctionNames.SkewX))
+                return new Matrix4x4(1, 0, 0, 0, MathF.Tan(AngleArg(0)), 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+            if (Named(name, FunctionNames.SkewY))
+                return new Matrix4x4(1, MathF.Tan(AngleArg(0)), 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+            if (Named(name, FunctionNames.Skew))
+            {
+                var ax = AngleArg(0);
+                var ay = args.Count > 1 ? AngleArg(1) : 0f;
+                return new Matrix4x4(1, MathF.Tan(ay), 0, 0, MathF.Tan(ax), 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+            }
+
+            if (Named(name, FunctionNames.Matrix))
+            {
+                if (args.Count < 6) return null;
+                float a = NumberArg(0), b = NumberArg(1), c = NumberArg(2),
+                      d = NumberArg(3), e = NumberArg(4), f = NumberArg(5);
+                return new Matrix4x4(
+                    a, b, 0, 0,
+                    c, d, 0, 0,
+                    0, 0, 1, 0,
+                    e, f, 0, 1);
+            }
+            if (Named(name, FunctionNames.Matrix3d))
+            {
+                if (args.Count < 16) return null;
+                var v = new float[16];
+                for (var i = 0; i < 16; i++) v[i] = NumberArg(i);
+                // CSS lists matrix3d() arguments column-major; System.Numerics.Matrix4x4 is row-major
+                // with translation in row 4. These two conventions are transposes of each other, so
+                // reading the 16 source arguments straight into the row-major constructor (in order)
+                // yields the mathematically correct matrix - verified against translate3d() equivalence.
+                return new Matrix4x4(
+                    v[0], v[1], v[2], v[3],
+                    v[4], v[5], v[6], v[7],
+                    v[8], v[9], v[10], v[11],
+                    v[12], v[13], v[14], v[15]);
+            }
+
+            // perspective(): identity everywhere except the z -> w coupling term.
+            if (Named(name, FunctionNames.Perspective))
+            {
+                var d = LengthArg(0, 0);
+                if (d <= 0) return Matrix4x4.Identity;
+                var m = Matrix4x4.Identity;
+                m.M34 = (float)(-1.0 / d);
+                return m;
+            }
+
+            // Unrecognized / unsupported (e.g. future functions) -> identity, contributes nothing.
+            return null;
+        }
+
+        private static bool Named(string data, string functionName) =>
+            string.Equals(data, functionName, StringComparison.OrdinalIgnoreCase);
+
+        private static string SingleTokenText(List<Token> group) =>
+            group.Count > 0 ? group[0].ToValue() : "0";
+
+        /// <summary>
+        /// Parses transform-origin: 1-3 values (X, Y, optional Z). X/Y accept length/percentage/keywords
+        /// (resolved against the box's own border-box size), Z is a plain length (no percentage), default 0.
+        /// </summary>
+        private static (double X, double Y, double Z) ParseTransformOrigin(string value, CssBoxProperties box)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return (box.ActualWidth / 2, box.ActualHeight / 2, 0);
+
+            var parts = value.Split((char[])null!, StringSplitOptions.RemoveEmptyEntries);
+
+            double ResolveX(string token) => token switch
+            {
+                "left" => 0,
+                "right" => box.ActualWidth,
+                "center" => box.ActualWidth / 2,
+                "top" or "bottom" => box.ActualWidth / 2, // keyword belongs to the other axis; fall back to center
+                _ => ParseLength(token, box.ActualWidth, box)
+            };
+
+            double ResolveY(string token) => token switch
+            {
+                "top" => 0,
+                "bottom" => box.ActualHeight,
+                "center" => box.ActualHeight / 2,
+                "left" or "right" => box.ActualHeight / 2,
+                _ => ParseLength(token, box.ActualHeight, box)
+            };
+
+            var ox = box.ActualWidth / 2;
+            var oy = box.ActualHeight / 2;
+            var oz = 0d;
+
+            if (parts.Length >= 1) ox = ResolveX(parts[0].ToLowerInvariant());
+            if (parts.Length >= 2) oy = ResolveY(parts[1].ToLowerInvariant());
+            if (parts.Length >= 3) oz = ParseLength(parts[2], 0, box);
+
+            // Handle the "top"/"bottom" (or "left"/"right") appearing as the *first* token, e.g. "top center".
+            if (parts.Length >= 1)
+            {
+                var first = parts[0].ToLowerInvariant();
+                if (first is "top" or "bottom")
+                {
+                    oy = first == "top" ? 0 : box.ActualHeight;
+                    ox = box.ActualWidth / 2;
+                    if (parts.Length >= 2) ox = ResolveX(parts[1].ToLowerInvariant());
+                }
+            }
+
+            return (ox, oy, oz);
+        }
+
+        /// <summary>
+        /// Projects a 4x4 transform (applied to the box's own z=0 plane) down to a 2D affine RMatrix,
+        /// via numeric differentiation around the transform-origin point (Ox, Oy). This is exact when
+        /// the projection is linear (i.e. no perspective() in the chain - w stays constant across the
+        /// plane), and a local approximation otherwise.
+        /// </summary>
+        private static RMatrix ProjectTo2D(Matrix4x4 m, double ox, double oy)
+        {
+            (double X, double Y)? Project(double x, double y)
+            {
+                var p = Vector4.Transform(new Vector4((float)x, (float)y, 0, 1), m);
+                if (MathF.Abs(p.W) < 1e-6f)
+                    return null;
+                return (p.X / p.W, p.Y / p.W);
+            }
+
+            var p0 = Project(ox, oy);
+            if (p0 is not { } origin)
+                return RMatrix.Identity;
+
+            const double epsilon = 1.0;
+            var px = Project(ox + epsilon, oy);
+            var py = Project(ox, oy + epsilon);
+            if (px is not { } pxv || py is not { } pyv)
+                return RMatrix.Identity;
+
+            var m11 = (pxv.X - origin.X) / epsilon;
+            var m12 = (pxv.Y - origin.Y) / epsilon;
+            var m21 = (pyv.X - origin.X) / epsilon;
+            var m22 = (pyv.Y - origin.Y) / epsilon;
+
+            var offsetX = origin.X - (ox * m11 + oy * m21);
+            var offsetY = origin.Y - (ox * m12 + oy * m22);
+
+            return new RMatrix(m11, m12, m21, m22, offsetX, offsetY);
         }
 
         private ParsedLinearGradient? ParseLinearGradient(string value)

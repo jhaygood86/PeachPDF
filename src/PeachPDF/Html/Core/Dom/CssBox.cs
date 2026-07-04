@@ -487,7 +487,16 @@ namespace PeachPDF.Html.Core.Dom
                 }
 
                 if (visible)
+                {
+                    var transformed = IsTransformed;
+                    if (transformed)
+                        g.PushTransform(ActualTransformMatrix);
+
                     await PaintImp(g);
+
+                    if (transformed)
+                        g.PopTransform();
+                }
 
                 // Restore clips
                 if (Position == CssConstants.Fixed)

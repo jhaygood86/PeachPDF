@@ -270,6 +270,8 @@ namespace PeachPDF.Html.Core
             { "text-decoration-style", CssConstants.Solid },
             { "text-indent", "0" },
             { "top", CssConstants.Auto },
+            { "transform", CssConstants.None },
+            { "transform-origin", "50% 50% 0" },
             { "vertical-align", "baseline" },
             { "visibility", "visible" },
             { "white-space", CssConstants.Normal },
