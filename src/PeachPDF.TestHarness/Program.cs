@@ -1176,8 +1176,8 @@ const string TransformCss = """
     h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
     p.intro { margin: 0 0 0.7em; color: #555 }
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
-    table.sw td { padding: 3px; padding-bottom: 90px; vertical-align: top; width: 25%; text-align: center }
-    .tbox { width: 60px; height: 34px; background: steelblue; border: 2px solid #1a6b8a; margin: 45px auto 3px }
+    table.sw td { padding: 3px; padding-bottom: 150px; vertical-align: top; width: 25%; text-align: center }
+    .tbox { width: 100px; height: 56px; background: steelblue; border: 2px solid #1a6b8a; margin: 75px auto 3px }
     .desc { font-size: 7pt; font-weight: bold; color: #444; margin-bottom: 1px }
     .css { font-size: 6pt; color: #666; line-height: 1.3; word-break: break-all }
     </style>
@@ -1231,12 +1231,12 @@ var transformHtml = "<!DOCTYPE html><html><head>" + TransformCss + "</head><body
     ) +
 
     "<h2>6 — perspective() Approximation</h2>" +
-    "<p class=\"intro\">PDF content streams only support 2D affine transforms, so perspective() is approximated as a local linear fit at the element's own transform-origin rather than true per-pixel foreshortening. The effect scales with the perspective distance *relative to the element's own size* - a distance many times the element's size (as is typical for full-page 3D effects) looks close to flat here; the swatches below deliberately use small distances comparable to the box's own ~60px size to make the narrowing visible at swatch scale.</p>" +
+    "<p class=\"intro\">PDF content streams only support 2D affine transforms, so perspective() is approximated as a local linear fit at the element's own transform-origin rather than true per-pixel foreshortening. The effect strength depends on the perspective distance *relative to the element's own half-size* (here, ~50px) - a distance many times larger (as is typical for full-page 3D effects) looks close to flat; the swatches below deliberately use distances at or below the box's own half-size to make the narrowing obvious at swatch scale.</p>" +
     Row(
         TransformSwatch("rotateY(45deg), no perspective", "rotateY(45deg)"),
-        TransformSwatch("perspective(150px) rotateY(45deg)", "perspective(150px) rotateY(45deg)"),
-        TransformSwatch("perspective(60px) rotateY(45deg)", "perspective(60px) rotateY(45deg)"),
-        TransformSwatch("perspective(2000px) rotateY(45deg) — nearly flat", "perspective(2000px) rotateY(45deg)")
+        TransformSwatch("perspective(75px) rotateY(45deg)", "perspective(75px) rotateY(45deg)"),
+        TransformSwatch("perspective(30px) rotateY(45deg)", "perspective(30px) rotateY(45deg)"),
+        TransformSwatch("perspective(1000px) rotateY(45deg) — nearly flat", "perspective(1000px) rotateY(45deg)")
     ) +
 
     "<h2>7 — Combined With Other Features</h2>" +
