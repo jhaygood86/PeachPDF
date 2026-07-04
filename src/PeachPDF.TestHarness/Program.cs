@@ -1231,11 +1231,11 @@ var transformHtml = "<!DOCTYPE html><html><head>" + TransformCss + "</head><body
     ) +
 
     "<h2>6 — perspective() Approximation</h2>" +
-    "<p class=\"intro\">PDF content streams only support 2D affine transforms, so perspective() is approximated as a local linear fit at the element's own transform-origin rather than true per-pixel foreshortening. The effect strength depends on the perspective distance *relative to the element's own half-size* (here, ~50px) - a distance many times larger (as is typical for full-page 3D effects) looks close to flat; the swatches below deliberately use distances at or below the box's own half-size to make the narrowing obvious at swatch scale.</p>" +
+    "<p class=\"intro\">The element's background/border are painted as its own true 4 corners under a real perspective projection - a genuine trapezoid - rather than the rectangle/parallelogram a single 2D affine matrix could otherwise ever produce (text/children still use an affine approximation). The effect strength depends on the perspective distance *relative to the element's own half-size* (here, ~50px). If the distance is small enough that a corner would end up behind the viewer - an inherent limit of approximating true 3D clipping this way - PeachPDF falls back to the plain affine rectangle instead of drawing a distorted shape.</p>" +
     Row(
         TransformSwatch("rotateY(45deg), no perspective", "rotateY(45deg)"),
-        TransformSwatch("perspective(75px) rotateY(45deg)", "perspective(75px) rotateY(45deg)"),
-        TransformSwatch("perspective(30px) rotateY(45deg)", "perspective(30px) rotateY(45deg)"),
+        TransformSwatch("perspective(75px) rotateY(45deg) — true trapezoid", "perspective(75px) rotateY(45deg)"),
+        TransformSwatch("perspective(30px) — corner behind viewer, falls back", "perspective(30px) rotateY(45deg)"),
         TransformSwatch("perspective(1000px) rotateY(45deg) — nearly flat", "perspective(1000px) rotateY(45deg)")
     ) +
 

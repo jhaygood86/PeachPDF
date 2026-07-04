@@ -265,6 +265,56 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(p.M12, m.M12, 3);
         }
 
+        // --- true perspective quad corners (trapezoid background/border) ---
+
+        [Fact]
+        public async Task HasPerspectiveTransform_FalseWithoutPerspective()
+        {
+            var divBox = await FindDivBox("transform: rotateY(45deg);");
+
+            Assert.False(divBox.HasPerspectiveTransform);
+            Assert.Null(divBox.LocalPerspectiveCorners);
+        }
+
+        [Fact]
+        public async Task HasPerspectiveTransform_TrueWithActivePerspective()
+        {
+            var divBox = await FindDivBox("transform: perspective(300px) rotateY(45deg);");
+
+            Assert.True(divBox.HasPerspectiveTransform);
+        }
+
+        [Fact]
+        public async Task LocalPerspectiveCorners_ProducesGenuineTrapezoid()
+        {
+            // A real perspective projection tapers - the left and right edges of a rotateY'd box end up
+            // at different heights (unlike the affine ActualTransformMatrix, which can only ever produce
+            // a rectangle or parallelogram - both have equal-height opposite edges).
+            var divBox = await FindDivBox("transform: perspective(300px) rotateY(45deg);");
+            var corners = divBox.LocalPerspectiveCorners;
+
+            Assert.NotNull(corners);
+            var c = corners!;
+            // Order: TL, TR, BR, BL.
+            var leftHeight = Math.Abs(c[3].Y - c[0].Y);
+            var rightHeight = Math.Abs(c[2].Y - c[1].Y);
+
+            Assert.NotEqual(leftHeight, rightHeight, 1);
+        }
+
+        [Fact]
+        public async Task LocalPerspectiveCorners_FallsBackToNullWhenCornerIsBehindViewer()
+        {
+            // A perspective distance far smaller than the box's own half-width pushes one or more
+            // corners behind the viewer's eye point (w <= 0), which would otherwise naively project
+            // into a self-intersecting "bowtie" instead of a trapezoid - must fall back to null so the
+            // caller uses the normal affine-approximated rendering instead.
+            var divBox = await FindDivBox("transform: perspective(10px) rotateY(45deg);");
+
+            Assert.True(divBox.HasPerspectiveTransform);
+            Assert.Null(divBox.LocalPerspectiveCorners);
+        }
+
         // --- Non-inheritance ---
 
         [Fact]

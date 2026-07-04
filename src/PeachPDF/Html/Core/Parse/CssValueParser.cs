@@ -429,10 +429,78 @@ namespace PeachPDF.Html.Core.Parse
         /// </remarks>
         public static RMatrix ParseTransform(string transformValue, string transformOriginValue, CssBoxProperties box)
         {
+            var built = BuildFinal4(transformValue, transformOriginValue, box);
+            if (built is not { } b)
+                return RMatrix.Identity;
+
+            var epsilonX = Math.Max(box.ActualWidth / 2, 1);
+            var epsilonY = Math.Max(box.ActualHeight / 2, 1);
+            return ProjectTo2D(b.Final4, b.Ox, b.Oy, epsilonX, epsilonY);
+        }
+
+        /// <summary>
+        /// True when the box's transform includes an active <c>perspective()</c> contribution (or an
+        /// equivalent custom <c>matrix3d()</c>), meaning the projection is genuinely non-affine and
+        /// <see cref="ParseTransform"/>'s result is only a local approximation - not just a scale/rotation
+        /// approximation, but one that can never reproduce the true trapezoidal shape a real 3D perspective
+        /// projection produces on a flat quad. See <see cref="TryGetLocalPerspectiveCorners"/> to get the
+        /// box's own 4 corners under the true (non-approximated) projection instead.
+        /// </summary>
+        public static bool HasPerspective(string transformValue, string transformOriginValue, CssBoxProperties box) =>
+            BuildFinal4(transformValue, transformOriginValue, box)?.HasPerspective ?? false;
+
+        /// <summary>
+        /// When the transform includes perspective(), computes the box's own 4 corners (top-left, top-right,
+        /// bottom-right, bottom-left, in that order) under the true, non-approximated projective transform -
+        /// i.e. the exact trapezoidal shape a real 3D perspective projection would produce - expressed relative
+        /// to the box's own local (0, 0) top-left, same as <see cref="ActualTransformMatrix"/>. Returns null when
+        /// there's no active perspective() (the affine ActualTransformMatrix is already exact in that case, so
+        /// there's no need for corner-based quad painting).
+        /// </summary>
+        public static RPoint[]? TryGetLocalPerspectiveCorners(string transformValue, string transformOriginValue, CssBoxProperties box)
+        {
+            var built = BuildFinal4(transformValue, transformOriginValue, box);
+            if (built is not { HasPerspective: true } b)
+                return null;
+
+            var w = box.ActualWidth;
+            var h = box.ActualHeight;
+            var localCorners = new (double X, double Y)[] { (0, 0), (w, 0), (w, h), (0, h) };
+            var result = new RPoint[4];
+
+            for (var i = 0; i < 4; i++)
+            {
+                var p = Vector4.Transform(new Vector4((float)localCorners[i].X, (float)localCorners[i].Y, 0, 1), b.Final4);
+
+                // w <= 0 means this corner is at or behind the viewer's eye point (the perspective distance
+                // is smaller than - or comparable to - how far this corner sits from the transform-origin
+                // along the rotated depth axis). Real 3D pipelines clip this away; naively dividing through
+                // a near-zero or negative w instead flips/explodes that corner, producing a self-intersecting
+                // "bowtie" rather than a trapezoid. Bail out to the normal affine-approximated paint path
+                // instead of drawing something nonsensical - this is an inherent limit of approximating
+                // perspective with flat corner projection rather than true near-plane clipping.
+                if (p.W < 0.1f)
+                    return null;
+
+                result[i] = new RPoint(p.X / p.W, p.Y / p.W);
+            }
+
+            return result;
+        }
+
+        private readonly record struct Final4Result(Matrix4x4 Final4, double Ox, double Oy, bool HasPerspective);
+
+        /// <summary>
+        /// Shared core of transform parsing: tokenizes, composes the per-function 4x4 matrices (see
+        /// <see cref="BuildFunctionMatrix"/>) in CSS's last-written-applied-first order, and wraps the result
+        /// around the box-local transform-origin. Returns null for "none"/empty/unparsable input.
+        /// </summary>
+        private static Final4Result? BuildFinal4(string transformValue, string transformOriginValue, CssBoxProperties box)
+        {
             if (string.IsNullOrWhiteSpace(transformValue) ||
                 string.Equals(transformValue.Trim(), CssConstants.None, StringComparison.OrdinalIgnoreCase))
             {
-                return RMatrix.Identity;
+                return null;
             }
 
             List<Token> tokens;
@@ -442,12 +510,12 @@ namespace PeachPDF.Html.Core.Parse
             }
             catch
             {
-                return RMatrix.Identity;
+                return null;
             }
 
             var functionTokens = tokens.OfType<FunctionToken>().ToList();
             if (functionTokens.Count == 0)
-                return RMatrix.Identity;
+                return null;
 
             var combined = Matrix4x4.Identity;
             var hasAny = false;
@@ -473,7 +541,12 @@ namespace PeachPDF.Html.Core.Parse
             }
 
             if (!hasAny)
-                return RMatrix.Identity;
+                return null;
+
+            // A nonzero M34 is the z -> w coupling term that only perspective() (or an equivalent custom
+            // matrix3d()) introduces - translations and rotations never touch it, so this is a reliable,
+            // function-agnostic way to detect a genuinely non-affine (projective) chain.
+            var hasPerspective = combined.M34 != 0;
 
             // Origin is resolved relative to the box's own top-left corner treated as local (0, 0).
             // This matrix is cached and computed once (see CssBoxProperties.ActualTransformMatrix),
@@ -487,9 +560,7 @@ namespace PeachPDF.Html.Core.Parse
                 combined *
                 Matrix4x4.CreateTranslation((float)ox, (float)oy, (float)oz);
 
-            var epsilonX = Math.Max(box.ActualWidth / 2, 1);
-            var epsilonY = Math.Max(box.ActualHeight / 2, 1);
-            return ProjectTo2D(final4, ox, oy, epsilonX, epsilonY);
+            return new Final4Result(final4, ox, oy, hasPerspective);
         }
 
         /// <summary>

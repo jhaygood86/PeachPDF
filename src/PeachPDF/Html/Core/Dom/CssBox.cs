@@ -489,13 +489,25 @@ namespace PeachPDF.Html.Core.Dom
                 if (visible)
                 {
                     var transformed = IsTransformed;
+                    var pageOffset = IsFixed ? RPoint.Empty : HtmlContainer!.ScrollOffset;
+
                     if (transformed)
                     {
+                        // perspective() makes the box's own affine-approximated matrix unable to
+                        // reproduce the true trapezoidal shape a real 3D perspective projection produces,
+                        // so paint the background/border as an exact quadrilateral directly (in absolute
+                        // page coordinates, outside the approximate transform pushed below) instead of
+                        // relying on the normal rectangle-based painting PaintImp would otherwise do
+                        // (which it skips for this box - see the HasPerspectiveTransform check there).
+                        if (HasPerspectiveTransform)
+                        {
+                            PaintPerspectiveQuad(g, pageOffset);
+                        }
+
                         // ActualTransformMatrix is cached treating the box's own top-left as local
                         // (0, 0) - painting draws in absolute page coordinates, so re-anchor the pivot
                         // to the box's actual page position (its Bounds, shifted by the current page's
                         // scroll offset, same as the visibility check above) right before pushing it.
-                        var pageOffset = IsFixed ? RPoint.Empty : HtmlContainer!.ScrollOffset;
                         var pageMatrix = ActualTransformMatrix.RebaseOrigin(
                             Bounds.X + pageOffset.X, Bounds.Y + pageOffset.Y);
                         g.PushTransform(pageMatrix);
@@ -1478,6 +1490,15 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (!IsRectVisible(actualRect, clip)) continue;
 
+                // When perspective() is active, the background/border are instead painted as a true
+                // quadrilateral (see Paint()) before this transform is pushed, since the box's own
+                // affine transform approximation can never reproduce the true trapezoidal shape a real
+                // 3D perspective projection produces on a flat rectangle. LocalPerspectiveCorners (not
+                // just HasPerspectiveTransform) is the right check here: for a degenerate case (a corner
+                // behind the viewer - see TryGetLocalPerspectiveCorners) it falls back to null, and this
+                // box's normal rectangle-based painting must run instead, or nothing would draw at all.
+                if (HasPerspectiveTransform && LocalPerspectiveCorners != null) continue;
+
                 PaintBackground(g, actualRect, i == 0);
 
                 // For multi-page tables, draw the outer bottom border at the page-break Y on
@@ -1573,6 +1594,46 @@ namespace PeachPDF.Html.Core.Dom
             clip.Intersect(rect);
 
             return clip != RRect.Empty;
+        }
+
+        /// <summary>
+        /// Paints this box's background and border as the box's own 4 corners under the true
+        /// (non-approximated) perspective projection - a genuine trapezoid, rather than the rectangle/
+        /// parallelogram the affine-approximated ActualTransformMatrix would otherwise produce. Only
+        /// called when HasPerspectiveTransform; PaintImp skips its normal rectangle-based background/
+        /// border painting for this box so the two don't both draw. Background images/gradients and
+        /// border styles other than solid are not warped to the quad - a solid background color and
+        /// solid-style borders are approximated as straight edges between the true corners, which is
+        /// still far closer to a real 3D perspective look than a plain rectangle.
+        /// </summary>
+        private void PaintPerspectiveQuad(RGraphics g, RPoint pageOffset)
+        {
+            var localCorners = LocalPerspectiveCorners;
+            if (localCorners == null) return;
+
+            var baseX = Bounds.X + pageOffset.X;
+            var baseY = Bounds.Y + pageOffset.Y;
+            var corners = new RPoint[4];
+            for (var i = 0; i < 4; i++)
+                corners[i] = new RPoint(localCorners[i].X + baseX, localCorners[i].Y + baseY);
+
+            if (RenderUtils.IsColorVisible(ActualBackgroundColor))
+            {
+                g.DrawPolygon(g.GetSolidBrush(ActualBackgroundColor), corners);
+            }
+
+            void DrawEdge(RPoint from, RPoint to, double width, RColor color)
+            {
+                if (width <= 0 || !RenderUtils.IsColorVisible(color)) return;
+                var pen = g.GetPen(color);
+                pen.Width = width;
+                g.DrawLine(pen, from.X, from.Y, to.X, to.Y);
+            }
+
+            DrawEdge(corners[0], corners[1], ActualBorderTopWidth, ActualBorderTopColor);
+            DrawEdge(corners[1], corners[2], ActualBorderRightWidth, ActualBorderRightColor);
+            DrawEdge(corners[2], corners[3], ActualBorderBottomWidth, ActualBorderBottomColor);
+            DrawEdge(corners[3], corners[0], ActualBorderLeftWidth, ActualBorderLeftColor);
         }
 
         /// <summary>
