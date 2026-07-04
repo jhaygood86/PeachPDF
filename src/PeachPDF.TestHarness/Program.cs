@@ -1231,12 +1231,12 @@ var transformHtml = "<!DOCTYPE html><html><head>" + TransformCss + "</head><body
     ) +
 
     "<h2>6 — perspective() Approximation</h2>" +
-    "<p class=\"intro\">PDF content streams only support 2D affine transforms, so perspective() is approximated as a local linear fit at the element's own transform-origin rather than true per-pixel foreshortening. A shorter perspective distance narrows the element more; a very large distance approaches the no-perspective rotateY result.</p>" +
+    "<p class=\"intro\">PDF content streams only support 2D affine transforms, so perspective() is approximated as a local linear fit at the element's own transform-origin rather than true per-pixel foreshortening. The effect scales with the perspective distance *relative to the element's own size* - a distance many times the element's size (as is typical for full-page 3D effects) looks close to flat here; the swatches below deliberately use small distances comparable to the box's own ~60px size to make the narrowing visible at swatch scale.</p>" +
     Row(
         TransformSwatch("rotateY(45deg), no perspective", "rotateY(45deg)"),
-        TransformSwatch("perspective(600px) rotateY(45deg)", "perspective(600px) rotateY(45deg)"),
-        TransformSwatch("perspective(200px) rotateY(45deg)", "perspective(200px) rotateY(45deg)"),
-        TransformSwatch("perspective(5000px) rotateY(45deg) — nearly flat", "perspective(5000px) rotateY(45deg)")
+        TransformSwatch("perspective(150px) rotateY(45deg)", "perspective(150px) rotateY(45deg)"),
+        TransformSwatch("perspective(60px) rotateY(45deg)", "perspective(60px) rotateY(45deg)"),
+        TransformSwatch("perspective(2000px) rotateY(45deg) — nearly flat", "perspective(2000px) rotateY(45deg)")
     ) +
 
     "<h2>7 — Combined With Other Features</h2>" +

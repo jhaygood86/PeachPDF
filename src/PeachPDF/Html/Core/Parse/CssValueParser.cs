@@ -487,7 +487,9 @@ namespace PeachPDF.Html.Core.Parse
                 combined *
                 Matrix4x4.CreateTranslation((float)ox, (float)oy, (float)oz);
 
-            return ProjectTo2D(final4, ox, oy);
+            var epsilonX = Math.Max(box.ActualWidth / 2, 1);
+            var epsilonY = Math.Max(box.ActualHeight / 2, 1);
+            return ProjectTo2D(final4, ox, oy, epsilonX, epsilonY);
         }
 
         /// <summary>
@@ -671,9 +673,17 @@ namespace PeachPDF.Html.Core.Parse
         /// Projects a 4x4 transform (applied to the box's own z=0 plane) down to a 2D affine RMatrix,
         /// via numeric differentiation around the transform-origin point (Ox, Oy). This is exact when
         /// the projection is linear (i.e. no perspective() in the chain - w stays constant across the
-        /// plane), and a local approximation otherwise.
+        /// plane, so the secant used here equals the true tangent everywhere), and a local approximation
+        /// otherwise.
         /// </summary>
-        private static RMatrix ProjectTo2D(Matrix4x4 m, double ox, double oy)
+        /// <param name="epsilonX">
+        /// Probe distance along X used to estimate the derivative there - scaled to the box's own half-width
+        /// (rather than a small constant) so that, when perspective() is involved, the fitted line reflects
+        /// the foreshortening actually spanned by the box's own extent instead of an infinitesimal
+        /// neighbourhood around the origin (which would barely differ from the no-perspective case for
+        /// typical box sizes and perspective distances, making perspective() look like a no-op).
+        /// </param>
+        private static RMatrix ProjectTo2D(Matrix4x4 m, double ox, double oy, double epsilonX, double epsilonY)
         {
             (double X, double Y)? Project(double x, double y)
             {
@@ -687,16 +697,15 @@ namespace PeachPDF.Html.Core.Parse
             if (p0 is not { } origin)
                 return RMatrix.Identity;
 
-            const double epsilon = 1.0;
-            var px = Project(ox + epsilon, oy);
-            var py = Project(ox, oy + epsilon);
+            var px = Project(ox + epsilonX, oy);
+            var py = Project(ox, oy + epsilonY);
             if (px is not { } pxv || py is not { } pyv)
                 return RMatrix.Identity;
 
-            var m11 = (pxv.X - origin.X) / epsilon;
-            var m12 = (pxv.Y - origin.Y) / epsilon;
-            var m21 = (pyv.X - origin.X) / epsilon;
-            var m22 = (pyv.Y - origin.Y) / epsilon;
+            var m11 = (pxv.X - origin.X) / epsilonX;
+            var m12 = (pxv.Y - origin.Y) / epsilonX;
+            var m21 = (pyv.X - origin.X) / epsilonY;
+            var m22 = (pyv.Y - origin.Y) / epsilonY;
 
             var offsetX = origin.X - (ox * m11 + oy * m21);
             var offsetY = origin.Y - (ox * m12 + oy * m22);
