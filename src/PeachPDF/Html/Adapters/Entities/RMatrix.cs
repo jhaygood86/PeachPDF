@@ -43,5 +43,21 @@ namespace PeachPDF.Html.Adapters.Entities
 
         public bool IsIdentity =>
             M11 == 1 && M12 == 0 && M21 == 0 && M22 == 1 && OffsetX == 0 && OffsetY == 0;
+
+        /// <summary>
+        /// Reinterprets this matrix - built treating the box's own top-left corner as local (0, 0) -
+        /// as pivoting around the given absolute (page-space) point instead. Equivalent to
+        /// translate(-px,-py) * this * translate(px,py): the linear part (M11/M12/M21/M22) is
+        /// unchanged, only the offset shifts so that (px, py) becomes a fixed point wherever it sits
+        /// on the page. Needed because painting draws in absolute page coordinates, and a box's page
+        /// position (its Bounds plus the current page's scroll offset) can vary across repeated paint
+        /// passes (e.g. pagination), while the underlying matrix itself is cached and computed once.
+        /// </summary>
+        public RMatrix RebaseOrigin(double px, double py)
+        {
+            var offsetX = OffsetX + px * (1 - M11) - py * M21;
+            var offsetY = OffsetY + py * (1 - M22) - px * M12;
+            return new RMatrix(M11, M12, M21, M22, offsetX, offsetY);
+        }
     }
 }

@@ -490,7 +490,16 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     var transformed = IsTransformed;
                     if (transformed)
-                        g.PushTransform(ActualTransformMatrix);
+                    {
+                        // ActualTransformMatrix is cached treating the box's own top-left as local
+                        // (0, 0) - painting draws in absolute page coordinates, so re-anchor the pivot
+                        // to the box's actual page position (its Bounds, shifted by the current page's
+                        // scroll offset, same as the visibility check above) right before pushing it.
+                        var pageOffset = IsFixed ? RPoint.Empty : HtmlContainer!.ScrollOffset;
+                        var pageMatrix = ActualTransformMatrix.RebaseOrigin(
+                            Bounds.X + pageOffset.X, Bounds.Y + pageOffset.Y);
+                        g.PushTransform(pageMatrix);
+                    }
 
                     await PaintImp(g);
 

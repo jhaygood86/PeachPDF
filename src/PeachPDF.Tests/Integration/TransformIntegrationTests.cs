@@ -1,4 +1,6 @@
 using PeachPDF.Adapters;
+using PeachPDF.Html.Adapters;
+using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -58,6 +60,9 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Scale_SetsLinearPart()
         {
+            // ActualTransformMatrix treats the box's own top-left corner as local (0, 0) - it is
+            // cached and computed once, independent of the box's actual page position (see
+            // CssBox.Paint / RMatrix.RebaseOrigin for how the page position is re-applied at paint time).
             var divBox = await FindDivBox("transform: scale(2, 3); transform-origin: 0 0;");
             var m = divBox.ActualTransformMatrix;
 
@@ -102,13 +107,12 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task TransformOrigin_DefaultCenter_IsFixedPointOfRotation()
         {
-            // 200x100 box, default transform-origin (50% 50% -> 100,50): rotating around the
+            // 200x100 box, default transform-origin (50% 50% -> local 100,50): rotating around the
             // box's own center must leave the center point itself unmoved.
             var divBox = await FindDivBox("transform: rotate(37deg);");
             var m = divBox.ActualTransformMatrix;
 
-            var mappedX = 100 * m.M11 + 50 * m.M21 + m.OffsetX;
-            var mappedY = 100 * m.M12 + 50 * m.M22 + m.OffsetY;
+            var (mappedX, mappedY) = MapPoint(m, 100, 50);
 
             Assert.Equal(100.0, mappedX, 1);
             Assert.Equal(50.0, mappedY, 1);
@@ -120,8 +124,7 @@ namespace PeachPDF.Tests.Integration
             var divBox = await FindDivBox("transform: rotate(50deg); transform-origin: 0 0;");
             var m = divBox.ActualTransformMatrix;
 
-            var mappedX = 0 * m.M11 + 0 * m.M21 + m.OffsetX;
-            var mappedY = 0 * m.M12 + 0 * m.M22 + m.OffsetY;
+            var (mappedX, mappedY) = MapPoint(m, 0, 0);
 
             Assert.Equal(0.0, mappedX, 1);
             Assert.Equal(0.0, mappedY, 1);
@@ -278,7 +281,122 @@ namespace PeachPDF.Tests.Integration
             Assert.False(child.IsTransformed);
         }
 
+        // --- RMatrix.RebaseOrigin (page-position re-anchoring at paint time) ---
+
+        [Fact]
+        public void RebaseOrigin_Identity_StaysIdentityAnywhere()
+        {
+            var rebased = RMatrix.Identity.RebaseOrigin(1234, -567);
+            Assert.True(rebased.IsIdentity);
+        }
+
+        [Fact]
+        public void RebaseOrigin_MakesGivenPointAFixedPoint()
+        {
+            // A rotation built as if the box's own top-left were local (0,0) (transform-origin: 0 0),
+            // when rebased to an arbitrary absolute page point, must leave that exact point unmoved -
+            // this is the property that CssBox.Paint relies on to pivot correctly regardless of where
+            // the box actually sits on the page.
+            var local = new RMatrix(0, 1, -1, 0, 0, 0); // rotate(90deg) around local (0,0)
+            var rebased = local.RebaseOrigin(347.5, -12.25);
+
+            var mappedX = 347.5 * rebased.M11 + -12.25 * rebased.M21 + rebased.OffsetX;
+            var mappedY = 347.5 * rebased.M12 + -12.25 * rebased.M22 + rebased.OffsetY;
+
+            Assert.Equal(347.5, mappedX, 6);
+            Assert.Equal(-12.25, mappedY, 6);
+        }
+
+        [Fact]
+        public void RebaseOrigin_PureTranslation_IsUnaffectedByPagePosition()
+        {
+            // Translation commutes with the origin re-anchoring, so it must come out unchanged
+            // regardless of what absolute point it's rebased to.
+            var local = new RMatrix(1, 0, 0, 1, 50, 20);
+            var rebased = local.RebaseOrigin(999, -333);
+
+            Assert.Equal(50, rebased.OffsetX, 6);
+            Assert.Equal(20, rebased.OffsetY, 6);
+        }
+
+        // --- Regression: paint-time pivot must use the box's actual page position ---
+        //
+        // ActualTransformMatrix is cached treating the box's own top-left as local (0, 0) - painting
+        // draws in absolute page coordinates, and a box's page position can vary across repeated
+        // paint passes (e.g. pagination), so CssBox.Paint re-anchors the pivot via RebaseOrigin right
+        // before pushing it. This regression test drives the real Paint() pipeline (not just
+        // ActualTransformMatrix) for a box positioned well away from the page's top-left corner, and
+        // inspects the matrix actually handed to RGraphics.PushTransform.
+
+        [Fact]
+        public async Task Paint_RotationAroundOwnTopLeft_PivotsAroundActualPagePosition()
+        {
+            // The box sits at (150, 80)+ on the page (via margin), nowhere near the page origin.
+            var html = """
+                <!DOCTYPE html><html><head><style>
+                div { width: 200px; height: 100px; margin: 80px 0 0 150px;
+                      transform: rotate(30deg); transform-origin: 0 0; }
+                </style></head><body><div></div></body></html>
+                """;
+
+            var container = await LayoutHtml(html);
+            var divBox = FindByTag(container.Root!, "div")!;
+
+            var spy = new SpyGraphics();
+            await divBox.Paint(spy);
+
+            Assert.NotNull(spy.LastPushedTransform);
+            var pushed = spy.LastPushedTransform!.Value;
+
+            // The box's own actual top-left corner on the page must be a fixed point of the
+            // matrix that was really pushed to the graphics context.
+            var mappedX = divBox.Bounds.X * pushed.M11 + divBox.Bounds.Y * pushed.M21 + pushed.OffsetX;
+            var mappedY = divBox.Bounds.X * pushed.M12 + divBox.Bounds.Y * pushed.M22 + pushed.OffsetY;
+
+            Assert.Equal(divBox.Bounds.X, mappedX, 1);
+            Assert.Equal(divBox.Bounds.Y, mappedY, 1);
+        }
+
+        private sealed class SpyGraphics : RGraphics
+        {
+            public RMatrix? LastPushedTransform { get; private set; }
+
+            public SpyGraphics() : base(new PdfSharpAdapter(), new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
+
+            public override void PushTransform(RMatrix matrix) => LastPushedTransform = matrix;
+            public override void PopTransform() { }
+            public override void PushClip(RRect rect) => _clipStack.Push(rect);
+            public override void PopClip() { if (_clipStack.Count > 1) _clipStack.Pop(); }
+            public override void PushClipExclude(RRect rect) { }
+            public override object SetAntiAliasSmoothingMode() => new object();
+            public override void ReturnPreviousSmoothingMode(object? prevMode) { }
+            public override RBrush GetTextureBrush(RImage image, RRect dstRect, RPoint translateTransformLocation) => null!;
+            public override RGraphicsPath GetGraphicsPath() => null!;
+            public override RSize MeasureString(string str, RFont font) => new(0, 12);
+            public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth)
+            {
+                charFit = str?.Length ?? 0;
+                charFitWidth = 0;
+            }
+            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl) { }
+            public override void DrawLine(RPen pen, double x1, double y1, double x2, double y2) { }
+            public override void DrawRectangle(RPen pen, double x, double y, double width, double height) { }
+            public override void DrawRectangle(RBrush brush, double x, double y, double width, double height) { }
+            public override void DrawImage(RImage image, RRect destRect, RRect srcRect) { }
+            public override void DrawImage(RImage image, RRect destRect) { }
+            public override void DrawPath(RPen pen, RGraphicsPath path) { }
+            public override void DrawPath(RBrush brush, RGraphicsPath path) { }
+            public override void DrawPolygon(RBrush brush, RPoint[] points) { }
+            public override void Dispose() { }
+        }
+
         // --- Helpers ---
+
+        // ActualTransformMatrix treats the box's own top-left corner as local (0, 0), so probe
+        // points here are box-local, not absolute page coordinates (see RebaseOrigin tests below
+        // for the page-space behavior applied at paint time).
+        private static (double X, double Y) MapPoint(RMatrix m, double x, double y) =>
+            (x * m.M11 + y * m.M21 + m.OffsetX, x * m.M12 + y * m.M22 + m.OffsetY);
 
         private Task<CssBox> FindDivBox(string css)
         {

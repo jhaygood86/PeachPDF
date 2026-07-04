@@ -475,6 +475,11 @@ namespace PeachPDF.Html.Core.Parse
             if (!hasAny)
                 return RMatrix.Identity;
 
+            // Origin is resolved relative to the box's own top-left corner treated as local (0, 0).
+            // This matrix is cached and computed once (see CssBoxProperties.ActualTransformMatrix),
+            // so it must stay position-independent - the box's actual page position can vary across
+            // repeated paint passes (e.g. pagination) and is re-applied at paint time instead, via
+            // RMatrix.RebaseOrigin.
             var (ox, oy, oz) = ParseTransformOrigin(transformOriginValue, box);
 
             var final4 =
