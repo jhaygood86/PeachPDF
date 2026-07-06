@@ -28,8 +28,9 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotNull(child);
             // Custom properties bypass the typed ColorProperty converter (var() can't be resolved until
-            // cascade time), so the value round-trips as literal text rather than being normalized to rgb().
-            Assert.Equal("red", child!.Color);
+            // cascade time), but the substituted result is re-parsed through the real converter afterward,
+            // so the value is normalized to rgb() the same way a literal declaration would be.
+            Assert.Equal("rgb(255, 0, 0)", child!.Color);
         }
 
         [Fact]
@@ -51,7 +52,7 @@ namespace PeachPDF.Tests.Integration
             var child = FindById(root, "child");
 
             Assert.NotNull(child);
-            Assert.Equal("green", child!.Color);
+            Assert.Equal("rgb(0, 128, 0)", child!.Color);
         }
 
         [Fact]
@@ -72,8 +73,8 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotNull(childA);
             Assert.NotNull(childB);
-            Assert.Equal("blue", childA!.Color);
-            Assert.Equal("red", childB!.Color);
+            Assert.Equal("rgb(0, 0, 255)", childA!.Color);
+            Assert.Equal("rgb(255, 0, 0)", childB!.Color);
         }
 
         [Fact]
@@ -160,7 +161,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
-            Assert.Equal("green", el!.Color);
+            Assert.Equal("rgb(0, 128, 0)", el!.Color);
         }
 
         [Fact]
@@ -249,7 +250,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
-            Assert.Equal("blue", el!.Color);
+            Assert.Equal("rgb(0, 0, 255)", el!.Color);
         }
 
         [Fact]
@@ -267,7 +268,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
-            Assert.Equal("blue", el!.Color);
+            Assert.Equal("rgb(0, 0, 255)", el!.Color);
         }
 
         [Fact]
@@ -285,7 +286,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
-            Assert.Equal("blue", el!.Color);
+            Assert.Equal("rgb(0, 0, 255)", el!.Color);
         }
 
         [Fact]
@@ -303,7 +304,7 @@ namespace PeachPDF.Tests.Integration
             var child = FindById(root, "child");
 
             Assert.NotNull(child);
-            Assert.Equal("red", child!.Color);
+            Assert.Equal("rgb(255, 0, 0)", child!.Color);
         }
 
         [Fact]
@@ -321,7 +322,7 @@ namespace PeachPDF.Tests.Integration
             var child = FindById(root, "child");
 
             Assert.NotNull(child);
-            Assert.Equal("blue", child!.Color);
+            Assert.Equal("rgb(0, 0, 255)", child!.Color);
         }
 
         [Fact]
@@ -337,8 +338,8 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
-            Assert.Equal("blue", el!.Color);
-            Assert.Equal("red", el.BackgroundColor);
+            Assert.Equal("rgb(0, 0, 255)", el!.Color);
+            Assert.Equal("rgb(255, 0, 0)", el.BackgroundColor);
         }
 
         [Fact]
@@ -376,7 +377,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
-            Assert.Equal("blue", el!.Color);
+            Assert.Equal("rgb(0, 0, 255)", el!.Color);
         }
 
         [Fact]
@@ -393,6 +394,25 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotNull(el);
             Assert.Equal("rgb(255, 0, 0)", el!.BackgroundColor);
+        }
+
+        [Fact]
+        public async Task Var_ResolvingToValueInvalidForProperty_IsIgnoredRatherThanAppliedUninspected()
+        {
+            // --x resolves to "42px", which is not a valid <color> — the substituted declaration must be
+            // re-validated through the real background-color converter (not applied to the box uninspected),
+            // so background-color is left at its CSS initial value ("transparent") instead of becoming "42px".
+            var html = """
+                <!DOCTYPE html><html><body>
+                <div id="el" style="--x: 42px; background-color: var(--x)">text</div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var el = FindById(root, "el");
+
+            Assert.NotNull(el);
+            Assert.Equal("transparent", el!.BackgroundColor);
         }
 
         [Fact]

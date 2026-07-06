@@ -740,7 +740,7 @@ namespace PeachPDF.Html.Core.Utils
             {
                 var value = GetPropertyValue(box, propertyName);
 
-                if (value is CssConstants.CurrentColor)
+                if (value is not null && value.Equals(CssConstants.CurrentColor, StringComparison.OrdinalIgnoreCase))
                 {
                     SetPropertyValue(valueParser, box, propertyName, colorValue);
                 }
@@ -755,7 +755,8 @@ namespace PeachPDF.Html.Core.Utils
 
         private static bool IsValidColorProperty(CssValueParser valueParser, string propValue)
         {
-            return propValue is CssConstants.CurrentColor || valueParser.IsColorValid(propValue);
+            return propValue.Equals(CssConstants.CurrentColor, StringComparison.OrdinalIgnoreCase) ||
+                   valueParser.IsColorValid(propValue);
         }
 
         private static bool IsValidBorderStyleProperty(string propValue)
