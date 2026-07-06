@@ -919,18 +919,20 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        // Returns the first whitespace-delimited token in a CSS value string.
+        // Returns the first top-level-whitespace-delimited token in a CSS value string (paren-depth-aware,
+        // so a calc()/min()/max()/clamp() value's internal spaces aren't mistaken for the delimiter).
         private static string FirstCssValue(string value)
         {
-            var space = value.IndexOf(' ');
-            return space < 0 ? value : value[..space];
+            using var tokens = CssValueParser.SplitTopLevelWhitespace(value).GetEnumerator();
+            return tokens.MoveNext() ? tokens.Current : value;
         }
 
-        // Returns the second whitespace-delimited token, or the first if there is no second (spec: omitted v-radius = h-radius).
+        // Returns the second top-level-whitespace-delimited token, or the first if there is no second
+        // (spec: omitted v-radius = h-radius).
         private static string SecondCssValue(string value)
         {
-            var space = value.IndexOf(' ');
-            return space < 0 ? value : value[(space + 1)..].TrimStart();
+            var tokens = new List<string>(CssValueParser.SplitTopLevelWhitespace(value));
+            return tokens.Count > 1 ? tokens[1] : value;
         }
 
         /// <summary>

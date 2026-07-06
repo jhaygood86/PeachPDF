@@ -681,6 +681,8 @@ namespace PeachPDF.Html.Core.Utils
                 case "none": cssBox.FlexGrow = "0"; cssBox.FlexShrink = "0"; cssBox.FlexBasis = "auto"; return;
                 case "auto": cssBox.FlexGrow = "1"; cssBox.FlexShrink = "1"; cssBox.FlexBasis = "auto"; return;
             }
+            // TODO: a calc()-valued flex-basis component (e.g. "flex: 1 1 calc(10px + 5px)") would be
+            // mis-split here, same as gap was - use CssValueParser.SplitTopLevelWhitespace if that's needed.
             var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length >= 1 && float.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _))
                 cssBox.FlexGrow = parts[0];
@@ -718,7 +720,9 @@ namespace PeachPDF.Html.Core.Utils
 
         private static void SetFlexGapShorthand(CssBox cssBox, string value)
         {
-            var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            // Paren-depth-aware split so a calc()/min()/max()/clamp() value's internal spaces aren't
+            // mistaken for the row/column delimiter (e.g. "gap: calc(10px + 5px) 20px").
+            var parts = CssValueParser.SplitTopLevelWhitespace(value).ToArray();
             cssBox.FlexRowGap    = parts[0];
             cssBox.FlexColumnGap = parts.Length > 1 ? parts[1] : parts[0];
         }

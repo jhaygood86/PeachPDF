@@ -47,7 +47,8 @@ namespace PeachPDF.CSS
             AngleConverter = new StructValueConverter<Angle>(ValueExtensions.ToAngle);
 
         public static readonly IValueConverter NumberConverter =
-            new StructValueConverter<float>(ValueExtensions.ToSingle);
+            new StructValueConverter<float>(ValueExtensions.ToSingle)
+                .Or(new CalcValueConverter(CalcCategory.Number));
 
         public static readonly IValueConverter NaturalNumberConverter =
             new StructValueConverter<float>(ValueExtensions.ToNaturalSingle);
@@ -65,7 +66,8 @@ namespace PeachPDF.CSS
             new StructValueConverter<Color>(ValueExtensions.ToColor);
 
         public static readonly IValueConverter LengthOrPercentConverter =
-            new StructValueConverter<Length>(ValueExtensions.ToDistance);
+            new StructValueConverter<Length>(ValueExtensions.ToDistance)
+                .Or(new CalcValueConverter(CalcCategory.LengthPercentage));
 
         public static readonly IValueConverter PercentOrFractionConverter =
             new StructValueConverter<Percent>(ValueExtensions.ToPercentOrFraction);
