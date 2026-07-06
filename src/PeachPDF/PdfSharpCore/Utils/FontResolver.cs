@@ -135,7 +135,13 @@ namespace PeachPDF.PdfSharpCore.Utils
                     var fontInfo = FontFileInfo.Load(fontPathFile);
                     Debug.WriteLine(fontPathFile);
                     tempFontInfoList.Add(fontInfo);
-                    _SystemFontPaths.Add(fontInfo.FontDescription.FontNameInvariantCulture, fontPathFile);
+
+                    lock(_SystemFontPaths){
+                        if (!_SystemFontPaths.ContainsKey(fontInfo.FontDescription.FontNameInvariantCulture))
+                        {
+                            _SystemFontPaths.Add(fontInfo.FontDescription.FontNameInvariantCulture, fontPathFile);
+                        }
+                    }
                 }
                 catch (System.Exception e)
                 {
