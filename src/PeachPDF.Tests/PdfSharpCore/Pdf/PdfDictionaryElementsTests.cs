@@ -572,19 +572,14 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf
         }
 
         [Fact]
-        public void EnumFromName_AfterSetEnumAsName_ThrowsDueToBuggyDebugAssert()
+        public void EnumFromName_AfterSetEnumAsName_RoundTrips()
         {
-            // SetEnumAsName stores the value as a PdfName, but GetEnumFromName's read path does
-            // `Debug.Assert(obj is Enum)` before parsing it -- the stored object is always a
-            // PdfName, never an Enum, so this assertion is always false for anything SetEnumAsName
-            // wrote, and a failed Debug.Assert aborts the test in a Debug build. Real, pre-existing
-            // bug in GetEnumFromName; documented here rather than fixed.
             var dict = new PdfDictionary();
             dict.Elements.SetEnumAsName("/Layout", PdfPageLayout.TwoColumnLeft);
 
-            var ex = Record.Exception(() => dict.Elements.GetEnumFromName("/Layout", PdfPageLayout.SinglePage));
+            var result = (PdfPageLayout)dict.Elements.GetEnumFromName("/Layout", PdfPageLayout.SinglePage);
 
-            Assert.NotNull(ex);
+            Assert.Equal(PdfPageLayout.TwoColumnLeft, result);
         }
 
         [Fact]

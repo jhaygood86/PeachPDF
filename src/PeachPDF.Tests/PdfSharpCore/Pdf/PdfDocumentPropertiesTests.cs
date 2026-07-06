@@ -52,33 +52,23 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf
         }
 
         [Fact]
-        public void PageLayout_Setter_ThrowsOnReadBackDueToBuggyDebugAssert()
+        public void PageLayout_Setter_RoundTrips()
         {
-            // PdfCatalog.PageLayout is backed by DictionaryElements.GetEnumFromName/SetEnumAsName.
-            // SetEnumAsName stores the value as a PdfName, but GetEnumFromName's read path does
-            // `Debug.Assert(obj is Enum)` before parsing it -- the stored object is always a
-            // PdfName, never an Enum, so the assertion always fails for anything the setter wrote,
-            // and a failed Debug.Assert aborts the test under a Debug build. Real, pre-existing bug
-            // in GetEnumFromName; documented here rather than fixed.
             var doc = new PdfDocument();
 
             doc.PageLayout = PdfPageLayout.OneColumn;
 
-            var ex = Record.Exception(() => doc.PageLayout);
-            Assert.NotNull(ex);
+            Assert.Equal(PdfPageLayout.OneColumn, doc.PageLayout);
         }
 
         [Fact]
-        public void PageMode_Setter_ThrowsOnReadBackDueToBuggyDebugAssert()
+        public void PageMode_Setter_RoundTrips()
         {
-            // See the NOTE on PageLayout_Setter_ThrowsOnReadBackDueToBuggyDebugAssert above --
-            // PdfCatalog.PageMode has the same GetEnumFromName/SetEnumAsName round-trip bug.
             var doc = new PdfDocument();
 
             doc.PageMode = PdfPageMode.FullScreen;
 
-            var ex = Record.Exception(() => doc.PageMode);
-            Assert.NotNull(ex);
+            Assert.Equal(PdfPageMode.FullScreen, doc.PageMode);
         }
 
         [Fact]
