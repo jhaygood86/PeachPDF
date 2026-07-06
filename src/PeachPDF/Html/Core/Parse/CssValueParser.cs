@@ -184,57 +184,19 @@ namespace PeachPDF.Html.Core.Parse
             //Get units of the length
             var (unit, numberValue) = GetUnit(length, defaultUnit, out var hasUnit);
 
-            //Factor will depend on the unit
-            double factor;
-
             //Number of the length
             var number = hasUnit ? numberValue : ParseNumber(length, hundredPercent);
 
-            //TODO: Units behave different in paper and in screen!
-            switch (unit)
+            // A bare point value returns the raw point number directly rather than round-tripping
+            // through pixel space, avoiding a redundant px->pt->px floating-point conversion.
+            if (returnPoints && unit == CssConstants.Pt)
             {
-                case CssConstants.Em:
-                    factor = emFactor;
-                    break;
-                case CssConstants.Rem:
-                    factor = remFactor;
-                    break;
-                case CssConstants.Ex:
-                    factor = emFactor / 2;
-                    break;
-                case CssConstants.Px:
-                    factor = fontAdjust ? 72f / 96f : 1f; //TODO:a check support for hi dpi
-                    break;
-                case CssConstants.Mm:
-                    factor = 3.779527559f; //3 pixels per millimeter
-                    break;
-                case CssConstants.Cm:
-                    factor = 37.795275591f; //37 pixels per centimeter
-                    break;
-                case CssConstants.In:
-                    factor = 96f; //96 pixels per inch
-                    break;
-                case CssConstants.Pt:
-                    factor = 96f / 72f; // 1 point = 1/72 of inch
-
-                    if (returnPoints)
-                    {
-                        return number!.Value;
-                    }
-
-                    break;
-                case CssConstants.Pc:
-                    factor = 16f; // 1 pica = 12 points
-                    break;
-                case CssConstants.Percent:
-                    factor = hundredPercent / 100d;
-                    break;
-                default:
-                    factor = 0f;
-                    break;
+                return number!.Value;
             }
 
-            return factor * number!.Value;
+            var lengthUnit = unit is not null ? Length.GetUnit(unit) : Length.Unit.None;
+
+            return new Length((float)number!.Value, lengthUnit).ToPixels(emFactor, remFactor, hundredPercent, fontAdjust);
         }
 
         /// <summary>
