@@ -1222,7 +1222,7 @@ var transformHtml = "<!DOCTYPE html><html><head>" + TransformCss + "</head><body
     ) +
 
     "<h2>5 — 3D Rotations (no perspective)</h2>" +
-    "<p class=\"intro\">Without a perspective() function, 3D rotations project exactly onto the flat page as an axis-aligned foreshortening (narrower/shorter), with no vanishing point.</p>" +
+    "<p class=\"intro\">3D rotations project onto the flat page as an axis-aligned foreshortening (narrower/shorter), with no vanishing point - PeachPDF does not support perspective(), so there's never a tapered/trapezoidal look.</p>" +
     Row(
         TransformSwatch("rotateX(50deg)", "rotateX(50deg)"),
         TransformSwatch("rotateY(50deg)", "rotateY(50deg)"),
@@ -1230,16 +1230,7 @@ var transformHtml = "<!DOCTYPE html><html><head>" + TransformCss + "</head><body
         TransformSwatch("translateZ (no visible effect)", "translateZ(300px)")
     ) +
 
-    "<h2>6 — perspective() Approximation</h2>" +
-    "<p class=\"intro\">The element's background/border are painted as its own true 4 corners under a real perspective projection - a genuine trapezoid - rather than the rectangle/parallelogram a single 2D affine matrix could otherwise ever produce (text/children still use an affine approximation). The effect strength depends on the perspective distance *relative to the element's own half-size* (here, ~50px). If the distance is small enough that a corner would end up behind the viewer - an inherent limit of approximating true 3D clipping this way - PeachPDF falls back to the plain affine rectangle instead of drawing a distorted shape.</p>" +
-    Row(
-        TransformSwatch("rotateY(45deg), no perspective", "rotateY(45deg)"),
-        TransformSwatch("perspective(75px) rotateY(45deg) — true trapezoid", "perspective(75px) rotateY(45deg)"),
-        TransformSwatch("perspective(30px) — corner behind viewer, falls back", "perspective(30px) rotateY(45deg)"),
-        TransformSwatch("perspective(1000px) rotateY(45deg) — nearly flat", "perspective(1000px) rotateY(45deg)")
-    ) +
-
-    "<h2>7 — Combined With Other Features</h2>" +
+    "<h2>6 — Combined With Other Features</h2>" +
     Row(
         TransformSwatch("+ border-radius", "rotate(15deg)", "border-radius: 12px;"),
         TransformSwatch("+ gradient background", "rotate(-10deg) scale(1.2)", "background: linear-gradient(to right, #e74c3c, #3498db);"),

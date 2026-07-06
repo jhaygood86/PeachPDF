@@ -237,7 +237,6 @@ namespace PeachPDF.Html.Core.Dom
             {
                 _transform = value;
                 _actualTransformComputed = false;
-                _hasPerspectiveTransform = null;
             }
         }
 
@@ -249,7 +248,6 @@ namespace PeachPDF.Html.Core.Dom
             {
                 _transformOrigin = value;
                 _actualTransformComputed = false;
-                _hasPerspectiveTransform = null;
             }
         }
 
@@ -985,26 +983,6 @@ namespace PeachPDF.Html.Core.Dom
         /// True when this box has a non-identity CSS transform to apply at paint time.
         /// </summary>
         public bool IsTransformed => !ActualTransformMatrix.IsIdentity;
-
-        private bool? _hasPerspectiveTransform;
-
-        /// <summary>
-        /// True when this box's transform includes an active perspective() (or equivalent matrix3d()),
-        /// meaning ActualTransformMatrix is only a local affine approximation of a true, non-affine
-        /// projection - see CssValueParser.HasPerspective / TryGetLocalPerspectiveCorners.
-        /// </summary>
-        public bool HasPerspectiveTransform =>
-            _hasPerspectiveTransform ??= CssValueParser.HasPerspective(Transform, TransformOrigin, this);
-
-        /// <summary>
-        /// When HasPerspectiveTransform, this box's own 4 corners (top-left, top-right, bottom-right,
-        /// bottom-left) under the true (non-approximated) perspective projection, relative to the box's
-        /// own local (0, 0) top-left - see CssValueParser.TryGetLocalPerspectiveCorners. Null otherwise.
-        /// Not cached (only read once per paint, for a rare feature) - re-derive from CssValueParser directly
-        /// if this is ever read more than once per box.
-        /// </summary>
-        public RPoint[]? LocalPerspectiveCorners =>
-            HasPerspectiveTransform ? CssValueParser.TryGetLocalPerspectiveCorners(Transform, TransformOrigin, this) : null;
 
         /// <summary>
         /// Gets a value indicating if at least one of the corners of the box is rounded.

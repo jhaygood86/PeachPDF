@@ -235,84 +235,23 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(40, m.OffsetY, 2);
         }
 
-        // --- perspective() approximation ---
+        // --- perspective() is unsupported ---
 
         [Fact]
-        public async Task Perspective_ForeshortensRotateY_AndConvergesAtLargeDistance()
+        public async Task Perspective_IsUnsupported_TreatedAsIdentity()
         {
-            var noPerspective = await FindDivBox("transform: rotateY(45deg); transform-origin: 0 0;");
-            var nearPerspective = await FindDivBox("transform: perspective(300px) rotateY(45deg); transform-origin: 0 0;");
-            var farPerspective = await FindDivBox("transform: perspective(100000px) rotateY(45deg); transform-origin: 0 0;");
+            // perspective() is not supported (see docs/html-css-support.md) - it's ignored like any
+            // other unrecognized function name, contributing identity to the composed transform.
+            var withPerspective = await FindDivBox("transform: perspective(300px) rotateY(45deg); transform-origin: 0 0;");
+            var plain = await FindDivBox("transform: rotateY(45deg); transform-origin: 0 0;");
 
-            var baseline = noPerspective.ActualTransformMatrix.M11;
-            var near = nearPerspective.ActualTransformMatrix.M11;
-            var far = farPerspective.ActualTransformMatrix.M11;
-
-            Assert.NotEqual(baseline, near, 3);
-            Assert.Equal(baseline, far, 3);
-        }
-
-        [Fact]
-        public async Task Perspective_NonPositiveDistance_IsIgnored()
-        {
-            var divBox = await FindDivBox("transform: perspective(0px) rotate(30deg); transform-origin: 0 0;");
-            var plain = await FindDivBox("transform: rotate(30deg); transform-origin: 0 0;");
-
-            var m = divBox.ActualTransformMatrix;
+            var m = withPerspective.ActualTransformMatrix;
             var p = plain.ActualTransformMatrix;
 
-            Assert.Equal(p.M11, m.M11, 3);
-            Assert.Equal(p.M12, m.M12, 3);
-        }
-
-        // --- true perspective quad corners (trapezoid background/border) ---
-
-        [Fact]
-        public async Task HasPerspectiveTransform_FalseWithoutPerspective()
-        {
-            var divBox = await FindDivBox("transform: rotateY(45deg);");
-
-            Assert.False(divBox.HasPerspectiveTransform);
-            Assert.Null(divBox.LocalPerspectiveCorners);
-        }
-
-        [Fact]
-        public async Task HasPerspectiveTransform_TrueWithActivePerspective()
-        {
-            var divBox = await FindDivBox("transform: perspective(300px) rotateY(45deg);");
-
-            Assert.True(divBox.HasPerspectiveTransform);
-        }
-
-        [Fact]
-        public async Task LocalPerspectiveCorners_ProducesGenuineTrapezoid()
-        {
-            // A real perspective projection tapers - the left and right edges of a rotateY'd box end up
-            // at different heights (unlike the affine ActualTransformMatrix, which can only ever produce
-            // a rectangle or parallelogram - both have equal-height opposite edges).
-            var divBox = await FindDivBox("transform: perspective(300px) rotateY(45deg);");
-            var corners = divBox.LocalPerspectiveCorners;
-
-            Assert.NotNull(corners);
-            var c = corners!;
-            // Order: TL, TR, BR, BL.
-            var leftHeight = Math.Abs(c[3].Y - c[0].Y);
-            var rightHeight = Math.Abs(c[2].Y - c[1].Y);
-
-            Assert.NotEqual(leftHeight, rightHeight, 1);
-        }
-
-        [Fact]
-        public async Task LocalPerspectiveCorners_FallsBackToNullWhenCornerIsBehindViewer()
-        {
-            // A perspective distance far smaller than the box's own half-width pushes one or more
-            // corners behind the viewer's eye point (w <= 0), which would otherwise naively project
-            // into a self-intersecting "bowtie" instead of a trapezoid - must fall back to null so the
-            // caller uses the normal affine-approximated rendering instead.
-            var divBox = await FindDivBox("transform: perspective(10px) rotateY(45deg);");
-
-            Assert.True(divBox.HasPerspectiveTransform);
-            Assert.Null(divBox.LocalPerspectiveCorners);
+            Assert.Equal(p.M11, m.M11, 6);
+            Assert.Equal(p.M22, m.M22, 6);
+            Assert.Equal(p.OffsetX, m.OffsetX, 6);
+            Assert.Equal(p.OffsetY, m.OffsetY, 6);
         }
 
         // --- Non-inheritance ---
