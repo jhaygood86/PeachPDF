@@ -1155,14 +1155,13 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (!double.IsNaN(_actualBorderSpacingHorizontal)) return _actualBorderSpacingHorizontal;
 
-                var matches = RegexParserUtils.CssLengthRegex().Matches(BorderSpacing);
+                // Paren-depth-aware split (not a naive regex length-search) so a calc()/min()/max()/clamp()
+                // value's internal spaces aren't mistaken for the horizontal/vertical delimiter.
+                var parts = new List<string>(CssValueParser.SplitTopLevelWhitespace(BorderSpacing));
 
-                _actualBorderSpacingHorizontal = matches.Count switch
-                {
-                    0 => 0,
-                    > 0 => CssValueParser.ParseLength(matches[0].Value, 1, this),
-                    _ => _actualBorderSpacingHorizontal
-                };
+                _actualBorderSpacingHorizontal = parts.Count > 0
+                    ? CssValueParser.ParseLength(parts[0], 1, this)
+                    : 0;
 
                 return _actualBorderSpacingHorizontal;
             }
@@ -1176,13 +1175,14 @@ namespace PeachPDF.Html.Core.Dom
             get
             {
                 if (!double.IsNaN(_actualBorderSpacingVertical)) return _actualBorderSpacingVertical;
-                var matches = RegexParserUtils.CssLengthRegex().Matches(BorderSpacing);
 
-                _actualBorderSpacingVertical = matches.Count switch
+                var parts = new List<string>(CssValueParser.SplitTopLevelWhitespace(BorderSpacing));
+
+                _actualBorderSpacingVertical = parts.Count switch
                 {
                     0 => 0,
-                    1 => CssValueParser.ParseLength(matches[0].Value, 1, this),
-                    _ => CssValueParser.ParseLength(matches[1].Value, 1, this)
+                    1 => CssValueParser.ParseLength(parts[0], 1, this),
+                    _ => CssValueParser.ParseLength(parts[1], 1, this)
                 };
 
                 return _actualBorderSpacingVertical;
@@ -1288,7 +1288,12 @@ namespace PeachPDF.Html.Core.Dom
             _actualWordSpacing = CssUtils.WhiteSpace(g, this);
             if (WordSpacing == CssConstants.Normal) return;
 
-            var len = RegexParserUtils.Search(RegexParserUtils.CssLengthRegex(), WordSpacing);
+            // A calc()-family value would otherwise have its first length-shaped substring plucked out
+            // by the regex below (e.g. "calc(2px + 3px)" mistaken for plain "2px") - the same bug the
+            // FontSize setter had. Pass it straight through to ParseLength's own calc-aware evaluation.
+            var len = CssValueParser.IsCalcFunction(WordSpacing)
+                ? WordSpacing
+                : RegexParserUtils.Search(RegexParserUtils.CssLengthRegex(), WordSpacing);
             _actualWordSpacing += CssValueParser.ParseLength(len!, 1, this);
         }
 
