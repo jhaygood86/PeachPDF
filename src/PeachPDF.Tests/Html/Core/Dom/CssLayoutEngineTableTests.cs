@@ -3,7 +3,6 @@ using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore.Drawing;
-using Xunit.Abstractions;
 
 namespace PeachPDF.Tests.Html.Core.Dom
 {

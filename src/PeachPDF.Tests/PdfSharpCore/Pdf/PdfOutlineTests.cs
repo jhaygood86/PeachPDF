@@ -71,7 +71,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf
             parent.Outlines.Add("Child", page);
 
             Assert.True(parent.HasChildren);
-            Assert.Equal(1, parent.Outlines.Count);
+            Assert.Single(parent.Outlines);
         }
 
         [Fact]
@@ -140,7 +140,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf
 
             doc.Outlines.Add("A", page);
 
-            Assert.Equal(1, doc.Outlines.Count);
+            Assert.Single(doc.Outlines);
         }
 
         [Fact]
@@ -158,7 +158,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf
             var page = doc.AddPage();
             var outline = doc.Outlines.Add("A", page);
 
-            Assert.True(doc.Outlines.Contains(outline));
+            Assert.Contains(outline, doc.Outlines);
         }
 
         [Fact]
@@ -200,7 +200,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf
             var removed = doc.Outlines.Remove(outline);
 
             Assert.True(removed);
-            Assert.Equal(0, doc.Outlines.Count);
+            Assert.Empty(doc.Outlines);
         }
 
         [Fact]
@@ -221,7 +221,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf
 
             doc.Outlines.RemoveAt(0);
 
-            Assert.Equal(0, doc.Outlines.Count);
+            Assert.Empty(doc.Outlines);
         }
 
         [Fact]
@@ -234,7 +234,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf
 
             doc.Outlines.Clear();
 
-            Assert.Equal(0, doc.Outlines.Count);
+            Assert.Empty(doc.Outlines);
         }
 
         [Fact]

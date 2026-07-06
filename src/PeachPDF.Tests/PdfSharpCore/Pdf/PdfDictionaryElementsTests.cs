@@ -261,7 +261,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf
             dict.Elements.Add("/Key", new PdfInteger(1));
 
             Assert.True(dict.Elements.ContainsKey("/Key"));
-            Assert.Equal(1, dict.Elements.Count);
+            Assert.Single(dict.Elements);
         }
 
         [Fact]
@@ -318,17 +318,17 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf
 
             dict.Elements.Clear();
 
-            Assert.Equal(0, dict.Elements.Count);
+            Assert.Empty(dict.Elements);
         }
 
         [Fact]
         public void Count_ReflectsNumberOfEntries()
         {
             var dict = new PdfDictionary();
-            Assert.Equal(0, dict.Elements.Count);
+            Assert.Empty(dict.Elements);
 
             dict.Elements.SetInteger("/A", 1);
-            Assert.Equal(1, dict.Elements.Count);
+            Assert.Single(dict.Elements);
         }
 
         [Fact]

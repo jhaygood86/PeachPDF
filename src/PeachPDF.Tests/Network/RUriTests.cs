@@ -67,7 +67,7 @@ namespace PeachPDF.Tests.Network
 
             Assert.NotNull(response);
             using var memoryStream = new MemoryStream();
-            await response!.ResourceStream!.CopyToAsync(memoryStream);
+            await response!.ResourceStream!.CopyToAsync(memoryStream, TestContext.Current.CancellationToken);
             Assert.Equal(bytes, memoryStream.ToArray());
         }
     }
