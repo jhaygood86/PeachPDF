@@ -675,6 +675,37 @@ When a `var()` reference can't be resolved and no fallback is given, the contain
 
 ---
 
+## CSS Math Functions
+
+PeachPDF supports [`calc()`](https://developer.mozilla.org/en-US/docs/Web/CSS/calc), [`min()`](https://developer.mozilla.org/en-US/docs/Web/CSS/min), [`max()`](https://developer.mozilla.org/en-US/docs/Web/CSS/max), and [`clamp()`](https://developer.mozilla.org/en-US/docs/Web/CSS/clamp) anywhere a `<length>`, `<percentage>`, `<angle>`, or plain `<number>` is accepted — width, height, margin, padding, inset (`top`/`left`/`right`/`bottom`), border-width, border-spacing, border-radius, gap, flex-basis, font-size, line-height, text-indent, the length/number arguments of `transform` functions like `translateX()`/`scale()`, the angle argument of `rotate()`/`skewX()`/`skewY()` and gradient direction angles, and the hue component of `hsl()`/`hsla()`.
+
+```css
+.card {
+  width: calc(100% - 40px);
+  padding: clamp(8px, 5%, 24px);
+  transform: rotate(calc(45deg + 10deg));
+  margin-left: min(5vw, 10px); /* vw isn't resolvable - see Unsupported CSS Features below */
+}
+```
+
+| Feature | Support | Notes |
+|---------|---------|-------|
+| `calc()` — `+`, `-`, `*`, `/` | Full | Standard CSS type-checking rules apply: `+`/`-` require matching operand categories (percentages freely combine with lengths), `*`/`/` require one operand to be a plain number |
+| `min()` / `max()` | Full | Any number of comma-separated arguments, all of the same category |
+| `clamp(min, val, max)` | Full | Exactly 3 arguments; if `min` is greater than `max`, the used value is `max` (per spec). The `none` keyword for an unbounded `min`/`max` is not supported |
+| Nesting | Full | `calc()`/`min()`/`max()`/`clamp()` may nest inside each other and inside parentheses, to any depth |
+| Combined with `var()` | Full | The custom property is substituted first, then the resulting expression is validated and evaluated the same as a literal one |
+| Percentages inside a math function | Full | Resolved against the same base the plain percentage form would use at that property (e.g. containing-block width for `width`/`margin`, parent font-size for `em`-relative `font-size`). Not accepted at all for the length-only properties (`border-width`, `border-spacing`), matching those properties' plain (non-`calc()`) behavior |
+| Angle units (`deg`, `grad`, `rad`, `turn`) inside a math function | Full | Mixed angle units fold to a single value at parse time (e.g. `rotate(calc(1turn / 4))` → `rotate(90deg)`), since angle units, unlike lengths/percentages, never need layout context to resolve |
+| Divide-by-zero / invalid category mixes (`calc(10px + 5)`, `calc(1px * 1px)`, `calc(10px + 5deg)`) | Rejected | The whole declaration is treated as invalid, the same as any other malformed CSS value |
+| Time and resolution units (`s`, `dpi`) inside a math function | Not supported | PeachPDF doesn't support these unit categories at all, with or without a math function |
+| Viewport units (`vw`/`vh`/`vmin`/`vmax`) inside a math function | Not supported | PeachPDF has no viewport-unit support anywhere |
+| A math function inside CSS Grid track sizing | Not applicable | PeachPDF doesn't support CSS Grid |
+
+Note: `background-position` and `background-size` are not listed above — `background-position` only recognizes the `left`/`right`/`top`/`bottom`/`center` keywords (a numeric offset, `calc()` or not, has no effect), and `background-size` is parsed but not read anywhere in the paint pipeline. Both are pre-existing gaps unrelated to `calc()`.
+
+---
+
 ## Unsupported CSS Features
 
 The following CSS features are not supported:
@@ -683,7 +714,6 @@ The following CSS features are not supported:
 - **3D perspective** — the `perspective()` transform function, and the `perspective`/`perspective-origin`/`transform-style`/`backface-visibility` properties
 - **Transitions and animations** — `transition`, `animation`, `@keyframes`
 - **Filters and effects** — `filter`, `backdrop-filter`, `mix-blend-mode`, `opacity`
-- **`calc()` expressions**
 - **`background` shorthand** — use individual `background-*` properties
 - **`letter-spacing`**
 - **`text-transform`** — `uppercase`, `lowercase`, `capitalize`

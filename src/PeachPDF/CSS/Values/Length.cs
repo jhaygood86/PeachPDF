@@ -213,21 +213,42 @@ namespace PeachPDF.CSS
 
         public float ToPixel()
         {
+            if (IsRelative)
+                throw new InvalidOperationException("A relative unit cannot be converted.");
+
+            return (float)ToPixels(0, 0, 0);
+        }
+
+        /// <summary>
+        ///     Resolves this length to pixels, given the context needed for relative units
+        ///     (<c>em</c>/<c>rem</c>/<c>ex</c>/<c>%</c>). This is the single source of truth for
+        ///     "unit + context -> pixels" — <see cref="ToPixel"/> delegates to it for absolute units,
+        ///     and layout-time consumers (e.g. calc() evaluation) use it directly for the relative case.
+        /// </summary>
+        /// <param name="emFactor">Pixels per 1em, i.e. the relevant font size in pixels.</param>
+        /// <param name="remFactor">Pixels per 1rem, i.e. the root element's font size in pixels.</param>
+        /// <param name="hundredPercent">The pixel value equivalent to 100%.</param>
+        /// <param name="fontAdjust">If the length is in pixels and font related, apply the 72/96 factor.</param>
+        internal double ToPixels(double emFactor, double remFactor, double hundredPercent, bool fontAdjust = false)
+        {
             return Type switch
             {
+                Unit.Em => emFactor * Value,
+                Unit.Rem => remFactor * Value,
+                Unit.Ex => emFactor / 2 * Value,
+                Unit.Px => (fontAdjust ? 72d / 96d : 1d) * Value, //TODO: a check support for hi dpi
                 Unit.In => // 1 in = 2.54 cm
-                    Value * 96f,
+                    96d * Value,
                 Unit.Mm => // 1 mm = 0.1 cm
-                    Value * 5f * 96f / 127f,
+                    3.779527559d * Value,
                 Unit.Pc => // 1 pc = 12 pt
-                    Value * 12f * 96f / 72f,
+                    16d * Value,
                 Unit.Pt => // 1 pt = 1/72 in
-                    Value * 96f / 72f,
+                    96d / 72d * Value,
                 Unit.Cm => // 1 cm = 50/127 in
-                    Value * 50f * 96f / 127f,
-                Unit.Px => // 1 px = 1/96 in
-                    Value,
-                _ => throw new InvalidOperationException("A relative unit cannot be converted.")
+                    37.795275591d * Value,
+                Unit.Percent => hundredPercent / 100d * Value,
+                _ => 0d
             };
         }
 

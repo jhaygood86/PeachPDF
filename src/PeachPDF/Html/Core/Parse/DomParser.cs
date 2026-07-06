@@ -565,26 +565,27 @@ namespace PeachPDF.Html.Core.Parse
         /// </summary>
         private static void ApplyResolvedPropertyValue(CssValueParser valueParser, CssBox box, string name, string value)
         {
-            if (PropertyFactory.Instance.CreateShorthand(name) is not null)
+            // Re-parse through the real Layer A converter for every var()-resolved declaration, not just
+            // shorthands, so calc()-family (and any other) expressions are validated and canonicalized the
+            // same way a literal declaration would be, instead of being handed to Layer B unchecked.
+            var reparsed = StylesheetParser.Default.ParseDeclaration($"{name}: {value}");
+
+            if (reparsed is ShorthandProperty { HasValue: true } shorthand)
             {
-                var reparsed = StylesheetParser.Default.ParseDeclaration($"{name}: {value}");
-                if (reparsed is ShorthandProperty { HasValue: true } shorthand)
+                var longhands = PropertyFactory.Instance.CreateLonghandsFor(name);
+                shorthand.Export(longhands);
+
+                foreach (var longhand in longhands)
                 {
-                    var longhands = PropertyFactory.Instance.CreateLonghandsFor(name);
-                    shorthand.Export(longhands);
-
-                    foreach (var longhand in longhands)
-                    {
-                        if (longhand.HasValue && IsStyleOnElementAllowed(box, longhand.Name, longhand.Value))
-                            CssUtils.SetPropertyValue(valueParser, box, longhand.Name, longhand.Value);
-                    }
-
-                    return;
+                    if (longhand.HasValue && IsStyleOnElementAllowed(box, longhand.Name, longhand.Value))
+                        CssUtils.SetPropertyValue(valueParser, box, longhand.Name, longhand.Value);
                 }
+
+                return;
             }
 
-            if (IsStyleOnElementAllowed(box, name, value))
-                CssUtils.SetPropertyValue(valueParser, box, name, value);
+            if (reparsed is { HasValue: true } property && IsStyleOnElementAllowed(box, name, property.Value))
+                CssUtils.SetPropertyValue(valueParser, box, name, property.Value);
         }
 
         /// <summary>

@@ -576,9 +576,6 @@ namespace PeachPDF.Html.Core.Utils
                 case "word-spacing":
                     cssBox.WordSpacing = value;
                     break;
-                case "font":
-                    SetFontPropertyValue(valueParser, cssBox, value);
-                    break;
                 case "font-family":
                     cssBox.FontFamily = valueParser.GetFontFamilyByName(value);
                     break;
@@ -681,6 +678,8 @@ namespace PeachPDF.Html.Core.Utils
                 case "none": cssBox.FlexGrow = "0"; cssBox.FlexShrink = "0"; cssBox.FlexBasis = "auto"; return;
                 case "auto": cssBox.FlexGrow = "1"; cssBox.FlexShrink = "1"; cssBox.FlexBasis = "auto"; return;
             }
+            // TODO: a calc()-valued flex-basis component (e.g. "flex: 1 1 calc(10px + 5px)") would be
+            // mis-split here, same as gap was - use CssValueParser.SplitTopLevelWhitespace if that's needed.
             var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length >= 1 && float.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _))
                 cssBox.FlexGrow = parts[0];
@@ -718,7 +717,9 @@ namespace PeachPDF.Html.Core.Utils
 
         private static void SetFlexGapShorthand(CssBox cssBox, string value)
         {
-            var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            // Paren-depth-aware split so a calc()/min()/max()/clamp() value's internal spaces aren't
+            // mistaken for the row/column delimiter (e.g. "gap: calc(10px + 5px) 20px").
+            var parts = CssValueParser.SplitTopLevelWhitespace(value).ToArray();
             cssBox.FlexRowGap    = parts[0];
             cssBox.FlexColumnGap = parts.Length > 1 ? parts[1] : parts[0];
         }
@@ -740,7 +741,7 @@ namespace PeachPDF.Html.Core.Utils
             {
                 var value = GetPropertyValue(box, propertyName);
 
-                if (value is CssConstants.CurrentColor)
+                if (value is not null && value.Equals(CssConstants.CurrentColor, StringComparison.OrdinalIgnoreCase))
                 {
                     SetPropertyValue(valueParser, box, propertyName, colorValue);
                 }
@@ -755,7 +756,8 @@ namespace PeachPDF.Html.Core.Utils
 
         private static bool IsValidColorProperty(CssValueParser valueParser, string propValue)
         {
-            return propValue is CssConstants.CurrentColor || valueParser.IsColorValid(propValue);
+            return propValue.Equals(CssConstants.CurrentColor, StringComparison.OrdinalIgnoreCase) ||
+                   valueParser.IsColorValid(propValue);
         }
 
         private static bool IsValidBorderStyleProperty(string propValue)
@@ -779,58 +781,6 @@ namespace PeachPDF.Html.Core.Utils
         public static bool IsValidBoxSizing(string propValue)
         {
             return propValue is CssConstants.BorderBox or CssConstants.ContentBox;
-        }
-
-        private static void SetFontPropertyValue(CssValueParser valueParser, CssBox box, string propValue)
-        {
-            var mustBe =
-                RegexParserUtils.Search(RegexParserUtils.CssFontSizeAndLineHeight, propValue, out var mustBePos);
-
-            if (string.IsNullOrEmpty(mustBe)) return;
-
-            mustBe = mustBe.Trim();
-            //Check for style||variant||weight on the left
-            var leftSide = propValue[..mustBePos];
-            var fontStyle = RegexParserUtils.Search(RegexParserUtils.CssFontStyle, leftSide);
-            var fontVariant = RegexParserUtils.Search(RegexParserUtils.CssFontVariant, leftSide);
-            var fontWeight = RegexParserUtils.Search(RegexParserUtils.CssFontWeight, leftSide);
-
-            //Check for family on the right
-            var rightSide = propValue[(mustBePos + mustBe.Length)..];
-            var fontFamily =
-                rightSide.Trim(); //Parser.Search(Parser.CssFontFamily, rightSide); //TODO: Would this be right?
-
-            //Check for font-size and line-height
-            var fontSize = mustBe;
-            var lineHeight = string.Empty;
-
-            if (mustBe.Contains('/') && mustBe.Length > mustBe.IndexOf('/') + 1)
-            {
-                var slashPos = mustBe.IndexOf('/');
-                fontSize = mustBe[..slashPos];
-                lineHeight = mustBe[(slashPos + 1)..];
-            }
-
-            if (!string.IsNullOrEmpty(fontFamily))
-                SetPropertyValue(valueParser, box, "font-family", valueParser.GetFontFamilyByName(fontFamily));
-
-            if (!string.IsNullOrEmpty(fontStyle))
-                SetPropertyValue(valueParser, box, "font-style", fontStyle);
-
-            if (!string.IsNullOrEmpty(fontVariant))
-                SetPropertyValue(valueParser, box, "font-variant", fontVariant);
-
-            if (!string.IsNullOrEmpty(fontWeight))
-                SetPropertyValue(valueParser, box, "font-weight", fontWeight);
-
-            if (!string.IsNullOrEmpty(fontSize))
-                SetPropertyValue(valueParser, box, "font-size", fontSize);
-
-            if (!string.IsNullOrEmpty(lineHeight))
-                SetPropertyValue(valueParser, box, "line-height", lineHeight);
-
-            // Check for: caption | icon | menu | message-box | small-caption | status-bar
-            //TODO: Interpret font values of: caption | icon | menu | message-box | small-caption | status-bar
         }
 
         private static void SetBorderPropertyValue(CssValueParser valueParser, CssBox box, string propValue, string? direction)

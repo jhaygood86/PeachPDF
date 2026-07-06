@@ -1255,3 +1255,106 @@ Console.WriteLine("Saved test_transform.pdf");
 File.Delete("test_transform.html");
 File.WriteAllText("test_transform.html", transformHtml);
 Console.WriteLine("Saved test_transform.html");
+
+// --- CSS calc() / min() / max() / clamp() showcase ---
+
+static string CalcSwatch(string desc, string css) =>
+    "<td>" +
+    $"<div class=\"cbox\" style=\"{css}\"></div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">{css}</div>" +
+    "</td>";
+
+const string CalcCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    p.intro { margin: 0 0 0.7em; color: #555 }
+    table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
+    table.sw td { padding: 3px; vertical-align: top; width: 25%; text-align: center }
+    .cbox { height: 40px; background: steelblue; border: 2px solid #1a6b8a; margin: 0 auto 3px }
+    .desc { font-size: 7pt; font-weight: bold; color: #444; margin-bottom: 1px }
+    .css { font-size: 6pt; color: #666; line-height: 1.3; word-break: break-all }
+    .wrap-200 { width: 200px; border: 1px dashed #999; margin: 0 auto; padding: 4px }
+    </style>
+    """;
+
+var calcHtml = "<!DOCTYPE html><html><head>" + CalcCss + "</head><body>" +
+
+    "<h1>CSS calc() / min() / max() / clamp() Test Page</h1>" +
+
+    "<h2>1 — Basic Arithmetic</h2>" +
+    Row(
+        CalcSwatch("addition", "width: calc(100px + 40px);"),
+        CalcSwatch("subtraction", "width: calc(200px - 60px);"),
+        CalcSwatch("multiplication", "width: calc(20px * 4);"),
+        CalcSwatch("division", "width: calc(200px / 4);")
+    ) +
+
+    "<h2>2 — Mixed Units &amp; Percentages</h2>" +
+    "<p class=\"intro\">calc(1em + 5px) resolves the em against the element's own font-size; calc(100% - 40px) resolves the percentage against the 200px dashed container below.</p>" +
+    Row(
+        "<td>" +
+            "<div class=\"wrap-200\"><div class=\"cbox\" style=\"font-size: 16px; width: calc(1em + 5px);\"></div></div>" +
+            "<div class=\"desc\">1em + 5px @ 16px font</div>" +
+            "<div class=\"css\">width: calc(1em + 5px)</div>" +
+        "</td>",
+        "<td>" +
+            "<div class=\"wrap-200\"><div class=\"cbox\" style=\"width: calc(100% - 40px);\"></div></div>" +
+            "<div class=\"desc\">100% - 40px in a 200px container</div>" +
+            "<div class=\"css\">width: calc(100% - 40px)</div>" +
+        "</td>"
+    ) +
+
+    "<h2>3 — Nested calc() and Parentheses</h2>" +
+    Row(
+        CalcSwatch("nested calc()", "width: calc(calc(50px + 50px) * 2);"),
+        CalcSwatch("parenthesized grouping", "width: calc((50px + 50px) * 2);")
+    ) +
+
+    "<h2>4 — margin / padding / border-radius / height</h2>" +
+    Row(
+        CalcSwatch("margin-left", "margin-left: calc(20px + 10px); width: 60px;"),
+        CalcSwatch("padding (widens box)", "padding: calc(5px + 5px); width: 60px;"),
+        CalcSwatch("border-radius", "border-radius: calc(10px + 10px); width: 80px;"),
+        CalcSwatch("height", "height: calc(20px + 20px); width: 80px;")
+    ) +
+
+    "<h2>5 — Negative Result</h2>" +
+    "<p class=\"intro\">PeachPDF doesn't clamp a negative calc() result to zero, matching how a plain negative length is already handled.</p>" +
+    Row(
+        CalcSwatch("calc(50px - 100px)", "width: calc(50px - 100px); height: 20px; border: 1px dashed red;")
+    ) +
+
+    "<h2>6 — min() / max() / clamp()</h2>" +
+    Row(
+        CalcSwatch("min(150px, 100px)", "width: min(150px, 100px);"),
+        CalcSwatch("max(150px, 100px)", "width: max(150px, 100px);"),
+        CalcSwatch("clamp(50px, 300px, 150px)", "width: clamp(50px, 300px, 150px);"),
+        CalcSwatch("clamp(50px, 10px, 150px)", "width: clamp(50px, 10px, 150px);")
+    ) +
+
+    "<h2>7 — calc() Combined With a Custom Property</h2>" +
+    Row(
+        "<td>" +
+            "<div class=\"wrap-200\"><div class=\"cbox\" style=\"--gap: 20px; width: calc(100% - var(--gap));\"></div></div>" +
+            "<div class=\"desc\">calc() referencing a custom property</div>" +
+            "<div class=\"css\">width: calc(100% - var(--gap))</div>" +
+        "</td>"
+    ) +
+
+    "</body></html>";
+
+var calcStream = new MemoryStream();
+var calcDocument = await generator.GeneratePdf(calcHtml, pdfConfig);
+calcDocument.Save(calcStream);
+
+File.Delete("test_calc.pdf");
+File.WriteAllBytes("test_calc.pdf", calcStream.ToArray());
+Console.WriteLine("Saved test_calc.pdf");
+
+File.Delete("test_calc.html");
+File.WriteAllText("test_calc.html", calcHtml);
+Console.WriteLine("Saved test_calc.html");

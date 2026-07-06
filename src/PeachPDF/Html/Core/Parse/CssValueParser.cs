@@ -105,6 +105,8 @@ namespace PeachPDF.Html.Core.Parse
         {
             if (value.Length <= 1) return false;
 
+            if (IsCalcFunction(value)) return true;
+
             var number = string.Empty;
 
             if (value.EndsWith('%'))
@@ -117,6 +119,40 @@ namespace PeachPDF.Html.Core.Parse
             }
 
             return double.TryParse(number, out _);
+        }
+
+        /// <summary>
+        /// Whether <paramref name="value"/> is (syntactically) a single calc-family function - e.g. so
+        /// callers that do their own lightweight text scanning of a length string (like
+        /// <see cref="Dom.CssBoxProperties"/>'s FontSize setter, which regex-searches for a bare "Nem"
+        /// substring to eagerly convert em to points) know to leave a calc() expression alone rather than
+        /// mangling it, deferring to <see cref="ParseLength(string, double, double, double, string, bool, bool)"/>'s
+        /// real evaluation instead.
+        /// </summary>
+        public static bool IsCalcFunction(string value)
+        {
+            return TryGetCalcFunction(value, out _);
+        }
+
+        /// <summary>
+        /// Recognizes a length string that is a single calc-family (calc/min/max/clamp) function, e.g. for
+        /// the syntactic gate in <see cref="IsValidLength"/> and the evaluation branch in
+        /// <see cref="ParseLength(string, double, double, double, string, bool, bool)"/>. Real
+        /// grammar/type validation already happened in Layer A's CalcValueConverter for any value that
+        /// didn't arrive via the var() substitution bypass; this is a syntactic recognizer only.
+        /// </summary>
+        private static bool TryGetCalcFunction(string length, out FunctionToken? function)
+        {
+            var tokens = GetCssTokens(length);
+
+            if (tokens is [FunctionToken fn] && CalcParser.IsCalcFamily(fn.Data))
+            {
+                function = fn;
+                return true;
+            }
+
+            function = null;
+            return false;
         }
 
         /// <summary>
@@ -181,60 +217,35 @@ namespace PeachPDF.Html.Core.Parse
             if (string.IsNullOrEmpty(length) || length == "0")
                 return 0f;
 
+            if (TryGetCalcFunction(length, out var calcFunction))
+            {
+                // Every calc-family string reaching layout has already been validated by Layer A's
+                // CalcValueConverter (directly, or via DomParser's var()-substitution re-parse) - a null
+                // result here should be unreachable, but 0 is the same "can't make sense of this" fallback
+                // used elsewhere in this method for any other degenerate input.
+                var node = CalcParser.Parse(calcFunction);
+                var context = new CalcContext(hundredPercent, emFactor, remFactor, fontAdjust, returnPoints);
+                var pixels = node is not null ? CalcEvaluator.Evaluate(node, context) : null;
+
+                return pixels ?? 0d;
+            }
+
             //Get units of the length
             var (unit, numberValue) = GetUnit(length, defaultUnit, out var hasUnit);
-
-            //Factor will depend on the unit
-            double factor;
 
             //Number of the length
             var number = hasUnit ? numberValue : ParseNumber(length, hundredPercent);
 
-            //TODO: Units behave different in paper and in screen!
-            switch (unit)
+            // A bare point value returns the raw point number directly rather than round-tripping
+            // through pixel space, avoiding a redundant px->pt->px floating-point conversion.
+            if (returnPoints && unit == CssConstants.Pt)
             {
-                case CssConstants.Em:
-                    factor = emFactor;
-                    break;
-                case CssConstants.Rem:
-                    factor = remFactor;
-                    break;
-                case CssConstants.Ex:
-                    factor = emFactor / 2;
-                    break;
-                case CssConstants.Px:
-                    factor = fontAdjust ? 72f / 96f : 1f; //TODO:a check support for hi dpi
-                    break;
-                case CssConstants.Mm:
-                    factor = 3.779527559f; //3 pixels per millimeter
-                    break;
-                case CssConstants.Cm:
-                    factor = 37.795275591f; //37 pixels per centimeter
-                    break;
-                case CssConstants.In:
-                    factor = 96f; //96 pixels per inch
-                    break;
-                case CssConstants.Pt:
-                    factor = 96f / 72f; // 1 point = 1/72 of inch
-
-                    if (returnPoints)
-                    {
-                        return number!.Value;
-                    }
-
-                    break;
-                case CssConstants.Pc:
-                    factor = 16f; // 1 pica = 12 points
-                    break;
-                case CssConstants.Percent:
-                    factor = hundredPercent / 100d;
-                    break;
-                default:
-                    factor = 0f;
-                    break;
+                return number!.Value;
             }
 
-            return factor * number!.Value;
+            var lengthUnit = unit is not null ? Length.GetUnit(unit) : Length.Unit.None;
+
+            return new Length((float)number!.Value, lengthUnit).ToPixels(emFactor, remFactor, hundredPercent, fontAdjust);
         }
 
         /// <summary>
@@ -520,8 +531,26 @@ namespace PeachPDF.Html.Core.Parse
             double LengthArg(int index, double hundredPercent) =>
                 index < args.Count ? ParseLength(SingleTokenText(args[index]), hundredPercent, box) : 0;
 
-            float NumberArg(int index) =>
-                index < args.Count ? (args[index].ToSingle() ?? 0f) : 0f;
+            float NumberArg(int index)
+            {
+                if (index >= args.Count) return 0f;
+
+                var direct = args[index].ToSingle();
+                if (direct.HasValue) return direct.Value;
+
+                // A calc()-family argument is a FunctionToken, not a NumberToken, so ToSingle() above
+                // can't see it - fall back to evaluating it directly. hundredPercent is a don't-care here
+                // (1) since a Number-category calc() can never contain a percentage leaf.
+                if (args[index] is [FunctionToken fn] && CalcParser.IsCalcFamily(fn.Data))
+                {
+                    var node = CalcParser.Parse(fn);
+                    var context = new CalcContext(1, box.GetEmHeight(), box.GetRemHeight(), false);
+                    var value = node is not null ? CalcEvaluator.Evaluate(node, context) : null;
+                    return (float?)value ?? 0f;
+                }
+
+                return 0f;
+            }
 
             float AngleArg(int index) =>
                 index < args.Count ? (args[index].ToAngle()?.ToRadian() ?? 0f) : 0f;
@@ -1277,6 +1306,28 @@ namespace PeachPDF.Html.Core.Parse
                 }
             }
             yield return value.Substring(start);
+        }
+
+        /// <summary>
+        /// Splits a string on top-level (paren-depth-zero) whitespace, e.g. for the two-value form of
+        /// border-*-radius or the gap shorthand. Needed because a calc()/min()/max()/clamp() value can
+        /// itself contain spaces (e.g. "calc(10px + 2px) 5px"), which a naive Split(' ') would corrupt.
+        /// </summary>
+        public static IEnumerable<string> SplitTopLevelWhitespace(string value)
+        {
+            int depth = 0, start = 0;
+            for (int i = 0; i < value.Length; i++)
+            {
+                char c = value[i];
+                if (c == '(') depth++;
+                else if (c == ')') depth--;
+                else if (char.IsWhiteSpace(c) && depth == 0)
+                {
+                    if (i > start) yield return value.Substring(start, i - start);
+                    start = i + 1;
+                }
+            }
+            if (start < value.Length) yield return value.Substring(start);
         }
 
         private static double? TryParseConicAngle(List<Token> item)

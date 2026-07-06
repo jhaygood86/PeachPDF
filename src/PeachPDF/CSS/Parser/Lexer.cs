@@ -1054,11 +1054,29 @@ namespace PeachPDF.CSS
         private Token NewFunction(string value)
         {
             var function = new FunctionToken(value, _position);
+
+            // Tracks paren depth so a bare (non-function) parenthesized group nested inside the
+            // function's arguments - e.g. calc((1px + 2px) * 3) - doesn't get mistaken for the end of
+            // the function: only the closing paren that matches this function's own opening paren (depth
+            // returning to 0) should terminate it. A nested function call's own parens are already fully
+            // consumed by its own (recursive) call to this method before it's added as a single token
+            // here, so they never surface as bare RoundBracketOpen/Close tokens at this level.
+            var depth = 1;
             var token = Get();
             while (token.Type != TokenType.EndOfFile)
             {
                 function.AddArgumentToken(token);
-                if (token.Type == TokenType.RoundBracketClose) break;
+
+                if (token.Type == TokenType.RoundBracketOpen)
+                {
+                    depth++;
+                }
+                else if (token.Type == TokenType.RoundBracketClose)
+                {
+                    depth--;
+                    if (depth == 0) break;
+                }
+
                 token = Get();
             }
 

@@ -11,6 +11,7 @@
 // "The Art of War"
 
 using PeachPDF;
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Entities;
@@ -477,27 +478,18 @@ namespace PeachPDF.Html.Core.Dom
             get => _fontSize;
             set
             {
-                var length = RegexParserUtils.Search(RegexParserUtils.CssLengthRegex(), value);
-
-                if (length != null)
+                // calc()-family text is resolved directly by ActualFont's own ParseLength call later
+                // (including any em/rem terms it contains) - leave it untouched here. A plain "Nem" is
+                // the only case needing eager conversion at this point (to points, using the parent's
+                // already-resolved font size); everything else - keywords like "medium"/"larger", or any
+                // other single-unit length - is left as-is for ActualFont's own resolution later.
+                if (!CssValueParser.IsCalcFunction(value) &&
+                    CssValueParser.GetCssTokens(value) is [UnitToken unitToken] &&
+                    Length.GetUnit(unitToken.Unit) == Length.Unit.Em &&
+                    GetParent() is { } parent)
                 {
-                    string computedValue;
-                    CssLength len = new(length);
-
-                    if (len.HasError)
-                    {
-                        computedValue = "medium";
-                    }
-                    else if (len.Unit == CssUnit.Ems && GetParent() != null)
-                    {
-                        computedValue = len.ConvertEmToPoints(GetParent()!.ActualFont.Size).ToString();
-                    }
-                    else
-                    {
-                        computedValue = len.ToString();
-                    }
-
-                    _fontSize = computedValue;
+                    var points = unitToken.Value * parent.ActualFont.Size;
+                    _fontSize = $"{points.ToString("0.0", NumberFormatInfo.InvariantInfo)}pt";
                 }
                 else
                 {
@@ -919,18 +911,20 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        // Returns the first whitespace-delimited token in a CSS value string.
+        // Returns the first top-level-whitespace-delimited token in a CSS value string (paren-depth-aware,
+        // so a calc()/min()/max()/clamp() value's internal spaces aren't mistaken for the delimiter).
         private static string FirstCssValue(string value)
         {
-            var space = value.IndexOf(' ');
-            return space < 0 ? value : value[..space];
+            using var tokens = CssValueParser.SplitTopLevelWhitespace(value).GetEnumerator();
+            return tokens.MoveNext() ? tokens.Current : value;
         }
 
-        // Returns the second whitespace-delimited token, or the first if there is no second (spec: omitted v-radius = h-radius).
+        // Returns the second top-level-whitespace-delimited token, or the first if there is no second
+        // (spec: omitted v-radius = h-radius).
         private static string SecondCssValue(string value)
         {
-            var space = value.IndexOf(' ');
-            return space < 0 ? value : value[(space + 1)..].TrimStart();
+            var tokens = new List<string>(CssValueParser.SplitTopLevelWhitespace(value));
+            return tokens.Count > 1 ? tokens[1] : value;
         }
 
         /// <summary>
@@ -1147,14 +1141,13 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (!double.IsNaN(_actualBorderSpacingHorizontal)) return _actualBorderSpacingHorizontal;
 
-                var matches = RegexParserUtils.CssLengthRegex().Matches(BorderSpacing);
+                // Paren-depth-aware split (not a naive regex length-search) so a calc()/min()/max()/clamp()
+                // value's internal spaces aren't mistaken for the horizontal/vertical delimiter.
+                var parts = new List<string>(CssValueParser.SplitTopLevelWhitespace(BorderSpacing));
 
-                _actualBorderSpacingHorizontal = matches.Count switch
-                {
-                    0 => 0,
-                    > 0 => CssValueParser.ParseLength(matches[0].Value, 1, this),
-                    _ => _actualBorderSpacingHorizontal
-                };
+                _actualBorderSpacingHorizontal = parts.Count > 0
+                    ? CssValueParser.ParseLength(parts[0], 1, this)
+                    : 0;
 
                 return _actualBorderSpacingHorizontal;
             }
@@ -1168,13 +1161,14 @@ namespace PeachPDF.Html.Core.Dom
             get
             {
                 if (!double.IsNaN(_actualBorderSpacingVertical)) return _actualBorderSpacingVertical;
-                var matches = RegexParserUtils.CssLengthRegex().Matches(BorderSpacing);
 
-                _actualBorderSpacingVertical = matches.Count switch
+                var parts = new List<string>(CssValueParser.SplitTopLevelWhitespace(BorderSpacing));
+
+                _actualBorderSpacingVertical = parts.Count switch
                 {
                     0 => 0,
-                    1 => CssValueParser.ParseLength(matches[0].Value, 1, this),
-                    _ => CssValueParser.ParseLength(matches[1].Value, 1, this)
+                    1 => CssValueParser.ParseLength(parts[0], 1, this),
+                    _ => CssValueParser.ParseLength(parts[1], 1, this)
                 };
 
                 return _actualBorderSpacingVertical;
@@ -1280,8 +1274,7 @@ namespace PeachPDF.Html.Core.Dom
             _actualWordSpacing = CssUtils.WhiteSpace(g, this);
             if (WordSpacing == CssConstants.Normal) return;
 
-            var len = RegexParserUtils.Search(RegexParserUtils.CssLengthRegex(), WordSpacing);
-            _actualWordSpacing += CssValueParser.ParseLength(len!, 1, this);
+            _actualWordSpacing += CssValueParser.ParseLength(WordSpacing, 1, this);
         }
 
         /// <summary>
