@@ -147,17 +147,6 @@ namespace PeachPDF.Html.Adapters
         }
 
         /// <summary>
-        /// Convert image object returned from <see cref="HtmlImageLoadEventArgs"/> to <see cref="RImage"/>.
-        /// </summary>
-        /// <param name="image">the image returned from load event</param>
-        /// <returns>converted image or null</returns>
-        public RImage? ConvertImage(object image)
-        {
-            // TODO:a remove this by creating better API.
-            return ConvertImageInt(image);
-        }
-
-        /// <summary>
         /// Create an <see cref="RImage"/> object from the given stream.
         /// </summary>
         /// <param name="memoryStream">the stream to create image from</param>
@@ -307,13 +296,6 @@ namespace PeachPDF.Html.Adapters
         }
 
         protected abstract RBrush CreateConicGradientBrush(RPoint center, double outerRadius, RColor[] colors, double[] anglesRad);
-
-        /// <summary>
-        /// Convert image object returned from <see cref="HtmlImageLoadEventArgs"/> to <see cref="RImage"/>.
-        /// </summary>
-        /// <param name="image">the image returned from load event</param>
-        /// <returns>converted image or null</returns>
-        protected abstract RImage? ConvertImageInt(object image);
 
         /// <summary>
         /// Create an <see cref="RImage"/> object from the given stream.

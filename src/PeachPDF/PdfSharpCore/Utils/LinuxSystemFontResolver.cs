@@ -11,9 +11,12 @@ using System.Text.RegularExpressions;
 
 namespace PeachPDF.PdfSharpCore.Utils
 {
-    internal static class LinuxSystemFontResolver
+    internal static partial class LinuxSystemFontResolver
     {
         const string libfontconfig = "libfontconfig.so.1";
+
+        [GeneratedRegex("<dir>(?<dir>.*)</dir>")]
+        private static partial Regex ConfDirRegex();
 
 
         [DllImport(libfontconfig)] private static extern IntPtr FcInitLoadConfigAndFonts();
@@ -176,7 +179,7 @@ namespace PeachPDF.PdfSharpCore.Utils
             var dirs = new List<string>();
             try
             {
-                Regex confRegex = new Regex("<dir>(?<dir>.*)</dir>", RegexOptions.Compiled);
+                Regex confRegex = ConfDirRegex();
                 using (var reader = new StreamReader(File.OpenRead("/etc/fonts/fonts.conf")))
                 {
                     string line;

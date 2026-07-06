@@ -1,6 +1,7 @@
 #nullable disable
 
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -9,25 +10,13 @@ namespace PeachPDF.CSS
     internal sealed class PseudoClassSelectorFactory
     {
         private static readonly Lazy<PseudoClassSelectorFactory> Lazy =
-            new(() =>
-                {
-                    var factory = new PseudoClassSelectorFactory();
-                    Selectors.Add(PseudoElementNames.Before,
-                        PseudoElementSelectorFactory.Instance.Create(PseudoElementNames.Before));
-                    Selectors.Add(PseudoElementNames.After,
-                        PseudoElementSelectorFactory.Instance.Create(PseudoElementNames.After));
-                    Selectors.Add(PseudoElementNames.FirstLine,
-                        PseudoElementSelectorFactory.Instance.Create(PseudoElementNames.FirstLine));
-                    Selectors.Add(PseudoElementNames.FirstLetter,
-                        PseudoElementSelectorFactory.Instance.Create(PseudoElementNames.FirstLetter));
-                    return factory;
-                }
-            );
+            new(() => new PseudoClassSelectorFactory());
 
         #region Selectors
 
-        private static readonly Dictionary<string, ISelector> Selectors =
-            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        private static Dictionary<string, ISelector> BuildSelectors()
+        {
+            var selectors = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                 {
                     PseudoClassNames.Root,
                     PseudoClassNames.Scope,
@@ -65,6 +54,20 @@ namespace PeachPDF.CSS
                     PseudoClassNames.Shadow,
                 }
                 .ToDictionary(x => x, PseudoClassSelector.Create);
+
+            selectors.Add(PseudoElementNames.Before,
+                PseudoElementSelectorFactory.Instance.Create(PseudoElementNames.Before));
+            selectors.Add(PseudoElementNames.After,
+                PseudoElementSelectorFactory.Instance.Create(PseudoElementNames.After));
+            selectors.Add(PseudoElementNames.FirstLine,
+                PseudoElementSelectorFactory.Instance.Create(PseudoElementNames.FirstLine));
+            selectors.Add(PseudoElementNames.FirstLetter,
+                PseudoElementSelectorFactory.Instance.Create(PseudoElementNames.FirstLetter));
+
+            return selectors;
+        }
+
+        private static readonly FrozenDictionary<string, ISelector> Selectors = BuildSelectors().ToFrozenDictionary();
 
         #endregion
 

@@ -19,6 +19,7 @@ using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore.Drawing;
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -209,7 +210,7 @@ namespace PeachPDF.Html.Core.Parse
             }
         }
 
-        private static readonly Dictionary<string, XSize> NamedPageSizes = new(StringComparer.OrdinalIgnoreCase)
+        private static readonly FrozenDictionary<string, XSize> NamedPageSizes = new Dictionary<string, XSize>(StringComparer.OrdinalIgnoreCase)
         {
             { "a0",      new XSize(2383.94, 3370.39) },
             { "a1",      new XSize(1683.78, 2383.94) },
@@ -224,7 +225,7 @@ namespace PeachPDF.Html.Core.Parse
             { "legal",   new XSize(612,      1008)   },
             { "ledger",  new XSize(1224,      792)   },
             { "tabloid", new XSize(792,      1224)   },
-        };
+        }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
         private static XSize? ParsePageSizeToPdfPoints(string sizeValue)
         {

@@ -6,9 +6,9 @@ namespace PeachPDF.CSS
 {
     internal sealed class DictionaryValueConverter<T> : IValueConverter
     {
-        private readonly Dictionary<string, T> _values;
+        private readonly IReadOnlyDictionary<string, T> _values;
 
-        public DictionaryValueConverter(Dictionary<string, T> values)
+        public DictionaryValueConverter(IReadOnlyDictionary<string, T> values)
         {
             _values = values;
         }

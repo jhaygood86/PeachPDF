@@ -19,7 +19,9 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: '8.0.x'
+        dotnet-version: |
+          8.0.x
+          10.0.x
 
     - name: Setup Python
       uses: actions/setup-python@v5
@@ -38,7 +40,9 @@ jobs:
       run: dotnet build src/PeachPDF.Tests/PeachPDF.Tests.csproj --no-restore --configuration Release
 
     - name: Install Playwright browsers
-      run: pwsh src/PeachPDF.Tests/bin/Release/net8.0/playwright.ps1 install chromium
+      run: |
+        $playwrightScript = Get-ChildItem -Path src/PeachPDF.Tests/bin/Release -Filter playwright.ps1 -Recurse | Select-Object -First 1 -ExpandProperty FullName
+        pwsh $playwrightScript install chromium
 
     - name: Test
       run: dotnet test src/PeachPDF.Tests/PeachPDF.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
@@ -51,8 +55,8 @@ jobs:
       if: github.event_name == 'pull_request'
       run: |
         git fetch origin ${{ github.base_ref }}
-        $coverageFile = Get-ChildItem -Path coverage -Filter coverage.cobertura.xml -Recurse | Select-Object -First 1 -ExpandProperty FullName
-        diff-cover $coverageFile --compare-branch=origin/${{ github.base_ref }} --fail-under=90 --html-report diff-cover-report.html
+        $coverageFiles = (Get-ChildItem -Path coverage -Filter coverage.cobertura.xml -Recurse | ForEach-Object FullName)
+        diff-cover $coverageFiles --compare-branch=origin/${{ github.base_ref }} --fail-under=90 --html-report diff-cover-report.html
 
     - name: Upload test results
       uses: actions/upload-artifact@v4

@@ -12,6 +12,7 @@
 
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Utils;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 
 namespace PeachPDF.Html.Core
@@ -171,7 +172,7 @@ namespace PeachPDF.Html.Core
         /// <summary>
         /// CSS properties that are inherited from a parent element (per CSS spec and PeachPDF's InheritStyle implementation).
         /// </summary>
-        public static readonly HashSet<string> InheritedProperties = new(System.StringComparer.OrdinalIgnoreCase)
+        public static readonly FrozenSet<string> InheritedProperties = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
         {
             "border-collapse", "border-spacing",
             "box-sizing",
@@ -186,13 +187,13 @@ namespace PeachPDF.Html.Core
             "visibility",
             "white-space",
             "word-break",
-        };
+        }.ToFrozenSet(System.StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// Comprehensive CSS spec initial values for every property handled by PeachPDF.
         /// Used only for resolving the <c>initial</c>, <c>unset</c>, and <c>revert</c> global keywords.
         /// </summary>
-        private static readonly Dictionary<string, string?> _allInitialValues = new(System.StringComparer.OrdinalIgnoreCase)
+        private static readonly FrozenDictionary<string, string?> _allInitialValues = new Dictionary<string, string?>(System.StringComparer.OrdinalIgnoreCase)
         {
             { PropertyNames.BackgroundAttachment, CssConstants.Scroll },
             { PropertyNames.BackgroundClip, CssConstants.BorderBox },
@@ -279,7 +280,7 @@ namespace PeachPDF.Html.Core
             { "word-break", CssConstants.Normal },
             { "word-spacing", CssConstants.Normal },
             { "z-index", CssConstants.Auto },
-        };
+        }.ToFrozenDictionary(System.StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// Returns the CSS spec initial value for the given property name, or null if unknown.

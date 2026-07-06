@@ -1,4 +1,4 @@
-﻿// "Therefore those skilled at the unorthodox
+// "Therefore those skilled at the unorthodox
 // are infinite as heaven and earth,
 // inexhaustible as the great rivers.
 // When they come to an end,
@@ -11,6 +11,7 @@
 // "The Art of War"
 
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Text;
 
@@ -23,17 +24,12 @@ namespace PeachPDF.Html.Core.Utils
         /// <summary>
         /// List of html tags that don't have content
         /// </summary>
-        private static readonly HashSet<string> _list =
-        [
-
-            ..new[]
-            {
-                "area", "base", "basefont", "br", "col",
-                "frame", "hr", "img", "input", "isindex",
-                "link", "meta", "param"
-            }
-
-        ];
+        private static readonly FrozenSet<string> _list = new HashSet<string>
+        {
+            "area", "base", "basefont", "br", "col",
+            "frame", "hr", "img", "input", "isindex",
+            "link", "meta", "param"
+        }.ToFrozenSet();
 
         /// <summary>
         /// the html encode\decode pairs
@@ -49,7 +45,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <summary>
         /// the html decode only pairs
         /// </summary>
-        private static readonly Dictionary<string, char> _decodeOnly = new(StringComparer.InvariantCultureIgnoreCase);
+        private static readonly FrozenDictionary<string, char> _decodeOnly;
 
         #endregion
 
@@ -59,248 +55,252 @@ namespace PeachPDF.Html.Core.Utils
         /// </summary>
         static HtmlUtils()
         {
-            _decodeOnly["nbsp"] = ' ';
-            _decodeOnly["rdquo"] = '"';
-            _decodeOnly["lsquo"] = '\'';
-            _decodeOnly["apos"] = '\'';
+            var decodeOnlyBuilder = new Dictionary<string, char>(StringComparer.InvariantCultureIgnoreCase);
+
+            decodeOnlyBuilder["nbsp"] = ' ';
+            decodeOnlyBuilder["rdquo"] = '"';
+            decodeOnlyBuilder["lsquo"] = '\'';
+            decodeOnlyBuilder["apos"] = '\'';
 
             // ISO 8859-1 Symbols
-            _decodeOnly["iexcl"] = Convert.ToChar(161);
-            _decodeOnly["cent"] = Convert.ToChar(162);
-            _decodeOnly["pound"] = Convert.ToChar(163);
-            _decodeOnly["curren"] = Convert.ToChar(164);
-            _decodeOnly["yen"] = Convert.ToChar(165);
-            _decodeOnly["brvbar"] = Convert.ToChar(166);
-            _decodeOnly["sect"] = Convert.ToChar(167);
-            _decodeOnly["uml"] = Convert.ToChar(168);
-            _decodeOnly["copy"] = Convert.ToChar(169);
-            _decodeOnly["ordf"] = Convert.ToChar(170);
-            _decodeOnly["laquo"] = Convert.ToChar(171);
-            _decodeOnly["not"] = Convert.ToChar(172);
-            _decodeOnly["shy"] = Convert.ToChar(173);
-            _decodeOnly["reg"] = Convert.ToChar(174);
-            _decodeOnly["macr"] = Convert.ToChar(175);
-            _decodeOnly["deg"] = Convert.ToChar(176);
-            _decodeOnly["plusmn"] = Convert.ToChar(177);
-            _decodeOnly["sup2"] = Convert.ToChar(178);
-            _decodeOnly["sup3"] = Convert.ToChar(179);
-            _decodeOnly["acute"] = Convert.ToChar(180);
-            _decodeOnly["micro"] = Convert.ToChar(181);
-            _decodeOnly["para"] = Convert.ToChar(182);
-            _decodeOnly["middot"] = Convert.ToChar(183);
-            _decodeOnly["cedil"] = Convert.ToChar(184);
-            _decodeOnly["sup1"] = Convert.ToChar(185);
-            _decodeOnly["ordm"] = Convert.ToChar(186);
-            _decodeOnly["raquo"] = Convert.ToChar(187);
-            _decodeOnly["frac14"] = Convert.ToChar(188);
-            _decodeOnly["frac12"] = Convert.ToChar(189);
-            _decodeOnly["frac34"] = Convert.ToChar(190);
-            _decodeOnly["iquest"] = Convert.ToChar(191);
-            _decodeOnly["times"] = Convert.ToChar(215);
-            _decodeOnly["divide"] = Convert.ToChar(247);
+            decodeOnlyBuilder["iexcl"] = Convert.ToChar(161);
+            decodeOnlyBuilder["cent"] = Convert.ToChar(162);
+            decodeOnlyBuilder["pound"] = Convert.ToChar(163);
+            decodeOnlyBuilder["curren"] = Convert.ToChar(164);
+            decodeOnlyBuilder["yen"] = Convert.ToChar(165);
+            decodeOnlyBuilder["brvbar"] = Convert.ToChar(166);
+            decodeOnlyBuilder["sect"] = Convert.ToChar(167);
+            decodeOnlyBuilder["uml"] = Convert.ToChar(168);
+            decodeOnlyBuilder["copy"] = Convert.ToChar(169);
+            decodeOnlyBuilder["ordf"] = Convert.ToChar(170);
+            decodeOnlyBuilder["laquo"] = Convert.ToChar(171);
+            decodeOnlyBuilder["not"] = Convert.ToChar(172);
+            decodeOnlyBuilder["shy"] = Convert.ToChar(173);
+            decodeOnlyBuilder["reg"] = Convert.ToChar(174);
+            decodeOnlyBuilder["macr"] = Convert.ToChar(175);
+            decodeOnlyBuilder["deg"] = Convert.ToChar(176);
+            decodeOnlyBuilder["plusmn"] = Convert.ToChar(177);
+            decodeOnlyBuilder["sup2"] = Convert.ToChar(178);
+            decodeOnlyBuilder["sup3"] = Convert.ToChar(179);
+            decodeOnlyBuilder["acute"] = Convert.ToChar(180);
+            decodeOnlyBuilder["micro"] = Convert.ToChar(181);
+            decodeOnlyBuilder["para"] = Convert.ToChar(182);
+            decodeOnlyBuilder["middot"] = Convert.ToChar(183);
+            decodeOnlyBuilder["cedil"] = Convert.ToChar(184);
+            decodeOnlyBuilder["sup1"] = Convert.ToChar(185);
+            decodeOnlyBuilder["ordm"] = Convert.ToChar(186);
+            decodeOnlyBuilder["raquo"] = Convert.ToChar(187);
+            decodeOnlyBuilder["frac14"] = Convert.ToChar(188);
+            decodeOnlyBuilder["frac12"] = Convert.ToChar(189);
+            decodeOnlyBuilder["frac34"] = Convert.ToChar(190);
+            decodeOnlyBuilder["iquest"] = Convert.ToChar(191);
+            decodeOnlyBuilder["times"] = Convert.ToChar(215);
+            decodeOnlyBuilder["divide"] = Convert.ToChar(247);
 
             // ISO 8859-1 Characters
-            _decodeOnly["Agrave"] = Convert.ToChar(192);
-            _decodeOnly["Aacute"] = Convert.ToChar(193);
-            _decodeOnly["Acirc"] = Convert.ToChar(194);
-            _decodeOnly["Atilde"] = Convert.ToChar(195);
-            _decodeOnly["Auml"] = Convert.ToChar(196);
-            _decodeOnly["Aring"] = Convert.ToChar(197);
-            _decodeOnly["AElig"] = Convert.ToChar(198);
-            _decodeOnly["Ccedil"] = Convert.ToChar(199);
-            _decodeOnly["Egrave"] = Convert.ToChar(200);
-            _decodeOnly["Eacute"] = Convert.ToChar(201);
-            _decodeOnly["Ecirc"] = Convert.ToChar(202);
-            _decodeOnly["Euml"] = Convert.ToChar(203);
-            _decodeOnly["Igrave"] = Convert.ToChar(204);
-            _decodeOnly["Iacute"] = Convert.ToChar(205);
-            _decodeOnly["Icirc"] = Convert.ToChar(206);
-            _decodeOnly["Iuml"] = Convert.ToChar(207);
-            _decodeOnly["ETH"] = Convert.ToChar(208);
-            _decodeOnly["Ntilde"] = Convert.ToChar(209);
-            _decodeOnly["Ograve"] = Convert.ToChar(210);
-            _decodeOnly["Oacute"] = Convert.ToChar(211);
-            _decodeOnly["Ocirc"] = Convert.ToChar(212);
-            _decodeOnly["Otilde"] = Convert.ToChar(213);
-            _decodeOnly["Ouml"] = Convert.ToChar(214);
-            _decodeOnly["Oslash"] = Convert.ToChar(216);
-            _decodeOnly["Ugrave"] = Convert.ToChar(217);
-            _decodeOnly["Uacute"] = Convert.ToChar(218);
-            _decodeOnly["Ucirc"] = Convert.ToChar(219);
-            _decodeOnly["Uuml"] = Convert.ToChar(220);
-            _decodeOnly["Yacute"] = Convert.ToChar(221);
-            _decodeOnly["THORN"] = Convert.ToChar(222);
-            _decodeOnly["szlig"] = Convert.ToChar(223);
-            _decodeOnly["agrave"] = Convert.ToChar(224);
-            _decodeOnly["aacute"] = Convert.ToChar(225);
-            _decodeOnly["acirc"] = Convert.ToChar(226);
-            _decodeOnly["atilde"] = Convert.ToChar(227);
-            _decodeOnly["auml"] = Convert.ToChar(228);
-            _decodeOnly["aring"] = Convert.ToChar(229);
-            _decodeOnly["aelig"] = Convert.ToChar(230);
-            _decodeOnly["ccedil"] = Convert.ToChar(231);
-            _decodeOnly["egrave"] = Convert.ToChar(232);
-            _decodeOnly["eacute"] = Convert.ToChar(233);
-            _decodeOnly["ecirc"] = Convert.ToChar(234);
-            _decodeOnly["euml"] = Convert.ToChar(235);
-            _decodeOnly["igrave"] = Convert.ToChar(236);
-            _decodeOnly["iacute"] = Convert.ToChar(237);
-            _decodeOnly["icirc"] = Convert.ToChar(238);
-            _decodeOnly["iuml"] = Convert.ToChar(239);
-            _decodeOnly["eth"] = Convert.ToChar(240);
-            _decodeOnly["ntilde"] = Convert.ToChar(241);
-            _decodeOnly["ograve"] = Convert.ToChar(242);
-            _decodeOnly["oacute"] = Convert.ToChar(243);
-            _decodeOnly["ocirc"] = Convert.ToChar(244);
-            _decodeOnly["otilde"] = Convert.ToChar(245);
-            _decodeOnly["ouml"] = Convert.ToChar(246);
-            _decodeOnly["oslash"] = Convert.ToChar(248);
-            _decodeOnly["ugrave"] = Convert.ToChar(249);
-            _decodeOnly["uacute"] = Convert.ToChar(250);
-            _decodeOnly["ucirc"] = Convert.ToChar(251);
-            _decodeOnly["uuml"] = Convert.ToChar(252);
-            _decodeOnly["yacute"] = Convert.ToChar(253);
-            _decodeOnly["thorn"] = Convert.ToChar(254);
-            _decodeOnly["yuml"] = Convert.ToChar(255);
+            decodeOnlyBuilder["Agrave"] = Convert.ToChar(192);
+            decodeOnlyBuilder["Aacute"] = Convert.ToChar(193);
+            decodeOnlyBuilder["Acirc"] = Convert.ToChar(194);
+            decodeOnlyBuilder["Atilde"] = Convert.ToChar(195);
+            decodeOnlyBuilder["Auml"] = Convert.ToChar(196);
+            decodeOnlyBuilder["Aring"] = Convert.ToChar(197);
+            decodeOnlyBuilder["AElig"] = Convert.ToChar(198);
+            decodeOnlyBuilder["Ccedil"] = Convert.ToChar(199);
+            decodeOnlyBuilder["Egrave"] = Convert.ToChar(200);
+            decodeOnlyBuilder["Eacute"] = Convert.ToChar(201);
+            decodeOnlyBuilder["Ecirc"] = Convert.ToChar(202);
+            decodeOnlyBuilder["Euml"] = Convert.ToChar(203);
+            decodeOnlyBuilder["Igrave"] = Convert.ToChar(204);
+            decodeOnlyBuilder["Iacute"] = Convert.ToChar(205);
+            decodeOnlyBuilder["Icirc"] = Convert.ToChar(206);
+            decodeOnlyBuilder["Iuml"] = Convert.ToChar(207);
+            decodeOnlyBuilder["ETH"] = Convert.ToChar(208);
+            decodeOnlyBuilder["Ntilde"] = Convert.ToChar(209);
+            decodeOnlyBuilder["Ograve"] = Convert.ToChar(210);
+            decodeOnlyBuilder["Oacute"] = Convert.ToChar(211);
+            decodeOnlyBuilder["Ocirc"] = Convert.ToChar(212);
+            decodeOnlyBuilder["Otilde"] = Convert.ToChar(213);
+            decodeOnlyBuilder["Ouml"] = Convert.ToChar(214);
+            decodeOnlyBuilder["Oslash"] = Convert.ToChar(216);
+            decodeOnlyBuilder["Ugrave"] = Convert.ToChar(217);
+            decodeOnlyBuilder["Uacute"] = Convert.ToChar(218);
+            decodeOnlyBuilder["Ucirc"] = Convert.ToChar(219);
+            decodeOnlyBuilder["Uuml"] = Convert.ToChar(220);
+            decodeOnlyBuilder["Yacute"] = Convert.ToChar(221);
+            decodeOnlyBuilder["THORN"] = Convert.ToChar(222);
+            decodeOnlyBuilder["szlig"] = Convert.ToChar(223);
+            decodeOnlyBuilder["agrave"] = Convert.ToChar(224);
+            decodeOnlyBuilder["aacute"] = Convert.ToChar(225);
+            decodeOnlyBuilder["acirc"] = Convert.ToChar(226);
+            decodeOnlyBuilder["atilde"] = Convert.ToChar(227);
+            decodeOnlyBuilder["auml"] = Convert.ToChar(228);
+            decodeOnlyBuilder["aring"] = Convert.ToChar(229);
+            decodeOnlyBuilder["aelig"] = Convert.ToChar(230);
+            decodeOnlyBuilder["ccedil"] = Convert.ToChar(231);
+            decodeOnlyBuilder["egrave"] = Convert.ToChar(232);
+            decodeOnlyBuilder["eacute"] = Convert.ToChar(233);
+            decodeOnlyBuilder["ecirc"] = Convert.ToChar(234);
+            decodeOnlyBuilder["euml"] = Convert.ToChar(235);
+            decodeOnlyBuilder["igrave"] = Convert.ToChar(236);
+            decodeOnlyBuilder["iacute"] = Convert.ToChar(237);
+            decodeOnlyBuilder["icirc"] = Convert.ToChar(238);
+            decodeOnlyBuilder["iuml"] = Convert.ToChar(239);
+            decodeOnlyBuilder["eth"] = Convert.ToChar(240);
+            decodeOnlyBuilder["ntilde"] = Convert.ToChar(241);
+            decodeOnlyBuilder["ograve"] = Convert.ToChar(242);
+            decodeOnlyBuilder["oacute"] = Convert.ToChar(243);
+            decodeOnlyBuilder["ocirc"] = Convert.ToChar(244);
+            decodeOnlyBuilder["otilde"] = Convert.ToChar(245);
+            decodeOnlyBuilder["ouml"] = Convert.ToChar(246);
+            decodeOnlyBuilder["oslash"] = Convert.ToChar(248);
+            decodeOnlyBuilder["ugrave"] = Convert.ToChar(249);
+            decodeOnlyBuilder["uacute"] = Convert.ToChar(250);
+            decodeOnlyBuilder["ucirc"] = Convert.ToChar(251);
+            decodeOnlyBuilder["uuml"] = Convert.ToChar(252);
+            decodeOnlyBuilder["yacute"] = Convert.ToChar(253);
+            decodeOnlyBuilder["thorn"] = Convert.ToChar(254);
+            decodeOnlyBuilder["yuml"] = Convert.ToChar(255);
 
             // Math Symbols Supported by HTML
-            _decodeOnly["forall"] = Convert.ToChar(8704);
-            _decodeOnly["part"] = Convert.ToChar(8706);
-            _decodeOnly["exist"] = Convert.ToChar(8707);
-            _decodeOnly["empty"] = Convert.ToChar(8709);
-            _decodeOnly["nabla"] = Convert.ToChar(8711);
-            _decodeOnly["isin"] = Convert.ToChar(8712);
-            _decodeOnly["notin"] = Convert.ToChar(8713);
-            _decodeOnly["ni"] = Convert.ToChar(8715);
-            _decodeOnly["prod"] = Convert.ToChar(8719);
-            _decodeOnly["sum"] = Convert.ToChar(8721);
-            _decodeOnly["minus"] = Convert.ToChar(8722);
-            _decodeOnly["lowast"] = Convert.ToChar(8727);
-            _decodeOnly["radic"] = Convert.ToChar(8730);
-            _decodeOnly["prop"] = Convert.ToChar(8733);
-            _decodeOnly["infin"] = Convert.ToChar(8734);
-            _decodeOnly["ang"] = Convert.ToChar(8736);
-            _decodeOnly["and"] = Convert.ToChar(8743);
-            _decodeOnly["or"] = Convert.ToChar(8744);
-            _decodeOnly["cap"] = Convert.ToChar(8745);
-            _decodeOnly["cup"] = Convert.ToChar(8746);
-            _decodeOnly["int"] = Convert.ToChar(8747);
-            _decodeOnly["there4"] = Convert.ToChar(8756);
-            _decodeOnly["sim"] = Convert.ToChar(8764);
-            _decodeOnly["cong"] = Convert.ToChar(8773);
-            _decodeOnly["asymp"] = Convert.ToChar(8776);
-            _decodeOnly["ne"] = Convert.ToChar(8800);
-            _decodeOnly["equiv"] = Convert.ToChar(8801);
-            _decodeOnly["le"] = Convert.ToChar(8804);
-            _decodeOnly["ge"] = Convert.ToChar(8805);
-            _decodeOnly["sub"] = Convert.ToChar(8834);
-            _decodeOnly["sup"] = Convert.ToChar(8835);
-            _decodeOnly["nsub"] = Convert.ToChar(8836);
-            _decodeOnly["sube"] = Convert.ToChar(8838);
-            _decodeOnly["supe"] = Convert.ToChar(8839);
-            _decodeOnly["oplus"] = Convert.ToChar(8853);
-            _decodeOnly["otimes"] = Convert.ToChar(8855);
-            _decodeOnly["perp"] = Convert.ToChar(8869);
-            _decodeOnly["sdot"] = Convert.ToChar(8901);
+            decodeOnlyBuilder["forall"] = Convert.ToChar(8704);
+            decodeOnlyBuilder["part"] = Convert.ToChar(8706);
+            decodeOnlyBuilder["exist"] = Convert.ToChar(8707);
+            decodeOnlyBuilder["empty"] = Convert.ToChar(8709);
+            decodeOnlyBuilder["nabla"] = Convert.ToChar(8711);
+            decodeOnlyBuilder["isin"] = Convert.ToChar(8712);
+            decodeOnlyBuilder["notin"] = Convert.ToChar(8713);
+            decodeOnlyBuilder["ni"] = Convert.ToChar(8715);
+            decodeOnlyBuilder["prod"] = Convert.ToChar(8719);
+            decodeOnlyBuilder["sum"] = Convert.ToChar(8721);
+            decodeOnlyBuilder["minus"] = Convert.ToChar(8722);
+            decodeOnlyBuilder["lowast"] = Convert.ToChar(8727);
+            decodeOnlyBuilder["radic"] = Convert.ToChar(8730);
+            decodeOnlyBuilder["prop"] = Convert.ToChar(8733);
+            decodeOnlyBuilder["infin"] = Convert.ToChar(8734);
+            decodeOnlyBuilder["ang"] = Convert.ToChar(8736);
+            decodeOnlyBuilder["and"] = Convert.ToChar(8743);
+            decodeOnlyBuilder["or"] = Convert.ToChar(8744);
+            decodeOnlyBuilder["cap"] = Convert.ToChar(8745);
+            decodeOnlyBuilder["cup"] = Convert.ToChar(8746);
+            decodeOnlyBuilder["int"] = Convert.ToChar(8747);
+            decodeOnlyBuilder["there4"] = Convert.ToChar(8756);
+            decodeOnlyBuilder["sim"] = Convert.ToChar(8764);
+            decodeOnlyBuilder["cong"] = Convert.ToChar(8773);
+            decodeOnlyBuilder["asymp"] = Convert.ToChar(8776);
+            decodeOnlyBuilder["ne"] = Convert.ToChar(8800);
+            decodeOnlyBuilder["equiv"] = Convert.ToChar(8801);
+            decodeOnlyBuilder["le"] = Convert.ToChar(8804);
+            decodeOnlyBuilder["ge"] = Convert.ToChar(8805);
+            decodeOnlyBuilder["sub"] = Convert.ToChar(8834);
+            decodeOnlyBuilder["sup"] = Convert.ToChar(8835);
+            decodeOnlyBuilder["nsub"] = Convert.ToChar(8836);
+            decodeOnlyBuilder["sube"] = Convert.ToChar(8838);
+            decodeOnlyBuilder["supe"] = Convert.ToChar(8839);
+            decodeOnlyBuilder["oplus"] = Convert.ToChar(8853);
+            decodeOnlyBuilder["otimes"] = Convert.ToChar(8855);
+            decodeOnlyBuilder["perp"] = Convert.ToChar(8869);
+            decodeOnlyBuilder["sdot"] = Convert.ToChar(8901);
 
             // Greek Letters Supported by HTML
-            _decodeOnly["Alpha"] = Convert.ToChar(913);
-            _decodeOnly["Beta"] = Convert.ToChar(914);
-            _decodeOnly["Gamma"] = Convert.ToChar(915);
-            _decodeOnly["Delta"] = Convert.ToChar(916);
-            _decodeOnly["Epsilon"] = Convert.ToChar(917);
-            _decodeOnly["Zeta"] = Convert.ToChar(918);
-            _decodeOnly["Eta"] = Convert.ToChar(919);
-            _decodeOnly["Theta"] = Convert.ToChar(920);
-            _decodeOnly["Iota"] = Convert.ToChar(921);
-            _decodeOnly["Kappa"] = Convert.ToChar(922);
-            _decodeOnly["Lambda"] = Convert.ToChar(923);
-            _decodeOnly["Mu"] = Convert.ToChar(924);
-            _decodeOnly["Nu"] = Convert.ToChar(925);
-            _decodeOnly["Xi"] = Convert.ToChar(926);
-            _decodeOnly["Omicron"] = Convert.ToChar(927);
-            _decodeOnly["Pi"] = Convert.ToChar(928);
-            _decodeOnly["Rho"] = Convert.ToChar(929);
-            _decodeOnly["Sigma"] = Convert.ToChar(931);
-            _decodeOnly["Tau"] = Convert.ToChar(932);
-            _decodeOnly["Upsilon"] = Convert.ToChar(933);
-            _decodeOnly["Phi"] = Convert.ToChar(934);
-            _decodeOnly["Chi"] = Convert.ToChar(935);
-            _decodeOnly["Psi"] = Convert.ToChar(936);
-            _decodeOnly["Omega"] = Convert.ToChar(937);
-            _decodeOnly["alpha"] = Convert.ToChar(945);
-            _decodeOnly["beta"] = Convert.ToChar(946);
-            _decodeOnly["gamma"] = Convert.ToChar(947);
-            _decodeOnly["delta"] = Convert.ToChar(948);
-            _decodeOnly["epsilon"] = Convert.ToChar(949);
-            _decodeOnly["zeta"] = Convert.ToChar(950);
-            _decodeOnly["eta"] = Convert.ToChar(951);
-            _decodeOnly["theta"] = Convert.ToChar(952);
-            _decodeOnly["iota"] = Convert.ToChar(953);
-            _decodeOnly["kappa"] = Convert.ToChar(954);
-            _decodeOnly["lambda"] = Convert.ToChar(955);
-            _decodeOnly["mu"] = Convert.ToChar(956);
-            _decodeOnly["nu"] = Convert.ToChar(957);
-            _decodeOnly["xi"] = Convert.ToChar(958);
-            _decodeOnly["omicron"] = Convert.ToChar(959);
-            _decodeOnly["pi"] = Convert.ToChar(960);
-            _decodeOnly["rho"] = Convert.ToChar(961);
-            _decodeOnly["sigmaf"] = Convert.ToChar(962);
-            _decodeOnly["sigma"] = Convert.ToChar(963);
-            _decodeOnly["tau"] = Convert.ToChar(964);
-            _decodeOnly["upsilon"] = Convert.ToChar(965);
-            _decodeOnly["phi"] = Convert.ToChar(966);
-            _decodeOnly["chi"] = Convert.ToChar(967);
-            _decodeOnly["psi"] = Convert.ToChar(968);
-            _decodeOnly["omega"] = Convert.ToChar(969);
-            _decodeOnly["thetasym"] = Convert.ToChar(977);
-            _decodeOnly["upsih"] = Convert.ToChar(978);
-            _decodeOnly["piv"] = Convert.ToChar(982);
+            decodeOnlyBuilder["Alpha"] = Convert.ToChar(913);
+            decodeOnlyBuilder["Beta"] = Convert.ToChar(914);
+            decodeOnlyBuilder["Gamma"] = Convert.ToChar(915);
+            decodeOnlyBuilder["Delta"] = Convert.ToChar(916);
+            decodeOnlyBuilder["Epsilon"] = Convert.ToChar(917);
+            decodeOnlyBuilder["Zeta"] = Convert.ToChar(918);
+            decodeOnlyBuilder["Eta"] = Convert.ToChar(919);
+            decodeOnlyBuilder["Theta"] = Convert.ToChar(920);
+            decodeOnlyBuilder["Iota"] = Convert.ToChar(921);
+            decodeOnlyBuilder["Kappa"] = Convert.ToChar(922);
+            decodeOnlyBuilder["Lambda"] = Convert.ToChar(923);
+            decodeOnlyBuilder["Mu"] = Convert.ToChar(924);
+            decodeOnlyBuilder["Nu"] = Convert.ToChar(925);
+            decodeOnlyBuilder["Xi"] = Convert.ToChar(926);
+            decodeOnlyBuilder["Omicron"] = Convert.ToChar(927);
+            decodeOnlyBuilder["Pi"] = Convert.ToChar(928);
+            decodeOnlyBuilder["Rho"] = Convert.ToChar(929);
+            decodeOnlyBuilder["Sigma"] = Convert.ToChar(931);
+            decodeOnlyBuilder["Tau"] = Convert.ToChar(932);
+            decodeOnlyBuilder["Upsilon"] = Convert.ToChar(933);
+            decodeOnlyBuilder["Phi"] = Convert.ToChar(934);
+            decodeOnlyBuilder["Chi"] = Convert.ToChar(935);
+            decodeOnlyBuilder["Psi"] = Convert.ToChar(936);
+            decodeOnlyBuilder["Omega"] = Convert.ToChar(937);
+            decodeOnlyBuilder["alpha"] = Convert.ToChar(945);
+            decodeOnlyBuilder["beta"] = Convert.ToChar(946);
+            decodeOnlyBuilder["gamma"] = Convert.ToChar(947);
+            decodeOnlyBuilder["delta"] = Convert.ToChar(948);
+            decodeOnlyBuilder["epsilon"] = Convert.ToChar(949);
+            decodeOnlyBuilder["zeta"] = Convert.ToChar(950);
+            decodeOnlyBuilder["eta"] = Convert.ToChar(951);
+            decodeOnlyBuilder["theta"] = Convert.ToChar(952);
+            decodeOnlyBuilder["iota"] = Convert.ToChar(953);
+            decodeOnlyBuilder["kappa"] = Convert.ToChar(954);
+            decodeOnlyBuilder["lambda"] = Convert.ToChar(955);
+            decodeOnlyBuilder["mu"] = Convert.ToChar(956);
+            decodeOnlyBuilder["nu"] = Convert.ToChar(957);
+            decodeOnlyBuilder["xi"] = Convert.ToChar(958);
+            decodeOnlyBuilder["omicron"] = Convert.ToChar(959);
+            decodeOnlyBuilder["pi"] = Convert.ToChar(960);
+            decodeOnlyBuilder["rho"] = Convert.ToChar(961);
+            decodeOnlyBuilder["sigmaf"] = Convert.ToChar(962);
+            decodeOnlyBuilder["sigma"] = Convert.ToChar(963);
+            decodeOnlyBuilder["tau"] = Convert.ToChar(964);
+            decodeOnlyBuilder["upsilon"] = Convert.ToChar(965);
+            decodeOnlyBuilder["phi"] = Convert.ToChar(966);
+            decodeOnlyBuilder["chi"] = Convert.ToChar(967);
+            decodeOnlyBuilder["psi"] = Convert.ToChar(968);
+            decodeOnlyBuilder["omega"] = Convert.ToChar(969);
+            decodeOnlyBuilder["thetasym"] = Convert.ToChar(977);
+            decodeOnlyBuilder["upsih"] = Convert.ToChar(978);
+            decodeOnlyBuilder["piv"] = Convert.ToChar(982);
 
             // Other Entities Supported by HTML
-            _decodeOnly["OElig"] = Convert.ToChar(338);
-            _decodeOnly["oelig"] = Convert.ToChar(339);
-            _decodeOnly["Scaron"] = Convert.ToChar(352);
-            _decodeOnly["scaron"] = Convert.ToChar(353);
-            _decodeOnly["Yuml"] = Convert.ToChar(376);
-            _decodeOnly["fnof"] = Convert.ToChar(402);
-            _decodeOnly["circ"] = Convert.ToChar(710);
-            _decodeOnly["tilde"] = Convert.ToChar(732);
-            _decodeOnly["ndash"] = Convert.ToChar(8211);
-            _decodeOnly["mdash"] = Convert.ToChar(8212);
-            _decodeOnly["lsquo"] = Convert.ToChar(8216);
-            _decodeOnly["rsquo"] = Convert.ToChar(8217);
-            _decodeOnly["sbquo"] = Convert.ToChar(8218);
-            _decodeOnly["ldquo"] = Convert.ToChar(8220);
-            _decodeOnly["rdquo"] = Convert.ToChar(8221);
-            _decodeOnly["bdquo"] = Convert.ToChar(8222);
-            _decodeOnly["dagger"] = Convert.ToChar(8224);
-            _decodeOnly["Dagger"] = Convert.ToChar(8225);
-            _decodeOnly["bull"] = Convert.ToChar(8226);
-            _decodeOnly["hellip"] = Convert.ToChar(8230);
-            _decodeOnly["permil"] = Convert.ToChar(8240);
-            _decodeOnly["prime"] = Convert.ToChar(8242);
-            _decodeOnly["Prime"] = Convert.ToChar(8243);
-            _decodeOnly["lsaquo"] = Convert.ToChar(8249);
-            _decodeOnly["rsaquo"] = Convert.ToChar(8250);
-            _decodeOnly["oline"] = Convert.ToChar(8254);
-            _decodeOnly["euro"] = Convert.ToChar(8364);
-            _decodeOnly["trade"] = Convert.ToChar(153);
-            _decodeOnly["larr"] = Convert.ToChar(8592);
-            _decodeOnly["uarr"] = Convert.ToChar(8593);
-            _decodeOnly["rarr"] = Convert.ToChar(8594);
-            _decodeOnly["darr"] = Convert.ToChar(8595);
-            _decodeOnly["harr"] = Convert.ToChar(8596);
-            _decodeOnly["crarr"] = Convert.ToChar(8629);
-            _decodeOnly["lceil"] = Convert.ToChar(8968);
-            _decodeOnly["rceil"] = Convert.ToChar(8969);
-            _decodeOnly["lfloor"] = Convert.ToChar(8970);
-            _decodeOnly["rfloor"] = Convert.ToChar(8971);
-            _decodeOnly["loz"] = Convert.ToChar(9674);
-            _decodeOnly["spades"] = Convert.ToChar(9824);
-            _decodeOnly["clubs"] = Convert.ToChar(9827);
-            _decodeOnly["hearts"] = Convert.ToChar(9829);
-            _decodeOnly["diams"] = Convert.ToChar(9830);
+            decodeOnlyBuilder["OElig"] = Convert.ToChar(338);
+            decodeOnlyBuilder["oelig"] = Convert.ToChar(339);
+            decodeOnlyBuilder["Scaron"] = Convert.ToChar(352);
+            decodeOnlyBuilder["scaron"] = Convert.ToChar(353);
+            decodeOnlyBuilder["Yuml"] = Convert.ToChar(376);
+            decodeOnlyBuilder["fnof"] = Convert.ToChar(402);
+            decodeOnlyBuilder["circ"] = Convert.ToChar(710);
+            decodeOnlyBuilder["tilde"] = Convert.ToChar(732);
+            decodeOnlyBuilder["ndash"] = Convert.ToChar(8211);
+            decodeOnlyBuilder["mdash"] = Convert.ToChar(8212);
+            decodeOnlyBuilder["lsquo"] = Convert.ToChar(8216);
+            decodeOnlyBuilder["rsquo"] = Convert.ToChar(8217);
+            decodeOnlyBuilder["sbquo"] = Convert.ToChar(8218);
+            decodeOnlyBuilder["ldquo"] = Convert.ToChar(8220);
+            decodeOnlyBuilder["rdquo"] = Convert.ToChar(8221);
+            decodeOnlyBuilder["bdquo"] = Convert.ToChar(8222);
+            decodeOnlyBuilder["dagger"] = Convert.ToChar(8224);
+            decodeOnlyBuilder["Dagger"] = Convert.ToChar(8225);
+            decodeOnlyBuilder["bull"] = Convert.ToChar(8226);
+            decodeOnlyBuilder["hellip"] = Convert.ToChar(8230);
+            decodeOnlyBuilder["permil"] = Convert.ToChar(8240);
+            decodeOnlyBuilder["prime"] = Convert.ToChar(8242);
+            decodeOnlyBuilder["Prime"] = Convert.ToChar(8243);
+            decodeOnlyBuilder["lsaquo"] = Convert.ToChar(8249);
+            decodeOnlyBuilder["rsaquo"] = Convert.ToChar(8250);
+            decodeOnlyBuilder["oline"] = Convert.ToChar(8254);
+            decodeOnlyBuilder["euro"] = Convert.ToChar(8364);
+            decodeOnlyBuilder["trade"] = Convert.ToChar(153);
+            decodeOnlyBuilder["larr"] = Convert.ToChar(8592);
+            decodeOnlyBuilder["uarr"] = Convert.ToChar(8593);
+            decodeOnlyBuilder["rarr"] = Convert.ToChar(8594);
+            decodeOnlyBuilder["darr"] = Convert.ToChar(8595);
+            decodeOnlyBuilder["harr"] = Convert.ToChar(8596);
+            decodeOnlyBuilder["crarr"] = Convert.ToChar(8629);
+            decodeOnlyBuilder["lceil"] = Convert.ToChar(8968);
+            decodeOnlyBuilder["rceil"] = Convert.ToChar(8969);
+            decodeOnlyBuilder["lfloor"] = Convert.ToChar(8970);
+            decodeOnlyBuilder["rfloor"] = Convert.ToChar(8971);
+            decodeOnlyBuilder["loz"] = Convert.ToChar(9674);
+            decodeOnlyBuilder["spades"] = Convert.ToChar(9824);
+            decodeOnlyBuilder["clubs"] = Convert.ToChar(9827);
+            decodeOnlyBuilder["hearts"] = Convert.ToChar(9829);
+            decodeOnlyBuilder["diams"] = Convert.ToChar(9830);
+
+            _decodeOnly = decodeOnlyBuilder.ToFrozenDictionary(StringComparer.InvariantCultureIgnoreCase);
         }
 
         public static string FixNewLines(string text)

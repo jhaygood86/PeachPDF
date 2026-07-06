@@ -1,6 +1,7 @@
 ﻿#nullable disable
 
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -12,13 +13,21 @@ namespace PeachPDF.CSS
 
         private readonly List<string> _animatables = new();
 
-        private readonly Dictionary<string, LonghandCreator> _fonts = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, LonghandCreator> _fontsBuilder = new(StringComparer.OrdinalIgnoreCase);
 
-        private readonly Dictionary<string, LonghandCreator> _longhands = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, LonghandCreator> _longhandsBuilder = new(StringComparer.OrdinalIgnoreCase);
 
-        private readonly Dictionary<string, string[]> _mappings = new();
+        private readonly Dictionary<string, string[]> _mappingsBuilder = new();
 
-        private readonly Dictionary<string, ShorthandCreator> _shorthands = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, ShorthandCreator> _shorthandsBuilder = new(StringComparer.OrdinalIgnoreCase);
+
+        private readonly FrozenDictionary<string, LonghandCreator> _fonts;
+
+        private readonly FrozenDictionary<string, LonghandCreator> _longhands;
+
+        private readonly FrozenDictionary<string, string[]> _mappings;
+
+        private readonly FrozenDictionary<string, ShorthandCreator> _shorthands;
 
         private PropertyFactory()
         {
@@ -341,25 +350,30 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.ObjectPosition, () => new ObjectPositionProperty(), true);
             AddLonghand(PropertyNames.Size, () => new PageSizeProperty());
 
-            _fonts.Add(PropertyNames.Src, () => new SrcProperty());
-            _fonts.Add(PropertyNames.UnicodeRange, () => new UnicodeRangeProperty());
+            _fontsBuilder.Add(PropertyNames.Src, () => new SrcProperty());
+            _fontsBuilder.Add(PropertyNames.UnicodeRange, () => new UnicodeRangeProperty());
+
+            _fonts = _fontsBuilder.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            _longhands = _longhandsBuilder.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            _mappings = _mappingsBuilder.ToFrozenDictionary();
+            _shorthands = _shorthandsBuilder.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         }
 
         internal static PropertyFactory Instance => Lazy.Value;
 
         private void AddShorthand(string name, ShorthandCreator creator, params string[] longhands)
         {
-            _shorthands.Add(name, creator);
-            _mappings.Add(name, longhands);
+            _shorthandsBuilder.Add(name, creator);
+            _mappingsBuilder.Add(name, longhands);
         }
 
         private void AddLonghand(string name, LonghandCreator creator, bool animatable = false, bool font = false)
         {
-            _longhands.Add(name, creator);
+            _longhandsBuilder.Add(name, creator);
 
             if (animatable) _animatables.Add(name);
 
-            if (font) _fonts.Add(name, creator);
+            if (font) _fontsBuilder.Add(name, creator);
         }
 
         public Property Create(string name)

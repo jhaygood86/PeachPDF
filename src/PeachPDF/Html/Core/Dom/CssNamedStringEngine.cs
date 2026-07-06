@@ -3,6 +3,7 @@ using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -10,8 +11,11 @@ namespace PeachPDF.Html.Core.Dom
     /// Engine for evaluating and applying CSS string-set properties.
     /// Handles named strings defined by the string-set property from CSS GCPM spec.
     /// </summary>
-    internal static class CssNamedStringEngine
+    internal static partial class CssNamedStringEngine
     {
+        [GeneratedRegex(@"\s+")]
+        private static partial Regex WhitespaceRegex();
+
         /// <summary>
         /// Applies string-set declarations to a CSS box by evaluating content-lists
         /// and storing the resulting named strings in the box's NamedStrings dictionary.
@@ -384,11 +388,7 @@ namespace PeachPDF.Html.Core.Dom
             if (!string.IsNullOrEmpty(cssBox.Text))
             {
                 // Normalize whitespace: collapse multiple spaces to single space
-                return System.Text.RegularExpressions.Regex.Replace(
-                 cssBox.Text.Trim(),
-                     @"\s+",
-                   " "
-                         );
+                return WhitespaceRegex().Replace(cssBox.Text.Trim(), " ");
             }
 
             // If no direct text, collect text from child boxes
@@ -396,7 +396,7 @@ namespace PeachPDF.Html.Core.Dom
             CollectTextFromChildren(cssBox, textBuilder);
 
             var text = textBuilder.ToString().Trim();
-            return System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ");
+            return WhitespaceRegex().Replace(text, " ");
         }
 
         /// <summary>
