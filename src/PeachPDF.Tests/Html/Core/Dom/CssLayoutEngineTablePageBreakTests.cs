@@ -720,6 +720,8 @@ namespace PeachPDF.Tests.Html.Core.Dom
             }
 
             public override void PushClipExclude(PeachPDF.Html.Adapters.Entities.RRect rect) { }
+            public override void PushTransform(PeachPDF.Html.Adapters.Entities.RMatrix matrix) { }
+            public override void PopTransform() { }
             public override object SetAntiAliasSmoothingMode() => new object();
             public override void ReturnPreviousSmoothingMode(object? prevMode) { }
             public override PeachPDF.Html.Adapters.Entities.RSize MeasureString(string str, PeachPDF.Html.Adapters.RFont font) => new(0, 12);

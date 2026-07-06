@@ -128,6 +128,18 @@ namespace PeachPDF.Html.Adapters
         /// <param name="rect">Rectangle to exclude clipping in.</param>
         public abstract void PushClipExclude(RRect rect);
 
+        /// <summary>
+        /// Push a 2D affine transform (composed before/with the current transform), saving state so it can
+        /// later be undone by <see cref="PopTransform"/>. Used to implement the CSS <c>transform</c> property.
+        /// </summary>
+        /// <param name="matrix">Matrix to apply.</param>
+        public abstract void PushTransform(RMatrix matrix);
+
+        /// <summary>
+        /// Pop the most recent <see cref="PushTransform"/>, restoring the prior transform state.
+        /// </summary>
+        public abstract void PopTransform();
+
 
         /// <summary>
         /// Restore the clipping region to the initial clip.

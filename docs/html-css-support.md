@@ -192,6 +192,15 @@ Form elements are rendered as static boxes. There is no interactive behavior —
 
 Percentages are relative to the border-box width (horizontal radius) and height (vertical radius). Overlapping adjacent radii are automatically reduced proportionally per the CSS spec.
 
+### Transforms
+
+| Property | MDN Reference | Notes |
+|----------|--------------|-------|
+| `transform` | [transform](https://developer.mozilla.org/en-US/docs/Web/CSS/transform) | Supports `matrix()`, `matrix3d()`, `translate()`/`translateX()`/`translateY()`/`translateZ()`/`translate3d()`, `scale()`/`scaleX()`/`scaleY()`/`scaleZ()`/`scale3d()`, `rotate()`/`rotateX()`/`rotateY()`/`rotateZ()`/`rotate3d()`, and `skew()`/`skewX()`/`skewY()`. Multiple functions may be chained in one value; they compose per spec (the last-listed function is applied first, closest to the element). Not inherited. `perspective()` is not supported — see [Unsupported CSS Features](#unsupported-css-features). |
+| `transform-origin` | [transform-origin](https://developer.mozilla.org/en-US/docs/Web/CSS/transform-origin) | 1–3 values (`<length>`/`<percentage>`/keyword for X and Y, plain `<length>` for Z). X/Y percentages resolve against the border-box. Defaults to `50% 50% 0`. Not inherited. |
+
+3D transform functions are composed as a genuine 4×4 matrix and projected onto the element's own flat plane for painting into the PDF content stream. This projection is always mathematically exact — `translate3d()`/`scale3d()`/`rotateX()`/`rotateY()`/`rotate3d()`/`matrix3d()` all render as true, lossless 2D transforms of the flattened element.
+
 ### Backgrounds
 
 | Property | MDN Reference | Notes |
@@ -671,7 +680,7 @@ When a `var()` reference can't be resolved and no fallback is given, the contain
 The following CSS features are not supported:
 
 - **Grid** — `display: grid` and all grid properties
-- **Transforms** — `transform`, `transform-origin`
+- **3D perspective** — the `perspective()` transform function, and the `perspective`/`perspective-origin`/`transform-style`/`backface-visibility` properties
 - **Transitions and animations** — `transition`, `animation`, `@keyframes`
 - **Filters and effects** — `filter`, `backdrop-filter`, `mix-blend-mode`, `opacity`
 - **`calc()` expressions**

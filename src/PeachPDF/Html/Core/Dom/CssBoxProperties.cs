@@ -229,6 +229,28 @@ namespace PeachPDF.Html.Core.Dom
             };
         }
 
+        private string _transform = CssConstants.None;
+        public string Transform
+        {
+            get => _transform;
+            set
+            {
+                _transform = value;
+                _actualTransformComputed = false;
+            }
+        }
+
+        private string _transformOrigin = "50% 50% 0";
+        public string TransformOrigin
+        {
+            get => _transformOrigin;
+            set
+            {
+                _transformOrigin = value;
+                _actualTransformComputed = false;
+            }
+        }
+
         private string _borderTopLeftRadius = "0";
         private string _borderTopRightRadius = "0";
         private string _borderBottomRightRadius = "0";
@@ -936,6 +958,32 @@ namespace PeachPDF.Html.Core.Dom
                                    brX * fX, brY * fY, blX * fX, blY * fY);
         }
 
+        private bool _actualTransformComputed;
+        private RMatrix _actualTransformMatrix;
+
+        /// <summary>
+        /// Lazily computes the combined 2D transform matrix for the <c>transform</c>/<c>transform-origin</c>
+        /// properties, resolved against this box's own border-box size. Identity when Transform is "none"
+        /// or unparsable. 3D transform functions are projected down to a 2D matrix - see CssValueParser.ParseTransform.
+        /// </summary>
+        public RMatrix ActualTransformMatrix
+        {
+            get
+            {
+                if (!_actualTransformComputed)
+                {
+                    _actualTransformMatrix = CssValueParser.ParseTransform(Transform, TransformOrigin, this);
+                    _actualTransformComputed = true;
+                }
+                return _actualTransformMatrix;
+            }
+        }
+
+        /// <summary>
+        /// True when this box has a non-identity CSS transform to apply at paint time.
+        /// </summary>
+        public bool IsTransformed => !ActualTransformMatrix.IsIdentity;
+
         /// <summary>
         /// Gets a value indicating if at least one of the corners of the box is rounded.
         /// </summary>
@@ -1298,6 +1346,8 @@ namespace PeachPDF.Html.Core.Dom
             BorderTopRightRadius = p.BorderTopRightRadius;
             BorderBottomRightRadius = p.BorderBottomRightRadius;
             BorderBottomLeftRadius = p.BorderBottomLeftRadius;
+            Transform = p.Transform;
+            TransformOrigin = p.TransformOrigin;
             Display = p.Display;
             Float = p.Float;
             Height = p.Height;
