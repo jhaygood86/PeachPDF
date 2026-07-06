@@ -88,14 +88,11 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf
         [Fact]
         public void Constructor_CharAbove255_ThrowsDuringConstruction()
         {
-            // The default (raw-encoding) constructor calls CheckRawEncoding, which does
-            // `Debug.Assert(s[idx] < 256, ...)` for every character -- so a value containing a
-            // character above 255 (like '€', U+20AC) fails during construction itself, not later
-            // when calling ToStringFromPdfDocEncoded() as the original upstream test assumed. Real,
-            // pre-existing behavior; documented here rather than fixed.
-            var ex = Record.Exception(() => new PdfString("H€llo"));
-
-            Assert.NotNull(ex);
+            // The default (raw-encoding) constructor calls CheckRawEncoding, which validates
+            // every character fits in a byte -- so a value containing a character above 255
+            // (like '€', U+20AC) fails during construction itself, not later when calling
+            // ToStringFromPdfDocEncoded() as the original upstream test assumed.
+            Assert.Throws<ArgumentException>(() => new PdfString("H€llo"));
         }
     }
 }

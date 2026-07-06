@@ -315,7 +315,8 @@ namespace PeachPDF.PdfSharpCore.Pdf
             int length = s.Length;
             for (int idx = 0; idx < length; idx++)
             {
-                Debug.Assert(s[idx] < 256, "RawString contains invalid character.");
+                if (s[idx] >= 256)
+                    throw new ArgumentException("RawString contains invalid character.", nameof(s));
             }
         }
 
