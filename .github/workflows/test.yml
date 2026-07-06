@@ -13,11 +13,23 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '8.0.x'
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+
+    - name: Install diff-cover and ReportGenerator
+      run: |
+        pip install diff-cover
+        dotnet tool install --global dotnet-reportgenerator-globaltool
 
     - name: Restore
       run: dotnet restore src/PeachPDF.Tests/PeachPDF.Tests.csproj
@@ -29,7 +41,18 @@ jobs:
       run: pwsh src/PeachPDF.Tests/bin/Release/net8.0/playwright.ps1 install chromium
 
     - name: Test
-      run: dotnet test src/PeachPDF.Tests/PeachPDF.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=test-results.trx"
+      run: dotnet test src/PeachPDF.Tests/PeachPDF.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+
+    - name: Generate HTML coverage report
+      if: always()
+      run: reportgenerator -reports:coverage/**/coverage.cobertura.xml -targetdir:coverage-report -reporttypes:Html
+
+    - name: Diff coverage gate (PRs only)
+      if: github.event_name == 'pull_request'
+      run: |
+        git fetch origin ${{ github.base_ref }}
+        $coverageFile = Get-ChildItem -Path coverage -Filter coverage.cobertura.xml -Recurse | Select-Object -First 1 -ExpandProperty FullName
+        diff-cover $coverageFile --compare-branch=origin/${{ github.base_ref }} --fail-under=90 --html-report diff-cover-report.html
 
     - name: Upload test results
       uses: actions/upload-artifact@v4
@@ -37,3 +60,14 @@ jobs:
       with:
         name: test-results
         path: src/PeachPDF.Tests/**/*.trx
+
+    - name: Upload coverage reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: coverage-reports
+        path: |
+          coverage/**/coverage.cobertura.xml
+          coverage-report/**
+          diff-cover-report.html
+        if-no-files-found: ignore

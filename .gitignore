@@ -148,6 +148,9 @@ _TeamCity*
 coverage*.json
 coverage*.xml
 coverage*.info
+/coverage/
+/coverage-report/
+diff-cover-report.html
 
 # Visual Studio code coverage results
 *.coverage
@@ -401,3 +404,5 @@ FodyWeavers.xsd
 *.pdf
 *.html
 *.pdf
+/coverage-report
+/coverage
