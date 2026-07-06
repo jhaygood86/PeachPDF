@@ -43,6 +43,18 @@ namespace PeachPDF.CSS
         public double Value { get; }
     }
 
+    internal sealed class AngleCalcNode : CalcNode
+    {
+        public AngleCalcNode(double value, Angle.Unit unit)
+        {
+            Value = value;
+            Unit = unit;
+        }
+
+        public double Value { get; }
+        public Angle.Unit Unit { get; }
+    }
+
     /// <summary>A leading unary sign directly before a parenthesized group or a nested function call.</summary>
     internal sealed class UnaryCalcNode : CalcNode
     {

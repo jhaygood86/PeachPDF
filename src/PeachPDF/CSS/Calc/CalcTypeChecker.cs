@@ -25,6 +25,9 @@ namespace PeachPDF.CSS
                 case PercentageCalcNode:
                     return CalcCategory.Percentage;
 
+                case AngleCalcNode:
+                    return CalcCategory.Angle;
+
                 case UnaryCalcNode unary:
                     return Check(unary.Operand);
 

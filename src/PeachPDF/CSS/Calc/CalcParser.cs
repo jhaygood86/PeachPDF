@@ -159,10 +159,22 @@ namespace PeachPDF.CSS
 
                 case TokenType.Dimension:
                 {
-                    var unit = Length.GetUnit(((UnitToken)token).Unit);
-                    if (!IsSupportedLengthUnit(unit)) return null;
-                    pos++;
-                    return new DimensionCalcNode(((UnitToken)token).Value, unit);
+                    var unitToken = (UnitToken)token;
+                    var lengthUnit = Length.GetUnit(unitToken.Unit);
+                    if (IsSupportedLengthUnit(lengthUnit))
+                    {
+                        pos++;
+                        return new DimensionCalcNode(unitToken.Value, lengthUnit);
+                    }
+
+                    var angleUnit = Angle.GetUnit(unitToken.Unit);
+                    if (angleUnit != Angle.Unit.None)
+                    {
+                        pos++;
+                        return new AngleCalcNode(unitToken.Value, angleUnit);
+                    }
+
+                    return null;
                 }
 
                 case TokenType.RoundBracketOpen:

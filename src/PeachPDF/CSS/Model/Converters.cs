@@ -6,10 +6,12 @@ namespace PeachPDF.CSS
     internal static class Converters
     {
         public static readonly IValueConverter LineWidthConverter =
-            new StructValueConverter<Length>(ValueExtensions.ToBorderWidth);
+            new StructValueConverter<Length>(ValueExtensions.ToBorderWidth)
+                .Or(new CalcValueConverter(CalcCategory.Length));
 
         public static readonly IValueConverter LengthConverter =
-            new StructValueConverter<Length>(ValueExtensions.ToLength);
+            new StructValueConverter<Length>(ValueExtensions.ToLength)
+                .Or(new CalcValueConverter(CalcCategory.Length));
 
         public static readonly IValueConverter ResolutionConverter =
             new StructValueConverter<Resolution>(ValueExtensions.ToResolution);
@@ -44,7 +46,8 @@ namespace PeachPDF.CSS
             BinaryConverter = new StructValueConverter<int>(ValueExtensions.ToBinary);
 
         public static readonly IValueConverter
-            AngleConverter = new StructValueConverter<Angle>(ValueExtensions.ToAngle);
+            AngleConverter = new StructValueConverter<Angle>(ValueExtensions.ToAngle)
+                .Or(new CalcValueConverter(CalcCategory.Angle));
 
         public static readonly IValueConverter NumberConverter =
             new StructValueConverter<float>(ValueExtensions.ToSingle)
@@ -76,7 +79,8 @@ namespace PeachPDF.CSS
             new StructValueConverter<Number>(ValueExtensions.ToPercentOrNumber);
 
         public static readonly IValueConverter AngleNumberConverter =
-            new StructValueConverter<Angle>(ValueExtensions.ToAngleNumber);
+            new StructValueConverter<Angle>(ValueExtensions.ToAngleNumber)
+                .Or(new CalcValueConverter(CalcCategory.Angle | CalcCategory.Number));
 
         public static readonly IValueConverter SideOrCornerConverter = WithAny(
             Assign(Keywords.Left, -1.0).Or(Keywords.Right, 1.0).Option(0.0),

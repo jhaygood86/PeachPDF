@@ -13,6 +13,13 @@ namespace PeachPDF.CSS
         Number = 1,
         Length = 2,
         Percentage = 4,
-        LengthPercentage = Length | Percentage
+        LengthPercentage = Length | Percentage,
+
+        /// <summary>
+        /// Unlike Length/Percentage, Angle never needs layout context to resolve (deg/grad/rad/turn all
+        /// convert via fixed constants), so a valid Angle-category expression always folds fully at
+        /// Layer A parse time - see CalcSerializer.
+        /// </summary>
+        Angle = 8
     }
 }

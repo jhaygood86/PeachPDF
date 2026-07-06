@@ -286,6 +286,53 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.Equal("scale(2)", concrete.Value);
         }
 
+        // ── angle calc() (rotate/skew, gradient direction, hsl hue) ──────────────────────
+
+        [Fact]
+        public void Transform_RotateCalcSameUnit_FoldsToDegrees()
+        {
+            var property = ParseDeclaration("transform: rotate(calc(45deg + 10deg))");
+            Assert.IsType<TransformProperty>(property);
+            var concrete = (TransformProperty)property;
+            Assert.True(concrete.HasValue);
+            Assert.Equal("rotate(55deg)", concrete.Value);
+        }
+
+        [Fact]
+        public void Transform_SkewXCalcMixedAngleUnits_FoldsToDegrees()
+        {
+            // 1turn / 4 = 90deg - division by a plain number is legal for an angle numerator.
+            var property = ParseDeclaration("transform: skewX(calc(1turn / 4))");
+            Assert.IsType<TransformProperty>(property);
+            var concrete = (TransformProperty)property;
+            Assert.True(concrete.HasValue);
+            Assert.Equal("skewX(90deg)", concrete.Value);
+        }
+
+        [Fact]
+        public void BackgroundImage_LinearGradientAngleCalc_FoldsToDegrees()
+        {
+            var property = ParseDeclaration("background-image: linear-gradient(calc(45deg + 45deg), red, blue)");
+            Assert.True(property.HasValue);
+            Assert.StartsWith("linear-gradient(90deg,", property.Value);
+        }
+
+        [Fact]
+        public void Color_HslHueCalcPlainNumber_FoldsToPlainNumber()
+        {
+            // hue accepts either an angle or a bare number (implicit degrees) - calc() should too.
+            var property = ParseDeclaration("color: hsl(calc(100 + 20), 50%, 50%)");
+            Assert.True(property.HasValue);
+            Assert.Equal("hsl(120, 50%, 50%)", property.Value);
+        }
+
+        [Fact]
+        public void Transform_RotateCalcAngleAndLength_IsInvalid()
+        {
+            var property = ParseDeclaration("transform: rotate(calc(45deg + 10px))");
+            Assert.False(property.HasValue);
+        }
+
         // ── border-radius two-value form ─────────────────────────────────────────────────
 
         [Fact]
@@ -295,6 +342,37 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.IsType<BorderTopLeftRadiusProperty>(property);
             Assert.True(property.HasValue);
             Assert.Equal("12px 5px", property.Value);
+        }
+
+        // ── length-only (no-percentage) converters: border-width, border-spacing ────────
+
+        [Fact]
+        public void BorderTopWidth_Calc_Legal()
+        {
+            // border-top-width goes through Converters.LineWidthConverter, a separate field from
+            // LengthOrPercentConverter (border-width doesn't accept percentages) that also needs calc().
+            var property = ParseDeclaration("border-top-width: calc(2px + 1px)");
+            Assert.IsType<BorderTopWidthProperty>(property);
+            Assert.True(property.HasValue);
+            Assert.Equal("3px", property.Value);
+        }
+
+        [Fact]
+        public void BorderTopWidth_CalcPercent_IsInvalid()
+        {
+            // border-width doesn't accept percentages, calc() or not.
+            var property = ParseDeclaration("border-top-width: calc(50% - 2px)");
+            Assert.False(property.HasValue);
+        }
+
+        [Fact]
+        public void BorderSpacing_CalcTwoValueForm_Legal()
+        {
+            // border-spacing goes through Converters.LengthConverter (also percentage-free), a separate
+            // field from LengthOrPercentConverter.
+            var property = ParseDeclaration("border-spacing: calc(5px + 5px) 20px");
+            Assert.True(property.HasValue);
+            Assert.Equal("10px 20px", property.Value);
         }
     }
 }

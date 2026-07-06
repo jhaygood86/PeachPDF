@@ -149,6 +149,62 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task Transform_RotateCalcAngleArithmetic_MatchesEquivalentPlainRotate()
+        {
+            // Angle calc() folds fully at Layer A (no layout context needed, unlike length/percentage),
+            // so rotate(calc(45deg + 45deg)) should reach layout as plain "rotate(90deg)" text and produce
+            // an identical matrix to a literal rotate(90deg).
+            var html = """
+                <!DOCTYPE html><html><body>
+                <div id="el" style="width: 100px; height: 50px; transform: rotate(calc(45deg + 45deg)); transform-origin: 0 0;"></div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var el = FindById(root, "el");
+
+            Assert.NotNull(el);
+            var m = el!.ActualTransformMatrix;
+            Assert.Equal(0, m.M11, 3);
+            Assert.Equal(1, m.M12, 3);
+            Assert.Equal(-1, m.M21, 3);
+            Assert.Equal(0, m.M22, 3);
+        }
+
+        [Fact]
+        public async Task BorderSpacing_CalcTwoValueForm_ResolvesHorizontalAndVerticalIndependently()
+        {
+            var html = """
+                <!DOCTYPE html><html><body>
+                <table id="el" style="border-spacing: calc(5px + 5px) 20px"><tr><td>x</td></tr></table>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var el = FindById(root, "el");
+
+            Assert.NotNull(el);
+            Assert.Equal(10, el!.ActualBorderSpacingHorizontal, 2);
+            Assert.Equal(20, el.ActualBorderSpacingVertical, 2);
+        }
+
+        [Fact]
+        public async Task WordSpacing_Calc_IsNotMangledByLengthRegex()
+        {
+            // word-spacing's regex-based length extraction used to grab just "2px" out of the calc()
+            // text (the same bug font-size's setter had) instead of evaluating the whole expression.
+            var withCalc = await BuildBoxTree(WordSpacingHtml("calc(2px + 3px)"));
+            var plain = await BuildBoxTree(WordSpacingHtml("5px"));
+
+            var calcEl = FindById(withCalc, "el");
+            var plainEl = FindById(plain, "el");
+
+            Assert.NotNull(calcEl);
+            Assert.NotNull(plainEl);
+            Assert.Equal(plainEl!.ActualWordSpacing, calcEl!.ActualWordSpacing, 2);
+        }
+
+        [Fact]
         public async Task Width_Min_PicksSmaller()
         {
             var root = await BuildBoxTree(WidthHtml("min(150px, 100px)"));
@@ -285,6 +341,12 @@ namespace PeachPDF.Tests.Integration
         private static string WidthHtml(string widthValue) => $"""
             <!DOCTYPE html><html><body>
             <div id="el" style="width: {widthValue}"></div>
+            </body></html>
+            """;
+
+        private static string WordSpacingHtml(string wordSpacingValue) => $"""
+            <!DOCTYPE html><html><body>
+            <div id="el" style="word-spacing: {wordSpacingValue}">hello world</div>
             </body></html>
             """;
 

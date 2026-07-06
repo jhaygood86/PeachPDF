@@ -19,12 +19,94 @@ namespace PeachPDF.CSS
                 return ((float)value).ToString(null, CultureInfo.InvariantCulture);
             }
 
+            if (category == CalcCategory.Angle)
+            {
+                // Unlike Length/Percentage, Angle never needs layout context to resolve - deg/grad/rad/turn
+                // all convert via fixed constants - so a valid Angle expression always folds fully here;
+                // there's no "defer to layout" text-preserving fallback needed the way there is below.
+                var radians = FoldAngle(node) ?? 0d;
+                var degrees = radians * (180.0 / System.Math.PI);
+                return new Angle((float)degrees, Angle.Unit.Deg).ToString(null, CultureInfo.InvariantCulture);
+            }
+
             if (TryFoldPixels(node, out var pixels))
             {
                 return new Length((float)pixels, Length.Unit.Px).ToString(null, CultureInfo.InvariantCulture);
             }
 
             return SerializeExpression(node);
+        }
+
+        /// <summary>Folds an Angle-category subtree to radians; always succeeds for a validated tree.</summary>
+        private static double? FoldAngle(CalcNode node)
+        {
+            switch (node)
+            {
+                case AngleCalcNode angle:
+                    return new Angle((float)angle.Value, angle.Unit).ToRadian();
+
+                case UnaryCalcNode unary:
+                {
+                    var value = FoldAngle(unary.Operand);
+                    return value is null ? null : unary.Negative ? -value.Value : value.Value;
+                }
+
+                case BinaryCalcNode { Operator: '+' or '-' } binary:
+                {
+                    var left = FoldAngle(binary.Left);
+                    var right = FoldAngle(binary.Right);
+                    if (left is null || right is null) return null;
+                    return binary.Operator == '+' ? left.Value + right.Value : left.Value - right.Value;
+                }
+
+                case BinaryCalcNode { Operator: '*' } binary:
+                {
+                    var leftAngle = FoldAngle(binary.Left);
+                    if (leftAngle is not null)
+                    {
+                        var scalar = CalcTypeChecker.FoldNumber(binary.Right);
+                        return scalar is null ? null : leftAngle.Value * scalar.Value;
+                    }
+
+                    var rightAngle = FoldAngle(binary.Right);
+                    if (rightAngle is not null)
+                    {
+                        var scalar = CalcTypeChecker.FoldNumber(binary.Left);
+                        return scalar is null ? null : rightAngle.Value * scalar.Value;
+                    }
+
+                    return null;
+                }
+
+                case BinaryCalcNode { Operator: '/' } binary:
+                {
+                    var left = FoldAngle(binary.Left);
+                    if (left is null) return null;
+                    var divisor = CalcTypeChecker.FoldNumber(binary.Right);
+                    return divisor is null or 0d ? null : left.Value / divisor.Value;
+                }
+
+                case CallCalcNode call:
+                {
+                    var values = new List<double>(call.Arguments.Count);
+                    foreach (var argument in call.Arguments)
+                    {
+                        var value = FoldAngle(argument);
+                        if (value is null) return null;
+                        values.Add(value.Value);
+                    }
+
+                    if (call.Name.Isi(FunctionNames.Min)) return Min(values);
+                    if (call.Name.Isi(FunctionNames.Max)) return Max(values);
+                    if (call.Name.Isi(FunctionNames.Clamp) && values.Count == 3)
+                        return values[0] > values[2] ? values[2] : System.Math.Clamp(values[1], values[0], values[2]);
+
+                    return null;
+                }
+
+                default:
+                    return null;
+            }
         }
 
         private static string SerializeExpression(CalcNode node)
