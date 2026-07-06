@@ -20,7 +20,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf
             var array = new PdfArray();
             array.Elements.Add(new PdfInteger(1));
 
-            Assert.Equal(1, array.Elements.Count);
+            Assert.Single(array.Elements);
             Assert.Equal(1, array.Elements.GetInteger(0));
         }
 
@@ -172,7 +172,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf
 
             array.Elements.RemoveAt(0);
 
-            Assert.Equal(1, array.Elements.Count);
+            Assert.Single(array.Elements);
             Assert.Equal(2, array.Elements.GetInteger(0));
         }
 
@@ -184,7 +184,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf
             array.Elements.Add(item);
 
             Assert.True(array.Elements.Remove(item));
-            Assert.Equal(0, array.Elements.Count);
+            Assert.Empty(array.Elements);
         }
 
         [Fact]
@@ -213,7 +213,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf
             var item = new PdfInteger(1);
             array.Elements.Add(item);
 
-            Assert.True(array.Elements.Contains(item));
+            Assert.Contains(item, array.Elements);
         }
 
         [Fact]
@@ -225,7 +225,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf
 
             array.Elements.Clear();
 
-            Assert.Equal(0, array.Elements.Count);
+            Assert.Empty(array.Elements);
         }
 
         [Fact]
@@ -293,7 +293,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf
             var clone = array.Elements.Clone();
             clone.Add(new PdfInteger(2));
 
-            Assert.Equal(1, array.Elements.Count);
+            Assert.Single(array.Elements);
             Assert.Equal(2, clone.Count);
         }
 

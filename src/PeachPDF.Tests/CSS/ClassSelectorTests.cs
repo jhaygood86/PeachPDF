@@ -10,7 +10,7 @@ public class ClassSelectorTests
         // Arrange
         var css =
             @".sample-class { background-color: #101010 } .sample-class[type='input'] { background-color: #121212 }";
-        var sheet = await new StylesheetParser().ParseAsync(css);
+        var sheet = await new StylesheetParser().ParseAsync(css, TestContext.Current.CancellationToken);
 
         // Act
         var list = sheet.StyleRules

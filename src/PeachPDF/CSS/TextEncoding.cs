@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -36,7 +37,7 @@ namespace PeachPDF.CSS
         public static readonly Encoding Latin13 = GetEncoding("iso-8859-13");
         public static readonly Encoding UsAscii = GetEncoding("us-ascii");
         public static readonly Encoding Korean = GetEncoding("ks_c_5601-1987");
-        private static readonly Dictionary<string, Encoding> Encodings = CreateEncodings();
+        private static readonly FrozenDictionary<string, Encoding> Encodings = CreateEncodings();
 
         public static bool IsUnicode(this Encoding encoding)
         {
@@ -70,7 +71,7 @@ namespace PeachPDF.CSS
             return Utf8;
         }
 
-        private static Dictionary<string, Encoding> CreateEncodings()
+        private static FrozenDictionary<string, Encoding> CreateEncodings()
         {
             var encodings = new Dictionary<string, Encoding>(StringComparer.OrdinalIgnoreCase)
             {
@@ -299,7 +300,7 @@ namespace PeachPDF.CSS
             var eucjp = GetEncoding("euc-jp");
             encodings.Add("euc-jp", eucjp);
 
-            return encodings;
+            return encodings.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         }
     }
 }

@@ -274,7 +274,7 @@ namespace PeachPDF.Tests.Integration
         public IBrowser? Firefox { get; private set; }
         public IBrowser? Webkit { get; private set; }
 
-        public async Task InitializeAsync()
+        public async ValueTask InitializeAsync()
         {
             try
             {
@@ -289,7 +289,7 @@ namespace PeachPDF.Tests.Integration
             }
         }
 
-        public async Task DisposeAsync()
+        public async ValueTask DisposeAsync()
         {
             if (Chromium != null) await Chromium.DisposeAsync();
             if (Firefox != null) await Firefox.DisposeAsync();

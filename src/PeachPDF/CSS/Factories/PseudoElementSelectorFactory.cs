@@ -1,6 +1,7 @@
 #nullable disable
 
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -15,7 +16,7 @@ namespace PeachPDF.CSS
 
         #region Selectors
 
-        private readonly Dictionary<string, ISelector> _selectors =
+        private readonly FrozenDictionary<string, ISelector> _selectors =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                 {
                     //TODO some lack implementation (selection, content, ...)
@@ -27,7 +28,8 @@ namespace PeachPDF.CSS
                     PseudoElementNames.FirstLetter,
                     PseudoElementNames.Content,
                 }
-                .ToDictionary(x => x, PseudoElementSelector.Create);
+                .ToDictionary(x => x, PseudoElementSelector.Create)
+                .ToFrozenDictionary();
 
         #endregion
 

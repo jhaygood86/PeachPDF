@@ -1,6 +1,7 @@
 ﻿#nullable disable
 
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -42,8 +43,8 @@ namespace PeachPDF.CSS
             PseudoElement
         }
 
-        private static readonly Dictionary<string, Func<SelectorConstructor, FunctionState>> PseudoClassFunctions =
-            new(StringComparer.OrdinalIgnoreCase)
+        private static readonly FrozenDictionary<string, Func<SelectorConstructor, FunctionState>> PseudoClassFunctions =
+            new Dictionary<string, Func<SelectorConstructor, FunctionState>>(StringComparer.OrdinalIgnoreCase)
             {
                 {PseudoClassNames.NthChild, ctx => new ChildFunctionState<FirstChildSelector>(ctx)},
                 {PseudoClassNames.NthLastChild, ctx => new ChildFunctionState<LastChildSelector>(ctx)},
@@ -58,7 +59,7 @@ namespace PeachPDF.CSS
                 {PseudoClassNames.Has, ctx => new HasFunctionState(ctx)},
                 {PseudoClassNames.Matches, ctx => new MatchesFunctionState(ctx)},
                 {PseudoClassNames.HostContext, ctx => new HostContextFunctionState(ctx)}
-            };
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
         public bool IsValid => _valid && _ready;
         public bool IsNested { get; private set; }

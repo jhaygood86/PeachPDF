@@ -2,28 +2,29 @@
 
 using PeachPDF.CSS.Conditions;
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 
 namespace PeachPDF.CSS
 {
     internal static class ParserExtensions
     {
-        private static readonly Dictionary<string, Func<string, DocumentFunction>> FunctionTypes =
-            new(StringComparer.OrdinalIgnoreCase)
+        private static readonly FrozenDictionary<string, Func<string, DocumentFunction>> FunctionTypes =
+            new Dictionary<string, Func<string, DocumentFunction>>(StringComparer.OrdinalIgnoreCase)
             {
                 {FunctionNames.Url, url => new UrlFunction(url)},
                 {FunctionNames.Domain, url => new DomainFunction(url)},
                 {FunctionNames.UrlPrefix, url => new UrlPrefixFunction(url)}
-            };
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
-        private static readonly Dictionary<string, Func<IEnumerable<IConditionFunction>, IConditionFunction>>
+        private static readonly FrozenDictionary<string, Func<IEnumerable<IConditionFunction>, IConditionFunction>>
             GroupCreators =
-                new(
+                new Dictionary<string, Func<IEnumerable<IConditionFunction>, IConditionFunction>>(
                     StringComparer.OrdinalIgnoreCase)
                 {
                     {Keywords.And, CreateAndCondition},
                     {Keywords.Or, CreateOrCondition}
-                };
+                }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
         private static IConditionFunction CreateAndCondition(IEnumerable<IConditionFunction> conditions)
         {

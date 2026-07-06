@@ -182,11 +182,6 @@ namespace PeachPDF.Adapters
             return new BrushAdapter(new XConicGradientBrush(xCenter, rPt, xColors, anglesRad));
         }
 
-        protected override RImage? ConvertImageInt(object? image)
-        {
-            return image != null ? new ImageAdapter((XImage)image) : null;
-        }
-
         protected override RImage ImageFromStreamInt(Stream memoryStream)
         {
             return new ImageAdapter(XImage.FromStream(() => memoryStream));

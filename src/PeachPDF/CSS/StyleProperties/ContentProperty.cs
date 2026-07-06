@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 
 namespace PeachPDF.CSS
@@ -13,14 +14,14 @@ namespace PeachPDF.CSS
 
         internal override IValueConverter Converter => StyleConverter;
 
-        private static readonly Dictionary<string, ContentMode> ContentModes =
-            new(StringComparer.OrdinalIgnoreCase)
+        private static readonly FrozenDictionary<string, ContentMode> ContentModes =
+            new Dictionary<string, ContentMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.OpenQuote, new OpenQuoteContentMode()},
                 {Keywords.NoOpenQuote, new NoOpenQuoteContentMode()},
                 {Keywords.CloseQuote, new CloseQuoteContentMode()},
                 {Keywords.NoCloseQuote, new NoCloseQuoteContentMode()}
-            };
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
         private static readonly ContentMode[] Default = [new NormalContentMode()];
 

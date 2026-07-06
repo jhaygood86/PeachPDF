@@ -76,7 +76,7 @@ namespace PeachPDF.CSS
             return new ListValueConverter(converter);
         }
 
-        public static IValueConverter ToConverter<T>(this Dictionary<string, T> values)
+        public static IValueConverter ToConverter<T>(this IReadOnlyDictionary<string, T> values)
         {
             return new DictionaryValueConverter<T>(values);
         }

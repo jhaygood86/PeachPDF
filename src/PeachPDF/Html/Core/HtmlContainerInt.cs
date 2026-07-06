@@ -44,40 +44,8 @@ namespace PeachPDF.Html.Core
     /// <para>
     /// <b>ScrollOffset:</b><br/>
     /// This will adjust the rendered html by the given offset so the content will be "scrolled".<br/>
-    /// Element that is rendered at location (50,100) with offset of (0,200) will not be rendered 
+    /// Element that is rendered at location (50,100) with offset of (0,200) will not be rendered
     /// at -100, therefore outside the client rectangle.
-    /// </para>
-    /// <para>
-    /// <b>LinkClicked event</b><br/>
-    /// Raised when the user clicks on a link in the html.<br/>
-    /// Allows canceling the execution of the link to overwrite by custom logic.<br/>
-    /// If error occurred in event handler it will propagate up the stack.
-    /// </para>
-    /// <para>
-    /// <b>StylesheetLoad event:</b><br/>
-    /// Raised when a stylesheet is about to be loaded by file path or URL in 'link' element.<br/>
-    /// Allows to overwrite the loaded stylesheet by providing the stylesheet data manually, or different source (file or URL) to load from.<br/>
-    /// Example: The stylesheet 'href' can be non-valid URI string that is interpreted in the overwrite delegate by custom logic to pre-loaded stylesheet object<br/>
-    /// If no alternative data is provided the original source will be used.<br/>
-    /// </para>
-    /// <para>
-    /// <b>ImageLoad event:</b><br/>
-    /// Raised when an image is about to be loaded by file path, URL or inline data in 'img' element or background-image CSS style.<br/>
-    /// Allows to overwrite the loaded image by providing the image object manually, or different source (file or URL) to load from.<br/>
-    /// Example: image 'src' can be non-valid string that is interpreted in the overwrite delegate by custom logic to resource image object<br/>
-    /// Example: image 'src' in the html is relative - the overwrite intercepts the load and provide full source URL to load the image from<br/>
-    /// Example: image download requires authentication - the overwrite intercepts the load, downloads the image to disk using custom code and provide 
-    /// file path to load the image from.<br/>
-    /// If no alternative data is provided the original source will be used.<br/>
-    /// </para>
-    /// <para>
-    /// <b>Refresh event:</b><br/>
-    /// Raised when html renderer requires refresh of the control hosting (invalidation and re-layout).<br/>
-    /// There is no guarantee that the event will be raised on the main thread, it can be raised on thread-pool thread.
-    /// </para>
-    /// <para>
-    /// <b>RenderError event:</b><br/>
-    /// Raised when an error occurred during html rendering.<br/>
     /// </para>
     /// </remarks>
     internal sealed class HtmlContainerInt : IDisposable

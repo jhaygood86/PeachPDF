@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -6,8 +7,8 @@ namespace PeachPDF.CSS
 {
     internal static class Colors
     {
-        private static readonly Dictionary<string, Color> NamedColors =
-            new(StringComparer.OrdinalIgnoreCase)
+        private static readonly FrozenDictionary<string, Color> NamedColors =
+            new Dictionary<string, Color>(StringComparer.OrdinalIgnoreCase)
             {
                 {"aliceblue", new Color(240, 248, 255)},
                 {"antiquewhite", new Color(250, 235, 215)},
@@ -186,7 +187,7 @@ namespace PeachPDF.CSS
                 {"window", new Color(255, 255, 255)},
                 {"windowframe", new Color(204, 204, 204)},
                 {"windowtext", new Color(0, 0, 0)}
-            };
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
         public static IEnumerable<string> Names => NamedColors.Keys;
 
