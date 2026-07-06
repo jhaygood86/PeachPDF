@@ -1,5 +1,6 @@
 using PeachPDF;
 using PeachPDF.PdfSharpCore;
+using PeachPDF.PdfSharpCore.Fonts;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Utils;
 using System;
@@ -201,6 +202,64 @@ body {{ font-family: '{familyName}', serif; font-size: 14pt; }}
 
             Assert.NotNull(doc);
             Assert.True(doc.PageCount >= 1);
+        }
+
+        // -------------------------------------------------------------------------
+        // WOFF2: full pipeline using a real, Brotli-compressed WOFF2 font file (this fork's
+        // WOFF2 decoder cannot be exercised with a hand-synthesized sample the way the WOFF
+        // test above wraps a system TTF, since a valid WOFF2 sample requires real Brotli
+        // compression) -- verifies @font-face -> AddFontFamilyFromUrl -> AddFont ->
+        // FontFormatConverter.ToOpenType -> Woff2Converter.Convert -> /FontFile2 embedding.
+        // -------------------------------------------------------------------------
+
+        private static string InterMediumWoff2Path =>
+            Path.Combine(AppContext.BaseDirectory, "Inter-Medium.woff2");
+
+        [Fact]
+        public async Task Woff2Font_ViaFontFaceDataUri_EmbedsAs_FontFile2()
+        {
+            var woff2Bytes = File.ReadAllBytes(InterMediumWoff2Path);
+            var b64 = Convert.ToBase64String(woff2Bytes);
+
+            var html = $@"<!DOCTYPE html>
+<html><head><style>
+@font-face {{ font-family: 'TestWoff2'; src: url('data:font/woff2;base64,{b64}') format('woff2'); }}
+body {{ font-family: 'TestWoff2', serif; font-size: 14pt; }}
+</style></head>
+<body>Hello WOFF2</body>
+</html>";
+
+            var generator = new PdfGenerator();
+            var doc = await generator.GeneratePdf(html, PageSize.A4);
+            var pdfText = GetPdfText(doc);
+
+            Assert.Contains("/FontFile2", pdfText);
+        }
+
+        [Fact]
+        public async Task Woff2Font_ViaAddFontFromStream_IsUsableInPdf()
+        {
+            var woff2Bytes = File.ReadAllBytes(InterMediumWoff2Path);
+            var openTypeBytes = Woff2Converter.Convert(woff2Bytes);
+            var familyName = TtfFontDescription.LoadDescription(new MemoryStream(openTypeBytes)).FontFamilyInvariantCulture;
+
+            var generator = new PdfGenerator();
+            using var woff2Stream = new MemoryStream(woff2Bytes);
+            await generator.AddFontFromStream(woff2Stream);
+
+            var html = $@"<!DOCTYPE html>
+<html><head><style>
+body {{ font-family: '{familyName}', serif; font-size: 14pt; }}
+</style></head>
+<body>WOFF2 via AddFontFromStream</body>
+</html>";
+
+            var doc = await generator.GeneratePdf(html, PageSize.A4);
+
+            Assert.NotNull(doc);
+            Assert.True(doc.PageCount >= 1);
+            var pdfText = GetPdfText(doc);
+            Assert.Contains("/FontFile2", pdfText);
         }
 
         // -------------------------------------------------------------------------

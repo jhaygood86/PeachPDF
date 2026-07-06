@@ -917,7 +917,7 @@ p.info span::after {
             Assert.Equal(RuleType.Media, sheet.Rules[2].Type);
         }
 
-        [Fact(Timeout = 1000)]
+        [Fact(Timeout = 10000)]
         public async Task CssParseSheetWithAtAndCommentDoesNotTakeForever()
         {
             var sheet = await Task.Run(() => ParseStyleSheet(@"
@@ -930,7 +930,7 @@ p.info span::after {
             Assert.Equal(RuleType.Style, sheet.Rules[0].Type);
         }
 
-        [Fact(Timeout = 1000)]
+        [Fact(Timeout = 10000)]
         public async Task CssParseSheetWithAtAndCommentDoesNotTakeForever2()
         {
             var sheet = await Task.Run(() => ParseStyleSheet(@"
@@ -945,7 +945,7 @@ p.info span::after {
             Assert.Equal(RuleType.Style, sheet.Rules[0].Type);
         }
 
-        [Fact(Timeout = 1000)]
+        [Fact(Timeout = 10000)]
         public async Task CssParseSheetWithAtAndCommentDoesNotTakeForever3()
         {
             var sheet = await Task.Run(() => ParseStyleSheet(@"

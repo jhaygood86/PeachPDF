@@ -196,28 +196,12 @@ namespace PeachPDF.PdfSharpCore.Fonts
         // glyf inverse transform (W3C WOFF2 spec §6.2)
         // ---------------------------------------------------------------------------
 
-        // Coordinate type table (16 types, indexed by bits 6:3 of the flag byte)
-        // Each entry: (xBytes, xPositive, yBytes, yPositive)
-        // xPositive/yPositive: +1=positive, -1=negative, 0=signed 2-byte
-        private static readonly (int xBytes, int xSign, int yBytes, int ySign)[] CoordTypes =
+        // Sign helper matching the WOFF2 reference decoder's `withSign`: bit 0 of the (masked)
+        // flag selects the sign of the decoded magnitude.
+        private static int WithSign(int flag, int baseValue)
         {
-            (0, 0,  0, 0),   // 0: dx=0,     dy=0
-            (0, 0,  1, +1),  // 1: dx=0,     dy=+byte
-            (0, 0,  1, -1),  // 2: dx=0,     dy=-byte
-            (0, 0,  2, 0),   // 3: dx=0,     dy=int16
-            (1, +1, 0, 0),   // 4: dx=+byte, dy=0
-            (1, +1, 1, +1),  // 5: dx=+byte, dy=+byte
-            (1, +1, 1, -1),  // 6: dx=+byte, dy=-byte
-            (1, +1, 2, 0),   // 7: dx=+byte, dy=int16
-            (1, -1, 0, 0),   // 8: dx=-byte, dy=0
-            (1, -1, 1, +1),  // 9: dx=-byte, dy=+byte
-            (1, -1, 1, -1),  // 10: dx=-byte, dy=-byte
-            (1, -1, 2, 0),   // 11: dx=-byte, dy=int16
-            (2, 0,  0, 0),   // 12: dx=int16, dy=0
-            (2, 0,  1, +1),  // 13: dx=int16, dy=+byte
-            (2, 0,  1, -1),  // 14: dx=int16, dy=-byte
-            (2, 0,  2, 0),   // 15: dx=int16, dy=int16
-        };
+            return (flag & 1) != 0 ? baseValue : -baseValue;
+        }
 
         private static (byte[] glyfOut, byte[] locaOut) UntransformGlyf(
             byte[] src, uint numGlyphs, bool longLoca)
@@ -246,7 +230,7 @@ namespace PeachPDF.PdfSharpCore.Fonts
             int glyphStreamSize = (int)ReadUInt32BE(src, p); p += 4;
             int compositeStreamSize = (int)ReadUInt32BE(src, p); p += 4;
             int bboxStreamSize = (int)ReadUInt32BE(src, p); p += 4;
-            p += 4; // instructionStreamSize (read instructions inline from glyph stream)
+            p += 4; // instructionStreamSize (computed independently below via bboxBase + bboxStreamSize)
 
             // Stream base offsets
             int nCBase = p;
@@ -255,9 +239,17 @@ namespace PeachPDF.PdfSharpCore.Fonts
             int gBase = fBase + flagStreamSize;
             int cBase = gBase + glyphStreamSize;
             int bboxBase = cBase + compositeStreamSize;
+            // Per W3C WOFF2 spec section 5.1, instructions for both simple and composite glyphs
+            // are stored in their own instructionStream, which follows bboxStream -- they are NOT
+            // inline in glyphStream. Only the per-glyph instruction *length* prefix (a 255UInt16)
+            // is read from glyphStream/compositeStream; the instruction bytes themselves must be
+            // read from this separate stream.
+            int iBase = bboxBase + bboxStreamSize;
 
-            // bboxStream starts with a bboxBitmap: ceil(numGlyphs/8) bytes
-            int bitmapBytes = ((int)numGlyphs + 7) >> 3;
+            // bboxStream starts with a bboxBitmap, padded up to a 4-byte (32-bit) boundary
+            // per the reference decoder (bboxBitmapSize = ceil(numGlyphs/32) * 4 bytes) --
+            // NOT simply ceil(numGlyphs/8) as a tightly-packed bitmap would be.
+            int bitmapBytes = (((int)numGlyphs + 31) >> 5) << 2;
             int bboxValBase = bboxBase + bitmapBytes;
 
             // Stream cursors
@@ -267,6 +259,7 @@ namespace PeachPDF.PdfSharpCore.Fonts
             int gSrc = gBase;
             int cSrc = cBase;
             int bboxValSrc = bboxValBase;
+            int iSrc = iBase;
 
             var glyfOut = new MemoryStream();
             var locaOffsets = new int[(int)numGlyphs + 1];
@@ -311,37 +304,68 @@ namespace PeachPDF.PdfSharpCore.Fonts
                     var xCoords = new short[totalPoints];
                     var yCoords = new short[totalPoints];
 
-                    // Decode flags from flag stream
+                    // Flag stream: exactly one byte per point, no repeat/run-length encoding
+                    // (unlike the *output* TTF flags, which do support a repeat scheme -- see
+                    // the write-side loop below). The high bit is the on-curve flag (0 = on
+                    // curve, per the W3C WOFF2 reference decoder); the low 7 bits select one of
+                    // 128 coordinate "triplet" encodings decoded below.
                     var w2flags = new byte[totalPoints];
-                    int pt = 0;
-                    while (pt < totalPoints)
-                    {
-                        byte f = src[fSrc++];
-                        int repeatCount = ((f & 0x04) != 0) ? src[fSrc++] : 0;
-                        for (int r = 0; r <= repeatCount && pt < totalPoints; r++, pt++)
-                            w2flags[pt] = f;
-                    }
+                    for (int pt0 = 0; pt0 < totalPoints; pt0++)
+                        w2flags[pt0] = src[fSrc++];
 
-                    // Decode coordinates from glyph stream
+                    // Decode coordinates from the glyph stream using the WOFF2 triplet encoding
+                    // (W3C WOFF2 spec sec. 5.2 / reference decoder's _decodeTriplets).
                     int prevX = 0, prevY = 0;
+                    int pt;
                     for (pt = 0; pt < totalPoints; pt++)
                     {
-                        byte f = w2flags[pt];
-                        bool onCurve = (f & 0x80) != 0;
-                        int coordTypeIdx = (f >> 3) & 0x0F;
-                        var (xBytes, xSign, yBytes, ySign) = CoordTypes[coordTypeIdx];
+                        int rawFlag = w2flags[pt];
+                        bool onCurve = (rawFlag & 0x80) == 0;
+                        int flag = rawFlag & 0x7F;
 
-                        int dx = ReadCoord(src, ref gSrc, xBytes, xSign);
-                        int dy = ReadCoord(src, ref gSrc, yBytes, ySign);
+                        int nBytes = flag < 84 ? 1 : flag < 120 ? 2 : flag < 124 ? 3 : 4;
+                        int dx, dy;
+                        if (flag < 10)
+                        {
+                            dx = 0;
+                            dy = WithSign(flag, ((flag & 14) << 7) + src[gSrc]);
+                        }
+                        else if (flag < 20)
+                        {
+                            dx = WithSign(flag, (((flag - 10) & 14) << 7) + src[gSrc]);
+                            dy = 0;
+                        }
+                        else if (flag < 84)
+                        {
+                            int b0 = flag - 20;
+                            int b1 = src[gSrc];
+                            dx = WithSign(flag, 1 + (b0 & 0x30) + (b1 >> 4));
+                            dy = WithSign(flag >> 1, 1 + ((b0 & 0x0C) << 2) + (b1 & 0x0F));
+                        }
+                        else if (flag < 120)
+                        {
+                            int b0 = flag - 84;
+                            dx = WithSign(flag, 1 + ((b0 / 12) << 8) + src[gSrc]);
+                            dy = WithSign(flag >> 1, 1 + (((b0 % 12) >> 2) << 8) + src[gSrc + 1]);
+                        }
+                        else if (flag < 124)
+                        {
+                            int b2 = src[gSrc + 1];
+                            dx = WithSign(flag, (src[gSrc] << 4) + (b2 >> 4));
+                            dy = WithSign(flag >> 1, ((b2 & 0x0F) << 8) + src[gSrc + 2]);
+                        }
+                        else
+                        {
+                            dx = WithSign(flag, (src[gSrc] << 8) + src[gSrc + 1]);
+                            dy = WithSign(flag >> 1, (src[gSrc + 2] << 8) + src[gSrc + 3]);
+                        }
+                        gSrc += nBytes;
 
                         prevX += dx;
                         prevY += dy;
                         xCoords[pt] = (short)prevX;
                         yCoords[pt] = (short)prevY;
-
-                        // Build TTF flag byte
-                        byte ttfFlag = onCurve ? (byte)1 : (byte)0;
-                        ttfFlags[pt] = ttfFlag;
+                        ttfFlags[pt] = onCurve ? (byte)1 : (byte)0;
                     }
 
                     // Read instruction length from glyph stream
@@ -374,9 +398,9 @@ namespace PeachPDF.PdfSharpCore.Fonts
                     // instructionLength
                     WriteUInt16(glyfOut, (ushort)instrLen);
 
-                    // instructions (already in glyph stream after instrLen)
+                    // instructions live in the separate instructionStream (see NOTE above)
                     for (int b = 0; b < instrLen; b++)
-                        glyfOut.WriteByte(src[gSrc++]);
+                        glyfOut.WriteByte(src[iSrc++]);
 
                     // flags (TTF compressed form: run-length encode identical flags)
                     pt = 0;
@@ -480,8 +504,9 @@ namespace PeachPDF.PdfSharpCore.Fonts
                     {
                         int instrLen = Read255UInt16(src, ref gSrc);
                         WriteUInt16(glyfOut, (ushort)instrLen);
+                        // instructions live in the separate instructionStream (see NOTE above)
                         for (int b = 0; b < instrLen; b++)
-                            glyfOut.WriteByte(src[gSrc++]);
+                            glyfOut.WriteByte(src[iSrc++]);
                     }
 
                     while ((glyfOut.Length & 3) != 0) glyfOut.WriteByte(0);
@@ -509,19 +534,6 @@ namespace PeachPDF.PdfSharpCore.Fonts
             }
 
             return (glyfBytes, locaBytes);
-        }
-
-        private static int ReadCoord(byte[] src, ref int pos, int byteCount, int sign)
-        {
-            if (byteCount == 0) return 0;
-            if (byteCount == 1)
-            {
-                byte b = src[pos++];
-                return sign >= 0 ? b : -b;
-            }
-            // 2 bytes: signed short
-            int v = ReadInt16BE(src, pos); pos += 2;
-            return v;
         }
 
         // 255UInt16 variable-length encoding (WOFF2 spec §6.2)

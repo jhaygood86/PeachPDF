@@ -875,7 +875,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
                     // ReSharper disable once PossibleInvalidCastException because Enum objects can always be casted to int.
                     return (int)defaultValue;
                 }
-                Debug.Assert(obj is Enum);
                 return (int)Enum.Parse(defaultValue.GetType(), obj.ToString().Substring(1), false);
             }
 

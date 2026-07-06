@@ -25,6 +25,21 @@ namespace PeachPDF.Tests.CSS
         }
 
         [Fact]
+        public void FontFaceWithWoff2Source()
+        {
+            var src = "@font-face{font-family:'Inter';src:url(fonts/Inter-Medium.woff2) format('woff2');font-weight:500}";
+            var sheet = ParseStyleSheet(src);
+            Assert.NotNull(sheet);
+            Assert.Equal(1, sheet.Rules.Length);
+            Assert.IsType<FontFaceRule>(sheet.Rules[0]);
+            var fontface = (IFontFaceRule)sheet.Rules[0];
+            Assert.Equal("\"Inter\"", fontface.Family);
+            Assert.Contains("Inter-Medium.woff2", fontface.Source);
+            Assert.Contains("woff2", fontface.Source);
+            Assert.Equal("500", fontface.Weight);
+        }
+
+        [Fact]
         public void FontFaceOpenSansNoSource()
         {
             var src = "@font-face{font-family:'Open Sans';font-style:normal}";
