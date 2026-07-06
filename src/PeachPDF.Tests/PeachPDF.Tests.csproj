@@ -11,10 +11,17 @@
 
   <ItemGroup>
     <None Remove="CSS\bootstrap.css" />
+    <None Remove="Inter-Medium.woff2" />
   </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="CSS\bootstrap.css" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Inter-Medium.woff2">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <ItemGroup>
