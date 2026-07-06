@@ -105,7 +105,7 @@ namespace PeachPDF.Html.Core.Parse
         {
             if (value.Length <= 1) return false;
 
-            if (TryGetCalcFunction(value, out _)) return true;
+            if (IsCalcFunction(value)) return true;
 
             var number = string.Empty;
 
@@ -119,6 +119,19 @@ namespace PeachPDF.Html.Core.Parse
             }
 
             return double.TryParse(number, out _);
+        }
+
+        /// <summary>
+        /// Whether <paramref name="value"/> is (syntactically) a single calc-family function - e.g. so
+        /// callers that do their own lightweight text scanning of a length string (like
+        /// <see cref="Dom.CssBoxProperties"/>'s FontSize setter, which regex-searches for a bare "Nem"
+        /// substring to eagerly convert em to points) know to leave a calc() expression alone rather than
+        /// mangling it, deferring to <see cref="ParseLength(string, double, double, double, string, bool, bool)"/>'s
+        /// real evaluation instead.
+        /// </summary>
+        public static bool IsCalcFunction(string value)
+        {
+            return TryGetCalcFunction(value, out _);
         }
 
         /// <summary>

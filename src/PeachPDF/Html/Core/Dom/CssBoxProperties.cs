@@ -477,7 +477,13 @@ namespace PeachPDF.Html.Core.Dom
             get => _fontSize;
             set
             {
-                var length = RegexParserUtils.Search(RegexParserUtils.CssLengthRegex(), value);
+                // A calc()-family value would otherwise have its first "Nem"-shaped substring plucked
+                // out by the regex below and treated as the whole declaration (e.g. "calc(1em + 4px)"
+                // would be mistaken for plain "1em", discarding everything else). Leave it as raw text;
+                // ActualFont's ParseLength call resolves it correctly (including its em/rem terms) later.
+                var length = CssValueParser.IsCalcFunction(value)
+                    ? null
+                    : RegexParserUtils.Search(RegexParserUtils.CssLengthRegex(), value);
 
                 if (length != null)
                 {
