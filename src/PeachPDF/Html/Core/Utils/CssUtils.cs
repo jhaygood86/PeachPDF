@@ -576,9 +576,6 @@ namespace PeachPDF.Html.Core.Utils
                 case "word-spacing":
                     cssBox.WordSpacing = value;
                     break;
-                case "font":
-                    SetFontPropertyValue(valueParser, cssBox, value);
-                    break;
                 case "font-family":
                     cssBox.FontFamily = valueParser.GetFontFamilyByName(value);
                     break;
@@ -784,58 +781,6 @@ namespace PeachPDF.Html.Core.Utils
         public static bool IsValidBoxSizing(string propValue)
         {
             return propValue is CssConstants.BorderBox or CssConstants.ContentBox;
-        }
-
-        private static void SetFontPropertyValue(CssValueParser valueParser, CssBox box, string propValue)
-        {
-            var mustBe =
-                RegexParserUtils.Search(RegexParserUtils.CssFontSizeAndLineHeight, propValue, out var mustBePos);
-
-            if (string.IsNullOrEmpty(mustBe)) return;
-
-            mustBe = mustBe.Trim();
-            //Check for style||variant||weight on the left
-            var leftSide = propValue[..mustBePos];
-            var fontStyle = RegexParserUtils.Search(RegexParserUtils.CssFontStyle, leftSide);
-            var fontVariant = RegexParserUtils.Search(RegexParserUtils.CssFontVariant, leftSide);
-            var fontWeight = RegexParserUtils.Search(RegexParserUtils.CssFontWeight, leftSide);
-
-            //Check for family on the right
-            var rightSide = propValue[(mustBePos + mustBe.Length)..];
-            var fontFamily =
-                rightSide.Trim(); //Parser.Search(Parser.CssFontFamily, rightSide); //TODO: Would this be right?
-
-            //Check for font-size and line-height
-            var fontSize = mustBe;
-            var lineHeight = string.Empty;
-
-            if (mustBe.Contains('/') && mustBe.Length > mustBe.IndexOf('/') + 1)
-            {
-                var slashPos = mustBe.IndexOf('/');
-                fontSize = mustBe[..slashPos];
-                lineHeight = mustBe[(slashPos + 1)..];
-            }
-
-            if (!string.IsNullOrEmpty(fontFamily))
-                SetPropertyValue(valueParser, box, "font-family", valueParser.GetFontFamilyByName(fontFamily));
-
-            if (!string.IsNullOrEmpty(fontStyle))
-                SetPropertyValue(valueParser, box, "font-style", fontStyle);
-
-            if (!string.IsNullOrEmpty(fontVariant))
-                SetPropertyValue(valueParser, box, "font-variant", fontVariant);
-
-            if (!string.IsNullOrEmpty(fontWeight))
-                SetPropertyValue(valueParser, box, "font-weight", fontWeight);
-
-            if (!string.IsNullOrEmpty(fontSize))
-                SetPropertyValue(valueParser, box, "font-size", fontSize);
-
-            if (!string.IsNullOrEmpty(lineHeight))
-                SetPropertyValue(valueParser, box, "line-height", lineHeight);
-
-            // Check for: caption | icon | menu | message-box | small-caption | status-bar
-            //TODO: Interpret font values of: caption | icon | menu | message-box | small-caption | status-bar
         }
 
         private static void SetBorderPropertyValue(CssValueParser valueParser, CssBox box, string propValue, string? direction)
