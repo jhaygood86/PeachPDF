@@ -35,9 +35,6 @@ namespace PeachPDF.Html.Core.Parse
         /// </summary>
         private const string CssLength = @"([0-9]+|[0-9]*\.[0-9]+)(em|ex|px|in|cm|mm|pt|pc)";
 
-        [GeneratedRegex(CssLength)]
-        public static partial Regex CssLengthRegex();
-
         /// <summary>
         /// Extracts line-height values (normal, numbers, lengths, percentages)
         /// </summary>

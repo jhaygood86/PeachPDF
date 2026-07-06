@@ -11,6 +11,7 @@
 // "The Art of War"
 
 using PeachPDF;
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Entities;
@@ -477,33 +478,18 @@ namespace PeachPDF.Html.Core.Dom
             get => _fontSize;
             set
             {
-                // A calc()-family value would otherwise have its first "Nem"-shaped substring plucked
-                // out by the regex below and treated as the whole declaration (e.g. "calc(1em + 4px)"
-                // would be mistaken for plain "1em", discarding everything else). Leave it as raw text;
-                // ActualFont's ParseLength call resolves it correctly (including its em/rem terms) later.
-                var length = CssValueParser.IsCalcFunction(value)
-                    ? null
-                    : RegexParserUtils.Search(RegexParserUtils.CssLengthRegex(), value);
-
-                if (length != null)
+                // calc()-family text is resolved directly by ActualFont's own ParseLength call later
+                // (including any em/rem terms it contains) - leave it untouched here. A plain "Nem" is
+                // the only case needing eager conversion at this point (to points, using the parent's
+                // already-resolved font size); everything else - keywords like "medium"/"larger", or any
+                // other single-unit length - is left as-is for ActualFont's own resolution later.
+                if (!CssValueParser.IsCalcFunction(value) &&
+                    CssValueParser.GetCssTokens(value) is [UnitToken unitToken] &&
+                    Length.GetUnit(unitToken.Unit) == Length.Unit.Em &&
+                    GetParent() is { } parent)
                 {
-                    string computedValue;
-                    CssLength len = new(length);
-
-                    if (len.HasError)
-                    {
-                        computedValue = "medium";
-                    }
-                    else if (len.Unit == CssUnit.Ems && GetParent() != null)
-                    {
-                        computedValue = len.ConvertEmToPoints(GetParent()!.ActualFont.Size).ToString();
-                    }
-                    else
-                    {
-                        computedValue = len.ToString();
-                    }
-
-                    _fontSize = computedValue;
+                    var points = unitToken.Value * parent.ActualFont.Size;
+                    _fontSize = $"{points.ToString("0.0", NumberFormatInfo.InvariantInfo)}pt";
                 }
                 else
                 {
@@ -1288,13 +1274,7 @@ namespace PeachPDF.Html.Core.Dom
             _actualWordSpacing = CssUtils.WhiteSpace(g, this);
             if (WordSpacing == CssConstants.Normal) return;
 
-            // A calc()-family value would otherwise have its first length-shaped substring plucked out
-            // by the regex below (e.g. "calc(2px + 3px)" mistaken for plain "2px") - the same bug the
-            // FontSize setter had. Pass it straight through to ParseLength's own calc-aware evaluation.
-            var len = CssValueParser.IsCalcFunction(WordSpacing)
-                ? WordSpacing
-                : RegexParserUtils.Search(RegexParserUtils.CssLengthRegex(), WordSpacing);
-            _actualWordSpacing += CssValueParser.ParseLength(len!, 1, this);
+            _actualWordSpacing += CssValueParser.ParseLength(WordSpacing, 1, this);
         }
 
         /// <summary>
