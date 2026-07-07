@@ -54,6 +54,12 @@ jobs:
           --generate-notes \
           $PRERELEASE_FLAG
 
+    - name: Trigger docs deploy
+      if: steps.version.outputs.prerelease != 'true'
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: gh workflow run pages.yml --ref main
+
     - name: Build
       run: dotnet build src/PeachPDF/PeachPDF.csproj --configuration Release
 
