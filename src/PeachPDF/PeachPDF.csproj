@@ -7,6 +7,11 @@
 		<IncludeSymbols>true</IncludeSymbols>
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
 		<WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
+		<!-- Off by default so ordinary local `dotnet build` runs stay fast; CI passes -p:DisableDefaultDocumentation=false to regenerate docs/api/. -->
+		<DisableDefaultDocumentation Condition="'$(DisableDefaultDocumentation)' == ''">true</DisableDefaultDocumentation>
+		<DefaultDocumentationFolder>$(MSBuildProjectDirectory)/../../docs/api</DefaultDocumentationFolder>
+		<DefaultDocumentationGeneratedAccessModifiers>Public</DefaultDocumentationGeneratedAccessModifiers>
+		<DefaultDocumentationFileNameFactory>Name</DefaultDocumentationFileNameFactory>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
 		<GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
@@ -21,6 +26,7 @@
 		<EnableTrimAnalyzer>true</EnableTrimAnalyzer>
 	</PropertyGroup>
 	<ItemGroup>
+		<PackageReference Include="DefaultDocumentation" Version="1.2.5" PrivateAssets="all" IncludeAssets="build" />
 		<PackageReference Include="MimeKit" Version="4.17.0" />
 		<PackageReference Include="StbImageSharp" Version="2.30.15" />
 		<PackageReference Include="StbImageWriteSharp" Version="1.16.7" />
@@ -39,10 +45,7 @@
 		<None Include="..\..\README.md" Pack="true" PackagePath="\" />
 	</ItemGroup>
 	<Target Name="GeneratePeachPdfProductInfo" BeforeTargets="BeforeBuild">
-		<WriteLinesToFile
-			File="$(IntermediateOutputPath)PeachPdfProductInfo.g.cs"
-			Lines="namespace PeachPDF { internal static class PeachPdfProductInfo { public const string Generator = &quot;PeachPDF $(PackageVersion)&quot;%3B } }"
-			Overwrite="true" />
+		<WriteLinesToFile File="$(IntermediateOutputPath)PeachPdfProductInfo.g.cs" Lines="namespace PeachPDF { internal static class PeachPdfProductInfo { public const string Generator = &quot;PeachPDF $(PackageVersion)&quot;%3B } }" Overwrite="true" />
 		<ItemGroup>
 			<Compile Include="$(IntermediateOutputPath)PeachPdfProductInfo.g.cs" />
 		</ItemGroup>

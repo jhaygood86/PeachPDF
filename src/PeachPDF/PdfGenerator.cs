@@ -68,11 +68,10 @@ namespace PeachPDF
         }
 
         /// <summary>
-        /// Parse the given stylesheet to <see cref="CssData"/> object.<br/>
-        /// If <paramref name="combineWithDefault"/> is true the parsed css blocks are added to the 
-        /// default css data (as defined by W3), merged if class name already exists. If false only the data in the given stylesheet is returned.
+        /// Parses the given stylesheet into a reusable <see cref="PeachPdfCssContent"/> object.<br/>
+        /// If <paramref name="combineWithDefault"/> is true the parsed css blocks are added to the
+        /// default css data (as defined by the <see href="http://www.w3.org/TR/CSS21/sample.html">CSS 2.1 default stylesheet for HTML</see>), merged if class name already exists. If false only the data in the given stylesheet is returned.
         /// </summary>
-        /// <seealso cref="http://www.w3.org/TR/CSS21/sample.html"/>
         /// <param name="stylesheet">the stylesheet source to parse</param>
         /// <param name="combineWithDefault">true - combine the parsed css data with default css data, false - return only the parsed css data</param>
         /// <returns>the parsed css data</returns>

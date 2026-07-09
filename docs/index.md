@@ -20,6 +20,7 @@ Targets .NET 8 and .NET 10.
 - **[Architecture](architecture.md)** — how PeachPDF converts HTML to PDF: the HTML parser, DOM model, CSS parser, layout engine, painting layer, and PDF renderer.
 - **[HTML & CSS Support](html-css-support.md)** — the full compatibility matrix of supported HTML elements, CSS properties, selectors, and at-rules, including notes on gaps and PeachPDF-specific extensions.
 - **[Usage Examples](usage-examples.md)** — copy-pasteable examples: local HTML strings, MHTML files, HTTP fetching, shared CSS contexts, saving to disk, and returning PDFs from ASP.NET Core (controllers and Minimal APIs) and Azure Functions.
+- **[API Reference](api/index.md)** — generated reference for every public type and member, always in sync with the latest source.
 
 ## Quick Start
 
