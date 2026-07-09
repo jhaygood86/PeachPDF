@@ -713,10 +713,10 @@ The following CSS features are not supported:
 - **Grid** — `display: grid` and all grid properties
 - **3D perspective** — the `perspective()` transform function, and the `perspective`/`perspective-origin`/`transform-style`/`backface-visibility` properties
 - **Transitions and animations** — `transition`, `animation`, `@keyframes`
-- **Filters and effects** — `filter`, `backdrop-filter`, `mix-blend-mode`, `opacity`
-- **`background` shorthand** — use individual `background-*` properties
-- **`letter-spacing`**
-- **`text-transform`** — `uppercase`, `lowercase`, `capitalize`
+- **Filters and effects** — `filter`, `backdrop-filter`, `mix-blend-mode` (not parsed at all)
+- **`opacity`** — parsed and accepted but has no effect
+- **`letter-spacing`** — parsed and accepted but has no effect
+- **`text-transform`** — `uppercase`, `lowercase`, `capitalize`; parsed and accepted but has no effect
 - **`text-shadow`**
 - **`word-wrap` / `overflow-wrap`**
 - **`outline`** and `outline-*` properties

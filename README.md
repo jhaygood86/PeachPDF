@@ -1,11 +1,25 @@
 # PeachPDF
 Peach PDF is a pure .NET HTML -> PDF rendering library. This library does not depend on Puppeter, wkhtmltopdf, or any other process to render the HTML to PDF. As a result, this should work in virtually any environment where .NET 8+ works. As a side benefit of being pure .NET, performance improvements in future .NET versions immediately benefit this library. 
 
+## Features
+
+- CSS custom properties (`--foo`) and `var()`, including fallbacks and inheritance
+- CSS math functions: `calc()`, `min()`, `max()`, `clamp()`
+- 2D and 3D CSS transforms (`translate`, `scale`, `rotate`, `skew`, `matrix`, and their variants)
+- Flexbox layout (CSS Flexbox Level 1)
+- All five CSS-wide keywords: `inherit`, `initial`, `unset`, `revert`, `revert-layer`
+- Gradients (`linear-gradient`, `radial-gradient`, `conic-gradient`, and repeating variants) with CSS Color Level 4 interpolation
+- CSS Paged Media: `@page` rules, named pages, margin boxes, and running headers/footers via `string-set`/`string()`
+- Automatic PDF metadata extraction from HTML `<title>` and `<meta>` elements
+- Web fonts (`@font-face`), custom fonts loaded from a stream, and system font discovery
+
+See [HTML & CSS Support](https://peachpdf.net/html-css-support.html) for the full compatibility matrix.
+
 ## PeachPDF Requirements
 
-- .NET 8
+- .NET 8 or .NET 10
 
-_Note: This package depends on PeachPDF.PdfSharpCore which has its own license, but the end result is still open source_
+_Note: This package embeds a fork of PdfSharpCore directly in its source tree; that fork carries its own license (see `src/PeachPDF/PdfSharpCore/LICENSE.md`), but the end result is still open source_
 
 ## Installing PeachPDF
 

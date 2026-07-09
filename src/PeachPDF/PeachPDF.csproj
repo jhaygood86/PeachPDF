@@ -3,7 +3,10 @@
 		<AssemblyName>PeachPDF</AssemblyName>
 		<PackageId>PeachPDF</PackageId>
 		<PackageVersion>0.9.1</PackageVersion>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<IncludeSymbols>true</IncludeSymbols>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
 		<GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
@@ -31,6 +34,9 @@
 	</ItemGroup>
 	<ItemGroup>
 		<InternalsVisibleTo Include="PeachPDF.Tests" />
+	</ItemGroup>
+	<ItemGroup>
+		<None Include="..\..\README.md" Pack="true" PackagePath="\" />
 	</ItemGroup>
 	<Target Name="GeneratePeachPdfProductInfo" BeforeTargets="BeforeBuild">
 		<WriteLinesToFile
