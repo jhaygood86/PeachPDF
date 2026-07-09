@@ -406,3 +406,6 @@ FodyWeavers.xsd
 *.pdf
 /coverage-report
 /coverage
+
+# Auto-generated API reference (built by pages.yml via DefaultDocumentation; not source)
+/docs/api/

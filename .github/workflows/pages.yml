@@ -21,6 +21,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Generate API reference
+        run: dotnet build src/PeachPDF/PeachPDF.csproj --configuration Release -p:TargetFramework=net10.0 -p:DisableDefaultDocumentation=false
+
       - uses: actions/configure-pages@v5
 
       - uses: actions/jekyll-build-pages@v1
