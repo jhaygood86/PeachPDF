@@ -1,22 +1,35 @@
 # PeachPDF
-Peach PDF is a pure .NET HTML -> PDF rendering library. This library does not depend on Puppeter, wkhtmltopdf, or any other process to render the HTML to PDF. As a result, this should work in virtually any environment where .NET 8+ works. As a side benefit of being pure .NET, performance improvements in future .NET versions immediately benefit this library. 
 
-## PeachPDF Requirements
+PeachPDF is a pure .NET HTML → PDF rendering library. It doesn't shell out to Puppeteer, wkhtmltopdf, or any other external process — everything from HTML parsing to PDF output runs in-process, so it works in virtually any environment where .NET runs (containers, serverless, trimmed/AOT deployments) and benefits automatically from future .NET performance improvements.
 
-- .NET 8
+Targets .NET 8 and .NET 10.
 
-## Installing PeachPDF
+## Features
 
-Install the PeachPDF package from nuget.org
+- CSS custom properties (`--foo`) and `var()`, including fallbacks and inheritance
+- CSS math functions: `calc()`, `min()`, `max()`, `clamp()`
+- 2D and 3D CSS transforms, and Flexbox layout (CSS Flexbox Level 1)
+- All five CSS-wide keywords: `inherit`, `initial`, `unset`, `revert`, `revert-layer`
+- Gradients with CSS Color Level 4 interpolation
+- CSS Paged Media: `@page` rules, named pages, margin boxes, and running headers/footers
+- Automatic PDF metadata extraction from HTML `<title>` and `<meta>` elements
+- Web fonts (`@font-face`), custom fonts loaded from a stream, and system font discovery
+
+## Guides
+
+- **[Architecture](architecture.md)** — how PeachPDF converts HTML to PDF: the HTML parser, DOM model, CSS parser, layout engine, painting layer, and PDF renderer.
+- **[HTML & CSS Support](html-css-support.md)** — the full compatibility matrix of supported HTML elements, CSS properties, selectors, and at-rules, including notes on gaps and PeachPDF-specific extensions.
+- **[Usage Examples](usage-examples.md)** — copy-pasteable examples: local HTML strings, MHTML files, HTTP fetching, shared CSS contexts, saving to disk, and returning PDFs from ASP.NET Core (controllers and Minimal APIs) and Azure Functions.
+
+## Quick Start
+
+Install the PeachPDF package from nuget.org:
 
 ```
 dotnet add package PeachPDF
 ```
 
-## Using PeachPDF
-
-### Simple example
-Simple example to render PDF to a Stream. All images and assets must be local to the file on the file system or in data: URIs
+Render HTML to a PDF stream. All images and assets must be local to the file system or in `data:` URIs:
 
 ```csharp
 PdfGenerateConfig pdfConfig = new(){
@@ -32,47 +45,7 @@ var document = await generator.GeneratePdf(html, pdfConfig);
 document.Save(stream);
 ```
 
-### Rendering an MHTML file
-
-You can generate PDF documents using self contained MHTML files (what Chrome calls "single page documents") by using the included MimeKitNetworkLoader
-
-```csharp
-PdfGenerateConfig pdfConfig = new(){
-  PageSize = PageSize.Letter,
-  PageOrientation = PageOrientation.Portrait,
-  NetworkLoader = new MimeKitNetworkLoader(File.OpenRead("example.mhtml"))
-};
-
-PdfGenerator generator = new();
-
-var stream = new MemoryStream();
-
-// Passing null to GeneratePdf will load the HTML from the provided network loader instance instead
-var document = await generator.GeneratePdf(null, pdfConfig);
-document.Save(stream);
-```
-
-### Rendering HTML from a URI
-
-You can also render HTML from the Internet to a PDF
-
-```csharp
-HttpClient httpClient = new();
-
-PdfGenerateConfig pdfConfig = new(){
-  PageSize = PageSize.Letter,
-  PageOrientation = PageOrientation.Portrait,
-  NetworkLoader = new HttpClientNetworkLoader(httpClient, new Uri("https://www.example.com"))
-};
-
-PdfGenerator generator = new();
-
-var stream = new MemoryStream();
-
-// Passing null to GeneratePdf will load the HTML from the provided network loader instance instead
-var document = await generator.GeneratePdf(null, pdfConfig);
-document.Save(stream);
-```
+For more usage examples — rendering self-contained MHTML files, fetching HTML from a remote URI, sharing a parsed CSS context across renders, saving to disk, and returning PDFs from ASP.NET Core or Azure Functions endpoints — see [Usage Examples](usage-examples.md).
 
 ## PDF Metadata
 
@@ -106,14 +79,6 @@ Example:
 </body>
 </html>
 ```
-
-## Architecture
-
-See [Architecture](architecture.md) for an overview of how PeachPDF converts HTML to PDF, covering the HTML parser, DOM model, CSS parser, layout engine, painting layer, and PDF renderer.
-
-## HTML & CSS Support
-
-See [HTML & CSS Support](html-css-support.md) for a full list of supported HTML elements and CSS properties, including notes on gaps and PeachPDF-specific extensions.
 
 ## Fonts
 

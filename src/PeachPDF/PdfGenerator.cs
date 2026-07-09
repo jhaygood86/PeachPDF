@@ -31,7 +31,10 @@ using System.Threading.Tasks;
 namespace PeachPDF
 {
     /// <summary>
-    /// TODO:a add doc
+    /// Renders HTML (and optionally CSS) into a PDF document entirely in-process, with no external
+    /// browser or process dependency. This is the main entry point for PeachPDF: use one of the
+    /// <c>GeneratePdf</c> overloads to create a new <see cref="PeachPdfDocument"/>, or one of the
+    /// <c>AddPdfPages</c> overloads to append rendered pages to an existing one.
     /// </summary>
     public class PdfGenerator
     {
