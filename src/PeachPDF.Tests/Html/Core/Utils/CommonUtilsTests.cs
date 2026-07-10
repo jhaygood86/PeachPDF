@@ -112,7 +112,11 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [Fact]
         public void TryGetFileInfo_InvalidPath_ReturnsNull()
         {
-            var info = CommonUtils.TryGetFileInfo(new string('x', 40_000));
+            // An embedded NUL is rejected by FileInfo's constructor on every OS. An
+            // excessively long path was tried previously, but only Windows validates path
+            // length eagerly in the FileInfo constructor -- macOS/Linux accept it, so that
+            // input isn't reliably invalid across platforms.
+            var info = CommonUtils.TryGetFileInfo("invalid\0path.txt");
 
             Assert.Null(info);
         }

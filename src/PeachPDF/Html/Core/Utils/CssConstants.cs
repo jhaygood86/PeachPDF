@@ -206,15 +206,14 @@ namespace PeachPDF.Html.Core.Utils
         public const double FontSize = 11f;
 
         /// <summary>
-        /// Default font used when no font-family is specified. "Segoe UI" only exists on
-        /// Windows, so macOS and Linux need a different, actually-installed default.
-        /// </summary>
-        public static readonly string DefaultFont = DetermineDefaultFont();
-
-        /// <summary>
         /// Common metrically-compatible Arial substitutes shipped by mainstream Linux
         /// distributions, in preference order.
         /// </summary>
+        /// <remarks>
+        /// Must be declared (and therefore initialized) before <see cref="DefaultFont"/>:
+        /// static field initializers run in textual declaration order, and DefaultFont's
+        /// initializer transitively reads this array via PickLinuxDefaultFont.
+        /// </remarks>
         private static readonly string[] LinuxArialAlternatives =
         [
             "Liberation Sans",
@@ -228,21 +227,28 @@ namespace PeachPDF.Html.Core.Utils
             "Arial",
         ];
 
-        private static string DetermineDefaultFont()
+        /// <summary>
+        /// Default font used when no font-family is specified. "Segoe UI" only exists on
+        /// Windows, so macOS and Linux need a different, actually-installed default.
+        /// </summary>
+        public static readonly string DefaultFont = DetermineDefaultFont(
+            OperatingSystem.IsWindows(), OperatingSystem.IsMacOS(), OperatingSystem.IsLinux());
+
+        internal static string DetermineDefaultFont(bool isWindows, bool isMacOS, bool isLinux)
         {
-            if (OperatingSystem.IsWindows())
+            if (isWindows)
                 return "Segoe UI";
 
-            if (OperatingSystem.IsMacOS())
+            if (isMacOS)
                 return "Arial";
 
-            if (OperatingSystem.IsLinux())
+            if (isLinux)
                 return PickLinuxDefaultFont(GetInstalledFontFamilyNames());
 
             return "Segoe UI";
         }
 
-        private static IEnumerable<string> GetInstalledFontFamilyNames()
+        internal static IEnumerable<string> GetInstalledFontFamilyNames()
         {
             foreach (var path in FontResolver.SupportedFonts)
             {
