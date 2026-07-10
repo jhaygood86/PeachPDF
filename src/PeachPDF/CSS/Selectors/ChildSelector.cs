@@ -9,7 +9,7 @@ namespace PeachPDF.CSS
         private readonly string _name;
         public int Step { get; private set; }
         public int Offset { get; private set; }
-        protected ISelector Kind;
+        internal ISelector Kind { get; private set; }
 
         protected ChildSelector(string name)
         {

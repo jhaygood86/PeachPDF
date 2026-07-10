@@ -20,12 +20,6 @@ namespace PeachPDF.CSS
                 {
                     PseudoClassNames.Root,
                     PseudoClassNames.Scope,
-                    PseudoClassNames.OnlyType,
-                    PseudoClassNames.FirstOfType,
-                    PseudoClassNames.LastOfType,
-                    PseudoClassNames.OnlyChild,
-                    PseudoClassNames.FirstChild,
-                    PseudoClassNames.LastChild,
                     PseudoClassNames.Empty,
                     PseudoClassNames.AnyLink,
                     PseudoClassNames.Link,
@@ -63,6 +57,18 @@ namespace PeachPDF.CSS
                 PseudoElementSelectorFactory.Instance.Create(PseudoElementNames.FirstLine));
             selectors.Add(PseudoElementNames.FirstLetter,
                 PseudoElementSelectorFactory.Instance.Create(PseudoElementNames.FirstLetter));
+
+            // Structural pseudo-classes: bare idents are equivalent to their nth-*(1) function form
+            // (see CSS Selectors spec), so wire them to the same ChildSelector subtypes that
+            // "nth-child(...)" etc. produce, rather than a generic PseudoClassSelector with no
+            // positional semantics. Kind uses AllSelector.Create() (never null) to match the
+            // invariant ChildFunctionState<T>.Produce() upholds for the function-form parse path.
+            selectors.Add(PseudoClassNames.FirstChild, new FirstChildSelector().With(0, 1, AllSelector.Create()));
+            selectors.Add(PseudoClassNames.LastChild, new LastChildSelector().With(0, 1, AllSelector.Create()));
+            selectors.Add(PseudoClassNames.FirstOfType, new FirstTypeSelector().With(0, 1, AllSelector.Create()));
+            selectors.Add(PseudoClassNames.LastOfType, new LastTypeSelector().With(0, 1, AllSelector.Create()));
+            selectors.Add(PseudoClassNames.OnlyChild, new OnlyChildSelector());
+            selectors.Add(PseudoClassNames.OnlyType, new OnlyOfTypeSelector());
 
             return selectors;
         }

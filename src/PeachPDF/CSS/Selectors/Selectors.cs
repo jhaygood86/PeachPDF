@@ -13,7 +13,7 @@ namespace PeachPDF.CSS
             _selectors = new List<ISelector>();
         }
 
-        public Priority Specificity
+        public virtual Priority Specificity
         {
             get
             {
