@@ -419,6 +419,14 @@ namespace PeachPDF.Html.Core.Utils
 
         public static CssBox? GetFirstIntersectingFloatBox(CssBox reference, CssFloatCoordinates coordinates, string floatProp)
         {
+            // Walking up to the root and re-scanning every preceding sibling's whole subtree below is
+            // O(document size) per call; for the very common case of a document with no floated boxes
+            // at all, skip it entirely rather than pay that cost for a lookup that can never succeed.
+            if (reference.HtmlContainer?.HasFloatedBoxes != true)
+            {
+                return null;
+            }
+
             while (true)
             {
                 if (reference.ParentBox is null)
@@ -527,6 +535,16 @@ namespace PeachPDF.Html.Core.Utils
 
         public static IEnumerable<CssBox> FlattenStackingContext(CssBox box)
         {
+            // Out-of-flow descendants (floated/absolute/fixed) need to be hoisted up through normal-flow
+            // wrapper boxes so their painting box's stacking context can order them correctly relative to
+            // its own layers. Normal in-flow descendants do NOT need hoisting - they're already painted
+            // correctly by their own parent's Paint() call, which recurses into this same method for its
+            // own direct children. Recursing here regardless of flow used to re-yield (and repaint) every
+            // in-flow descendant once per ancestor level between it and this box - an O(depth) blowup on
+            // top of the O(tree size) this method already does. Skip that recursion entirely unless the
+            // document actually has out-of-flow content somewhere to hoist.
+            var hasOutOfFlowBoxes = box.HtmlContainer?.HasOutOfFlowBoxes ?? true;
+
             foreach (var childBox in box.Boxes)
             {
                 if (!IsStackingContextBox(childBox))
@@ -534,13 +552,13 @@ namespace PeachPDF.Html.Core.Utils
                     yield return childBox;
                 }
 
-                var flattenedChildBoxes = FlattenStackingContext(childBox);
+                if (!hasOutOfFlowBoxes) continue;
 
-                foreach (var flattenedStackingBox in flattenedChildBoxes)
+                foreach (var flattenedBox in FlattenStackingContext(childBox))
                 {
-                    if (!IsStackingContextBox(flattenedStackingBox))
+                    if (!IsStackingContextBox(flattenedBox) && flattenedBox.IsOutOfFlow)
                     {
-                        yield return flattenedStackingBox;
+                        yield return flattenedBox;
                     }
                 }
             }

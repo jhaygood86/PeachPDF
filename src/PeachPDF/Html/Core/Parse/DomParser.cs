@@ -337,10 +337,15 @@ namespace PeachPDF.Html.Core.Parse
             // 3. UA pass — user-agent stylesheet rules only
             var importantPropertyNames = AssignCssBlocks(valueParser, box, cssData.GetUserAgentStyleRules(media, box), null, null, null, pendingVarProperties);
 
-            // 4. Author pass — author stylesheet rules; revert target is the UA-applied state
-            var uaSnapshot = CssUtils.SnapshotProperties(box);
-            var uaCustomSnapshot = CssUtils.SnapshotCustomProperties(box);
-            importantPropertyNames = AssignCssBlocks(valueParser, box, cssData.GetAuthorStyleRules(media, box), importantPropertyNames, uaSnapshot, uaCustomSnapshot, pendingVarProperties);
+            // 4. Author pass — author stylesheet rules; revert target is the UA-applied state.
+            // The snapshot is only ever read back when a declaration's value is literally revert/revert-layer
+            // (see AssignCssBlock/AssignCustomPropertyDeclaration), which is rare, so only pay for capturing
+            // it when the matched rules actually use one of those keywords.
+            var authorRules = cssData.GetAuthorStyleRules(media, box).ToList();
+            var needsUaSnapshot = RulesUseRevertKeyword(authorRules);
+            var uaSnapshot = needsUaSnapshot ? CssUtils.SnapshotProperties(box) : null;
+            var uaCustomSnapshot = needsUaSnapshot ? CssUtils.SnapshotCustomProperties(box) : null;
+            importantPropertyNames = AssignCssBlocks(valueParser, box, authorRules, importantPropertyNames, uaSnapshot, uaCustomSnapshot, pendingVarProperties);
 
             if (box.HtmlTag != null)
             {
@@ -352,10 +357,13 @@ namespace PeachPDF.Html.Core.Parse
                     var styleAttributeText = box.HtmlTag.TryGetAttribute("style");
                     var stylesheet = "* { " + styleAttributeText + " }";
 
-                    var authorSnapshot = CssUtils.SnapshotProperties(box);
-                    var authorCustomSnapshot = CssUtils.SnapshotCustomProperties(box);
                     var block = CssParser.ParseStyleSheet(stylesheet);
-                    AssignCssBlock(valueParser, box, block.StyleRules.Single(), importantPropertyNames, authorSnapshot, authorCustomSnapshot, pendingVarProperties);
+                    var inlineRule = block.StyleRules.Single();
+
+                    var needsAuthorSnapshot = RulesUseRevertKeyword([inlineRule]);
+                    var authorSnapshot = needsAuthorSnapshot ? CssUtils.SnapshotProperties(box) : null;
+                    var authorCustomSnapshot = needsAuthorSnapshot ? CssUtils.SnapshotCustomProperties(box) : null;
+                    AssignCssBlock(valueParser, box, inlineRule, importantPropertyNames, authorSnapshot, authorCustomSnapshot, pendingVarProperties);
                 }
             }
 
@@ -404,6 +412,25 @@ namespace PeachPDF.Html.Core.Parse
             foreach (var rule in rules)
                 AssignCssBlock(valueParser, box, rule, importantPropertyNames, revertTarget, customPropertyRevertTarget, pendingVarProperties);
             return importantPropertyNames;
+        }
+
+        /// <summary>
+        /// Checks whether any declaration in the given rules literally uses the revert/revert-layer keyword,
+        /// so the (relatively expensive) property snapshot used as their revert target only needs to be
+        /// captured when it can actually be consulted.
+        /// </summary>
+        private static bool RulesUseRevertKeyword(IEnumerable<IStyleRule> rules)
+        {
+            foreach (var rule in rules)
+            {
+                foreach (var prop in rule.Style)
+                {
+                    if (prop.Value is CssConstants.Revert or CssConstants.RevertLayer)
+                        return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>

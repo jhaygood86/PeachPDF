@@ -39,6 +39,151 @@ namespace PeachPDF.Html.Core
         {
         }
 
+        // --- Rule index -----------------------------------------------------------------------
+        //
+        // Matching every stylesheet rule against every CssBox in the document (the naive approach)
+        // is O(rules x boxes) and dominated cascade cost on large documents. Real browser engines
+        // avoid this by bucketing rules by the "subject" simple selector (the one that must match the
+        // box itself, e.g. the tag/class/id) so a box only needs to test the handful of rules that
+        // could plausibly match it, instead of the whole stylesheet. `DoesSelectorMatch` remains the
+        // source of truth for whether a rule actually matches - the index only narrows the candidates.
+        //
+        // Built lazily, once, the first time this CssData's rules are queried. Safe because by the
+        // time CascadeApplyStyles starts querying rules for the box tree, DomParser has already
+        // finished building/cloning CssData from <style>/<link> tags (see DomParser.GenerateCssTree),
+        // so Stylesheets doesn't change during the walk.
+        private enum SelectorBucketKind { Tag, Class, Id, Universal }
+
+        private readonly record struct IndexedRule(IStyleRule Rule, bool IsUserAgent);
+
+        private Dictionary<string, List<IndexedRule>>? _tagIndex;
+        private Dictionary<string, List<IndexedRule>>? _classIndex;
+        private Dictionary<string, List<IndexedRule>>? _idIndex;
+        private List<IndexedRule>? _universalRules;
+
+        private void EnsureIndex()
+        {
+            if (_universalRules is not null) return;
+
+            var tagIndex = new Dictionary<string, List<IndexedRule>>(StringComparer.InvariantCultureIgnoreCase);
+            var classIndex = new Dictionary<string, List<IndexedRule>>(StringComparer.InvariantCultureIgnoreCase);
+            var idIndex = new Dictionary<string, List<IndexedRule>>(StringComparer.InvariantCultureIgnoreCase);
+            var universal = new List<IndexedRule>();
+            var keys = new List<(SelectorBucketKind Kind, string Key)>();
+
+            foreach (var stylesheet in Stylesheets)
+            {
+                foreach (var rule in stylesheet.StyleRules)
+                {
+                    var indexedRule = new IndexedRule(rule, stylesheet.IsUserAgent);
+
+                    keys.Clear();
+                    CollectIndexKeys(rule.Selector, keys);
+
+                    foreach (var (kind, key) in keys)
+                    {
+                        var bucket = kind switch
+                        {
+                            SelectorBucketKind.Tag => tagIndex,
+                            SelectorBucketKind.Class => classIndex,
+                            SelectorBucketKind.Id => idIndex,
+                            _ => null
+                        };
+
+                        if (bucket is null)
+                        {
+                            universal.Add(indexedRule);
+                        }
+                        else
+                        {
+                            if (!bucket.TryGetValue(key, out var list))
+                                bucket[key] = list = [];
+                            list.Add(indexedRule);
+                        }
+                    }
+                }
+            }
+
+            _tagIndex = tagIndex;
+            _classIndex = classIndex;
+            _idIndex = idIndex;
+            _universalRules = universal;
+        }
+
+        /// <summary>
+        /// Determines which bucket(s) a rule's selector should be indexed under, based on the simple
+        /// selector that must match the box itself (for <see cref="ComplexSelector"/>, that's its
+        /// rightmost/subject selector - see the reversal in <see cref="DoesSelectorMatch(ComplexSelector, CssBox?)"/>).
+        /// A <see cref="ListSelector"/> (comma-separated) contributes one key per alternative, since
+        /// matching any alternative matches the rule.
+        /// </summary>
+        private static void CollectIndexKeys(ISelector selector, List<(SelectorBucketKind Kind, string Key)> keys)
+        {
+            switch (selector)
+            {
+                case ListSelector listSelector:
+                    foreach (var sub in listSelector)
+                        CollectIndexKeys(sub, keys);
+                    break;
+
+                case ComplexSelector complexSelector:
+                    var last = complexSelector.LastOrDefault().Selector;
+                    if (last is not null)
+                        CollectIndexKeys(last, keys);
+                    else
+                        keys.Add((SelectorBucketKind.Universal, string.Empty));
+                    break;
+
+                case CompoundSelector compoundSelector:
+                    // Pseudo-element and :first-child subjects need the box's own HtmlTag/ParentBox
+                    // re-derived at match time (see DoesSelectorMatch), including for synthesized
+                    // pseudo-element boxes whose HtmlTag is null - the tag/class/id index can't
+                    // safely represent that, so fall back to a full scan for these.
+                    if (compoundSelector.Any(s => s is PseudoElementSelector or FirstChildSelector))
+                    {
+                        keys.Add((SelectorBucketKind.Universal, string.Empty));
+                        break;
+                    }
+
+                    IdSelector? id = null;
+                    ClassSelector? cls = null;
+                    TypeSelector? type = null;
+
+                    foreach (var member in compoundSelector)
+                    {
+                        switch (member)
+                        {
+                            case IdSelector idSel: id ??= idSel; break;
+                            case ClassSelector clsSel: cls ??= clsSel; break;
+                            case TypeSelector typeSel: type ??= typeSel; break;
+                        }
+                    }
+
+                    if (id is not null) keys.Add((SelectorBucketKind.Id, id.Id));
+                    else if (cls is not null) keys.Add((SelectorBucketKind.Class, cls.Class));
+                    else if (type is not null) keys.Add((SelectorBucketKind.Tag, type.Name));
+                    else keys.Add((SelectorBucketKind.Universal, string.Empty));
+                    break;
+
+                case TypeSelector typeSelector:
+                    keys.Add((SelectorBucketKind.Tag, typeSelector.Name));
+                    break;
+
+                case ClassSelector classSelector:
+                    keys.Add((SelectorBucketKind.Class, classSelector.Class));
+                    break;
+
+                case IdSelector idSelector:
+                    keys.Add((SelectorBucketKind.Id, idSelector.Id));
+                    break;
+
+                default:
+                    // AllSelector, bare pseudo-class/element/attribute selectors, etc.
+                    keys.Add((SelectorBucketKind.Universal, string.Empty));
+                    break;
+            }
+        }
+
         /// <summary>
         /// Parse the given stylesheet to <see cref="CssData"/> object.<br/>
         /// If <paramref name="combineWithDefault"/> is true the parsed css blocks are added to the 
@@ -66,15 +211,66 @@ namespace PeachPDF.Html.Core
 
         private IEnumerable<IStyleRule> GetStyleRulesByOrigin(string media, CssBox box, bool? userAgentOnly)
         {
+            EnsureIndex();
+
+            // Rules matched via the index below can, in rare cases (a comma-separated selector list
+            // whose alternatives land in different buckets, e.g. "div, .foo" matching a <div class="foo">),
+            // be reachable through more than one bucket. Dedup so callers never see the same rule twice.
+            HashSet<IStyleRule>? seen = null;
+
+            bool ShouldEmit(IndexedRule indexed)
+            {
+                if (userAgentOnly.HasValue && indexed.IsUserAgent != userAgentOnly.Value) return false;
+                if (!DoesSelectorMatch(indexed.Rule.Selector, box)) return false;
+                seen ??= [];
+                return seen.Add(indexed.Rule);
+            }
+
+            foreach (var indexed in _universalRules!)
+            {
+                if (ShouldEmit(indexed))
+                    yield return indexed.Rule;
+            }
+
+            if (box.HtmlTag is not null)
+            {
+                if (_tagIndex!.TryGetValue(box.HtmlTag.Name, out var tagRules))
+                {
+                    foreach (var indexed in tagRules)
+                        if (ShouldEmit(indexed))
+                            yield return indexed.Rule;
+                }
+
+                if (box.HtmlTag.Attributes is not null)
+                {
+                    if (box.HtmlTag.Attributes.TryGetValue("class", out var classAttr) && classAttr.Length > 0)
+                    {
+                        foreach (var className in classAttr.Split(' '))
+                        {
+                            if (className.Length == 0) continue;
+                            if (_classIndex!.TryGetValue(className, out var classRules))
+                                foreach (var indexed in classRules)
+                                    if (ShouldEmit(indexed))
+                                        yield return indexed.Rule;
+                        }
+                    }
+
+                    if (box.HtmlTag.Attributes.TryGetValue("id", out var idAttr) && idAttr.Length > 0
+                        && _idIndex!.TryGetValue(idAttr, out var idRules))
+                    {
+                        foreach (var indexed in idRules)
+                            if (ShouldEmit(indexed))
+                                yield return indexed.Rule;
+                    }
+                }
+            }
+
+            // Rules inside @media blocks are not pre-indexed (typically few of them in practice) -
+            // keep a direct scan for these, same as before.
             foreach (var stylesheet in Stylesheets)
             {
                 if (userAgentOnly.HasValue && stylesheet.IsUserAgent != userAgentOnly.Value)
                     continue;
-
-                foreach (var rule in GetStyleRules(stylesheet.StyleRules, box))
-                {
-                    yield return rule;
-                }
 
                 foreach (var mediaRule in stylesheet.MediaRules)
                 {
@@ -86,6 +282,7 @@ namespace PeachPDF.Html.Core
 
                         foreach (var rule in GetStyleRules(mediaRule.Rules.OfType<IStyleRule>(), box))
                         {
+                            if (seen is not null && !seen.Add(rule)) continue;
                             yield return rule;
                         }
                     }
