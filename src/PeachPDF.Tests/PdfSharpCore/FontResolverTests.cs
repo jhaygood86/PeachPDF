@@ -177,6 +177,36 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         }
 
         [Fact]
+        public void DiscoverSupportedFonts_OSX_FindsFontsInAnExistingLibraryFontsDirectory()
+        {
+            // The candidate-path existence checks (Directory.Exists) mean GetFontFiles's
+            // actual directory scan never runs on CI runners where none of the hardcoded
+            // macOS font directories exist. Point HOME at a temp directory that really does
+            // have a populated Library/Fonts subfolder so that scan executes for real,
+            // regardless of host OS.
+            var homeDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+            var fontsDir = Path.Combine(homeDir, "Library", "Fonts");
+            Directory.CreateDirectory(fontsDir);
+            File.Copy(BundledFonts.Ttf, Path.Combine(fontsDir, Path.GetFileName(BundledFonts.Ttf)));
+
+            var originalHome = Environment.GetEnvironmentVariable("HOME");
+            try
+            {
+                Environment.SetEnvironmentVariable("HOME", homeDir);
+
+                var fonts = FontResolver.DiscoverSupportedFonts(
+                    isOSX: true, isLinux: false, isWindows: false, isAndroid: false, isIOS: false);
+
+                Assert.Contains(fonts, f => Path.GetDirectoryName(f) == fontsDir);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("HOME", originalHome);
+                Directory.Delete(homeDir, recursive: true);
+            }
+        }
+
+        [Fact]
         public void DiscoverSupportedFonts_Android_ScansSystemFontDirectories()
         {
             // /system/fonts, /product/fonts and /data/fonts don't exist on non-Android test
