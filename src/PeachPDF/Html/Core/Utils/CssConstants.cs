@@ -228,14 +228,42 @@ namespace PeachPDF.Html.Core.Utils
         ];
 
         /// <summary>
+        /// Common metrically-compatible Arial substitutes available on Android, in
+        /// preference order. Roboto is the flagship system font on every Android version
+        /// that ships a working font resolver (5.0+); Noto Sans is Google's cross-platform
+        /// fallback family and is present on most devices for non-Latin script coverage.
+        /// </summary>
+        /// <remarks>
+        /// Must be declared (and therefore initialized) before <see cref="DefaultFont"/> —
+        /// see the remarks on <see cref="LinuxArialAlternatives"/>.
+        /// </remarks>
+        private static readonly string[] AndroidArialAlternatives =
+        [
+            "Roboto",
+            "Noto Sans",
+            "Droid Sans",
+            "Liberation Sans",
+            "Arimo",
+            "DejaVu Sans",
+            "Helvetica",
+            "Arial",
+        ];
+
+        /// <summary>
         /// Default font used when no font-family is specified. "Segoe UI" only exists on
-        /// Windows, so macOS and Linux need a different, actually-installed default.
+        /// Windows, so macOS, Linux, and Android need a different, actually-installed
+        /// default.
         /// </summary>
         public static readonly string DefaultFont = DetermineDefaultFont(
-            OperatingSystem.IsWindows(), OperatingSystem.IsMacOS(), OperatingSystem.IsLinux());
+            OperatingSystem.IsWindows(), OperatingSystem.IsMacOS(), OperatingSystem.IsLinux(), OperatingSystem.IsAndroid());
 
-        internal static string DetermineDefaultFont(bool isWindows, bool isMacOS, bool isLinux)
+        internal static string DetermineDefaultFont(bool isWindows, bool isMacOS, bool isLinux, bool isAndroid)
         {
+            // Checked before isLinux: Android is Linux-kernel-based and isLinux may also be
+            // true there depending on how it was computed, so Android must take priority.
+            if (isAndroid)
+                return PickAndroidDefaultFont(GetInstalledFontFamilyNames());
+
             if (isWindows)
                 return "Segoe UI";
 
@@ -272,17 +300,36 @@ namespace PeachPDF.Html.Core.Utils
         /// names, preferring common Arial alternatives and otherwise falling back to
         /// whatever font was actually found so this never names a font that isn't there.
         /// </summary>
-        internal static string PickLinuxDefaultFont(IEnumerable<string> installedFontFamilyNames)
+        internal static string PickLinuxDefaultFont(IEnumerable<string> installedFontFamilyNames) =>
+            PickBestAvailableFont(installedFontFamilyNames, LinuxArialAlternatives);
+
+        /// <summary>
+        /// Picks the best available default font from a list of installed font family
+        /// names, preferring common Arial alternatives available on Android and otherwise
+        /// falling back to whatever font was actually found so this never names a font
+        /// that isn't there.
+        /// </summary>
+        internal static string PickAndroidDefaultFont(IEnumerable<string> installedFontFamilyNames) =>
+            PickBestAvailableFont(installedFontFamilyNames, AndroidArialAlternatives);
+
+        /// <summary>
+        /// Shared picking logic for <see cref="PickLinuxDefaultFont"/> and
+        /// <see cref="PickAndroidDefaultFont"/>: prefer the first candidate (in preference
+        /// order) that's actually installed, otherwise fall back to whatever font was found,
+        /// otherwise fall back to <paramref name="preferenceOrder"/>'s first (and most
+        /// likely to be present) entry so this never returns an empty string.
+        /// </summary>
+        private static string PickBestAvailableFont(IEnumerable<string> installedFontFamilyNames, string[] preferenceOrder)
         {
             var installed = new HashSet<string>(installedFontFamilyNames, StringComparer.OrdinalIgnoreCase);
 
-            foreach (var candidate in LinuxArialAlternatives)
+            foreach (var candidate in preferenceOrder)
             {
                 if (installed.Contains(candidate))
                     return candidate;
             }
 
-            return installed.FirstOrDefault() ?? "Liberation Sans";
+            return installed.FirstOrDefault() ?? preferenceOrder[0];
         }
     }
 }
