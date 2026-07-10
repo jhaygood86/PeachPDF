@@ -39,6 +39,218 @@ namespace PeachPDF.Html.Core
         {
         }
 
+        // --- Rule index -----------------------------------------------------------------------
+        //
+        // Matching every stylesheet rule against every CssBox in the document (the naive approach)
+        // is O(rules x boxes) and dominated cascade cost on large documents. Real browser engines
+        // avoid this by bucketing rules by the "subject" simple selector (the one that must match the
+        // box itself, e.g. the tag/class/id) so a box only needs to test the handful of rules that
+        // could plausibly match it, instead of the whole stylesheet. `DoesSelectorMatch` remains the
+        // source of truth for whether a rule actually matches - the index only narrows the candidates.
+        //
+        // Built lazily, once, the first time this CssData's rules are queried. Safe because by the
+        // time CascadeApplyStyles starts querying rules for the box tree, DomParser has already
+        // finished building/cloning CssData from <style>/<link> tags (see DomParser.GenerateCssTree),
+        // so Stylesheets doesn't change during the walk.
+        private enum SelectorBucketKind { Tag, Class, Id, Universal }
+
+        // DocumentOrder is assigned while walking stylesheets (recursing into @media blocks in
+        // place) so that, regardless of which bucket a rule is later retrieved through, the true
+        // source order - including across the plain-rule/@media boundary - can be reconstructed
+        // for specificity tie-breaking (see GetStyleRulesByOrigin). EnclosingMedia carries the
+        // chain of @media conditions (outermost first) a rule was nested under, so media matching
+        // no longer needs a separate unindexed scan.
+        private readonly record struct IndexedRule(IStyleRule Rule, bool IsUserAgent, int DocumentOrder, MediaList[]? EnclosingMedia);
+
+        private Dictionary<string, List<IndexedRule>>? _tagIndex;
+        private Dictionary<string, List<IndexedRule>>? _classIndex;
+        private Dictionary<string, List<IndexedRule>>? _idIndex;
+        private List<IndexedRule>? _universalRules;
+
+        private void EnsureIndex()
+        {
+            if (_universalRules is not null) return;
+
+            var tagIndex = new Dictionary<string, List<IndexedRule>>(StringComparer.InvariantCultureIgnoreCase);
+            var classIndex = new Dictionary<string, List<IndexedRule>>(StringComparer.InvariantCultureIgnoreCase);
+            var idIndex = new Dictionary<string, List<IndexedRule>>(StringComparer.InvariantCultureIgnoreCase);
+            var universal = new List<IndexedRule>();
+            var keys = new List<(SelectorBucketKind Kind, string Key)>();
+            var order = 0;
+
+            foreach (var stylesheet in Stylesheets)
+            {
+                IndexRules(stylesheet.Rules, stylesheet.IsUserAgent, null, tagIndex, classIndex, idIndex, universal, keys, ref order);
+            }
+
+            _tagIndex = tagIndex;
+            _classIndex = classIndex;
+            _idIndex = idIndex;
+            _universalRules = universal;
+        }
+
+        /// <summary>
+        /// Walks a rule list in true document order, recursing into <c>@media</c> blocks (any
+        /// nesting depth) in place, and buckets every style rule found - assigning each an
+        /// ever-increasing <see cref="IndexedRule.DocumentOrder"/> and recording the chain of
+        /// enclosing media conditions it's nested under, if any.
+        /// </summary>
+        private static void IndexRules(
+            IEnumerable<IRule> rules,
+            bool isUserAgent,
+            MediaList[]? enclosingMedia,
+            Dictionary<string, List<IndexedRule>> tagIndex,
+            Dictionary<string, List<IndexedRule>> classIndex,
+            Dictionary<string, List<IndexedRule>> idIndex,
+            List<IndexedRule> universal,
+            List<(SelectorBucketKind Kind, string Key)> keys,
+            ref int order)
+        {
+            foreach (var rule in rules)
+            {
+                switch (rule)
+                {
+                    case IStyleRule styleRule:
+                        var indexedRule = new IndexedRule(styleRule, isUserAgent, order++, enclosingMedia);
+
+                        keys.Clear();
+                        CollectIndexKeys(styleRule.Selector, keys);
+
+                        foreach (var (kind, key) in keys)
+                        {
+                            var bucket = kind switch
+                            {
+                                SelectorBucketKind.Tag => tagIndex,
+                                SelectorBucketKind.Class => classIndex,
+                                SelectorBucketKind.Id => idIndex,
+                                _ => null
+                            };
+
+                            if (bucket is null)
+                            {
+                                universal.Add(indexedRule);
+                            }
+                            else
+                            {
+                                if (!bucket.TryGetValue(key, out var list))
+                                    bucket[key] = list = [];
+                                list.Add(indexedRule);
+                            }
+                        }
+                        break;
+
+                    case IMediaRule mediaRule:
+                        var nestedMedia = enclosingMedia is null
+                            ? [mediaRule.Media]
+                            : (MediaList[])[.. enclosingMedia, mediaRule.Media];
+                        IndexRules(mediaRule.Rules, isUserAgent, nestedMedia, tagIndex, classIndex, idIndex, universal, keys, ref order);
+                        break;
+                }
+            }
+        }
+
+        /// <summary>
+        /// True if every level of a rule's enclosing <c>@media</c> chain matches <paramref name="media"/>
+        /// (nesting is conjunctive - all levels must match), or if the rule isn't nested in any
+        /// <c>@media</c> block at all.
+        /// </summary>
+        private static bool EnclosingMediaMatches(MediaList[]? enclosingMedia, string media)
+        {
+            if (enclosingMedia is null) return true;
+
+            foreach (var mediaList in enclosingMedia)
+            {
+                var anyMatches = false;
+                foreach (var medium in mediaList)
+                {
+                    var typeMatches = medium.Type == media || medium.Type == "all";
+                    if (medium.IsInverse ? !typeMatches : typeMatches)
+                    {
+                        anyMatches = true;
+                        break;
+                    }
+                }
+
+                if (!anyMatches) return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Determines which bucket(s) a rule's selector should be indexed under, based on the simple
+        /// selector that must match the box itself (for <see cref="ComplexSelector"/>, that's its
+        /// rightmost/subject selector - see the reversal in <see cref="DoesSelectorMatch(ComplexSelector, CssBox?)"/>).
+        /// A <see cref="ListSelector"/> (comma-separated) contributes one key per alternative, since
+        /// matching any alternative matches the rule.
+        /// </summary>
+        private static void CollectIndexKeys(ISelector selector, List<(SelectorBucketKind Kind, string Key)> keys)
+        {
+            switch (selector)
+            {
+                case ListSelector listSelector:
+                    foreach (var sub in listSelector)
+                        CollectIndexKeys(sub, keys);
+                    break;
+
+                case ComplexSelector complexSelector:
+                    var last = complexSelector.LastOrDefault().Selector;
+                    if (last is not null)
+                        CollectIndexKeys(last, keys);
+                    else
+                        keys.Add((SelectorBucketKind.Universal, string.Empty));
+                    break;
+
+                case CompoundSelector compoundSelector:
+                    // Pseudo-element and :first-child subjects need the box's own HtmlTag/ParentBox
+                    // re-derived at match time (see DoesSelectorMatch), including for synthesized
+                    // pseudo-element boxes whose HtmlTag is null - the tag/class/id index can't
+                    // safely represent that, so fall back to a full scan for these.
+                    if (compoundSelector.Any(s => s is PseudoElementSelector or FirstChildSelector))
+                    {
+                        keys.Add((SelectorBucketKind.Universal, string.Empty));
+                        break;
+                    }
+
+                    IdSelector? id = null;
+                    ClassSelector? cls = null;
+                    TypeSelector? type = null;
+
+                    foreach (var member in compoundSelector)
+                    {
+                        switch (member)
+                        {
+                            case IdSelector idSel: id ??= idSel; break;
+                            case ClassSelector clsSel: cls ??= clsSel; break;
+                            case TypeSelector typeSel: type ??= typeSel; break;
+                        }
+                    }
+
+                    if (id is not null) keys.Add((SelectorBucketKind.Id, id.Id));
+                    else if (cls is not null) keys.Add((SelectorBucketKind.Class, cls.Class));
+                    else if (type is not null) keys.Add((SelectorBucketKind.Tag, type.Name));
+                    else keys.Add((SelectorBucketKind.Universal, string.Empty));
+                    break;
+
+                case TypeSelector typeSelector:
+                    keys.Add((SelectorBucketKind.Tag, typeSelector.Name));
+                    break;
+
+                case ClassSelector classSelector:
+                    keys.Add((SelectorBucketKind.Class, classSelector.Class));
+                    break;
+
+                case IdSelector idSelector:
+                    keys.Add((SelectorBucketKind.Id, idSelector.Id));
+                    break;
+
+                default:
+                    // AllSelector, bare pseudo-class/element/attribute selectors, etc.
+                    keys.Add((SelectorBucketKind.Universal, string.Empty));
+                    break;
+            }
+        }
+
         /// <summary>
         /// Parse the given stylesheet to <see cref="CssData"/> object.<br/>
         /// If <paramref name="combineWithDefault"/> is true the parsed css blocks are added to the 
@@ -66,36 +278,90 @@ namespace PeachPDF.Html.Core
 
         private IEnumerable<IStyleRule> GetStyleRulesByOrigin(string media, CssBox box, bool? userAgentOnly)
         {
-            foreach (var stylesheet in Stylesheets)
-            {
-                if (userAgentOnly.HasValue && stylesheet.IsUserAgent != userAgentOnly.Value)
-                    continue;
+            EnsureIndex();
 
-                foreach (var rule in GetStyleRules(stylesheet.StyleRules, box))
+            // Rules matched via the index below can, in rare cases (a comma-separated selector list
+            // whose alternatives land in different buckets, e.g. "div, .foo" matching a <div class="foo">),
+            // be reachable through more than one bucket. Dedup so callers never see the same rule twice.
+            HashSet<IStyleRule>? seen = null;
+            var matched = new List<IndexedRule>();
+
+            void Collect(IndexedRule indexed)
+            {
+                if (userAgentOnly.HasValue && indexed.IsUserAgent != userAgentOnly.Value) return;
+                if (!EnclosingMediaMatches(indexed.EnclosingMedia, media)) return;
+                if (!DoesSelectorMatch(indexed.Rule.Selector, box)) return;
+                seen ??= [];
+                if (!seen.Add(indexed.Rule)) return;
+                matched.Add(indexed);
+            }
+
+            foreach (var indexed in _universalRules!)
+                Collect(indexed);
+
+            if (box.HtmlTag is not null)
+            {
+                if (_tagIndex!.TryGetValue(box.HtmlTag.Name, out var tagRules))
                 {
-                    yield return rule;
+                    foreach (var indexed in tagRules)
+                        Collect(indexed);
                 }
 
-                foreach (var mediaRule in stylesheet.MediaRules)
+                if (box.HtmlTag.Attributes is not null)
                 {
-                    foreach (var medium in mediaRule.Media)
+                    if (box.HtmlTag.Attributes.TryGetValue("class", out var classAttr) && classAttr.Length > 0)
                     {
-                        var typeMatches = medium.Type == media || medium.Type == "all";
-                        var matches = medium.IsInverse ? !typeMatches : typeMatches;
-                        if (!matches) continue;
-
-                        foreach (var rule in GetStyleRules(mediaRule.Rules.OfType<IStyleRule>(), box))
+                        foreach (var className in classAttr.Split(' '))
                         {
-                            yield return rule;
+                            if (className.Length == 0) continue;
+                            if (_classIndex!.TryGetValue(className, out var classRules))
+                                foreach (var indexed in classRules)
+                                    Collect(indexed);
                         }
+                    }
+
+                    if (box.HtmlTag.Attributes.TryGetValue("id", out var idAttr) && idAttr.Length > 0
+                        && _idIndex!.TryGetValue(idAttr, out var idRules))
+                    {
+                        foreach (var indexed in idRules)
+                            Collect(indexed);
                     }
                 }
             }
+
+            // Stable sort by specificity, tie-broken by DocumentOrder (true source order, including
+            // across the plain-rule/@media boundary, assigned once up front by IndexRules) - equal-
+            // specificity rules keep true document order for correct source-order tiebreaking.
+            return matched
+                .OrderBy(indexed => GetMatchedSpecificity(indexed.Rule.Selector, box))
+                .ThenBy(indexed => indexed.DocumentOrder)
+                .Select(indexed => indexed.Rule);
         }
 
-        private static IEnumerable<IStyleRule> GetStyleRules(IEnumerable<IStyleRule> styleRules, CssBox box)
+        /// <summary>
+        /// The effective specificity of a matched rule's selector for cascade-ordering purposes,
+        /// relative to a specific matched box. This deliberately differs from calling
+        /// <c>selector.Specificity</c> directly for a top-level <see cref="ListSelector"/> (comma-
+        /// separated rule selector, e.g. "h1, h2 {}"): per spec a selector list used as a whole
+        /// rule's selector is cascade-equivalent to separate rules, so the specificity that governs
+        /// THIS box's cascade is whichever one alternative actually matched it - not every
+        /// alternative's static max (which is what <see cref="ListSelector.Specificity"/> reports,
+        /// correctly, for its OTHER use as an argument to :is()/:not()/:has()). One level of
+        /// ListSelector-checking is sufficient since the grammar can't nest one directly inside
+        /// another top-level list.
+        /// </summary>
+        private static Priority GetMatchedSpecificity(ISelector selector, CssBox? box)
         {
-            return styleRules.Where(rule => DoesSelectorMatch(rule.Selector, box));
+            if (selector is ListSelector list)
+            {
+                return list
+                    .Where(s => DoesSelectorMatch(s, box))
+                    .Select(s => s.Specificity)
+                    .DefaultIfEmpty(Priority.Zero)
+                    .Max();
+            }
+
+            return selector.Specificity;
         }
 
         private static bool DoesSelectorMatch(ISelector selector, CssBox? box)
@@ -118,7 +384,12 @@ namespace PeachPDF.Html.Core
                 AttrBeginsSelector attrBeginsSelector => DoesSelectorMatch(attrBeginsSelector, box),
                 AttrEndsSelector attrEndsSelector => DoesSelectorMatch(attrEndsSelector, box),
                 AttrHyphenSelector attrHyphenSelector => DoesSelectorMatch(attrHyphenSelector, box),
-                FirstChildSelector firstChildSelector => DoesSelectorMatch(firstChildSelector, box),
+                ChildSelector childSelector => DoesSelectorMatch(childSelector, box),
+                OnlyChildSelector onlyChildSelector => DoesSelectorMatch(onlyChildSelector, box),
+                OnlyOfTypeSelector onlyOfTypeSelector => DoesSelectorMatch(onlyOfTypeSelector, box),
+                NotSelector notSelector => DoesSelectorMatch(notSelector, box),
+                MatchesSelector matchesSelector => DoesSelectorMatch(matchesSelector, box),
+                HasSelector hasSelector => DoesSelectorMatch(hasSelector, box),
                 _ => false
             };
         }
@@ -136,7 +407,11 @@ namespace PeachPDF.Html.Core
 
             var lastSelector = compoundSelector.Last();
 
-            if (lastSelector is not PseudoElementSelector or FirstChildSelector)
+            // Structural pseudo-classes (ChildSelector subtypes, OnlyChildSelector, OnlyOfTypeSelector)
+            // are matched against `box` itself here, same as every other compound member - their own
+            // DoesSelectorMatch overload re-derives sibling scope from `box` as needed, so no special
+            // handling is required for them beyond the plain path below.
+            if (lastSelector is not PseudoElementSelector)
                 return compoundSelector.All(selector => DoesSelectorMatch(selector, box));
 
             if (lastSelector is PseudoElementSelector pseudoElementSelector)
@@ -181,17 +456,6 @@ namespace PeachPDF.Html.Core
                             break;
                         }
                 }
-            }
-
-            if (lastSelector is FirstChildSelector firstChildSelector)
-            {
-                var referenceBox = DomUtils.GetNearestParentElementBox(box);
-
-                var isMatchWithoutNthChildElement = compoundSelector
-                    .Where(x => x is not FirstChildSelector)
-                    .All(selector => DoesSelectorMatch(selector, referenceBox));
-
-                return isMatchWithoutNthChildElement && DoesSelectorMatch(firstChildSelector, box);
             }
 
             return false;
@@ -347,7 +611,142 @@ namespace PeachPDF.Html.Core
             }
         }
 
-        private static bool DoesSelectorMatch(FirstChildSelector firstChildSelector, CssBox? box)
+        /// <summary>
+        /// Matches the six structural "An+B" pseudo-classes (:nth-child, :nth-last-child,
+        /// :nth-of-type, :nth-last-of-type, :nth-column, :nth-last-column - including their bare-ident
+        /// forms like :first-child, which are wired to Step=0/Offset=1 by PseudoClassSelectorFactory).
+        /// Each variant differs only in (a) which sibling scope to count within and (b) whether to
+        /// count from the start or the end; the actual "does this position satisfy An+B" test is
+        /// shared via <see cref="MatchesAnPlusB"/>.
+        /// </summary>
+        private static bool DoesSelectorMatch(ChildSelector childSelector, CssBox? box)
+        {
+            if (box?.HtmlTag is null)
+            {
+                return false;
+            }
+
+            switch (childSelector)
+            {
+                case FirstColumnSelector or LastColumnSelector:
+                    return DoesColumnSelectorMatch(childSelector, box, fromEnd: childSelector is LastColumnSelector);
+            }
+
+            var parentBox = DomUtils.GetNearestParentElementBox(box);
+            if (parentBox is null)
+            {
+                return false;
+            }
+
+            IEnumerable<CssBox> siblingBoxes = parentBox.Boxes.Where(b => b.HtmlTag is not null);
+
+            var sameTypeOnly = childSelector is FirstTypeSelector or LastTypeSelector;
+            if (sameTypeOnly)
+            {
+                siblingBoxes = siblingBoxes.Where(b =>
+                    b.HtmlTag!.Name.Equals(box.HtmlTag.Name, StringComparison.InvariantCultureIgnoreCase));
+            }
+
+            // CSS4 "of <selector>" extension (:nth-child(An+B of S)/:nth-last-child(An+B of S)).
+            // Kind defaults to AllSelector (matches unconditionally) whenever no "of" clause was
+            // written, and the parser only ever allows a non-default Kind on FirstChildSelector/
+            // LastChildSelector - so this filter is always a no-op for the four other subtypes.
+            // Applying it unconditionally is simpler than special-casing which subtypes can have it.
+            siblingBoxes = siblingBoxes.Where(b => DoesSelectorMatch(childSelector.Kind, b));
+
+            var siblings = siblingBoxes.ToList();
+            var index = siblings.IndexOf(box);
+            if (index < 0)
+            {
+                return false;
+            }
+
+            var fromEndPosition = childSelector is LastChildSelector or LastTypeSelector;
+            var position = fromEndPosition ? siblings.Count - index : index + 1;
+
+            return MatchesAnPlusB(position, childSelector.Step, childSelector.Offset);
+        }
+
+        /// <summary>
+        /// Matches :nth-column()/:nth-last-column() against the cell's occupied column position(s)
+        /// within its own row. Only accounts for colspan of preceding cells in the SAME row - unlike
+        /// <see cref="Dom.CssLayoutEngineTable"/>'s column bookkeeping (which additionally accounts for
+        /// rowspan carried over from earlier rows via placeholder boxes inserted during layout), this
+        /// runs during cascade, before layout, when that placeholder bookkeeping doesn't exist yet.
+        /// A colspan-N cell occupies N columns; per spec this matches if ANY occupied column position
+        /// satisfies the An+B formula, not just the cell's starting column.
+        /// </summary>
+        private static bool DoesColumnSelectorMatch(ChildSelector childSelector, CssBox box, bool fromEnd)
+        {
+            var row = box.ParentBox;
+            if (row is null)
+            {
+                return false;
+            }
+
+            var cellsInRow = row.Boxes.Where(b => b.HtmlTag is not null).ToList();
+            var columnIndex = 0;
+            var totalColumns = 0;
+            var found = false;
+
+            foreach (var cell in cellsInRow)
+            {
+                if (cell == box)
+                {
+                    columnIndex = totalColumns;
+                    found = true;
+                }
+
+                totalColumns += GetColSpan(cell);
+            }
+
+            if (!found)
+            {
+                return false;
+            }
+
+            var boxSpan = GetColSpan(box);
+            for (var column = columnIndex; column < columnIndex + boxSpan; column++)
+            {
+                var position = fromEnd ? totalColumns - column : column + 1;
+                if (MatchesAnPlusB(position, childSelector.Step, childSelector.Offset))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Reads a box's "colspan" HTML attribute (default 1 if absent/invalid). Deliberately
+        /// duplicated from <see cref="Dom.CssLayoutEngineTable"/>'s private equivalent rather than
+        /// shared - this runs at cascade time, before the layout-phase state that method's column
+        /// bookkeeping otherwise depends on exists.
+        /// </summary>
+        private static int GetColSpan(CssBox box)
+        {
+            var value = box.GetAttribute("colspan", "1");
+            return !int.TryParse(value, out var colSpan) || colSpan < 1 ? 1 : colSpan;
+        }
+
+        /// <summary>
+        /// The standard CSS "An+B" existence test: does there exist a non-negative integer n such that
+        /// position == step*n + offset? position is always the 1-based index within whatever sibling
+        /// scope the caller has already resolved.
+        /// </summary>
+        private static bool MatchesAnPlusB(int position, int step, int offset)
+        {
+            if (step == 0)
+            {
+                return position == offset;
+            }
+
+            var diff = position - offset;
+            return diff % step == 0 && (step > 0 ? diff >= 0 : diff <= 0);
+        }
+
+        private static bool DoesSelectorMatch(OnlyChildSelector _, CssBox? box)
         {
             if (box?.HtmlTag is null)
             {
@@ -355,14 +754,57 @@ namespace PeachPDF.Html.Core
             }
 
             var parentBox = DomUtils.GetNearestParentElementBox(box);
+            return parentBox is not null && parentBox.Boxes.Count(b => b.HtmlTag is not null) == 1;
+        }
 
+        private static bool DoesSelectorMatch(OnlyOfTypeSelector _, CssBox? box)
+        {
+            if (box?.HtmlTag is null)
+            {
+                return false;
+            }
+
+            var parentBox = DomUtils.GetNearestParentElementBox(box);
             if (parentBox is null)
             {
                 return false;
             }
 
-            var currentIndex = parentBox.Boxes.Where(b => b.HtmlTag is not null).ToList();
-            return currentIndex.IndexOf(box) == firstChildSelector.Offset;
+            return parentBox.Boxes.Count(b =>
+                b.HtmlTag is not null &&
+                b.HtmlTag.Name.Equals(box.HtmlTag.Name, StringComparison.InvariantCultureIgnoreCase)) == 1;
+        }
+
+        private static bool DoesSelectorMatch(NotSelector notSelector, CssBox? box)
+        {
+            return box is not null && !DoesSelectorMatch(notSelector.Inner, box);
+        }
+
+        private static bool DoesSelectorMatch(MatchesSelector matchesSelector, CssBox? box)
+        {
+            return DoesSelectorMatch(matchesSelector.Inner, box);
+        }
+
+        private static bool DoesSelectorMatch(HasSelector hasSelector, CssBox? box)
+        {
+            return box is not null && HasDescendantMatch(box, hasSelector.Inner);
+        }
+
+        /// <summary>
+        /// Recursively searches box's descendants (at any depth) for one matching inner, short-
+        /// circuiting on the first hit - mirrors the shape of DomUtils.GetBoxById/GetBoxByTagName.
+        /// Backs :has()'s default (descendant) relative-selector form; leading-combinator forms
+        /// (":has(&gt; x)"/"+"/"~") aren't supported - see HasSelector's doc comment.
+        /// </summary>
+        private static bool HasDescendantMatch(CssBox box, ISelector inner)
+        {
+            foreach (var child in box.Boxes)
+            {
+                if (DoesSelectorMatch(inner, child)) return true;
+                if (HasDescendantMatch(child, inner)) return true;
+            }
+
+            return false;
         }
 
         private static bool DoesSelectorMatch(ComplexSelector complexSelector, CssBox? box)

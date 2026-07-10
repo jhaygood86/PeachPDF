@@ -176,6 +176,22 @@ namespace PeachPDF.Html.Core
         /// </summary>
         public RSize ActualSize { get; set; }
 
+        /// <summary>
+        /// Whether any box in the current document has <c>float: left/right</c>. Computed once per
+        /// <see cref="PerformLayout"/> call and used to let float-intersection lookups
+        /// (<see cref="Utils.DomUtils.GetFirstIntersectingFloatBox"/>) skip their tree walk entirely for
+        /// the common case of a document with no floated content at all.
+        /// </summary>
+        internal bool HasFloatedBoxes { get; private set; }
+
+        /// <summary>
+        /// Whether any box in the current document is out-of-flow (floated, absolutely positioned, or
+        /// fixed). Computed alongside <see cref="HasFloatedBoxes"/> and used by
+        /// <see cref="Utils.DomUtils.FlattenStackingContext"/> to skip hoisting out-of-flow descendants
+        /// past normal-flow wrapper boxes entirely when there's nothing to hoist.
+        /// </summary>
+        internal bool HasOutOfFlowBoxes { get; private set; }
+
         public RSize PageSize { get; set; }
 
         /// <summary>
@@ -323,6 +339,8 @@ namespace PeachPDF.Html.Core
             ActualSize = RSize.Empty;
             if (Root is null) return;
 
+            (HasFloatedBoxes, HasOutOfFlowBoxes) = ComputeFlowFlags(Root);
+
             // if width is not restricted we set it to large value to get the actual later
             Root.Size = new RSize(MaxSize.Width > 0 ? MaxSize.Width : PageSize.Width, 0);
             Root.Location = Location;
@@ -338,6 +356,33 @@ namespace PeachPDF.Html.Core
 
             // After layout, re-apply content to pseudo-elements now that named strings are set
             ReapplyPseudoElementContent(Root);
+
+            // Recompute after layout in case pseudo-element reapplication added any out-of-flow boxes.
+            (HasFloatedBoxes, HasOutOfFlowBoxes) = ComputeFlowFlags(Root);
+        }
+
+        /// <summary>
+        /// Recursively checks whether any box in the tree is floated and/or out-of-flow, short-circuiting
+        /// once both have been confirmed true.
+        /// </summary>
+        private static (bool HasFloated, bool HasOutOfFlow) ComputeFlowFlags(CssBox box)
+        {
+            var hasFloated = false;
+            var hasOutOfFlow = false;
+            ComputeFlowFlags(box, ref hasFloated, ref hasOutOfFlow);
+            return (hasFloated, hasOutOfFlow);
+        }
+
+        private static void ComputeFlowFlags(CssBox box, ref bool hasFloated, ref bool hasOutOfFlow)
+        {
+            if (box.IsFloated) hasFloated = true;
+            if (box.IsOutOfFlow) hasOutOfFlow = true;
+
+            foreach (var childBox in box.Boxes)
+            {
+                if (hasFloated && hasOutOfFlow) return;
+                ComputeFlowFlags(childBox, ref hasFloated, ref hasOutOfFlow);
+            }
         }
 
         /// <summary>

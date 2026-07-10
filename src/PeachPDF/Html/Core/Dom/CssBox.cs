@@ -485,6 +485,33 @@ namespace PeachPDF.Html.Core.Dom
                     if (clip != RRect.Empty)
                         visible = true;
                 }
+                else if (HtmlContainer?.HasOutOfFlowBoxes ?? true)
+                {
+                    // Rectangles.Count == 0 boxes (most block-level containers) have historically always
+                    // been treated as visible here regardless of the current clip, so every page walked
+                    // every box in the whole document. That's only safe to tighten up when there's no
+                    // out-of-flow content (float/absolute/fixed) anywhere in the document: an out-of-flow
+                    // descendant's visual position can fall outside this box's own Bounds, and it's only
+                    // discovered/painted via this box's own PaintImp -> FlattenStackingContext call, so
+                    // skipping that call based on Bounds alone could silently drop it. With no such content
+                    // anywhere (checked once for the whole document - see HtmlContainerInt.PerformLayout),
+                    // every descendant is normal-flow and nested within this box's own Bounds, so it's safe
+                    // to prune using them below instead.
+                }
+                else
+                {
+                    var clip = g.GetClip();
+                    var rect = Bounds;
+                    rect.X -= 2;
+                    rect.Width += 2;
+                    if (!IsFixed)
+                    {
+                        rect.Offset(HtmlContainer!.ScrollOffset);
+                    }
+                    clip.Intersect(rect);
+
+                    visible = clip != RRect.Empty;
+                }
 
                 if (visible)
                 {

@@ -437,6 +437,79 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal("scale(2)", child!.Transform);
         }
 
+        // ── regression: lazy revert-snapshot (only computed when a matched rule ──
+        // ── actually uses revert/revert-layer) must still resolve correctly ─────
+
+        [Fact]
+        public async Task Revert_AmongMultipleAuthorRulesOnlyOneUsingRevert_StillFindsUaSnapshot()
+        {
+            // Several author-phase declarations apply to #el; only one of them uses "revert".
+            // The snapshot must still be captured before the author pass runs, not skipped just
+            // because most declarations in this pass are plain values.
+            var html = """
+                <!DOCTYPE html><html><head><style>
+                  div { color: blue; }
+                  #el { background-color: yellow; font-weight: bold; color: revert; }
+                </style></head><body>
+                <div id="el">text</div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var el = FindById(root, "el");
+
+            Assert.NotNull(el);
+            Assert.Equal("black", el!.Color);
+            Assert.Equal("rgb(255, 255, 0)", el.BackgroundColor);
+            Assert.Equal("bold", el.FontWeight);
+        }
+
+        [Fact]
+        public async Task Revert_CustomProperty_RevertsToUaValue()
+        {
+            // Custom property (--foo) declarations are routed separately from regular properties
+            // but share the same rule set scanned for the revert/revert-layer keyword - confirm
+            // that scan actually looks at custom-property values too, not just known properties.
+            var html = """
+                <!DOCTYPE html><html><head><style>
+                  #el { --accent: blue; }
+                  #el.override { --accent: revert; }
+                </style></head><body>
+                <div id="el" class="override">text</div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var el = FindById(root, "el");
+
+            Assert.NotNull(el);
+            Assert.False(el!.CustomProperties?.ContainsKey("--accent") ?? false, "revert with no prior origin snapshot value should leave the custom property absent");
+        }
+
+        [Fact]
+        public async Task Revert_NoRuleUsesRevertKeyword_SnapshotSkippedWithoutBreakingCascade()
+        {
+            // Plain sanity check that skipping the (now-lazy) snapshot entirely, for the common
+            // case where nothing in the matched rules ever uses revert/revert-layer, still lets
+            // every property cascade normally.
+            var html = """
+                <!DOCTYPE html><html><head><style>
+                  div { color: blue; margin-top: 12px; }
+                  #el { background-color: yellow; }
+                </style></head><body>
+                <div id="el">text</div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var el = FindById(root, "el");
+
+            Assert.NotNull(el);
+            Assert.Equal("rgb(0, 0, 255)", el!.Color);
+            Assert.Equal("12px", el.MarginTop);
+            Assert.Equal("rgb(255, 255, 0)", el.BackgroundColor);
+        }
+
         // ── regression: 3-phase cascade must not break existing behaviour ──────
 
         [Fact]
@@ -531,6 +604,57 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotNull(el);
             Assert.Equal("rgb(0, 0, 255)", el!.Color);
+        }
+
+        [Fact]
+        public async Task InlineImportant_BeatsAuthorImportantRule()
+        {
+            // Per spec, inline style sits at the top of its origin's !important tier too, same as
+            // it does for the normal tier - an inline !important declaration must beat an author
+            // stylesheet !important declaration for the same property.
+            var html = """
+                <!DOCTYPE html><html><head><style>
+                  div { color: blue !important; }
+                </style></head><body>
+                <div id="el" style="color: red !important">text</div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var el = FindById(root, "el");
+
+            Assert.NotNull(el);
+            Assert.Equal("rgb(255, 0, 0)", el!.Color);
+        }
+
+        [Fact]
+        public async Task AuthorImportantRevert_RollsBackToInlineNormalValue_NotAllTheWayToUa()
+        {
+            // Documents a deliberate design choice in the 6-phase cascade restructure: an
+            // author-!important declaration's "revert" rolls back to the state right before ANY
+            // !important ran (which includes inline-normal's contribution), not all the way back to
+            // the UA-origin snapshot as a stricter per-origin reading of the spec might imply. This
+            // pins the behavior down so it can't drift silently - see the comment in
+            // DomParser.CascadeApplyStyles above the author-!important phase for the full rationale.
+            //
+            // Expected chain: UA has no color rule for div (stays at the initial "black") -> author-
+            // normal "div{color:blue}" applies -> inline-normal "color:green" applies on top -> the
+            // author-!important "revert" should land on "green" (the value right before any
+            // !important ran), not "blue" (author-normal-only) or "black" (UA-only).
+            var html = """
+                <!DOCTYPE html><html><head><style>
+                  div { color: blue; }
+                  #el { color: revert !important; }
+                </style></head><body>
+                <div id="el" style="color: green">text</div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var el = FindById(root, "el");
+
+            Assert.NotNull(el);
+            Assert.Equal("rgb(0, 128, 0)", el!.Color);
         }
 
         [Fact]
