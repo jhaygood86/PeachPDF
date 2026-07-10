@@ -25,15 +25,32 @@ namespace PeachPDF.PdfSharpCore.Utils
 
         public static string[] SupportedFonts { get; }
 
+        private static readonly string[] FontExtensions = ["*.ttf", "*.otf"];
+
+        private static string[] GetFontFiles(string dir)
+        {
+            if (!Directory.Exists(dir))
+                return [];
+
+            return FontExtensions
+                .SelectMany(pattern => Directory.GetFiles(dir, pattern, SearchOption.AllDirectories))
+                .ToArray();
+        }
+
         static FontResolver()
         {
-            string fontDir;
-
             var isOSX = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.OSX);
             if (isOSX)
             {
-                fontDir = "/Library/Fonts/";
-                SupportedFonts = Directory.GetFiles(fontDir, "*.ttf", System.IO.SearchOption.AllDirectories);
+                var homeDir = System.Environment.GetEnvironmentVariable("HOME");
+                var candidateDirs = new List<string> { "/System/Library/Fonts", "/Library/Fonts" };
+                if (!string.IsNullOrEmpty(homeDir))
+                    candidateDirs.Add(Path.Combine(homeDir, "Library", "Fonts"));
+
+                SupportedFonts = candidateDirs
+                    .SelectMany(GetFontFiles)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
                 return;
             }
 
@@ -48,18 +65,11 @@ namespace PeachPDF.PdfSharpCore.Utils
 
             if (isWindows)
             {
-                fontDir = System.Environment.ExpandEnvironmentVariables(@"%SystemRoot%\Fonts");
-                var fontPaths = new List<string>();
-
-                var systemFontPaths = System.IO.Directory.GetFiles(fontDir, "*.ttf", SearchOption.AllDirectories);
-                fontPaths.AddRange(systemFontPaths);
+                var fontDir = System.Environment.ExpandEnvironmentVariables(@"%SystemRoot%\Fonts");
+                var fontPaths = new List<string>(GetFontFiles(fontDir));
 
                 var appdataFontDir = System.Environment.ExpandEnvironmentVariables(@"%LOCALAPPDATA%\Microsoft\Windows\Fonts");
-                if (Directory.Exists(appdataFontDir))
-                {
-                    var appdataFontPaths = System.IO.Directory.GetFiles(appdataFontDir, "*.ttf", SearchOption.AllDirectories);
-                    fontPaths.AddRange(appdataFontPaths);
-                }
+                fontPaths.AddRange(GetFontFiles(appdataFontDir));
 
                 SupportedFonts = fontPaths.ToArray();
 

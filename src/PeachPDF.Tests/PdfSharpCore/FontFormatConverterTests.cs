@@ -9,6 +9,12 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
 {
     public class FontFormatConverterTests
     {
+        private static string BundledOtfPath =>
+            Path.Combine(AppContext.BaseDirectory, "SourceSans3-Regular.otf");
+
+        private static string BundledWoff2Path =>
+            Path.Combine(AppContext.BaseDirectory, "Inter-Medium.woff2");
+
         // -----------------------------------------------------------------------
         // Magic byte detection
         // -----------------------------------------------------------------------
@@ -101,12 +107,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         [Fact]
         public void ToOpenType_WithOtfBytes_ReturnsSameBytes()
         {
-            if (!OperatingSystem.IsWindows()) return;
-            var fontsDir = Path.Combine(Environment.GetEnvironmentVariable("SystemRoot") ?? @"C:\Windows", "Fonts");
-            var otfPath = Directory.GetFiles(fontsDir, "*.otf").FirstOrDefault();
-            if (otfPath == null) return;
-
-            byte[] otfBytes = File.ReadAllBytes(otfPath);
+            byte[] otfBytes = File.ReadAllBytes(BundledOtfPath);
             byte[] result = FontFormatConverter.ToOpenType(otfBytes);
 
             // OTF passes through unchanged
@@ -119,30 +120,19 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         [Fact]
         public void TtfFontDescription_CffFont_ParsesWithoutError()
         {
-            if (!OperatingSystem.IsWindows()) return;
-            var fontsDir = Path.Combine(Environment.GetEnvironmentVariable("SystemRoot") ?? @"C:\Windows", "Fonts");
-            var otfPath = Directory.GetFiles(fontsDir, "*.otf").FirstOrDefault();
-            if (otfPath == null) return;
-
             // TtfFontDescription must handle CFF (OTTO) fonts
-            var desc = TtfFontDescription.LoadDescription(otfPath);
+            var desc = TtfFontDescription.LoadDescription(BundledOtfPath);
             Assert.NotEmpty(desc.FontFamilyInvariantCulture);
         }
 
         // -----------------------------------------------------------------------
-        // WOFF2 conversion using a system WOFF2 font (if present)
+        // WOFF2 conversion using the bundled WOFF2 test font
         // -----------------------------------------------------------------------
 
         [Fact]
-        public void Woff2Convert_SystemFont_ProducesValidOpenType()
+        public void Woff2Convert_BundledFont_ProducesValidOpenType()
         {
-            if (!OperatingSystem.IsWindows()) return;
-            var fontsDir = Path.Combine(Environment.GetEnvironmentVariable("SystemRoot") ?? @"C:\Windows", "Fonts");
-            if (!Directory.Exists(fontsDir)) return;
-            var woff2Path = Directory.GetFiles(fontsDir, "*.woff2").FirstOrDefault();
-            if (woff2Path == null) return; // No WOFF2 on this system — skip gracefully
-
-            byte[] woff2Bytes = File.ReadAllBytes(woff2Path);
+            byte[] woff2Bytes = File.ReadAllBytes(BundledWoff2Path);
             Assert.True(Woff2Converter.IsWoff2(woff2Bytes));
 
             byte[] result = Woff2Converter.Convert(woff2Bytes);

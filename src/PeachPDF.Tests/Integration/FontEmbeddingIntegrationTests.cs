@@ -23,8 +23,8 @@ namespace PeachPDF.Tests.Integration
     /// </summary>
     public class FontEmbeddingIntegrationTests
     {
-        private static string WindowsFontsDir =>
-            Path.Combine(Environment.GetEnvironmentVariable("SystemRoot") ?? @"C:\Windows", "Fonts");
+        private static string BundledOtfPath =>
+            Path.Combine(AppContext.BaseDirectory, "SourceSans3-Regular.otf");
 
         // -------------------------------------------------------------------------
         // TTF regression: must still embed as /FontFile2
@@ -62,11 +62,7 @@ body {{ font-family: 'TestTtf', serif; font-size: 14pt; }}
         [Fact]
         public async Task CffFont_ViaFontFaceDataUri_EmbedsAs_FontFile3_OpenType()
         {
-            if (!OperatingSystem.IsWindows()) return;
-            var otfPath = Directory.GetFiles(WindowsFontsDir, "*.otf").FirstOrDefault();
-            if (otfPath == null) return;
-
-            var otfBytes = File.ReadAllBytes(otfPath);
+            var otfBytes = File.ReadAllBytes(BundledOtfPath);
             var b64 = Convert.ToBase64String(otfBytes);
 
             var html = $@"<!DOCTYPE html>
@@ -92,11 +88,7 @@ body {{ font-family: 'TestCff', serif; font-size: 14pt; }}
         [Fact]
         public async Task CffFont_EmbeddedStream_HasNo_Length1()
         {
-            if (!OperatingSystem.IsWindows()) return;
-            var otfPath = Directory.GetFiles(WindowsFontsDir, "*.otf").FirstOrDefault();
-            if (otfPath == null) return;
-
-            var otfBytes = File.ReadAllBytes(otfPath);
+            var otfBytes = File.ReadAllBytes(BundledOtfPath);
             var b64 = Convert.ToBase64String(otfBytes);
 
             var html = $@"<!DOCTYPE html>

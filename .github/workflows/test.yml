@@ -8,7 +8,16 @@ on:
 
 jobs:
   test:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        shell: pwsh
 
     steps:
     - name: Checkout
@@ -28,6 +37,10 @@ jobs:
       with:
         python-version: '3.x'
 
+    - name: Install fonts (Linux)
+      if: runner.os == 'Linux'
+      run: sudo apt-get update && sudo apt-get install -y fontconfig fonts-liberation fonts-dejavu-core
+
     - name: Install diff-cover and ReportGenerator
       run: |
         pip install diff-cover
@@ -42,7 +55,11 @@ jobs:
     - name: Install Playwright browsers
       run: |
         $playwrightScript = Get-ChildItem -Path src/PeachPDF.Tests/bin/Release -Filter playwright.ps1 -Recurse | Select-Object -First 1 -ExpandProperty FullName
-        pwsh $playwrightScript install chromium
+        if ($IsLinux) {
+          pwsh $playwrightScript install --with-deps chromium
+        } else {
+          pwsh $playwrightScript install chromium
+        }
 
     - name: Test
       run: dotnet test src/PeachPDF.Tests/PeachPDF.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
@@ -62,14 +79,14 @@ jobs:
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: test-results
+        name: test-results-${{ matrix.os }}
         path: src/PeachPDF.Tests/**/*.trx
 
     - name: Upload coverage reports
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: coverage-reports
+        name: coverage-reports-${{ matrix.os }}
         path: |
           coverage/**/coverage.cobertura.xml
           coverage-report/**
