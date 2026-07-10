@@ -57,7 +57,8 @@ namespace PeachPDF.CSS
                 {PseudoClassNames.Lang, _ => new LangFunctionState()},
                 {PseudoClassNames.Contains, _ => new ContainsFunctionState()},
                 {PseudoClassNames.Has, ctx => new HasFunctionState(ctx)},
-                {PseudoClassNames.Matches, ctx => new MatchesFunctionState(ctx)},
+                {PseudoClassNames.Matches, ctx => new MatchesFunctionState(ctx, PseudoClassNames.Matches)},
+                {PseudoClassNames.Is, ctx => new MatchesFunctionState(ctx, PseudoClassNames.Is)},
                 {PseudoClassNames.HostContext, ctx => new HostContextFunctionState(ctx)}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
@@ -526,13 +527,7 @@ namespace PeachPDF.CSS
             {
                 var valid = _selector.IsValid;
                 var sel = _selector.GetResult();
-                if (valid)
-                {
-                    var code = PseudoClassNames.Not.StylesheetFunction(sel.Text);
-                    return PseudoClassSelector.Create( /*el => !sel.Match(el),*/ code);
-                }
-
-                return null;
+                return valid ? new NotSelector(sel) : null;
             }
 
             public override void Dispose()
@@ -567,13 +562,7 @@ namespace PeachPDF.CSS
                 var valid = _nested.IsValid;
                 var sel = _nested.GetResult();
 
-                if (!valid)
-                {
-                    return null;
-                }
-
-                var code = PseudoClassNames.Has.StylesheetFunction(sel.Text);
-                return PseudoClassSelector.Create( /*el => el.ChildNodes.QuerySelector(sel) != null,*/ code);
+                return valid ? new HasSelector(sel) : null;
             }
 
             public override void Dispose()
@@ -586,10 +575,12 @@ namespace PeachPDF.CSS
         private sealed class MatchesFunctionState : FunctionState
         {
             private readonly SelectorConstructor _selector;
+            private readonly string _keyword;
 
-            public MatchesFunctionState(SelectorConstructor parent)
+            public MatchesFunctionState(SelectorConstructor parent, string keyword)
             {
                 _selector = parent.CreateChild();
+                _keyword = keyword;
             }
 
             protected override bool OnToken(Token token)
@@ -608,14 +599,7 @@ namespace PeachPDF.CSS
             {
                 var valid = _selector.IsValid;
                 var sel = _selector.GetResult();
-                if (!valid)
-                {
-                    return null;
-                }
-
-                var code = PseudoClassNames.Matches.StylesheetFunction(sel.Text);
-                return PseudoClassSelector.Create( /*el => sel.Match(el),*/ code);
-
+                return valid ? new MatchesSelector(sel, _keyword) : null;
             }
 
             public override void Dispose()

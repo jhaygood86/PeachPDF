@@ -402,13 +402,19 @@ Because PeachPDF renders a static PDF with no interactive or dynamic state, stat
 | `:nth-child(an+b)`, `:nth-last-child(an+b)` | Full "An+B" support, including `odd`/`even` keywords and negative steps (e.g. `:nth-child(-n+3)`) |
 | `:nth-of-type(an+b)`, `:nth-last-of-type(an+b)` | Same as above, counting only same-tag siblings |
 | `:nth-column(an+b)`, `:nth-last-column(an+b)` | Matches a table cell against its column position. Only accounts for `colspan` within the same row — a cell's column position does not account for `rowspan` carried over from earlier rows, since that bookkeeping only exists during layout, not at the point selectors are matched |
+| `:nth-child(an+b of S)`, `:nth-last-child(an+b of S)` | CSS Selectors Level 4 `of <selector>` extension — the An+B position is computed only among siblings matching `S`; `S` may be a comma-separated selector list |
+| `:not(S)` | Matches an element that does not match `S`. Nesting `:not()` inside `:not()` (e.g. `:not(:not(.foo))`) is rejected — the whole enclosing selector is invalid and the rule matches nothing |
+| `:is(S)`, `:matches(S)` | Matches an element that matches any selector in the (comma-separated, forgiving) list `S`. `:matches()` is the legacy alias for `:is()` |
+| `:has(S)` | Matches an element with a descendant matching `S`; `S` may be a comma-separated selector list. Only the default descendant relationship is supported — CSS4 leading-combinator forms (`:has(> S)`, `:has(+ S)`, `:has(~ S)`) are not supported and are silently discarded by the parser |
 | All others | Parsed but not matched — rules are silently ignored |
 
-Two known gaps in the structural pseudo-classes above:
-- The CSS Selectors Level 4 `of <selector>` extension (e.g. `:nth-child(2n+1 of .foo)`) is parsed but not matched — the whole rule is evaluated as if `of <selector>` were absent.
-- `:nth-column()`/`:nth-last-column()`'s same-row-only limitation described above.
+Known gap: `:nth-column()`/`:nth-last-column()`'s same-row-only limitation described above.
 
 State-based pseudo-classes other than `:link` (`:hover`, `:focus`, `:active`, `:checked`, `:disabled`, `:root`, `:empty`, etc.) are parsed but not applied.
+
+### Cascade & Specificity
+
+Rule application respects real CSS specificity, not just source order: for a given element, matching rules are applied in true document order, then stably re-sorted by specificity (inline style > ID count > class/attribute/pseudo-class count > type/pseudo-element count) so a higher-specificity rule always wins over a lower-specificity one regardless of which was declared first. Equal-specificity rules still resolve by source order (last one wins), and `!important` continues to take precedence over normal declarations, applied per-origin (author `!important` beats author normal; user-agent `!important` beats everything).
 
 ---
 

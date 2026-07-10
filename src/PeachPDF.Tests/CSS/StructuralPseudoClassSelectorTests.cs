@@ -256,6 +256,93 @@ public class StructuralPseudoClassSelectorTests
         Assert.NotEqual("transparent", boxes[2].BackgroundColor); // C, the last of 4 columns
     }
 
+    // ── CSS4 "of <selector>" extension (:nth-child()/:nth-last-child() only) ──
+
+    [Fact]
+    public async Task NthChildOfSelector_1_MatchesOnlyTheFirstMatchingSibling()
+    {
+        // Position is counted among the ".foo"-matching subset only, skipping non-".foo" siblings.
+        var html = Html(
+            ":nth-child(1 of .foo) { background-color: #ff0000; }",
+            "<div><p>1</p><p class='foo'>2</p><p>3</p><p class='foo'>4</p></div>");
+        var boxes = await FindAllBoxesByTag(html, "p");
+        Assert.Equal(4, boxes.Count);
+        Assert.Equal("transparent", boxes[0].BackgroundColor); // "1", not .foo
+        Assert.NotEqual("transparent", boxes[1].BackgroundColor); // "2", first .foo
+        Assert.Equal("transparent", boxes[2].BackgroundColor); // "3", not .foo
+        Assert.Equal("transparent", boxes[3].BackgroundColor); // "4", second .foo
+    }
+
+    [Fact]
+    public async Task NthChildOfSelector_2nPlus1_AppliesFormulaWithinTheFilteredSubset()
+    {
+        var html = Html(
+            ":nth-child(2n+1 of .foo) { background-color: #ff0000; }",
+            "<div><p>skip</p><p class='foo'>foo-1</p><p>skip</p><p class='foo'>foo-2</p><p class='foo'>foo-3</p></div>");
+        var boxes = await FindAllBoxesByTag(html, "p");
+        Assert.Equal(5, boxes.Count);
+        Assert.Equal("transparent", boxes[0].BackgroundColor); // "skip"
+        Assert.NotEqual("transparent", boxes[1].BackgroundColor); // "foo-1" - .foo position 1 (odd)
+        Assert.Equal("transparent", boxes[2].BackgroundColor); // "skip"
+        Assert.Equal("transparent", boxes[3].BackgroundColor); // "foo-2" - .foo position 2 (even)
+        Assert.NotEqual("transparent", boxes[4].BackgroundColor); // "foo-3" - .foo position 3 (odd)
+    }
+
+    [Fact]
+    public async Task NthLastChildOfSelector_1_MatchesTheLastMatchingSibling()
+    {
+        var html = Html(
+            ":nth-last-child(1 of .foo) { background-color: #ff0000; }",
+            "<div><p class='foo'>1</p><p>2</p><p class='foo'>3</p></div>");
+        var boxes = await FindAllBoxesByTag(html, "p");
+        Assert.Equal(3, boxes.Count);
+        Assert.Equal("transparent", boxes[0].BackgroundColor);
+        Assert.Equal("transparent", boxes[1].BackgroundColor);
+        Assert.NotEqual("transparent", boxes[2].BackgroundColor); // last .foo
+    }
+
+    [Fact]
+    public async Task NthChildOfSelector_ElementNotMatchingS_NeverMatchesRegardlessOfPosition()
+    {
+        // The structurally-first element doesn't itself have class "foo", so it can never satisfy
+        // ":nth-child(1 of .foo)" even though it's first among ALL children.
+        var html = Html(
+            ":nth-child(1 of .foo) { background-color: #ff0000; }",
+            "<div><p>first, not foo</p><p class='foo'>second, is foo</p></div>");
+        var boxes = await FindAllBoxesByTag(html, "p");
+        Assert.Equal(2, boxes.Count);
+        Assert.Equal("transparent", boxes[0].BackgroundColor);
+        Assert.NotEqual("transparent", boxes[1].BackgroundColor);
+    }
+
+    [Fact]
+    public async Task NthChildOfSelector_CommaSeparatedList_MatchesEitherBranch()
+    {
+        var html = Html(
+            ":nth-child(1 of .foo, .bar) { background-color: #ff0000; }",
+            "<div><p>skip</p><p class='bar'>first-of-either</p><p class='foo'>second-of-either</p></div>");
+        var boxes = await FindAllBoxesByTag(html, "p");
+        Assert.Equal(3, boxes.Count);
+        Assert.Equal("transparent", boxes[0].BackgroundColor);
+        Assert.NotEqual("transparent", boxes[1].BackgroundColor); // first among .foo-or-.bar
+        Assert.Equal("transparent", boxes[2].BackgroundColor);
+    }
+
+    [Fact]
+    public async Task OfSelector_OnDisallowedFunction_InvalidatesTheWholeRule()
+    {
+        // The parser only allows "of S" on nth-child/nth-last-child - CSS spec has no such clause
+        // for nth-of-type/nth-last-of-type/nth-column/nth-last-column. Writing it anyway doesn't
+        // silently drop just the clause: it invalidates the entire enclosing selector (parses to
+        // UnknownSelector), so the whole rule matches nothing. Locking in this existing, correct
+        // parser behavior as a regression guard.
+        var html = Html(
+            "td:nth-of-type(1 of .foo) { background-color: #ff0000; }",
+            "<table><tr><td class='foo'>A</td></tr></table>");
+        var box = await FindBoxByTag(html, "td");
+        Assert.Equal("transparent", box.BackgroundColor);
+    }
+
     // ── Helpers (mirrors SelectorMatchingTests.cs conventions) ────────────────
 
     private static string Html(string css, string body) =>
