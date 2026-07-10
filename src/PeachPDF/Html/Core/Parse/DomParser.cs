@@ -340,6 +340,26 @@ namespace PeachPDF.Html.Core.Parse
             var uaRules = cssData.GetUserAgentStyleRules(media, box).ToList();
             var authorRules = cssData.GetAuthorStyleRules(media, box).ToList();
 
+            // Inline style is parsed up front - parsing is pure text -> rule with no cascade side
+            // effects, so hoisting it here (ahead of TranslateAttributes, which still runs at its
+            // original point below) doesn't change behavior, and lets RulesUseRevertKeyword below
+            // see it too.
+            IStyleRule? inlineRule = null;
+            if (box.HtmlTag != null && box.HtmlTag.HasAttribute("style"))
+            {
+                var styleAttributeText = box.HtmlTag.TryGetAttribute("style");
+                var block = CssParser.ParseStyleSheet("* { " + styleAttributeText + " }");
+                inlineRule = block.StyleRules.Single();
+            }
+
+            // The relatively expensive property/custom-property snapshots below are only ever read
+            // back when a later phase's declaration is literally revert/revert-layer (see
+            // AssignCssBlock/AssignCustomPropertyDeclaration), which is rare - so each is only
+            // captured when something that will actually consult it uses one of those keywords.
+            var authorUsesRevert = RulesUseRevertKeyword(authorRules);
+            var uaUsesRevert = RulesUseRevertKeyword(uaRules);
+            var inlineUsesRevert = inlineRule is not null && RulesUseRevertKeyword([inlineRule]);
+
             // Cascade precedence (lowest to highest, i.e. applied in this order so "last write wins"
             // naturally produces the correct winner): UA-normal, Author-normal (inline-normal wins
             // ties within this tier), Author-!important (inline-!important wins ties within this
@@ -351,26 +371,19 @@ namespace PeachPDF.Html.Core.Parse
 
             // 3. UA normal
             AssignCssBlocks(valueParser, box, uaRules, importantPass: false, null, null, pendingVarProperties);
-            var uaSnapshot = CssUtils.SnapshotProperties(box);
-            var uaCustomSnapshot = CssUtils.SnapshotCustomProperties(box);
+            var needsUaSnapshot = authorUsesRevert;
+            var uaSnapshot = needsUaSnapshot ? CssUtils.SnapshotProperties(box) : null;
+            var uaCustomSnapshot = needsUaSnapshot ? CssUtils.SnapshotCustomProperties(box) : null;
 
             // 4. Author normal
             AssignCssBlocks(valueParser, box, authorRules, importantPass: false, uaSnapshot, uaCustomSnapshot, pendingVarProperties);
-            var authorNormalSnapshot = CssUtils.SnapshotProperties(box);
-            var authorNormalCustomSnapshot = CssUtils.SnapshotCustomProperties(box);
+            var needsAuthorNormalSnapshot = inlineUsesRevert || authorUsesRevert;
+            var authorNormalSnapshot = needsAuthorNormalSnapshot ? CssUtils.SnapshotProperties(box) : null;
+            var authorNormalCustomSnapshot = needsAuthorNormalSnapshot ? CssUtils.SnapshotCustomProperties(box) : null;
 
-            IStyleRule? inlineRule = null;
             if (box.HtmlTag != null)
             {
                 TranslateAttributes(box.HtmlTag, box);
-
-                if (box.HtmlTag.HasAttribute("style"))
-                {
-                    var styleAttributeText = box.HtmlTag.TryGetAttribute("style");
-                    var stylesheet = "* { " + styleAttributeText + " }";
-                    var block = CssParser.ParseStyleSheet(stylesheet);
-                    inlineRule = block.StyleRules.Single();
-                }
             }
 
             // 5. Inline normal; revert target is the author-normal-applied state (unchanged from
@@ -380,8 +393,9 @@ namespace PeachPDF.Html.Core.Parse
             if (inlineRule is not null)
             {
                 AssignCssBlock(valueParser, box, inlineRule, importantPass: false, authorNormalSnapshot, authorNormalCustomSnapshot, pendingVarProperties);
-                inlineNormalSnapshot = CssUtils.SnapshotProperties(box);
-                inlineNormalCustomSnapshot = CssUtils.SnapshotCustomProperties(box);
+                var needsInlineNormalSnapshot = authorUsesRevert;
+                inlineNormalSnapshot = needsInlineNormalSnapshot ? CssUtils.SnapshotProperties(box) : null;
+                inlineNormalCustomSnapshot = needsInlineNormalSnapshot ? CssUtils.SnapshotCustomProperties(box) : null;
             }
 
             // 6. Author !important. Note: this means an author-!important "revert" can roll back to
@@ -392,8 +406,9 @@ namespace PeachPDF.Html.Core.Parse
             // an author-!important declaration, interacting with a preceding inline-normal value) is
             // untested territory in real usage; documenting it here rather than resolving it silently.
             AssignCssBlocks(valueParser, box, authorRules, importantPass: true, inlineNormalSnapshot, inlineNormalCustomSnapshot, pendingVarProperties);
-            var authorImportantSnapshot = CssUtils.SnapshotProperties(box);
-            var authorImportantCustomSnapshot = CssUtils.SnapshotCustomProperties(box);
+            var needsAuthorImportantSnapshot = inlineUsesRevert || uaUsesRevert;
+            var authorImportantSnapshot = needsAuthorImportantSnapshot ? CssUtils.SnapshotProperties(box) : null;
+            var authorImportantCustomSnapshot = needsAuthorImportantSnapshot ? CssUtils.SnapshotCustomProperties(box) : null;
 
             // 7. Inline !important
             var afterInlineImportantSnapshot = authorImportantSnapshot;
@@ -401,8 +416,9 @@ namespace PeachPDF.Html.Core.Parse
             if (inlineRule is not null)
             {
                 AssignCssBlock(valueParser, box, inlineRule, importantPass: true, authorImportantSnapshot, authorImportantCustomSnapshot, pendingVarProperties);
-                afterInlineImportantSnapshot = CssUtils.SnapshotProperties(box);
-                afterInlineImportantCustomSnapshot = CssUtils.SnapshotCustomProperties(box);
+                var needsAfterInlineImportantSnapshot = uaUsesRevert;
+                afterInlineImportantSnapshot = needsAfterInlineImportantSnapshot ? CssUtils.SnapshotProperties(box) : null;
+                afterInlineImportantCustomSnapshot = needsAfterInlineImportantSnapshot ? CssUtils.SnapshotCustomProperties(box) : null;
             }
 
             // 8. UA !important - applied globally last so it wins over everything else, per spec's
@@ -453,6 +469,25 @@ namespace PeachPDF.Html.Core.Parse
         {
             foreach (var rule in rules)
                 AssignCssBlock(valueParser, box, rule, importantPass, revertTarget, customPropertyRevertTarget, pendingVarProperties);
+        }
+
+        /// <summary>
+        /// Checks whether any declaration in the given rules literally uses the revert/revert-layer keyword,
+        /// so the (relatively expensive) property snapshot used as their revert target only needs to be
+        /// captured when it can actually be consulted.
+        /// </summary>
+        private static bool RulesUseRevertKeyword(IEnumerable<IStyleRule> rules)
+        {
+            foreach (var rule in rules)
+            {
+                foreach (var prop in rule.Style)
+                {
+                    if (prop.Value is CssConstants.Revert or CssConstants.RevertLayer)
+                        return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>

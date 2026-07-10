@@ -40,6 +40,14 @@ namespace PeachPDF.PdfSharpCore.Utils
         static FontResolver()
         {
             var isOSX = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.OSX);
+            var isLinux = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux);
+            var isWindows = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows);
+
+            SupportedFonts = DiscoverSupportedFonts(isOSX, isLinux, isWindows);
+        }
+
+        internal static string[] DiscoverSupportedFonts(bool isOSX, bool isLinux, bool isWindows)
+        {
             if (isOSX)
             {
                 var homeDir = System.Environment.GetEnvironmentVariable("HOME");
@@ -47,21 +55,16 @@ namespace PeachPDF.PdfSharpCore.Utils
                 if (!string.IsNullOrEmpty(homeDir))
                     candidateDirs.Add(Path.Combine(homeDir, "Library", "Fonts"));
 
-                SupportedFonts = candidateDirs
+                return candidateDirs
                     .SelectMany(GetFontFiles)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToArray();
-                return;
             }
 
-            var isLinux = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux);
             if (isLinux)
             {
-                SupportedFonts = LinuxSystemFontResolver.Resolve();
-                return;
+                return LinuxSystemFontResolver.Resolve();
             }
-
-            var isWindows = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows);
 
             if (isWindows)
             {
@@ -71,12 +74,12 @@ namespace PeachPDF.PdfSharpCore.Utils
                 var appdataFontDir = System.Environment.ExpandEnvironmentVariables(@"%LOCALAPPDATA%\Microsoft\Windows\Fonts");
                 fontPaths.AddRange(GetFontFiles(appdataFontDir));
 
-                SupportedFonts = fontPaths.ToArray();
-
-                return;
+                return fontPaths.ToArray();
             }
 
-            throw new System.NotImplementedException("FontResolver not implemented for this platform (PeachPDF.PdfSharpCore.Utils.FontResolver.cs).");
+            // Platforms without system font discovery (iOS, Android, ...): start with no
+            // system fonts and rely on fonts registered via PdfGenerator.AddFontFromStream.
+            return [];
         }
 
 

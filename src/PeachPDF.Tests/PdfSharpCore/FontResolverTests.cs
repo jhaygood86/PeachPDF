@@ -113,5 +113,41 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
             Assert.NotNull(bytes);
             Assert.True(bytes.Length > 0);
         }
+
+        [Fact]
+        public void DiscoverSupportedFonts_UnsupportedPlatform_ReturnsEmpty()
+        {
+            var fonts = FontResolver.DiscoverSupportedFonts(isOSX: false, isLinux: false, isWindows: false);
+
+            Assert.Empty(fonts);
+        }
+
+        [Fact]
+        public void DiscoverSupportedFonts_Linux_DelegatesToLinuxSystemFontResolver()
+        {
+            var fonts = FontResolver.DiscoverSupportedFonts(isOSX: false, isLinux: true, isWindows: false);
+
+            Assert.Equal(LinuxSystemFontResolver.Resolve(), fonts);
+        }
+
+        [Fact]
+        public void DiscoverSupportedFonts_Windows_ReturnsSystemFontFiles()
+        {
+            var fonts = FontResolver.DiscoverSupportedFonts(isOSX: false, isLinux: false, isWindows: true);
+
+            Assert.NotNull(fonts);
+        }
+
+        [Fact]
+        public void DiscoverSupportedFonts_OSX_UsesLibraryFontsDirectory()
+        {
+            // The macOS font directories don't exist on non-macOS test runners, but the
+            // branch must still be exercised so it's covered on the platforms where it does.
+            // Missing directories are skipped rather than throwing, so this returns an
+            // empty (but non-null) array on non-macOS runners.
+            var fonts = FontResolver.DiscoverSupportedFonts(isOSX: true, isLinux: false, isWindows: false);
+
+            Assert.NotNull(fonts);
+        }
     }
 }
