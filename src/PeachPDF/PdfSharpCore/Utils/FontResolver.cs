@@ -32,22 +32,57 @@ namespace PeachPDF.PdfSharpCore.Utils
             if (!Directory.Exists(dir))
                 return [];
 
-            return FontExtensions
-                .SelectMany(pattern => Directory.GetFiles(dir, pattern, SearchOption.AllDirectories))
-                .ToArray();
+            try
+            {
+                return FontExtensions
+                    .SelectMany(pattern => Directory.GetFiles(dir, pattern, SearchOption.AllDirectories))
+                    .ToArray();
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Some directories (e.g. Android's /data/fonts, /product/fonts) may exist
+                // but be unreadable depending on OEM/OS-version SELinux policy. Treat that
+                // the same as "no fonts here" rather than failing font discovery entirely.
+                return [];
+            }
         }
 
         static FontResolver()
         {
+            var isAndroid = System.OperatingSystem.IsAndroid();
+            var isIOS = System.OperatingSystem.IsIOS();
             var isOSX = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.OSX);
             var isLinux = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux);
             var isWindows = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows);
 
-            SupportedFonts = DiscoverSupportedFonts(isOSX, isLinux, isWindows);
+            SupportedFonts = DiscoverSupportedFonts(isOSX, isLinux, isWindows, isAndroid, isIOS);
         }
 
-        internal static string[] DiscoverSupportedFonts(bool isOSX, bool isLinux, bool isWindows)
+        internal static string[] DiscoverSupportedFonts(bool isOSX, bool isLinux, bool isWindows, bool isAndroid, bool isIOS)
         {
+            // Checked first: RuntimeInformation.IsOSPlatform(OSPlatform.Linux) is not
+            // guaranteed to exclude Android (Linux-kernel-based), so Android/iOS must be
+            // routed to their own branches before isLinux/isOSX are consulted.
+            if (isAndroid)
+            {
+                var candidateDirs = new[] { "/system/fonts", "/product/fonts", "/data/fonts" };
+
+                return candidateDirs
+                    .SelectMany(GetFontFiles)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+            }
+
+            if (isIOS)
+            {
+                // iOS sandboxes apps away from system font files entirely, and CoreText
+                // exposes fonts only as opaque handles (CTFont/UIFont) with no public API
+                // to extract raw file bytes. There is nothing on-disk this resolver can
+                // discover here. iOS apps should embed their own fonts and register them
+                // via PdfGenerator.AddFontFromStream.
+                return [];
+            }
+
             if (isOSX)
             {
                 var homeDir = System.Environment.GetEnvironmentVariable("HOME");
@@ -77,8 +112,9 @@ namespace PeachPDF.PdfSharpCore.Utils
                 return fontPaths.ToArray();
             }
 
-            // Platforms without system font discovery (iOS, Android, ...): start with no
-            // system fonts and rely on fonts registered via PdfGenerator.AddFontFromStream.
+            // Other platforms without system font discovery (tvOS, watchOS, browser/WASM,
+            // ...): start with no system fonts and rely on fonts registered via
+            // PdfGenerator.AddFontFromStream.
             return [];
         }
 

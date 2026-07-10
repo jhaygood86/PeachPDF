@@ -117,7 +117,8 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         [Fact]
         public void DiscoverSupportedFonts_UnsupportedPlatform_ReturnsEmpty()
         {
-            var fonts = FontResolver.DiscoverSupportedFonts(isOSX: false, isLinux: false, isWindows: false);
+            var fonts = FontResolver.DiscoverSupportedFonts(
+                isOSX: false, isLinux: false, isWindows: false, isAndroid: false, isIOS: false);
 
             Assert.Empty(fonts);
         }
@@ -125,7 +126,8 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         [Fact]
         public void DiscoverSupportedFonts_Linux_DelegatesToLinuxSystemFontResolver()
         {
-            var fonts = FontResolver.DiscoverSupportedFonts(isOSX: false, isLinux: true, isWindows: false);
+            var fonts = FontResolver.DiscoverSupportedFonts(
+                isOSX: false, isLinux: true, isWindows: false, isAndroid: false, isIOS: false);
 
             Assert.Equal(LinuxSystemFontResolver.Resolve(), fonts);
         }
@@ -133,7 +135,8 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         [Fact]
         public void DiscoverSupportedFonts_Windows_ReturnsSystemFontFiles()
         {
-            var fonts = FontResolver.DiscoverSupportedFonts(isOSX: false, isLinux: false, isWindows: true);
+            var fonts = FontResolver.DiscoverSupportedFonts(
+                isOSX: false, isLinux: false, isWindows: true, isAndroid: false, isIOS: false);
 
             Assert.NotNull(fonts);
         }
@@ -145,7 +148,8 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
             // branch must still be exercised so it's covered on the platforms where it does.
             // Missing directories are skipped rather than throwing, so this returns an
             // empty (but non-null) array on non-macOS runners.
-            var fonts = FontResolver.DiscoverSupportedFonts(isOSX: true, isLinux: false, isWindows: false);
+            var fonts = FontResolver.DiscoverSupportedFonts(
+                isOSX: true, isLinux: false, isWindows: false, isAndroid: false, isIOS: false);
 
             Assert.NotNull(fonts);
         }
@@ -161,7 +165,8 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
             {
                 Environment.SetEnvironmentVariable("HOME", Path.GetTempPath());
 
-                var fonts = FontResolver.DiscoverSupportedFonts(isOSX: true, isLinux: false, isWindows: false);
+                var fonts = FontResolver.DiscoverSupportedFonts(
+                    isOSX: true, isLinux: false, isWindows: false, isAndroid: false, isIOS: false);
 
                 Assert.NotNull(fonts);
             }
@@ -169,6 +174,49 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
             {
                 Environment.SetEnvironmentVariable("HOME", originalHome);
             }
+        }
+
+        [Fact]
+        public void DiscoverSupportedFonts_Android_ScansSystemFontDirectories()
+        {
+            // /system/fonts, /product/fonts and /data/fonts don't exist on non-Android test
+            // runners, but the branch must still be exercised so it's covered on the
+            // platforms where it does. Missing/unreadable directories are skipped rather
+            // than throwing, so this returns an empty (but non-null) array here.
+            var fonts = FontResolver.DiscoverSupportedFonts(
+                isOSX: false, isLinux: false, isWindows: false, isAndroid: true, isIOS: false);
+
+            Assert.NotNull(fonts);
+        }
+
+        [Fact]
+        public void DiscoverSupportedFonts_Android_TakesPriorityOverLinux()
+        {
+            // RuntimeInformation.IsOSPlatform(OSPlatform.Linux) is not guaranteed to exclude
+            // Android (Linux-kernel-based). Guards against a regression where Android would
+            // be routed into LinuxSystemFontResolver.Resolve() (which P/Invokes
+            // libfontconfig.so.1 -- not present/meaningful on Android) instead of its own
+            // branch when isLinux happens to also be true: the result must be identical to
+            // isAndroid alone, regardless of isLinux.
+            var androidOnly = FontResolver.DiscoverSupportedFonts(
+                isOSX: false, isLinux: false, isWindows: false, isAndroid: true, isIOS: false);
+            var androidAndLinux = FontResolver.DiscoverSupportedFonts(
+                isOSX: false, isLinux: true, isWindows: false, isAndroid: true, isIOS: false);
+
+            Assert.Equal(androidOnly, androidAndLinux);
+        }
+
+        [Fact]
+        public void DiscoverSupportedFonts_IOS_ReturnsEmpty()
+        {
+            // iOS has no readable system font files and no public API to extract raw font
+            // bytes from CoreText -- this is an intentional, permanent no-op, not a gap to
+            // be filled in later. iOS apps are expected to embed and register their own
+            // fonts via PdfGenerator.AddFontFromStream.
+            var fonts = FontResolver.DiscoverSupportedFonts(
+                isOSX: false, isLinux: false, isWindows: false, isAndroid: false, isIOS: true);
+
+            Assert.Empty(fonts);
         }
     }
 }

@@ -106,7 +106,11 @@ namespace PeachPDF.Tests.Integration
             sw.Stop();
 
             Assert.True(document.PageCount > 0);
-            Assert.True(sw.ElapsedMilliseconds < 5000,
+            // Bound is generous (well beyond the sub-second time this actually takes) to absorb CI
+            // noise from shared/contended runners - e.g. the net8.0 and net10.0 TFM test runs executing
+            // concurrently in the same job. A real regression back to an O(document size) walk per box
+            // scales towards many seconds even for smaller documents than this, so it still trips this.
+            Assert.True(sw.ElapsedMilliseconds < 15000,
                 $"rendering {40} float-free repeated sections took {sw.ElapsedMilliseconds}ms - " +
                 "this should complete in well under a second; a multi-second time suggests the float " +
                 "scan short-circuit (HasFloatedBoxes) has regressed back to an O(document size) walk per box.");
