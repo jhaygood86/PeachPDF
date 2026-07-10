@@ -133,7 +133,7 @@ namespace PeachPDF.PdfSharpCore.Utils
         }
 
 
-        static bool IsSupportedFontFile(string path) =>
+        internal static bool IsSupportedFontFile(string path) =>
             path.EndsWith(".ttf", StringComparison.OrdinalIgnoreCase) ||
             path.EndsWith(".otf", StringComparison.OrdinalIgnoreCase);
 

@@ -1,6 +1,7 @@
 using MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes;
 using PeachPDF.PdfSharpCore.Utils;
 using PeachPDF.Tests.TestSupport;
+using System;
 using System.IO;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests
@@ -147,6 +148,27 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
             var fonts = FontResolver.DiscoverSupportedFonts(isOSX: true, isLinux: false, isWindows: false);
 
             Assert.NotNull(fonts);
+        }
+
+        [Fact]
+        public void DiscoverSupportedFonts_OSX_IncludesUserLibraryFontsWhenHomeIsSet()
+        {
+            // Exercises the ~/Library/Fonts candidate path directly, regardless of whether
+            // the HOME environment variable happens to be set on the host running the tests
+            // (it typically isn't on Windows).
+            var originalHome = Environment.GetEnvironmentVariable("HOME");
+            try
+            {
+                Environment.SetEnvironmentVariable("HOME", Path.GetTempPath());
+
+                var fonts = FontResolver.DiscoverSupportedFonts(isOSX: true, isLinux: false, isWindows: false);
+
+                Assert.NotNull(fonts);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("HOME", originalHome);
+            }
         }
     }
 }
