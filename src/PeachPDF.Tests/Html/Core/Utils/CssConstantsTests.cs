@@ -35,11 +35,13 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [Fact]
         public void PickLinuxDefaultFont_IsCaseInsensitive()
         {
+            // Matching is case-insensitive; the canonical (properly-cased) candidate name
+            // is returned rather than whatever casing the installed font happened to report.
             var installed = new[] { "liberation sans" };
 
             var result = CssConstants.PickLinuxDefaultFont(installed);
 
-            Assert.Equal("liberation sans", result);
+            Assert.Equal("Liberation Sans", result);
         }
 
         [Fact]

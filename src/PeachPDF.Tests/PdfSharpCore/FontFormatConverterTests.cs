@@ -292,8 +292,11 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         private static void WriteUInt16BE(byte[] d, int o, ushort v)
         { d[o] = (byte)(v >> 8); d[o + 1] = (byte)v; }
 
-        // Creates a WOFF where only the first table is zlib-compressed so we can
-        // test the InflaterInputStream decompression path in WoffConverter.
+        // Creates a WOFF where exactly one table is zlib-compressed so we can test the
+        // InflaterInputStream decompression path in WoffConverter. The largest table is
+        // chosen (rather than always table 0) because small tables can compress *larger*
+        // than their original size once zlib's header/checksum overhead is added, which
+        // would violate the WOFF spec's compLength <= origLength requirement.
         private static byte[] WrapTtfAsWoffWithCompressedFirstTable(byte[] ttf)
         {
             uint sfVersion = ReadUInt32BE(ttf, 0);
@@ -313,30 +316,30 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
                 lengths[i] = ReadUInt32BE(ttf, e + 12);
             }
 
-            // zlib-compress the first table
-            byte[] firstTableRaw = new byte[checked((int)lengths[0])];
-            Array.Copy(ttf, (int)offsets[0], firstTableRaw, 0, (int)lengths[0]);
-            byte[] firstTableCompressed = ZlibCompress(firstTableRaw);
+            int compressedIndex = 0;
+            for (int i = 1; i < numTables; i++)
+            {
+                if (lengths[i] > lengths[compressedIndex])
+                    compressedIndex = i;
+            }
 
-            // Build WOFF: header(44) + directory(20*n) + compressed[0] + verbatim[1..n-1]
+            // zlib-compress the chosen table
+            byte[] compressedTableRaw = new byte[checked((int)lengths[compressedIndex])];
+            Array.Copy(ttf, (int)offsets[compressedIndex], compressedTableRaw, 0, (int)lengths[compressedIndex]);
+            byte[] compressedTableCompressed = ZlibCompress(compressedTableRaw);
+
+            // Build WOFF: header(44) + directory(20*n) + one compressed table + verbatim others
             int dataStart = 44 + numTables * 20;
             var woffOffsets = new uint[numTables];
             var woffCompLengths = new uint[numTables];
 
             uint woffPos = (uint)dataStart;
 
-            // First table: compressed
-            woffOffsets[0] = woffPos;
-            woffCompLengths[0] = (uint)firstTableCompressed.Length;
-            woffPos += woffCompLengths[0];
-            woffPos = (woffPos + 3u) & ~3u;
-
-            // Remaining tables: verbatim
-            for (int i = 1; i < numTables; i++)
+            for (int i = 0; i < numTables; i++)
             {
                 woffOffsets[i] = woffPos;
-                woffCompLengths[i] = lengths[i];
-                woffPos += lengths[i];
+                woffCompLengths[i] = i == compressedIndex ? (uint)compressedTableCompressed.Length : lengths[i];
+                woffPos += woffCompLengths[i];
                 woffPos = (woffPos + 3u) & ~3u;
             }
 
@@ -366,12 +369,15 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
                 WriteUInt32BE(woff, p, checksums[i]); p += 4;
             }
 
-            // Write first table (compressed)
-            Array.Copy(firstTableCompressed, 0, woff, (int)woffOffsets[0], firstTableCompressed.Length);
+            // Write the compressed table
+            Array.Copy(compressedTableCompressed, 0, woff, (int)woffOffsets[compressedIndex], compressedTableCompressed.Length);
 
             // Write remaining tables (verbatim)
-            for (int i = 1; i < numTables; i++)
-                Array.Copy(ttf, (int)offsets[i], woff, (int)woffOffsets[i], (int)lengths[i]);
+            for (int i = 0; i < numTables; i++)
+            {
+                if (i != compressedIndex)
+                    Array.Copy(ttf, (int)offsets[i], woff, (int)woffOffsets[i], (int)lengths[i]);
+            }
 
             return woff;
         }
