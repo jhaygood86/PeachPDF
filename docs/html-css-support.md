@@ -390,15 +390,25 @@ Both the single-colon legacy syntax (`:before`, `:after`) and the modern double-
 
 ### Pseudo-classes
 
-Because PeachPDF renders a static PDF with no interactive or dynamic state, almost all pseudo-classes are parsed but not evaluated and will not match any elements.
+Because PeachPDF renders a static PDF with no interactive or dynamic state, state-based pseudo-classes are parsed but not evaluated and will not match any elements. The structural pseudo-classes (which depend only on an element's position in the document, not on interactive state) are fully supported, including the CSS "An+B" formula.
 
 | Pseudo-class | Notes |
 |--------------|-------|
 | `:link` | Matches `<a>` elements that have an `href` attribute |
-| `:nth-child(an+b)` | Partially supported: the step value `a` is ignored; only the offset `b` is checked against the element's position among siblings |
+| `:first-child`, `:last-child` | Equivalent to `:nth-child(1)` / `:nth-last-child(1)` |
+| `:only-child` | Matches an element with no other element siblings |
+| `:first-of-type`, `:last-of-type` | Equivalent to `:nth-of-type(1)` / `:nth-last-of-type(1)` |
+| `:only-of-type` | Matches an element with no other same-tag element siblings |
+| `:nth-child(an+b)`, `:nth-last-child(an+b)` | Full "An+B" support, including `odd`/`even` keywords and negative steps (e.g. `:nth-child(-n+3)`) |
+| `:nth-of-type(an+b)`, `:nth-last-of-type(an+b)` | Same as above, counting only same-tag siblings |
+| `:nth-column(an+b)`, `:nth-last-column(an+b)` | Matches a table cell against its column position. Only accounts for `colspan` within the same row — a cell's column position does not account for `rowspan` carried over from earlier rows, since that bookkeeping only exists during layout, not at the point selectors are matched |
 | All others | Parsed but not matched — rules are silently ignored |
 
-State-based pseudo-classes (`:hover`, `:focus`, `:active`, `:checked`, `:disabled`) and structural pseudo-classes (`:first-child`, `:last-child`, `:nth-of-type()`, `:not()`, etc.) are not applied.
+Two known gaps in the structural pseudo-classes above:
+- The CSS Selectors Level 4 `of <selector>` extension (e.g. `:nth-child(2n+1 of .foo)`) is parsed but not matched — the whole rule is evaluated as if `of <selector>` were absent.
+- `:nth-column()`/`:nth-last-column()`'s same-row-only limitation described above.
+
+State-based pseudo-classes other than `:link` (`:hover`, `:focus`, `:active`, `:checked`, `:disabled`, `:root`, `:empty`, etc.) are parsed but not applied.
 
 ---
 

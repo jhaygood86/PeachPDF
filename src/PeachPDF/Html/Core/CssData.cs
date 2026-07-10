@@ -118,7 +118,9 @@ namespace PeachPDF.Html.Core
                 AttrBeginsSelector attrBeginsSelector => DoesSelectorMatch(attrBeginsSelector, box),
                 AttrEndsSelector attrEndsSelector => DoesSelectorMatch(attrEndsSelector, box),
                 AttrHyphenSelector attrHyphenSelector => DoesSelectorMatch(attrHyphenSelector, box),
-                FirstChildSelector firstChildSelector => DoesSelectorMatch(firstChildSelector, box),
+                ChildSelector childSelector => DoesSelectorMatch(childSelector, box),
+                OnlyChildSelector onlyChildSelector => DoesSelectorMatch(onlyChildSelector, box),
+                OnlyOfTypeSelector onlyOfTypeSelector => DoesSelectorMatch(onlyOfTypeSelector, box),
                 _ => false
             };
         }
@@ -136,7 +138,11 @@ namespace PeachPDF.Html.Core
 
             var lastSelector = compoundSelector.Last();
 
-            if (lastSelector is not PseudoElementSelector or FirstChildSelector)
+            // Structural pseudo-classes (ChildSelector subtypes, OnlyChildSelector, OnlyOfTypeSelector)
+            // are matched against `box` itself here, same as every other compound member - their own
+            // DoesSelectorMatch overload re-derives sibling scope from `box` as needed, so no special
+            // handling is required for them beyond the plain path below.
+            if (lastSelector is not PseudoElementSelector)
                 return compoundSelector.All(selector => DoesSelectorMatch(selector, box));
 
             if (lastSelector is PseudoElementSelector pseudoElementSelector)
@@ -181,17 +187,6 @@ namespace PeachPDF.Html.Core
                             break;
                         }
                 }
-            }
-
-            if (lastSelector is FirstChildSelector firstChildSelector)
-            {
-                var referenceBox = DomUtils.GetNearestParentElementBox(box);
-
-                var isMatchWithoutNthChildElement = compoundSelector
-                    .Where(x => x is not FirstChildSelector)
-                    .All(selector => DoesSelectorMatch(selector, referenceBox));
-
-                return isMatchWithoutNthChildElement && DoesSelectorMatch(firstChildSelector, box);
             }
 
             return false;
@@ -347,7 +342,135 @@ namespace PeachPDF.Html.Core
             }
         }
 
-        private static bool DoesSelectorMatch(FirstChildSelector firstChildSelector, CssBox? box)
+        /// <summary>
+        /// Matches the six structural "An+B" pseudo-classes (:nth-child, :nth-last-child,
+        /// :nth-of-type, :nth-last-of-type, :nth-column, :nth-last-column - including their bare-ident
+        /// forms like :first-child, which are wired to Step=0/Offset=1 by PseudoClassSelectorFactory).
+        /// Each variant differs only in (a) which sibling scope to count within and (b) whether to
+        /// count from the start or the end; the actual "does this position satisfy An+B" test is
+        /// shared via <see cref="MatchesAnPlusB"/>.
+        /// </summary>
+        private static bool DoesSelectorMatch(ChildSelector childSelector, CssBox? box)
+        {
+            if (box?.HtmlTag is null)
+            {
+                return false;
+            }
+
+            switch (childSelector)
+            {
+                case FirstColumnSelector or LastColumnSelector:
+                    return DoesColumnSelectorMatch(childSelector, box, fromEnd: childSelector is LastColumnSelector);
+            }
+
+            var parentBox = DomUtils.GetNearestParentElementBox(box);
+            if (parentBox is null)
+            {
+                return false;
+            }
+
+            IEnumerable<CssBox> siblingBoxes = parentBox.Boxes.Where(b => b.HtmlTag is not null);
+
+            var sameTypeOnly = childSelector is FirstTypeSelector or LastTypeSelector;
+            if (sameTypeOnly)
+            {
+                siblingBoxes = siblingBoxes.Where(b =>
+                    b.HtmlTag!.Name.Equals(box.HtmlTag.Name, StringComparison.InvariantCultureIgnoreCase));
+            }
+
+            var siblings = siblingBoxes.ToList();
+            var index = siblings.IndexOf(box);
+            if (index < 0)
+            {
+                return false;
+            }
+
+            var fromEndPosition = childSelector is LastChildSelector or LastTypeSelector;
+            var position = fromEndPosition ? siblings.Count - index : index + 1;
+
+            return MatchesAnPlusB(position, childSelector.Step, childSelector.Offset);
+        }
+
+        /// <summary>
+        /// Matches :nth-column()/:nth-last-column() against the cell's occupied column position(s)
+        /// within its own row. Only accounts for colspan of preceding cells in the SAME row - unlike
+        /// <see cref="Dom.CssLayoutEngineTable"/>'s column bookkeeping (which additionally accounts for
+        /// rowspan carried over from earlier rows via placeholder boxes inserted during layout), this
+        /// runs during cascade, before layout, when that placeholder bookkeeping doesn't exist yet.
+        /// A colspan-N cell occupies N columns; per spec this matches if ANY occupied column position
+        /// satisfies the An+B formula, not just the cell's starting column.
+        /// </summary>
+        private static bool DoesColumnSelectorMatch(ChildSelector childSelector, CssBox box, bool fromEnd)
+        {
+            var row = box.ParentBox;
+            if (row is null)
+            {
+                return false;
+            }
+
+            var cellsInRow = row.Boxes.Where(b => b.HtmlTag is not null).ToList();
+            var columnIndex = 0;
+            var totalColumns = 0;
+            var found = false;
+
+            foreach (var cell in cellsInRow)
+            {
+                if (cell == box)
+                {
+                    columnIndex = totalColumns;
+                    found = true;
+                }
+
+                totalColumns += GetColSpan(cell);
+            }
+
+            if (!found)
+            {
+                return false;
+            }
+
+            var boxSpan = GetColSpan(box);
+            for (var column = columnIndex; column < columnIndex + boxSpan; column++)
+            {
+                var position = fromEnd ? totalColumns - column : column + 1;
+                if (MatchesAnPlusB(position, childSelector.Step, childSelector.Offset))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Reads a box's "colspan" HTML attribute (default 1 if absent/invalid). Deliberately
+        /// duplicated from <see cref="Dom.CssLayoutEngineTable"/>'s private equivalent rather than
+        /// shared - this runs at cascade time, before the layout-phase state that method's column
+        /// bookkeeping otherwise depends on exists.
+        /// </summary>
+        private static int GetColSpan(CssBox box)
+        {
+            var value = box.GetAttribute("colspan", "1");
+            return !int.TryParse(value, out var colSpan) || colSpan < 1 ? 1 : colSpan;
+        }
+
+        /// <summary>
+        /// The standard CSS "An+B" existence test: does there exist a non-negative integer n such that
+        /// position == step*n + offset? position is always the 1-based index within whatever sibling
+        /// scope the caller has already resolved.
+        /// </summary>
+        private static bool MatchesAnPlusB(int position, int step, int offset)
+        {
+            if (step == 0)
+            {
+                return position == offset;
+            }
+
+            var diff = position - offset;
+            return diff % step == 0 && (step > 0 ? diff >= 0 : diff <= 0);
+        }
+
+        private static bool DoesSelectorMatch(OnlyChildSelector _, CssBox? box)
         {
             if (box?.HtmlTag is null)
             {
@@ -355,14 +478,25 @@ namespace PeachPDF.Html.Core
             }
 
             var parentBox = DomUtils.GetNearestParentElementBox(box);
+            return parentBox is not null && parentBox.Boxes.Count(b => b.HtmlTag is not null) == 1;
+        }
 
+        private static bool DoesSelectorMatch(OnlyOfTypeSelector _, CssBox? box)
+        {
+            if (box?.HtmlTag is null)
+            {
+                return false;
+            }
+
+            var parentBox = DomUtils.GetNearestParentElementBox(box);
             if (parentBox is null)
             {
                 return false;
             }
 
-            var currentIndex = parentBox.Boxes.Where(b => b.HtmlTag is not null).ToList();
-            return currentIndex.IndexOf(box) == firstChildSelector.Offset;
+            return parentBox.Boxes.Count(b =>
+                b.HtmlTag is not null &&
+                b.HtmlTag.Name.Equals(box.HtmlTag.Name, StringComparison.InvariantCultureIgnoreCase)) == 1;
         }
 
         private static bool DoesSelectorMatch(ComplexSelector complexSelector, CssBox? box)

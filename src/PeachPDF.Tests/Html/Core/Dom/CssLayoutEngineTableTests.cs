@@ -457,6 +457,11 @@ Assert.Equal(3, cells.Count);
      public async Task TableLayout_RespectsSpecifiedColumnWidths()
 {
    // Arrange
+   // Four (not three) unstyled-width columns: an even auto-layout split of 600px across 4 columns
+   // lands near 150px each, comfortably below the >=180 threshold below - so this can only pass if
+   // ":first-child" actually forced the first cell to ~200px, not by coincidentally landing in the
+   // same range as an inert rule's auto-layout split (which a 3-column table's ~200px/column average
+   // could not distinguish from a working rule).
 var html = @"
 <!DOCTYPE html>
 <html>
@@ -470,7 +475,7 @@ var html = @"
 <body>
     <table>
       <tbody>
-        <tr><td>Wide Cell</td><td>Auto</td><td>Auto</td></tr>
+        <tr><td>Wide Cell</td><td>Auto</td><td>Auto</td><td>Auto</td></tr>
    </tbody>
 </table>
 </body>
@@ -496,10 +501,13 @@ Assert.NotNull(tbody);
    var row = tbody.Boxes[0];
      var firstCell = row.Boxes[0];
     var firstCellWidth = firstCell.ActualRight - firstCell.Location.X;
+    var secondCell = row.Boxes[1];
+    var secondCellWidth = secondCell.ActualRight - secondCell.Location.X;
 
         // Assert
-    _output.WriteLine($"First cell width: {firstCellWidth}");
+    _output.WriteLine($"First cell width: {firstCellWidth}, second cell width: {secondCellWidth}");
      Assert.True(firstCellWidth >= 180, $"First cell should be approximately 200px wide (accounting for borders), but was {firstCellWidth}");
+     Assert.True(secondCellWidth < 160, $"Second cell should be narrower than the explicitly-widened first cell (proving the rule is selective, not applied to every column), but was {secondCellWidth}");
      }
 
         #endregion
