@@ -27,28 +27,29 @@ namespace PeachPDF.PdfSharpCore.Utils
 
         static FontResolver()
         {
-            string fontDir;
-
             var isOSX = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.OSX);
+            var isLinux = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux);
+            var isWindows = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows);
+
+            SupportedFonts = DiscoverSupportedFonts(isOSX, isLinux, isWindows);
+        }
+
+        internal static string[] DiscoverSupportedFonts(bool isOSX, bool isLinux, bool isWindows)
+        {
             if (isOSX)
             {
-                fontDir = "/Library/Fonts/";
-                SupportedFonts = Directory.GetFiles(fontDir, "*.ttf", System.IO.SearchOption.AllDirectories);
-                return;
+                const string fontDir = "/Library/Fonts/";
+                return Directory.GetFiles(fontDir, "*.ttf", System.IO.SearchOption.AllDirectories);
             }
 
-            var isLinux = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux);
             if (isLinux)
             {
-                SupportedFonts = LinuxSystemFontResolver.Resolve();
-                return;
+                return LinuxSystemFontResolver.Resolve();
             }
-
-            var isWindows = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows);
 
             if (isWindows)
             {
-                fontDir = System.Environment.ExpandEnvironmentVariables(@"%SystemRoot%\Fonts");
+                var fontDir = System.Environment.ExpandEnvironmentVariables(@"%SystemRoot%\Fonts");
                 var fontPaths = new List<string>();
 
                 var systemFontPaths = System.IO.Directory.GetFiles(fontDir, "*.ttf", SearchOption.AllDirectories);
@@ -61,14 +62,12 @@ namespace PeachPDF.PdfSharpCore.Utils
                     fontPaths.AddRange(appdataFontPaths);
                 }
 
-                SupportedFonts = fontPaths.ToArray();
-
-                return;
+                return fontPaths.ToArray();
             }
 
             // Platforms without system font discovery (iOS, Android, ...): start with no
             // system fonts and rely on fonts registered via PdfGenerator.AddFontFromStream.
-            SupportedFonts = [];
+            return [];
         }
 
 
