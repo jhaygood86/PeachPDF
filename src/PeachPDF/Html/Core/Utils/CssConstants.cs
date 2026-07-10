@@ -10,6 +10,11 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.PdfSharpCore.Utils;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
 namespace PeachPDF.Html.Core.Utils
 {
     /// <summary>
@@ -201,8 +206,77 @@ namespace PeachPDF.Html.Core.Utils
         public const double FontSize = 11f;
 
         /// <summary>
-        /// Default font used for the generic 'serif' family
+        /// Default font used when no font-family is specified. "Segoe UI" only exists on
+        /// Windows, so macOS and Linux need a different, actually-installed default.
         /// </summary>
-        public const string DefaultFont = "Segoe UI";
+        public static readonly string DefaultFont = DetermineDefaultFont();
+
+        /// <summary>
+        /// Common metrically-compatible Arial substitutes shipped by mainstream Linux
+        /// distributions, in preference order.
+        /// </summary>
+        private static readonly string[] LinuxArialAlternatives =
+        [
+            "Liberation Sans",
+            "Arimo",
+            "Nimbus Sans",
+            "DejaVu Sans",
+            "FreeSans",
+            "Noto Sans",
+            "Helvetica",
+            "Verdana",
+            "Arial",
+        ];
+
+        private static string DetermineDefaultFont()
+        {
+            if (OperatingSystem.IsWindows())
+                return "Segoe UI";
+
+            if (OperatingSystem.IsMacOS())
+                return "Arial";
+
+            if (OperatingSystem.IsLinux())
+                return PickLinuxDefaultFont(GetInstalledFontFamilyNames());
+
+            return "Segoe UI";
+        }
+
+        private static IEnumerable<string> GetInstalledFontFamilyNames()
+        {
+            foreach (var path in FontResolver.SupportedFonts)
+            {
+                string? family = null;
+                try
+                {
+                    family = TtfFontDescription.LoadDescription(path).FontFamilyInvariantCulture;
+                }
+                catch
+                {
+                    // Ignore unparsable/corrupt font files, same tolerance FontResolver itself uses.
+                }
+
+                if (!string.IsNullOrEmpty(family))
+                    yield return family;
+            }
+        }
+
+        /// <summary>
+        /// Picks the best available default font from a list of installed font family
+        /// names, preferring common Arial alternatives and otherwise falling back to
+        /// whatever font was actually found so this never names a font that isn't there.
+        /// </summary>
+        internal static string PickLinuxDefaultFont(IEnumerable<string> installedFontFamilyNames)
+        {
+            var installed = new HashSet<string>(installedFontFamilyNames, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var candidate in LinuxArialAlternatives)
+            {
+                if (installed.Contains(candidate))
+                    return candidate;
+            }
+
+            return installed.FirstOrDefault() ?? "Liberation Sans";
+        }
     }
 }
