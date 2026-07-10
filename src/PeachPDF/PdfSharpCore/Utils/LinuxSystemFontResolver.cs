@@ -133,18 +133,22 @@ namespace PeachPDF.PdfSharpCore.Utils
         }
 
 
+        internal static bool IsSupportedFontFile(string path) =>
+            path.EndsWith(".ttf", StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith(".otf", StringComparison.OrdinalIgnoreCase);
+
         public static string[] Resolve()
         {
             try
             {
-                return ResolveFontConfig().Where(x => x.EndsWith(".ttf", StringComparison.OrdinalIgnoreCase)).ToArray();
+                return ResolveFontConfig().Where(IsSupportedFontFile).ToArray();
             }
             catch (Exception ex)
             {
 #if DEBUG
                 Console.Error.WriteLine(ex.ToString());
 #endif
-                return ResolveFallback().Where(x => x.EndsWith(".ttf", StringComparison.OrdinalIgnoreCase)).ToArray();
+                return ResolveFallback().Where(IsSupportedFontFile).ToArray();
             }
         }
 

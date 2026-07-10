@@ -14,6 +14,7 @@
 
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
@@ -62,6 +63,15 @@ namespace PeachPDF.Adapters
                     Console.Error.WriteLine($"Failed to load font from path: {fontPath}");
 #endif
                 }
+            }
+
+            // "Arial" itself isn't installed on most Linux distros; fall back to whatever
+            // metrically-compatible substitute CssConstants.DefaultFont already resolved to
+            // (e.g. Liberation Sans) so explicit `font-family: Arial` behaves the same as
+            // the platform's implicit default font.
+            if (!IsFontExists("Arial"))
+            {
+                AddFontFamilyMapping("Arial", CssConstants.DefaultFont);
             }
         }
 
