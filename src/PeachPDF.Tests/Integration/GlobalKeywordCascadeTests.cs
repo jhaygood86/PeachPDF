@@ -607,6 +607,57 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task InlineImportant_BeatsAuthorImportantRule()
+        {
+            // Per spec, inline style sits at the top of its origin's !important tier too, same as
+            // it does for the normal tier - an inline !important declaration must beat an author
+            // stylesheet !important declaration for the same property.
+            var html = """
+                <!DOCTYPE html><html><head><style>
+                  div { color: blue !important; }
+                </style></head><body>
+                <div id="el" style="color: red !important">text</div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var el = FindById(root, "el");
+
+            Assert.NotNull(el);
+            Assert.Equal("rgb(255, 0, 0)", el!.Color);
+        }
+
+        [Fact]
+        public async Task AuthorImportantRevert_RollsBackToInlineNormalValue_NotAllTheWayToUa()
+        {
+            // Documents a deliberate design choice in the 6-phase cascade restructure: an
+            // author-!important declaration's "revert" rolls back to the state right before ANY
+            // !important ran (which includes inline-normal's contribution), not all the way back to
+            // the UA-origin snapshot as a stricter per-origin reading of the spec might imply. This
+            // pins the behavior down so it can't drift silently - see the comment in
+            // DomParser.CascadeApplyStyles above the author-!important phase for the full rationale.
+            //
+            // Expected chain: UA has no color rule for div (stays at the initial "black") -> author-
+            // normal "div{color:blue}" applies -> inline-normal "color:green" applies on top -> the
+            // author-!important "revert" should land on "green" (the value right before any
+            // !important ran), not "blue" (author-normal-only) or "black" (UA-only).
+            var html = """
+                <!DOCTYPE html><html><head><style>
+                  div { color: blue; }
+                  #el { color: revert !important; }
+                </style></head><body>
+                <div id="el" style="color: green">text</div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var el = FindById(root, "el");
+
+            Assert.NotNull(el);
+            Assert.Equal("rgb(0, 128, 0)", el!.Color);
+        }
+
+        [Fact]
         public async Task Regression_LaterAuthorRuleOverridesEarlierSameSpecificity()
         {
             // When two rules share the same specificity, source order decides: last wins.

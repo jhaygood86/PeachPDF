@@ -31,6 +31,10 @@ jobs:
       - name: Generate API reference
         run: dotnet build src/PeachPDF/PeachPDF.csproj --configuration Release -p:TargetFramework=net10.0 -p:DisableDefaultDocumentation=false
 
+      - name: Fix API reference cross-links
+        shell: pwsh
+        run: ./.github/scripts/Fix-ApiDocLinks.ps1 -ApiDocsPath ./docs/api
+
       - uses: actions/configure-pages@v5
 
       - uses: actions/jekyll-build-pages@v1

@@ -132,19 +132,17 @@ public class CssDataRuleIndexingTests
         // quirk where the non-nth-child member of a compound is checked against the parent box
         // rather than the candidate box itself (AllSelector matches unconditionally either way).
         //
-        // DoesSelectorMatch(FirstChildSelector,...) compares a 0-based child index against the
-        // literal (1-based, per CSS) offset parsed from "nth-child(N)", so "nth-child(1)" actually
-        // matches the *second* element child here, not the first - this test asserts that actual
-        // (pre-existing) behaviour rather than CSS-spec-correct ":first-child" semantics, since
-        // what matters for this regression suite is only that the rule is reachable at all.
+        // DoesSelectorMatch(ChildSelector,...) compares a 1-based child position (index + 1)
+        // against the literal offset parsed from "nth-child(N)", so "nth-child(1)" correctly
+        // matches the *first* element child here, per CSS ":first-child" semantics.
         var html = Html(
             "*:nth-child(1) { background-color: #ff0000; }",
             "<div><p>first</p><p>second</p></div>");
         var boxes = await FindAllBoxesByTag(html, "p");
 
         Assert.Equal(2, boxes.Count);
-        Assert.Equal("transparent", boxes[0].BackgroundColor);
-        Assert.NotEqual("transparent", boxes[1].BackgroundColor);
+        Assert.NotEqual("transparent", boxes[0].BackgroundColor);
+        Assert.Equal("transparent", boxes[1].BackgroundColor);
     }
 
     // ── Media query rules (kept as an unindexed linear scan) ──────────────────

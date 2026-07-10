@@ -334,40 +334,98 @@ namespace PeachPDF.Html.Core.Parse
             // FINAL custom property values regardless of which phase declared them.
             var pendingVarProperties = new Dictionary<string, string>();
 
-            // 3. UA pass — user-agent stylesheet rules only
-            var importantPropertyNames = AssignCssBlocks(valueParser, box, cssData.GetUserAgentStyleRules(media, box), null, null, null, pendingVarProperties);
-
-            // 4. Author pass — author stylesheet rules; revert target is the UA-applied state.
-            // The snapshot is only ever read back when a declaration's value is literally revert/revert-layer
-            // (see AssignCssBlock/AssignCustomPropertyDeclaration), which is rare, so only pay for capturing
-            // it when the matched rules actually use one of those keywords.
+            // Matched rules are already sorted by CssData (specificity ascending, then true source
+            // order) - materialize each origin once so both the normal and important passes below
+            // reuse the same matched/sorted list instead of re-querying CssData twice per origin.
+            var uaRules = cssData.GetUserAgentStyleRules(media, box).ToList();
             var authorRules = cssData.GetAuthorStyleRules(media, box).ToList();
-            var needsUaSnapshot = RulesUseRevertKeyword(authorRules);
+
+            // Inline style is parsed up front - parsing is pure text -> rule with no cascade side
+            // effects, so hoisting it here (ahead of TranslateAttributes, which still runs at its
+            // original point below) doesn't change behavior, and lets RulesUseRevertKeyword below
+            // see it too.
+            IStyleRule? inlineRule = null;
+            if (box.HtmlTag != null && box.HtmlTag.HasAttribute("style"))
+            {
+                var styleAttributeText = box.HtmlTag.TryGetAttribute("style");
+                var block = CssParser.ParseStyleSheet("* { " + styleAttributeText + " }");
+                inlineRule = block.StyleRules.Single();
+            }
+
+            // The relatively expensive property/custom-property snapshots below are only ever read
+            // back when a later phase's declaration is literally revert/revert-layer (see
+            // AssignCssBlock/AssignCustomPropertyDeclaration), which is rare - so each is only
+            // captured when something that will actually consult it uses one of those keywords.
+            var authorUsesRevert = RulesUseRevertKeyword(authorRules);
+            var uaUsesRevert = RulesUseRevertKeyword(uaRules);
+            var inlineUsesRevert = inlineRule is not null && RulesUseRevertKeyword([inlineRule]);
+
+            // Cascade precedence (lowest to highest, i.e. applied in this order so "last write wins"
+            // naturally produces the correct winner): UA-normal, Author-normal (inline-normal wins
+            // ties within this tier), Author-!important (inline-!important wins ties within this
+            // tier), UA-!important (per spec, origin order REVERSES for !important, so it's applied -
+            // and wins - last). Each phase's revert/revert-layer target is a snapshot of the box's
+            // state immediately before that phase ran - generalizing the pre-existing (and already
+            // tested) "revert = state right before this phase" model uniformly across all six phases,
+            // rather than a stricter, more formally origin-pure model.
+
+            // 3. UA normal
+            AssignCssBlocks(valueParser, box, uaRules, importantPass: false, null, null, pendingVarProperties);
+            var needsUaSnapshot = authorUsesRevert;
             var uaSnapshot = needsUaSnapshot ? CssUtils.SnapshotProperties(box) : null;
             var uaCustomSnapshot = needsUaSnapshot ? CssUtils.SnapshotCustomProperties(box) : null;
-            importantPropertyNames = AssignCssBlocks(valueParser, box, authorRules, importantPropertyNames, uaSnapshot, uaCustomSnapshot, pendingVarProperties);
+
+            // 4. Author normal
+            AssignCssBlocks(valueParser, box, authorRules, importantPass: false, uaSnapshot, uaCustomSnapshot, pendingVarProperties);
+            var needsAuthorNormalSnapshot = inlineUsesRevert || authorUsesRevert;
+            var authorNormalSnapshot = needsAuthorNormalSnapshot ? CssUtils.SnapshotProperties(box) : null;
+            var authorNormalCustomSnapshot = needsAuthorNormalSnapshot ? CssUtils.SnapshotCustomProperties(box) : null;
 
             if (box.HtmlTag != null)
             {
                 TranslateAttributes(box.HtmlTag, box);
-
-                // 5. Inline styles; revert target is the author-applied state
-                if (box.HtmlTag.HasAttribute("style"))
-                {
-                    var styleAttributeText = box.HtmlTag.TryGetAttribute("style");
-                    var stylesheet = "* { " + styleAttributeText + " }";
-
-                    var block = CssParser.ParseStyleSheet(stylesheet);
-                    var inlineRule = block.StyleRules.Single();
-
-                    var needsAuthorSnapshot = RulesUseRevertKeyword([inlineRule]);
-                    var authorSnapshot = needsAuthorSnapshot ? CssUtils.SnapshotProperties(box) : null;
-                    var authorCustomSnapshot = needsAuthorSnapshot ? CssUtils.SnapshotCustomProperties(box) : null;
-                    AssignCssBlock(valueParser, box, inlineRule, importantPropertyNames, authorSnapshot, authorCustomSnapshot, pendingVarProperties);
-                }
             }
 
-            // 6. Resolve var() references now that every custom property's final cascaded value is known
+            // 5. Inline normal; revert target is the author-normal-applied state (unchanged from
+            // before this restructure)
+            var inlineNormalSnapshot = authorNormalSnapshot;
+            var inlineNormalCustomSnapshot = authorNormalCustomSnapshot;
+            if (inlineRule is not null)
+            {
+                AssignCssBlock(valueParser, box, inlineRule, importantPass: false, authorNormalSnapshot, authorNormalCustomSnapshot, pendingVarProperties);
+                var needsInlineNormalSnapshot = authorUsesRevert;
+                inlineNormalSnapshot = needsInlineNormalSnapshot ? CssUtils.SnapshotProperties(box) : null;
+                inlineNormalCustomSnapshot = needsInlineNormalSnapshot ? CssUtils.SnapshotCustomProperties(box) : null;
+            }
+
+            // 6. Author !important. Note: this means an author-!important "revert" can roll back to
+            // a value inline *normal* style just set, not all the way back to the UA snapshot - a
+            // deliberate choice for mechanical consistency with the rest of this "snapshot = state
+            // right before this phase" model, rather than a stricter per-origin reading of the spec.
+            // The built-in UA stylesheet has no !important rules, so this combination (revert inside
+            // an author-!important declaration, interacting with a preceding inline-normal value) is
+            // untested territory in real usage; documenting it here rather than resolving it silently.
+            AssignCssBlocks(valueParser, box, authorRules, importantPass: true, inlineNormalSnapshot, inlineNormalCustomSnapshot, pendingVarProperties);
+            var needsAuthorImportantSnapshot = inlineUsesRevert || uaUsesRevert;
+            var authorImportantSnapshot = needsAuthorImportantSnapshot ? CssUtils.SnapshotProperties(box) : null;
+            var authorImportantCustomSnapshot = needsAuthorImportantSnapshot ? CssUtils.SnapshotCustomProperties(box) : null;
+
+            // 7. Inline !important
+            var afterInlineImportantSnapshot = authorImportantSnapshot;
+            var afterInlineImportantCustomSnapshot = authorImportantCustomSnapshot;
+            if (inlineRule is not null)
+            {
+                AssignCssBlock(valueParser, box, inlineRule, importantPass: true, authorImportantSnapshot, authorImportantCustomSnapshot, pendingVarProperties);
+                var needsAfterInlineImportantSnapshot = uaUsesRevert;
+                afterInlineImportantSnapshot = needsAfterInlineImportantSnapshot ? CssUtils.SnapshotProperties(box) : null;
+                afterInlineImportantCustomSnapshot = needsAfterInlineImportantSnapshot ? CssUtils.SnapshotCustomProperties(box) : null;
+            }
+
+            // 8. UA !important - applied globally last so it wins over everything else, per spec's
+            // origin reversal for the !important tier.
+            AssignCssBlocks(valueParser, box, uaRules, importantPass: true, afterInlineImportantSnapshot, afterInlineImportantCustomSnapshot, pendingVarProperties);
+
+            // 9. Resolve var() references now that every custom property's final cascaded value is known
             ResolveDeferredVarProperties(valueParser, box, pendingVarProperties);
 
             // Correct current color
@@ -397,21 +455,20 @@ namespace PeachPDF.Html.Core.Parse
         }
 
         /// <summary>
-        /// Assigns the given css style rules to the given css box.
+        /// Assigns the given css style rules to the given css box, applying only the declarations
+        /// whose <c>!important</c> flag matches <paramref name="importantPass"/>.
         /// </summary>
-        private static HashSet<string> AssignCssBlocks(
+        private static void AssignCssBlocks(
             CssValueParser valueParser,
             CssBox box,
             IEnumerable<IStyleRule> rules,
-            HashSet<string>? importantPropertyNames,
+            bool importantPass,
             IReadOnlyDictionary<string, string?>? revertTarget,
             IReadOnlyDictionary<string, string>? customPropertyRevertTarget,
             Dictionary<string, string> pendingVarProperties)
         {
-            importantPropertyNames ??= [];
             foreach (var rule in rules)
-                AssignCssBlock(valueParser, box, rule, importantPropertyNames, revertTarget, customPropertyRevertTarget, pendingVarProperties);
-            return importantPropertyNames;
+                AssignCssBlock(valueParser, box, rule, importantPass, revertTarget, customPropertyRevertTarget, pendingVarProperties);
         }
 
         /// <summary>
@@ -434,7 +491,12 @@ namespace PeachPDF.Html.Core.Parse
         }
 
         /// <summary>
-        /// Assigns the given css style block properties to the given css box.
+        /// Assigns the given css style block properties to the given css box, applying only the
+        /// declarations whose <c>!important</c> flag matches <paramref name="importantPass"/> (the
+        /// caller is expected to call this once per origin per pass - see <see cref="CascadeApplyStyles"/>
+        /// - so that within a properly-ordered sequence of calls, "last write wins" alone produces the
+        /// spec-correct result without needing to track which property names were already locked by an
+        /// earlier !important declaration).
         /// Handles all five CSS global keywords: inherit, initial, unset, revert, revert-layer.
         /// Custom property declarations (--foo) are routed to <see cref="AssignCustomPropertyDeclaration"/> instead,
         /// since those keywords mean something different for an open-ended, case-sensitive property store.
@@ -444,7 +506,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="valueParser">the css value parser to use</param>
         /// <param name="box">the css box to assign css to</param>
         /// <param name="stylesheetRule">the stylesheet rule to assign</param>
-        /// <param name="importantPropertyNames">Carries the property names that have been marked important so they don't get re-applied</param>
+        /// <param name="importantPass">true to apply only <c>!important</c> declarations, false to apply only normal ones</param>
         /// <param name="revertTarget">Property snapshot representing the prior cascade origin, used for revert/revert-layer</param>
         /// <param name="customPropertyRevertTarget">Case-sensitive custom-property snapshot for revert/revert-layer</param>
         /// <param name="pendingVarProperties">Accumulates regular declarations whose value contains var(...), keyed by property name</param>
@@ -452,16 +514,19 @@ namespace PeachPDF.Html.Core.Parse
             CssValueParser valueParser,
             CssBox box,
             IStyleRule stylesheetRule,
-            HashSet<string> importantPropertyNames,
+            bool importantPass,
             IReadOnlyDictionary<string, string?>? revertTarget,
             IReadOnlyDictionary<string, string>? customPropertyRevertTarget,
             Dictionary<string, string> pendingVarProperties)
         {
             foreach (var prop in stylesheetRule.Style)
             {
+                if (prop.IsImportant != importantPass)
+                    continue;
+
                 if (PropertyFactory.IsCustomPropertyName(prop.Name))
                 {
-                    AssignCustomPropertyDeclaration(box, prop, importantPropertyNames, customPropertyRevertTarget);
+                    AssignCustomPropertyDeclaration(box, prop, customPropertyRevertTarget);
                     continue;
                 }
 
@@ -483,12 +548,6 @@ namespace PeachPDF.Html.Core.Parse
                             : CssDefaults.GetInitialValue(prop.Name),
                     _ => prop.Value
                 };
-
-                if (importantPropertyNames.Contains(prop.Name.ToLowerInvariant()))
-                    continue;
-
-                if (prop.IsImportant)
-                    importantPropertyNames.Add(prop.Name.ToLowerInvariant());
 
                 if (value is null) continue;
 
@@ -518,12 +577,8 @@ namespace PeachPDF.Html.Core.Parse
         private static void AssignCustomPropertyDeclaration(
             CssBox box,
             IProperty prop,
-            HashSet<string> importantPropertyNames,
             IReadOnlyDictionary<string, string>? customPropertyRevertTarget)
         {
-            if (importantPropertyNames.Contains(prop.Name)) return; // case-sensitive: no ToLowerInvariant
-            if (prop.IsImportant) importantPropertyNames.Add(prop.Name);
-
             var rawValue = prop.Value switch
             {
                 CssConstants.Inherit or CssConstants.Unset // custom properties are always inherited
