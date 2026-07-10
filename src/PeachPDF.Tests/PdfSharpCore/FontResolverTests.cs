@@ -1,5 +1,6 @@
 using MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes;
 using PeachPDF.PdfSharpCore.Utils;
+using PeachPDF.Tests.TestSupport;
 using System.IO;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests
@@ -17,9 +18,9 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         {
             var resolver = new FontResolver();
 
-            // Pick the first family that was actually loaded
-            var familyName = TtfFontDescription.LoadDescription(FontResolver.SupportedFonts[0])
-                .FontFamilyInvariantCulture;
+            // A system font if one was detected, otherwise the bundled test font is
+            // registered — either way, at least one family is guaranteed.
+            var familyName = BundledFonts.GetOrRegisterKnownFamily(resolver);
 
             var info = resolver.ResolveTypeface(familyName, isBold: false, isItalic: false);
 
@@ -52,8 +53,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         public void GetFont_ResolvableFaceName_ReturnsFontBytes()
         {
             var resolver = new FontResolver();
-            var familyName = TtfFontDescription.LoadDescription(FontResolver.SupportedFonts[0])
-                .FontFamilyInvariantCulture;
+            var familyName = BundledFonts.GetOrRegisterKnownFamily(resolver);
 
             var info = resolver.ResolveTypeface(familyName, isBold: false, isItalic: false);
             var bytes = resolver.GetFont(info.FaceName);
@@ -66,8 +66,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         public void HasFont_KnownFaceName_ReturnsTrue()
         {
             var resolver = new FontResolver();
-            var familyName = TtfFontDescription.LoadDescription(FontResolver.SupportedFonts[0])
-                .FontFamilyInvariantCulture;
+            var familyName = BundledFonts.GetOrRegisterKnownFamily(resolver);
             var info = resolver.ResolveTypeface(familyName, isBold: false, isItalic: false);
 
             Assert.True(resolver.HasFont(info.FaceName));
@@ -85,7 +84,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         public void AddFont_CustomFont_IsResolvableByFamilyName()
         {
             var resolver = new FontResolver();
-            var fontPath = FontResolver.SupportedFonts[0];
+            var fontPath = BundledFonts.AnySupportedFontPath;
             var fontDesc = TtfFontDescription.LoadDescription(fontPath);
             const string customFamilyName = "__TestCustomFamily__";
 
@@ -101,7 +100,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         public void AddFont_CustomFont_BytesRetrievableByFaceName()
         {
             var resolver = new FontResolver();
-            var fontPath = FontResolver.SupportedFonts[0];
+            var fontPath = BundledFonts.AnySupportedFontPath;
             const string customFamilyName = "__TestCustomFamily2__";
 
             using var stream = File.OpenRead(fontPath);

@@ -1,12 +1,16 @@
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Utils;
+using PeachPDF.Tests.TestSupport;
 using System.IO;
+using System.Linq;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests
 {
     public class TtfFontDescriptionTests
     {
-        private static string FirstSystemFont => FontResolver.SupportedFonts[0];
+        // A system font if one was detected, otherwise a bundled font — guaranteed
+        // non-empty regardless of the host OS/environment.
+        private static string FirstSystemFont => BundledFonts.AnySupportedFontPath;
 
         [Fact]
         public void LoadFromFile_ReturnsNonEmptyFamilyAndFullName()
@@ -66,7 +70,14 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         {
             var failures = new List<(string path, string error)>();
 
-            foreach (var path in FontResolver.SupportedFonts)
+            // Union with the bundled fonts so this always exercises at least one TTF and
+            // one OTF, regardless of what (if anything) the host OS reports.
+            var fontsToTest = FontResolver.SupportedFonts
+                .Append(BundledFonts.Ttf)
+                .Append(BundledFonts.Otf)
+                .Distinct();
+
+            foreach (var path in fontsToTest)
             {
                 try
                 {

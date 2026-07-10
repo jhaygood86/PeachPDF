@@ -3,9 +3,9 @@ using PeachPDF.PdfSharpCore;
 using PeachPDF.PdfSharpCore.Fonts;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Utils;
+using PeachPDF.Tests.TestSupport;
 using System;
 using System.IO;
-using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Xunit;
@@ -23,9 +23,6 @@ namespace PeachPDF.Tests.Integration
     /// </summary>
     public class FontEmbeddingIntegrationTests
     {
-        private static string BundledOtfPath =>
-            Path.Combine(AppContext.BaseDirectory, "SourceSans3-Regular.otf");
-
         // -------------------------------------------------------------------------
         // TTF regression: must still embed as /FontFile2
         // -------------------------------------------------------------------------
@@ -33,11 +30,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task TtfFont_ViaFontFaceDataUri_EmbedsAs_FontFile2()
         {
-            var ttfPath = FontResolver.SupportedFonts
-                .FirstOrDefault(p => p.EndsWith(".ttf", StringComparison.OrdinalIgnoreCase));
-            if (ttfPath == null) return;
-
-            var ttfBytes = File.ReadAllBytes(ttfPath);
+            var ttfBytes = File.ReadAllBytes(BundledFonts.Ttf);
             var b64 = Convert.ToBase64String(ttfBytes);
 
             var html = $@"<!DOCTYPE html>
@@ -62,7 +55,7 @@ body {{ font-family: 'TestTtf', serif; font-size: 14pt; }}
         [Fact]
         public async Task CffFont_ViaFontFaceDataUri_EmbedsAs_FontFile3_OpenType()
         {
-            var otfBytes = File.ReadAllBytes(BundledOtfPath);
+            var otfBytes = File.ReadAllBytes(BundledFonts.Otf);
             var b64 = Convert.ToBase64String(otfBytes);
 
             var html = $@"<!DOCTYPE html>
@@ -88,7 +81,7 @@ body {{ font-family: 'TestCff', serif; font-size: 14pt; }}
         [Fact]
         public async Task CffFont_EmbeddedStream_HasNo_Length1()
         {
-            var otfBytes = File.ReadAllBytes(BundledOtfPath);
+            var otfBytes = File.ReadAllBytes(BundledFonts.Otf);
             var b64 = Convert.ToBase64String(otfBytes);
 
             var html = $@"<!DOCTYPE html>
@@ -138,11 +131,7 @@ body {{ font-family: 'TestCffL', serif; font-size: 14pt; }}
         [Fact]
         public async Task WoffFont_ViaFontFaceDataUri_GeneratesPdfSuccessfully()
         {
-            var ttfPath = FontResolver.SupportedFonts
-                .FirstOrDefault(p => p.EndsWith(".ttf", StringComparison.OrdinalIgnoreCase));
-            if (ttfPath == null) return;
-
-            var woffBytes = WrapTtfAsWoff(File.ReadAllBytes(ttfPath));
+            var woffBytes = WrapTtfAsWoff(File.ReadAllBytes(BundledFonts.Ttf));
             var b64 = Convert.ToBase64String(woffBytes);
 
             var html = $@"<!DOCTYPE html>
@@ -170,12 +159,8 @@ body {{ font-family: 'TestWoff', serif; font-size: 14pt; }}
         [Fact]
         public async Task WoffFont_ViaAddFontFromStream_IsUsableInPdf()
         {
-            var ttfPath = FontResolver.SupportedFonts
-                .FirstOrDefault(p => p.EndsWith(".ttf", StringComparison.OrdinalIgnoreCase));
-            if (ttfPath == null) return;
-
-            var ttfBytes = File.ReadAllBytes(ttfPath);
-            var familyName = TtfFontDescription.LoadDescription(ttfPath).FontFamilyInvariantCulture;
+            var ttfBytes = File.ReadAllBytes(BundledFonts.Ttf);
+            var familyName = TtfFontDescription.LoadDescription(BundledFonts.Ttf).FontFamilyInvariantCulture;
 
             var woffBytes = WrapTtfAsWoff(ttfBytes);
 
@@ -204,13 +189,10 @@ body {{ font-family: '{familyName}', serif; font-size: 14pt; }}
         // FontFormatConverter.ToOpenType -> Woff2Converter.Convert -> /FontFile2 embedding.
         // -------------------------------------------------------------------------
 
-        private static string InterMediumWoff2Path =>
-            Path.Combine(AppContext.BaseDirectory, "Inter-Medium.woff2");
-
         [Fact]
         public async Task Woff2Font_ViaFontFaceDataUri_EmbedsAs_FontFile2()
         {
-            var woff2Bytes = File.ReadAllBytes(InterMediumWoff2Path);
+            var woff2Bytes = File.ReadAllBytes(BundledFonts.Woff2);
             var b64 = Convert.ToBase64String(woff2Bytes);
 
             var html = $@"<!DOCTYPE html>
@@ -231,7 +213,7 @@ body {{ font-family: 'TestWoff2', serif; font-size: 14pt; }}
         [Fact]
         public async Task Woff2Font_ViaAddFontFromStream_IsUsableInPdf()
         {
-            var woff2Bytes = File.ReadAllBytes(InterMediumWoff2Path);
+            var woff2Bytes = File.ReadAllBytes(BundledFonts.Woff2);
             var openTypeBytes = Woff2Converter.Convert(woff2Bytes);
             var familyName = TtfFontDescription.LoadDescription(new MemoryStream(openTypeBytes)).FontFamilyInvariantCulture;
 

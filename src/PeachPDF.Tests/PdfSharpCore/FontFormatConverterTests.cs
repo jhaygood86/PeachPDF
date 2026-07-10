@@ -1,20 +1,14 @@
 using PeachPDF.PdfSharpCore.Fonts;
 using System.IO.Compression;
 using PeachPDF.PdfSharpCore.Utils;
+using PeachPDF.Tests.TestSupport;
 using System;
 using System.IO;
-using System.Linq;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests
 {
     public class FontFormatConverterTests
     {
-        private static string BundledOtfPath =>
-            Path.Combine(AppContext.BaseDirectory, "SourceSans3-Regular.otf");
-
-        private static string BundledWoff2Path =>
-            Path.Combine(AppContext.BaseDirectory, "Inter-Medium.woff2");
-
         // -----------------------------------------------------------------------
         // Magic byte detection
         // -----------------------------------------------------------------------
@@ -62,14 +56,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         [Fact]
         public void WoffConvert_RoundTrip_ProducesValidOpenType()
         {
-            // Use the first available system font
-            var ttfPath = FontResolver.SupportedFonts.FirstOrDefault(
-                p => p.EndsWith(".ttf", StringComparison.OrdinalIgnoreCase));
-
-            if (ttfPath == null)
-                return; // No TTF font available — skip gracefully
-
-            byte[] ttfBytes = File.ReadAllBytes(ttfPath);
+            byte[] ttfBytes = File.ReadAllBytes(BundledFonts.Ttf);
 
             // Wrap TTF as uncompressed WOFF (compLength == origLength = no compression)
             byte[] woffBytes = WrapTtfAsWoff(ttfBytes);
@@ -107,7 +94,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         [Fact]
         public void ToOpenType_WithOtfBytes_ReturnsSameBytes()
         {
-            byte[] otfBytes = File.ReadAllBytes(BundledOtfPath);
+            byte[] otfBytes = File.ReadAllBytes(BundledFonts.Otf);
             byte[] result = FontFormatConverter.ToOpenType(otfBytes);
 
             // OTF passes through unchanged
@@ -121,7 +108,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         public void TtfFontDescription_CffFont_ParsesWithoutError()
         {
             // TtfFontDescription must handle CFF (OTTO) fonts
-            var desc = TtfFontDescription.LoadDescription(BundledOtfPath);
+            var desc = TtfFontDescription.LoadDescription(BundledFonts.Otf);
             Assert.NotEmpty(desc.FontFamilyInvariantCulture);
         }
 
@@ -132,7 +119,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         [Fact]
         public void Woff2Convert_BundledFont_ProducesValidOpenType()
         {
-            byte[] woff2Bytes = File.ReadAllBytes(BundledWoff2Path);
+            byte[] woff2Bytes = File.ReadAllBytes(BundledFonts.Woff2);
             Assert.True(Woff2Converter.IsWoff2(woff2Bytes));
 
             byte[] result = Woff2Converter.Convert(woff2Bytes);
@@ -154,11 +141,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         [Fact]
         public void WoffConvert_CompressedTable_DecompressesCorrectly()
         {
-            var ttfPath = FontResolver.SupportedFonts.FirstOrDefault(
-                p => p.EndsWith(".ttf", StringComparison.OrdinalIgnoreCase));
-            if (ttfPath == null) return;
-
-            byte[] ttfBytes = File.ReadAllBytes(ttfPath);
+            byte[] ttfBytes = File.ReadAllBytes(BundledFonts.Ttf);
 
             // Build a WOFF where the first table is zlib-compressed.
             byte[] woffBytes = WrapTtfAsWoffWithCompressedFirstTable(ttfBytes);
