@@ -66,7 +66,9 @@ namespace PeachPDF.PdfSharpCore.Utils
                 return;
             }
 
-            throw new System.NotImplementedException("FontResolver not implemented for this platform (PeachPDF.PdfSharpCore.Utils.FontResolver.cs).");
+            // Platforms without system font discovery (iOS, Android, ...): start with no
+            // system fonts and rely on fonts registered via PdfGenerator.AddFontFromStream.
+            SupportedFonts = [];
         }
 
 
