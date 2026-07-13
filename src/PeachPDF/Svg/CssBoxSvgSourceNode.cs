@@ -29,5 +29,13 @@ namespace PeachPDF.Svg
         public string? GetAttribute(string name) => box.GetAttribute(name, null);
 
         public IEnumerable<ISvgSourceNode> Children => box.Boxes.Select(static b => (ISvgSourceNode)new CssBoxSvgSourceNode(b));
+
+        /// <summary>
+        /// Mirrors <c>DomParser.CascadeParseStyles</c>'s own precedent for reading a <c>&lt;style&gt;</c>
+        /// box's CSS text (direct child boxes are plain text nodes, not further nested elements - the
+        /// HTML tokenizer doesn't give <c>&lt;style&gt;</c> any special raw-text handling, so its content
+        /// arrives as ordinary child text boxes, same as any other element's text).
+        /// </summary>
+        public string GetTextContent() => string.Concat(box.Boxes.Select(b => b.Text ?? string.Empty));
     }
 }

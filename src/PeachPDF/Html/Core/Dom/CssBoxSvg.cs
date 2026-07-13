@@ -104,7 +104,7 @@ namespace PeachPDF.Html.Core.Dom
             if (_document is not null)
                 return;
 
-            _document = SvgTreeBuilder.Build(new CssBoxSvgSourceNode(this), HtmlContainer!.Adapter);
+            _document = SvgTreeBuilder.Build(new CssBoxSvgSourceNode(this), HtmlContainer!.Adapter, ActualColor);
 
             // The parser builds a real (generic) CssBox for every SVG child element so
             // SvgTreeBuilder can read tag names/attributes off them - but once the scene graph above
@@ -114,6 +114,30 @@ namespace PeachPDF.Html.Core.Dom
             // background/border/content positioning. Clearing them makes this box a true leaf (one
             // phantom word, no children), exactly like CssBoxImage.
             Boxes.Clear();
+        }
+
+        /// <summary>
+        /// The built <see cref="SvgDocument"/> and its unshifted (layout-time, not paint-time
+        /// scroll-offset-adjusted) rendered rectangle, for <c>&lt;a&gt;</c> link-annotation discovery
+        /// (see <see cref="SvgRenderer.CollectLinks"/>) - deliberately not reusing <see cref="PaintImp"/>'s
+        /// rect computation, since that one applies <see cref="Html.Core.HtmlContainerInt.ScrollOffset"/>,
+        /// which varies per output page during pagination and would need to be un-applied again to get
+        /// back to the single full-document-space rectangle link annotations need.
+        /// </summary>
+        internal (SvgDocument Document, RRect Rect)? GetLinkSource()
+        {
+            EnsureDocument();
+
+            if (_document is null)
+                return null;
+
+            var r = _svgWord.Rectangle;
+            r.Height -= ActualBorderTopWidth + ActualBorderBottomWidth + ActualPaddingTop + ActualPaddingBottom;
+            r.Y += ActualBorderTopWidth + ActualPaddingTop;
+            r.X = Math.Floor(r.X);
+            r.Y = Math.Floor(r.Y);
+
+            return r is { Width: > 0, Height: > 0 } ? (_document, r) : null;
         }
     }
 }

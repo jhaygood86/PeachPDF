@@ -137,10 +137,14 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 
             if (!isEllipse)
             {
-                // Circle: define shading in page space
+                // Circle: define shading in page space. The r0 (zero-radius) circle sits at the focal
+                // point (defaults to center_v, i.e. identical to every pre-existing caller's output,
+                // when no distinct focal point was supplied) - this is what lets a gradient's brightest
+                // point be offset from its outer circle's center (e.g. SVG radialGradient's fx/fy).
+                XPoint focal_v = renderer.WorldToView(brush._focalCenter);
                 Elements[Keys.Coords] = new PdfLiteral(
                     "[{0:" + fmt + "} {1:" + fmt + "} 0 {2:" + fmt + "} {3:" + fmt + "} {4:" + fmt + "}]",
-                    center_v.X, center_v.Y, center_v.X, center_v.Y, rx_v);
+                    focal_v.X, focal_v.Y, center_v.X, center_v.Y, rx_v);
             }
             else
             {

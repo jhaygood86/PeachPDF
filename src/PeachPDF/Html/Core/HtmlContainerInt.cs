@@ -310,6 +310,15 @@ namespace PeachPDF.Html.Core
             {
                 linkElements.Add(new LinkElementData<RRect>(box.GetAttribute("id"), box.GetAttribute("href"), CommonUtils.GetFirstValueOrDefault(box.Rectangles, box.Bounds)));
             }
+
+            var svgLinks = new List<(RRect Rect, string Href)>();
+            DomUtils.GetAllSvgLinks(Root, svgLinks);
+
+            foreach (var (rect, href) in svgLinks)
+            {
+                linkElements.Add(new LinkElementData<RRect>(string.Empty, href, rect));
+            }
+
             return linkElements;
         }
 

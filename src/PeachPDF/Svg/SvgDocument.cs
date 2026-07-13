@@ -28,6 +28,8 @@ namespace PeachPDF.Svg
         public double? Width { get; set; }
         public double? Height { get; set; }
 
+        public SvgPreserveAspectRatio PreserveAspectRatio { get; set; } = SvgPreserveAspectRatio.Default;
+
         public List<SvgElement> Children { get; init; } = [];
 
         /// <summary>Gradient definitions keyed by <c>id</c> (ids are case-sensitive per XML).</summary>

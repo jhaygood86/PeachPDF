@@ -60,9 +60,13 @@ namespace PeachPDF.PdfSharpCore.Drawing
 
         /// <summary>
         /// Initializes a multi-stop radial gradient brush supporting both circle and ellipse shapes.
-        /// radiusX and radiusY may differ for ellipses.
+        /// radiusX and radiusY may differ for ellipses. <paramref name="focalCenter"/> (e.g. from an
+        /// SVG radialGradient's <c>fx</c>/<c>fy</c>) offsets the gradient's zero-radius starting point
+        /// away from <paramref name="center"/>; defaults to <paramref name="center"/> (no offset) when
+        /// omitted, matching every pre-existing caller's behavior exactly. Only honored for the
+        /// circular (non-ellipse) shading path - see <see cref="Pdf.Advanced.PdfShading"/>.
         /// </summary>
-        public XRadialGradientBrush(XPoint center, double radiusX, double radiusY, XColor[] colors, double[] positions)
+        public XRadialGradientBrush(XPoint center, double radiusX, double radiusY, XColor[] colors, double[] positions, XPoint? focalCenter = null)
             : base(colors[0], colors[colors.Length - 1])
         {
             _center1 = center;
@@ -73,9 +77,11 @@ namespace PeachPDF.PdfSharpCore.Drawing
             _radiusY = radiusY;
             _colors = colors;
             _positions = positions;
+            _focalCenter = focalCenter ?? center;
         }
 
         internal XPoint _center1, _center2;
+        internal XPoint _focalCenter;
         internal double _r1, _r2;
         internal double _radiusX, _radiusY;
         internal XColor[]? _colors;

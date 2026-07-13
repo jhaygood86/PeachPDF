@@ -24,6 +24,14 @@ namespace PeachPDF.Svg
         public RColor Color { get; init; }
     }
 
+    /// <summary>How a gradient's colors extend beyond its own defined 0-1 stop range.</summary>
+    internal enum SvgSpreadMethod
+    {
+        Pad,
+        Reflect,
+        Repeat,
+    }
+
     /// <summary>
     /// Common definition shared by <c>&lt;linearGradient&gt;</c>/<c>&lt;radialGradient&gt;</c>. Lives
     /// only in <see cref="SvgDocument"/>'s gradient registry - never painted directly, only referenced
@@ -34,10 +42,11 @@ namespace PeachPDF.Svg
         public string? Id { get; init; }
 
         /// <summary>
-        /// True for <c>gradientUnits="userSpaceOnUse"</c> - the only mode supported in v1.
-        /// <c>objectBoundingBox</c> (the spec default) is out of scope; a gradient without an explicit
-        /// <c>userSpaceOnUse</c> is still treated as user-space, which is only correct when the
-        /// document itself was authored with explicit user-space gradient coordinates.
+        /// True for <c>gradientUnits="userSpaceOnUse"</c>; false (the spec default, including when
+        /// the attribute is omitted) means <c>objectBoundingBox</c> - coordinates are fractions of the
+        /// referencing shape's bounding box, resolved at paint time (see
+        /// <see cref="SvgRenderer"/>/<see cref="SvgGeometryBounds"/>) since a gradient can be shared by
+        /// several differently-sized/positioned shapes via <c>fill:url(#id)</c>.
         /// </summary>
         public bool GradientUnitsUserSpaceOnUse { get; init; } = true;
 
@@ -48,6 +57,15 @@ namespace PeachPDF.Svg
         public RMatrix? GradientTransform { get; init; }
 
         public IReadOnlyList<SvgGradientStop> Stops { get; init; } = [];
+
+        /// <summary>
+        /// <c>reflect</c>/<c>repeat</c> are both approximated as "don't extend past the defined
+        /// gradient region" (rather than truly tiling/mirroring the gradient pattern, which the
+        /// underlying PDF shading writer doesn't support without a much larger rework) - a documented
+        /// v1 simplification that at least differentiates them from the <c>pad</c> default (which
+        /// clamps to the edge stop colors) instead of silently ignoring the attribute.
+        /// </summary>
+        public SvgSpreadMethod SpreadMethod { get; init; } = SvgSpreadMethod.Pad;
     }
 
     internal sealed class SvgLinearGradient : SvgGradient
@@ -63,5 +81,9 @@ namespace PeachPDF.Svg
         public double Cx { get; init; }
         public double Cy { get; init; }
         public double R { get; init; }
+
+        /// <summary>Focal point - defaults to (<see cref="Cx"/>, <see cref="Cy"/>) when null (unspecified).</summary>
+        public double? Fx { get; init; }
+        public double? Fy { get; init; }
     }
 }

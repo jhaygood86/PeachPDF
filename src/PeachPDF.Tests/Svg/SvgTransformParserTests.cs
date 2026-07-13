@@ -1,3 +1,4 @@
+using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Svg;
 
 namespace PeachPDF.Tests.Svg
@@ -90,13 +91,13 @@ namespace PeachPDF.Tests.Svg
         [Fact]
         public void Parse_UnrecognizedFunctionAlone_ReturnsNull()
         {
-            Assert.Null(SvgTransformParser.Parse("rotate(45)"));
+            Assert.Null(SvgTransformParser.Parse("perspective(500)"));
         }
 
         [Fact]
         public void Parse_UnrecognizedFunctionMixedWithSupportedOne_ContributesNothing()
         {
-            var matrix = SvgTransformParser.Parse("rotate(45) translate(5,5)");
+            var matrix = SvgTransformParser.Parse("perspective(500) translate(5,5)");
 
             Assert.NotNull(matrix);
             var m = matrix!.Value;
@@ -112,6 +113,68 @@ namespace PeachPDF.Tests.Svg
             Assert.Null(SvgTransformParser.Parse(null));
             Assert.Null(SvgTransformParser.Parse(""));
             Assert.Null(SvgTransformParser.Parse("   "));
+        }
+
+        private static (double X, double Y) Apply(RMatrix m, double x, double y) =>
+            (x * m.M11 + y * m.M21 + m.OffsetX, x * m.M12 + y * m.M22 + m.OffsetY);
+
+        [Fact]
+        public void Parse_RotateAboutOrigin_MatchesSpecMatrixForm()
+        {
+            // Per spec, rotate(a) == matrix(cos(a), sin(a), -sin(a), cos(a), 0, 0). Using 90 degrees
+            // keeps expected component values clean (0/1/-1) rather than landing on an arbitrary
+            // floating-point cosine/sine value.
+            var matrix = SvgTransformParser.Parse("rotate(90)");
+
+            Assert.NotNull(matrix);
+            var m = matrix!.Value;
+            Assert.Equal(0, m.M11, 5);
+            Assert.Equal(1, m.M12, 5);
+            Assert.Equal(-1, m.M21, 5);
+            Assert.Equal(0, m.M22, 5);
+            Assert.Equal(0, m.OffsetX, 5);
+            Assert.Equal(0, m.OffsetY, 5);
+        }
+
+        [Fact]
+        public void Parse_RotateWithCenter_LeavesCenterPointFixed()
+        {
+            var matrix = SvgTransformParser.Parse("rotate(90, 10, 10)");
+
+            Assert.NotNull(matrix);
+            var (cx, cy) = Apply(matrix!.Value, 10, 10);
+            Assert.Equal(10, cx, 5);
+            Assert.Equal(10, cy, 5);
+
+            // A point 10 units "above" the center (smaller y, SVG's y-down space) rotates 90 degrees
+            // clockwise to 10 units to its right.
+            var (x, y) = Apply(matrix!.Value, 10, 0);
+            Assert.Equal(20, x, 5);
+            Assert.Equal(10, y, 5);
+        }
+
+        [Fact]
+        public void Parse_SkewX_ShearsXBasedOnY()
+        {
+            // Per spec, skewX(a) == matrix(1, 0, tan(a), 1, 0, 0).
+            var matrix = SvgTransformParser.Parse("skewX(45)");
+
+            Assert.NotNull(matrix);
+            var (x, y) = Apply(matrix!.Value, 0, 10);
+            Assert.Equal(10, x, 4);
+            Assert.Equal(10, y, 4);
+        }
+
+        [Fact]
+        public void Parse_SkewY_ShearsYBasedOnX()
+        {
+            // Per spec, skewY(a) == matrix(1, tan(a), 0, 1, 0, 0).
+            var matrix = SvgTransformParser.Parse("skewY(45)");
+
+            Assert.NotNull(matrix);
+            var (x, y) = Apply(matrix!.Value, 10, 0);
+            Assert.Equal(10, x, 4);
+            Assert.Equal(10, y, 4);
         }
     }
 }

@@ -65,6 +65,14 @@ namespace PeachPDF.Html.Adapters
         }
 
         /// <summary>
+        /// Get a pen that strokes with the given brush, e.g. for an SVG <c>stroke="url(#gradient)"</c>.
+        /// </summary>
+        public RPen GetPen(RBrush brush)
+        {
+            return _adapter.GetPen(brush);
+        }
+
+        /// <summary>
         /// Get solid color brush.
         /// </summary>
         /// <param name="color">the color to get the brush for</param>
@@ -92,9 +100,9 @@ namespace PeachPDF.Html.Adapters
             return _adapter.GetLinearGradientBrush(p1, p2, stops, isRepeating);
         }
 
-        public RBrush GetRadialGradientBrush(RPoint center, double radiusX, double radiusY, (RColor Color, double Position)[] stops, bool isRepeating = false)
+        public RBrush GetRadialGradientBrush(RPoint center, double radiusX, double radiusY, (RColor Color, double Position)[] stops, bool isRepeating = false, RPoint? focalCenter = null)
         {
-            return _adapter.GetRadialGradientBrush(center, radiusX, radiusY, stops, isRepeating);
+            return _adapter.GetRadialGradientBrush(center, radiusX, radiusY, stops, isRepeating, focalCenter);
         }
 
         public RBrush GetConicGradientBrush(RPoint center, double outerRadius, RColor[] colors, double[] anglesRad)

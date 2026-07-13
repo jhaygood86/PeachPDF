@@ -11,6 +11,7 @@
 // "The Art of War"
 
 using PeachPDF.Html.Adapters.Entities;
+using System;
 using System.Collections.Generic;
 using System.Numerics;
 
@@ -18,10 +19,8 @@ namespace PeachPDF.Svg
 {
     /// <summary>
     /// Parses the SVG <c>transform</c>/<c>gradientTransform</c> attribute grammar: a whitespace
-    /// separated list of <c>matrix()</c>/<c>translate()</c>/<c>scale()</c> functions (the only ones
-    /// needed for v1 - <c>rotate()</c>/<c>skewX()</c>/<c>skewY()</c> are recognized syntactically
-    /// so parsing doesn't break, but contribute no transform, since none of them can currently be
-    /// expressed as-is by <see cref="RMatrix"/> consumers that assume axis-aligned gradients).
+    /// separated list of <c>matrix()</c>/<c>translate()</c>/<c>scale()</c>/<c>rotate()</c>/
+    /// <c>skewX()</c>/<c>skewY()</c> functions.
     /// </summary>
     internal static class SvgTransformParser
     {
@@ -125,9 +124,49 @@ namespace PeachPDF.Svg
                         0, 0, 0, 1);
                 }
 
+                case "rotate" when args.Count >= 1:
+                {
+                    var angle = Arg(0) * (MathF.PI / 180f);
+                    var cos = MathF.Cos(angle);
+                    var sin = MathF.Sin(angle);
+
+                    // With an optional center (cx, cy): equivalent to translate(cx,cy) rotate(angle)
+                    // translate(-cx,-cy), expressed here as the single closed-form combined matrix
+                    // rather than composing three separate matrices.
+                    var (e, f) = args.Count >= 3
+                        ? (Arg(1) * (1 - cos) + Arg(2) * sin, Arg(2) * (1 - cos) - Arg(1) * sin)
+                        : (0f, 0f);
+
+                    return new Matrix4x4(
+                        cos, sin, 0, 0,
+                        -sin, cos, 0, 0,
+                        0, 0, 1, 0,
+                        e, f, 0, 1);
+                }
+
+                case "skewx" when args.Count >= 1:
+                {
+                    var tan = MathF.Tan(Arg(0) * (MathF.PI / 180f));
+                    return new Matrix4x4(
+                        1, 0, 0, 0,
+                        tan, 1, 0, 0,
+                        0, 0, 1, 0,
+                        0, 0, 0, 1);
+                }
+
+                case "skewy" when args.Count >= 1:
+                {
+                    var tan = MathF.Tan(Arg(0) * (MathF.PI / 180f));
+                    return new Matrix4x4(
+                        1, tan, 0, 0,
+                        0, 1, 0, 0,
+                        0, 0, 1, 0,
+                        0, 0, 0, 1);
+                }
+
                 default:
-                    // rotate()/skewX()/skewY()/unknown - recognized only so we can skip past the
-                    // parentheses; contributes no transform (documented v1 limitation).
+                    // Unrecognized function name - recognized only so we can skip past the
+                    // parentheses; contributes no transform.
                     return null;
             }
         }

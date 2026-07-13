@@ -13,6 +13,7 @@
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Drawing;
+using System.Linq;
 
 namespace PeachPDF.Adapters
 {
@@ -85,6 +86,47 @@ namespace PeachPDF.Adapters
                         break;
                 }
             }
+        }
+
+        public override RLineCap LineCap
+        {
+            set => _pen.LineCap = value switch
+            {
+                RLineCap.Round => XLineCap.Round,
+                RLineCap.Square => XLineCap.Square,
+                _ => XLineCap.Flat,
+            };
+        }
+
+        public override RLineJoin LineJoin
+        {
+            set => _pen.LineJoin = value switch
+            {
+                RLineJoin.Round => XLineJoin.Round,
+                RLineJoin.Bevel => XLineJoin.Bevel,
+                _ => XLineJoin.Miter,
+            };
+        }
+
+        public override void SetDashPattern(double[] pattern, double offset)
+        {
+            if (pattern.Length == 0)
+            {
+                _pen.DashStyle = XDashStyle.Solid;
+                return;
+            }
+
+            // XPen's custom dash array is expressed as multiples of pen width (a GDI+ convention -
+            // see PdfGraphicsState.RealizePen, which multiplies each entry by pen._width when writing
+            // the PDF "d" operator), whereas SVG's stroke-dasharray/stroke-dashoffset are absolute
+            // user-space lengths - normalize by dividing through by the pen's width.
+            var width = _pen.Width;
+            if (width <= 0)
+                return;
+
+            _pen.DashStyle = XDashStyle.Custom;
+            _pen.DashPattern = pattern.Select(v => v / width).ToArray();
+            _pen.DashOffset = offset / width;
         }
     }
 }

@@ -34,5 +34,12 @@ namespace PeachPDF.Svg
         string? GetAttribute(string name);
 
         IEnumerable<ISvgSourceNode> Children { get; }
+
+        /// <summary>
+        /// The concatenated text content of this node's children - only meaningful for a
+        /// <c>&lt;style&gt;</c> element's CSS text today; empty for a node whose children are all
+        /// elements rather than text.
+        /// </summary>
+        string GetTextContent();
     }
 }

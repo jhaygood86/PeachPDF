@@ -36,5 +36,7 @@ namespace PeachPDF.Svg
         }
 
         public IEnumerable<ISvgSourceNode> Children => element.Elements().Select(static e => (ISvgSourceNode)new XElementSvgSourceNode(e));
+
+        public string GetTextContent() => element.Value;
     }
 }
