@@ -28,5 +28,10 @@ namespace PeachPDF.Html.Adapters
         /// Gets or sets the style used for dashed lines drawn with this Pen.
         /// </summary>
         public abstract RDashStyle DashStyle { set; }
+
+        /// <summary>
+        /// Gets or sets the miter limit used when joining sharp corners of a stroked path.
+        /// </summary>
+        public abstract double MiterLimit { get; set; }
     }
 }

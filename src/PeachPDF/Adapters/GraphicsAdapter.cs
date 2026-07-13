@@ -80,6 +80,16 @@ namespace PeachPDF.Adapters
             _g.IntersectClip(Utils.Convert(rect, PixelsPerPoint));
         }
 
+        public override void PushClip(RGraphicsPath path)
+        {
+            // No simple bounding rectangle for an arbitrary path, so keep the tracked clip bound
+            // conservative (unchanged) - it's only used for culling, and an over-wide bound never
+            // hides content that should actually be visible.
+            _clipStack.Push(_clipStack.Peek());
+            _g.Save();
+            _g.IntersectClip(((GraphicsPathAdapter)path).GraphicsPath);
+        }
+
         public override void PushClipExclude(RRect rect)
         { }
 

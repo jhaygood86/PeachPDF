@@ -87,6 +87,7 @@ namespace PeachPDF.Html.Core.Utils
         public const string Style = "style";
         //        public const string SUB = "SUB";
         //        public const string SUP = "SUP";
+        public const string Svg = "svg";
         public const string Table = "table";
         public const string Tbody = "tbody";
         public const string Td = "td";

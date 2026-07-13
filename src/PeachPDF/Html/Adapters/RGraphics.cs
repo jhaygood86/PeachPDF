@@ -123,6 +123,14 @@ namespace PeachPDF.Html.Adapters
         public abstract void PushClip(RRect rect);
 
         /// <summary>
+        /// Push the clipping region of this Graphics to intersection of the current clip and the given
+        /// (possibly non-rectangular) path. Used for SVG <c>clip-path</c>, where the clip region isn't
+        /// necessarily axis-aligned.
+        /// </summary>
+        /// <param name="path">Path to clip to.</param>
+        public abstract void PushClip(RGraphicsPath path);
+
+        /// <summary>
         /// Push the clipping region of this Graphics to exclude the given rectangle from the current clipping rectangle.
         /// </summary>
         /// <param name="rect">Rectangle to exclude clipping in.</param>

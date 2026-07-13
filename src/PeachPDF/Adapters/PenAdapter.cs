@@ -48,6 +48,12 @@ namespace PeachPDF.Adapters
             set { _pen.Width = value; }
         }
 
+        public override double MiterLimit
+        {
+            get { return _pen.MiterLimit; }
+            set { _pen.MiterLimit = value; }
+        }
+
         public override RDashStyle DashStyle
         {
             set

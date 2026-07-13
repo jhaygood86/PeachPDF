@@ -355,6 +355,7 @@ namespace PeachPDF.Tests.Integration
             public override void PushTransform(RMatrix matrix) => LastPushedTransform = matrix;
             public override void PopTransform() { }
             public override void PushClip(RRect rect) => _clipStack.Push(rect);
+            public override void PushClip(RGraphicsPath path) => _clipStack.Push(_clipStack.Peek());
             public override void PopClip() { if (_clipStack.Count > 1) _clipStack.Pop(); }
             public override void PushClipExclude(RRect rect) { }
             public override object SetAntiAliasSmoothingMode() => new object();

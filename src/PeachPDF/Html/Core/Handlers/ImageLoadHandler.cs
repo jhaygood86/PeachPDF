@@ -10,13 +10,18 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using MimeKit;
 using PeachPDF;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
+using PeachPDF.Svg;
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
+using System.Xml;
+using System.Xml.Linq;
 
 namespace PeachPDF.Html.Core.Handlers
 {
@@ -61,6 +66,12 @@ namespace PeachPDF.Html.Core.Handlers
         /// </summary>
         private bool _disposed;
 
+        /// <summary>
+        /// True if the src's file extension suggests an SVG image - computed once up front from the
+        /// original source string, before any URI resolution, and reused across the file/network paths.
+        /// </summary>
+        private bool _srcHintsSvg;
+
         #endregion
 
 
@@ -81,6 +92,12 @@ namespace PeachPDF.Html.Core.Handlers
         public RImage? Image { get; private set; }
 
         /// <summary>
+        /// the parsed SVG scene graph, set instead of <see cref="Image"/> when the source was detected
+        /// to be an SVG image (by file extension or <c>Content-Type: image/svg+xml</c>).
+        /// </summary>
+        public SvgDocument? SvgDocument { get; private set; }
+
+        /// <summary>
         /// Set image of this image box by analyzing the src attribute.<br/>
         /// Load the image from inline base64 encoded string.<br/>
         /// Or from calling property/method on the bridge object that returns image or URL to image.<br/>
@@ -99,6 +116,8 @@ namespace PeachPDF.Html.Core.Handlers
             {
                 if (!string.IsNullOrEmpty(src))
                 {
+                    _srcHintsSvg = src.Split('?', '#')[0].EndsWith(".svg", StringComparison.OrdinalIgnoreCase)
+                        || src.StartsWith("data:image/svg+xml", StringComparison.OrdinalIgnoreCase);
                     await SetImageFromPath(src);
                 }
                 else
@@ -196,7 +215,7 @@ namespace PeachPDF.Html.Core.Handlers
 
                 if (_disposed is false)
                 {
-                    LoadImageFromStream(imageFileStream);
+                    LoadImageFromStream(imageFileStream, _srcHintsSvg);
                     _releaseImageObject = true;
                 }
 
@@ -209,8 +228,14 @@ namespace PeachPDF.Html.Core.Handlers
             }
         }
 
-        private void LoadImageFromStream(Stream stream)
+        private void LoadImageFromStream(Stream stream, bool isSvg)
         {
+            if (isSvg)
+            {
+                LoadSvgFromStream(stream);
+                return;
+            }
+
             try
             {
                 Image = _htmlContainer.Adapter.ImageFromStream(stream);
@@ -218,6 +243,30 @@ namespace PeachPDF.Html.Core.Handlers
             catch (InvalidOperationException)
             {
                 Image = null;
+            }
+        }
+
+        /// <summary>
+        /// Parses an SVG image eagerly (unlike raster images, which <see cref="RAdapter.ImageFromStream"/>
+        /// reads lazily) into <see cref="SvgDocument"/>, via a standalone XML parse
+        /// (<see cref="XElementSvgSourceNode"/>) rather than the HTML tokenizer, since a fetched SVG
+        /// resource is expected to be a standalone, well-formed XML document.
+        /// </summary>
+        private void LoadSvgFromStream(Stream stream)
+        {
+            try
+            {
+                var xdoc = XDocument.Load(stream);
+
+                if (xdoc.Root is not null)
+                {
+                    SvgDocument = SvgTreeBuilder.Build(new XElementSvgSourceNode(xdoc.Root), _htmlContainer.Adapter);
+                }
+            }
+            catch (XmlException ex)
+            {
+                SvgDocument = null;
+                _htmlContainer.ReportError(HtmlRenderErrorType.Image, "Failed to parse SVG image", ex);
             }
         }
 
@@ -244,7 +293,10 @@ namespace PeachPDF.Html.Core.Handlers
 
             if (networkResponse?.ResourceStream is not null)
             {
-                LoadImageFromStream(networkResponse.ResourceStream);
+                var contentTypeHintsSvg = networkResponse.ResponseHeaders?.TryGetValue("Content-Type", out var contentTypeValues) == true
+                    && contentTypeValues.Select(ContentType.Parse).Any(ct => ct.IsMimeType("image", "svg+xml"));
+
+                LoadImageFromStream(networkResponse.ResourceStream, _srcHintsSvg || contentTypeHintsSvg);
             }
 
             ImageLoadComplete();

@@ -84,7 +84,7 @@ namespace PeachPDF.Html.Core.Parse
 
             CorrectTextBoxes(root);
 
-            CorrectImgBoxes(root);
+            CorrectReplacedElementBoxes(root);
 
             CorrectLineBreaksBlocks(root);
 
@@ -900,7 +900,7 @@ namespace PeachPDF.Html.Core.Parse
                 return true;
             }
 
-            return box.HtmlTag.Name switch
+            return box.HtmlTag.Name.ToLowerInvariant() switch
             {
                 HtmlConstants.Table => value == CssConstants.Table,
                 HtmlConstants.Tr => value == CssConstants.TableRow,
@@ -936,14 +936,15 @@ namespace PeachPDF.Html.Core.Parse
         {
             if (!tag.HasAttributes()) return;
 
-            foreach (var att in tag.Attributes!.Keys)
+            foreach (var attKey in tag.Attributes!.Keys)
             {
-                var value = tag.Attributes[att];
+                var value = tag.Attributes[attKey];
+                var att = attKey.ToLowerInvariant();
 
                 switch (att)
                 {
                     case HtmlConstants.Align:
-                        if (tag.Name is "img")
+                        if (tag.Name.Equals(HtmlConstants.Img, StringComparison.OrdinalIgnoreCase))
                         {
                             switch (value)
                             {
@@ -987,7 +988,7 @@ namespace PeachPDF.Html.Core.Parse
                             box.BorderLeftStyle = box.BorderTopStyle = box.BorderRightStyle = box.BorderBottomStyle = CssConstants.Solid;
                         box.BorderLeftWidth = box.BorderTopWidth = box.BorderRightWidth = box.BorderBottomWidth = TranslateLength(value);
 
-                        if (tag.Name == HtmlConstants.Table)
+                        if (tag.Name.Equals(HtmlConstants.Table, StringComparison.OrdinalIgnoreCase))
                         {
                             if (value != "0")
                                 ApplyTableBorder(box, "1px");
@@ -1161,15 +1162,18 @@ namespace PeachPDF.Html.Core.Parse
         }
 
         /// <summary>
-        /// Go over all image boxes and if its display style is set to block, put it inside another block but set the image to inline.
+        /// Go over all word-based replaced-element boxes (&lt;img&gt;, inline &lt;svg&gt;) and if
+        /// their display style is set to block, put them inside another block but set them back to
+        /// inline - both box types represent themselves as a single atomic word in the normal inline
+        /// layout algorithm, which can't itself be a block-level box directly.
         /// </summary>
         /// <param name="box">the current box to correct its sub-tree</param>
-        private static void CorrectImgBoxes(CssBox box)
+        private static void CorrectReplacedElementBoxes(CssBox box)
         {
             for (int i = box.Boxes.Count - 1; i >= 0; i--)
             {
                 var childBox = box.Boxes[i];
-                if (childBox is CssBoxImage && childBox.Display == CssConstants.Block)
+                if (childBox is CssBoxImage or CssBoxSvg && childBox.Display == CssConstants.Block)
                 {
                     var block = CssBox.CreateBlock(childBox.ParentBox!, null, childBox);
                     childBox.ParentBox = block;
@@ -1178,7 +1182,7 @@ namespace PeachPDF.Html.Core.Parse
                 else
                 {
                     // recursive
-                    CorrectImgBoxes(childBox);
+                    CorrectReplacedElementBoxes(childBox);
                 }
             }
         }

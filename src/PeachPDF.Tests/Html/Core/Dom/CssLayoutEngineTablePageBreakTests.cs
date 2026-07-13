@@ -718,6 +718,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
                 PopCount++;
             }
 
+            public override void PushClip(PeachPDF.Html.Adapters.RGraphicsPath path) => _clipStack.Push(_clipStack.Peek());
             public override void PushClipExclude(PeachPDF.Html.Adapters.Entities.RRect rect) { }
             public override void PushTransform(PeachPDF.Html.Adapters.Entities.RMatrix matrix) { }
             public override void PopTransform() { }
@@ -744,6 +745,11 @@ namespace PeachPDF.Tests.Html.Core.Dom
             public override void Start(double x, double y) { }
             public override void LineTo(double x, double y) { }
             public override void ArcTo(double x, double y, double radiusX, double radiusY, Corner corner) { }
+            public override void AddMove(double x, double y) { }
+            public override void AddBezierTo(double x1, double y1, double x2, double y2, double x3, double y3) { }
+            public override void AddArc(double x, double y, double radiusX, double radiusY, double rotationAngle, bool isLargeArc, bool sweepClockwise) { }
+            public override void CloseFigure() { }
+            public override PeachPDF.Html.Adapters.Entities.RFillMode FillMode { get; set; }
             public override void Dispose() { }
         }
 
