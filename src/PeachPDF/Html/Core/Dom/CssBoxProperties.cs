@@ -252,6 +252,17 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
+        private string _opacity = "1";
+        public string Opacity
+        {
+            get => _opacity;
+            set
+            {
+                _opacity = value;
+                _actualOpacityComputed = false;
+            }
+        }
+
         private string _borderTopLeftRadius = "0";
         private string _borderTopRightRadius = "0";
         private string _borderBottomRightRadius = "0";
@@ -978,6 +989,34 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         public bool IsTransformed => !ActualTransformMatrix.IsIdentity;
 
+        private bool _actualOpacityComputed;
+        private double _actualOpacity;
+
+        /// <summary>
+        /// Lazily computes the used value of the <c>opacity</c> property, clamped to [0, 1].
+        /// An empty/unparsable value (or the initial "1") resolves to fully opaque.
+        /// </summary>
+        public double ActualOpacity
+        {
+            get
+            {
+                if (!_actualOpacityComputed)
+                {
+                    _actualOpacity = string.IsNullOrEmpty(Opacity)
+                        ? 1.0
+                        : Math.Clamp(CssValueParser.ParseNumber(Opacity, 1.0), 0.0, 1.0);
+                    _actualOpacityComputed = true;
+                }
+                return _actualOpacity;
+            }
+        }
+
+        /// <summary>
+        /// True when this box's <c>opacity</c> is fully opaque (the common case) - false when a
+        /// group-opacity transparency-group composite is needed at paint time.
+        /// </summary>
+        public bool IsOpaque => ActualOpacity >= 1.0;
+
         /// <summary>
         /// Gets a value indicating if at least one of the corners of the box is rounded.
         /// </summary>
@@ -1341,6 +1380,7 @@ namespace PeachPDF.Html.Core.Dom
             BorderBottomLeftRadius = p.BorderBottomLeftRadius;
             Transform = p.Transform;
             TransformOrigin = p.TransformOrigin;
+            Opacity = p.Opacity;
             Display = p.Display;
             Float = p.Float;
             Height = p.Height;

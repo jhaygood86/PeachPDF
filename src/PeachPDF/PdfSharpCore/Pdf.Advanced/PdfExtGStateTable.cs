@@ -91,7 +91,32 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             return extGState;
         }
 
+        /// <summary>
+        /// Gets a PdfExtGState with both 'ca' (non-stroking alpha) and 'CA' (stroking alpha) set to the
+        /// same alpha value - used to composite a whole transparency-group Form XObject (e.g. for CSS/SVG
+        /// group <c>opacity</c>) with a single <c>gs</c> operator, rather than needing separate stroke/non-stroke states.
+        /// No overprint parameter, unlike <see cref="GetExtGStateStroke"/>/<see cref="GetExtGStateNonStroke"/> -
+        /// overprint is a fill/stroke color-realization concern, not something whole-group opacity compositing needs.
+        /// </summary>
+        public PdfExtGState GetExtGState(double alpha)
+        {
+            string key = PdfExtGState.MakeKey(alpha, false);
+            PdfExtGState extGState;
+            if (!_combinedAlphaStates.TryGetValue(key, out extGState))
+            {
+                extGState = new PdfExtGState(Owner)
+                {
+                    StrokeAlpha = alpha,
+                    NonStrokeAlpha = alpha
+                };
+
+                _combinedAlphaStates[key] = extGState;
+            }
+            return extGState;
+        }
+
         readonly Dictionary<string, PdfExtGState> _strokeAlphaValues = new Dictionary<string, PdfExtGState>();
         readonly Dictionary<string, PdfExtGState> _nonStrokeStates = new Dictionary<string, PdfExtGState>();
+        readonly Dictionary<string, PdfExtGState> _combinedAlphaStates = new Dictionary<string, PdfExtGState>();
     }
 }

@@ -202,6 +202,12 @@ Percentages are relative to the border-box width (horizontal radius) and height 
 
 3D transform functions are composed as a genuine 4×4 matrix and projected onto the element's own flat plane for painting into the PDF content stream. This projection is always mathematically exact — `translate3d()`/`scale3d()`/`rotateX()`/`rotateY()`/`rotate3d()`/`matrix3d()` all render as true, lossless 2D transforms of the flattened element.
 
+### Opacity
+
+| Property | MDN Reference | Notes |
+|----------|--------------|-------|
+| `opacity` | [opacity](https://developer.mozilla.org/en-US/docs/Web/CSS/opacity) | Full support; not inherited (it composites the element and its whole subtree as a group, per spec). Rendered as a genuine, isolated PDF transparency group — the element's subtree is painted into an offscreen Form XObject and flattened, then that single flattened result is composited onto the page at the given alpha, so overlapping content within the element (e.g. two overlapping semi-transparent children) doesn't double-darken where it overlaps. |
+
 ### Backgrounds
 
 | Property | MDN Reference | Notes |
@@ -731,7 +737,6 @@ The following CSS features are not supported:
 - **3D perspective** — the `perspective()` transform function, and the `perspective`/`perspective-origin`/`transform-style`/`backface-visibility` properties
 - **Transitions and animations** — `transition`, `animation`, `@keyframes`
 - **Filters and effects** — `filter`, `backdrop-filter`, `mix-blend-mode` (not parsed at all)
-- **`opacity`** — parsed and accepted but has no effect
 - **`letter-spacing`** — parsed and accepted but has no effect
 - **`text-transform`** — `uppercase`, `lowercase`, `capitalize`; parsed and accepted but has no effect
 - **`text-shadow`**
