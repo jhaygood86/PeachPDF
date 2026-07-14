@@ -953,5 +953,274 @@ namespace PeachPDF.Tests.Svg
             var rect = Assert.IsType<SvgRectElement>(Assert.Single(anchor.Children));
             Assert.Equal(RColor.FromArgb(0x00, 0xff, 0x00), rect.Fill.Color);
         }
+
+        /// <summary>
+        /// A tiny synthesized PNG, same technique as <c>ImageDrawingTests.MakePngBytes</c> (a
+        /// hand-picked minimal PNG isn't reliably decodable by the StbImageSharp-based decoder this
+        /// fork uses - writing one with the matching StbImageWriteSharp encoder is).
+        /// </summary>
+        private static readonly string OnePixelPngDataUri = "data:image/png;base64," + System.Convert.ToBase64String(MakePngBytes());
+
+        private static byte[] MakePngBytes()
+        {
+            var pixels = new byte[] { 255, 0, 0, 255 };
+            using var ms = new System.IO.MemoryStream();
+            new StbImageWriteSharp.ImageWriter().WritePng(pixels, 1, 1, StbImageWriteSharp.ColorComponents.RedGreenBlueAlpha, ms);
+            return ms.ToArray();
+        }
+
+        [Fact]
+        public void Image_XYWidthHeight_AreParsed()
+        {
+            var document = BuildFrom($"""<svg xmlns="http://www.w3.org/2000/svg"><image x="10" y="20" width="30" height="40" href="{OnePixelPngDataUri}"/></svg>""");
+
+            var image = Assert.IsType<SvgImageElement>(Assert.Single(document.Children));
+            Assert.Equal(10, image.X, 3);
+            Assert.Equal(20, image.Y, 3);
+            Assert.Equal(30, image.Width, 3);
+            Assert.Equal(40, image.Height, 3);
+        }
+
+        [Fact]
+        public void Image_DataUriPng_ResolvesToRasterImage()
+        {
+            var document = BuildFrom($"""<svg xmlns="http://www.w3.org/2000/svg"><image width="1" height="1" href="{OnePixelPngDataUri}"/></svg>""");
+
+            var image = Assert.IsType<SvgImageElement>(Assert.Single(document.Children));
+            Assert.NotNull(image.Image);
+            Assert.Null(image.NestedDocument);
+        }
+
+        [Fact]
+        public void Image_XlinkHref_IsAlsoResolved()
+        {
+            var document = BuildFrom($"""<svg xmlns="http://www.w3.org/2000/svg"><image width="1" height="1" xlink:href="{OnePixelPngDataUri}" xmlns:xlink="http://www.w3.org/1999/xlink"/></svg>""");
+
+            var image = Assert.IsType<SvgImageElement>(Assert.Single(document.Children));
+            Assert.NotNull(image.Image);
+        }
+
+        [Fact]
+        public void Image_DataUriSvg_ResolvesToNestedDocumentWithOwnChildren()
+        {
+            var embeddedSvg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="#00ff00"/></svg>""";
+            var dataUri = "data:image/svg+xml;base64," + System.Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(embeddedSvg));
+
+            var document = BuildFrom($"""<svg xmlns="http://www.w3.org/2000/svg"><image width="20" height="20" href="{dataUri}"/></svg>""");
+
+            var image = Assert.IsType<SvgImageElement>(Assert.Single(document.Children));
+            Assert.Null(image.Image);
+            Assert.NotNull(image.NestedDocument);
+            var circle = Assert.IsType<SvgCircleElement>(Assert.Single(image.NestedDocument!.Children));
+            Assert.Equal(RColor.FromArgb(0x00, 0xff, 0x00), circle.Fill.Color);
+        }
+
+        [Fact]
+        public void Image_NonDataUriHref_LeavesUnresolved()
+        {
+            // A network/file href is a documented v1 gap (SvgTreeBuilder.Build is synchronous) - the
+            // element still builds, it just renders nothing rather than throwing or blocking.
+            var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><image width="10" height="10" href="https://example.com/x.png"/></svg>""");
+
+            var image = Assert.IsType<SvgImageElement>(Assert.Single(document.Children));
+            Assert.Null(image.Image);
+            Assert.Null(image.NestedDocument);
+        }
+
+        [Fact]
+        public void Image_MalformedDataUri_LeavesUnresolvedRatherThanThrowing()
+        {
+            var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><image width="10" height="10" href="data:image/png;base64,not-valid-base64!!"/></svg>""");
+
+            var image = Assert.IsType<SvgImageElement>(Assert.Single(document.Children));
+            Assert.Null(image.Image);
+            Assert.Null(image.NestedDocument);
+        }
+
+        [Fact]
+        public void Image_PreserveAspectRatio_IsParsed()
+        {
+            var document = BuildFrom($"""<svg xmlns="http://www.w3.org/2000/svg"><image width="10" height="10" preserveAspectRatio="xMinYMin slice" href="{OnePixelPngDataUri}"/></svg>""");
+
+            var image = Assert.IsType<SvgImageElement>(Assert.Single(document.Children));
+            Assert.Equal(SvgAlign.XMinYMin, image.PreserveAspectRatio.Align);
+            Assert.True(image.PreserveAspectRatio.Slice);
+        }
+
+        [Fact]
+        public void Image_ReferencedByUse_ResolvesTarget()
+        {
+            var document = BuildFrom($"""
+                <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+                  <defs><image id="pic" width="1" height="1" href="{OnePixelPngDataUri}"/></defs>
+                  <use xlink:href="#pic" x="5" y="5"/>
+                </svg>
+                """);
+
+            var use = Assert.IsType<SvgUseElement>(Assert.Single(document.Children));
+            var image = Assert.IsType<SvgImageElement>(use.Target);
+            Assert.NotNull(image.Image);
+        }
+
+        [Fact]
+        public void Text_XYAndContent_AreParsed()
+        {
+            var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><text x="10" y="20">Hello</text></svg>""");
+
+            var text = Assert.IsType<SvgTextElement>(Assert.Single(document.Children));
+            Assert.True(text.HasOwnX);
+            Assert.True(text.HasOwnY);
+            Assert.Equal(10, text.X, 3);
+            Assert.Equal(20, text.Y, 3);
+            Assert.Equal("Hello", text.Text);
+            Assert.NotNull(text.Font);
+            Assert.Empty(text.Spans);
+        }
+
+        [Fact]
+        public void Text_WhitespaceInContent_IsCollapsedAndTrimmed()
+        {
+            var document = BuildFrom("""
+                <svg xmlns="http://www.w3.org/2000/svg">
+                  <text x="0" y="0">
+                    Hello    World
+                  </text>
+                </svg>
+                """);
+
+            var text = Assert.IsType<SvgTextElement>(Assert.Single(document.Children));
+            Assert.Equal("Hello World", text.Text);
+        }
+
+        [Fact]
+        public void Text_NoXY_DefaultsToZeroWithoutOwnPosition()
+        {
+            var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><text>Hi</text></svg>""");
+
+            var text = Assert.IsType<SvgTextElement>(Assert.Single(document.Children));
+            Assert.False(text.HasOwnX);
+            Assert.False(text.HasOwnY);
+            Assert.Equal(0, text.X, 3);
+            Assert.Equal(0, text.Y, 3);
+        }
+
+        [Theory]
+        [InlineData("middle", "Middle")]
+        [InlineData("end", "End")]
+        [InlineData("start", "Start")]
+        public void Text_TextAnchor_IsParsed(string value, string expectedName)
+        {
+            var document = BuildFrom($"""<svg xmlns="http://www.w3.org/2000/svg"><text text-anchor="{value}">Hi</text></svg>""");
+
+            var text = Assert.IsType<SvgTextElement>(Assert.Single(document.Children));
+            var expected = System.Enum.Parse<SvgTextAnchor>(expectedName);
+            Assert.Equal(expected, text.TextAnchor);
+        }
+
+        [Fact]
+        public void Text_Tspan_OwnTextIsSeparateFromParentText()
+        {
+            // Regression test for the own-text-vs-descendant-text distinction both ISvgSourceNode
+            // implementations must agree on - see XElementSvgSourceNode.GetTextContent's doc comment.
+            var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><text x="0" y="0">Hello <tspan fill="#ff0000">World</tspan></text></svg>""");
+
+            var text = Assert.IsType<SvgTextElement>(Assert.Single(document.Children));
+            Assert.Equal("Hello", text.Text);
+            var span = Assert.Single(text.Spans);
+            Assert.Equal("World", span.Text);
+            Assert.Equal(RColor.FromArgb(0xff, 0x00, 0x00), span.Fill.Color);
+        }
+
+        [Fact]
+        public void Text_Tspan_WithoutOwnXY_DoesNotHaveOwnPosition()
+        {
+            var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><text x="10" y="20">Hello <tspan>World</tspan></text></svg>""");
+
+            var text = Assert.IsType<SvgTextElement>(Assert.Single(document.Children));
+            var span = Assert.Single(text.Spans);
+            Assert.False(span.HasOwnX);
+            Assert.False(span.HasOwnY);
+        }
+
+        [Fact]
+        public void Text_Tspan_WithOwnXY_HasOwnPosition()
+        {
+            var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><text x="10" y="20">Hello <tspan x="50" y="60">World</tspan></text></svg>""");
+
+            var text = Assert.IsType<SvgTextElement>(Assert.Single(document.Children));
+            var span = Assert.Single(text.Spans);
+            Assert.True(span.HasOwnX);
+            Assert.True(span.HasOwnY);
+            Assert.Equal(50, span.X, 3);
+            Assert.Equal(60, span.Y, 3);
+        }
+
+        [Fact]
+        public void Text_Tspan_InheritsParentFontWhenUnspecified()
+        {
+            var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><text font-family="Arial" font-size="20">Hello <tspan>World</tspan></text></svg>""");
+
+            var text = Assert.IsType<SvgTextElement>(Assert.Single(document.Children));
+            var span = Assert.Single(text.Spans);
+            Assert.NotNull(text.Font);
+            Assert.NotNull(span.Font);
+            Assert.Equal(text.Font!.Size, span.Font!.Size, 3);
+        }
+
+        [Fact]
+        public void Text_FontSize_OverridesParentOnTspan()
+        {
+            var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><text font-size="10">Hello <tspan font-size="30">World</tspan></text></svg>""");
+
+            var text = Assert.IsType<SvgTextElement>(Assert.Single(document.Children));
+            var span = Assert.Single(text.Spans);
+            // Font.Size reports the underlying XFont's own (adapter-internal-units) size, not the raw
+            // SVG font-size value directly - assert the ratio instead of an absolute value so this
+            // isn't coupled to PdfSharpAdapter.PixelsPerPoint's default.
+            Assert.Equal(3.0, span.Font!.Size / text.Font!.Size, 3);
+        }
+
+        [Fact]
+        public void Text_FontWeightBold_SetsBoldStyle()
+        {
+            var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><text font-weight="bold">Hi</text></svg>""");
+
+            var text = Assert.IsType<SvgTextElement>(Assert.Single(document.Children));
+            Assert.NotNull(text.Font);
+        }
+
+        [Fact]
+        public void Text_Tref_ResolvesReferencedElementsText()
+        {
+            var document = BuildFrom("""
+                <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+                  <defs><text id="src">Referenced Text</text></defs>
+                  <text x="0" y="0"><tref xlink:href="#src"/></text>
+                </svg>
+                """);
+
+            var text = Assert.IsType<SvgTextElement>(Assert.Single(document.Children));
+            var span = Assert.Single(text.Spans);
+            Assert.Equal("Referenced Text", span.Text);
+        }
+
+        [Fact]
+        public void Text_Tref_UnresolvableHref_ProducesEmptyRun()
+        {
+            var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><text x="0" y="0"><tref xlink:href="#missing"/></text></svg>""");
+
+            var text = Assert.IsType<SvgTextElement>(Assert.Single(document.Children));
+            var span = Assert.Single(text.Spans);
+            Assert.Equal("", span.Text);
+        }
+
+        [Fact]
+        public void Text_FillNone_ParsesAsNoneKind()
+        {
+            var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><text fill="none">Hi</text></svg>""");
+
+            var text = Assert.IsType<SvgTextElement>(Assert.Single(document.Children));
+            Assert.Equal(SvgPaintKind.None, text.Fill.Kind);
+        }
     }
 }

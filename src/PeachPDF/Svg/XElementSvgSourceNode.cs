@@ -37,6 +37,15 @@ namespace PeachPDF.Svg
 
         public IEnumerable<ISvgSourceNode> Children => element.Elements().Select(static e => (ISvgSourceNode)new XElementSvgSourceNode(e));
 
-        public string GetTextContent() => element.Value;
+        /// <summary>
+        /// Only this element's own direct text-node children - deliberately NOT <see cref="XElement.Value"/>,
+        /// which recurses into descendant elements' text too. Matches <see cref="CssBoxSvgSourceNode"/>'s
+        /// (accidental but relied-upon) behavior: its own <c>GetTextContent</c> only sees direct child
+        /// boxes, so a nested element's text never bleeds into its parent's. This matters once a node
+        /// can have both loose text and element children (e.g. <c>&lt;text&gt;Hello &lt;tspan&gt;World&lt;/tspan&gt;&lt;/text&gt;</c>) -
+        /// callers that need only the element's own run rely on that distinction (<see cref="SvgTreeBuilder"/>'s
+        /// text handling).
+        /// </summary>
+        public string GetTextContent() => string.Concat(element.Nodes().OfType<XText>().Select(t => t.Value));
     }
 }

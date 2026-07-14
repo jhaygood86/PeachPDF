@@ -122,8 +122,9 @@ PeachPDF renders a subset of the HTML and CSS specifications. This page document
 
 | Element | MDN Reference | Notes |
 |---------|--------------|-------|
-| `img` | [img](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/img) | Full support; images are loaded via the configured network loader. Data URIs are supported |
+| `img` | [img](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/img) | Full support; images are loaded via the configured network loader. Data URIs are supported. An SVG source (`.svg` file, `data:image/svg+xml`) renders as real vector PDF content — see [Supported SVG Features](supported-svg-features.md) |
 | `iframe` | [iframe](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe) | Rendered as a placeholder box with a gray border. For YouTube and Vimeo embed URLs, a video thumbnail image is displayed |
+| `svg` | [svg](https://developer.mozilla.org/en-US/docs/Web/SVG/Reference/Element/svg) | Inline SVG renders as real vector PDF content, not a rasterized bitmap — see [Supported SVG Features](supported-svg-features.md) for the full SVG compatibility matrix |
 
 ### Forms
 

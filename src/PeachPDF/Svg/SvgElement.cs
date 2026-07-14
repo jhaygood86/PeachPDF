@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using System.Collections.Generic;
 
@@ -100,6 +101,44 @@ namespace PeachPDF.Svg
         public IReadOnlyList<PathSegment> Segments { get; set; } = [];
     }
 
+    internal enum SvgTextAnchor { Start, Middle, End }
+
+    /// <summary>
+    /// A single positioned text run - built from a <c>&lt;text&gt;</c>, <c>&lt;tspan&gt;</c>, or
+    /// <c>&lt;tref&gt;</c> element (all three share this shape; only the root of a subtree is ever an
+    /// actual <c>&lt;text&gt;</c>). <see cref="HasOwnX"/>/<see cref="HasOwnY"/> distinguish "this run
+    /// starts a new absolute position" from "this run continues immediately after its previous
+    /// sibling's rendered width" (ordinary SVG text flow) - resolved at render time, once each run's
+    /// measured width is known (see <see cref="SvgRenderer"/>). Per-character <c>x</c>/<c>y</c>/
+    /// <c>dx</c>/<c>dy</c>/<c>rotate</c> arrays (SVG 1.1's full per-glyph positioning model) are out of
+    /// scope in v1 - only a single leading value applies to the whole run, the same simplification
+    /// already used elsewhere in this renderer (e.g. <c>&lt;switch&gt;</c>'s first-child-only rule).
+    /// Only a solid <see cref="SvgElement.Fill"/> is painted (<see cref="Html.Adapters.RGraphics.DrawString"/>
+    /// takes a single color, not a brush) - a gradient/pattern fill or any <see cref="SvgElement.Stroke"/>
+    /// on text is a documented v1 gap (would need glyph-outline-as-path support, the same underlying
+    /// gap that puts <c>&lt;textPath&gt;</c> out of v1 scope).
+    /// </summary>
+    internal sealed class SvgTextElement : SvgElement
+    {
+        public bool HasOwnX { get; set; }
+        public bool HasOwnY { get; set; }
+        public double X { get; set; }
+        public double Y { get; set; }
+        public double Dx { get; set; }
+        public double Dy { get; set; }
+        public double RotateDegrees { get; set; }
+        public SvgTextAnchor TextAnchor { get; set; } = SvgTextAnchor.Start;
+
+        /// <summary>Null when the resolved font family (and the library-wide default fallback) couldn't be found - the run then renders nothing rather than throwing, unlike ordinary HTML text.</summary>
+        public RFont? Font { get; set; }
+
+        /// <summary>This run's own direct text content only - not its <see cref="Spans"/>' text.</summary>
+        public string Text { get; set; } = "";
+
+        /// <summary>Child <c>&lt;tspan&gt;</c>/<c>&lt;tref&gt;</c> runs, in document order.</summary>
+        public List<SvgTextElement> Spans { get; } = [];
+    }
+
     internal sealed class SvgCircleElement : SvgElement
     {
         public double Cx { get; set; }
@@ -151,6 +190,25 @@ namespace PeachPDF.Svg
         public double Y1 { get; set; }
         public double X2 { get; set; }
         public double Y2 { get; set; }
+    }
+
+    /// <summary>
+    /// An <c>&lt;image&gt;</c> element. Only a <c>data:</c> URI <c>href</c> is resolved (into either
+    /// <see cref="Image"/> for a raster payload or <see cref="NestedDocument"/> for an embedded
+    /// <c>image/svg+xml</c> payload, mutually exclusive) - <see cref="SvgTreeBuilder.Build"/> is
+    /// synchronous, so a network/file-path href (which needs the existing async image-loading
+    /// pipeline) is a documented v1 gap; both properties stay null and the element simply renders
+    /// nothing, same as any other unresolvable reference elsewhere in this builder.
+    /// </summary>
+    internal sealed class SvgImageElement : SvgElement
+    {
+        public double X { get; set; }
+        public double Y { get; set; }
+        public double Width { get; set; }
+        public double Height { get; set; }
+        public SvgPreserveAspectRatio PreserveAspectRatio { get; set; } = SvgPreserveAspectRatio.Default;
+        public RImage? Image { get; set; }
+        public SvgDocument? NestedDocument { get; set; }
     }
 
     /// <summary>

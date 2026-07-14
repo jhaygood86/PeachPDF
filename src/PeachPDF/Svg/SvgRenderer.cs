@@ -219,6 +219,130 @@ namespace PeachPDF.Svg
             g.PopClip();
         }
 
+        /// <summary>
+        /// Renders an <c>&lt;image&gt;</c> element - either an embedded raster payload (fit into its
+        /// own (x, y, width, height) box per its own <c>preserveAspectRatio</c>, same alignment/meet/
+        /// slice math as any other viewport) or an embedded <c>image/svg+xml</c> payload (rendered as
+        /// its own self-contained <see cref="SvgDocument"/>, so its <c>url(#id)</c> references resolve
+        /// against its own gradient/clip/mask/pattern registries, not the host document's). Does
+        /// nothing for an unresolved <c>href</c> (see <see cref="SvgImageElement"/>).
+        /// </summary>
+        private static void RenderImage(RGraphics g, SvgImageElement image, double opacity)
+        {
+            if (image.Width <= 0 || image.Height <= 0)
+                return;
+
+            var viewportRect = new RRect(image.X, image.Y, image.Width, image.Height);
+
+            if (image.NestedDocument is { } nestedDocument)
+            {
+                var viewBoxWidth = nestedDocument.ViewBox?.Width ?? nestedDocument.Width ?? image.Width;
+                var viewBoxHeight = nestedDocument.ViewBox?.Height ?? nestedDocument.Height ?? image.Height;
+                if (viewBoxWidth <= 0 || viewBoxHeight <= 0)
+                    return;
+
+                var viewBoxX = nestedDocument.ViewBox?.X ?? 0;
+                var viewBoxY = nestedDocument.ViewBox?.Y ?? 0;
+
+                // Per spec, the <image> element's own preserveAspectRatio governs how the referenced
+                // document is fit into its box - not the referenced document's own root
+                // preserveAspectRatio (only relevant when that document is rendered as a top-level
+                // viewport in its own right, e.g. via RenderInto).
+                var matrix = ComputeViewportTransform(viewportRect, viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight, image.PreserveAspectRatio);
+
+                g.PushClip(viewportRect);
+                g.PushTransform(matrix);
+
+                var nestedViewport = (viewBoxWidth, viewBoxHeight);
+                foreach (var child in nestedDocument.Children)
+                    RenderElement(g, nestedDocument, child, opacity, nestedViewport);
+
+                g.PopTransform();
+                g.PopClip();
+            }
+            else if (image.Image is { } raster && raster.Width > 0 && raster.Height > 0)
+            {
+                var matrix = ComputeViewportTransform(viewportRect, 0, 0, raster.Width, raster.Height, image.PreserveAspectRatio);
+
+                g.PushClip(viewportRect);
+                g.PushTransform(matrix);
+                g.DrawImage(raster, new RRect(0, 0, raster.Width, raster.Height));
+                g.PopTransform();
+                g.PopClip();
+            }
+        }
+
+        /// <summary>
+        /// Renders one text run (a <c>&lt;text&gt;</c>, <c>&lt;tspan&gt;</c>, or <c>&lt;tref&gt;</c> - see
+        /// <see cref="SvgTextElement"/>), then recurses into its <see cref="SvgTextElement.Spans"/>. The
+        /// cursor is threaded by reference through siblings so a span without its own <c>x</c>/<c>y</c>
+        /// continues immediately after the previous run's rendered width - ordinary SVG text flow,
+        /// approximated to whole-run granularity rather than per-glyph (see the type's doc comment).
+        /// </summary>
+        private static void RenderTextRun(RGraphics g, SvgTextElement run, double inheritedOpacity, ref double cursorX, ref double cursorY)
+        {
+            var opacity = inheritedOpacity * run.Opacity;
+
+            if (run.HasOwnX) cursorX = run.X;
+            if (run.HasOwnY) cursorY = run.Y;
+
+            var x = cursorX + run.Dx;
+            var y = cursorY + run.Dy;
+
+            if (run.Text.Length > 0 && run.Font is { } font)
+            {
+                var size = g.MeasureString(run.Text, font);
+
+                var drawX = run.TextAnchor switch
+                {
+                    SvgTextAnchor.Middle => x - size.Width / 2,
+                    SvgTextAnchor.End => x - size.Width,
+                    _ => x,
+                };
+
+                // DrawString positions from the top-left of the line box, not the baseline - shift up
+                // by the font's ascent so (x, y) lands on the baseline, per SVG's <text> coordinate
+                // semantics.
+                var drawY = y - font.Ascent;
+
+                var pushedRotation = run.RotateDegrees != 0;
+                if (pushedRotation)
+                {
+                    var radians = run.RotateDegrees * (Math.PI / 180.0);
+                    var cos = Math.Cos(radians);
+                    var sin = Math.Sin(radians);
+                    var toOrigin = new RMatrix(1, 0, 0, 1, -x, -y);
+                    var rotate = new RMatrix(cos, sin, -sin, cos, 0, 0);
+                    var fromOrigin = new RMatrix(1, 0, 0, 1, x, y);
+                    g.PushTransform(MultiplyMatrix(MultiplyMatrix(toOrigin, rotate), fromOrigin));
+                }
+
+                PaintTextRun(g, run, font, drawX, drawY, size, opacity);
+
+                if (pushedRotation)
+                    g.PopTransform();
+
+                cursorX = x + size.Width;
+                cursorY = y;
+            }
+
+            foreach (var span in run.Spans)
+                RenderTextRun(g, span, opacity, ref cursorX, ref cursorY);
+        }
+
+        /// <summary>
+        /// Only a solid <see cref="SvgElement.Fill"/> is painted - see <see cref="SvgTextElement"/>'s
+        /// doc comment for why gradient/pattern fill and any stroke on text are out of v1 scope.
+        /// </summary>
+        private static void PaintTextRun(RGraphics g, SvgTextElement run, RFont font, double drawX, double drawY, RSize size, double opacity)
+        {
+            if (run.Fill.Kind != SvgPaintKind.Solid)
+                return;
+
+            var color = ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity);
+            g.DrawString(run.Text, font, color, new RPoint(drawX, drawY), size, rtl: false);
+        }
+
         private static void RenderElement(RGraphics g, SvgDocument document, SvgElement element, double inheritedOpacity, (double Width, double Height) viewport)
         {
             var opacity = inheritedOpacity * element.Opacity;
@@ -315,6 +439,17 @@ namespace PeachPDF.Svg
                 case SvgNestedSvgElement nestedSvg:
                     RenderViewport(g, document, nestedSvg.X, nestedSvg.Y, nestedSvg.Width, nestedSvg.Height, nestedSvg.ViewBox, nestedSvg.PreserveAspectRatio, nestedSvg.Children, opacity);
                     break;
+
+                case SvgImageElement image:
+                    RenderImage(g, image, opacity);
+                    break;
+
+                case SvgTextElement text:
+                {
+                    double cursorX = text.X, cursorY = text.Y;
+                    RenderTextRun(g, text, opacity, ref cursorX, ref cursorY);
+                    break;
+                }
 
                 case SvgUseElement { Target: { } target } use:
                 {

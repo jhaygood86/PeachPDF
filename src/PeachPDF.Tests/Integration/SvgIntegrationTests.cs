@@ -748,5 +748,229 @@ namespace PeachPDF.Tests.Integration
             Assert.Contains("0.18", pdfText);
             Assert.Contains("0.8", pdfText);
         }
+
+        /// <summary>
+        /// Same technique as <c>ImageDrawingTests.MakePngBytes</c> - a hand-picked minimal PNG isn't
+        /// reliably decodable by the StbImageSharp-based decoder this fork uses; writing one with the
+        /// matching StbImageWriteSharp encoder is.
+        /// </summary>
+        private static string OnePixelPngDataUri()
+        {
+            var pixels = new byte[] { 255, 0, 0, 255 };
+            using var ms = new MemoryStream();
+            new StbImageWriteSharp.ImageWriter().WritePng(pixels, 1, 1, StbImageWriteSharp.ColorComponents.RedGreenBlueAlpha, ms);
+            return "data:image/png;base64," + Convert.ToBase64String(ms.ToArray());
+        }
+
+        [Fact]
+        public async Task InlineSvg_ImageDataUriPng_RendersImageXObject()
+        {
+            var html = $"""
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <image x="10" y="10" width="80" height="80" href="{OnePixelPngDataUri()}"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("/Subtype /Image", pdfText);
+        }
+
+        [Fact]
+        public async Task ImgSvg_ImageDataUriPng_RendersImageXObject()
+        {
+            var svg = $"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100"><image x="10" y="10" width="80" height="80" href="{OnePixelPngDataUri()}"/></svg>""";
+            var dataUri = "data:image/svg+xml;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(svg));
+            var html = $"""<!DOCTYPE html><html><body><img src="{dataUri}" width="100" height="100"/></body></html>""";
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("/Subtype /Image", pdfText);
+        }
+
+        [Fact]
+        public async Task InlineSvg_ImageDataUriSvg_RendersVectorContentNotImageXObject()
+        {
+            // An <image> referencing an embedded image/svg+xml payload must render as real vector
+            // content (its own scene graph), never rasterize - unlike the PNG case above, no
+            // "/Subtype /Image" XObject should appear at all.
+            var embeddedSvg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect x="0" y="0" width="10" height="10" fill="#000000"/></svg>""";
+            var embeddedDataUri = "data:image/svg+xml;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(embeddedSvg));
+
+            var html = $"""
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <image x="10" y="10" width="80" height="80" href="{embeddedDataUri}"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("\nf\n", pdfText);
+            Assert.DoesNotContain("/Subtype /Image", pdfText);
+        }
+
+        [Fact]
+        public async Task InlineSvg_ImageWithNonDataUriHref_RendersNothingRatherThanThrowing()
+        {
+            // A network/file href is a documented v1 gap (SvgTreeBuilder.Build is synchronous) - the
+            // page must still render successfully, just without that image's content.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <image x="10" y="10" width="80" height="80" href="https://example.com/x.png"/>
+                  <rect x="0" y="0" width="10" height="10" fill="#000000"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.DoesNotContain("/Subtype /Image", pdfText);
+            Assert.Contains("\nf\n", pdfText);
+        }
+
+        /// <summary>
+        /// Counts non-overlapping occurrences of <paramref name="operatorText"/> (e.g. <c>"Tj"</c>) in
+        /// <paramref name="pdfText"/> - used instead of checking for literal readable text, since this
+        /// renderer's fonts are embedded with <c>PdfFontEncoding.Unicode</c> (glyph-index/CID encoding),
+        /// so a drawn string like "Hello" never appears as the literal bytes <c>(Hello)</c> in the
+        /// content stream - only the operator's presence/count is a reliable signal.
+        /// </summary>
+        private static int CountOccurrences(string pdfText, string operatorText)
+        {
+            var count = 0;
+            var index = 0;
+            while ((index = pdfText.IndexOf(operatorText, index, StringComparison.Ordinal)) >= 0)
+            {
+                count++;
+                index += operatorText.Length;
+            }
+            return count;
+        }
+
+        [Fact]
+        public async Task InlineSvg_Text_RendersTjOperator()
+        {
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <text x="10" y="20" fill="#000000">Hello</text>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("Tj", pdfText);
+        }
+
+        [Fact]
+        public async Task ImgSvg_Text_RendersTjOperator()
+        {
+            var svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100"><text x="10" y="20" fill="#000000">World</text></svg>""";
+            var dataUri = "data:image/svg+xml;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(svg));
+            var html = $"""<!DOCTYPE html><html><body><img src="{dataUri}" width="100" height="100"/></body></html>""";
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("Tj", pdfText);
+        }
+
+        [Fact]
+        public async Task InlineSvg_Text_FillNone_RendersNoTjOperator()
+        {
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <text x="10" y="20" fill="none">Hidden</text>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.DoesNotContain("Tj", pdfText);
+        }
+
+        [Fact]
+        public async Task InlineSvg_TspanWithOwnFill_RendersDistinctColorAndTwoTjOperators()
+        {
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <text x="10" y="20" fill="#000000">Hello <tspan fill="#2ecc71">World</tspan></text>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            // One Tj per run ("Hello " and "World") - confirms the tspan actually drew as its own
+            // separate DrawString call rather than being silently dropped or merged.
+            Assert.True(CountOccurrences(pdfText, "Tj") >= 2, $"Expected at least 2 Tj operators, found {CountOccurrences(pdfText, "Tj")}");
+            // #2ecc71 -> (0.180, 0.800, 0.443) - confirms the tspan's own fill color, not the parent's
+            // black, actually reached the content stream as a distinct color-setting operator.
+            Assert.Contains("0.18", pdfText);
+        }
+
+        [Fact]
+        public async Task InlineSvg_Tref_RendersReferencedElementsTextAsTjOperator()
+        {
+            var resolvedHtml = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100" xmlns:xlink="http://www.w3.org/1999/xlink">
+                  <defs><text id="src">Referenced</text></defs>
+                  <text x="10" y="20" fill="#000000"><tref xlink:href="#src"/></text>
+                </svg>
+                </body></html>
+                """;
+            var unresolvedHtml = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100" xmlns:xlink="http://www.w3.org/1999/xlink">
+                  <text x="10" y="20" fill="#000000"><tref xlink:href="#missing"/></text>
+                </svg>
+                </body></html>
+                """;
+
+            var resolvedPdfText = await GetPdfText(resolvedHtml);
+            var unresolvedPdfText = await GetPdfText(unresolvedHtml);
+
+            // The resolved <tref> draws real text (a Tj operator); the unresolved one (empty text)
+            // draws nothing at all - confirms the referenced element's text content actually made it
+            // through to painting, not just that BuildTextRun resolved the string.
+            Assert.Contains("Tj", resolvedPdfText);
+            Assert.DoesNotContain("Tj", unresolvedPdfText);
+        }
+
+        [Fact]
+        public async Task InlineSvg_TextAnchorMiddle_ShiftsDrawOrigin()
+        {
+            // text-anchor="middle" must shift the actual drawn Td/Tm x-coordinate left of the
+            // element's own x="50" (half the measured text width) - confirms MeasureString-based
+            // centering actually reached the content stream, not just that text-anchor parsed.
+            var startHtml = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <text x="50" y="20" fill="#000000">Hi</text>
+                </svg>
+                </body></html>
+                """;
+            var middleHtml = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <text x="50" y="20" fill="#000000" text-anchor="middle">Hi</text>
+                </svg>
+                </body></html>
+                """;
+
+            var startPdfText = await GetPdfText(startHtml);
+            var middlePdfText = await GetPdfText(middleHtml);
+
+            Assert.NotEqual(startPdfText, middlePdfText);
+        }
     }
 }

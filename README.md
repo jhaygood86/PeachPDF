@@ -3,6 +3,7 @@ Peach PDF is a pure .NET HTML -> PDF rendering library. This library does not de
 
 ## Features
 
+- Native vector SVG rendering (inline `<svg>` and standalone `<img src="x.svg">`/`data:image/svg+xml`) — never rasterized
 - CSS custom properties (`--foo`) and `var()`, including fallbacks and inheritance
 - CSS math functions: `calc()`, `min()`, `max()`, `clamp()`
 - 2D and 3D CSS transforms (`translate`, `scale`, `rotate`, `skew`, `matrix`, and their variants)
@@ -13,7 +14,7 @@ Peach PDF is a pure .NET HTML -> PDF rendering library. This library does not de
 - Automatic PDF metadata extraction from HTML `<title>` and `<meta>` elements
 - Web fonts (`@font-face`), custom fonts loaded from a stream, and system font discovery
 
-See [HTML & CSS Support](https://peachpdf.net/html-css-support.html) for the full compatibility matrix.
+See [HTML & CSS Support](https://peachpdf.net/html-css-support.html) for the full compatibility matrix, and [Supported SVG Features](https://peachpdf.net/supported-svg-features.html) for the full SVG compatibility matrix.
 
 ## PeachPDF Requirements
 

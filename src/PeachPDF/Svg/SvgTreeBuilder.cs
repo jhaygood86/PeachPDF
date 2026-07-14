@@ -111,6 +111,19 @@ namespace PeachPDF.Svg
                 MarkerEndRef: null);
         }
 
+        /// <summary>
+        /// Font properties inherited through a <c>&lt;text&gt;</c>/<c>&lt;tspan&gt;</c>/<c>&lt;tref&gt;</c>
+        /// subtree only - a deliberate v1 scope reduction, since real SVG inherits font-family/
+        /// font-size/font-weight/font-style from ANY ancestor (including <c>&lt;g&gt;</c>/<c>&lt;svg&gt;</c>),
+        /// not just from a text run's own text-run ancestors. <see cref="InheritedPaint"/> is not
+        /// extended with these instead, to avoid threading font resolution through every non-text
+        /// element in the tree for a property only text ever consults.
+        /// </summary>
+        private readonly record struct FontContext(string Family, double Size, bool Bold, bool Italic)
+        {
+            public static readonly FontContext Default = new(Html.Core.Utils.CssConstants.DefaultFont, Html.Core.Utils.CssConstants.FontSize, false, false);
+        }
+
         /// <param name="root">The root node to build from.</param>
         /// <param name="adapter">The graphics adapter, used to resolve paint colors.</param>
         /// <param name="contextColor">
@@ -207,6 +220,8 @@ namespace PeachPDF.Svg
                 "line" => BuildLine(node, inherited),
                 "use" => BuildUse(node, inherited),
                 "svg" => BuildNestedSvg(node, inherited),
+                "image" => BuildImage(node, inherited),
+                "text" => BuildTextRun(node, inherited, FontContext.Default),
                 "switch" => BuildSwitch(node, inherited),
                 "a" => BuildAnchor(node, inherited),
                 _ => null,
@@ -460,6 +475,95 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>
+        /// Builds an <c>&lt;image&gt;</c> element. Only a <c>data:</c> URI <c>href</c> can be resolved
+        /// synchronously here - see <see cref="SvgImageElement"/>'s doc comment for why network/file
+        /// hrefs are a deliberate, documented v1 gap instead.
+        /// </summary>
+        private SvgImageElement BuildImage(ISvgSourceNode node, InheritedPaint inherited)
+        {
+            var image = new SvgImageElement
+            {
+                X = SvgValueParsers.ParseLength(node.GetAttribute("x"), _viewportWidth) ?? 0,
+                Y = SvgValueParsers.ParseLength(node.GetAttribute("y"), _viewportHeight) ?? 0,
+                Width = SvgValueParsers.ParseLength(node.GetAttribute("width"), _viewportWidth) ?? 0,
+                Height = SvgValueParsers.ParseLength(node.GetAttribute("height"), _viewportHeight) ?? 0,
+                PreserveAspectRatio = SvgValueParsers.ParsePreserveAspectRatio(node.GetAttribute("preserveAspectRatio")),
+            };
+            ApplyCommon(image, node, inherited);
+
+            var href = node.GetAttribute("href") ?? node.GetAttribute("xlink:href");
+            if (!TryDecodeDataUri(href, out var mimeType, out var bytes))
+                return image;
+
+            if (mimeType.Equals("image/svg+xml", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    var xdoc = System.Xml.Linq.XDocument.Parse(System.Text.Encoding.UTF8.GetString(bytes));
+                    if (xdoc.Root is not null)
+                        image.NestedDocument = Build(new XElementSvgSourceNode(xdoc.Root), _adapter, _contextColor);
+                }
+                catch (System.Xml.XmlException)
+                {
+                    // Malformed embedded SVG - NestedDocument stays null, renders nothing.
+                }
+            }
+            else
+            {
+                try
+                {
+                    image.Image = _adapter.ImageFromStream(new System.IO.MemoryStream(bytes));
+                }
+                catch (InvalidOperationException)
+                {
+                    // Undecodable image bytes - same exception ImageLoadHandler.LoadImageFromStream
+                    // already treats as a non-fatal decode failure; Image stays null, renders nothing.
+                }
+            }
+
+            return image;
+        }
+
+        /// <summary>
+        /// Synchronous counterpart of <see cref="Network.DataUriNetworkLoader"/>'s <c>data:</c> URI
+        /// decoding, needed here since <see cref="Build"/> is synchronous while the general
+        /// network/file resource-loading pipeline (<see cref="Html.Core.Handlers.ImageLoadHandler"/>)
+        /// is async.
+        /// </summary>
+        private static bool TryDecodeDataUri(string? href, out string mimeType, out byte[] bytes)
+        {
+            mimeType = "";
+            bytes = [];
+
+            if (href is null || !href.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            var comma = href.IndexOf(',');
+            if (comma < 0)
+                return false;
+
+            var header = href[5..comma];
+            var data = href[(comma + 1)..];
+
+            var headerParts = header.Split(';');
+            mimeType = headerParts.Length > 0 && headerParts[0].Length > 0 ? headerParts[0] : "text/plain";
+            var isBase64 = headerParts.Any(p => p.Equals("base64", StringComparison.OrdinalIgnoreCase));
+
+            try
+            {
+                bytes = isBase64
+                    ? Convert.FromBase64String(data)
+                    : System.Text.Encoding.UTF8.GetBytes(Uri.UnescapeDataString(data));
+            }
+            catch (FormatException)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
         /// Resolves (and memoizes into <see cref="SvgDocument.ClipPaths"/>) the &lt;clipPath&gt;
         /// referenced by <paramref name="id"/>. Safe to call once the full id registry from
         /// <see cref="CollectDefinitions"/> is in place, i.e. any time during pass 2. Paint
@@ -503,14 +607,7 @@ namespace PeachPDF.Svg
             // (by specificity) < inline style="" attribute. Attr() below checks each tier in that
             // order, so every existing attribute read transparently gains style=/<style> support
             // without duplicating the inherit/fallback logic per property.
-            var styleDeclarations = SvgValueParsers.ParseStyleDeclarations(node.GetAttribute("style"));
-            var classList = (node.GetAttribute("class") ?? "").Split([' ', '\t', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries);
-            var stylesheetDeclarations = _styleSheet.Match(node.Name, node.GetAttribute("id"), classList);
-
-            string? Attr(string name) =>
-                styleDeclarations.TryGetValue(name, out var v1) ? v1
-                : stylesheetDeclarations.TryGetValue(name, out var v2) ? v2
-                : node.GetAttribute(name);
+            string? Attr(string name) => ResolveStyledAttr(node, name);
 
             var fillAttr = Attr("fill");
             element.Fill = fillAttr is null || fillAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
@@ -615,6 +712,122 @@ namespace PeachPDF.Svg
                 element.MarkerMidRef,
                 element.MarkerEndRef);
         }
+
+        /// <summary>
+        /// Resolves one presentation-style property for <paramref name="node"/> with the same
+        /// precedence <see cref="ApplyCommon"/>'s local <c>Attr</c> closure uses (inline <c>style=</c>
+        /// beats a matching <c>&lt;style&gt;</c> rule beats a bare presentation attribute) - extracted
+        /// so <see cref="BuildTextRun"/> can resolve font/text-anchor properties the same way without
+        /// duplicating the precedence logic. Re-parses <paramref name="node"/>'s own <c>style=</c>/
+        /// <c>class</c> per call rather than caching, matching this builder's existing preference for
+        /// simplicity over micro-optimization elsewhere (e.g. <see cref="BuildDefinitionChildren"/>).
+        /// </summary>
+        private string? ResolveStyledAttr(ISvgSourceNode node, string name)
+        {
+            var styleDeclarations = SvgValueParsers.ParseStyleDeclarations(node.GetAttribute("style"));
+            var classList = (node.GetAttribute("class") ?? "").Split([' ', '\t', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries);
+            var stylesheetDeclarations = _styleSheet.Match(node.Name, node.GetAttribute("id"), classList);
+
+            return styleDeclarations.TryGetValue(name, out var v1) ? v1
+                : stylesheetDeclarations.TryGetValue(name, out var v2) ? v2
+                : node.GetAttribute(name);
+        }
+
+        /// <summary>
+        /// Builds one text run - shared by <c>&lt;text&gt;</c> (the subtree root) and its
+        /// <c>&lt;tspan&gt;</c>/<c>&lt;tref&gt;</c> children (see <see cref="SvgTextElement"/>).
+        /// <paramref name="fontContext"/> is this run's inherited font (see <see cref="FontContext"/>'s
+        /// doc comment for why it's a separate, text-subtree-only inheritance channel rather than part
+        /// of <see cref="InheritedPaint"/>).
+        /// </summary>
+        private SvgTextElement BuildTextRun(ISvgSourceNode node, InheritedPaint inherited, FontContext fontContext)
+        {
+            var xAttr = node.GetAttribute("x");
+            var yAttr = node.GetAttribute("y");
+
+            var run = new SvgTextElement
+            {
+                HasOwnX = !string.IsNullOrEmpty(xAttr),
+                HasOwnY = !string.IsNullOrEmpty(yAttr),
+                X = SvgValueParsers.ParseLength(xAttr, _viewportWidth) ?? 0,
+                Y = SvgValueParsers.ParseLength(yAttr, _viewportHeight) ?? 0,
+                Dx = SvgValueParsers.ParseLength(node.GetAttribute("dx"), _viewportWidth) ?? 0,
+                Dy = SvgValueParsers.ParseLength(node.GetAttribute("dy"), _viewportHeight) ?? 0,
+                // Only a single leading rotation value applies to the whole run - see SvgTextElement's
+                // doc comment re: per-character arrays being out of v1 scope.
+                RotateDegrees = SvgValueParsers.ParseLength(node.GetAttribute("rotate")) ?? 0,
+                Text = CollapseWhitespace(node.GetTextContent()),
+            };
+
+            var resolved = ApplyCommon(run, node, inherited);
+
+            run.TextAnchor = ResolveStyledAttr(node, "text-anchor")?.Trim().ToLowerInvariant() switch
+            {
+                "middle" => SvgTextAnchor.Middle,
+                "end" => SvgTextAnchor.End,
+                _ => SvgTextAnchor.Start,
+            };
+
+            var familyAttr = ResolveStyledAttr(node, "font-family");
+            var family = string.IsNullOrWhiteSpace(familyAttr) ? fontContext.Family : familyAttr.Split(',')[0].Trim().Trim('\'', '"');
+
+            var size = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "font-size"), ViewportDiagonal) ?? fontContext.Size;
+
+            var weightAttr = ResolveStyledAttr(node, "font-weight");
+            var bold = weightAttr switch
+            {
+                null => fontContext.Bold,
+                _ when weightAttr.Equals("bold", StringComparison.OrdinalIgnoreCase) || weightAttr.Equals("bolder", StringComparison.OrdinalIgnoreCase) => true,
+                _ when int.TryParse(weightAttr, out var weightValue) => weightValue >= 700,
+                _ => false,
+            };
+
+            var styleAttr = ResolveStyledAttr(node, "font-style");
+            var italic = styleAttr is null
+                ? fontContext.Italic
+                : styleAttr.Equals("italic", StringComparison.OrdinalIgnoreCase) || styleAttr.Equals("oblique", StringComparison.OrdinalIgnoreCase);
+
+            var fontStyle = RFontStyle.Regular;
+            if (bold) fontStyle |= RFontStyle.Bold;
+            if (italic) fontStyle |= RFontStyle.Italic;
+
+            run.Font = _adapter.GetFont(family, size, fontStyle) ?? _adapter.GetFont(Html.Core.Utils.CssConstants.DefaultFont, size, fontStyle);
+
+            var childFontContext = new FontContext(family, size, bold, italic);
+
+            foreach (var child in node.Children)
+            {
+                switch (child.Name)
+                {
+                    case "tspan":
+                        run.Spans.Add(BuildTextRun(child, resolved, childFontContext));
+                        break;
+
+                    case "tref":
+                    {
+                        var trefRun = BuildTextRun(child, resolved, childFontContext);
+                        var href = child.GetAttribute("href") ?? child.GetAttribute("xlink:href");
+                        var id = href?.TrimStart('#');
+                        if (!string.IsNullOrEmpty(id) && _nodesById.TryGetValue(id, out var target))
+                            trefRun.Text = CollapseWhitespace(target.GetTextContent());
+                        run.Spans.Add(trefRun);
+                        break;
+                    }
+                }
+            }
+
+            return run;
+        }
+
+        /// <summary>
+        /// SVG's default (<c>xml:space="default"</c>) whitespace handling: runs of whitespace collapse
+        /// to a single space, leading/trailing whitespace is trimmed. Applied independently per text
+        /// run rather than across a whole <c>&lt;text&gt;</c> subtree as one unit (the fully spec-correct
+        /// behavior) - a documented v1 simplification, same category as <see cref="SvgTextElement"/>'s
+        /// other scope reductions.
+        /// </summary>
+        private static string CollapseWhitespace(string text) =>
+            string.IsNullOrEmpty(text) ? "" : System.Text.RegularExpressions.Regex.Replace(text, "\\s+", " ").Trim();
 
         private SvgMarkerElement BuildMarker(ISvgSourceNode node)
         {
