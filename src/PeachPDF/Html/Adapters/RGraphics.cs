@@ -221,17 +221,21 @@ namespace PeachPDF.Html.Adapters
         public abstract (RGraphics Graphics, RImage Image)? CreateTile(double width, double height);
 
         /// <summary>
-        /// Applies a luminosity soft mask - built the same way as an <see cref="RImage"/> tile (see
-        /// <see cref="CreateTile"/>) - to everything drawn until the matching <see cref="PopSoftMask"/>.
-        /// White areas of <paramref name="maskImage"/> are fully visible, black fully transparent,
-        /// matching PDF's/SVG's own <c>&lt;mask&gt;</c> luminosity semantics. A no-op if
-        /// <paramref name="maskImage"/> wasn't created via <see cref="CreateTile"/> on this same
+        /// Draws <paramref name="image"/> (a tile from <see cref="CreateTile"/>) at
+        /// <paramref name="destRect"/> with <paramref name="maskImage"/> (another same-adapter tile,
+        /// sharing <paramref name="image"/>'s own local width/height) applied as a luminosity soft
+        /// mask, scoped to just this one placement. White areas of <paramref name="maskImage"/> are
+        /// fully visible, black fully transparent, matching PDF's/SVG's own <c>&lt;mask&gt;</c>
+        /// semantics. Deliberately NOT a "push mask, draw normally, pop mask" pair (which an earlier
+        /// version of this API was): a tile's own content is Y-flipped relative to its own (small)
+        /// size, not the page's, so positioning it correctly requires the same explicit destRect
+        /// placement <see cref="DrawImage(RImage, RRect)"/> already uses for pattern tiles - relying
+        /// on whatever transform happens to be ambient in the page's own content stream at some
+        /// arbitrary "push" point silently mispositions the mask relative to the content it's meant
+        /// to mask. A no-op if either image wasn't created via <see cref="CreateTile"/> on this same
         /// <see cref="RGraphics"/>.
         /// </summary>
-        public abstract void PushSoftMask(RImage maskImage);
-
-        /// <summary>Ends the effect of the most recent <see cref="PushSoftMask"/>.</summary>
-        public abstract void PopSoftMask();
+        public abstract void DrawImageMasked(RImage image, RImage maskImage, RRect destRect);
 
         /// <summary>
         /// Measure the width and height of string <paramref name="str"/> when drawn on device context HDC

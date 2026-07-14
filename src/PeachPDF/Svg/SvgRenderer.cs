@@ -368,18 +368,57 @@ namespace PeachPDF.Svg
                 }
             }
 
-            var pushedMask = false;
-
             if (element.MaskRef is { } maskRef && document.Masks.TryGetValue(maskRef, out var mask))
+                RenderMaskedElementContent(g, document, element, mask, opacity, viewport);
+            else
+                RenderElementSwitch(g, document, element, opacity, viewport);
+
+            if (pushedClip) g.PopClip();
+            clipPath?.Dispose();
+            if (pushedTransform) g.PopTransform();
+        }
+
+        /// <summary>
+        /// Renders <paramref name="element"/> (which has its own <c>mask="url(#...)"</c>) into a
+        /// fresh tile sized to the mask's resolved region, then composites that tile onto the page in
+        /// one atomic placement (<see cref="RGraphics.DrawImageMasked"/>) with the mask's own tile
+        /// attached - see <see cref="RGraphics.DrawImageMasked"/>'s doc comment for why this (rather
+        /// than a simpler-looking "push the mask as ambient state, render normally, pop it" approach)
+        /// is required for the mask to land in the same place as the content it's masking.
+        /// </summary>
+        private static void RenderMaskedElementContent(RGraphics g, SvgDocument document, SvgElement element, SvgMask mask, double opacity, (double Width, double Height) viewport)
+        {
+            var (x, y, width, height) = ResolveMaskRect(element, mask);
+            if (width <= 0 || height <= 0)
+                return;
+
+            var contentTile = g.CreateTile(width, height);
+            if (contentTile is not { } content)
+                return;
+
+            var maskImage = BuildMaskTile(g, document, element, mask);
+            if (maskImage is null)
             {
-                var maskTile = BuildMaskTile(g, document, element, mask);
-                if (maskTile is not null)
-                {
-                    g.PushSoftMask(maskTile);
-                    pushedMask = true;
-                }
+                content.Graphics.Dispose();
+                return;
             }
 
+            var pushedOffset = x != 0 || y != 0;
+            if (pushedOffset)
+                content.Graphics.PushTransform(new RMatrix(1, 0, 0, 1, -x, -y));
+
+            RenderElementSwitch(content.Graphics, document, element, opacity, viewport);
+
+            if (pushedOffset)
+                content.Graphics.PopTransform();
+
+            content.Graphics.Dispose();
+
+            g.DrawImageMasked(content.Image, maskImage, new RRect(x, y, width, height));
+        }
+
+        private static void RenderElementSwitch(RGraphics g, SvgDocument document, SvgElement element, double opacity, (double Width, double Height) viewport)
+        {
             switch (element)
             {
                 case SvgGroupElement group:
@@ -482,17 +521,12 @@ namespace PeachPDF.Svg
                     break;
                 }
             }
-
-            if (pushedMask) g.PopSoftMask();
-            if (pushedClip) g.PopClip();
-            clipPath?.Dispose();
-            if (pushedTransform) g.PopTransform();
         }
 
         /// <summary>
         /// Renders <paramref name="mask"/>'s content (a full paint, not just geometry - see
-        /// <see cref="SvgMask"/>) into a tile sized to its own resolved region, for use with
-        /// <see cref="RGraphics.PushSoftMask"/>. Unlike <see cref="RenderViewport"/> (used for
+        /// <see cref="SvgMask"/>) into a tile sized to its own resolved region, for use as the
+        /// luminosity source in <see cref="RGraphics.DrawImageMasked"/>. Unlike <see cref="RenderViewport"/> (used for
         /// <c>&lt;pattern&gt;</c>/<c>&lt;symbol&gt;</c>/nested <c>&lt;svg&gt;</c>), a mask doesn't
         /// establish its own viewBox-scaled coordinate system - its content is drawn in ordinary
         /// user-space units, just positioned relative to the tile's own local origin rather than the
@@ -736,6 +770,7 @@ namespace PeachPDF.Svg
                 .ToArray();
 
             var isRepeating = gradient.SpreadMethod != SvgSpreadMethod.Pad;
+            var reflect = gradient.SpreadMethod == SvgSpreadMethod.Reflect;
 
             switch (gradient)
             {
@@ -743,8 +778,21 @@ namespace PeachPDF.Svg
                 {
                     var (x1, y1) = ResolveGradientPoint(owner, gradient, linear.X1, linear.Y1);
                     var (x2, y2) = ResolveGradientPoint(owner, gradient, linear.X2, linear.Y2);
-                    var p1 = ApplyMatrix(new RPoint(x1, y1), gradient.GradientTransform);
-                    var p2 = ApplyMatrix(new RPoint(x2, y2), gradient.GradientTransform);
+                    var p1 = new RPoint(x1, y1);
+                    var p2 = new RPoint(x2, y2);
+
+                    // Unlike CSS's repeating-linear-gradient (whose axis is already sized to span the
+                    // whole background box before the stop list is ever built), SVG's x1/y1/x2/y2
+                    // define just ONE cycle - spreadMethod="repeat"/"reflect" must tile that cycle
+                    // outward to actually cover the shape, or (as originally implemented) nothing
+                    // paints outside that one short segment at all: IsRepeating only ever toggled the
+                    // PDF shading's /Extend to false, with no tiling behind it, so most of a typical
+                    // fill silently stayed unpainted.
+                    if (isRepeating)
+                        (p1, p2, stops) = ExpandLinearSpread(owner, p1, p2, stops, reflect);
+
+                    p1 = ApplyMatrix(p1, gradient.GradientTransform);
+                    p2 = ApplyMatrix(p2, gradient.GradientTransform);
                     return g.GetLinearGradientBrush(p1, p2, stops, isRepeating);
                 }
 
@@ -753,6 +801,12 @@ namespace PeachPDF.Svg
                     var (cx, cy) = ResolveGradientPoint(owner, gradient, radial.Cx, radial.Cy);
                     var (fx, fy) = ResolveGradientPoint(owner, gradient, radial.Fx ?? radial.Cx, radial.Fy ?? radial.Cy);
                     var r = ResolveGradientRadius(owner, gradient, radial.R);
+
+                    // Radial counterpart: tiles concentric rings outward from the center to cover the
+                    // shape's bounding box, rather than extending along a linear axis.
+                    if (isRepeating)
+                        (r, stops) = ExpandRadialSpread(owner, new RPoint(cx, cy), r, stops, reflect);
+
                     var center = ApplyMatrix(new RPoint(cx, cy), gradient.GradientTransform);
                     var focal = ApplyMatrix(new RPoint(fx, fy), gradient.GradientTransform);
                     var (radiusX, radiusY) = ApplyMatrixToRadius(r, gradient.GradientTransform);
@@ -763,6 +817,126 @@ namespace PeachPDF.Svg
                     return null;
             }
         }
+
+        /// <summary>Safety cap on how many spreadMethod cycles get tiled - see <see cref="ExpandLinearSpread"/>/<see cref="ExpandRadialSpread"/>.</summary>
+        private const int MaxSpreadCycles = 500;
+
+        /// <summary>
+        /// Extends a linear gradient's axis (<paramref name="p1"/>..<paramref name="p2"/>, one cycle)
+        /// to cover <paramref name="owner"/>'s bounding box, and replicates <paramref name="stops"/>
+        /// across the extended range - one copy per cycle, each positioned at its own integer offset
+        /// along the original gradient direction. For <paramref name="reflect"/>, odd-numbered cycles
+        /// use mirrored stop positions (1-position) so adjacent cycle boundaries share a color (no
+        /// hard seam); for plain "repeat", every cycle uses the same direction (a seam appears at each
+        /// boundary wherever the first/last stop colors differ, which is spec-correct for "repeat").
+        /// Falls back to the original (unexpanded) axis/stops if the shape has no computable bounding
+        /// box or the axis is degenerate (zero length) - the caller's <c>/Extend=false</c> then simply
+        /// paints one cycle and leaves the rest of the shape unpainted, same as before this existed.
+        /// </summary>
+        private static (RPoint P1, RPoint P2, (RColor Color, double Position)[] Stops) ExpandLinearSpread(
+            SvgElement owner, RPoint p1, RPoint p2, (RColor Color, double Position)[] stops, bool reflect)
+        {
+            if (stops.Length < 2 || SvgGeometryBounds.GetBoundingBox(owner) is not { } bbox)
+                return (p1, p2, stops);
+
+            var dx = p2.X - p1.X;
+            var dy = p2.Y - p1.Y;
+            var len2 = dx * dx + dy * dy;
+            if (len2 < 1e-9)
+                return (p1, p2, stops);
+
+            var corners = new[]
+            {
+                new RPoint(bbox.X, bbox.Y),
+                new RPoint(bbox.X + bbox.Width, bbox.Y),
+                new RPoint(bbox.X, bbox.Y + bbox.Height),
+                new RPoint(bbox.X + bbox.Width, bbox.Y + bbox.Height),
+            };
+
+            var tMin = double.MaxValue;
+            var tMax = double.MinValue;
+            foreach (var corner in corners)
+            {
+                var t = ((corner.X - p1.X) * dx + (corner.Y - p1.Y) * dy) / len2;
+                tMin = Math.Min(tMin, t);
+                tMax = Math.Max(tMax, t);
+            }
+
+            var kMin = (int)Math.Floor(tMin);
+            var kMax = (int)Math.Ceiling(tMax);
+            if (kMin >= 0 && kMax <= 1)
+                return (p1, p2, stops);
+
+            if (kMax - kMin > MaxSpreadCycles)
+                kMax = kMin + MaxSpreadCycles;
+
+            var cycles = kMax - kMin;
+            var newP1 = new RPoint(p1.X + kMin * dx, p1.Y + kMin * dy);
+            var newP2 = new RPoint(p1.X + kMax * dx, p1.Y + kMax * dy);
+
+            var expanded = new List<(RColor Color, double Position)>(stops.Length * cycles);
+            for (var k = kMin; k < kMax; k++)
+            {
+                var reflectedCycle = reflect && PositiveMod(k, 2) != 0;
+                foreach (var stop in stops)
+                {
+                    var localPos = reflectedCycle ? 1 - stop.Position : stop.Position;
+                    var newPos = (k - kMin + localPos) / cycles;
+                    expanded.Add((stop.Color, Math.Clamp(newPos, 0.0, 1.0)));
+                }
+            }
+
+            expanded.Sort((a, b) => a.Position.CompareTo(b.Position));
+            return (newP1, newP2, expanded.ToArray());
+        }
+
+        /// <summary>Radial counterpart of <see cref="ExpandLinearSpread"/> - tiles concentric rings outward from <paramref name="center"/> to cover <paramref name="owner"/>'s bounding box.</summary>
+        private static (double R, (RColor Color, double Position)[] Stops) ExpandRadialSpread(
+            SvgElement owner, RPoint center, double r, (RColor Color, double Position)[] stops, bool reflect)
+        {
+            if (stops.Length < 2 || r < 1e-9 || SvgGeometryBounds.GetBoundingBox(owner) is not { } bbox)
+                return (r, stops);
+
+            var corners = new[]
+            {
+                new RPoint(bbox.X, bbox.Y),
+                new RPoint(bbox.X + bbox.Width, bbox.Y),
+                new RPoint(bbox.X, bbox.Y + bbox.Height),
+                new RPoint(bbox.X + bbox.Width, bbox.Y + bbox.Height),
+            };
+
+            var maxDist = 0.0;
+            foreach (var corner in corners)
+            {
+                var ddx = corner.X - center.X;
+                var ddy = corner.Y - center.Y;
+                maxDist = Math.Max(maxDist, Math.Sqrt(ddx * ddx + ddy * ddy));
+            }
+
+            var cycles = (int)Math.Ceiling(maxDist / r);
+            if (cycles <= 1)
+                return (r, stops);
+
+            cycles = Math.Min(cycles, MaxSpreadCycles);
+
+            var newR = r * cycles;
+            var expanded = new List<(RColor Color, double Position)>(stops.Length * cycles);
+            for (var k = 0; k < cycles; k++)
+            {
+                var reflectedCycle = reflect && k % 2 != 0;
+                foreach (var stop in stops)
+                {
+                    var localPos = reflectedCycle ? 1 - stop.Position : stop.Position;
+                    var newPos = (k + localPos) / cycles;
+                    expanded.Add((stop.Color, Math.Clamp(newPos, 0.0, 1.0)));
+                }
+            }
+
+            expanded.Sort((a, b) => a.Position.CompareTo(b.Position));
+            return (newR, expanded.ToArray());
+        }
+
+        private static int PositiveMod(int a, int m) => ((a % m) + m) % m;
 
         /// <summary>
         /// Resolves one gradient coordinate pair. In <c>userSpaceOnUse</c> mode the raw values are

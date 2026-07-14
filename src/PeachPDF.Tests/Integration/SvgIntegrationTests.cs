@@ -3,6 +3,7 @@ using PeachPDF.Tests.TestSupport;
 using System;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -370,6 +371,78 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task InlineSvg_LinearSpreadMethodRepeat_TilesStopsAcrossShapeBounds()
+        {
+            // Regression test: SVG's x1/y1/x2/y2 define only ONE cycle of the gradient, unlike CSS's
+            // repeating-linear-gradient() (whose axis is already sized to span the whole background
+            // box before the stop list is built) - spreadMethod="repeat"/"reflect" must tile that one
+            // cycle outward to actually cover the shape. The original implementation only ever
+            // toggled the PDF shading's /Extend to false with no tiling behind it, so a short axis
+            // (20 units here) painted into an 80x80 rect left most of the rect unpainted. A real fix
+            // replicates the stops into a stitching function (/FunctionType 3) across an axis extended
+            // to cover the shape's bounding box - assert that stitching function actually appears,
+            // rather than the plain 2-color /FunctionType 2 a single unrepeated cycle would produce.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <defs><linearGradient id="g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="20" y2="0" spreadMethod="repeat">
+                    <stop offset="0" stop-color="#ff9966"/><stop offset="1" stop-color="#ff5e62"/>
+                  </linearGradient></defs>
+                  <rect x="10" y="10" width="80" height="80" fill="url(#g)"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("/ShadingType", pdfText);
+            Assert.Contains("/FunctionType 3", pdfText);
+        }
+
+        [Fact]
+        public async Task InlineSvg_LinearSpreadMethodReflect_TilesStopsAcrossShapeBounds()
+        {
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <defs><linearGradient id="g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="20" y2="0" spreadMethod="reflect">
+                    <stop offset="0" stop-color="#00c9ff"/><stop offset="1" stop-color="#92fe9d"/>
+                  </linearGradient></defs>
+                  <rect x="10" y="10" width="80" height="80" fill="url(#g)"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("/ShadingType", pdfText);
+            Assert.Contains("/FunctionType 3", pdfText);
+        }
+
+        [Fact]
+        public async Task InlineSvg_RadialSpreadMethodRepeat_TilesStopsAcrossShapeBounds()
+        {
+            // Radial counterpart: rings tile outward from the center rather than extending along an
+            // axis, but the same "must actually expand the stop list, not just flip /Extend" bug
+            // applied here too.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <defs><radialGradient id="g" gradientUnits="userSpaceOnUse" cx="50" cy="50" r="10" spreadMethod="repeat">
+                    <stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#000000"/>
+                  </radialGradient></defs>
+                  <rect x="0" y="0" width="100" height="100" fill="url(#g)"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("/ShadingType", pdfText);
+            Assert.Contains("/FunctionType 3", pdfText);
+        }
+
+        [Fact]
         public async Task InlineSvg_GradientStroke_RendersShadingNotFlatColor()
         {
             // Before Phase 5, a gradient-paint stroke was approximated with the first stop's flat
@@ -727,6 +800,69 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Contains("/SMask", pdfText);
             Assert.Contains("/Luminosity", pdfText);
+        }
+
+        [Fact]
+        public async Task InlineSvg_Mask_SMaskGsAndContentDoShareTheSameCm()
+        {
+            // Regression test for a bug where the masked content and the mask's own Form XObject were
+            // positioned via two DIFFERENT coordinate conventions (the mask tile's own small-height
+            // Y-flip vs the page's), so relying on "gs" (activate the mask) at some ambient point in
+            // the content stream, applied separately from wherever the content itself later got drawn,
+            // silently misaligned the two - the mask would evaluate as fully transparent everywhere,
+            // even though every other check here (/SMask, /Luminosity, /Subtype /Form present) still
+            // passed, since those only check token presence, not where the tokens actually land.
+            // RGraphics.DrawImageMasked fixes this by emitting the mask's "gs" and the content's "Do"
+            // on the SAME "q ... cm ... gs ... Do Q" line, sharing one placement transform - assert
+            // that structure directly so a future regression to the old "ambient gs, unrelated Do"
+            // shape fails loudly here instead of only being visible as a blank render.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <defs>
+                    <mask id="fade" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
+                      <rect x="0" y="0" width="100" height="100" fill="#ffffff"/>
+                    </mask>
+                  </defs>
+                  <rect x="10" y="10" width="80" height="80" fill="#000000" mask="url(#fade)"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Matches(new Regex(@"cm /GS\d+ gs /Fm\d+ Do"), pdfText);
+        }
+
+        [Fact]
+        public async Task InlineSvg_Mask_ContentFormIsItselfATransparencyGroup()
+        {
+            // Regression test for a bug where the masked CONTENT form (not just the mask's own /G
+            // form) needs its own /Group transparency dictionary for the active SMask to actually take
+            // effect. Its absence is invisible in MuPDF (which applies an SMask to plain, non-group
+            // content leniently) but PDFium (Chrome/Edge, and most real-world viewers/printers)
+            // silently ignores the mask entirely without it - masked content rendered fully opaque,
+            // as if unmasked. Neither symptom is a "does the token exist" problem (/SMask, /Luminosity,
+            // /Subtype /Form all still present either way), so this specifically counts the "/I true"
+            // marker (isolated group, set on both the mask form and the content form, but not on the
+            // page's own top-level /Group) to confirm BOTH forms - not just the mask - are groups.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <defs>
+                    <mask id="fade" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
+                      <rect x="0" y="0" width="100" height="100" fill="#ffffff"/>
+                    </mask>
+                  </defs>
+                  <rect x="10" y="10" width="80" height="80" fill="#000000" mask="url(#fade)"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            var isolatedGroupCount = Regex.Matches(pdfText, @"/I true").Count;
+            Assert.True(isolatedGroupCount >= 2, $"Expected at least 2 isolated transparency groups (mask form + content form), found {isolatedGroupCount}");
         }
 
         [Fact]

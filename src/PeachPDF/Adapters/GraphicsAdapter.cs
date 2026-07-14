@@ -184,15 +184,10 @@ namespace PeachPDF.Adapters
             return (tileGraphics, new ImageAdapter(form));
         }
 
-        public override void PushSoftMask(RImage maskImage)
+        public override void DrawImageMasked(RImage image, RImage maskImage, RRect destRect)
         {
-            if (((ImageAdapter)maskImage).Image is XForm form)
-                _g.PushSoftMask(form);
-        }
-
-        public override void PopSoftMask()
-        {
-            _g.PopSoftMask();
+            if (((ImageAdapter)image).Image is XForm imageForm && ((ImageAdapter)maskImage).Image is XForm maskForm)
+                _g.DrawImageMasked(imageForm, maskForm, Utils.Convert(destRect, PixelsPerPoint));
         }
 
         public override void Dispose()

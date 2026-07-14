@@ -1629,45 +1629,106 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         }
 
         /// <summary>
-        /// Applies a luminosity soft mask (subsequent drawing is masked by <paramref name="maskForm"/>'s
-        /// rendered brightness - white is fully visible, black fully transparent) via an ExtGState
-        /// <c>/SMask</c>, exactly mirroring the pattern <c>PdfShading</c>'s own alpha-gradient soft
-        /// masks already use (see <c>BuildAlphaExtGStateIfNeeded</c>) - just driven by an arbitrary
-        /// rendered Form XObject (an SVG <c>&lt;mask&gt;</c>'s own content) rather than a hand-built
-        /// grayscale shading function.
+        /// Draws <paramref name="image"/> (a Form XObject, typically a rendered SVG "content" tile)
+        /// at <paramref name="destRect"/> with <paramref name="maskImage"/> (another Form XObject,
+        /// sized/positioned identically to <paramref name="image"/> in its own local coordinate
+        /// system) attached as a <c>/Luminosity</c> soft mask (white = fully visible, black = fully
+        /// transparent) via an ExtGState <c>/SMask</c> - mirroring the pattern <c>PdfShading</c>'s own
+        /// alpha-gradient soft masks already use (see <c>BuildAlphaExtGStateIfNeeded</c>), just driven
+        /// by an arbitrary rendered Form XObject rather than a hand-built grayscale shading function.
         /// </summary>
-        internal void PushSoftMask(XForm maskForm)
+        /// <remarks>
+        /// The <c>gs</c> that activates the mask is emitted INSIDE the same <c>q ... cm ... Do ... Q</c>
+        /// block that places <paramref name="image"/> (mirroring <see cref="DrawImage(XImage, XRect, XRect, XGraphicsUnit)"/>'s
+        /// own Form XObject placement exactly), rather than as a separate "push before / pop after"
+        /// pair relying on the ambient CTM. This distinction matters: a Form XObject created via
+        /// <c>XGraphics.FromForm</c> (as SVG's <c>&lt;mask&gt;</c>/<c>&lt;pattern&gt;</c> "tile"
+        /// rendering does) gets its own content Y-flipped relative to ITS OWN (small) height, not the
+        /// page's - a coordinate convention that's only self-consistent when the form is placed via an
+        /// explicit destRect (as here, and as pattern tiles already do via ordinary <c>DrawImage</c>).
+        /// Relying on the CTM already ambient at some arbitrary point in the page's own content stream
+        /// (built for page-style, not form-style, coordinates) to position such a form's implicit BBox
+        /// - which an earlier, simpler "PushSoftMask/PopSoftMask" implementation of this feature did -
+        /// silently misplaces the mask relative to the content in every case except where the two
+        /// coordinate conventions happen to coincide (i.e. never, once the page has any margin/scroll/
+        /// layout offset), making the masked content evaluate as fully transparent everywhere.
+        /// <para>
+        /// Separately, both <paramref name="image"/> and <paramref name="maskImage"/> are given their
+        /// own <c>/Group &lt;&lt; /S /Transparency ... &gt;&gt;</c> dictionary. The masked CONTENT form
+        /// needing this (not just the <c>/G</c> mask target) was found the hard way: MuPDF renders an
+        /// active SMask correctly even when the painted content itself isn't a transparency group, but
+        /// PDFium (Chrome/Edge, and by extension most other real-world viewers/printers) silently
+        /// ignores the SMask entirely in that case - a PDF that "works" only needs checking in one
+        /// renderer to look done and still be broken everywhere else. Don't trust a single renderer
+        /// (least of all MuPDF, which is unusually forgiving of non-conformant transparency PDFs) for
+        /// anything touching soft masks or transparency groups - cross-check with PDFium too (e.g.
+        /// Python's <c>pypdfium2</c>) before calling it fixed.
+        /// </para>
+        /// </remarks>
+        internal void DrawImageMasked(XForm image, XForm maskImage, XRect destRect)
         {
+            const string format = Config.SignificantFigures4;
+
+            double x = destRect.X;
+            double y = destRect.Y;
+            double width = destRect.Width;
+            double height = destRect.Height;
+
+            string name = Realize(image);
+
+            BeginPage();
+            image.Finish();
+            maskImage.Finish();
+
             // A /Luminosity SMask's /G target must itself be a transparency group (PDF 32000-1 §11.6.4.3)
             // - XForm/PdfFormXObject don't set this up automatically, so it's added here rather than
             // generalizing CreateTile's caller-agnostic form creation for a mask-only requirement.
-            var pdfForm = maskForm.PdfForm;
-            var group = new PdfDictionary();
-            group.Elements["/S"] = new PdfName("/Transparency");
-            group.Elements["/CS"] = new PdfName("/DeviceGray");
-            group.Elements["/I"] = new PdfBoolean(true);
-            group.Elements["/K"] = new PdfBoolean(false);
-            pdfForm.Elements["/Group"] = group;
+            var maskPdfForm = maskImage.PdfForm;
+            var maskGroup = new PdfDictionary();
+            maskGroup.Elements["/S"] = new PdfName("/Transparency");
+            maskGroup.Elements["/CS"] = new PdfName("/DeviceGray");
+            maskGroup.Elements["/I"] = new PdfBoolean(true);
+            maskGroup.Elements["/K"] = new PdfBoolean(false);
+            maskPdfForm.Elements["/Group"] = maskGroup;
+
+            // The CONTENT form being masked must itself be a transparency group too, or the active
+            // SMask silently has no visible effect in stricter readers (Chrome/Edge/Acrobat, all
+            // PDFium- or Acrobat-derived) even though it renders correctly in MuPDF regardless -
+            // MuPDF applies an SMask to plain (non-group) painted content leniently; that's MuPDF
+            // being forgiving of non-conformant input, not something to rely on. Every real-world PDF
+            // writer that composites masked content via a Form XObject marks that content form as an
+            // isolated transparency group too, not just the /G mask target.
+            var contentPdfForm = image.PdfForm;
+            var contentGroup = new PdfDictionary();
+            contentGroup.Elements["/S"] = new PdfName("/Transparency");
+            contentGroup.Elements["/CS"] = new PdfName("/DeviceRGB");
+            contentGroup.Elements["/I"] = new PdfBoolean(true);
+            contentPdfForm.Elements["/Group"] = contentGroup;
 
             var softMask = new PdfSoftMask(Owner);
             softMask.Elements[PdfSoftMask.Keys.S] = new PdfName("/Luminosity");
-            softMask.Elements.SetReference(PdfSoftMask.Keys.G, pdfForm);
+            softMask.Elements.SetReference(PdfSoftMask.Keys.G, maskPdfForm);
 
             var extGState = new PdfExtGState(Owner);
             extGState.Elements["/SMask"] = softMask;
+            var gsName = Resources.AddExtGState(extGState);
 
-            var name = Resources.AddExtGState(extGState);
-            AppendFormatString("{0} gs\n", name);
-        }
+            double cx = width / image.PointWidth;
+            double cy = height / image.PointHeight;
 
-        /// <summary>Ends the effect of the most recent <see cref="PushSoftMask"/> by resetting <c>/SMask</c> to <c>/None</c>.</summary>
-        internal void PopSoftMask()
-        {
-            var extGState = new PdfExtGState(Owner);
-            extGState.Elements["/SMask"] = new PdfName("/None");
+            if (cx == 0 || cy == 0)
+                return;
 
-            var name = Resources.AddExtGState(extGState);
-            AppendFormatString("{0} gs\n", name);
+            if (_gfx.PageDirection == XPageDirection.Downwards)
+            {
+                AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm " + gsName + " gs {4} Do Q\n",
+                    x, y + height, cx, cy, name);
+            }
+            else
+            {
+                AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm " + gsName + " gs {4} Do Q\n",
+                    x, y, cx, cy, name);
+            }
         }
 
         /// <summary>

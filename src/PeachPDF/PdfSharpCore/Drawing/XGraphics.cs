@@ -1863,18 +1863,14 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         }
 
         /// <summary>
-        /// Applies a luminosity soft mask, driven by <paramref name="maskForm"/>'s own rendered
-        /// content, to everything drawn until the matching <see cref="PopSoftMask"/>.
+        /// Draws <paramref name="image"/> at <paramref name="destRect"/> with <paramref name="maskImage"/>
+        /// applied as a luminosity soft mask, scoped to just this one placement - see
+        /// <see cref="XGraphicsPdfRenderer.DrawImageMasked"/> for why the mask must be applied this
+        /// way (atomically, sharing the placement's own "cm") rather than as a separate push/pop pair.
         /// </summary>
-        internal void PushSoftMask(XForm maskForm)
+        internal void DrawImageMasked(XForm image, XForm maskImage, XRect destRect)
         {
-            (_renderer as XGraphicsPdfRenderer)?.PushSoftMask(maskForm);
-        }
-
-        /// <summary>Ends the effect of the most recent <see cref="PushSoftMask"/>.</summary>
-        internal void PopSoftMask()
-        {
-            (_renderer as XGraphicsPdfRenderer)?.PopSoftMask();
+            (_renderer as XGraphicsPdfRenderer)?.DrawImageMasked(image, maskImage, destRect);
         }
 
         /// <summary>
