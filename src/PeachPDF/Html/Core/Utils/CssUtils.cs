@@ -127,6 +127,7 @@ namespace PeachPDF.Html.Core.Utils
                 "text-decoration-color" => cssBox.TextDecorationColor,
                 "text-decoration-line" => cssBox.TextDecorationLine,
                 "text-decoration-style" => cssBox.TextDecorationStyle,
+                "text-transform" => cssBox.TextTransform,
                 "white-space" => cssBox.WhiteSpace,
                 "word-break" => cssBox.WordBreak,
                 "visibility" => cssBox.Visibility,
@@ -186,7 +187,7 @@ namespace PeachPDF.Html.Core.Utils
             "position",
             "right", "string-set",
             "text-align", "text-decoration", "text-decoration-color", "text-decoration-line", "text-decoration-style",
-            "text-indent", "top",
+            "text-indent", "text-transform", "top",
             "transform", "transform-origin", "opacity",
             "vertical-align", "visibility",
             "white-space", "width", "word-break", "word-spacing",
@@ -571,6 +572,9 @@ namespace PeachPDF.Html.Core.Utils
                     break;
                 case "text-decoration-style":
                     cssBox.TextDecorationStyle = value;
+                    break;
+                case "text-transform":
+                    cssBox.TextTransform = value;
                     break;
                 case "white-space":
                     cssBox.WhiteSpace = value;

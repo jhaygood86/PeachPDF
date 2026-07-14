@@ -39,6 +39,7 @@ namespace PeachPDF.Html.Core.Utils
         public const string Bottom = "bottom";
         public const string BreakAll = "break-all";
         public const string KeepAll = "keep-all";
+        public const string Capitalize = "capitalize";
         public const string Center = "center";
         public const string Collapse = "collapse";
         public const string Counter = "counter";
@@ -69,6 +70,7 @@ namespace PeachPDF.Html.Core.Utils
         public const string Lighter = "lighter";
         public const string LineThrough = "line-through";
         public const string ListItem = "list-item";
+        public const string Lowercase = "lowercase";
         public const string Ltr = "ltr";
         public const string LowerAlpha = "lower-alpha";
         public const string LowerLatin = "lower-latin";
@@ -133,6 +135,7 @@ namespace PeachPDF.Html.Core.Utils
         public const string UpperAlpha = "upper-alpha";
         public const string UpperLatin = "upper-latin";
         public const string UpperRoman = "upper-roman";
+        public const string Uppercase = "uppercase";
         public const string XLarge = "x-large";
         public const string XSmall = "x-small";
         public const string XXLarge = "xx-large";

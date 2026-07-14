@@ -472,6 +472,8 @@ namespace PeachPDF.Html.Core.Dom
 
         public string TextDecorationColor { get; set; } = string.Empty;
 
+        public string TextTransform { get; set; } = CssConstants.None;
+
         public string WhiteSpace { get; set; } = "normal";
 
         public string Visibility { get; set; } = "visible";
@@ -1341,6 +1343,7 @@ namespace PeachPDF.Html.Core.Dom
             Visibility = p.Visibility;
             _textIndent = p._textIndent;
             TextAlign = p.TextAlign;
+            TextTransform = p.TextTransform;
             VerticalAlign = p.VerticalAlign;
             FontFamily = p.FontFamily;
             _fontSize = p._fontSize;

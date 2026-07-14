@@ -247,6 +247,7 @@ Percentages are relative to the border-box width (horizontal radius) and height 
 | `text-decoration-line` | [text-decoration-line](https://developer.mozilla.org/en-US/docs/Web/CSS/text-decoration-line) | `none`, `underline`, `overline`, `line-through` |
 | `text-decoration-style` | [text-decoration-style](https://developer.mozilla.org/en-US/docs/Web/CSS/text-decoration-style) | `solid`, `dashed`, `dotted`, `double`, `wavy` |
 | `text-indent` | [text-indent](https://developer.mozilla.org/en-US/docs/Web/CSS/text-indent) | Full support |
+| `text-transform` | [text-transform](https://developer.mozilla.org/en-US/docs/Web/CSS/text-transform) | `none`, `uppercase`, `lowercase`, `capitalize`; `full-width`/`full-size-kana` not supported |
 | `white-space` | [white-space](https://developer.mozilla.org/en-US/docs/Web/CSS/white-space) | `normal`, `nowrap`, `pre`, `pre-wrap`, `pre-line` |
 | `word-break` | [word-break](https://developer.mozilla.org/en-US/docs/Web/CSS/word-break) | `normal`, `break-all`, `keep-all` |
 | `word-spacing` | [word-spacing](https://developer.mozilla.org/en-US/docs/Web/CSS/word-spacing) | Full support |
@@ -738,7 +739,6 @@ The following CSS features are not supported:
 - **Transitions and animations** — `transition`, `animation`, `@keyframes`
 - **Filters and effects** — `filter`, `backdrop-filter`, `mix-blend-mode` (not parsed at all)
 - **`letter-spacing`** — parsed and accepted but has no effect
-- **`text-transform`** — `uppercase`, `lowercase`, `capitalize`; parsed and accepted but has no effect
 - **`text-shadow`**
 - **`word-wrap` / `overflow-wrap`**
 - **`outline`** and `outline-*` properties
