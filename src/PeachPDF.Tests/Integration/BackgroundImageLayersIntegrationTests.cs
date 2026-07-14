@@ -83,6 +83,24 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task BackgroundColorAndImage_ColorPaintsBeneathImage()
+        {
+            // Regression test: background-color is always the bottom-most layer (CSS Backgrounds 3
+            // §3.6/§3.8) and must be painted BEFORE (i.e. beneath, in PDF paint order) any
+            // background-image/gradient layer, not after (which would hide an opaque color's image
+            // entirely behind it).
+            var pdfText = await GetPdfText(BoxHtml(
+                "background-color: rgb(10, 20, 30); background-image: linear-gradient(to right, red, blue);"));
+
+            var colorIndex = pdfText.IndexOf(" rg\n");
+            var patternIndex = pdfText.IndexOf("/Pattern cs");
+            Assert.True(colorIndex >= 0, "Expected solid background-color fill operator in content stream");
+            Assert.True(patternIndex >= 0, "Expected gradient pattern fill in content stream");
+            Assert.True(colorIndex < patternIndex,
+                "background-color must be painted before (beneath) the background-image gradient layer");
+        }
+
+        [Fact]
         public async Task HtmlBackgroundAttribute_RendersWithoutCrash()
         {
             // The HTML background="" attribute is set via DomParser as CssImage.Url

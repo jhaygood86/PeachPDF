@@ -196,14 +196,6 @@ namespace PeachPDF.Html.Adapters
         public abstract void ReturnPreviousSmoothingMode(object? prevMode);
 
         /// <summary>
-        /// Get TextureBrush object that uses the specified image and bounding rectangle.
-        /// </summary>
-        /// <param name="image">The Image object with which this TextureBrush object fills interiors.</param>
-        /// <param name="dstRect">A Rectangle structure that represents the bounding rectangle for this TextureBrush object.</param>
-        /// <param name="translateTransformLocation">The dimension by which to translate the transformation</param>
-        public abstract RBrush GetTextureBrush(RImage image, RRect dstRect, RPoint translateTransformLocation);
-
-        /// <summary>
         /// Get GraphicsPath object.
         /// </summary>
         /// <returns>graphics path instance</returns>

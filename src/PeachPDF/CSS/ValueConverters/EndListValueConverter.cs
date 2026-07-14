@@ -94,7 +94,7 @@ namespace PeachPDF.CSS
 
                     if (extracted == null) continue;
 
-                    if (tokens.Count > 0) tokens.Add(Token.Whitespace);
+                    if (tokens.Count > 0) tokens.Add(Token.Comma);
 
                     tokens.AddRange(extracted);
                 }

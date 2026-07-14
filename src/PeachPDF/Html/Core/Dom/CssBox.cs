@@ -1057,9 +1057,9 @@ namespace PeachPDF.Html.Core.Dom
                 Location.Y + ActualPaddingTop + offset.Y,
                 size,
                 size);
-            CssImagePainter.Paint(g, ListStyleImage, isFirst: true,
-                originRect: markerRect, clipRect: markerRect,
-                position: "center", repeat: "no-repeat",
+            CssImagePainter.Paint(g, ListStyleImage, layerIndex: 0, isFirst: true,
+                originRect: markerRect, clipRect: markerRect, roundedClipPath: null,
+                positionList: "center", sizeList: CssConstants.Auto, repeatList: "no-repeat", box: this,
                 drawBrush: brush =>
                 {
                     g.DrawRectangle(brush, markerRect.X, markerRect.Y, markerRect.Width, markerRect.Height);
@@ -1077,9 +1077,9 @@ namespace PeachPDF.Html.Core.Dom
                 var rect = area;
                 rect.Offset(offset);
                 if (rect.Width <= 0 || rect.Height <= 0) continue;
-                CssImagePainter.Paint(g, ContentImage, isFirst: true,
-                    originRect: rect, clipRect: rect,
-                    position: "0% 0%", repeat: "no-repeat",
+                CssImagePainter.Paint(g, ContentImage, layerIndex: 0, isFirst: true,
+                    originRect: rect, clipRect: rect, roundedClipPath: null,
+                    positionList: "0% 0%", sizeList: CssConstants.Auto, repeatList: "no-repeat", box: this,
                     drawBrush: brush =>
                     {
                         g.DrawRectangle(brush, rect.X, rect.Y, rect.Width, rect.Height);
@@ -1675,52 +1675,89 @@ namespace PeachPDF.Html.Core.Dom
                         rect.Height - ActualBorderTopWidth  - ActualBorderBottomWidth),
                 };
 
-                var originRect = BoxModelRect(BackgroundOrigin);
-                var clipRect   = BoxModelRect(BackgroundClip);
+                // background-origin/background-clip are themselves comma-list (per-layer) properties,
+                // just like background-image/-position/-size - resolved per layer inside the loop below,
+                // not once for the whole box.
+                var originLayers = BackgroundLayerResolver.SplitLayers(BackgroundOrigin);
+                var clipLayers   = BackgroundLayerResolver.SplitLayers(BackgroundClip);
 
                 RBrush? solidBrush = RenderUtils.IsColorVisible(ActualBackgroundColor)
                     ? g.GetSolidBrush(ActualBackgroundColor)
                     : null;
 
-                // Paint layers back-to-front (last in list = bottom), then solid color beneath all
-                var layersToPaint = BackgroundImages != null
-                    ? Enumerable.Range(0, BackgroundImages.Count).Reverse()
-                    : Enumerable.Empty<int>();
-
-                void DrawBrush(RBrush brush)
+                // background-color is always the bottom-most layer (CSS Backgrounds 3 §3.6/§3.8) -
+                // painted BEFORE any background-image/gradient layer so those layers appear on top of
+                // it, not hidden beneath an opaque color.
+                if (solidBrush != null)
                 {
-                    // TODO:a handle it correctly (tables background)
-                    RGraphicsPath? roundrect = null;
+                    // background-color is not itself a layered property: when background-clip has
+                    // multiple values, the solid fill uses the LAST (bottom-most) one, independent of
+                    // how many background-image layers exist - including zero.
+                    var colorClipRect = BoxModelRect(clipLayers[^1]);
+
+                    RGraphicsPath? colorRoundedClipPath = null;
                     if (IsRounded)
                     {
-                        var radii = ComputeRadii(clipRect);
-                        roundrect = RenderUtils.GetRoundRect(g, clipRect,
+                        var radii = ComputeRadii(colorClipRect);
+                        colorRoundedClipPath = RenderUtils.GetRoundRect(g, colorClipRect,
                             radii.TLX, radii.TLY, radii.TRX, radii.TRY,
                             radii.BRX, radii.BRY, radii.BLX, radii.BLY);
                     }
 
-                    Object? prevMode = null;
-                    if (HtmlContainer is { AvoidGeometryAntialias: false } && IsRounded)
-                        prevMode = g.SetAntiAliasSmoothingMode();
-
-                    if (roundrect != null)
-                        g.DrawPath(brush, roundrect);
-                    else
-                        g.DrawRectangle(brush, clipRect.X, clipRect.Y, clipRect.Width, clipRect.Height);
-
-                    g.ReturnPreviousSmoothingMode(prevMode);
-                    roundrect?.Dispose();
-                    brush.Dispose();
+                    PaintClippedBrush(g, solidBrush, colorClipRect, colorRoundedClipPath);
+                    colorRoundedClipPath?.Dispose();
                 }
+
+                // Then paint image/gradient layers back-to-front (last in the comma-list = bottom-most
+                // image layer, but still on top of the solid color) so the first-declared layer ends up
+                // visually on top.
+                var layersToPaint = BackgroundImages != null
+                    ? Enumerable.Range(0, BackgroundImages.Count).Reverse()
+                    : Enumerable.Empty<int>();
 
                 foreach (int layerIndex in layersToPaint)
                 {
-                    CssImagePainter.Paint(g, BackgroundImages![layerIndex], isFirst, originRect, clipRect,
-                        BackgroundPosition, BackgroundRepeat, DrawBrush);
-                }
+                    var originRect = BoxModelRect(BackgroundLayerResolver.LayerAt(originLayers, layerIndex));
+                    var clipRect   = BoxModelRect(BackgroundLayerResolver.LayerAt(clipLayers, layerIndex));
 
-                if (solidBrush != null) DrawBrush(solidBrush);
+                    RGraphicsPath? roundedClipPath = null;
+                    if (IsRounded)
+                    {
+                        var radii = ComputeRadii(clipRect);
+                        roundedClipPath = RenderUtils.GetRoundRect(g, clipRect,
+                            radii.TLX, radii.TLY, radii.TRX, radii.TRY,
+                            radii.BRX, radii.BRY, radii.BLX, radii.BLY);
+                    }
+
+                    void DrawBrush(RBrush brush) => PaintClippedBrush(g, brush, clipRect, roundedClipPath);
+
+                    CssImagePainter.Paint(g, BackgroundImages![layerIndex], layerIndex, isFirst, originRect, clipRect,
+                        roundedClipPath, BackgroundPosition, BackgroundSize, BackgroundRepeat, this, DrawBrush);
+
+                    roundedClipPath?.Dispose();
+                }
             }
+        }
+
+        /// <summary>
+        /// Fills <paramref name="brush"/> clipped to <paramref name="roundedClipPath"/> (border-radius
+        /// case) or <paramref name="clipRect"/> (rectangular case), and disposes the brush afterward.
+        /// Shared by every per-layer background-image/gradient draw and the final solid-color fill.
+        /// </summary>
+        private void PaintClippedBrush(RGraphics g, RBrush brush, RRect clipRect, RGraphicsPath? roundedClipPath)
+        {
+            // TODO:a handle it correctly (tables background)
+            object? prevMode = null;
+            if (HtmlContainer is { AvoidGeometryAntialias: false } && IsRounded)
+                prevMode = g.SetAntiAliasSmoothingMode();
+
+            if (roundedClipPath != null)
+                g.DrawPath(brush, roundedClipPath);
+            else
+                g.DrawRectangle(brush, clipRect.X, clipRect.Y, clipRect.Width, clipRect.Height);
+
+            g.ReturnPreviousSmoothingMode(prevMode);
+            brush.Dispose();
         }
 
         /// <summary>

@@ -153,11 +153,6 @@ namespace PeachPDF.Adapters
             _g.DrawString(str, ((FontAdapter)font).Font, xBrush, xPoint.X, xPoint.Y, _stringFormat);
         }
 
-        public override RBrush GetTextureBrush(RImage image, RRect dstRect, RPoint translateTransformLocation)
-        {
-            return new BrushAdapter(new XTextureBrush(((ImageAdapter)image).Image, Utils.Convert(dstRect, PixelsPerPoint), Utils.Convert(translateTransformLocation, PixelsPerPoint)));
-        }
-
         public override RGraphicsPath GetGraphicsPath()
         {
             return new GraphicsPathAdapter();
@@ -219,11 +214,7 @@ namespace PeachPDF.Adapters
         public override void DrawRectangle(RBrush brush, double x, double y, double width, double height)
         {
             var xBrush = ((BrushAdapter)brush).Brush;
-            if (xBrush is XTextureBrush xTextureBrush)
-            {
-                xTextureBrush.DrawRectangle(_g, x / PixelsPerPoint, y / PixelsPerPoint, width / PixelsPerPoint, height / PixelsPerPoint);
-            }
-            else if (xBrush is XBaseGradientBrush)
+            if (xBrush is XBaseGradientBrush)
             {
                 // Wrap in q/Q so the SMask applied for transparent gradients does not
                 // leak into subsequent operations (e.g. border drawing).

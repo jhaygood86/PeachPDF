@@ -1295,7 +1295,7 @@ namespace PeachPDF.Html.Core.Parse
             return result.Count > 0 ? result : null;
         }
 
-        private static IEnumerable<string> SplitTopLevelCommas(string value)
+        internal static IEnumerable<string> SplitTopLevelCommas(string value)
         {
             int depth = 0, start = 0;
             for (int i = 0; i < value.Length; i++)

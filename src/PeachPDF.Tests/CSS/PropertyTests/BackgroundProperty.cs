@@ -915,6 +915,37 @@ namespace PeachPDF.Tests.CSS.PropertyTests
         }
 
         [Fact]
+        public void BackgroundShorthand_MultipleLayers_ExtractsCommaJoinedNotSpaceJoinedLonghands()
+        {
+            // Regression test: EndListValueConverter used to join per-layer longhand values with a
+            // space instead of a comma when extracted from a multi-layer `background` shorthand,
+            // silently corrupting them (e.g. "no-repeat repeat-x" looks like a single valid
+            // two-axis repeat value, not two layers).
+            var style = ParseDeclarations(
+                "background: url(\"a.png\") top no-repeat, url(\"b.png\") bottom repeat-x");
+
+            Assert.Equal("url(\"a.png\"), url(\"b.png\")", style.BackgroundImage);
+            Assert.Equal("top, bottom", style.BackgroundPosition);
+            Assert.Equal("no-repeat, repeat-x", style.BackgroundRepeat);
+            Assert.NotEqual("no-repeat repeat-x", style.BackgroundRepeat);
+        }
+
+        [Fact]
+        public void BackgroundShorthand_MultipleLayers_OriginClipCommaJoined()
+        {
+            // Each layer explicitly gives both box-model keywords (origin then clip) to avoid a
+            // separate, pre-existing ambiguity in this shorthand: a single box-model keyword is
+            // always assigned to background-origin (never background-clip) here, rather than
+            // setting both per spec - unrelated to the comma-vs-whitespace joining this test targets.
+            var style = ParseDeclarations(
+                "background: url(\"a.png\") padding-box content-box, url(\"b.png\") border-box padding-box");
+
+            Assert.Equal("url(\"a.png\"), url(\"b.png\")", style.BackgroundImage);
+            Assert.Equal("padding-box, border-box", style.BackgroundOrigin);
+            Assert.Equal("content-box, padding-box", style.BackgroundClip);
+        }
+
+        [Fact]
         public void BackgroundShorthand_HexColor_SetsBackgroundColor()
         {
             var style = ParseDeclarations("background: #336699");
