@@ -12,6 +12,8 @@
 
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Utils;
 using System;
 
 namespace PeachPDF.Html.Core.Handlers
@@ -23,27 +25,58 @@ namespace PeachPDF.Html.Core.Handlers
     {
         /// <summary>
         /// Draw the background image of the given box in the given rectangle.<br/>
-        /// Handle background-repeat and background-position values.
+        /// Handles background-position, background-size, and background-repeat, per CSS
+        /// Backgrounds and Borders Module Level 3.
         /// </summary>
         /// <param name="g">the device to draw into</param>
-        /// <param name="image">the image to draw</param>
-        /// <param name="backgroundPosition">the background-position CSS value</param>
+        /// <param name="image">the image to draw (a natural bitmap, or a <see cref="RGraphics.CreateTile"/>-produced tile standing in for a gradient layer)</param>
+        /// <param name="sizeValue">the resolved background-size CSS value for this layer</param>
+        /// <param name="positionValue">the resolved background-position CSS value for this layer</param>
         /// <param name="backgroundRepeat">the background-repeat CSS value</param>
         /// <param name="positioningRect">the background positioning area (background-origin)</param>
-        /// <param name="clipRect">the background painting area (background-clip)</param>
-        public static void DrawBackgroundImage(RGraphics g, RImage image, string backgroundPosition, string backgroundRepeat, RRect positioningRect, RRect clipRect)
+        /// <param name="clipRect">the background painting area (background-clip), used when <paramref name="roundedClipPath"/> is null</param>
+        /// <param name="roundedClipPath">a rounded-corner clip path to use instead of <paramref name="clipRect"/> when the box has border-radius</param>
+        /// <param name="box">the box the image is painted on, needed for em/rem-relative length resolution</param>
+        public static void DrawBackgroundImage(
+            RGraphics g, RImage image,
+            string sizeValue, string positionValue, string backgroundRepeat,
+            RRect positioningRect, RRect clipRect,
+            RGraphicsPath? roundedClipPath,
+            CssBoxProperties box)
         {
-            var imgSize = new RSize(image.Width, image.Height);
+            var intrinsicWidth = image.Width > 0 ? image.Width : (double?)null;
+            var intrinsicHeight = image.Height > 0 ? image.Height : (double?)null;
+            var intrinsicRatio = intrinsicWidth is not null && intrinsicHeight is not null
+                ? intrinsicWidth.Value / intrinsicHeight.Value
+                : (double?)null;
 
-            var location = GetLocation(backgroundPosition, positioningRect, imgSize);
+            var (tileWidth, tileHeight) = BackgroundLayerResolver.ResolveSize(
+                sizeValue, positioningRect.Width, positioningRect.Height,
+                intrinsicWidth, intrinsicHeight, intrinsicRatio, box);
 
-            var srcRect = new RRect(0, 0, imgSize.Width, imgSize.Height);
-            var destRect = new RRect(location, imgSize);
+            if (tileWidth <= 0 || tileHeight <= 0)
+                return;
 
-            // clip to the painting area (background-clip) intersected with the current graphics clip
-            var lClipRect = clipRect;
-            lClipRect.Intersect(g.GetClip());
-            g.PushClip(lClipRect);
+            var (offsetX, offsetY) = BackgroundLayerResolver.ResolvePosition(
+                positionValue, positioningRect.Width, positioningRect.Height, tileWidth, tileHeight, box);
+
+            var location = new RPoint(positioningRect.X + offsetX, positioningRect.Y + offsetY);
+
+            var srcRect = new RRect(0, 0, image.Width, image.Height);
+            var destRect = new RRect(location, new RSize(tileWidth, tileHeight));
+
+            // clip to the painting area (background-clip, rounded if the box has border-radius)
+            // intersected with the current graphics clip
+            if (roundedClipPath != null)
+            {
+                g.PushClip(roundedClipPath);
+            }
+            else
+            {
+                var lClipRect = clipRect;
+                lClipRect.Intersect(g.GetClip());
+                g.PushClip(lClipRect);
+            }
 
             switch (backgroundRepeat)
             {
@@ -51,13 +84,13 @@ namespace PeachPDF.Html.Core.Handlers
                     g.DrawImage(image, destRect, srcRect);
                     break;
                 case "repeat-x":
-                    DrawRepeatX(g, image, positioningRect, srcRect, destRect, imgSize);
+                    DrawRepeatX(g, image, positioningRect, srcRect, destRect);
                     break;
                 case "repeat-y":
-                    DrawRepeatY(g, image, positioningRect, srcRect, destRect, imgSize);
+                    DrawRepeatY(g, image, positioningRect, srcRect, destRect);
                     break;
                 default:
-                    DrawRepeat(g, image, positioningRect, srcRect, destRect, imgSize);
+                    DrawRepeat(g, image, positioningRect, srcRect, destRect);
                     break;
             }
 
@@ -68,80 +101,66 @@ namespace PeachPDF.Html.Core.Handlers
         #region Private methods
 
         /// <summary>
-        /// Get top-left location to start drawing the image at depending on background-position value.
+        /// Hard cap on tiles drawn per axis, guarding against a pathologically tiny resolved
+        /// background-size (e.g. a fraction-of-a-pixel tile) repeating across a large box from
+        /// looping for an unreasonable amount of time or emitting an unreasonable number of PDF
+        /// draw operators. Ordinary content never approaches this.
         /// </summary>
-        private static RPoint GetLocation(string backgroundPosition, RRect rectangle, RSize imgSize)
+        private const int MaxTilesPerAxis = 20_000;
+
+        /// <summary>
+        /// Computes the first tile position at or before <paramref name="rangeStart"/>, without
+        /// looping (a naive "subtract tileSize until in range" loop can run unreasonably long for
+        /// a tiny tile size positioned far from the range start).
+        /// </summary>
+        private static double FirstTileStart(double tileStart, double tileSize, double rangeStart)
         {
-            double left = rectangle.Left;
-            if (backgroundPosition.IndexOf("left", StringComparison.OrdinalIgnoreCase) > -1)
-            {
-                left = (rectangle.Left + .5f);
-            }
-            else if (backgroundPosition.IndexOf("right", StringComparison.OrdinalIgnoreCase) > -1)
-            {
-                left = rectangle.Right - imgSize.Width;
-            }
-            else if (backgroundPosition.IndexOf("0", StringComparison.OrdinalIgnoreCase) < 0)
-            {
-                left = (rectangle.Left + (rectangle.Width - imgSize.Width) / 2 + .5f);
-            }
+            if (tileStart <= rangeStart)
+                return tileStart;
 
-            double top = rectangle.Top;
-            if (backgroundPosition.IndexOf("top", StringComparison.OrdinalIgnoreCase) > -1)
-            {
-                top = rectangle.Top;
-            }
-            else if (backgroundPosition.IndexOf("bottom", StringComparison.OrdinalIgnoreCase) > -1)
-            {
-                top = rectangle.Bottom - imgSize.Height;
-            }
-            else if (backgroundPosition.IndexOf("0", StringComparison.OrdinalIgnoreCase) < 0)
-            {
-                top = (rectangle.Top + (rectangle.Height - imgSize.Height) / 2 + .5f);
-            }
-
-            return new RPoint(left, top);
+            var tilesBack = Math.Ceiling((tileStart - rangeStart) / tileSize);
+            return tileStart - tilesBack * tileSize;
         }
 
         /// <summary>
-        /// Draw the background image repeating it over the X axis.<br/>
-        /// Adjust location to left if starting location doesn't include all the range (adjusted to center or right).
+        /// Draw the background image repeating it over the X axis, at the resolved tile size.
         /// </summary>
-        private static void DrawRepeatX(RGraphics g, RImage image, RRect rectangle, RRect srcRect, RRect destRect, RSize imgSize)
+        private static void DrawRepeatX(RGraphics g, RImage image, RRect rectangle, RRect srcRect, RRect destRect)
         {
-            while (destRect.X > rectangle.X)
-                destRect.X -= imgSize.Width;
+            var startX = FirstTileStart(destRect.X, destRect.Width, rectangle.X);
 
-            using var brush = g.GetTextureBrush(image, srcRect, destRect.Location);
-            g.DrawRectangle(brush, rectangle.X, destRect.Y, rectangle.Width, srcRect.Height);
+            var x = startX;
+            for (var i = 0; i < MaxTilesPerAxis && x < rectangle.Right; i++, x += destRect.Width)
+                g.DrawImage(image, new RRect(x, destRect.Y, destRect.Width, destRect.Height), srcRect);
         }
 
         /// <summary>
-        /// Draw the background image repeating it over the Y axis.<br/>
-        /// Adjust location to top if starting location doesn't include all the range (adjusted to center or bottom).
+        /// Draw the background image repeating it over the Y axis, at the resolved tile size.
         /// </summary>
-        private static void DrawRepeatY(RGraphics g, RImage image, RRect rectangle, RRect srcRect, RRect destRect, RSize imgSize)
+        private static void DrawRepeatY(RGraphics g, RImage image, RRect rectangle, RRect srcRect, RRect destRect)
         {
-            while (destRect.Y > rectangle.Y)
-                destRect.Y -= imgSize.Height;
+            var startY = FirstTileStart(destRect.Y, destRect.Height, rectangle.Y);
 
-            using var brush = g.GetTextureBrush(image, srcRect, destRect.Location);
-            g.DrawRectangle(brush, destRect.X, rectangle.Y, srcRect.Width, rectangle.Height);
+            var y = startY;
+            for (var i = 0; i < MaxTilesPerAxis && y < rectangle.Bottom; i++, y += destRect.Height)
+                g.DrawImage(image, new RRect(destRect.X, y, destRect.Width, destRect.Height), srcRect);
         }
 
         /// <summary>
-        /// Draw the background image repeating it over both X and Y axes.<br/>
-        /// Adjust location to left-top if starting location doesn't include all the range (adjusted to center or bottom/right).
+        /// Draw the background image repeating it over both X and Y axes, at the resolved tile size.
         /// </summary>
-        private static void DrawRepeat(RGraphics g, RImage image, RRect rectangle, RRect srcRect, RRect destRect, RSize imgSize)
+        private static void DrawRepeat(RGraphics g, RImage image, RRect rectangle, RRect srcRect, RRect destRect)
         {
-            while (destRect.X > rectangle.X)
-                destRect.X -= imgSize.Width;
-            while (destRect.Y > rectangle.Y)
-                destRect.Y -= imgSize.Height;
+            var startX = FirstTileStart(destRect.X, destRect.Width, rectangle.X);
+            var startY = FirstTileStart(destRect.Y, destRect.Height, rectangle.Y);
 
-            using var brush = g.GetTextureBrush(image, srcRect, destRect.Location);
-            g.DrawRectangle(brush, rectangle.X, rectangle.Y, rectangle.Width, rectangle.Height);
+            var y = startY;
+            for (var j = 0; j < MaxTilesPerAxis && y < rectangle.Bottom; j++, y += destRect.Height)
+            {
+                var x = startX;
+                for (var i = 0; i < MaxTilesPerAxis && x < rectangle.Right; i++, x += destRect.Width)
+                    g.DrawImage(image, new RRect(x, y, destRect.Width, destRect.Height), srcRect);
+            }
         }
 
         #endregion

@@ -394,6 +394,8 @@ namespace PeachPDF.Html.Core.Dom
 
         public string BackgroundRepeat { get; set; } = "repeat";
 
+        public string BackgroundSize { get; set; } = CssConstants.Auto;
+
         public string BackgroundOrigin { get; set; } = CssConstants.PaddingBox;
 
         public string BackgroundClip { get; set; } = CssConstants.BorderBox;

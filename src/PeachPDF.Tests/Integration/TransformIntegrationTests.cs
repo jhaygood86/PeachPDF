@@ -360,7 +360,6 @@ namespace PeachPDF.Tests.Integration
             public override void PushClipExclude(RRect rect) { }
             public override object SetAntiAliasSmoothingMode() => new object();
             public override void ReturnPreviousSmoothingMode(object? prevMode) { }
-            public override RBrush GetTextureBrush(RImage image, RRect dstRect, RPoint translateTransformLocation) => null!;
             public override RGraphicsPath GetGraphicsPath() => null!;
             public override (RGraphics Graphics, RImage Image)? CreateTile(double width, double height) => null;
             public override void DrawImageMasked(RImage image, RImage maskImage, RRect destRect) { }

@@ -107,6 +107,7 @@ namespace PeachPDF.Html.Core.Utils
                 "background-color" => cssBox.BackgroundColor,
                 "background-image" => null,
                 "background-position" => cssBox.BackgroundPosition,
+                "background-size" => cssBox.BackgroundSize,
                 "background-repeat" => cssBox.BackgroundRepeat,
                 "background-origin" => cssBox.BackgroundOrigin,
                 "background-clip" => cssBox.BackgroundClip,
@@ -508,6 +509,9 @@ namespace PeachPDF.Html.Core.Utils
                     break;
                 case "background-position":
                     cssBox.BackgroundPosition = value;
+                    break;
+                case "background-size":
+                    cssBox.BackgroundSize = value;
                     break;
                 case "background-repeat":
                     cssBox.BackgroundRepeat = value;

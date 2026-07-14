@@ -1057,9 +1057,9 @@ namespace PeachPDF.Html.Core.Dom
                 Location.Y + ActualPaddingTop + offset.Y,
                 size,
                 size);
-            CssImagePainter.Paint(g, ListStyleImage, isFirst: true,
-                originRect: markerRect, clipRect: markerRect,
-                position: "center", repeat: "no-repeat",
+            CssImagePainter.Paint(g, ListStyleImage, layerIndex: 0, isFirst: true,
+                originRect: markerRect, clipRect: markerRect, roundedClipPath: null,
+                positionList: "center", sizeList: CssConstants.Auto, repeat: "no-repeat", box: this,
                 drawBrush: brush =>
                 {
                     g.DrawRectangle(brush, markerRect.X, markerRect.Y, markerRect.Width, markerRect.Height);
@@ -1077,9 +1077,9 @@ namespace PeachPDF.Html.Core.Dom
                 var rect = area;
                 rect.Offset(offset);
                 if (rect.Width <= 0 || rect.Height <= 0) continue;
-                CssImagePainter.Paint(g, ContentImage, isFirst: true,
-                    originRect: rect, clipRect: rect,
-                    position: "0% 0%", repeat: "no-repeat",
+                CssImagePainter.Paint(g, ContentImage, layerIndex: 0, isFirst: true,
+                    originRect: rect, clipRect: rect, roundedClipPath: null,
+                    positionList: "0% 0%", sizeList: CssConstants.Auto, repeat: "no-repeat", box: this,
                     drawBrush: brush =>
                     {
                         g.DrawRectangle(brush, rect.X, rect.Y, rect.Width, rect.Height);
@@ -1678,6 +1678,20 @@ namespace PeachPDF.Html.Core.Dom
                 var originRect = BoxModelRect(BackgroundOrigin);
                 var clipRect   = BoxModelRect(BackgroundClip);
 
+                // Computed once and shared by every layer (image, gradient-tile, and the solid-color
+                // fill below) so background-image/gradient layers get the same rounded-corner clip
+                // that solid/gradient fills already did - previously only this DrawBrush path clipped
+                // to the rounded rect, so a bordered-radius box with a url() background image drew
+                // square corners.
+                RGraphicsPath? roundedClipPath = null;
+                if (IsRounded)
+                {
+                    var radii = ComputeRadii(clipRect);
+                    roundedClipPath = RenderUtils.GetRoundRect(g, clipRect,
+                        radii.TLX, radii.TLY, radii.TRX, radii.TRY,
+                        radii.BRX, radii.BRY, radii.BLX, radii.BLY);
+                }
+
                 RBrush? solidBrush = RenderUtils.IsColorVisible(ActualBackgroundColor)
                     ? g.GetSolidBrush(ActualBackgroundColor)
                     : null;
@@ -1690,36 +1704,28 @@ namespace PeachPDF.Html.Core.Dom
                 void DrawBrush(RBrush brush)
                 {
                     // TODO:a handle it correctly (tables background)
-                    RGraphicsPath? roundrect = null;
-                    if (IsRounded)
-                    {
-                        var radii = ComputeRadii(clipRect);
-                        roundrect = RenderUtils.GetRoundRect(g, clipRect,
-                            radii.TLX, radii.TLY, radii.TRX, radii.TRY,
-                            radii.BRX, radii.BRY, radii.BLX, radii.BLY);
-                    }
-
                     Object? prevMode = null;
                     if (HtmlContainer is { AvoidGeometryAntialias: false } && IsRounded)
                         prevMode = g.SetAntiAliasSmoothingMode();
 
-                    if (roundrect != null)
-                        g.DrawPath(brush, roundrect);
+                    if (roundedClipPath != null)
+                        g.DrawPath(brush, roundedClipPath);
                     else
                         g.DrawRectangle(brush, clipRect.X, clipRect.Y, clipRect.Width, clipRect.Height);
 
                     g.ReturnPreviousSmoothingMode(prevMode);
-                    roundrect?.Dispose();
                     brush.Dispose();
                 }
 
                 foreach (int layerIndex in layersToPaint)
                 {
-                    CssImagePainter.Paint(g, BackgroundImages![layerIndex], isFirst, originRect, clipRect,
-                        BackgroundPosition, BackgroundRepeat, DrawBrush);
+                    CssImagePainter.Paint(g, BackgroundImages![layerIndex], layerIndex, isFirst, originRect, clipRect,
+                        roundedClipPath, BackgroundPosition, BackgroundSize, BackgroundRepeat, this, DrawBrush);
                 }
 
                 if (solidBrush != null) DrawBrush(solidBrush);
+
+                roundedClipPath?.Dispose();
             }
         }
 

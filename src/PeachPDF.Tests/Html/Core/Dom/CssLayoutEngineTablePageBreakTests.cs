@@ -738,8 +738,6 @@ namespace PeachPDF.Tests.Html.Core.Dom
             public override (PeachPDF.Html.Adapters.RGraphics Graphics, PeachPDF.Html.Adapters.RImage Image)? CreateTile(double width, double height) => null;
             public override void DrawImageMasked(PeachPDF.Html.Adapters.RImage image, PeachPDF.Html.Adapters.RImage maskImage, PeachPDF.Html.Adapters.Entities.RRect destRect) { }
             public override void DrawImageWithOpacity(PeachPDF.Html.Adapters.RImage image, PeachPDF.Html.Adapters.Entities.RRect destRect, double opacity) { }
-            public override PeachPDF.Html.Adapters.RBrush GetTextureBrush(PeachPDF.Html.Adapters.RImage image, PeachPDF.Html.Adapters.Entities.RRect dstRect, PeachPDF.Html.Adapters.Entities.RPoint translateTransformLocation)
-                => GetSolidBrush(PeachPDF.Html.Adapters.Entities.RColor.Black);
             public override void Dispose() { }
         }
 

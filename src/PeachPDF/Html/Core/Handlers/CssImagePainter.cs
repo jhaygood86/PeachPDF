@@ -1,6 +1,7 @@
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Utils;
 using System;
@@ -12,35 +13,105 @@ namespace PeachPDF.Html.Core.Handlers
     internal static class CssImagePainter
     {
         /// <summary>
-        /// Paints one CSS image layer. Gradient types get a brush that is passed to <paramref name="drawBrush"/>;
-        /// URL images are drawn directly via <see cref="BackgroundImageDrawHandler"/>.
+        /// Paints one CSS image layer. Gradient types get a brush that is passed to <paramref name="drawBrush"/>
+        /// (or, when a real <c>background-size</c> makes the layer smaller/larger than the box, get rendered
+        /// once into a <see cref="RGraphics.CreateTile"/> tile and then positioned/repeated exactly like a
+        /// url() image); URL images are drawn directly via <see cref="BackgroundImageDrawHandler"/>.
         /// The <paramref name="isFirst"/> flag gates URL painting (URL images only appear on the first rectangle).
         /// </summary>
         public static void Paint(
             RGraphics g,
             CssImage image,
+            int layerIndex,
             bool isFirst,
             RRect originRect,
             RRect clipRect,
-            string position,
+            RGraphicsPath? roundedClipPath,
+            string positionList,
+            string sizeList,
             string repeat,
+            CssBoxProperties box,
             Action<RBrush> drawBrush)
         {
             switch (image)
             {
                 case CssImage.Url urlImage when isFirst && urlImage.Image != null:
-                    BackgroundImageDrawHandler.DrawBackgroundImage(g, urlImage.Image, position, repeat, originRect, clipRect);
+                {
+                    var sizeValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(sizeList), layerIndex);
+                    var positionValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(positionList), layerIndex);
+                    BackgroundImageDrawHandler.DrawBackgroundImage(
+                        g, urlImage.Image, sizeValue, positionValue, repeat, originRect, clipRect, roundedClipPath, box);
                     break;
+                }
                 case CssImage.LinearGradient lg:
-                    drawBrush(GetLinearGradientBrush(g, lg.Gradient, originRect));
+                    PaintGradientLayer(g, originRect, clipRect, roundedClipPath, layerIndex, sizeList, positionList, repeat, box,
+                        (brushGraphics, rect) => GetLinearGradientBrush(brushGraphics, lg.Gradient, rect), drawBrush);
                     break;
                 case CssImage.RadialGradient rg:
-                    drawBrush(GetRadialGradientBrush(g, rg.Gradient, originRect));
+                    PaintGradientLayer(g, originRect, clipRect, roundedClipPath, layerIndex, sizeList, positionList, repeat, box,
+                        (brushGraphics, rect) => GetRadialGradientBrush(brushGraphics, rg.Gradient, rect), drawBrush);
                     break;
                 case CssImage.ConicGradient cg:
-                    drawBrush(GetConicGradientBrush(g, cg.Gradient, originRect));
+                    PaintGradientLayer(g, originRect, clipRect, roundedClipPath, layerIndex, sizeList, positionList, repeat, box,
+                        (brushGraphics, rect) => GetConicGradientBrush(brushGraphics, cg.Gradient, rect), drawBrush);
                     break;
             }
+        }
+
+        /// <summary>
+        /// Resolves this gradient layer's background-size against <paramref name="originRect"/>. When it
+        /// equals the full box (the common case - no explicit background-size, or cover/contain/auto,
+        /// which are all equivalent to 100%/100% for a "generated image" with no intrinsic ratio), keeps
+        /// the existing untiled full-box brush fill unchanged. Otherwise renders the gradient once into a
+        /// tile sized to the resolved layer size and hands it to <see cref="BackgroundImageDrawHandler"/>
+        /// so it gets positioned and repeated exactly like a url() image.
+        /// </summary>
+        private static void PaintGradientLayer(
+            RGraphics g,
+            RRect originRect, RRect clipRect, RGraphicsPath? roundedClipPath,
+            int layerIndex, string sizeList, string positionList, string repeat,
+            CssBoxProperties box,
+            Func<RGraphics, RRect, RBrush> createBrush,
+            Action<RBrush> drawBrush)
+        {
+            var sizeValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(sizeList), layerIndex);
+            var (tileWidth, tileHeight) = BackgroundLayerResolver.ResolveSize(
+                sizeValue, originRect.Width, originRect.Height, null, null, null, box);
+
+            if (tileWidth <= 0 || tileHeight <= 0)
+                return;
+
+            const double epsilon = 0.01;
+            var isFullBox = Math.Abs(tileWidth - originRect.Width) < epsilon && Math.Abs(tileHeight - originRect.Height) < epsilon;
+            if (isFullBox)
+            {
+                drawBrush(createBrush(g, originRect));
+                return;
+            }
+
+            var tile = g.CreateTile(tileWidth, tileHeight);
+            if (tile is not { } t)
+            {
+                // No real page/document context to own a Form XObject in (e.g. a measure-only pass) -
+                // degrade gracefully to the untiled full-box brush rather than losing the layer entirely.
+                drawBrush(createBrush(g, originRect));
+                return;
+            }
+
+            var tileRect = new RRect(0, 0, tileWidth, tileHeight);
+            using (var tileBrush = createBrush(t.Graphics, tileRect))
+            {
+                t.Graphics.DrawRectangle(tileBrush, 0, 0, tileWidth, tileHeight);
+            }
+            t.Graphics.Dispose();
+
+            // "auto" here resolves to the tile's own intrinsic (natural) size via
+            // BackgroundLayerResolver.ResolveSize's both-auto branch below - the tile was already
+            // rendered at exactly the resolved layer size above, so it must be placed/repeated at
+            // that same natural size, not re-stretched to the container (which "100% 100%" would do).
+            var positionValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(positionList), layerIndex);
+            BackgroundImageDrawHandler.DrawBackgroundImage(
+                g, t.Image, CssConstants.Auto, positionValue, repeat, originRect, clipRect, roundedClipPath, box);
         }
 
         private static RBrush GetLinearGradientBrush(RGraphics g, ParsedLinearGradient gradient, RRect originRect)
