@@ -905,14 +905,14 @@ tobi loki jane {
         Assert.Equal(RuleType.Page, sheet.Rules[0].Type);
         Assert.Equal(1, sheet.Rules.Length);
 
-        var pageRule = sheet.Rules[0] as PageRule;
+        var pageRule = (PageRule)sheet.Rules[0];
         Assert.Equal(RuleType.Page, pageRule.Type);
         Assert.Equal(":left", pageRule.SelectorText);
 
-        var marginRule = pageRule.Children.Last() as MarginStyleRule;
+        var marginRule = (MarginStyleRule)pageRule.Children.Last();
         Assert.Equal("@bottom-right", marginRule.SelectorText);
         Assert.Single(marginRule.Style.Children);
-        Assert.Equal("color: rgb(0, 0, 0)", (marginRule.Style.Children.First() as ColorProperty).CssText);
+        Assert.Equal("color: rgb(0, 0, 0)", ((ColorProperty)marginRule.Style.Children.First()).CssText);
     }
 
     [Fact]

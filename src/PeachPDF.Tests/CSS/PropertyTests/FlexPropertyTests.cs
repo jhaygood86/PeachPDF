@@ -18,7 +18,7 @@ html {
 """;
             var stylesheet = new StylesheetParser().Parse(css);
 
-            var info = stylesheet.StyleRules.First() as StyleRule;
+            var info = (StyleRule)stylesheet.StyleRules.First();
 
             Assert.Equal(@"center", info.Style.AlignItems);
             Assert.Equal(@"center", info.Style.AlignContent);
@@ -36,7 +36,7 @@ html {
 """;
 
             var stylesheet = new StylesheetParser().Parse(css);
-            var info = stylesheet.StyleRules.First() as StyleRule;
+            var info = (StyleRule)stylesheet.StyleRules.First();
             Assert.Equal(@"1 1 auto", info.Style.Flex);
         }
     }

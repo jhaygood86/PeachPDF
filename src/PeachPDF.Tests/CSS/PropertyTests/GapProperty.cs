@@ -15,7 +15,7 @@ namespace PeachPDF.Tests.CSS.PropertyTests
         {
             var source = $".test {{ gap: {propertyValue}; }}";
             var styleSheet = ParseStyleSheet(source);
-            var rule = styleSheet.StyleRules.First() as StyleRule;
+            var rule = (StyleRule)styleSheet.StyleRules.First();
 
             Assert.Equal(rule.Style.Gap, propertyValue);
             Assert.Equal(rule.Style.RowGap, expectedRowGap);

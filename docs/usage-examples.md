@@ -11,6 +11,7 @@ using PeachPDF.Network;
 
 ## Contents
 
+- [Thread safety](#thread-safety)
 - [Rendering HTML from a local string](#rendering-html-from-a-local-string)
 - [Rendering an MHTML file](#rendering-an-mhtml-file)
 - [Fetching HTML over HTTP](#fetching-html-over-http)
@@ -19,6 +20,40 @@ using PeachPDF.Network;
 - [ASP.NET Core controller endpoint](#aspnet-core-controller-endpoint)
 - [ASP.NET Core Minimal API endpoint](#aspnet-core-minimal-api-endpoint)
 - [Azure Functions (isolated worker) HTTP handler](#azure-functions-isolated-worker-http-handler)
+
+## Thread safety
+
+A `PdfGenerator` instance is **not thread-safe**: don't call methods on the same instance concurrently from multiple threads, and don't reuse one instance across overlapping renders.
+
+Using a **separate `PdfGenerator` instance per thread** — one per incoming web request, one per item in a parallel batch — is safe, and is the intended way to generate PDFs concurrently. Every one of the ASP.NET Core, Minimal API, and Azure Functions examples below already follows this pattern by constructing a new `PdfGenerator` inside the request handler; that's not incidental, it's the correct usage.
+
+```csharp
+// Safe: each thread/task gets its own PdfGenerator.
+var results = await Task.WhenAll(htmlDocuments.Select(async html =>
+{
+    var generator = new PdfGenerator();
+    var document = await generator.GeneratePdf(html, pdfConfig);
+
+    var stream = new MemoryStream();
+    document.Save(stream);
+    return stream;
+}));
+```
+
+```csharp
+// Unsafe: sharing one PdfGenerator across concurrent renders.
+var generator = new PdfGenerator();
+
+var results = await Task.WhenAll(htmlDocuments.Select(async html =>
+{
+    var document = await generator.GeneratePdf(html, pdfConfig); // do not do this
+    var stream = new MemoryStream();
+    document.Save(stream);
+    return stream;
+}));
+```
+
+Any state PeachPDF shares across `PdfGenerator` instances internally (such as system font discovery) is synchronized specifically to support many instances being used concurrently, one per thread.
 
 ## Rendering HTML from a local string
 
@@ -120,7 +155,7 @@ foreach (var invoiceHtml in invoiceHtmlDocuments)
 }
 ```
 
-Reusing `sharedCssData` this way avoids re-parsing identical CSS on every iteration; the same `PdfGenerator` instance can also be reused across renders (font mappings and loaded fonts persist on it).
+Reusing `sharedCssData` this way avoids re-parsing identical CSS on every iteration; the same `PdfGenerator` instance can also be reused across renders like this — sequentially, as in the loop above (font mappings and loaded fonts persist on it). See [Thread safety](#thread-safety) if you're parallelizing this loop across threads: use one `PdfGenerator` per thread rather than sharing this one.
 
 ## Saving a PDF to a file
 

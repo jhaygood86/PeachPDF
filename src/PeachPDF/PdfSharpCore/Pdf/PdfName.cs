@@ -101,7 +101,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Determines whether the specified name and string are equal.
         /// </summary>
-        public static bool operator ==(PdfName name, string str)
+        public static bool operator ==(PdfName? name, string? str)
         {
             if (ReferenceEquals(name, null))
                 return str == null;
@@ -112,7 +112,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Determines whether the specified name and string are not equal.
         /// </summary>
-        public static bool operator !=(PdfName name, string str)
+        public static bool operator !=(PdfName? name, string? str)
         {
             if (ReferenceEquals(name, null))
                 return str != null;

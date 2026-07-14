@@ -9,7 +9,7 @@ namespace PeachPDF.Tests.CSS.PropertyTests
         {
             var parser = new StylesheetParser();
             var rule = parser.Parse(source).Rules[0];
-            return rule as StyleRule;
+            return (StyleRule)rule;
         }
 
         [Fact]

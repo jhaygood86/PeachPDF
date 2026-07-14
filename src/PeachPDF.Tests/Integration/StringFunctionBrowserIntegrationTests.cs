@@ -321,7 +321,7 @@ namespace PeachPDF.Tests.Integration
         {
             if (root.HtmlTag != null)
             {
-                var classAttr = root.HtmlTag.TryGetAttribute("class", "");
+                var classAttr = root.HtmlTag.TryGetAttribute("class", "") ?? "";
                 if (classAttr.Contains(className))
                 {
                     return root;

@@ -93,6 +93,27 @@ document.Save(stream);
 
 Note that loading images using relative paths will default to the local file system unless an `HttpClientNetworkLoader` (or custom `RNetworkLoader`) with an appropriate `BaseUri` is provided, or if the HTML has a `<base>` element with an `href` set. Images will need to be in the current working directory when using the default loader.
 
+## Thread safety
+
+A `PdfGenerator` instance is **not thread-safe** — don't call it concurrently from multiple threads, and don't reuse one instance across overlapping renders.
+
+Using a **separate `PdfGenerator` instance per thread** (one per web request, one per item in a parallel batch, etc.) is safe and is the intended way to generate PDFs concurrently:
+
+```csharp
+// Safe: each thread/task gets its own PdfGenerator.
+var results = await Task.WhenAll(htmlDocuments.Select(async html =>
+{
+    var generator = new PdfGenerator();
+    var document = await generator.GeneratePdf(html, pdfConfig);
+
+    var stream = new MemoryStream();
+    document.Save(stream);
+    return stream;
+}));
+```
+
+See [Thread safety](https://peachpdf.net/usage-examples.html#thread-safety) for more detail.
+
 ## Fonts
 
 ### Default Font

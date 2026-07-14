@@ -250,7 +250,6 @@ namespace PeachPDF.Tests.Html.Core.Dom
             // For each body row on page N, its content must start at/after the content top
             // and end at/before the content bottom of that page.
             var pageHeight = 300.0;
-            var marginTop = 20.0;
             var marginBottom = 20.0;
 
             var html = @"

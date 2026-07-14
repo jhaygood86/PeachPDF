@@ -109,7 +109,7 @@ public class SelectorsTests
     private Stream GetStream(string fileName)
     {
         var fullyQualifiedName = $"{GetType().Namespace}.{fileName}";
-        return GetType().Assembly.GetManifestResourceStream(fullyQualifiedName);
+        return GetType().Assembly.GetManifestResourceStream(fullyQualifiedName)!;
     }
 }
 

@@ -1003,7 +1003,6 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Applies vertical alignment to the linebox
         /// </summary>
-        /// <param name="g"></param>
         /// <param name="lineBox"></param>
         private static void ApplyVerticalAlignment(CssLineBox lineBox)
         {
@@ -1084,7 +1083,6 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Applies centered alignment to the text on the line-box
         /// </summary>
-        /// <param name="g"></param>
         /// <param name="line"></param>
         private static void ApplyCenterAlignment(CssLineBox line)
         {
@@ -1115,7 +1113,6 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Applies right alignment to the text on the line-box
         /// </summary>
-        /// <param name="g"></param>
         /// <param name="line"></param>
         private static void ApplyRightAlignment(CssLineBox line)
         {

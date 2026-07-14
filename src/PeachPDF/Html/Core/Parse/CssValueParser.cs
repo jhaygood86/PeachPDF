@@ -156,7 +156,7 @@ namespace PeachPDF.Html.Core.Parse
         }
 
         /// <summary>
-        /// Evals a number and returns it. If number is a percentage, it will be multiplied by <see cref="hundredPercent"/>
+        /// Evals a number and returns it. If number is a percentage, it will be multiplied by <paramref name="hundredPercent"/>
         /// </summary>
         /// <param name="number">Number to be parsed</param>
         /// <param name="hundredPercent">Number that represents the 100% if parsed number is a percentage</param>
@@ -711,6 +711,9 @@ namespace PeachPDF.Html.Core.Parse
         /// plane, so the secant used here equals the true tangent everywhere), and a local approximation
         /// otherwise.
         /// </summary>
+        /// <param name="m">The 4x4 transform to project.</param>
+        /// <param name="ox">X coordinate of the transform-origin point the projection is taken around.</param>
+        /// <param name="oy">Y coordinate of the transform-origin point the projection is taken around.</param>
         /// <param name="epsilonX">
         /// Probe distance along X used to estimate the derivative there - scaled to the box's own half-width
         /// (rather than a small constant) so that, when perspective() is involved, the fitted line reflects
@@ -718,6 +721,7 @@ namespace PeachPDF.Html.Core.Parse
         /// neighbourhood around the origin (which would barely differ from the no-perspective case for
         /// typical box sizes and perspective distances, making perspective() look like a no-op).
         /// </param>
+        /// <param name="epsilonY">Probe distance along Y used to estimate the derivative there, analogous to <paramref name="epsilonX"/>.</param>
         private static RMatrix ProjectTo2D(Matrix4x4 m, double ox, double oy, double epsilonX, double epsilonY)
         {
             (double X, double Y)? Project(double x, double y)
