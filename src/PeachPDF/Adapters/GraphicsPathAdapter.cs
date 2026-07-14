@@ -59,6 +59,41 @@ namespace PeachPDF.Adapters
             _lastPoint = new RPoint(x, y);
         }
 
+        public override void AddMove(double x, double y)
+        {
+            _graphicsPath.AddMove(x, y);
+            _lastPoint = new RPoint(x, y);
+        }
+
+        public override void AddBezierTo(double x1, double y1, double x2, double y2, double x3, double y3)
+        {
+            _graphicsPath.AddBezier(_lastPoint.X, _lastPoint.Y, x1, y1, x2, y2, x3, y3);
+            _lastPoint = new RPoint(x3, y3);
+        }
+
+        public override void AddArc(double x, double y, double radiusX, double radiusY, double rotationAngle, bool isLargeArc, bool sweepClockwise)
+        {
+            _graphicsPath.AddArc(
+                new XPoint(_lastPoint.X, _lastPoint.Y),
+                new XPoint(x, y),
+                new XSize(radiusX, radiusY),
+                rotationAngle,
+                isLargeArc,
+                sweepClockwise ? XSweepDirection.Clockwise : XSweepDirection.Counterclockwise);
+            _lastPoint = new RPoint(x, y);
+        }
+
+        public override void CloseFigure()
+        {
+            _graphicsPath.CloseFigure();
+        }
+
+        public override RFillMode FillMode
+        {
+            get => _graphicsPath.FillMode == XFillMode.Winding ? RFillMode.Nonzero : RFillMode.EvenOdd;
+            set => _graphicsPath.FillMode = value == RFillMode.Nonzero ? XFillMode.Winding : XFillMode.Alternate;
+        }
+
         public override void Dispose()
         { }
 

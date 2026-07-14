@@ -1,6 +1,7 @@
 using PeachPDF;
 using PeachPDF.PdfSharpCore;
 using System.Linq;
+using System.Text;
 
 PdfGenerateConfig pdfConfig = new()
 {
@@ -1358,3 +1359,537 @@ Console.WriteLine("Saved test_calc.pdf");
 File.Delete("test_calc.html");
 File.WriteAllText("test_calc.html", calcHtml);
 Console.WriteLine("Saved test_calc.html");
+
+// ─── SVG showcase ────────────────────────────────────────────────────────────
+
+static string SvgSwatch(string desc, string svgMarkup, string label) =>
+    "<td>" +
+    $"<div class=\"sbox\">{svgMarkup}</div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">{label}</div>" +
+    "</td>";
+
+static string PeachSwatch(string title, string svgMarkup, string blurb) =>
+    "<td style=\"width:50%\">" +
+    "<div style=\"page-break-inside:avoid\">" +
+    $"<div class=\"peach-box\">{svgMarkup}</div>" +
+    $"<h3 style=\"margin:4px 0 2px;font-size:9pt;text-align:center\">{title}</h3>" +
+    $"<p style=\"margin:0;font-size:7pt;color:#666;text-align:center\">{blurb}</p>" +
+    "</div>" +
+    "</td>";
+
+const string SvgShowcaseCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
+    table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
+    table.sw td { padding: 3px; vertical-align: top; width: 25%; text-align: center }
+    .sbox { height: 90px; border: 1px solid #ccc; margin-bottom: 3px; display: flex; align-items: center; justify-content: center; background: #fafafa }
+    .desc { font-size: 7pt; font-weight: bold; color: #444; margin-bottom: 1px }
+    .css { font-size: 5.5pt; color: #666; line-height: 1.3; word-break: break-all; font-family: monospace }
+    .peach-box { border: 1px solid #e0c9a6; margin-bottom: 4px; background: #fffdf7; text-align: center; padding: 10px 0 }
+    </style>
+    """;
+
+// Shared point lists (5-point star / pentagon) reused across several swatches.
+const string StarPoints = "50,12 58.8,37.9 86.1,38.3 64.3,54.6 72.3,80.7 50,65 27.7,80.7 35.7,54.6 13.9,38.3 41.2,37.9";
+const string PentagonPoints = "50,12 86,38 72,81 28,81 14,38";
+
+// Shared between the "inline <svg>" and "<img src=data:...>" swatches below, to prove both
+// rendering paths take the exact same markup. Namespaces are declared (harmless for the inline
+// case, which doesn't need them) because the <img> path parses this as standalone XML via
+// XDocument, which requires the "xlink" prefix to be declared before xlink:href can be used.
+var parityMarkup =
+    $"""<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 100 100" width="80" height="80"><defs><polygon id="parityStar" points="{StarPoints}"/><linearGradient id="lgParity" gradientUnits="userSpaceOnUse" x1="10" y1="10" x2="90" y2="90"><stop offset="0" stop-color="#a1c4fd"/><stop offset="1" stop-color="#c2e9fb"/></linearGradient><clipPath id="clipParity"><use xlink:href="#parityStar"/></clipPath></defs><g clip-path="url(#clipParity)"><polygon points="0,0 100,0 100,100 0,100" fill="url(#lgParity)"/></g></svg>""";
+var parityDataUri = "data:image/svg+xml;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(parityMarkup));
+
+// Small synthesized raster PNG (8x8 colorful checker) for the <image> element showcase. A
+// hand-picked minimal PNG isn't reliably decodable by the StbImageSharp-based decoder PeachPDF
+// uses internally - writing one with the matching StbImageWriteSharp encoder (already a transitive
+// dependency via the PeachPDF project reference) is.
+static string MakeRasterDataUri()
+{
+    const int size = 8;
+    var palette = new (byte R, byte G, byte B)[]
+    {
+        (231, 76, 60), (241, 196, 15), (46, 204, 113), (52, 152, 219)
+    };
+    var pixels = new byte[size * size * 4];
+    for (var y = 0; y < size; y++)
+    {
+        for (var x = 0; x < size; x++)
+        {
+            var (r, g, b) = palette[(x + y) % palette.Length];
+            var i = (y * size + x) * 4;
+            pixels[i] = r; pixels[i + 1] = g; pixels[i + 2] = b; pixels[i + 3] = 255;
+        }
+    }
+
+    using var ms = new MemoryStream();
+    new StbImageWriteSharp.ImageWriter().WritePng(pixels, size, size, StbImageWriteSharp.ColorComponents.RedGreenBlueAlpha, ms);
+    return "data:image/png;base64," + Convert.ToBase64String(ms.ToArray());
+}
+var rasterDataUri = MakeRasterDataUri();
+
+// A data:image/svg+xml payload for <image href="...">, proving that path stays real vector content
+// (never rasterized) - unlike the raster PNG swatch above.
+var nestedVectorMarkup = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><radialGradient id="nvg" gradientUnits="userSpaceOnUse" cx="50" cy="50" r="50"><stop offset="0" stop-color="#fceabb"/><stop offset="1" stop-color="#f8b500"/></radialGradient></defs><circle cx="50" cy="50" r="45" fill="url(#nvg)"/></svg>""";
+var nestedVectorDataUri = "data:image/svg+xml;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(nestedVectorMarkup));
+
+// Two data:image/svg+xml <img> payloads for the <style> showcase below - a nested <style> element
+// inside an INLINE <svg> has a known limitation (MimeKit's HTML tokenizer can hoist it out of the
+// <svg> before SvgTreeBuilder ever sees it), so <style>-element demos deliberately use the
+// standalone/<img> path instead, exactly like the automated test suite works around the same gap.
+var styleClassMarkup = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="80" height="80"><style>.hi{fill:#2980b9}.lo{fill:#bdc3c7}</style><rect x="10" y="10" width="35" height="80" class="lo"/><rect x="55" y="10" width="35" height="80" class="hi"/></svg>""";
+var styleClassDataUri = "data:image/svg+xml;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(styleClassMarkup));
+var styleIdMarkup = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="80" height="80"><style>#target{fill:#c0392b}</style><circle id="target" cx="50" cy="50" r="35" fill="#bdc3c7"/></svg>""";
+var styleIdDataUri = "data:image/svg+xml;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(styleIdMarkup));
+
+var svgHtml = "<!DOCTYPE html><html><head>" + SvgShowcaseCss + "</head><body>" +
+
+    "<h1>SVG Test Page</h1>" +
+    "<p class=\"intro\">PeachPDF renders SVG through its own vector scene graph, reusing the same PDF path/fill/stroke/gradient/clip primitives already used for CSS backgrounds and borders — SVG content is never rasterized to a bitmap. Full SVG 1.0 coverage is now supported (minus a handful of PDF-incompatible features such as animation, scripting, and filters): all basic shapes, fill-rule, stroke dash/cap/join, rotate()/skewX()/skewY() transforms, full preserveAspectRatio and nested viewports, objectBoundingBox/spreadMethod/currentColor gradients, the style cascade (style= and &lt;style&gt;), &lt;switch&gt;/&lt;a&gt; links, &lt;marker&gt;, &lt;pattern&gt;, &lt;mask&gt;, &lt;image&gt;, and &lt;text&gt;/&lt;tspan&gt;/&lt;tref&gt;. See <a href=\"https://github.com/jhaygood86/PeachPDF/blob/main/docs/supported-svg-features.md\">supported-svg-features.md</a> for the full compatibility matrix.</p>" +
+
+    "<h2>1 — Path Primitives: Lines, Curves &amp; Arcs</h2>" +
+    Row(
+        SvgSwatch("straight lines (M/L/Z)",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><path d="M50,10 L90,90 L10,90 Z" fill="#3498db"/></svg>""",
+            "path d=\"M50,10 L90,90 L10,90 Z\""),
+        SvgSwatch("cubic Bézier (C)",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><path d="M10,80 C10,20 90,20 90,80" fill="none" stroke="#e74c3c" stroke-width="6"/></svg>""",
+            "path d=\"M10,80 C10,20 90,20 90,80\""),
+        SvgSwatch("elliptical arc (A)",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><path d="M10,60 A40,40 0 0 1 90,60" fill="none" stroke="#27ae60" stroke-width="6"/></svg>""",
+            "path d=\"M10,60 A40,40 0 0 1 90,60\""),
+        SvgSwatch("multiple subpaths",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><path d="M25,10 L40,25 L25,40 L10,25 Z M75,60 L90,75 L75,90 L60,75 Z" fill="#9b59b6"/></svg>""",
+            "one path, two \"M...Z\" subpaths")
+    ) +
+
+    "<h2>2 — circle &amp; polygon</h2>" +
+    Row(
+        SvgSwatch("circle",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><circle cx="50" cy="50" r="35" fill="#f39c12"/></svg>""",
+            "circle cx=50 cy=50 r=35"),
+        SvgSwatch("polygon (pentagon)",
+            $"""<svg viewBox="0 0 100 100" width="80" height="80"><polygon points="{PentagonPoints}" fill="#2ecc71"/></svg>""",
+            "polygon points=\"...\""),
+        SvgSwatch("overlapping circles + opacity",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><circle cx="38" cy="50" r="30" fill="#3498db" opacity="0.7"/><circle cx="62" cy="50" r="30" fill="#e74c3c" opacity="0.7"/></svg>""",
+            "two circles, opacity=\"0.7\" each"),
+        SvgSwatch("polygon (5-point star)",
+            $"""<svg viewBox="0 0 100 100" width="80" height="80"><polygon points="{StarPoints}" fill="#f1c40f"/></svg>""",
+            "polygon points=\"...\"")
+    ) +
+
+    "<h2>3 — Linear &amp; Radial Gradients</h2>" +
+    Row(
+        SvgSwatch("linearGradient, 2 stops",
+            """<svg viewBox="0 0 100 100" width="80" height="60"><defs><linearGradient id="lg1" gradientUnits="userSpaceOnUse" x1="10" y1="50" x2="90" y2="50"><stop offset="0" stop-color="#ff5f6d"/><stop offset="1" stop-color="#ffc371"/></linearGradient></defs><polygon points="10,20 90,20 90,80 10,80" fill="url(#lg1)"/></svg>""",
+            "linearGradient x1/y1/x2/y2, 2 stops"),
+        SvgSwatch("linearGradient, 3 stops",
+            """<svg viewBox="0 0 100 100" width="80" height="60"><defs><linearGradient id="lg2" gradientUnits="userSpaceOnUse" x1="10" y1="10" x2="90" y2="90"><stop offset="0" stop-color="#00c6ff"/><stop offset="0.5" stop-color="#8e54e9"/><stop offset="1" stop-color="#eb3941"/></linearGradient></defs><polygon points="10,20 90,20 90,80 10,80" fill="url(#lg2)"/></svg>""",
+            "diagonal, 3 stops"),
+        SvgSwatch("radialGradient, centered",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><defs><radialGradient id="rg1" gradientUnits="userSpaceOnUse" cx="50" cy="50" r="40"><stop offset="0" stop-color="#fff9c4"/><stop offset="1" stop-color="#f57f17"/></radialGradient></defs><circle cx="50" cy="50" r="40" fill="url(#rg1)"/></svg>""",
+            "radialGradient cx/cy/r"),
+        SvgSwatch("radialGradient + gradientTransform",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><defs><radialGradient id="rg2" gradientUnits="userSpaceOnUse" cx="50" cy="50" r="40" gradientTransform="matrix(1 0 0 0.5 0 25)"><stop offset="0" stop-color="#e0f7fa"/><stop offset="1" stop-color="#006064"/></radialGradient></defs><circle cx="50" cy="50" r="40" fill="url(#rg2)"/></svg>""",
+            "gradientTransform squishes the radial into an ellipse")
+    ) +
+
+    "<h2>4 — Stroke Properties</h2>" +
+    Row(
+        SvgSwatch("stroke only, default miterlimit",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><path d="M20,80 L50,15 L80,80 Z" fill="none" stroke="#2c3e50" stroke-width="4" stroke-miterlimit="10"/></svg>""",
+            "stroke-width=4 stroke-miterlimit=10"),
+        SvgSwatch("thick stroke, low miterlimit",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><path d="M20,80 L50,15 L80,80 Z" fill="none" stroke="#2c3e50" stroke-width="10" stroke-miterlimit="1"/></svg>""",
+            "stroke-width=10 stroke-miterlimit=1"),
+        SvgSwatch("fill + stroke combined",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><circle cx="50" cy="50" r="35" fill="#1abc9c" stroke="#0e6655" stroke-width="6"/></svg>""",
+            "fill and stroke on the same shape"),
+        SvgSwatch("stroke-only star",
+            $"""<svg viewBox="0 0 100 100" width="80" height="80"><polygon points="{StarPoints}" fill="none" stroke="#c0392b" stroke-width="3"/></svg>""",
+            "fill=\"none\" stroke=\"#c0392b\"")
+    ) +
+
+    "<h2>5 — Group Opacity &amp; Transforms</h2>" +
+    Row(
+        SvgSwatch("nested group opacity (0.7 × 0.7)",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><polygon points="10,10 90,10 90,90 10,90" fill="#f1c40f"/><g opacity="0.7"><g opacity="0.7"><circle cx="50" cy="50" r="35" fill="#2980b9"/></g></g></svg>""",
+            "g opacity=\"0.7\" > g opacity=\"0.7\""),
+        SvgSwatch("group transform: translate + scale",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><g transform="translate(15,15) scale(0.6)"><path d="M50,10 L90,90 L10,90 Z" fill="#8e44ad"/></g></svg>""",
+            "transform=\"translate(15,15) scale(0.6)\""),
+        SvgSwatch("horizontal mirror via scale(-1,1)",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><g transform="scale(-1,1) translate(-100,0)"><path d="M20,80 L60,20 L90,80 Z" fill="#16a085"/></g></svg>""",
+            "transform=\"scale(-1,1) translate(-100,0)\""),
+        SvgSwatch("use + per-instance transform",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><defs><circle id="dot2" cx="50" cy="50" r="15" fill="#9b59b6"/></defs><use xlink:href="#dot2" transform="scale(0.6)"/><use xlink:href="#dot2" transform="translate(40,20) scale(0.8)"/></svg>""",
+            "two &lt;use&gt; of the same &lt;circle&gt;, each transformed")
+    ) +
+
+    "<h2>6 — clipPath + use</h2>" +
+    "<p class=\"intro\">clip-path references a &lt;clipPath&gt; that itself contains a &lt;use&gt; of a shape defined once in &lt;defs&gt; — the same pattern used by the peach illustrations below.</p>" +
+    Row(
+        SvgSwatch("gradient clipped to a circle",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><defs><circle id="clipCircle1" cx="50" cy="50" r="35"/><linearGradient id="lg3" gradientUnits="userSpaceOnUse" x1="10" y1="10" x2="90" y2="90"><stop offset="0" stop-color="#ff9a9e"/><stop offset="1" stop-color="#fecfef"/></linearGradient><clipPath id="clip1"><use xlink:href="#clipCircle1"/></clipPath></defs><g clip-path="url(#clip1)"><polygon points="0,0 100,0 100,100 0,100" fill="url(#lg3)"/></g></svg>""",
+            "clipPath > use > circle"),
+        SvgSwatch("gradient clipped to a star",
+            $"""<svg viewBox="0 0 100 100" width="80" height="80"><defs><polygon id="clipStar" points="{StarPoints}"/><linearGradient id="lg4" gradientUnits="userSpaceOnUse" x1="10" y1="10" x2="90" y2="90"><stop offset="0" stop-color="#f6d365"/><stop offset="1" stop-color="#fda085"/></linearGradient><clipPath id="clip2"><use xlink:href="#clipStar"/></clipPath></defs><g clip-path="url(#clip2)"><polygon points="0,0 100,0 100,100 0,100" fill="url(#lg4)"/></g></svg>""",
+            "clipPath > use > polygon"),
+        SvgSwatch("use for simple repetition",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><defs><circle id="dot" cx="0" cy="0" r="12" fill="#e67e22"/></defs><use xlink:href="#dot" x="30" y="50"/><use xlink:href="#dot" x="70" y="50"/></svg>""",
+            "use xlink:href=\"#dot\" x=.. y=.."),
+        SvgSwatch("clip + group opacity combined",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><defs><circle id="clipCircle2" cx="50" cy="50" r="35"/><clipPath id="clip3"><use xlink:href="#clipCircle2"/></clipPath></defs><polygon points="0,0 100,0 100,100 0,100" fill="#34495e"/><g clip-path="url(#clip3)" opacity="0.8"><polygon points="0,0 100,0 100,100 0,100" fill="#e74c3c"/></g></svg>""",
+            "g clip-path=\"url(#clip3)\" opacity=\"0.8\"")
+    ) +
+
+    "<h2>7 — Basic Shapes: rect, ellipse, line &amp; polyline</h2>" +
+    Row(
+        SvgSwatch("rect with rounded corners",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><rect x="15" y="15" width="70" height="70" rx="15" fill="#3498db"/></svg>""",
+            "rect x y width height rx=15"),
+        SvgSwatch("ellipse (percentage rx)",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><ellipse cx="50" cy="50" rx="35%" ry="25" fill="#e67e22"/></svg>""",
+            "ellipse rx=\"35%\" (percentage length)"),
+        SvgSwatch("line, round linecap",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><line x1="10" y1="90" x2="90" y2="10" stroke="#c0392b" stroke-width="8" stroke-linecap="round"/></svg>""",
+            "line x1 y1 x2 y2 stroke-linecap=\"round\""),
+        SvgSwatch("polyline (open, unclosed)",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><polyline points="10,80 30,20 50,70 70,15 90,60" fill="none" stroke="#16a085" stroke-width="4" stroke-linejoin="round"/></svg>""",
+            "polyline points=\"...\" fill=\"none\"")
+    ) +
+
+    "<h2>8 — Stroke: Dash Arrays, Caps &amp; Joins</h2>" +
+    Row(
+        SvgSwatch("stroke-dasharray + dashoffset",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><path d="M10,50 L90,50" stroke="#8e44ad" stroke-width="8" stroke-dasharray="14,8" stroke-dashoffset="4" fill="none"/></svg>""",
+            "stroke-dasharray=\"14,8\" stroke-dashoffset=\"4\""),
+        SvgSwatch("stroke-linecap: butt/round/square",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><g stroke-width="12"><line x1="20" y1="15" x2="20" y2="85" stroke="#2c3e50" stroke-linecap="butt"/><line x1="50" y1="15" x2="50" y2="85" stroke="#2980b9" stroke-linecap="round"/><line x1="80" y1="15" x2="80" y2="85" stroke="#c0392b" stroke-linecap="square"/></g></svg>""",
+            "stroke-linecap: butt, round, square"),
+        SvgSwatch("stroke-linejoin: miter/round/bevel",
+            """<svg viewBox="0 0 140 100" width="90" height="64"><g fill="none" stroke-width="8"><path d="M5,75 L25,25 L45,75" stroke="#2c3e50" stroke-linejoin="miter"/><path d="M50,75 L70,25 L90,75" stroke="#2980b9" stroke-linejoin="round"/><path d="M95,75 L115,25 L135,75" stroke="#c0392b" stroke-linejoin="bevel"/></g></svg>""",
+            "stroke-linejoin: miter, round, bevel"),
+        SvgSwatch("dashed rounded-rect border",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><rect x="15" y="15" width="70" height="70" rx="12" fill="none" stroke="#16a085" stroke-width="5" stroke-dasharray="6,4" stroke-linecap="round" stroke-linejoin="round"/></svg>""",
+            "dasharray + linecap + linejoin combined")
+    ) +
+
+    "<h2>9 — Fill Rule &amp; Opacity</h2>" +
+    Row(
+        SvgSwatch("fill-rule=\"nonzero\" (default)",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><path d="M20,20 L80,20 L80,80 L20,80 Z M35,35 L65,35 L65,65 L35,65 Z" fill="#8e44ad" fill-rule="nonzero"/></svg>""",
+            "same-direction inner square: solid (no hole)"),
+        SvgSwatch("fill-rule=\"evenodd\"",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><path d="M20,20 L80,20 L80,80 L20,80 Z M35,35 L65,35 L65,65 L35,65 Z" fill="#8e44ad" fill-rule="evenodd"/></svg>""",
+            "identical path, evenodd: donut (hole visible)"),
+        SvgSwatch("fill-opacity, stroke fully opaque",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><circle cx="50" cy="50" r="35" fill="#e74c3c" fill-opacity="0.4" stroke="#c0392b" stroke-width="6"/></svg>""",
+            "fill-opacity=\"0.4\" (stroke unaffected)"),
+        SvgSwatch("stroke-opacity, fill fully opaque",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><circle cx="50" cy="50" r="35" fill="#e74c3c" stroke="#2c3e50" stroke-width="10" stroke-opacity="0.4"/></svg>""",
+            "stroke-opacity=\"0.4\" (fill unaffected)")
+    ) +
+
+    "<h2>10 — Transforms: rotate() &amp; skew()</h2>" +
+    Row(
+        SvgSwatch("rotate(angle, cx, cy)",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><g transform="rotate(30,50,50)"><rect x="25" y="35" width="50" height="30" fill="#3498db"/></g></svg>""",
+            "transform=\"rotate(30,50,50)\""),
+        SvgSwatch("rotate(-angle, cx, cy)",
+            $"""<svg viewBox="0 0 100 100" width="80" height="80"><g transform="rotate(-45,50,50)"><polygon points="{PentagonPoints}" fill="#e67e22"/></g></svg>""",
+            "transform=\"rotate(-45,50,50)\""),
+        SvgSwatch("skewX()",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><g transform="skewX(20)"><rect x="15" y="25" width="50" height="50" fill="#16a085"/></g></svg>""",
+            "transform=\"skewX(20)\""),
+        SvgSwatch("skewY()",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><g transform="skewY(-20)"><rect x="25" y="15" width="50" height="50" fill="#9b59b6"/></g></svg>""",
+            "transform=\"skewY(-20)\"")
+    ) +
+
+    "<h2>11 — Advanced Gradients: objectBoundingBox, spreadMethod &amp; Radial Focus</h2>" +
+    Row(
+        SvgSwatch("objectBoundingBox (default)",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><defs><linearGradient id="obbGrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#43cea2"/><stop offset="1" stop-color="#185a9d"/></linearGradient></defs><rect x="15" y="30" width="70" height="40" fill="url(#obbGrad)"/></svg>""",
+            "no gradientUnits: x1/x2 are 0..1 fractions of the rect's own box"),
+        SvgSwatch("spreadMethod=\"repeat\"",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><defs><linearGradient id="spreadRepeat" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="20" y2="0" spreadMethod="repeat"><stop offset="0" stop-color="#ff9966"/><stop offset="1" stop-color="#ff5e62"/></linearGradient></defs><rect x="10" y="10" width="80" height="80" fill="url(#spreadRepeat)"/></svg>""",
+            "narrow x1..x2 range tiles across the rect"),
+        SvgSwatch("spreadMethod=\"reflect\"",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><defs><linearGradient id="spreadReflect" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="20" y2="0" spreadMethod="reflect"><stop offset="0" stop-color="#00c9ff"/><stop offset="1" stop-color="#92fe9d"/></linearGradient></defs><rect x="10" y="10" width="80" height="80" fill="url(#spreadReflect)"/></svg>""",
+            "same idea, mirrored at each repeat"),
+        SvgSwatch("radial fx/fy off-center highlight",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><defs><radialGradient id="fxfy" gradientUnits="userSpaceOnUse" cx="50" cy="50" r="40" fx="30" fy="30"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#34495e"/></radialGradient></defs><circle cx="50" cy="50" r="40" fill="url(#fxfy)"/></svg>""",
+            "fx/fy offset from cx/cy: sphere-shading highlight")
+    ) +
+
+    "<h2>12 — preserveAspectRatio &amp; Nested Viewports</h2>" +
+    Row(
+        SvgSwatch("default: xMidYMid meet",
+            """<svg viewBox="0 0 200 100" width="80" height="80"><rect x="0" y="0" width="100" height="100" fill="#3498db"/><rect x="100" y="0" width="100" height="100" fill="#e74c3c"/></svg>""",
+            "2:1 viewBox into a square box: letterboxed"),
+        SvgSwatch("xMidYMid slice",
+            """<svg viewBox="0 0 200 100" width="80" height="80" preserveAspectRatio="xMidYMid slice"><rect x="0" y="0" width="100" height="100" fill="#3498db"/><rect x="100" y="0" width="100" height="100" fill="#e74c3c"/></svg>""",
+            "same viewBox, slice: cropped, fills the box"),
+        SvgSwatch("preserveAspectRatio=\"none\"",
+            """<svg viewBox="0 0 200 100" width="80" height="80" preserveAspectRatio="none"><rect x="0" y="0" width="100" height="100" fill="#3498db"/><rect x="100" y="0" width="100" height="100" fill="#e74c3c"/></svg>""",
+            "stretched independently per axis: distorted"),
+        SvgSwatch("nested &lt;svg&gt;, own viewport",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><rect x="0" y="0" width="100" height="100" fill="#ecf0f1"/><svg x="15" y="15" width="70" height="70" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="#8e44ad"/></svg></svg>""",
+            "nested svg establishes its own coordinate system")
+    ) +
+
+    "<h2>13 — Style Cascade &amp; currentColor</h2>" +
+    Row(
+        SvgSwatch("style= overrides presentation attribute",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><circle cx="50" cy="50" r="35" fill="red" style="fill:#2ecc71"/></svg>""",
+            "fill=\"red\" style=\"fill:#2ecc71\": style wins"),
+        SvgSwatch("currentColor",
+            """<span style="color:#e67e22"><svg viewBox="0 0 100 100" width="80" height="80"><circle cx="50" cy="50" r="35" fill="currentColor"/></svg></span>""",
+            "fill=\"currentColor\" resolves the ancestor's CSS color"),
+        "<td>" +
+            $"<div class=\"sbox\"><img src=\"{styleClassDataUri}\" width=\"80\" height=\"80\"/></div>" +
+            "<div class=\"desc\">&lt;style&gt; class selector</div>" +
+            "<div class=\"css\">.hi/.lo rules, via &lt;img&gt; (see note below)</div>" +
+        "</td>",
+        "<td>" +
+            $"<div class=\"sbox\"><img src=\"{styleIdDataUri}\" width=\"80\" height=\"80\"/></div>" +
+            "<div class=\"desc\">&lt;style&gt; id selector</div>" +
+            "<div class=\"css\">#target rule, via &lt;img&gt; (see note below)</div>" +
+        "</td>"
+    ) +
+    "<p class=\"intro\">Note: a &lt;style&gt; element nested inside an <em>inline</em> &lt;svg&gt; has a known limitation in PeachPDF's HTML tokenizer, so the two &lt;style&gt; swatches above use the standalone &lt;img src=\"data:image/svg+xml\"&gt; path, which is unaffected — see supported-svg-features.md.</p>" +
+
+    "<h2>14 — &lt;switch&gt; &amp; &lt;a&gt; Links</h2>" +
+    Row(
+        SvgSwatch("switch: first child wins",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><switch><rect x="20" y="20" width="60" height="60" fill="#e74c3c"/><circle cx="50" cy="50" r="35" fill="#3498db"/></switch></svg>""",
+            "no requiredFeatures evaluation: always shows child 1"),
+        SvgSwatch("switch: skips an unbuildable child",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><switch><metadata>ignored</metadata><circle cx="50" cy="50" r="35" fill="#27ae60"/></switch></svg>""",
+            "&lt;metadata&gt; isn't renderable, so child 2 is used"),
+        SvgSwatch("&lt;a href&gt;: real PDF link",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><a href="https://github.com/jhaygood86/PeachPDF"><circle cx="50" cy="50" r="35" fill="#2980b9" stroke="#1a5276" stroke-width="3"/></a></svg>""",
+            "becomes a clickable PDF link annotation"),
+        SvgSwatch("&lt;a&gt; with no href",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><a><rect x="20" y="20" width="60" height="60" fill="#7f8c8d"/></a></svg>""",
+            "renders children normally, just isn't a link")
+    ) +
+
+    "<h2>15 — Markers</h2>" +
+    Row(
+        SvgSwatch("marker-end, orient=\"auto\"",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><defs><marker id="arrow1" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#c0392b"/></marker></defs><path d="M10,80 Q50,10 90,80" fill="none" stroke="#c0392b" stroke-width="3" marker-end="url(#arrow1)"/></svg>""",
+            "marker rotates to follow the path's tangent"),
+        SvgSwatch("marker-start/mid/end on every vertex",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><defs><marker id="dot1" markerWidth="6" markerHeight="6" refX="3" refY="3" markerUnits="userSpaceOnUse"><circle cx="3" cy="3" r="3" fill="#2980b9"/></marker></defs><polyline points="10,80 30,20 50,70 70,15 90,60" fill="none" stroke="#95a5a6" stroke-width="2" marker-start="url(#dot1)" marker-mid="url(#dot1)" marker-end="url(#dot1)"/></svg>""",
+            "one marker def, placed at start/mid/end vertices"),
+        SvgSwatch("markerUnits=\"strokeWidth\" (default)",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><defs><marker id="mScale" markerWidth="4" markerHeight="4" refX="2" refY="2" markerUnits="strokeWidth"><circle cx="2" cy="2" r="2" fill="#8e44ad"/></marker></defs><line x1="15" y1="30" x2="85" y2="30" stroke="#8e44ad" stroke-width="2" marker-end="url(#mScale)"/><line x1="15" y1="70" x2="85" y2="70" stroke="#8e44ad" stroke-width="10" marker-end="url(#mScale)"/></svg>""",
+            "same marker, scales with each line's own stroke-width"),
+        SvgSwatch("orient: fixed angle",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><defs><marker id="tri" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="45"><path d="M0,0 L8,0 L4,8 Z" fill="#16a085"/></marker></defs><polyline points="15,15 85,15 15,85 85,85" fill="none" stroke="none" marker-start="url(#tri)" marker-mid="url(#tri)" marker-end="url(#tri)"/></svg>""",
+            "orient=\"45\": same fixed rotation at every vertex")
+    ) +
+
+    "<h2>16 — Pattern Fill</h2>" +
+    Row(
+        SvgSwatch("checkerboard",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><defs><pattern id="checker" patternUnits="userSpaceOnUse" width="20" height="20"><rect width="10" height="10" fill="#ecf0f1"/><rect x="10" width="10" height="10" fill="#95a5a6"/><rect y="10" width="10" height="10" fill="#95a5a6"/><rect x="10" y="10" width="10" height="10" fill="#ecf0f1"/></pattern></defs><rect x="10" y="10" width="80" height="80" fill="url(#checker)"/></svg>""",
+            "pattern of 4 &lt;rect&gt; tiles, patternUnits=\"userSpaceOnUse\""),
+        SvgSwatch("polka dots",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><defs><pattern id="dots" patternUnits="userSpaceOnUse" width="16" height="16"><circle cx="8" cy="8" r="4" fill="#e67e22"/></pattern></defs><circle cx="50" cy="50" r="40" fill="url(#dots)"/></svg>""",
+            "dot pattern clipped to the circle's own geometry"),
+        SvgSwatch("patternTransform=\"rotate(45)\"",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><defs><pattern id="stripes" patternUnits="userSpaceOnUse" width="12" height="12" patternTransform="rotate(45)"><rect width="6" height="12" fill="#2ecc71"/></pattern></defs><rect x="10" y="10" width="80" height="80" fill="url(#stripes)"/></svg>""",
+            "stripe tile rotated 45° via patternTransform"),
+        SvgSwatch("pattern filling a star shape",
+            $"""<svg viewBox="0 0 100 100" width="80" height="80"><defs><pattern id="grid" patternUnits="userSpaceOnUse" width="10" height="10"><rect width="10" height="10" fill="#fdebd0"/><rect width="10" height="2" fill="#e67e22"/><rect width="2" height="10" fill="#e67e22"/></pattern></defs><polygon points="{StarPoints}" fill="url(#grid)"/></svg>""",
+            "pattern respects the star's own fill geometry")
+    ) +
+
+    "<h2>17 — Mask</h2>" +
+    Row(
+        SvgSwatch("linear-gradient luminance fade",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><defs><linearGradient id="fadeGrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#000000"/></linearGradient><mask id="fadeMask" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100"><rect x="0" y="0" width="100" height="100" fill="url(#fadeGrad)"/></mask></defs><rect x="0" y="0" width="100" height="100" fill="#f1c40f"/><rect x="0" y="0" width="100" height="100" fill="#8e44ad" mask="url(#fadeMask)"/></svg>""",
+            "gradient mask fades the purple rect over a yellow backdrop"),
+        SvgSwatch("radial vignette",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><defs><radialGradient id="vignetteGrad" gradientUnits="objectBoundingBox" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#000000"/></radialGradient><mask id="vignetteMask" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100"><rect x="0" y="0" width="100" height="100" fill="url(#vignetteGrad)"/></mask></defs><rect x="0" y="0" width="100" height="100" fill="#c0392b" mask="url(#vignetteMask)"/></svg>""",
+            "radial mask: spotlight/vignette fade"),
+        SvgSwatch("vector shape as mask",
+            $"""<svg viewBox="0 0 100 100" width="80" height="80"><defs><mask id="starMask" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100"><polygon points="{StarPoints}" fill="#ffffff"/></mask></defs><rect x="0" y="0" width="100" height="100" fill="#16a085" mask="url(#starMask)"/></svg>""",
+            "a shape, not just a gradient, as the mask's luminance"),
+        SvgSwatch("&lt;text&gt; as mask content",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><defs><linearGradient id="textGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff9966"/><stop offset="1" stop-color="#ff5e62"/></linearGradient><mask id="textMask" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100"><text x="6" y="65" font-size="46" font-weight="bold" fill="#ffffff">PDF</text></mask></defs><rect x="0" y="0" width="100" height="100" fill="url(#textGrad)" mask="url(#textMask)"/></svg>""",
+            "gradient shows only through the letter shapes")
+    ) +
+
+    "<h2>18 — &lt;image&gt; Element</h2>" +
+    Row(
+        SvgSwatch("raster data:image/png",
+            $"""<svg viewBox="0 0 100 100" width="80" height="80"><image x="10" y="10" width="80" height="80" href="{rasterDataUri}"/></svg>""",
+            "a real embedded raster image XObject"),
+        SvgSwatch("vector data:image/svg+xml",
+            $"""<svg viewBox="0 0 100 100" width="80" height="80"><image x="0" y="0" width="100" height="100" href="{nestedVectorDataUri}"/></svg>""",
+            "stays real vector content, never rasterized"),
+        SvgSwatch("preserveAspectRatio=\"none\" on &lt;image&gt;",
+            $"""<svg viewBox="0 0 100 60" width="80" height="48"><image x="0" y="0" width="100" height="60" preserveAspectRatio="none" href="{rasterDataUri}"/></svg>""",
+            "raster image stretched non-uniformly to fit its box"),
+        SvgSwatch("&lt;image&gt; with clip-path",
+            $"""<svg viewBox="0 0 100 100" width="80" height="80"><defs><circle id="imgClip" cx="50" cy="50" r="40"/><clipPath id="clipImg"><use xlink:href="#imgClip"/></clipPath></defs><image x="5" y="5" width="90" height="90" href="{rasterDataUri}" clip-path="url(#clipImg)"/></svg>""",
+            "clip-path applies to &lt;image&gt; like any other element")
+    ) +
+
+    "<h2>19 — Text, tspan &amp; tref</h2>" +
+    Row(
+        SvgSwatch("&lt;text x y fill font-size&gt;",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><rect x="0" y="0" width="100" height="100" fill="#2c3e50"/><text x="10" y="55" font-size="20" fill="#ecf0f1">Peach</text></svg>""",
+            "plain positioned text, baseline at (x, y)"),
+        SvgSwatch("text-anchor: start/middle/end",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><line x1="50" y1="5" x2="50" y2="95" stroke="#bdc3c7" stroke-dasharray="3,3"/><text x="50" y="30" font-size="12" fill="#2980b9" text-anchor="start">start</text><text x="50" y="55" font-size="12" fill="#c0392b" text-anchor="middle">middle</text><text x="50" y="80" font-size="12" fill="#27ae60" text-anchor="end">end</text></svg>""",
+            "all three anchored at x=50 (dashed guideline)"),
+        SvgSwatch("&lt;tspan&gt; restyles mid-run",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><rect width="100" height="100" fill="#fdf2e9"/><text x="8" y="45" font-size="14" fill="#2c3e50">Hello <tspan fill="#c0392b" font-weight="bold">World</tspan></text></svg>""",
+            "tspan flows right after \"Hello \", own fill+weight"),
+        SvgSwatch("&lt;tspan x y&gt;: new line + font variety",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><text x="10"><tspan x="10" y="30" font-size="16" font-weight="bold" fill="#2980b9">Bold</tspan><tspan x="10" y="55" font-size="14" font-style="italic" fill="#c0392b">Italic</tspan><tspan x="10" y="80" font-size="12" fill="#16a085">Regular</tspan></text></svg>""",
+            "own x/y starts a new line; size/weight/style vary")
+    ) +
+
+    "<h2>20 — Inline &lt;svg&gt; vs &lt;img src=\"data:image/svg+xml\"&gt;</h2>" +
+    "<p class=\"intro\">The identical SVG markup rendered two ways: embedded directly in the HTML, and encoded as a base64 data: URI on an &lt;img&gt; tag. Both go through the same vector renderer.</p>" +
+    "<table class=\"sw\"><tr>" +
+    SvgSwatch("inline &lt;svg&gt;", parityMarkup, "&lt;svg&gt;...&lt;/svg&gt; inline in the HTML body") +
+    "<td>" +
+        $"<div class=\"sbox\"><img src=\"{parityDataUri}\" width=\"80\" height=\"80\"/></div>" +
+        "<div class=\"desc\">&lt;img src=\"data:...\"&gt;</div>" +
+        "<div class=\"css\">same markup, base64 data: URI</div>" +
+    "</td>" +
+    "</tr></table>" +
+
+    "<h2>21 — Peach Showcase</h2>" +
+    "<p class=\"intro\">Two original peach illustrations, built entirely from the elements above: cubic-curve paths, radial gradients for shading, and a clipPath + use for the cross-section.</p>" +
+    "<table class=\"sw\"><tr>" +
+    PeachSwatch("Whole Peach",
+        """
+        <svg viewBox="0 0 200 200" width="150" height="150">
+          <defs>
+            <radialGradient id="peachBody" gradientUnits="userSpaceOnUse" cx="80" cy="70" r="150">
+              <stop offset="0" stop-color="#fff3b0"/>
+              <stop offset="0.35" stop-color="#ffb347"/>
+              <stop offset="0.7" stop-color="#ff6f61"/>
+              <stop offset="1" stop-color="#d1495b"/>
+            </radialGradient>
+            <radialGradient id="cheekBlush" gradientUnits="userSpaceOnUse" cx="140" cy="130" r="55">
+              <stop offset="0" stop-color="#ff4d6d" stop-opacity="0.55"/>
+              <stop offset="1" stop-color="#ff4d6d" stop-opacity="0"/>
+            </radialGradient>
+          </defs>
+          <path d="M100,82 C90,60 65,45 40,55 C10,67 3,112 18,146 C33,178 66,195 100,195 C134,195 167,178 182,146 C197,112 190,67 160,55 C135,45 110,60 100,82 Z" fill="url(#peachBody)"/>
+          <circle cx="140" cy="130" r="55" fill="url(#cheekBlush)"/>
+          <path d="M100,55 C112,35 140,28 155,40 C143,55 118,60 100,55 Z" fill="#4caf50"/>
+          <path d="M100,55 L96,35" fill="none" stroke="#6d4c30" stroke-width="6"/>
+        </svg>
+        """,
+        "path (M/C/Z) body + leaf + stroked stem, radialGradient shading, radial blush with alpha stops") +
+    PeachSwatch("Peach Slice",
+        """
+        <svg viewBox="0 0 200 200" width="150" height="150">
+          <defs>
+            <circle id="sliceOuter" cx="100" cy="100" r="85"/>
+            <radialGradient id="fleshGradient" gradientUnits="userSpaceOnUse" cx="100" cy="90" r="110">
+              <stop offset="0" stop-color="#fff8e1"/>
+              <stop offset="0.5" stop-color="#ffb74d"/>
+              <stop offset="1" stop-color="#e65100"/>
+            </radialGradient>
+            <clipPath id="sliceClip">
+              <use xlink:href="#sliceOuter"/>
+            </clipPath>
+          </defs>
+          <g clip-path="url(#sliceClip)">
+            <polygon points="0,0 200,0 200,200 0,200" fill="url(#fleshGradient)"/>
+            <g opacity="0.35">
+              <path d="M100,100 L100,20" fill="none" stroke="#e65100" stroke-width="2"/>
+              <path d="M100,100 L170,60" fill="none" stroke="#e65100" stroke-width="2"/>
+              <path d="M100,100 L170,140" fill="none" stroke="#e65100" stroke-width="2"/>
+              <path d="M100,100 L100,180" fill="none" stroke="#e65100" stroke-width="2"/>
+              <path d="M100,100 L30,140" fill="none" stroke="#e65100" stroke-width="2"/>
+              <path d="M100,100 L30,60" fill="none" stroke="#e65100" stroke-width="2"/>
+            </g>
+          </g>
+          <path d="M100,75 C120,75 135,90 135,108 C135,128 118,142 100,142 C82,142 65,128 65,108 C65,90 80,75 100,75 Z" fill="#8d5524" stroke="#5d3a1a" stroke-width="2"/>
+          <use xlink:href="#sliceOuter" fill="none" stroke="#c0392b" stroke-width="6"/>
+        </svg>
+        """,
+        "clipPath + use round the flesh, opacity-grouped striations, pit path, use for the skin outline") +
+    "</tr></table>" +
+    "<table class=\"sw\"><tr>" +
+    PeachSwatch("Peach Branch &amp; Blossoms",
+        """
+        <svg viewBox="0 0 200 200" width="150" height="150">
+          <defs>
+            <marker id="blossom" markerWidth="8" markerHeight="8" refX="4" refY="4" markerUnits="userSpaceOnUse">
+              <circle cx="4" cy="4" r="3.5" fill="#ffd1e3" stroke="#ff8fab" stroke-width="0.6"/>
+            </marker>
+            <marker id="leafTip" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+              <path d="M0,5 C3,0 7,0 10,5 C7,10 3,10 0,5 Z" fill="#4caf50"/>
+            </marker>
+          </defs>
+          <path d="M30,170 C50,130 70,90 110,55" fill="none" stroke="#6d4c30" stroke-width="6" stroke-linecap="round"
+                marker-mid="url(#blossom)" marker-end="url(#leafTip)"/>
+          <polyline points="55,140 75,120 95,100 110,55" fill="none" stroke="none" marker-mid="url(#blossom)"/>
+          <text x="100" y="192" font-size="13" font-style="italic" fill="#6d4c30" text-anchor="middle">Prunus persica</text>
+        </svg>
+        """,
+        "&lt;marker&gt; blossoms/leaf tip along a curved branch, italic &lt;text&gt; caption") +
+    PeachSwatch("Peach Basket",
+        """
+        <svg viewBox="0 0 200 200" width="150" height="150">
+          <defs>
+            <pattern id="weave" patternUnits="userSpaceOnUse" width="14" height="14" patternTransform="rotate(20)">
+              <rect width="14" height="14" fill="#c98a4b"/>
+              <rect width="14" height="6" fill="#a86b34"/>
+            </pattern>
+            <radialGradient id="basketPeach" gradientUnits="userSpaceOnUse" cx="0" cy="-15" r="45">
+              <stop offset="0" stop-color="#fff3b0"/>
+              <stop offset="0.5" stop-color="#ffb347"/>
+              <stop offset="1" stop-color="#d1495b"/>
+            </radialGradient>
+            <linearGradient id="basketShadow" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#000000"/>
+              <stop offset="1" stop-color="#000000" stop-opacity="0"/>
+            </linearGradient>
+            <mask id="basketShadowMask" maskUnits="objectBoundingBox" x="0" y="0" width="1" height="1">
+              <rect x="20" y="150" width="160" height="30" fill="url(#basketShadow)"/>
+            </mask>
+          </defs>
+          <ellipse cx="100" cy="165" rx="80" ry="15" fill="#000000" opacity="0.25" mask="url(#basketShadowMask)"/>
+          <rect x="30" y="110" width="140" height="70" rx="10" fill="url(#weave)" stroke="#7a4a1e" stroke-width="3"/>
+          <circle cx="70" cy="105" r="28" fill="url(#basketPeach)" transform="translate(0,0) rotate(-8,70,105)"/>
+          <circle cx="120" cy="100" r="30" fill="url(#basketPeach)"/>
+          <circle cx="150" cy="115" r="24" fill="url(#basketPeach)" transform="rotate(10,150,115)"/>
+        </svg>
+        """,
+        "pattern-woven basket, rotate() on individual peaches, gradient drop-shadow via mask") +
+    "</tr></table>" +
+
+    "</body></html>";
+
+var svgStream = new MemoryStream();
+var svgDocument = await generator.GeneratePdf(svgHtml, pdfConfig);
+svgDocument.Save(svgStream);
+
+File.Delete("test_svg.pdf");
+File.WriteAllBytes("test_svg.pdf", svgStream.ToArray());
+Console.WriteLine("Saved test_svg.pdf");
+
+File.Delete("test_svg.html");
+File.WriteAllText("test_svg.html", svgHtml);
+Console.WriteLine("Saved test_svg.html");

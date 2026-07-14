@@ -115,6 +115,15 @@ namespace PeachPDF.Html.Adapters
         }
 
         /// <summary>
+        /// Get a (not cached - brushes aren't identity-stable/comparable the way colors are) pen that
+        /// strokes with the given brush, e.g. for an SVG <c>stroke="url(#gradient)"</c>.
+        /// </summary>
+        public RPen GetPen(RBrush brush)
+        {
+            return CreatePen(brush);
+        }
+
+        /// <summary>
         /// Get cached solid brush instance for the given color.
         /// </summary>
         /// <param name="color">the color to get brush for</param>
@@ -265,6 +274,11 @@ namespace PeachPDF.Html.Adapters
         protected abstract RPen CreatePen(RColor color);
 
         /// <summary>
+        /// Creates a pen that strokes with the given brush.
+        /// </summary>
+        protected abstract RPen CreatePen(RBrush brush);
+
+        /// <summary>
         /// Get cached solid brush instance for the given color.
         /// </summary>
         /// <param name="color">the color to get brush for</param>
@@ -283,12 +297,12 @@ namespace PeachPDF.Html.Adapters
 
         protected abstract RBrush CreateLinearGradientBrush(RPoint p1, RPoint p2, (RColor Color, double Position)[] stops, bool isRepeating = false);
 
-        public RBrush GetRadialGradientBrush(RPoint center, double radiusX, double radiusY, (RColor Color, double Position)[] stops, bool isRepeating = false)
+        public RBrush GetRadialGradientBrush(RPoint center, double radiusX, double radiusY, (RColor Color, double Position)[] stops, bool isRepeating = false, RPoint? focalCenter = null)
         {
-            return CreateRadialGradientBrush(center, radiusX, radiusY, stops, isRepeating);
+            return CreateRadialGradientBrush(center, radiusX, radiusY, stops, isRepeating, focalCenter);
         }
 
-        protected abstract RBrush CreateRadialGradientBrush(RPoint center, double radiusX, double radiusY, (RColor Color, double Position)[] stops, bool isRepeating = false);
+        protected abstract RBrush CreateRadialGradientBrush(RPoint center, double radiusX, double radiusY, (RColor Color, double Position)[] stops, bool isRepeating = false, RPoint? focalCenter = null);
 
         public RBrush GetConicGradientBrush(RPoint center, double outerRadius, RColor[] colors, double[] anglesRad)
         {

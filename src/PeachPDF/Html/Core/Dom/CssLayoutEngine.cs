@@ -37,10 +37,23 @@ namespace PeachPDF.Html.Core.Dom
         public static void MeasureImageSize(CssRectImage imageWord)
         {
             ArgumentNullException.ThrowIfNull(imageWord);
-            ArgumentNullException.ThrowIfNull(imageWord.OwnerBox);
+            MeasureIntrinsicSize(imageWord, imageWord.Image?.Width, imageWord.Image?.Height);
+        }
 
-            var width = new CssLength(imageWord.OwnerBox.Width);
-            var height = new CssLength(imageWord.OwnerBox.Height);
+        /// <summary>
+        /// Measure a replaced-element word's box size by the width/height set on the box and a given
+        /// intrinsic size (null components mean "unknown", e.g. an image that failed to load, or an
+        /// SVG with no viewBox/width/height). Shared by <see cref="MeasureImageSize"/> (backed by an
+        /// <see cref="RImage"/>'s pixel size) and <c>CssBoxSvg</c>/<c>CssBoxImage</c>'s SVG-source
+        /// sizing (backed by an <c>SvgDocument</c>'s viewBox/width/height).
+        /// </summary>
+        public static void MeasureIntrinsicSize(CssRect word, double? intrinsicWidth, double? intrinsicHeight)
+        {
+            ArgumentNullException.ThrowIfNull(word);
+            ArgumentNullException.ThrowIfNull(word.OwnerBox);
+
+            var width = new CssLength(word.OwnerBox.Width);
+            var height = new CssLength(word.OwnerBox.Height);
 
             var hasImageTagWidth = width is { Number: > 0, Unit: CssUnit.Pixels };
             var hasImageTagHeight = height is { Number: > 0, Unit: CssUnit.Pixels };
@@ -48,23 +61,23 @@ namespace PeachPDF.Html.Core.Dom
 
             if (hasImageTagWidth)
             {
-                imageWord.Width = width.Number;
+                word.Width = width.Number;
             }
             else if (width is { Number: > 0, IsPercentage: true })
             {
-                imageWord.Width = width.Number * imageWord.OwnerBox.ContainingBlock.Size.Width;
+                word.Width = width.Number * word.OwnerBox.ContainingBlock.Size.Width;
                 scaleImageHeight = true;
             }
-            else if (imageWord.Image != null)
+            else if (intrinsicWidth is > 0)
             {
-                imageWord.Width = imageWord.Image.Width;
+                word.Width = intrinsicWidth.Value;
             }
             else
             {
-                imageWord.Width = hasImageTagHeight ? height.Number / 1.14f : 20;
+                word.Width = hasImageTagHeight ? height.Number / 1.14f : 20;
             }
 
-            var maxWidth = new CssLength(imageWord.OwnerBox.MaxWidth);
+            var maxWidth = new CssLength(word.OwnerBox.MaxWidth);
             if (maxWidth.Number > 0)
             {
                 double maxWidthVal = -1;
@@ -74,17 +87,17 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 else if (maxWidth.IsPercentage)
                 {
-                    maxWidthVal = maxWidth.Number * imageWord.OwnerBox.ContainingBlock.Size.Width;
+                    maxWidthVal = maxWidth.Number * word.OwnerBox.ContainingBlock.Size.Width;
                 }
 
-                if (maxWidthVal > -1 && imageWord.Width > maxWidthVal)
+                if (maxWidthVal > -1 && word.Width > maxWidthVal)
                 {
-                    imageWord.Width = maxWidthVal;
+                    word.Width = maxWidthVal;
                     scaleImageHeight = !hasImageTagHeight;
                 }
             }
 
-            var minWidth = new CssLength(imageWord.OwnerBox.MinWidth);
+            var minWidth = new CssLength(word.OwnerBox.MinWidth);
             if (minWidth.Number > 0)
             {
                 double minWidthVal = -1;
@@ -94,50 +107,50 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 else if (minWidth.IsPercentage)
                 {
-                    minWidthVal = minWidth.Number * imageWord.OwnerBox.ContainingBlock.Size.Width;
+                    minWidthVal = minWidth.Number * word.OwnerBox.ContainingBlock.Size.Width;
                 }
 
-                if (minWidthVal > -1 && imageWord.Width < minWidthVal)
+                if (minWidthVal > -1 && word.Width < minWidthVal)
                 {
-                    imageWord.Width = minWidthVal;
+                    word.Width = minWidthVal;
                     scaleImageHeight = !hasImageTagHeight;
                 }
             }
 
             if (hasImageTagHeight)
             {
-                imageWord.Height = height.Number;
+                word.Height = height.Number;
             }
-            else if (imageWord.Image != null)
+            else if (intrinsicHeight is > 0)
             {
-                imageWord.Height = imageWord.Image.Height;
+                word.Height = intrinsicHeight.Value;
             }
             else
             {
-                imageWord.Height = imageWord.Width > 0 ? imageWord.Width * 1.14f : 22.8f;
+                word.Height = word.Width > 0 ? word.Width * 1.14f : 22.8f;
             }
 
-            if (imageWord.Image != null)
+            if (intrinsicWidth is > 0 && intrinsicHeight is > 0)
             {
                 // If only the width was set in the html tag, ratio the height.
                 if ((hasImageTagWidth && !hasImageTagHeight) || scaleImageHeight)
                 {
                     // Divide the given tag width with the actual image width, to get the ratio.
-                    var ratio = imageWord.Width / imageWord.Image.Width;
-                    imageWord.Height = imageWord.Image.Height * ratio;
+                    var ratio = word.Width / intrinsicWidth.Value;
+                    word.Height = intrinsicHeight.Value * ratio;
                 }
                 // If only the height was set in the html tag, ratio the width.
                 else if (hasImageTagHeight && !hasImageTagWidth)
                 {
                     // Divide the given tag height with the actual image height, to get the ratio.
-                    var ratio = imageWord.Height / imageWord.Image.Height;
-                    imageWord.Width = imageWord.Image.Width * ratio;
+                    var ratio = word.Height / intrinsicHeight.Value;
+                    word.Width = intrinsicWidth.Value * ratio;
                 }
             }
 
             // Apply max-height / min-height constraints, rescaling width by the image's aspect
             // ratio (mirroring the max-width/min-width handling above).
-            var maxHeight = new CssLength(imageWord.OwnerBox.MaxHeight);
+            var maxHeight = new CssLength(word.OwnerBox.MaxHeight);
             if (maxHeight.Number > 0)
             {
                 double maxHeightVal = -1;
@@ -145,22 +158,22 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     maxHeightVal = maxHeight.Number;
                 }
-                else if (maxHeight.IsPercentage && imageWord.OwnerBox.ContainingBlock.IsHeightCalculated)
+                else if (maxHeight.IsPercentage && word.OwnerBox.ContainingBlock.IsHeightCalculated)
                 {
-                    maxHeightVal = maxHeight.Number * imageWord.OwnerBox.ContainingBlock.Size.Height;
+                    maxHeightVal = maxHeight.Number * word.OwnerBox.ContainingBlock.Size.Height;
                 }
 
-                if (maxHeightVal > -1 && imageWord.Height > maxHeightVal)
+                if (maxHeightVal > -1 && word.Height > maxHeightVal)
                 {
-                    if (imageWord.Image != null && imageWord.Height > 0)
+                    if (intrinsicWidth is > 0 && intrinsicHeight is > 0 && word.Height > 0)
                     {
-                        imageWord.Width *= maxHeightVal / imageWord.Height;
+                        word.Width *= maxHeightVal / word.Height;
                     }
-                    imageWord.Height = maxHeightVal;
+                    word.Height = maxHeightVal;
                 }
             }
 
-            var minHeight = new CssLength(imageWord.OwnerBox.MinHeight);
+            var minHeight = new CssLength(word.OwnerBox.MinHeight);
             if (minHeight.Number > 0)
             {
                 double minHeightVal = -1;
@@ -168,22 +181,22 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     minHeightVal = minHeight.Number;
                 }
-                else if (minHeight.IsPercentage && imageWord.OwnerBox.ContainingBlock.IsHeightCalculated)
+                else if (minHeight.IsPercentage && word.OwnerBox.ContainingBlock.IsHeightCalculated)
                 {
-                    minHeightVal = minHeight.Number * imageWord.OwnerBox.ContainingBlock.Size.Height;
+                    minHeightVal = minHeight.Number * word.OwnerBox.ContainingBlock.Size.Height;
                 }
 
-                if (minHeightVal > -1 && imageWord.Height < minHeightVal)
+                if (minHeightVal > -1 && word.Height < minHeightVal)
                 {
-                    if (imageWord.Image != null && imageWord.Height > 0)
+                    if (intrinsicWidth is > 0 && intrinsicHeight is > 0 && word.Height > 0)
                     {
-                        imageWord.Width *= minHeightVal / imageWord.Height;
+                        word.Width *= minHeightVal / word.Height;
                     }
-                    imageWord.Height = minHeightVal;
+                    word.Height = minHeightVal;
                 }
             }
 
-            imageWord.Height += imageWord.OwnerBox.ActualBorderBottomWidth + imageWord.OwnerBox.ActualBorderTopWidth + imageWord.OwnerBox.ActualPaddingTop + imageWord.OwnerBox.ActualPaddingBottom;
+            word.Height += word.OwnerBox.ActualBorderBottomWidth + word.OwnerBox.ActualBorderTopWidth + word.OwnerBox.ActualPaddingTop + word.OwnerBox.ActualPaddingBottom;
         }
 
         /// <summary>

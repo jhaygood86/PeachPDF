@@ -345,11 +345,12 @@ namespace PeachPDF.Html.Core.Dom
         {
             ArgumentNullException.ThrowIfNull(tag);
 
-            return tag.Name switch
+            return tag.Name.ToLowerInvariant() switch
             {
                 HtmlConstants.Img => new CssBoxImage(parent, tag),
                 HtmlConstants.Iframe => new CssBoxFrame(parent, tag),
                 HtmlConstants.Hr => new CssBoxHr(parent, tag),
+                HtmlConstants.Svg => new CssBoxSvg(parent, tag),
                 _ => new CssBox(parent, tag)
             };
         }

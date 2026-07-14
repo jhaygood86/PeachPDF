@@ -137,6 +137,11 @@ namespace PeachPDF.Adapters
             return new PenAdapter(new XPen(Utils.Convert(color)));
         }
 
+        protected override RPen CreatePen(RBrush brush)
+        {
+            return new PenAdapter(new XPen(((BrushAdapter)brush).Brush));
+        }
+
         protected override RBrush CreateSolidBrush(RColor color)
         {
             XBrush solidBrush;
@@ -174,14 +179,15 @@ namespace PeachPDF.Adapters
             return new BrushAdapter(new XLinearGradientBrush(xp1, xp2, colors, positions) { IsRepeating = isRepeating });
         }
 
-        protected override RBrush CreateRadialGradientBrush(RPoint center, double radiusX, double radiusY, (RColor Color, double Position)[] stops, bool isRepeating = false)
+        protected override RBrush CreateRadialGradientBrush(RPoint center, double radiusX, double radiusY, (RColor Color, double Position)[] stops, bool isRepeating = false, RPoint? focalCenter = null)
         {
             var xCenter = new XPoint(center.X / PixelsPerPoint, center.Y / PixelsPerPoint);
             var rxPt = radiusX / PixelsPerPoint;
             var ryPt = radiusY / PixelsPerPoint;
             var colors = stops.Select(s => Utils.Convert(s.Color)).ToArray();
             var positions = stops.Select(s => s.Position).ToArray();
-            return new BrushAdapter(new XRadialGradientBrush(xCenter, rxPt, ryPt, colors, positions) { IsRepeating = isRepeating });
+            var xFocal = focalCenter is { } f ? new XPoint(f.X / PixelsPerPoint, f.Y / PixelsPerPoint) : (XPoint?)null;
+            return new BrushAdapter(new XRadialGradientBrush(xCenter, rxPt, ryPt, colors, positions, xFocal) { IsRepeating = isRepeating });
         }
 
         protected override RBrush CreateConicGradientBrush(RPoint center, double outerRadius, RColor[] colors, double[] anglesRad)

@@ -80,6 +80,16 @@ namespace PeachPDF.Adapters
             _g.IntersectClip(Utils.Convert(rect, PixelsPerPoint));
         }
 
+        public override void PushClip(RGraphicsPath path)
+        {
+            // No simple bounding rectangle for an arbitrary path, so keep the tracked clip bound
+            // conservative (unchanged) - it's only used for culling, and an over-wide bound never
+            // hides content that should actually be visible.
+            _clipStack.Push(_clipStack.Peek());
+            _g.Save();
+            _g.IntersectClip(((GraphicsPathAdapter)path).GraphicsPath);
+        }
+
         public override void PushClipExclude(RRect rect)
         { }
 
@@ -151,6 +161,33 @@ namespace PeachPDF.Adapters
         public override RGraphicsPath GetGraphicsPath()
         {
             return new GraphicsPathAdapter();
+        }
+
+        public override (RGraphics Graphics, RImage Image)? CreateTile(double width, double height)
+        {
+            // XForm/XGraphics.FromForm() is real, working PdfSharpCore infrastructure for drawing into
+            // a separate PDF Form XObject's own content stream (rather than the page's) - the same
+            // mechanism this method's own XGraphics (_g) is itself built on when bound to a page. The
+            // owning PdfDocument is only reachable via the current page, so this returns null outside
+            // an actual page-paint context (e.g. a measure-only pass).
+            var document = _g.PdfPage?.Owner;
+            if (document is null || width <= 0 || height <= 0)
+                return null;
+
+            var form = new XForm(document, new XSize(width, height));
+            var formGraphics = XGraphics.FromForm(form);
+            // releaseGraphics: true - disposing the returned tile RGraphics must dispose the
+            // underlying XGraphics, which is what actually calls XForm.Finish() and closes out the
+            // Form XObject's content stream (see XGraphics.Dispose()). Without this, the tile's
+            // drawing commands would never get flushed into the PDF at all.
+            var tileGraphics = new GraphicsAdapter(_adapter, formGraphics, PixelsPerPoint, releaseGraphics: true);
+            return (tileGraphics, new ImageAdapter(form));
+        }
+
+        public override void DrawImageMasked(RImage image, RImage maskImage, RRect destRect)
+        {
+            if (((ImageAdapter)image).Image is XForm imageForm && ((ImageAdapter)maskImage).Image is XForm maskForm)
+                _g.DrawImageMasked(imageForm, maskForm, Utils.Convert(destRect, PixelsPerPoint));
         }
 
         public override void Dispose()

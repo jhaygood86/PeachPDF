@@ -28,5 +28,31 @@ namespace PeachPDF.Html.Adapters
         /// Gets or sets the style used for dashed lines drawn with this Pen.
         /// </summary>
         public abstract RDashStyle DashStyle { set; }
+
+        /// <summary>
+        /// Gets or sets the miter limit used when joining sharp corners of a stroked path.
+        /// </summary>
+        public abstract double MiterLimit { get; set; }
+
+        /// <summary>
+        /// Sets how the ends of an unclosed subpath are drawn.
+        /// </summary>
+        public abstract RLineCap LineCap { set; }
+
+        /// <summary>
+        /// Sets how consecutive stroked segments are joined.
+        /// </summary>
+        public abstract RLineJoin LineJoin { set; }
+
+        /// <summary>
+        /// Sets an explicit numeric dash pattern (e.g. from SVG's <c>stroke-dasharray</c>/
+        /// <c>stroke-dashoffset</c>), overriding <see cref="DashStyle"/> with a custom pattern.
+        /// <paramref name="pattern"/> and <paramref name="offset"/> are in the same absolute units as
+        /// <see cref="Width"/> - implementations are responsible for any unit-normalization their
+        /// underlying pen API requires (e.g. a GDI+-style dash array expressed as multiples of pen
+        /// width rather than absolute lengths). An empty <paramref name="pattern"/> reverts to a solid
+        /// line.
+        /// </summary>
+        public abstract void SetDashPattern(double[] pattern, double offset);
     }
 }

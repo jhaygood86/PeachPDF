@@ -58,7 +58,7 @@ namespace PeachPDF.Html.Core.Parse
                         {
                             var text = (HtmlDataToken)token;
 
-                            if (curBox.HtmlTag?.Name is HtmlConstants.NoScript)
+                            if (curBox.HtmlTag?.Name.Equals(HtmlConstants.NoScript, StringComparison.OrdinalIgnoreCase) == true)
                             {
                                 curBox = ParseDocument(text.Data, curBox);
                             }
@@ -114,7 +114,7 @@ namespace PeachPDF.Html.Core.Parse
         {
             if (ParseHtmlTag(token, out var tagName, out var tagAttributes))
             {
-                if (!HtmlUtils.IsSingleTag(tagName) && curBox.ParentBox != null)
+                if (!HtmlUtils.IsSingleTag(tagName.ToLowerInvariant()) && curBox.ParentBox != null)
                 {
 #if DEBUG
                     Console.WriteLine($"parse token, tag close: {tagName}. current box: {curBox}");
@@ -131,7 +131,7 @@ namespace PeachPDF.Html.Core.Parse
 #endif
                 while (true)
                 {
-                    if (curBox.HtmlTag is not null && HtmlUtils.CanEndTagBeOmitted(curBox.HtmlTag.Name, tagName))
+                    if (curBox.HtmlTag is not null && HtmlUtils.CanEndTagBeOmitted(curBox.HtmlTag.Name.ToLowerInvariant(), tagName.ToLowerInvariant()))
                     {
                         var previousBox = curBox;
                         curBox = CloseElement(curBox, curBox.HtmlTag.Name);
@@ -146,7 +146,7 @@ namespace PeachPDF.Html.Core.Parse
                     }
                 }
 
-                var isSingle = HtmlUtils.IsSingleTag(tagName) || token.IsEmptyElement;
+                var isSingle = HtmlUtils.IsSingleTag(tagName.ToLowerInvariant()) || token.IsEmptyElement;
                 var tag = new HtmlTag(tagName, isSingle, tagAttributes);
 
                 if (isSingle)
@@ -184,7 +184,7 @@ namespace PeachPDF.Html.Core.Parse
         {
             var isClosing = token.IsEndTag;
 
-            name = token.Name.ToLowerInvariant();
+            name = token.Name;
 
             attributes = null;
 

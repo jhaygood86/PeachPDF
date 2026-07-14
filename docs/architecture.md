@@ -1,6 +1,6 @@
 # PeachPDF Architecture
 
-PeachPDF converts HTML and CSS into PDF documents entirely within .NET, with no external process dependencies. The pipeline passes through seven distinct phases: HTML parsing, DOM construction, CSS parsing, stylesheet application, layout, painting, and PDF rendering.
+PeachPDF converts HTML and CSS into PDF documents entirely within .NET, with no external process dependencies. The pipeline passes through seven distinct phases: HTML parsing, DOM construction, CSS parsing, stylesheet application, layout, painting, and PDF rendering. SVG content is a cross-cutting subsystem that plugs into the DOM, layout, and painting phases — see [SVG Rendering](#svg-rendering) below.
 
 ```
 HTML Input
@@ -447,3 +447,68 @@ PdfSharpCore includes importers for JPEG (`ImageImporterJpeg`) and BMP (`ImageIm
 4. Returns the completed `PdfDocument`, which the caller saves to any `Stream`.
 
 Unnecessary PdfSharpCore features (WPF/GDI rendering targets, interactive form fields, XPS output) have been removed, keeping the dependency surface small and compatible with .NET 8 trimming and AOT compilation.
+
+---
+
+## SVG Rendering
+
+**Key types:** `SvgTreeBuilder` ([Svg/SvgTreeBuilder.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Svg/SvgTreeBuilder.cs)), `SvgRenderer` ([Svg/SvgRenderer.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Svg/SvgRenderer.cs)), `SvgDocument` ([Svg/SvgDocument.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Svg/SvgDocument.cs)), `ISvgSourceNode` ([Svg/ISvgSourceNode.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Svg/ISvgSourceNode.cs)), `CssBoxSvg` ([Html/Core/Dom/CssBoxSvg.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Dom/CssBoxSvg.cs))
+
+PeachPDF renders SVG — both inline `<svg>` elements in HTML and standalone SVG (`<img src="x.svg">` / `data:image/svg+xml`) — as real vector PDF content: shapes become native PDF path-construction operators, gradients become native PDF shadings, and clips/masks/patterns become native PDF constructs. SVG is never rasterized to a bitmap. This is a cross-cutting subsystem, not a pipeline phase of its own — it plugs into DOM construction (§2), layout (§5), and painting (§6) through two specialised `CssBox` subtypes. For the full element/property compatibility matrix, see [Supported SVG Features](supported-svg-features.md).
+
+### Two entry points, one pipeline
+
+SVG content reaches the renderer through one of two `CssBox` subtypes, both converging on the same `SvgTreeBuilder`/`SvgRenderer` pipeline:
+
+| Entry point | Source | How the source is read |
+|---|---|---|
+| `CssBoxSvg` | An inline `<svg>` element in the HTML document | Its already-parsed descendant `CssBox` tree (built for free by the ordinary HTML parser — see §1) is read as a plain tag/attribute data source, never laid out or painted through the generic box pipeline |
+| `CssBoxImage` | `<img src="x.svg">` or `<img src="data:image/svg+xml,...">` | `ImageLoadHandler` sniffs the `.svg` extension or `data:image/svg+xml`/`Content-Type: image/svg+xml` and, instead of decoding a raster bitmap, parses the fetched bytes as standalone XML (`XDocument.Load`) |
+
+Both paths build an `SvgDocument` scene graph once (cached for the box's lifetime — `CssBoxSvg.EnsureDocument`, `ImageLoadHandler.LoadSvgFromStream`) and repaint it from that cached graph on every subsequent paint, including once per output page during pagination.
+
+### Source abstraction — `ISvgSourceNode`
+
+`SvgTreeBuilder` never touches `CssBox` or `XElement` directly. Both entry points instead wrap their underlying tree behind a minimal, source-agnostic interface — `Name`, `GetAttribute(name)`, `Children`, `GetTextContent()` — so the exact same tree-building code produces an identical `SvgDocument` regardless of which source it came from:
+
+- `CssBoxSvgSourceNode` ([Svg/CssBoxSvgSourceNode.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Svg/CssBoxSvgSourceNode.cs)) wraps a live `CssBox` tree (inline `<svg>`).
+- `XElementSvgSourceNode` ([Svg/XElementSvgSourceNode.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Svg/XElementSvgSourceNode.cs)) wraps a `System.Xml.Linq.XElement` (standalone SVG, parsed as real XML rather than through the HTML tokenizer).
+
+`GetTextContent()` returns only a node's own direct text-node children, not descendant elements' text — this matters for `<text>Hello <tspan>World</tspan></text>`, where "Hello" (the `<text>`'s own run) must stay separate from "World" (the `<tspan>`'s own run) for both source kinds identically.
+
+### Build phase — `SvgTreeBuilder`
+
+`SvgTreeBuilder.Build(ISvgSourceNode root, RAdapter adapter, RColor? contextColor)` runs synchronously in two passes:
+
+1. **`CollectDefinitions`** — a single walk of the whole tree that registers every id-bearing node (`Dictionary<string, ISvgSourceNode>`) and fully resolves self-contained definitions (gradients, markers, patterns, masks, `<style>` text) up front. This exists because SVG allows forward references — a `<use>` or `fill="url(#id)"` can reference an id defined later in document order.
+2. **Recursive tree build** — `BuildElement`/`BuildGroup`/`BuildPath`/etc. walk the tree again, this time constructing the immutable `SvgElement` scene graph, resolving `url(#id)` references against the now-complete registry from pass 1.
+
+Presentation properties (fill, stroke, opacity, font, etc.) are threaded down the recursion as small immutable record structs — `InheritedPaint` for paint/stroke properties, `FontContext` for `<text>`'s font-family/size/weight/style — so a property left unspecified on a child correctly resolves to its nearest ancestor's value, matching CSS-style inheritance without needing `CssBox`'s own cascade machinery.
+
+The result is an `SvgDocument`: a `ViewBox`/`Width`/`Height`/`PreserveAspectRatio` plus a `List<SvgElement>` scene graph (`SvgPathElement`, `SvgCircleElement`, `SvgRectElement`, `SvgGroupElement`, `SvgUseElement`, `SvgImageElement`, `SvgTextElement`, and others — see [Svg/SvgElement.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Svg/SvgElement.cs)) plus dictionaries of gradient/clip-path/marker/pattern/mask definitions keyed by id.
+
+### Paint phase — `SvgRenderer`
+
+`SvgRenderer.RenderInto(RGraphics g, SvgDocument document, RRect viewportRect)` is the single paint entry point shared by `CssBoxSvg.PaintImp` and `CssBoxImage.PaintImp`. It clips to the target rectangle, computes the viewBox→viewport transform (`ComputeViewportTransform`, supporting all 9 `preserveAspectRatio` alignment keywords plus `meet`/`slice`/`none`), pushes that transform, and recursively paints every scene-graph element.
+
+Critically, `SvgRenderer` issues nothing but ordinary `RGraphics` calls (`GetGraphicsPath`, `DrawPath`, `GetSolidBrush`, `GetLinearGradientBrush`, `PushClip`, `PushTransform`, `DrawString`, …) — the same abstraction §6's HTML/CSS painting uses. There is no SVG-specific graphics API; an SVG `<path>` becomes an `RGraphicsPath` built from bezier/arc/line segments exactly the way a CSS `border-radius` corner does, and an SVG gradient becomes an `RBrush` from the same `GetLinearGradientBrush`/`GetRadialGradientBrush` calls background-image gradients use. This is what keeps SVG output genuinely vector: every drawing call flows through the same `XGraphics`-backed adapter as the rest of the document (§7).
+
+PDF's native shading types have no tiling/repeat concept of their own, so `spreadMethod="repeat"`/`"reflect"` (`SvgRenderer.ExpandLinearSpread`/`ExpandRadialSpread`) pre-tile the gradient's own stop list — projecting the filled shape's bounding box onto the gradient axis (or radius) to find how many cycles are needed to cover it, then replicating the stops per cycle, mirroring alternate cycles for `reflect` — before the brush is ever built. This mirrors, but doesn't share code with, how CSS's `repeating-linear-gradient()`/`repeating-radial-gradient()` (`CssImagePainter.ExpandRepeatingStops`) solve the identical underlying problem: CSS's gradient axis is already sized to the background box before tiling starts, while SVG's `x1`/`y1`/`x2`/`y2` (or `r`) define only one author-chosen cycle, and SVG additionally needs `reflect`, which CSS repeating-gradients don't have.
+
+The viewport-transform helper is reused, not reimplemented, for every SVG construct that establishes its own coordinate system: a nested `<svg>`, a `<symbol>` reached through `<use>`, a `<marker>` instance, and a `<pattern>` tile all call the same `RenderViewport` helper `RenderInto` itself is built on.
+
+### PDF primitive reuse for pattern/mask
+
+`<pattern>` and `<mask>` needed genuinely new PDF-writing capability, supplied by extending the `RGraphics`/`RAdapter` abstraction rather than adding SVG-specific PDF code:
+
+- `RGraphics.CreateTile(width, height)` creates an `XForm`/`PdfFormXObject` pair — a real PDF Form XObject — and returns a fresh `RGraphics` that paints into it. A pattern's content, a mask's content, and (for a masked element) the element's own content are each rendered once into a tile this way.
+- **Pattern fill** clips to the filled shape's geometry, then draws that one tile `RImage` repeatedly (`DrawImage`) across the shape's bounding box. Every repeat references the same underlying vector Form XObject content — never a rasterized bitmap — but this is not a native PDF `/PatternType 1` tiling pattern object; it's a simpler, lower-risk approximation that stays fully vector.
+- **Mask** (`SvgRenderer.RenderMaskedElementContent`) renders the masked element's own content into one tile and the `<mask>`'s content into a second, identically-sized tile, then composites them via `RGraphics.DrawImageMasked(content, mask, destRect)` — a single atomic placement (`XGraphicsPdfRenderer.DrawImageMasked`, [PdfSharpCore/Drawing.Pdf/XGraphicsPdfRenderer.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/PdfSharpCore/Drawing.Pdf/XGraphicsPdfRenderer.cs)) that emits the PDF `/SMask` `gs` operator inside the *same* `q ... cm ... Do ... Q` block used to place the content, reusing `DrawImage`'s already-correct destRect placement math rather than relying on whatever CTM happens to be ambient at some earlier point in the content stream. This atomicity is load-bearing, not stylistic: a `CreateTile` form's content is Y-flipped relative to *its own* small height, not the page's, so a mask activated via a bare, separately-timed `gs` (an earlier implementation) silently lands in the wrong part of the page the moment the page has any margin, scroll offset, or layout position — evaluating as fully transparent everywhere. Both the mask's `/G` form and the masked content's own form must additionally carry their own `/Group << /S /Transparency ... >>` transparency-group dictionary for the soft mask to take effect in spec-conformant readers (Chrome/Edge/Acrobat, all PDFium- or Acrobat-derived) — MuPDF is unusually lenient and applies an `/SMask` even to non-group content, which made this gap easy to miss under a single-renderer check. See [Supported SVG Features](supported-svg-features.md) and the `PdfSoftMask`/`PdfExtGState` PDF object types for the rest of the construct.
+
+### Link annotations
+
+An `<a>` element becomes a real PDF link annotation, reusing the same annotation-registration pipeline plain HTML `<a>` elements already use rather than a parallel SVG-specific one. Because painting runs once per *output page* during pagination, link discovery is a deliberately separate, paint-independent tree walk — `SvgRenderer.CollectLinks` composes transforms and bounding boxes only, issuing no `RGraphics` calls — so a link is registered exactly once regardless of how many pages the containing box is painted on. `DomUtils.GetAllSvgLinks` finds every `CssBoxSvg`/`CssBoxImage` in the box tree and calls `CollectLinks` on each; `HtmlContainerInt.GetLinks()` merges the results into the same list ordinary HTML `<a>` links populate.
+
+### Coverage
+
+See [Supported SVG Features](supported-svg-features.md) for the complete element/attribute compatibility matrix, including the reasoning behind each deliberately-excluded SVG feature (SMIL animation, scripting, `filter`, `foreignObject`, legacy SVG fonts, `textPath`, and others).

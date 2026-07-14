@@ -16,6 +16,7 @@ using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
+using PeachPDF.Svg;
 using System;
 using System.Threading.Tasks;
 
@@ -35,6 +36,12 @@ namespace PeachPDF.Html.Core.Dom
         /// handler used for image loading by source
         /// </summary>
         private ImageLoadHandler? _imageLoadHandler;
+
+        /// <summary>
+        /// the parsed SVG scene graph, set instead of <see cref="Image"/> when the src was detected to
+        /// be an SVG image (by file extension or <c>Content-Type: image/svg+xml</c>).
+        /// </summary>
+        private SvgDocument? _svgDocument;
 
         /// <summary>
         /// Init.
@@ -66,7 +73,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 _imageLoadHandler = new ImageLoadHandler(HtmlContainer!);
                 await _imageLoadHandler.LoadImage(ImageSource);
-                OnLoadImageComplete(_imageLoadHandler.Image);
+                OnLoadImageComplete();
             }
 
             var rect = CommonUtils.GetFirstValueOrDefault(Rectangles);
@@ -89,9 +96,13 @@ namespace PeachPDF.Html.Core.Dom
             r.X = Math.Floor(r.X);
             r.Y = Math.Floor(r.Y);
 
-            if (_imageWord.Image != null)
+            if (r is { Width: > 0, Height: > 0 })
             {
-                if (r is { Width: > 0, Height: > 0 })
+                if (_svgDocument is not null)
+                {
+                    SvgRenderer.RenderInto(g, _svgDocument, r);
+                }
+                else if (_imageWord.Image != null)
                 {
                     g.DrawImage(_imageWord.Image, r);
                 }
@@ -126,14 +137,22 @@ namespace PeachPDF.Html.Core.Dom
                     else
                         await _imageLoadHandler.LoadImage(ImageSource);
 
-                    OnLoadImageComplete(_imageLoadHandler.Image);
+                    OnLoadImageComplete();
                 }
 
                 MeasureWordSpacing(g);
                 _wordsSizeMeasured = true;
             }
 
-            CssLayoutEngine.MeasureImageSize(_imageWord);
+            if (_svgDocument is not null)
+            {
+                var (intrinsicWidth, intrinsicHeight) = SvgIntrinsicSize.Resolve(_svgDocument);
+                CssLayoutEngine.MeasureIntrinsicSize(_imageWord, intrinsicWidth, intrinsicHeight);
+            }
+            else
+            {
+                CssLayoutEngine.MeasureImageSize(_imageWord);
+            }
         }
 
         /// <summary>
@@ -146,13 +165,34 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// On image load process is complete with image or without update the image box.
+        /// On image load process is complete with image (or SVG document, or neither on failure)
+        /// update the image box.
         /// </summary>
-        /// <param name="image">the image loaded or null if failed</param>
-        private void OnLoadImageComplete(RImage? image)
+        private void OnLoadImageComplete()
         {
-            _imageWord.Image = image;
+            _imageWord.Image = _imageLoadHandler!.Image;
+            _svgDocument = _imageLoadHandler.SvgDocument;
             _wordsSizeMeasured = false;
+        }
+
+        /// <summary>
+        /// The parsed <see cref="SvgDocument"/> (for a <c>&lt;img src="x.svg"&gt;</c>) and its
+        /// unshifted rendered rectangle, for <c>&lt;a&gt;</c> link-annotation discovery - see
+        /// <see cref="CssBoxSvg.GetLinkSource"/> for why this doesn't reuse <see cref="PaintImp"/>'s
+        /// (scroll-offset-adjusted) rect computation. Null for an ordinary raster image.
+        /// </summary>
+        internal (SvgDocument Document, RRect Rect)? GetLinkSource()
+        {
+            if (_svgDocument is null)
+                return null;
+
+            var r = _imageWord.Rectangle;
+            r.Height -= ActualBorderTopWidth + ActualBorderBottomWidth + ActualPaddingTop + ActualPaddingBottom;
+            r.Y += ActualBorderTopWidth + ActualPaddingTop;
+            r.X = Math.Floor(r.X);
+            r.Y = Math.Floor(r.Y);
+
+            return r is { Width: > 0, Height: > 0 } ? (_svgDocument, r) : null;
         }
     }
 }

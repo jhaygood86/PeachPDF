@@ -1863,6 +1863,17 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         }
 
         /// <summary>
+        /// Draws <paramref name="image"/> at <paramref name="destRect"/> with <paramref name="maskImage"/>
+        /// applied as a luminosity soft mask, scoped to just this one placement - see
+        /// <see cref="XGraphicsPdfRenderer.DrawImageMasked"/> for why the mask must be applied this
+        /// way (atomically, sharing the placement's own "cm") rather than as a separate push/pop pair.
+        /// </summary>
+        internal void DrawImageMasked(XForm image, XForm maskImage, XRect destRect)
+        {
+            (_renderer as XGraphicsPdfRenderer)?.DrawImageMasked(image, maskImage, destRect);
+        }
+
+        /// <summary>
         /// Provides access to internal data structures of the XGraphics class.
         /// </summary>
         internal class XGraphicsInternals

@@ -13,6 +13,7 @@
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
+using PeachPDF.Svg;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -215,6 +216,38 @@ namespace PeachPDF.Html.Core.Utils
             foreach (var childBox in box.Boxes)
             {
                 GetAllLinkBoxes(childBox, linkBoxes);
+            }
+        }
+
+        /// <summary>
+        /// Collect every SVG-sourced link candidate (from <c>&lt;a&gt;</c> elements inside an inline
+        /// <c>&lt;svg&gt;</c> or a standalone <c>&lt;img src="x.svg"&gt;</c>) found anywhere in the
+        /// HTML tree, already resolved to page-space rectangles via <see cref="SvgRenderer.CollectLinks"/>.
+        /// A <see cref="CssBoxSvg"/>/<see cref="CssBoxImage"/> is a leaf as far as this walk is
+        /// concerned - its own descendant boxes (if any) aren't ordinary HTML content, so recursion
+        /// stops there rather than continuing into <c>box.Boxes</c>.
+        /// </summary>
+        public static void GetAllSvgLinks(CssBox? box, List<(RRect Rect, string Href)> linkBoxes)
+        {
+            switch (box)
+            {
+                case null:
+                    return;
+
+                case CssBoxSvg svgBox:
+                    if (svgBox.GetLinkSource() is { } svgSource)
+                        SvgRenderer.CollectLinks(svgSource.Document, svgSource.Rect, linkBoxes);
+                    return;
+
+                case CssBoxImage imageBox:
+                    if (imageBox.GetLinkSource() is { } imageSource)
+                        SvgRenderer.CollectLinks(imageSource.Document, imageSource.Rect, linkBoxes);
+                    return;
+            }
+
+            foreach (var childBox in box.Boxes)
+            {
+                GetAllSvgLinks(childBox, linkBoxes);
             }
         }
 

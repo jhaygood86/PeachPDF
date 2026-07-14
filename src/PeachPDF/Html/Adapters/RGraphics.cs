@@ -65,6 +65,14 @@ namespace PeachPDF.Html.Adapters
         }
 
         /// <summary>
+        /// Get a pen that strokes with the given brush, e.g. for an SVG <c>stroke="url(#gradient)"</c>.
+        /// </summary>
+        public RPen GetPen(RBrush brush)
+        {
+            return _adapter.GetPen(brush);
+        }
+
+        /// <summary>
         /// Get solid color brush.
         /// </summary>
         /// <param name="color">the color to get the brush for</param>
@@ -92,9 +100,9 @@ namespace PeachPDF.Html.Adapters
             return _adapter.GetLinearGradientBrush(p1, p2, stops, isRepeating);
         }
 
-        public RBrush GetRadialGradientBrush(RPoint center, double radiusX, double radiusY, (RColor Color, double Position)[] stops, bool isRepeating = false)
+        public RBrush GetRadialGradientBrush(RPoint center, double radiusX, double radiusY, (RColor Color, double Position)[] stops, bool isRepeating = false, RPoint? focalCenter = null)
         {
-            return _adapter.GetRadialGradientBrush(center, radiusX, radiusY, stops, isRepeating);
+            return _adapter.GetRadialGradientBrush(center, radiusX, radiusY, stops, isRepeating, focalCenter);
         }
 
         public RBrush GetConicGradientBrush(RPoint center, double outerRadius, RColor[] colors, double[] anglesRad)
@@ -121,6 +129,14 @@ namespace PeachPDF.Html.Adapters
         /// </summary>
         /// <param name="rect">Rectangle to clip to.</param>
         public abstract void PushClip(RRect rect);
+
+        /// <summary>
+        /// Push the clipping region of this Graphics to intersection of the current clip and the given
+        /// (possibly non-rectangular) path. Used for SVG <c>clip-path</c>, where the clip region isn't
+        /// necessarily axis-aligned.
+        /// </summary>
+        /// <param name="path">Path to clip to.</param>
+        public abstract void PushClip(RGraphicsPath path);
 
         /// <summary>
         /// Push the clipping region of this Graphics to exclude the given rectangle from the current clipping rectangle.
@@ -192,6 +208,34 @@ namespace PeachPDF.Html.Adapters
         /// </summary>
         /// <returns>graphics path instance</returns>
         public abstract RGraphicsPath GetGraphicsPath();
+
+        /// <summary>
+        /// Creates a fresh, independent (<paramref name="width"/> x <paramref name="height"/>)
+        /// drawing surface for tile-based content (e.g. an SVG <c>&lt;pattern&gt;</c>'s cell): draw
+        /// into the returned <c>Graphics</c> using ordinary <see cref="RGraphics"/> calls, then use the
+        /// returned <c>Image</c> with <see cref="DrawImage(RImage, RRect)"/> - repeated calls tile it,
+        /// each one a real reference to the same underlying vector content (a PDF Form XObject), never
+        /// rasterized. Null when creating one isn't supported in the current rendering context (e.g. a
+        /// measure-only pass with no real PDF page to own the new object).
+        /// </summary>
+        public abstract (RGraphics Graphics, RImage Image)? CreateTile(double width, double height);
+
+        /// <summary>
+        /// Draws <paramref name="image"/> (a tile from <see cref="CreateTile"/>) at
+        /// <paramref name="destRect"/> with <paramref name="maskImage"/> (another same-adapter tile,
+        /// sharing <paramref name="image"/>'s own local width/height) applied as a luminosity soft
+        /// mask, scoped to just this one placement. White areas of <paramref name="maskImage"/> are
+        /// fully visible, black fully transparent, matching PDF's/SVG's own <c>&lt;mask&gt;</c>
+        /// semantics. Deliberately NOT a "push mask, draw normally, pop mask" pair (which an earlier
+        /// version of this API was): a tile's own content is Y-flipped relative to its own (small)
+        /// size, not the page's, so positioning it correctly requires the same explicit destRect
+        /// placement <see cref="DrawImage(RImage, RRect)"/> already uses for pattern tiles - relying
+        /// on whatever transform happens to be ambient in the page's own content stream at some
+        /// arbitrary "push" point silently mispositions the mask relative to the content it's meant
+        /// to mask. A no-op if either image wasn't created via <see cref="CreateTile"/> on this same
+        /// <see cref="RGraphics"/>.
+        /// </summary>
+        public abstract void DrawImageMasked(RImage image, RImage maskImage, RRect destRect);
 
         /// <summary>
         /// Measure the width and height of string <paramref name="str"/> when drawn on device context HDC

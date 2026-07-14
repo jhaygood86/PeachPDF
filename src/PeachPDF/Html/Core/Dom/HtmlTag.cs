@@ -11,6 +11,7 @@
 // "The Art of War"
 
 using PeachPDF.Html.Core.Utils;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -31,7 +32,7 @@ namespace PeachPDF.Html.Core.Dom
 
             Name = name;
             IsSingle = isSingle;
-            Attributes = attributes?.ToDictionary(x => x.Key.ToLowerInvariant(), x => x.Value);
+            Attributes = attributes?.ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase);
         }
 
         /// <summary>
