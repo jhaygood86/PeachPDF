@@ -2146,3 +2146,105 @@ Console.WriteLine("Saved test_opacity.pdf");
 File.Delete("test_opacity.html");
 File.WriteAllText("test_opacity.html", opacityHtml);
 Console.WriteLine("Saved test_opacity.html");
+
+// --- text-transform showcase ---
+
+static string TextTransformSwatch(string desc, string text, string cssValue) =>
+    "<td>" +
+    $"<div class=\"ttbox\" style=\"text-transform: {cssValue}\">{text}</div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">text-transform: {cssValue}</div>" +
+    "</td>";
+
+static string TextTransformSwatchHtml(string desc, string bodyHtml, string cssLabel) =>
+    "<td>" +
+    $"<div class=\"ttbox\">{bodyHtml}</div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">{cssLabel}</div>" +
+    "</td>";
+
+const string TextTransformCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
+    table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
+    table.sw td { padding: 3px; vertical-align: top; width: 25% }
+    .ttbox { font-size: 11pt; border: 1px solid #999; background: #f7f7f7; padding: 8px; margin-bottom: 3px; min-height: 1.4em }
+    .desc { font-size: 7pt; font-weight: bold; color: #444; margin: 2px 0 1px }
+    .css { font-size: 6pt; color: #666; line-height: 1.3; word-break: break-all }
+    </style>
+    """;
+
+var textTransformHtml = "<!DOCTYPE html><html><head>" + TextTransformCss + "</head><body>" +
+
+    "<h1>CSS text-transform Test Page</h1>" +
+
+    "<h2>1 — Core Keywords</h2>" +
+    Row(
+        TextTransformSwatch("none (baseline)", "Hello World", "none"),
+        TextTransformSwatch("uppercase", "hello world", "uppercase"),
+        TextTransformSwatch("lowercase", "HELLO WORLD", "lowercase"),
+        TextTransformSwatch("capitalize", "hello world", "capitalize")
+    ) +
+
+    "<h2>2 — Capitalize: Word-Boundary Edge Cases</h2>" +
+    "<p class=\"intro\">Capitalize only uppercases the first letter of each whitespace-delimited word - a hyphenated compound stays one word, not three separately-capitalized fragments.</p>" +
+    Row(
+        TextTransformSwatch("hyphenated compound", "editor-in-chief", "capitalize"),
+        TextTransformSwatch("already mixed case", "hELLO wORLD", "capitalize"),
+        TextTransformSwatch("leading punctuation", "&#39;twas the night", "capitalize"),
+        TextTransformSwatch("multiple spaces", "one   two   three", "capitalize")
+    ) +
+
+    "<h2>3 — Inheritance</h2>" +
+    "<p class=\"intro\">text-transform is an inherited property - a child inline element picks it up from its parent unless it sets its own value.</p>" +
+    Row(
+        TextTransformSwatchHtml("child inherits parent's uppercase",
+            "<div style=\"text-transform: uppercase\">parent <span>child inherits</span></div>",
+            "div { text-transform: uppercase } span (no override)"),
+        TextTransformSwatchHtml("child overrides to none",
+            "<div style=\"text-transform: uppercase\">parent <span style=\"text-transform: none\">child overrides</span></div>",
+            "span { text-transform: none }"),
+        TextTransformSwatchHtml("child overrides to capitalize",
+            "<div style=\"text-transform: lowercase\">PARENT <span style=\"text-transform: capitalize\">child override</span></div>",
+            "div { text-transform: lowercase } span { text-transform: capitalize }"),
+        TextTransformSwatchHtml("baseline, no transform anywhere",
+            "<div>no transform <span>plain child</span></div>",
+            "(none set)")
+    ) +
+
+    "<h2>4 — Combined With Other Text Properties</h2>" +
+    Row(
+        TextTransformSwatchHtml("uppercase + bold", "<div style=\"text-transform: uppercase; font-weight: bold\">important notice</div>", "text-transform: uppercase; font-weight: bold"),
+        TextTransformSwatchHtml("capitalize + centered", "<div style=\"text-transform: capitalize; text-align: center\">quarterly report</div>", "text-transform: capitalize; text-align: center"),
+        TextTransformSwatchHtml("uppercase + underline", "<div style=\"text-transform: uppercase; text-decoration: underline\">click here</div>", "text-transform: uppercase; text-decoration: underline"),
+        TextTransformSwatchHtml("capitalize list marker text", "<ul style=\"margin:0;padding-left:1.2em;text-transform: capitalize\"><li>first item</li><li>second item</li></ul>", "ul { text-transform: capitalize }")
+    ) +
+
+    "<h2>5 — Long-Form Paragraph (Layout Correctness)</h2>" +
+    "<p class=\"intro\">Confirms word-wrapping and width measurement operate on the transformed text, not the original - the paragraph below wraps the same as untransformed text of equal length would.</p>" +
+    Row(
+        TextTransformSwatchHtml("uppercase paragraph, narrow column",
+            "<p style=\"text-transform: uppercase; width: 140px; margin: 0;\">the quick brown fox jumps over the lazy dog near the riverbank at dawn.</p>",
+            "text-transform: uppercase; width: 140px"),
+        TextTransformSwatchHtml("capitalize paragraph, narrow column",
+            "<p style=\"text-transform: capitalize; width: 140px; margin: 0;\">the quick brown fox jumps over the lazy dog near the riverbank at dawn.</p>",
+            "text-transform: capitalize; width: 140px")
+    ) +
+
+    "</body></html>";
+
+var textTransformStream = new MemoryStream();
+var textTransformDocument = await generator.GeneratePdf(textTransformHtml, pdfConfig);
+textTransformDocument.Save(textTransformStream);
+
+File.Delete("test_text_transform.pdf");
+File.WriteAllBytes("test_text_transform.pdf", textTransformStream.ToArray());
+Console.WriteLine("Saved test_text_transform.pdf");
+
+File.Delete("test_text_transform.html");
+File.WriteAllText("test_text_transform.html", textTransformHtml);
+Console.WriteLine("Saved test_text_transform.html");
