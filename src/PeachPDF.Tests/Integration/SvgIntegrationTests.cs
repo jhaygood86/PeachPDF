@@ -933,6 +933,33 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task InlineSvg_GroupOpacity_NoBoundableContent_FallsBackToPerShapeAlpha()
+        {
+            // SvgGeometryBounds.GetBoundingBox doesn't handle <text> (only geometry elements), so a
+            // <g opacity> containing only text has no boundable content to size a tile from -
+            // RenderContainerOpacityGroup falls back to the older per-shape alpha multiply rather than
+            // rendering nothing. Assert the text still renders, translucently, via that fallback (no
+            // isolated-group Form XObject is expected here, just the plain fill-alpha path).
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <g opacity="0.5">
+                    <text x="10" y="50" font-size="20" fill="#ff0000">Hi</text>
+                  </g>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            // The per-shape alpha-multiply fallback quantizes opacity through a byte alpha channel
+            // (RColor.A is 0-255 - see SvgRenderer.ApplyOpacity), so 0.5 comes out as 128/255 (~0.502),
+            // unlike the isolated-group path's exact double alpha - assert on that quantized value
+            // rather than an exact "0.5".
+            Assert.Contains("/ca 0.5019608", pdfText);
+        }
+
+        [Fact]
         public async Task InlineSvg_GroupFillInheritedByUnstyledChild()
         {
             var html = """

@@ -1773,7 +1773,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             contentGroup.Elements["/I"] = new PdfBoolean(true);
             contentPdfForm.Elements["/Group"] = contentGroup;
 
-            var extGState = Owner.ExtGStateTable.GetExtGState(opacity, false);
+            var extGState = Owner.ExtGStateTable.GetExtGState(opacity);
             var gsName = Resources.AddExtGState(extGState);
 
             if (_page != null)
@@ -1782,19 +1782,11 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             double cx = width / image.PointWidth;
             double cy = height / image.PointHeight;
 
-            if (cx == 0 || cy == 0)
-                return;
-
-            if (_gfx.PageDirection == XPageDirection.Downwards)
-            {
-                AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm " + gsName + " gs {4} Do Q\n",
-                    x, y + height, cx, cy, name);
-            }
-            else
-            {
-                AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm " + gsName + " gs {4} Do Q\n",
-                    x, y, cx, cy, name);
-            }
+            // XGraphics.PageDirection can only ever be Downwards in this fork (the setter throws for
+            // any other value - see XGraphics.PageDirection), unlike DrawImageMasked just above (which
+            // predates that constraint being tightened) - so there's only one placement to emit here.
+            AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm " + gsName + " gs {4} Do Q\n",
+                x, y + height, cx, cy, name);
         }
 
         /// <summary>

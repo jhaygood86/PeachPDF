@@ -196,6 +196,67 @@ namespace PeachPDF.Tests.Integration
             Assert.Matches(new Regex(@"/ca 0\.5\b"), pdfText);
         }
 
+        [Fact]
+        public async Task Opacity_NoPageContext_FallsBackToDirectPaint()
+        {
+            // CreateTile returns null outside a real page/document context (e.g. a measure-only pass -
+            // see GraphicsAdapter.CreateTile) - PaintWithOpacity falls back to painting directly rather
+            // than throwing. Exercise that fallback by painting into the same measure-context graphics
+            // LayoutHtml uses for layout, instead of the full (always page-bound) PdfGenerator pipeline.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <div style="width: 50px; height: 50px; background: #ff0000; opacity: 0.5;"></div>
+                </body></html>
+                """;
+
+            var adapter = new PdfSharpAdapter();
+            var container = new HtmlContainerInt(adapter);
+            await container.SetHtml(html, null);
+
+            var size = new XSize(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+
+            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
+            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            await container.PerformLayout(graphics);
+
+            var divBox = FindByTag(container.Root!, "div")!;
+            await divBox.Paint(graphics);
+        }
+
+        [Fact]
+        public async Task Opacity_SvgGroupOpacity_NoPageContext_FallsBackToDirectRender()
+        {
+            // The SVG-side equivalent of Opacity_NoPageContext_FallsBackToDirectPaint -
+            // RenderContainerOpacityGroup's own CreateTile call falls back to rendering the group
+            // directly (per-shape alpha multiply) rather than throwing when there's no real page/document.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <g opacity="0.5">
+                    <rect x="10" y="10" width="60" height="60" fill="#ff0000"/>
+                  </g>
+                </svg>
+                </body></html>
+                """;
+
+            var adapter = new PdfSharpAdapter();
+            var container = new HtmlContainerInt(adapter);
+            await container.SetHtml(html, null);
+
+            var size = new XSize(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+
+            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
+            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            await container.PerformLayout(graphics);
+
+            var svgBox = FindByTag(container.Root!, "svg")!;
+            await svgBox.Paint(graphics);
+        }
+
         private static async Task<string> GetPdfText(string html)
         {
             var generator = new PdfGenerator();
