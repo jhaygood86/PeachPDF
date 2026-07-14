@@ -238,6 +238,17 @@ namespace PeachPDF.Html.Adapters
         public abstract void DrawImageMasked(RImage image, RImage maskImage, RRect destRect);
 
         /// <summary>
+        /// Draws <paramref name="image"/> (a tile from <see cref="CreateTile"/>) at
+        /// <paramref name="destRect"/>, composited as a single flattened result at constant
+        /// <paramref name="opacity"/> - the mechanism behind CSS/SVG group <c>opacity</c>. Unlike simply
+        /// multiplying the alpha of each shape painted into the tile, this flattens the tile's own
+        /// (possibly overlapping) content once before applying <paramref name="opacity"/> to the
+        /// flattened result, so overlapping content doesn't double-darken where it overlaps. A no-op if
+        /// <paramref name="image"/> wasn't created via <see cref="CreateTile"/> on this same <see cref="RGraphics"/>.
+        /// </summary>
+        public abstract void DrawImageWithOpacity(RImage image, RRect destRect, double opacity);
+
+        /// <summary>
         /// Measure the width and height of string <paramref name="str"/> when drawn on device context HDC
         /// using the given font <paramref name="font"/>.
         /// </summary>

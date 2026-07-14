@@ -1732,6 +1732,72 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         }
 
         /// <summary>
+        /// Draws <paramref name="image"/> (a Form XObject, typically a whole box/element subtree
+        /// rendered into an offscreen tile via <c>CreateTile</c>) at <paramref name="destRect"/>,
+        /// composited as a single flattened result at constant <paramref name="opacity"/> - the PDF
+        /// mechanism behind CSS/SVG group <c>opacity</c>. This is deliberately NOT the same as painting
+        /// each of the tile's own shapes at reduced alpha individually (the simpler, but double-blending,
+        /// approach SVG element opacity uses via <c>ApplyOpacity</c>): marking <paramref name="image"/>
+        /// as an <b>isolated transparency group</b> (<c>/Group &lt;&lt; /S /Transparency /I true &gt;&gt;</c>)
+        /// makes the PDF viewer flatten the tile's own (possibly overlapping) content into one RGBA
+        /// result FIRST, at each shape's own local alpha, and only THEN apply the single <paramref name="opacity"/>
+        /// value to that already-flattened result as it's composited onto the real page - so overlapping
+        /// content inside the tile no longer double-darkens where it overlaps.
+        /// </summary>
+        /// <remarks>
+        /// See the atomicity/coordinate-convention remarks on <see cref="DrawImageMasked"/> just above -
+        /// the same reasoning applies here: the <c>gs</c> activating the alpha must be emitted inside the
+        /// same <c>q ... cm ... Do ... Q</c> block that places <paramref name="image"/>, not separately.
+        /// </remarks>
+        internal void DrawImageWithOpacity(XForm image, XRect destRect, double opacity)
+        {
+            const string format = Config.SignificantFigures4;
+
+            double x = destRect.X;
+            double y = destRect.Y;
+            double width = destRect.Width;
+            double height = destRect.Height;
+
+            string name = Realize(image);
+
+            BeginPage();
+            image.Finish();
+
+            // Must be an isolated transparency group so the tile's own (possibly overlapping) content is
+            // flattened once before the constant alpha below is applied to the flattened result - see
+            // the remarks above and on DrawImageMasked for why plain (non-group) content wouldn't work.
+            var contentPdfForm = image.PdfForm;
+            var contentGroup = new PdfDictionary();
+            contentGroup.Elements["/S"] = new PdfName("/Transparency");
+            contentGroup.Elements["/CS"] = new PdfName("/DeviceRGB");
+            contentGroup.Elements["/I"] = new PdfBoolean(true);
+            contentPdfForm.Elements["/Group"] = contentGroup;
+
+            var extGState = Owner.ExtGStateTable.GetExtGState(opacity, false);
+            var gsName = Resources.AddExtGState(extGState);
+
+            if (_page != null)
+                _page.TransparencyUsed = true;
+
+            double cx = width / image.PointWidth;
+            double cy = height / image.PointHeight;
+
+            if (cx == 0 || cy == 0)
+                return;
+
+            if (_gfx.PageDirection == XPageDirection.Downwards)
+            {
+                AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm " + gsName + " gs {4} Do Q\n",
+                    x, y + height, cx, cy, name);
+            }
+            else
+            {
+                AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm " + gsName + " gs {4} Do Q\n",
+                    x, y, cx, cy, name);
+            }
+        }
+
+        /// <summary>
         /// Gets the PdfResources of this page or form.
         /// </summary>
         internal PdfResources Resources

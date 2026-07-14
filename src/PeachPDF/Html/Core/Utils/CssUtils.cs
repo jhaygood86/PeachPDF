@@ -103,6 +103,7 @@ namespace PeachPDF.Html.Core.Utils
                 "min-height" => cssBox.MinHeight,
                 "transform" => cssBox.Transform,
                 "transform-origin" => cssBox.TransformOrigin,
+                "opacity" => cssBox.Opacity,
                 "background-color" => cssBox.BackgroundColor,
                 "background-image" => null,
                 "background-position" => cssBox.BackgroundPosition,
@@ -185,7 +186,7 @@ namespace PeachPDF.Html.Core.Utils
             "right", "string-set",
             "text-align", "text-decoration", "text-decoration-color", "text-decoration-line", "text-decoration-style",
             "text-indent", "top",
-            "transform", "transform-origin",
+            "transform", "transform-origin", "opacity",
             "vertical-align", "visibility",
             "white-space", "width", "word-break", "word-spacing",
             "z-index",
@@ -358,6 +359,9 @@ namespace PeachPDF.Html.Core.Utils
                     break;
                 case "transform-origin":
                     cssBox.TransformOrigin = value;
+                    break;
+                case "opacity":
+                    cssBox.Opacity = value;
                     break;
                 case "border-top-left-radius":
                     cssBox.BorderTopLeftRadius = value;

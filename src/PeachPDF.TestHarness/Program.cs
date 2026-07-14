@@ -1893,3 +1893,121 @@ Console.WriteLine("Saved test_svg.pdf");
 File.Delete("test_svg.html");
 File.WriteAllText("test_svg.html", svgHtml);
 Console.WriteLine("Saved test_svg.html");
+
+// --- opacity showcase ---
+
+static string OpacitySwatch(string desc, string bodyHtml, string cssLabel) =>
+    "<td>" +
+    $"<div class=\"stage\">{bodyHtml}</div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">{cssLabel}</div>" +
+    "</td>";
+
+const string OpacityCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
+    table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
+    table.sw td { padding: 3px; vertical-align: top; width: 25% }
+    .stage { height: 90px; background: repeating-linear-gradient(45deg, #eee 0 8px, #fff 8px 16px); border: 1px solid #999; position: relative; overflow: hidden }
+    .desc { font-size: 7pt; font-weight: bold; color: #444; margin: 2px 0 1px }
+    .css { font-size: 5.5pt; color: #666; line-height: 1.3; word-break: break-all }
+    </style>
+    """;
+
+var opacityHtml = "<!DOCTYPE html><html><head>" + OpacityCss + "</head><body>" +
+
+    "<h1>CSS opacity &amp; SVG group opacity Test Page</h1>" +
+    "<p class=\"intro\">Each stage has a checkerboard-ish backdrop so translucency is visible. This exercises the isolated-transparency-group implementation (docs/html-css-support.md#opacity, docs/supported-svg-features.md).</p>" +
+
+    "<h2>1 — Basic translucent box</h2>" +
+    "<table class=\"sw\"><tr>" +
+    OpacitySwatch("opacity: 1 (baseline)",
+        "<div style=\"position:absolute;left:10px;top:10px;width:70px;height:70px;background:#e74c3c;\"></div>",
+        "opacity: 1") +
+    OpacitySwatch("opacity: 0.7",
+        "<div style=\"position:absolute;left:10px;top:10px;width:70px;height:70px;background:#e74c3c;opacity:0.7;\"></div>",
+        "opacity: 0.7") +
+    OpacitySwatch("opacity: 0.3",
+        "<div style=\"position:absolute;left:10px;top:10px;width:70px;height:70px;background:#e74c3c;opacity:0.3;\"></div>",
+        "opacity: 0.3") +
+    OpacitySwatch("opacity: 0 (invisible)",
+        "<div style=\"position:absolute;left:10px;top:10px;width:70px;height:70px;background:#e74c3c;opacity:0;\"></div>",
+        "opacity: 0") +
+    "</tr></table>" +
+
+    "<h2>2 — Overlapping children under one parent opacity (double-blend proof)</h2>" +
+    "<p class=\"intro\">The overlap should look like a single flat blend, not a darker double-blend - this is the isolated transparency-group fix in action.</p>" +
+    "<table class=\"sw\"><tr>" +
+    OpacitySwatch("two opaque overlapping boxes (baseline)",
+        "<div style=\"position:absolute;left:10px;top:15px;width:50px;height:50px;background:#e74c3c;\"></div>" +
+        "<div style=\"position:absolute;left:35px;top:35px;width:50px;height:50px;background:#3498db;\"></div>",
+        "no opacity - opaque overlap") +
+    OpacitySwatch("parent opacity:0.5, opaque children",
+        "<div style=\"position:absolute;left:0;top:0;width:100%;height:100%;opacity:0.5;\">" +
+        "<div style=\"position:absolute;left:10px;top:15px;width:50px;height:50px;background:#e74c3c;\"></div>" +
+        "<div style=\"position:absolute;left:35px;top:35px;width:50px;height:50px;background:#3498db;\"></div>" +
+        "</div>",
+        "parent opacity: 0.5 (children opaque)") +
+    OpacitySwatch("nested opacity compounding",
+        "<div style=\"position:absolute;left:0;top:0;width:100%;height:100%;opacity:0.6;\">" +
+        "<div style=\"position:absolute;left:10px;top:15px;width:70px;height:60px;background:#e74c3c;opacity:0.6;\"></div>" +
+        "</div>",
+        "parent 0.6 &times; child 0.6 = 0.36 effective") +
+    OpacitySwatch("opacity + transform combined",
+        "<div style=\"position:absolute;left:20px;top:20px;width:60px;height:50px;background:#8e44ad;opacity:0.5;transform:rotate(15deg);\"></div>",
+        "opacity: 0.5; transform: rotate(15deg)") +
+    "</tr></table>" +
+
+    "<h2>3 — Opacity over images and gradients</h2>" +
+    "<table class=\"sw\"><tr>" +
+    OpacitySwatch("opacity on a box containing a raster &lt;img&gt;",
+        "<div style=\"position:absolute;left:10px;top:10px;width:70px;height:70px;opacity:0.5;\">" +
+        "<img src=\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==\" width=\"70\" height=\"70\" />" +
+        "</div>",
+        "opacity: 0.5 (img child)") +
+    OpacitySwatch("opacity on a gradient background",
+        "<div style=\"position:absolute;left:10px;top:10px;width:70px;height:70px;background:linear-gradient(to right,#e74c3c,#3498db);opacity:0.5;\"></div>",
+        "opacity: 0.5 (gradient background)") +
+    "</tr></table>" +
+
+    "<h2>4 — SVG &lt;g opacity&gt; (the SVG equivalent)</h2>" +
+    "<p class=\"intro\">SVG group opacity now uses the same isolated-transparency-group compositing as CSS opacity - the overlap below should also look like a single flat blend.</p>" +
+    "<table class=\"sw\"><tr>" +
+    OpacitySwatch("&lt;g opacity=\"0.5\"&gt; with overlapping shapes",
+        """
+        <svg viewBox="0 0 100 100" width="90" height="90">
+          <g opacity="0.5">
+            <rect x="10" y="15" width="50" height="50" fill="#e74c3c"/>
+            <rect x="35" y="35" width="50" height="50" fill="#3498db"/>
+          </g>
+        </svg>
+        """,
+        "&lt;g opacity=\"0.5\"&gt;, two overlapping rects") +
+    OpacitySwatch("leaf fill-opacity vs group opacity",
+        """
+        <svg viewBox="0 0 100 100" width="90" height="90">
+          <g opacity="0.6">
+            <rect x="10" y="10" width="80" height="80" fill="#8e44ad" fill-opacity="0.5"/>
+          </g>
+        </svg>
+        """,
+        "group opacity 0.6 &times; leaf fill-opacity 0.5") +
+    "</tr></table>" +
+
+    "</body></html>";
+
+var opacityStream = new MemoryStream();
+var opacityDocument = await generator.GeneratePdf(opacityHtml, pdfConfig);
+opacityDocument.Save(opacityStream);
+
+File.Delete("test_opacity.pdf");
+File.WriteAllBytes("test_opacity.pdf", opacityStream.ToArray());
+Console.WriteLine("Saved test_opacity.pdf");
+
+File.Delete("test_opacity.html");
+File.WriteAllText("test_opacity.html", opacityHtml);
+Console.WriteLine("Saved test_opacity.html");

@@ -530,7 +530,14 @@ namespace PeachPDF.Html.Core.Dom
                         g.PushTransform(pageMatrix);
                     }
 
-                    await PaintImp(g);
+                    if (IsOpaque)
+                    {
+                        await PaintImp(g);
+                    }
+                    else
+                    {
+                        await PaintWithOpacity(g);
+                    }
 
                     if (transformed)
                         g.PopTransform();
@@ -546,6 +553,45 @@ namespace PeachPDF.Html.Core.Dom
             {
                 HtmlContainer?.ReportError(HtmlRenderErrorType.Paint, "Exception in box paint", ex);
             }
+        }
+
+        /// <summary>
+        /// Paints this box (and, via <see cref="PaintImp"/>, its whole subtree) into an offscreen tile
+        /// sized to the current page's visible clip, then composites that tile onto <paramref name="g"/>
+        /// as a single flattened result at <c>ActualOpacity</c> - the CSS <c>opacity</c> property
+        /// is a group effect (it applies once to the element and everything painted inside it, not to
+        /// each descendant's own paint calls independently), and this is what makes overlapping content
+        /// within the box composite correctly instead of double-blending where it overlaps.
+        /// </summary>
+        /// <remarks>
+        /// The tile is sized to the whole current page-visible rect (not a tight bounding box of this
+        /// box's own content) so that <see cref="PaintImp"/> can keep painting at its normal absolute
+        /// page coordinates unmodified - this box's own possible multiple <see cref="Rectangles"/> (line
+        /// wraps) and any overflowing/absolutely-positioned descendants all land correctly inside the
+        /// tile with no extra translation math, at the cost of a somewhat larger-than-necessary Form
+        /// XObject. Any transform already pushed onto <paramref name="g"/> for this same box (see the
+        /// caller in <see cref="Paint"/>) is left active and applies to the tile's placement automatically,
+        /// since PDF's own <c>cm</c> operator concatenates - no separate transform-folding is needed here.
+        /// </remarks>
+        private async ValueTask PaintWithOpacity(RGraphics g)
+        {
+            var clip = g.GetClip();
+            var tileRect = new RRect(0, 0, clip.Right, clip.Bottom);
+
+            var tile = g.CreateTile(tileRect.Width, tileRect.Height);
+            if (tile is not { } t)
+            {
+                // No page/document context to own a Form XObject in (e.g. a measure-only pass) -
+                // opacity has no visual effect there anyway, so just paint directly.
+                await PaintImp(g);
+                return;
+            }
+
+            t.Graphics.PushClip(clip);
+            await PaintImp(t.Graphics);
+            t.Graphics.Dispose();
+
+            g.DrawImageWithOpacity(t.Image, tileRect, ActualOpacity);
         }
 
         /// <summary>

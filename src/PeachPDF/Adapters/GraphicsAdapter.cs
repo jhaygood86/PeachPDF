@@ -167,10 +167,11 @@ namespace PeachPDF.Adapters
         {
             // XForm/XGraphics.FromForm() is real, working PdfSharpCore infrastructure for drawing into
             // a separate PDF Form XObject's own content stream (rather than the page's) - the same
-            // mechanism this method's own XGraphics (_g) is itself built on when bound to a page. The
-            // owning PdfDocument is only reachable via the current page, so this returns null outside
-            // an actual page-paint context (e.g. a measure-only pass).
-            var document = _g.PdfPage?.Owner;
+            // mechanism this method's own XGraphics (_g) is itself built on when bound to a page. XGraphics.Owner
+            // falls back to the owning document of a Form XObject (not just a page), so this also works
+            // when called recursively from inside another tile (e.g. nested opacity) - it's still null
+            // outside any real page/document-paint context (e.g. a measure-only pass).
+            var document = _g.Owner;
             if (document is null || width <= 0 || height <= 0)
                 return null;
 
@@ -188,6 +189,12 @@ namespace PeachPDF.Adapters
         {
             if (((ImageAdapter)image).Image is XForm imageForm && ((ImageAdapter)maskImage).Image is XForm maskForm)
                 _g.DrawImageMasked(imageForm, maskForm, Utils.Convert(destRect, PixelsPerPoint));
+        }
+
+        public override void DrawImageWithOpacity(RImage image, RRect destRect, double opacity)
+        {
+            if (((ImageAdapter)image).Image is XForm imageForm)
+                _g.DrawImageWithOpacity(imageForm, Utils.Convert(destRect, PixelsPerPoint), opacity);
         }
 
         public override void Dispose()

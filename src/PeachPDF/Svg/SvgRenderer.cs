@@ -370,12 +370,80 @@ namespace PeachPDF.Svg
 
             if (element.MaskRef is { } maskRef && document.Masks.TryGetValue(maskRef, out var mask))
                 RenderMaskedElementContent(g, document, element, mask, opacity, viewport);
+            else if (element.Opacity < 1.0 && element is SvgGroupElement or SvgNestedSvgElement)
+                // A container's own opacity needs an isolated transparency-group composite - see
+                // RenderContainerOpacityGroup - rather than the plain per-shape alpha multiply the
+                // "else" branch below uses for everything else, so overlapping children don't
+                // double-blend where they overlap. Masked elements are excluded above since masking
+                // already produces its own isolated composite via RenderMaskedElementContent.
+                RenderContainerOpacityGroup(g, document, element, inheritedOpacity, viewport);
             else
                 RenderElementSwitch(g, document, element, opacity, viewport);
 
             if (pushedClip) g.PopClip();
             clipPath?.Dispose();
             if (pushedTransform) g.PopTransform();
+        }
+
+        /// <summary>
+        /// Renders a container element's (<c>&lt;g&gt;</c>/<c>&lt;a&gt;</c>/nested <c>&lt;svg&gt;</c>)
+        /// children into an offscreen tile at full local alpha, then composites that tile onto
+        /// <paramref name="g"/> as a single flattened result at <paramref name="element"/>'s own
+        /// <see cref="SvgElement.Opacity"/> - the same isolated-transparency-group technique
+        /// <c>CssBox</c> uses for CSS <c>opacity</c> (see <c>CssBox.PaintWithOpacity</c>), applied here
+        /// to fix the double-blend limitation this renderer previously had for SVG group opacity.
+        /// </summary>
+        private static void RenderContainerOpacityGroup(RGraphics g, SvgDocument document, SvgElement element, double inheritedOpacity, (double Width, double Height) viewport)
+        {
+            // The tile's content is painted in the SAME raw SVG user-space coordinates the normal
+            // (non-tiled) path would use, translated to the tile's own local origin - exactly like
+            // RenderMaskedElementContent/BuildMaskTile - relying on whatever ambient transform (viewBox
+            // scale, ancestor element transforms) is already active on `g` to correctly project both the
+            // tile's placement AND its content back onto the page. A copy of `g`'s current transform is
+            // NOT pushed onto the tile: unlike CSS `transform` (a self-contained per-box pivot rotation
+            // applied once at the very end - see CssBox.PaintWithOpacity), SVG's ambient transform is a
+            // true cumulative CTM that every descendant coordinate number is defined relative to, so
+            // "paint at raw coordinates, let the same ambient transform re-apply at placement time" is
+            // the only way the numbers stay meaningful.
+            //
+            // The bounding box (with the same -10%/+20% margin SvgMask's own default region uses, as a
+            // stroke-width/curve-control-point safety margin) comes from the same SvgGeometryBounds this
+            // renderer already uses for objectBoundingBox gradients/masks - an approximation (it doesn't
+            // account for descendants' own nested `transform`), acceptable here for the same reason it's
+            // acceptable there.
+            if (SvgGeometryBounds.GetBoundingBox(element) is not { } bbox || bbox.Width <= 0 || bbox.Height <= 0)
+            {
+                // No boundable content (e.g. a group of only <text>, or an empty group) - fall back to
+                // the older, double-blend-prone but still-translucent per-shape alpha multiply rather
+                // than rendering nothing.
+                RenderElementSwitch(g, document, element, inheritedOpacity * element.Opacity, viewport);
+                return;
+            }
+
+            var x = bbox.X - bbox.Width * 0.1;
+            var y = bbox.Y - bbox.Height * 0.1;
+            var width = bbox.Width * 1.2;
+            var height = bbox.Height * 1.2;
+
+            var tile = g.CreateTile(width, height);
+            if (tile is not { } t)
+            {
+                RenderElementSwitch(g, document, element, inheritedOpacity * element.Opacity, viewport);
+                return;
+            }
+
+            var pushedOffset = x != 0 || y != 0;
+            if (pushedOffset)
+                t.Graphics.PushTransform(new RMatrix(1, 0, 0, 1, -x, -y));
+
+            RenderElementSwitch(t.Graphics, document, element, inheritedOpacity, viewport);
+
+            if (pushedOffset)
+                t.Graphics.PopTransform();
+
+            t.Graphics.Dispose();
+
+            g.DrawImageWithOpacity(t.Image, new RRect(x, y, width, height), element.Opacity);
         }
 
         /// <summary>

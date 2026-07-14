@@ -866,6 +866,73 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task InlineSvg_GroupOpacity_RendersIsolatedTransparencyGroup()
+        {
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <g opacity="0.5">
+                    <rect x="10" y="10" width="60" height="60" fill="#ff0000"/>
+                  </g>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("/Subtype /Form", pdfText);
+            Assert.Contains("/S /Transparency", pdfText);
+            Assert.Matches(new Regex(@"/ca 0\.5\b"), pdfText);
+        }
+
+        [Fact]
+        public async Task InlineSvg_GroupOpacity_OverlappingChildren_DoNotDoubleBlend()
+        {
+            // The SVG-side equivalent of OpacityIntegrationTests.Opacity_OverlappingChildren_DoNotDoubleBlend -
+            // regression test for the double-blend limitation documented at supported-svg-features.md
+            // (a <g opacity> containing overlapping shapes used to double-darken at the overlap, since
+            // opacity was applied as a per-shape alpha multiply rather than an isolated group composite).
+            // Only ONE /ca 0.5 should appear (the group's own composite) - the two overlapping rects
+            // must paint at full local alpha inside the isolated tile, not each carry their own /ca 0.5.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <g opacity="0.5">
+                    <rect x="10" y="10" width="50" height="50" fill="#ff0000"/>
+                    <rect x="30" y="30" width="50" height="50" fill="#0000ff"/>
+                  </g>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            var alphaMatches = Regex.Matches(pdfText, @"/ca 0\.5\b");
+            Assert.Single(alphaMatches);
+        }
+
+        [Fact]
+        public async Task InlineSvg_GroupOpacity_CombinedWithLeafFillOpacity()
+        {
+            // A leaf shape's own fill-opacity must still combine with an ancestor group's opacity -
+            // the group composites once at its own 0.5, and the leaf's fill-opacity (0.5) is applied
+            // independently to that leaf's own color inside the (now-isolated) tile.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <g opacity="0.5">
+                    <rect x="10" y="10" width="60" height="60" fill="#ff0000" fill-opacity="0.5"/>
+                  </g>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Matches(new Regex(@"/ca 0\.5\b"), pdfText);
+        }
+
+        [Fact]
         public async Task InlineSvg_GroupFillInheritedByUnstyledChild()
         {
             var html = """

@@ -1863,6 +1863,15 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         }
 
         /// <summary>
+        /// The owning <see cref="PdfDocument"/>, whether this <see cref="XGraphics"/> is bound to a real
+        /// page (<see cref="PdfPage"/>) or to a Form XObject (<c>FromForm</c> - as a <c>CreateTile</c>
+        /// tile is). Falling back to the form's own owner is what lets a tile be created recursively from
+        /// inside another tile (e.g. nested CSS/SVG group <c>opacity</c>, or opacity inside a mask/pattern
+        /// tile) - <see cref="PdfPage"/> alone is null for a form-bound instance.
+        /// </summary>
+        internal PdfDocument Owner => PdfPage?.Owner ?? _form?.Owner;
+
+        /// <summary>
         /// Draws <paramref name="image"/> at <paramref name="destRect"/> with <paramref name="maskImage"/>
         /// applied as a luminosity soft mask, scoped to just this one placement - see
         /// <see cref="XGraphicsPdfRenderer.DrawImageMasked"/> for why the mask must be applied this
@@ -1871,6 +1880,17 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         internal void DrawImageMasked(XForm image, XForm maskImage, XRect destRect)
         {
             (_renderer as XGraphicsPdfRenderer)?.DrawImageMasked(image, maskImage, destRect);
+        }
+
+        /// <summary>
+        /// Draws <paramref name="image"/> at <paramref name="destRect"/>, composited as a single
+        /// flattened result at constant <paramref name="opacity"/> - see
+        /// <see cref="XGraphicsPdfRenderer.DrawImageWithOpacity"/> for why this differs from simply
+        /// reducing the alpha of each shape painted into the tile.
+        /// </summary>
+        internal void DrawImageWithOpacity(XForm image, XRect destRect, double opacity)
+        {
+            (_renderer as XGraphicsPdfRenderer)?.DrawImageWithOpacity(image, destRect, opacity);
         }
 
         /// <summary>

@@ -273,6 +273,7 @@ namespace PeachPDF.Html.Core
             { "top", CssConstants.Auto },
             { "transform", CssConstants.None },
             { "transform-origin", "50% 50% 0" },
+            { "opacity", "1" },
             { "vertical-align", "baseline" },
             { "visibility", "visible" },
             { "white-space", CssConstants.Normal },
