@@ -89,6 +89,28 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task BackgroundShorthand_MultipleLayers_RepeatValuesApplyPerLayer()
+        {
+            // Regression test for the EndListValueConverter comma-vs-whitespace bug: per-layer
+            // background-repeat values set via the multi-layer `background` shorthand must survive
+            // extraction onto the longhand and actually drive per-layer tiling behavior, not just
+            // round-trip correctly at the CSS-OM string level.
+            const string pngBase64 =
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+            var pdfText = await GetPdfText(BoxHtml(
+                $"background: url('data:image/png;base64,{pngBase64}') left top / 20px 20px no-repeat, " +
+                $"url('data:image/png;base64,{pngBase64}') left top / 20px 20px repeat-x;"));
+
+            // One layer draws once; the other tiles multiple 20pt-wide copies to the right of it.
+            // div is flush at the page margin (20, 822) with no border/padding, so "left top" with a
+            // 20x20 tile lands at (20, 802) = (822 - tileHeight).
+            Assert.Contains("q 20 0 0 20 20 802 cm", pdfText);
+            Assert.Contains("q 20 0 0 20 40 802 cm", pdfText);
+            Assert.Contains("q 20 0 0 20 60 802 cm", pdfText);
+        }
+
+        [Fact]
         public async Task BackgroundShorthand_Transparent_ProducesNoBrush()
         {
             // transparent should not produce a filled background rectangle

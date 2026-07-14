@@ -29,7 +29,7 @@ namespace PeachPDF.Html.Core.Handlers
             RGraphicsPath? roundedClipPath,
             string positionList,
             string sizeList,
-            string repeat,
+            string repeatList,
             CssBoxProperties box,
             Action<RBrush> drawBrush)
         {
@@ -39,20 +39,21 @@ namespace PeachPDF.Html.Core.Handlers
                 {
                     var sizeValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(sizeList), layerIndex);
                     var positionValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(positionList), layerIndex);
+                    var repeatValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(repeatList), layerIndex);
                     BackgroundImageDrawHandler.DrawBackgroundImage(
-                        g, urlImage.Image, sizeValue, positionValue, repeat, originRect, clipRect, roundedClipPath, box);
+                        g, urlImage.Image, sizeValue, positionValue, repeatValue, originRect, clipRect, roundedClipPath, box);
                     break;
                 }
                 case CssImage.LinearGradient lg:
-                    PaintGradientLayer(g, originRect, clipRect, roundedClipPath, layerIndex, sizeList, positionList, repeat, box,
+                    PaintGradientLayer(g, originRect, clipRect, roundedClipPath, layerIndex, sizeList, positionList, repeatList, box,
                         (brushGraphics, rect) => GetLinearGradientBrush(brushGraphics, lg.Gradient, rect), drawBrush);
                     break;
                 case CssImage.RadialGradient rg:
-                    PaintGradientLayer(g, originRect, clipRect, roundedClipPath, layerIndex, sizeList, positionList, repeat, box,
+                    PaintGradientLayer(g, originRect, clipRect, roundedClipPath, layerIndex, sizeList, positionList, repeatList, box,
                         (brushGraphics, rect) => GetRadialGradientBrush(brushGraphics, rg.Gradient, rect), drawBrush);
                     break;
                 case CssImage.ConicGradient cg:
-                    PaintGradientLayer(g, originRect, clipRect, roundedClipPath, layerIndex, sizeList, positionList, repeat, box,
+                    PaintGradientLayer(g, originRect, clipRect, roundedClipPath, layerIndex, sizeList, positionList, repeatList, box,
                         (brushGraphics, rect) => GetConicGradientBrush(brushGraphics, cg.Gradient, rect), drawBrush);
                     break;
             }
@@ -69,7 +70,7 @@ namespace PeachPDF.Html.Core.Handlers
         private static void PaintGradientLayer(
             RGraphics g,
             RRect originRect, RRect clipRect, RGraphicsPath? roundedClipPath,
-            int layerIndex, string sizeList, string positionList, string repeat,
+            int layerIndex, string sizeList, string positionList, string repeatList,
             CssBoxProperties box,
             Func<RGraphics, RRect, RBrush> createBrush,
             Action<RBrush> drawBrush)
@@ -110,8 +111,9 @@ namespace PeachPDF.Html.Core.Handlers
             // rendered at exactly the resolved layer size above, so it must be placed/repeated at
             // that same natural size, not re-stretched to the container (which "100% 100%" would do).
             var positionValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(positionList), layerIndex);
+            var repeatValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(repeatList), layerIndex);
             BackgroundImageDrawHandler.DrawBackgroundImage(
-                g, t.Image, CssConstants.Auto, positionValue, repeat, originRect, clipRect, roundedClipPath, box);
+                g, t.Image, CssConstants.Auto, positionValue, repeatValue, originRect, clipRect, roundedClipPath, box);
         }
 
         private static RBrush GetLinearGradientBrush(RGraphics g, ParsedLinearGradient gradient, RRect originRect)

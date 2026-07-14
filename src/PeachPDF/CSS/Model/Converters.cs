@@ -87,27 +87,11 @@ namespace PeachPDF.CSS
             Assign(Keywords.Top, 1.0).Or(Keywords.Bottom, -1.0).Option(0.0)
         );
 
-        public static readonly IValueConverter PointConverter = Construct(() =>
-        {
-            var hi = Assign(Keywords.Left, Length.Zero)
-                .Or(Keywords.Right, new Length(100f, Length.Unit.Percent))
-                .Or(Keywords.Center, new Length(50f, Length.Unit.Percent));
-            var vi = Assign(Keywords.Top, Length.Zero)
-                .Or(Keywords.Bottom, new Length(100f, Length.Unit.Percent))
-                .Or(Keywords.Center, new Length(50f, Length.Unit.Percent));
-            var h = hi.Or(LengthOrPercentConverter).Required();
-            var v = vi.Or(LengthOrPercentConverter).Required();
-
-            return LengthOrPercentConverter.Or(
-                Toggle(Keywords.Left, Keywords.Right)).Or(
-                Toggle(Keywords.Top, Keywords.Bottom)).Or(
-                Keywords.Center, Point.Center).Or(
-                WithOrder(h, v)).Or(
-                WithOrder(v, h)).Or(
-                WithOrder(hi, vi, LengthOrPercentConverter)).Or(
-                WithOrder(hi, LengthOrPercentConverter, vi)).Or(
-                WithOrder(hi, LengthOrPercentConverter, vi, LengthOrPercentConverter));
-        });
+        // The 1/2/3/4-token background-position grammar (including the edge-relative offset syntax,
+        // e.g. "right 20px bottom 10px") is implemented once in BackgroundPositionGrammar and shared
+        // with the render layer's BackgroundLayerResolver, rather than re-implemented as a second,
+        // independent parser of the same value string - see that class's doc comment.
+        public static readonly IValueConverter PointConverter = new BackgroundPositionValueConverter();
 
         public static readonly IValueConverter AttrConverter = new FunctionValueConverter(
             FunctionNames.Attr, WithArgs(StringConverter.Or(IdentifierConverter)));
@@ -441,9 +425,9 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter FontFamiliesConverter =
             DefaultFontFamiliesConverter.Or(StringConverter).Or(LiteralsConverter).FromList();
 
-        public static readonly IValueConverter BackgroundSizeConverter = AutoLengthOrPercentConverter.Or(
-            Keywords.Cover).Or(Keywords.Contain).Or(
-            WithOrder(AutoLengthOrPercentConverter.Required(), AutoLengthOrPercentConverter.Required()));
+        // Shared with the render layer's BackgroundLayerResolver via BackgroundSizeGrammar - see
+        // BackgroundPositionGrammar's doc comment for why.
+        public static readonly IValueConverter BackgroundSizeConverter = new BackgroundSizeValueConverter();
 
         public static readonly IValueConverter BackgroundRepeatsConverter = BackgroundRepeatConverter.Or(
             Keywords.RepeatX).Or(Keywords.RepeatY).Or(

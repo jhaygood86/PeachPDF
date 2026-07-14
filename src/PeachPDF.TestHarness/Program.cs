@@ -381,6 +381,34 @@ var originHtml = "<!DOCTYPE html><html><head>" + OriginCss + "</head><body>" +
         OriginSwatch("radial, origin+clip: content", "background: radial-gradient(circle at center, yellow, navy); background-origin: content-box; background-clip: content-box", "origin: content-box; clip: content-box")
     ) +
 
+    "<h2>10 — Multi-Layer background-origin / background-clip</h2>" +
+    "<p class=\"intro\">Comma-separated background-origin/background-clip values cycle per background-image layer, one value per layer, just like background-position/background-size.</p>" +
+    Row(
+        OriginSwatch("2 layers: content-box, border-box",
+            "background-image: linear-gradient(to right, red, blue), linear-gradient(to bottom, green, yellow); background-origin: content-box, border-box; background-clip: content-box, border-box",
+            "origin/clip: content-box, border-box"),
+        OriginSwatch("2 layers: padding-box, content-box",
+            "background-image: linear-gradient(to right, teal, gold), radial-gradient(circle, crimson, navy); background-origin: padding-box, content-box; background-clip: padding-box, content-box",
+            "origin/clip: padding-box, content-box"),
+        OriginSwatch("3 layers cycling 2 values",
+            "background-image: linear-gradient(red, blue), linear-gradient(green, yellow), linear-gradient(orange, purple); background-origin: border-box, content-box; background-clip: border-box, content-box",
+            "3 layers, origin/clip cycle: border-box, content-box, border-box"),
+        OriginSwatch("color uses LAST clip entry",
+            "background-color: coral; background-clip: border-box, content-box",
+            "background-clip: border-box, content-box (no images — color clips to content-box, the last entry)")
+    ) +
+
+    "<h2>11 — Multi-Layer background-repeat</h2>" +
+    "<p class=\"intro\">A comma-separated background-repeat value also cycles per layer — each background-image layer can repeat independently.</p>" +
+    Row(
+        OriginSwatch("layer 1: no-repeat, layer 2: repeat",
+            "background-image: radial-gradient(circle, red, blue 70%), radial-gradient(circle, green, yellow 70%); background-size: 16px, 16px; background-repeat: no-repeat, repeat",
+            "background-repeat: no-repeat, repeat"),
+        OriginSwatch("layer 1: repeat-x, layer 2: repeat-y",
+            "background-image: linear-gradient(to right, red, blue), linear-gradient(to bottom, green, yellow); background-size: 16px 16px, 16px 16px; background-repeat: repeat-x, repeat-y",
+            "background-repeat: repeat-x, repeat-y")
+    ) +
+
     "</body></html>";
 
 var originStream = new MemoryStream();
@@ -394,6 +422,113 @@ Console.WriteLine("Saved test_background_origin_clip.pdf");
 File.Delete("test_background_origin_clip.html");
 File.WriteAllText("test_background_origin_clip.html", originHtml);
 Console.WriteLine("Saved test_background_origin_clip.html");
+
+// --- background-position + background-size showcase ---
+
+const string PositionCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
+    table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
+    table.sw td { padding: 3px; vertical-align: top; width: 25% }
+    .obox { height: 60px; border: 1px solid #333; background-color: #eee; background-repeat: no-repeat; margin-bottom: 3px; box-sizing: border-box }
+    .desc { font-size: 7pt; font-weight: bold; color: #444; margin-bottom: 1px }
+    .css { font-size: 6pt; color: #666; line-height: 1.3; word-break: break-all }
+    </style>
+    """;
+
+const string Dot = "radial-gradient(circle, crimson, darkred)";
+
+// Gradients have no intrinsic size/ratio (they're "generated images" per spec), so a two-value
+// background-size (e.g. "20px 20px") is used throughout to get an actual 20x20 square marker -
+// a single-value size like "20px" would set width=20px but fall back to the FULL container height
+// for the auto height axis (there's no ratio to compute a proportional height from), per spec.
+const string DotSize = "20px 20px";
+
+var positionHtml = "<!DOCTYPE html><html><head>" + PositionCss + "</head><body>" +
+
+    "<h1>CSS background-position &amp; background-size Test Page</h1>" +
+    "<p class=\"intro\">Each box is 60px tall with a light gray fill; the red dot is a 20x20 background-image whose placement/size is what's under test.</p>" +
+
+    "<h2>1 — background-position: Keywords</h2>" +
+    Row(
+        OriginSwatch("top left", $"background-image: {Dot}; background-size: {DotSize}; background-position: top left", "background-position: top left"),
+        OriginSwatch("top right", $"background-image: {Dot}; background-size: {DotSize}; background-position: top right", "background-position: top right"),
+        OriginSwatch("bottom left", $"background-image: {Dot}; background-size: {DotSize}; background-position: bottom left", "background-position: bottom left"),
+        OriginSwatch("bottom right", $"background-image: {Dot}; background-size: {DotSize}; background-position: bottom right", "background-position: bottom right")
+    ) +
+
+    "<h2>2 — background-position: Center &amp; Reversed Keyword Order</h2>" +
+    Row(
+        OriginSwatch("center", $"background-image: {Dot}; background-size: {DotSize}; background-position: center", "background-position: center"),
+        OriginSwatch("bottom center", $"background-image: {Dot}; background-size: {DotSize}; background-position: bottom center", "background-position: bottom center"),
+        OriginSwatch("center right (reversed)", $"background-image: {Dot}; background-size: {DotSize}; background-position: center right", "background-position: center right"),
+        OriginSwatch("right (single keyword)", $"background-image: {Dot}; background-size: {DotSize}; background-position: right", "background-position: right (Y implied center)")
+    ) +
+
+    "<h2>3 — background-position: Percentages &amp; Lengths</h2>" +
+    Row(
+        OriginSwatch("25% 75%", $"background-image: {Dot}; background-size: {DotSize}; background-position: 25% 75%", "background-position: 25% 75% (not centered)"),
+        OriginSwatch("10px 10px", $"background-image: {Dot}; background-size: {DotSize}; background-position: 10px 10px", "background-position: 10px 10px"),
+        OriginSwatch("calc(50% - 10px) center", $"background-image: {Dot}; background-size: {DotSize}; background-position: calc(50% - 10px) center", "background-position: calc(50% - 10px) center"),
+        OriginSwatch("0 0 (top left)", $"background-image: {Dot}; background-size: {DotSize}; background-position: 0 0", "background-position: 0 0")
+    ) +
+
+    "<h2>4 — background-position: 4-Value Edge Offset Syntax</h2>" +
+    Row(
+        OriginSwatch("right 10px bottom 10px", $"background-image: {Dot}; background-size: {DotSize}; background-position: right 10px bottom 10px", "background-position: right 10px bottom 10px"),
+        OriginSwatch("right 20px top", $"background-image: {Dot}; background-size: {DotSize}; background-position: right 20px top", "background-position: right 20px top"),
+        OriginSwatch("left bottom 20px", $"background-image: {Dot}; background-size: {DotSize}; background-position: left bottom 20px", "background-position: left bottom 20px"),
+        OriginSwatch("bottom 5px right 5px", $"background-image: {Dot}; background-size: {DotSize}; background-position: bottom 5px right 5px", "background-position: bottom 5px right 5px")
+    ) +
+
+    "<h2>5 — background-size: cover / contain / auto (no intrinsic ratio)</h2>" +
+    "<p class=\"intro\">Gradients are \"generated images\" with no intrinsic size or ratio, so per spec cover/contain/auto all resolve identically to 100% 100% (full box) - contrasted here with an explicit stretched size.</p>" +
+    Row(
+        OriginSwatch("cover (= full box)", $"background-image: {Dot}; background-repeat: no-repeat; background-size: cover", "background-size: cover"),
+        OriginSwatch("contain (= full box)", $"background-image: {Dot}; background-repeat: no-repeat; background-size: contain", "background-size: contain"),
+        OriginSwatch("auto (= full box)", $"background-image: {Dot}; background-repeat: no-repeat; background-size: auto", "background-size: auto"),
+        OriginSwatch("100% 100% (same result)", $"background-image: {Dot}; background-repeat: no-repeat; background-size: 100% 100%", "background-size: 100% 100%")
+    ) +
+
+    "<h2>6 — background-size: Explicit Lengths &amp; Percentages</h2>" +
+    Row(
+        OriginSwatch("40px 40px", $"background-image: {Dot}; background-repeat: no-repeat; background-position: center; background-size: 40px 40px", "background-size: 40px 40px"),
+        OriginSwatch("50% 50%", $"background-image: {Dot}; background-repeat: no-repeat; background-position: center; background-size: 50% 50%", "background-size: 50% 50%"),
+        OriginSwatch("20px (width only, height fills box)", $"background-image: {Dot}; background-repeat: no-repeat; background-position: top left; background-size: 20px", "background-size: 20px (no ratio - height defaults to full box)"),
+        OriginSwatch("gradient background-size, tiled", "background-image: linear-gradient(to right, red, blue); background-repeat: repeat; background-size: 50%", "gradient background-size: 50% (tiles)")
+    ) +
+
+    "<h2>7 — Multi-Layer background-position / background-size</h2>" +
+    "<p class=\"intro\">Comma-separated background-position/background-size values cycle per background-image layer, same as background-image itself.</p>" +
+    Row(
+        OriginSwatch("2 dots, different corners",
+            $"background-image: {Dot}, {Dot}; background-repeat: no-repeat; background-size: {DotSize}, {DotSize}; background-position: top left, bottom right",
+            "background-position: top left, bottom right"),
+        OriginSwatch("2 dots, different sizes",
+            $"background-image: {Dot}, {Dot}; background-repeat: no-repeat; background-position: center; background-size: 40px 40px, 15px 15px",
+            "background-size: 40px 40px, 15px 15px (cycled per layer)"),
+        OriginSwatch("3 layers cycling 2 positions",
+            $"background-image: {Dot}, {Dot}, {Dot}; background-repeat: no-repeat; background-size: 16px 16px; background-position: top left, bottom right",
+            "3 layers, position cycles: top left, bottom right, top left")
+    ) +
+
+    "</body></html>";
+
+var positionStream = new MemoryStream();
+var positionDocument = await generator.GeneratePdf(positionHtml, pdfConfig);
+positionDocument.Save(positionStream);
+
+File.Delete("test_background_position_size.pdf");
+File.WriteAllBytes("test_background_position_size.pdf", positionStream.ToArray());
+Console.WriteLine("Saved test_background_position_size.pdf");
+
+File.Delete("test_background_position_size.html");
+File.WriteAllText("test_background_position_size.html", positionHtml);
+Console.WriteLine("Saved test_background_position_size.html");
 
 // --- list-style-image showcase ---
 

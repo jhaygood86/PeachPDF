@@ -1,7 +1,7 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 
 namespace PeachPDF.Html.Core.Utils
@@ -10,16 +10,13 @@ namespace PeachPDF.Html.Core.Utils
     /// Resolves CSS <c>background-position</c> and <c>background-size</c> per-layer values into
     /// concrete pixel geometry, per CSS Backgrounds and Borders Module Level 3
     /// (https://www.w3.org/TR/css-backgrounds-3/#the-background-position,
-    /// https://www.w3.org/TR/css-backgrounds-3/#the-background-size). Pure math, no rendering
-    /// dependency, so it's directly unit-testable.
+    /// https://www.w3.org/TR/css-backgrounds-3/#the-background-size). Grammar/tokenization is shared
+    /// with the CSS-OM layer via <see cref="BackgroundPositionGrammar"/>/<see cref="BackgroundSizeGrammar"/>
+    /// (see those classes) - this class does only the pixel arithmetic against a runtime box size,
+    /// which isn't known until paint time.
     /// </summary>
     internal static class BackgroundLayerResolver
     {
-        private static readonly HashSet<string> AxisKeywords = new(StringComparer.OrdinalIgnoreCase)
-        {
-            CssConstants.Left, CssConstants.Right, CssConstants.Top, CssConstants.Bottom, CssConstants.Center
-        };
-
         /// <summary>
         /// Splits a comma-separated multi-layer property value (background-position or
         /// background-size) into its per-layer segments, trimmed. Returns a single-element array
@@ -59,20 +56,23 @@ namespace PeachPDF.Html.Core.Utils
             CssBoxProperties box)
         {
             var value = string.IsNullOrWhiteSpace(sizeLayerValue) ? CssConstants.Auto : sizeLayerValue.Trim();
-            bool hasRatio = intrinsicRatio is > 0;
+            var hasRatio = intrinsicRatio is > 0;
 
-            if (value.Equals("cover", StringComparison.OrdinalIgnoreCase) ||
-                value.Equals("contain", StringComparison.OrdinalIgnoreCase))
+            var tokens = CssValueParser.GetCssTokens(value);
+            var parsed = BackgroundSizeGrammar.TryParse(tokens);
+            if (parsed is null)
+                return (Math.Max(0, containerWidth), Math.Max(0, containerHeight));
+
+            if (parsed.IsCover || parsed.IsContain)
             {
                 if (!hasRatio || containerWidth <= 0 || containerHeight <= 0)
                     return (Math.Max(0, containerWidth), Math.Max(0, containerHeight));
 
                 var ratio = intrinsicRatio!.Value;
-                var isCover = value.Equals("cover", StringComparison.OrdinalIgnoreCase);
 
                 var scaleWidth = containerWidth;
                 var scaleHeight = containerWidth / ratio;
-                if ((isCover && scaleHeight < containerHeight) || (!isCover && scaleHeight > containerHeight))
+                if ((parsed.IsCover && scaleHeight < containerHeight) || (parsed.IsContain && scaleHeight > containerHeight))
                 {
                     scaleHeight = containerHeight;
                     scaleWidth = containerHeight * ratio;
@@ -81,15 +81,8 @@ namespace PeachPDF.Html.Core.Utils
                 return (scaleWidth, scaleHeight);
             }
 
-            var tokens = CssValueParser.SplitTopLevelWhitespace(value).ToArray();
-            var widthToken = tokens.Length > 0 ? tokens[0] : CssConstants.Auto;
-            var heightToken = tokens.Length > 1 ? tokens[1] : CssConstants.Auto;
-
-            var widthAuto = widthToken.Equals(CssConstants.Auto, StringComparison.OrdinalIgnoreCase);
-            var heightAuto = heightToken.Equals(CssConstants.Auto, StringComparison.OrdinalIgnoreCase);
-
-            double? resolvedWidth = widthAuto ? null : Math.Max(0, CssValueParser.ParseLength(widthToken, containerWidth, box));
-            double? resolvedHeight = heightAuto ? null : Math.Max(0, CssValueParser.ParseLength(heightToken, containerHeight, box));
+            double? resolvedWidth = parsed.Width.IsAuto ? null : Math.Max(0, CssValueParser.ParseLength(parsed.Width.Value.ToValue(), containerWidth, box));
+            double? resolvedHeight = parsed.Height.IsAuto ? null : Math.Max(0, CssValueParser.ParseLength(parsed.Height.Value.ToValue(), containerHeight, box));
 
             if (resolvedWidth is null && resolvedHeight is null)
             {
@@ -133,96 +126,31 @@ namespace PeachPDF.Html.Core.Utils
             CssBoxProperties box)
         {
             var value = string.IsNullOrWhiteSpace(positionLayerValue) ? "0% 0%" : positionLayerValue.Trim();
-            var tokens = CssValueParser.SplitTopLevelWhitespace(value).ToArray();
-            if (tokens.Length == 0)
-                tokens = ["0%", "0%"];
+            var tokens = CssValueParser.GetCssTokens(value);
+            var parsed = BackgroundPositionGrammar.TryParse(tokens);
+            if (parsed is null)
+                return (0, 0);
 
-            var items = GroupTokens(tokens);
-
-            (string? Keyword, string? Offset) xItem, yItem;
-            if (items.Count == 1)
-            {
-                var only = items[0];
-                if (only.Keyword is CssConstants.Top or CssConstants.Bottom)
-                {
-                    yItem = only;
-                    xItem = (CssConstants.Center, null);
-                }
-                else
-                {
-                    xItem = only;
-                    yItem = (CssConstants.Center, null);
-                }
-            }
-            else
-            {
-                var a = items[0];
-                var b = items[1];
-                var swapped = a.Keyword is CssConstants.Top or CssConstants.Bottom
-                    || b.Keyword is CssConstants.Left or CssConstants.Right;
-                if (swapped)
-                {
-                    yItem = a;
-                    xItem = b;
-                }
-                else
-                {
-                    xItem = a;
-                    yItem = b;
-                }
-            }
-
-            var x = ResolveAxis(xItem.Keyword, xItem.Offset, containerWidth, tileWidth, box);
-            var y = ResolveAxis(yItem.Keyword, yItem.Offset, containerHeight, tileHeight, box);
+            var x = ResolveAxis(parsed.X, containerWidth, tileWidth, box);
+            var y = ResolveAxis(parsed.Y, containerHeight, tileHeight, box);
             return (x, y);
         }
 
-        private static List<(string? Keyword, string? Offset)> GroupTokens(string[] tokens)
-        {
-            var items = new List<(string? Keyword, string? Offset)>();
-            var allowMerge = tokens.Length >= 3;
-            var i = 0;
-            while (i < tokens.Length)
-            {
-                var tok = tokens[i];
-                if (AxisKeywords.Contains(tok))
-                {
-                    string? offset = null;
-                    if (allowMerge && i + 1 < tokens.Length && !AxisKeywords.Contains(tokens[i + 1]))
-                    {
-                        offset = tokens[i + 1];
-                        i++;
-                    }
-
-                    items.Add((tok.ToLowerInvariant(), offset));
-                }
-                else
-                {
-                    items.Add((null, tok));
-                }
-
-                i++;
-            }
-
-            return items.Count > 2 ? items.Take(2).ToList() : items;
-        }
-
-        private static double ResolveAxis(string? keyword, string? offsetToken, double containerSize, double tileSize, CssBoxProperties box)
+        private static double ResolveAxis(BackgroundPositionGrammar.Component component, double containerSize, double tileSize, CssBoxProperties box)
         {
             var available = containerSize - tileSize;
 
-            if (keyword is null)
-                return CssValueParser.ParseLength(offsetToken!, available, box);
-
-            switch (keyword)
+            switch (component.Keyword)
             {
-                case CssConstants.Center:
+                case BackgroundPositionGrammar.AxisKeyword.None:
+                    return CssValueParser.ParseLength(component.Offset.ToValue(), available, box);
+                case BackgroundPositionGrammar.AxisKeyword.Center:
                     return available / 2.0;
-                case CssConstants.Right:
-                case CssConstants.Bottom:
-                    return offsetToken is null ? available : available - CssValueParser.ParseLength(offsetToken, available, box);
-                default: // left or top
-                    return offsetToken is null ? 0.0 : CssValueParser.ParseLength(offsetToken, available, box);
+                case BackgroundPositionGrammar.AxisKeyword.Right:
+                case BackgroundPositionGrammar.AxisKeyword.Bottom:
+                    return component.Offset is null ? available : available - CssValueParser.ParseLength(component.Offset.ToValue(), available, box);
+                default: // Left or Top
+                    return component.Offset is null ? 0.0 : CssValueParser.ParseLength(component.Offset.ToValue(), available, box);
             }
         }
     }
