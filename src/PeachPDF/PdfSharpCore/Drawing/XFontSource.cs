@@ -76,24 +76,6 @@ namespace PeachPDF.PdfSharpCore.Drawing
             }
             return fontSource;
         }
-        public static XFontSource GetOrCreateFrom(string typefaceKey, byte[] fontBytes)
-        {
-            XFontSource fontSource;
-            ulong key = FontHelper.CalcChecksum(fontBytes);
-            if (FontFactory.TryGetFontSourceByKey(key, out fontSource))
-            {
-                // The font source already exists, but is not yet cached under the specified typeface key.
-                FontFactory.CacheExistingFontSourceWithNewTypefaceKey(typefaceKey, fontSource);
-            }
-            else
-            {
-                // No font source exists. Create new one and cache it.
-                fontSource = new XFontSource(fontBytes, key);
-                FontFactory.CacheNewFontSource(typefaceKey, fontSource);
-            }
-            return fontSource;
-        }
-
         public static XFontSource CreateCompiledFont(byte[] bytes)
         {
             XFontSource fontSource = new XFontSource(bytes, 0);
