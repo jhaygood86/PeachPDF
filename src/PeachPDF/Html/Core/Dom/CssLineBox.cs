@@ -180,7 +180,6 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Sets the baseline of the words of the specified box to certain height
         /// </summary>
-        /// <param name="g">Device info</param>
         /// <param name="b">box to check words</param>
         /// <param name="baseline">baseline</param>
         internal void SetBaseLine(CssBox b, double baseline)

@@ -174,7 +174,7 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         /// <summary>
-        // create font (try using existing font family to support custom fonts)
+        /// create font (try using existing font family to support custom fonts)
         /// </summary>
         private RFont CreateFont(string family, double size, RFontStyle style)
         {

@@ -306,8 +306,8 @@ namespace PeachPDF.Svg
         public static RColor ParseStopColor(string? stopColorAttr, string? stopOpacityAttr, string? style, RAdapter adapter)
         {
             var declarations = ParseStyleDeclarations(style);
-            var colorValue = declarations.GetValueOrDefault("stop-color", stopColorAttr);
-            var opacityValue = declarations.GetValueOrDefault("stop-opacity", stopOpacityAttr);
+            var colorValue = declarations.TryGetValue("stop-color", out var colorFromStyle) ? colorFromStyle : stopColorAttr;
+            var opacityValue = declarations.TryGetValue("stop-opacity", out var opacityFromStyle) ? opacityFromStyle : stopOpacityAttr;
 
             var color = string.IsNullOrWhiteSpace(colorValue)
                 ? RColor.Black

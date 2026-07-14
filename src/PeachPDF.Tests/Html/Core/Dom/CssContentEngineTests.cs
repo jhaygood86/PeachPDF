@@ -189,7 +189,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
         public void ApplyContent_WithAttrFunction_RetrievesAttribute()
         {
             var box = CreateBox();
-            box.HtmlTag.Attributes["title"] = "Test Title";
+            box.HtmlTag!.Attributes!["title"] = "Test Title";
             box.Content = "attr(title)";
 
             CssContentEngine.ApplyContent(box);

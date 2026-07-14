@@ -182,14 +182,14 @@ namespace PeachPDF.Tests.Svg
         public void ParseDashArray_EvenCount_ReturnsAsIs()
         {
             var result = SvgValueParsers.ParseDashArray("5,3,2,1", null);
-            Assert.Equal([5, 3, 2, 1], result);
+            Assert.Equal([5, 3, 2, 1], result!);
         }
 
         [Fact]
         public void ParseDashArray_OddCount_IsDuplicatedToEvenCount()
         {
             var result = SvgValueParsers.ParseDashArray("5 3 2", null);
-            Assert.Equal([5, 3, 2, 5, 3, 2], result);
+            Assert.Equal([5, 3, 2, 5, 3, 2], result!);
         }
 
         [Fact]
@@ -208,7 +208,7 @@ namespace PeachPDF.Tests.Svg
         public void ParseDashArray_PercentageResolvesAgainstReferenceLength()
         {
             var result = SvgValueParsers.ParseDashArray("50%,25%", 100);
-            Assert.Equal([50, 25], result);
+            Assert.Equal([50, 25], result!);
         }
 
         [Fact]

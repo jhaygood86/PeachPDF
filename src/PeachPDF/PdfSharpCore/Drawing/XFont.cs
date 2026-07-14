@@ -50,6 +50,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// </summary>
         /// <param name="familyName">Name of the font family.</param>
         /// <param name="emSize">The em size.</param>
+        /// <param name="fontResolver">The font resolver used to look up the font's glyph data.</param>
         public XFont(string familyName, double emSize, IFontResolver fontResolver)
             : this(familyName, emSize, XFontStyle.Regular, new XPdfFontOptions(GlobalFontSettings.DefaultFontEncoding), fontResolver)
         { }
@@ -60,6 +61,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <param name="familyName">Name of the font family.</param>
         /// <param name="emSize">The em size.</param>
         /// <param name="style">The font style.</param>
+        /// <param name="fontResolver">The font resolver used to look up the font's glyph data.</param>
         public XFont(string familyName, double emSize, XFontStyle style, IFontResolver fontResolver)
             : this(familyName, emSize, style, new XPdfFontOptions(GlobalFontSettings.DefaultFontEncoding), fontResolver)
         { }
@@ -71,6 +73,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <param name="emSize">The em size.</param>
         /// <param name="style">The font style.</param>
         /// <param name="pdfOptions">Additional PDF options.</param>
+        /// <param name="fontResolver">The font resolver used to look up the font's glyph data.</param>
         public XFont(string familyName, double emSize, XFontStyle style, XPdfFontOptions pdfOptions, IFontResolver fontResolver)
         {
             _familyName = familyName;

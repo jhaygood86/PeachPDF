@@ -100,7 +100,7 @@ namespace PeachPDF.Tests.CSS
         {
             var source = $".test {{ flex-flow: {propertyValue}; }}";
             var styleSheet = ParseStyleSheet(source);
-            var rule = styleSheet.StyleRules.First() as StyleRule;
+            var rule = (StyleRule)styleSheet.StyleRules.First();
 
             Assert.Equal(expectedDirection, rule.Style.FlexDirection);
             Assert.Equal(expectedWrap, rule.Style.FlexWrap);
@@ -113,7 +113,7 @@ namespace PeachPDF.Tests.CSS
         {
             var source = $".test {{ flex: {propertyValue}; }}";
             var styleSheet = ParseStyleSheet(source);
-            var rule = styleSheet.StyleRules.First() as StyleRule;
+            var rule = (StyleRule)styleSheet.StyleRules.First();
 
             Assert.Equal(propertyValue, rule.Style.FlexGrow);
             Assert.Equal("1", rule.Style.FlexShrink);
@@ -130,7 +130,7 @@ namespace PeachPDF.Tests.CSS
         {
             var source = $".test {{ flex: {propertyValue}; }}";
             var styleSheet = ParseStyleSheet(source);
-            var rule = styleSheet.StyleRules.First() as StyleRule;
+            var rule = (StyleRule)styleSheet.StyleRules.First();
 
             Assert.Equal(expectedFlexGrow, rule.Style.FlexGrow);
             Assert.Equal(expectedFlexShrink, rule.Style.FlexShrink);
@@ -148,7 +148,7 @@ namespace PeachPDF.Tests.CSS
         {
             var source = $".test {{ flex: {propertyValue}; }}";
             var styleSheet = ParseStyleSheet(source);
-            var rule = styleSheet.StyleRules.First() as StyleRule;
+            var rule = (StyleRule)styleSheet.StyleRules.First();
 
             Assert.Equal(propertyValue, rule.Style.Flex);
             Assert.Equal(expectedFlexGrow, rule.Style.FlexGrow);

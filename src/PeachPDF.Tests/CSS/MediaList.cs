@@ -31,7 +31,7 @@ namespace PeachPDF.Tests.CSS
             var sheet = ParseStyleSheet(source);
             Assert.Equal(1, sheet.Rules.Length);
             Assert.Equal(RuleType.Media, sheet.Rules[0].Type);
-            var media = sheet.Rules[0] as MediaRule;
+            var media = (MediaRule)sheet.Rules[0];
             Assert.Equal("not all", media.ConditionText);
             Assert.Equal(1, media.Rules.Length);
         }
@@ -170,7 +170,7 @@ namespace PeachPDF.Tests.CSS
             var sheet = ParseStyleSheet(source);
             Assert.Equal(1, sheet.Rules.Length);
             Assert.Equal(RuleType.Media, sheet.Rules[0].Type);
-            var media = sheet.Rules[0] as MediaRule;
+            var media = (MediaRule)sheet.Rules[0];
             Assert.Equal("not all", media.ConditionText);
             Assert.Equal(1, media.Rules.Length);
         }
@@ -184,7 +184,7 @@ namespace PeachPDF.Tests.CSS
             var sheet = ParseStyleSheet(source);
             Assert.Equal(1, sheet.Rules.Length);
             Assert.Equal(RuleType.Media, sheet.Rules[0].Type);
-            var media = sheet.Rules[0] as MediaRule;
+            var media = (MediaRule)sheet.Rules[0];
             Assert.Equal("", media.ConditionText);
             Assert.Equal(1, media.Rules.Length);
         }
@@ -198,7 +198,7 @@ namespace PeachPDF.Tests.CSS
             var sheet = ParseStyleSheet(source);
             Assert.Equal(1, sheet.Rules.Length);
             Assert.Equal(RuleType.Media, sheet.Rules[0].Type);
-            var media = sheet.Rules[0] as MediaRule;
+            var media = (MediaRule)sheet.Rules[0];
             Assert.Equal("not all", media.ConditionText);
             Assert.Equal(1, media.Rules.Length);
         }
@@ -212,7 +212,7 @@ namespace PeachPDF.Tests.CSS
             var sheet = ParseStyleSheet(source);
             Assert.Equal(1, sheet.Rules.Length);
             Assert.Equal(RuleType.Media, sheet.Rules[0].Type);
-            var media = sheet.Rules[0] as MediaRule;
+            var media = (MediaRule)sheet.Rules[0];
             Assert.Equal("not all", media.ConditionText);
             Assert.Equal(1, media.Rules.Length);
         }
@@ -227,7 +227,7 @@ namespace PeachPDF.Tests.CSS
             var sheet = ParseStyleSheet(source);
             Assert.Equal(1, sheet.Rules.Length);
             Assert.Equal(RuleType.Media, sheet.Rules[0].Type);
-            var media = sheet.Rules[0] as MediaRule;
+            var media = (MediaRule)sheet.Rules[0];
             Assert.Equal("not all", media.ConditionText);
             Assert.Equal(1, media.Rules.Length);
         }
@@ -257,7 +257,7 @@ h1 { color: green }";
             var sheet = ParseStyleSheet(source);
             Assert.Equal(1, sheet.Rules.Length);
             Assert.Equal(RuleType.Media, sheet.Rules[0].Type);
-            var media = sheet.Rules[0] as MediaRule;
+            var media = (MediaRule)sheet.Rules[0];
             Assert.Equal("not all", media.ConditionText);
             Assert.Equal(1, media.Rules.Length);
         }
@@ -271,7 +271,7 @@ h1 { color: green }";
             var sheet = ParseStyleSheet(source);
             Assert.Equal(1, sheet.Rules.Length);
             Assert.Equal(RuleType.Media, sheet.Rules[0].Type);
-            var media = sheet.Rules[0] as MediaRule;
+            var media = (MediaRule)sheet.Rules[0];
             Assert.Equal("not all", media.ConditionText);
             Assert.Equal(1, media.Rules.Length);
         }

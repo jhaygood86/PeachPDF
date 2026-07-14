@@ -36,6 +36,20 @@ namespace PeachPDF
     /// <c>GeneratePdf</c> overloads to create a new <see cref="PeachPdfDocument"/>, or one of the
     /// <c>AddPdfPages</c> overloads to append rendered pages to an existing one.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A <see cref="PdfGenerator"/> instance is <b>not thread-safe</b>. Every font/brush/pen cache,
+    /// font resolver, and network loader it uses is owned exclusively by that instance, so calling
+    /// its methods concurrently from multiple threads on the <i>same</i> instance (or reusing one
+    /// instance across overlapping renders) is not supported and can corrupt its internal state.
+    /// </para>
+    /// <para>
+    /// Using a <b>separate <see cref="PdfGenerator"/> instance per thread</b> — e.g. one per
+    /// incoming web request, or one per work item in a parallel batch — is safe and is the intended
+    /// way to generate PDFs concurrently. Any state PeachPDF shares across instances (such as
+    /// system font discovery) is synchronized internally for exactly this usage pattern.
+    /// </para>
+    /// </remarks>
     public class PdfGenerator
     {
         private readonly PdfSharpAdapter _pdfSharpAdapter = new();

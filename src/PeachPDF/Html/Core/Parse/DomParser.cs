@@ -1193,7 +1193,6 @@ namespace PeachPDF.Html.Core.Parse
         /// but if it is after block box then it will have min-height of the font size so it will create empty line.
         /// </summary>
         /// <param name="box">the current box to correct its sub-tree</param>
-        /// move to a new line</param>
         private static void CorrectLineBreaksBlocks(CssBox box)
         {
             foreach (var childBox in box.Boxes)

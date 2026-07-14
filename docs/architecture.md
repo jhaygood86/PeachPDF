@@ -429,6 +429,13 @@ PdfSharpCore's font subsystem is built around OpenType:
 
 The font resolver honours the family mappings registered via `PdfGenerator.AddFontFamilyMapping` and discovers system fonts from the operating-system font directories at startup.
 
+#### Thread safety
+
+`PdfGenerator` and everything it owns (font/brush/pen caches, the font resolver, `HtmlContainer`) is instance-scoped and not safe to share across threads — but PeachPDF is designed so that using one `PdfGenerator` per thread is safe, including the process-wide state this pipeline touches:
+
+- System font discovery (scanning OS font directories and parsing TrueType/OpenType `name` tables) runs exactly once per process, in `FontResolver`'s static constructor, into immutable `FrozenDictionary` structures. Every `FontResolver` instance (one per `PdfSharpAdapter`, one per `PdfGenerator`) reads this once-built data without locking; `AddFont`/`AddFontFromStream` clone a family's data before overriding a style, so a custom font registered on one `PdfGenerator` can never mutate the shared system-font data seen by other instances.
+- `FontFactory`'s process-wide caches (`GlyphTypefaceCache`, `FontFamilyCache`, `FontDescriptorCache`, `OpenTypeFontface` records) are guarded by a single reentrant `Lock.EnterFontFactory()` monitor, so concurrent `PdfGenerator` instances resolving different fonts at the same time don't corrupt each other's cache entries.
+
 ### Image pipeline
 
 PdfSharpCore includes importers for JPEG (`ImageImporterJpeg`) and BMP (`ImageImporterBmp`) formats. Other formats (PNG, GIF, etc.) arrive as pre-decoded RGBA bitmaps from StbImageSharp and are written as PDF image XObjects using `XBitmapImage`.

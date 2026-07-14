@@ -4,7 +4,7 @@ namespace PeachPDF.Tests.CSS
     class ObjectArrayComparer : IEqualityComparer, IEqualityComparer<object[]>
     {
         public static readonly ObjectArrayComparer Instance = new ObjectArrayComparer();
-        public bool Equals(object[] x, object[] y)
+        public bool Equals(object[]? x, object[]? y)
         {
             if (ReferenceEquals(x, y))
                 return true;
@@ -23,7 +23,7 @@ namespace PeachPDF.Tests.CSS
             return true;
         }
 
-        public int GetHashCode(object[] obj)
+        public int GetHashCode(object[]? obj)
         {
             if (obj == null || obj.Length == 0)
                 return 0;
@@ -38,7 +38,7 @@ namespace PeachPDF.Tests.CSS
             return hash;
         }
 
-        bool IEqualityComparer.Equals(object x, object y)
+        bool IEqualityComparer.Equals(object? x, object? y)
         {
             if (x == y)
                 return true;
@@ -50,7 +50,7 @@ namespace PeachPDF.Tests.CSS
             throw new ArgumentException("Type of argument is not compatible with this comparer.");
         }
 
-        int IEqualityComparer.GetHashCode(object obj)
+        int IEqualityComparer.GetHashCode(object? obj)
         {
             if (obj == null)
                 return 0;

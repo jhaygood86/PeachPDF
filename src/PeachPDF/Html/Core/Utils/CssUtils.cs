@@ -956,7 +956,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <summary>
         /// 
         /// </summary>
-        /// <parm name="valueParser"></parm>
+        /// <param name="valueParser"></param>
         /// <param name="value"></param>
         /// <param name="width"> </param>
         /// <param name="style"></param>

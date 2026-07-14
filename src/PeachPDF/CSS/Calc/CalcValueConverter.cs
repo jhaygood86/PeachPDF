@@ -6,7 +6,7 @@ namespace PeachPDF.CSS
 {
     /// <summary>
     /// Accepts a calc()/min()/max()/clamp() declaration whose resolved type-checking category is within
-    /// <paramref name="allowed"/>, composed onto the existing length/percent/number converters via
+    /// <c>allowed</c>, composed onto the existing length/percent/number converters via
     /// <c>.Or(...)</c> (see Converters.cs) so support cascades to every property built on them. Runs only
     /// for non-var() declarations — var()-containing values are already routed to Converters.Any by
     /// Property.TrySetValue, and reach this converter again (for the substituted text) via
