@@ -112,7 +112,7 @@ namespace PeachPDF.Tests.Svg
         {
             var paint = SvgValueParsers.ParsePaint("url(#SVGID_1_)", Adapter, RColor.Black);
             Assert.Equal(SvgPaintKind.GradientRef, paint.Kind);
-            Assert.Equal("SVGID_1_", paint.GradientId);
+            Assert.Equal("SVGID_1_", paint.ReferenceId);
         }
 
         [Fact]

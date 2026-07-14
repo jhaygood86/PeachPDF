@@ -351,5 +351,22 @@ namespace PeachPDF.Svg
 
             return declarations;
         }
+
+        /// <summary>Parses a <c>marker</c>/<c>marker-start</c>/<c>marker-mid</c>/<c>marker-end</c> value: <c>none</c> or a <c>url(#id)</c> reference. Any other value (unsupported/malformed) resolves to no marker.</summary>
+        public static string? ParseMarkerReference(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value) || value.Trim().Equals("none", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            var trimmed = value.Trim();
+
+            if (!trimmed.StartsWith("url(", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            var hashIndex = trimmed.IndexOf('#');
+            var closeIndex = trimmed.IndexOf(')');
+
+            return hashIndex >= 0 && closeIndex > hashIndex ? trimmed[(hashIndex + 1)..closeIndex].Trim() : null;
+        }
     }
 }

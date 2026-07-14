@@ -89,7 +89,10 @@ namespace PeachPDF.Svg
             RLineCap StrokeLineCap,
             RLineJoin StrokeLineJoin,
             double[] StrokeDashArray,
-            double StrokeDashOffset)
+            double StrokeDashOffset,
+            string? MarkerStartRef,
+            string? MarkerMidRef,
+            string? MarkerEndRef)
         {
             public static readonly InheritedPaint Initial = new(
                 Fill: SvgPaint.Solid(RColor.Black),
@@ -102,7 +105,10 @@ namespace PeachPDF.Svg
                 StrokeLineCap: RLineCap.Butt,
                 StrokeLineJoin: RLineJoin.Miter,
                 StrokeDashArray: [],
-                StrokeDashOffset: 0);
+                StrokeDashOffset: 0,
+                MarkerStartRef: null,
+                MarkerMidRef: null,
+                MarkerEndRef: null);
         }
 
         /// <param name="root">The root node to build from.</param>
@@ -157,6 +163,15 @@ namespace PeachPDF.Svg
                         break;
                     case "radialGradient" when !string.IsNullOrEmpty(id):
                         _document.Gradients[id] = BuildRadialGradient(child);
+                        break;
+                    case "marker" when !string.IsNullOrEmpty(id):
+                        _document.Markers[id] = BuildMarker(child);
+                        break;
+                    case "pattern" when !string.IsNullOrEmpty(id):
+                        _document.Patterns[id] = BuildPattern(child);
+                        break;
+                    case "mask" when !string.IsNullOrEmpty(id):
+                        _document.Masks[id] = BuildMask(child);
                         break;
                     case "style":
                         // Note: for CssBoxSvgSourceNode (inline <svg>), DomParser.CascadeParseStyles
@@ -500,12 +515,12 @@ namespace PeachPDF.Svg
             var fillAttr = Attr("fill");
             element.Fill = fillAttr is null || fillAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 ? inherited.Fill
-                : SvgValueParsers.ParsePaint(fillAttr, _adapter, _contextColor);
+                : ResolveUrlPaintKind(SvgValueParsers.ParsePaint(fillAttr, _adapter, _contextColor));
 
             var strokeAttr = Attr("stroke");
             element.Stroke = strokeAttr is null || strokeAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 ? inherited.Stroke
-                : SvgValueParsers.ParsePaint(strokeAttr, _adapter, _contextColor);
+                : ResolveUrlPaintKind(SvgValueParsers.ParsePaint(strokeAttr, _adapter, _contextColor));
 
             element.StrokeWidth = SvgValueParsers.ParseLength(Attr("stroke-width"), ViewportDiagonal) ?? inherited.StrokeWidth;
             element.StrokeMiterLimit = SvgValueParsers.ParseLength(Attr("stroke-miterlimit")) ?? inherited.StrokeMiterLimit;
@@ -561,6 +576,29 @@ namespace PeachPDF.Svg
                 }
             }
 
+            // Same url(#id)/none grammar as a marker reference - reused directly rather than
+            // duplicating the tiny parser.
+            element.MaskRef = SvgValueParsers.ParseMarkerReference(Attr("mask"));
+
+            // The `marker` shorthand sets all three individual properties at once; an individually
+            // specified marker-start/mid/end (if present) then overrides just that one.
+            var markerShorthandAttr = Attr("marker");
+            var markerShorthandRef = markerShorthandAttr is null || markerShorthandAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? null
+                : SvgValueParsers.ParseMarkerReference(markerShorthandAttr);
+
+            string? ResolveMarkerProperty(string propertyName, string? inheritedRef)
+            {
+                var attr = Attr(propertyName);
+                if (attr is null)
+                    return markerShorthandRef ?? inheritedRef;
+                return attr.Equals("inherit", StringComparison.OrdinalIgnoreCase) ? inheritedRef : SvgValueParsers.ParseMarkerReference(attr);
+            }
+
+            element.MarkerStartRef = ResolveMarkerProperty("marker-start", inherited.MarkerStartRef);
+            element.MarkerMidRef = ResolveMarkerProperty("marker-mid", inherited.MarkerMidRef);
+            element.MarkerEndRef = ResolveMarkerProperty("marker-end", inherited.MarkerEndRef);
+
             return new InheritedPaint(
                 element.Fill,
                 element.Stroke,
@@ -572,7 +610,109 @@ namespace PeachPDF.Svg
                 element.StrokeLineCap,
                 element.StrokeLineJoin,
                 element.StrokeDashArray,
-                element.StrokeDashOffset);
+                element.StrokeDashOffset,
+                element.MarkerStartRef,
+                element.MarkerMidRef,
+                element.MarkerEndRef);
+        }
+
+        private SvgMarkerElement BuildMarker(ISvgSourceNode node)
+        {
+            var orient = node.GetAttribute("orient");
+
+            var marker = new SvgMarkerElement
+            {
+                RefX = SvgValueParsers.ParseLength(node.GetAttribute("refX")) ?? 0,
+                RefY = SvgValueParsers.ParseLength(node.GetAttribute("refY")) ?? 0,
+                MarkerWidth = SvgValueParsers.ParseLength(node.GetAttribute("markerWidth")) ?? 3,
+                MarkerHeight = SvgValueParsers.ParseLength(node.GetAttribute("markerHeight")) ?? 3,
+                ViewBox = SvgValueParsers.ParseViewBox(node.GetAttribute("viewBox")),
+                PreserveAspectRatio = SvgValueParsers.ParsePreserveAspectRatio(node.GetAttribute("preserveAspectRatio")),
+                MarkerUnitsStrokeWidth = !string.Equals(node.GetAttribute("markerUnits"), "userSpaceOnUse", StringComparison.OrdinalIgnoreCase),
+                OrientAuto = string.Equals(orient, "auto", StringComparison.OrdinalIgnoreCase),
+                OrientAutoStartReverse = string.Equals(orient, "auto-start-reverse", StringComparison.OrdinalIgnoreCase),
+                OrientAngle = SvgValueParsers.ParseLength(orient) ?? 0,
+            };
+
+            foreach (var child in node.Children)
+            {
+                var element = BuildElement(child, InheritedPaint.Initial);
+                if (element is not null)
+                    marker.Children.Add(element);
+            }
+
+            return marker;
+        }
+
+        /// <summary>
+        /// <see cref="SvgValueParsers.ParsePaint"/> has no document context, so a <c>url(#id)</c> value
+        /// always initially comes back as <see cref="SvgPaintKind.GradientRef"/> regardless of what
+        /// <c>#id</c> actually names - reclassify it to <see cref="SvgPaintKind.PatternRef"/> here, now
+        /// that the id registry (built by <see cref="CollectDefinitions"/>, which always runs before
+        /// any element's own paint is resolved) is available.
+        /// </summary>
+        private SvgPaint ResolveUrlPaintKind(SvgPaint paint) =>
+            paint.Kind == SvgPaintKind.GradientRef && paint.ReferenceId is { } id && !_document.Gradients.ContainsKey(id) && _document.Patterns.ContainsKey(id)
+                ? SvgPaint.PatternRef(id)
+                : paint;
+
+        private SvgMask BuildMask(ISvgSourceNode node)
+        {
+            var isObjectBoundingBox = !string.Equals(node.GetAttribute("maskUnits"), "userSpaceOnUse", StringComparison.OrdinalIgnoreCase);
+            var contentUnitsUserSpaceOnUse = !string.Equals(node.GetAttribute("maskContentUnits"), "objectBoundingBox", StringComparison.OrdinalIgnoreCase);
+
+            var defaultMask = new SvgMask();
+            var mask = new SvgMask
+            {
+                Id = node.GetAttribute("id"),
+                X = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("x"), isObjectBoundingBox, _viewportWidth) ?? defaultMask.X,
+                Y = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("y"), isObjectBoundingBox, _viewportHeight) ?? defaultMask.Y,
+                Width = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("width"), isObjectBoundingBox, _viewportWidth) ?? defaultMask.Width,
+                Height = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("height"), isObjectBoundingBox, _viewportHeight) ?? defaultMask.Height,
+                MaskUnitsUserSpaceOnUse = !isObjectBoundingBox,
+                MaskContentUnitsUserSpaceOnUse = contentUnitsUserSpaceOnUse,
+                Children = BuildDefinitionChildren(node),
+            };
+
+            return mask;
+        }
+
+        private SvgPattern BuildPattern(ISvgSourceNode node)
+        {
+            var isObjectBoundingBox = !string.Equals(node.GetAttribute("patternUnits"), "userSpaceOnUse", StringComparison.OrdinalIgnoreCase);
+            var contentUnitsUserSpaceOnUse = !string.Equals(node.GetAttribute("patternContentUnits"), "objectBoundingBox", StringComparison.OrdinalIgnoreCase);
+
+            var pattern = new SvgPattern
+            {
+                Id = node.GetAttribute("id"),
+                X = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("x"), isObjectBoundingBox, _viewportWidth) ?? 0,
+                Y = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("y"), isObjectBoundingBox, _viewportHeight) ?? 0,
+                Width = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("width"), isObjectBoundingBox, _viewportWidth) ?? 0,
+                Height = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("height"), isObjectBoundingBox, _viewportHeight) ?? 0,
+                PatternUnitsUserSpaceOnUse = !isObjectBoundingBox,
+                PatternContentUnitsUserSpaceOnUse = contentUnitsUserSpaceOnUse,
+                PatternTransform = SvgTransformParser.Parse(node.GetAttribute("patternTransform")),
+                ViewBox = SvgValueParsers.ParseViewBox(node.GetAttribute("viewBox")),
+                PreserveAspectRatio = SvgValueParsers.ParsePreserveAspectRatio(node.GetAttribute("preserveAspectRatio")),
+                Children = BuildDefinitionChildren(node),
+            };
+
+            return pattern;
+        }
+
+        /// <summary>Builds the renderable children of a pure definition element (<c>&lt;pattern&gt;</c>/<c>&lt;marker&gt;</c>/<c>&lt;mask&gt;</c>) - same recursion <see cref="BuildGroup"/> uses for an ordinary container, just not itself wrapped in a paintable <see cref="SvgElement"/>.</summary>
+        private List<SvgElement> BuildDefinitionChildren(ISvgSourceNode node)
+        {
+            var children = new List<SvgElement>();
+
+            foreach (var child in node.Children)
+            {
+                var element = BuildElement(child, InheritedPaint.Initial);
+                if (element is not null)
+                    children.Add(element);
+            }
+
+            return children;
         }
 
         private SvgLinearGradient BuildLinearGradient(ISvgSourceNode node)

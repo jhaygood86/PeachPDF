@@ -1629,6 +1629,48 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         }
 
         /// <summary>
+        /// Applies a luminosity soft mask (subsequent drawing is masked by <paramref name="maskForm"/>'s
+        /// rendered brightness - white is fully visible, black fully transparent) via an ExtGState
+        /// <c>/SMask</c>, exactly mirroring the pattern <c>PdfShading</c>'s own alpha-gradient soft
+        /// masks already use (see <c>BuildAlphaExtGStateIfNeeded</c>) - just driven by an arbitrary
+        /// rendered Form XObject (an SVG <c>&lt;mask&gt;</c>'s own content) rather than a hand-built
+        /// grayscale shading function.
+        /// </summary>
+        internal void PushSoftMask(XForm maskForm)
+        {
+            // A /Luminosity SMask's /G target must itself be a transparency group (PDF 32000-1 §11.6.4.3)
+            // - XForm/PdfFormXObject don't set this up automatically, so it's added here rather than
+            // generalizing CreateTile's caller-agnostic form creation for a mask-only requirement.
+            var pdfForm = maskForm.PdfForm;
+            var group = new PdfDictionary();
+            group.Elements["/S"] = new PdfName("/Transparency");
+            group.Elements["/CS"] = new PdfName("/DeviceGray");
+            group.Elements["/I"] = new PdfBoolean(true);
+            group.Elements["/K"] = new PdfBoolean(false);
+            pdfForm.Elements["/Group"] = group;
+
+            var softMask = new PdfSoftMask(Owner);
+            softMask.Elements[PdfSoftMask.Keys.S] = new PdfName("/Luminosity");
+            softMask.Elements.SetReference(PdfSoftMask.Keys.G, pdfForm);
+
+            var extGState = new PdfExtGState(Owner);
+            extGState.Elements["/SMask"] = softMask;
+
+            var name = Resources.AddExtGState(extGState);
+            AppendFormatString("{0} gs\n", name);
+        }
+
+        /// <summary>Ends the effect of the most recent <see cref="PushSoftMask"/> by resetting <c>/SMask</c> to <c>/None</c>.</summary>
+        internal void PopSoftMask()
+        {
+            var extGState = new PdfExtGState(Owner);
+            extGState.Elements["/SMask"] = new PdfName("/None");
+
+            var name = Resources.AddExtGState(extGState);
+            AppendFormatString("{0} gs\n", name);
+        }
+
+        /// <summary>
         /// Gets the PdfResources of this page or form.
         /// </summary>
         internal PdfResources Resources

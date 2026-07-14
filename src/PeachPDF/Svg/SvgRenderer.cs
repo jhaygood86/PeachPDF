@@ -244,6 +244,18 @@ namespace PeachPDF.Svg
                 }
             }
 
+            var pushedMask = false;
+
+            if (element.MaskRef is { } maskRef && document.Masks.TryGetValue(maskRef, out var mask))
+            {
+                var maskTile = BuildMaskTile(g, document, element, mask);
+                if (maskTile is not null)
+                {
+                    g.PushSoftMask(maskTile);
+                    pushedMask = true;
+                }
+            }
+
             switch (element)
             {
                 case SvgGroupElement group:
@@ -336,9 +348,55 @@ namespace PeachPDF.Svg
                 }
             }
 
+            if (pushedMask) g.PopSoftMask();
             if (pushedClip) g.PopClip();
             clipPath?.Dispose();
             if (pushedTransform) g.PopTransform();
+        }
+
+        /// <summary>
+        /// Renders <paramref name="mask"/>'s content (a full paint, not just geometry - see
+        /// <see cref="SvgMask"/>) into a tile sized to its own resolved region, for use with
+        /// <see cref="RGraphics.PushSoftMask"/>. Unlike <see cref="RenderViewport"/> (used for
+        /// <c>&lt;pattern&gt;</c>/<c>&lt;symbol&gt;</c>/nested <c>&lt;svg&gt;</c>), a mask doesn't
+        /// establish its own viewBox-scaled coordinate system - its content is drawn in ordinary
+        /// user-space units, just positioned relative to the tile's own local origin rather than the
+        /// mask region's <see cref="SvgMask.X"/>/<see cref="SvgMask.Y"/>.
+        /// </summary>
+        private static RImage? BuildMaskTile(RGraphics g, SvgDocument document, SvgElement owner, SvgMask mask)
+        {
+            var (x, y, width, height) = ResolveMaskRect(owner, mask);
+            if (width <= 0 || height <= 0)
+                return null;
+
+            var tile = g.CreateTile(width, height);
+            if (tile is not { } t)
+                return null;
+
+            var pushedOffset = x != 0 || y != 0;
+            if (pushedOffset)
+                t.Graphics.PushTransform(new RMatrix(1, 0, 0, 1, -x, -y));
+
+            foreach (var child in mask.Children)
+                RenderElement(t.Graphics, document, child, 1.0, (width, height));
+
+            if (pushedOffset)
+                t.Graphics.PopTransform();
+
+            t.Graphics.Dispose();
+            return t.Image;
+        }
+
+        /// <summary>Resolves a mask's region, same objectBoundingBox/userSpaceOnUse handling as <see cref="ResolveGradientPoint"/>/<see cref="ResolvePatternRect"/>.</summary>
+        private static (double X, double Y, double Width, double Height) ResolveMaskRect(SvgElement owner, SvgMask mask)
+        {
+            if (mask.MaskUnitsUserSpaceOnUse)
+                return (mask.X, mask.Y, mask.Width, mask.Height);
+
+            if (SvgGeometryBounds.GetBoundingBox(owner) is not { } bbox)
+                return (mask.X, mask.Y, mask.Width, mask.Height);
+
+            return (bbox.X + mask.X * bbox.Width, bbox.Y + mask.Y * bbox.Height, mask.Width * bbox.Width, mask.Height * bbox.Height);
         }
 
         private static void PaintShape(RGraphics g, SvgDocument document, SvgElement element, RGraphicsPath path, double opacity)
@@ -350,9 +408,16 @@ namespace PeachPDF.Svg
             // real fill call is still wasted content-stream bytes and not what a real SVG renderer does.
             if (element is not SvgLineElement && element.Fill.Kind != SvgPaintKind.None)
             {
-                var brush = ResolvePaintBrush(g, document, element, element.Fill, opacity * element.FillOpacity);
-                if (brush is not null)
-                    g.DrawPath(brush, path);
+                if (element.Fill.Kind == SvgPaintKind.PatternRef)
+                {
+                    PaintPatternFill(g, document, element, path, opacity * element.FillOpacity);
+                }
+                else
+                {
+                    var brush = ResolvePaintBrush(g, document, element, element.Fill, opacity * element.FillOpacity);
+                    if (brush is not null)
+                        g.DrawPath(brush, path);
+                }
             }
 
             if (element.Stroke.Kind != SvgPaintKind.None && element.StrokeWidth > 0)
@@ -361,6 +426,88 @@ namespace PeachPDF.Svg
                 if (pen is not null)
                     g.DrawPath(pen, path);
             }
+
+            PaintMarkers(g, document, element, opacity);
+        }
+
+        /// <summary>
+        /// Per spec, markers only attach to <c>&lt;path&gt;</c>/<c>&lt;line&gt;</c>/<c>&lt;polyline&gt;</c>/
+        /// <c>&lt;polygon&gt;</c> - not basic shapes like <c>&lt;rect&gt;</c>/<c>&lt;circle&gt;</c>/
+        /// <c>&lt;ellipse&gt;</c>, which have no defined vertex sequence to attach to.
+        /// </summary>
+        private static void PaintMarkers(RGraphics g, SvgDocument document, SvgElement element, double opacity)
+        {
+            if (element.MarkerStartRef is null && element.MarkerMidRef is null && element.MarkerEndRef is null)
+                return;
+
+            var vertices = element switch
+            {
+                SvgPathElement path => SvgMarkerGeometry.ComputeForPath(path.Segments),
+                SvgLineElement line => SvgMarkerGeometry.ComputeForLine(line.X1, line.Y1, line.X2, line.Y2),
+                SvgPolylineElement polyline => SvgMarkerGeometry.ComputeForPoints(polyline.Points, closed: false),
+                SvgPolygonElement polygon => SvgMarkerGeometry.ComputeForPoints(polygon.Points, closed: true),
+                _ => null,
+            };
+
+            if (vertices is null)
+                return;
+
+            foreach (var vertex in vertices)
+            {
+                var markerRef = vertex.IsStart ? element.MarkerStartRef : vertex.IsEnd ? element.MarkerEndRef : element.MarkerMidRef;
+
+                if (markerRef is not null && document.Markers.TryGetValue(markerRef, out var marker))
+                    PaintMarker(g, document, marker, vertex, element.StrokeWidth, opacity);
+            }
+        }
+
+        /// <summary>
+        /// Places one marker instance: establishes its own (markerWidth x markerHeight, optionally
+        /// scaled by the host shape's stroke-width) viewport, rotated per <see cref="SvgMarkerElement.OrientAuto"/>/
+        /// <see cref="SvgMarkerElement.OrientAngle"/> and positioned so (refX, refY) - resolved through
+        /// the marker's own viewBox, if any - lands exactly on <paramref name="vertex"/>.
+        /// </summary>
+        private static void PaintMarker(RGraphics g, SvgDocument document, SvgMarkerElement marker, MarkerVertex vertex, double strokeWidth, double opacity)
+        {
+            if (marker.MarkerWidth <= 0 || marker.MarkerHeight <= 0)
+                return;
+
+            var scale = marker.MarkerUnitsStrokeWidth ? strokeWidth : 1.0;
+            if (scale <= 0)
+                return;
+
+            var rotation = marker.OrientAuto || marker.OrientAutoStartReverse
+                ? vertex.AngleDegrees + (marker.OrientAutoStartReverse && vertex.IsStart ? 180 : 0)
+                : marker.OrientAngle;
+
+            // Where does (refX, refY) land within a (markerWidth x markerHeight) viewport anchored at
+            // the local origin, per the marker's own viewBox (if any)? That point must become the
+            // rotation/scale pivot (i.e. sit exactly at the vertex once placed) - using the same
+            // viewport-transform math RenderViewport itself will independently redo below.
+            double refLocalX = marker.RefX, refLocalY = marker.RefY;
+            var viewBoxWidth = marker.ViewBox?.Width ?? marker.MarkerWidth;
+            var viewBoxHeight = marker.ViewBox?.Height ?? marker.MarkerHeight;
+
+            if (viewBoxWidth > 0 && viewBoxHeight > 0)
+            {
+                var probeMatrix = ComputeViewportTransform(new RRect(0, 0, marker.MarkerWidth, marker.MarkerHeight), marker.ViewBox?.X ?? 0, marker.ViewBox?.Y ?? 0, viewBoxWidth, viewBoxHeight, marker.PreserveAspectRatio);
+                var refPoint = ApplyMatrix(new RPoint(marker.RefX, marker.RefY), probeMatrix);
+                refLocalX = refPoint.X;
+                refLocalY = refPoint.Y;
+            }
+
+            var radians = rotation * (Math.PI / 180.0);
+            var cos = Math.Cos(radians);
+            var sin = Math.Sin(radians);
+
+            var preShift = new RMatrix(1, 0, 0, 1, -refLocalX, -refLocalY);
+            var rotateScale = new RMatrix(cos * scale, sin * scale, -sin * scale, cos * scale, 0, 0);
+            var toVertex = new RMatrix(1, 0, 0, 1, vertex.X, vertex.Y);
+            var placement = MultiplyMatrix(MultiplyMatrix(preShift, rotateScale), toVertex);
+
+            g.PushTransform(placement);
+            RenderViewport(g, document, 0, 0, marker.MarkerWidth, marker.MarkerHeight, marker.ViewBox, marker.PreserveAspectRatio, marker.Children, opacity);
+            g.PopTransform();
         }
 
         private static RBrush? ResolvePaintBrush(RGraphics g, SvgDocument document, SvgElement owner, SvgPaint paint, double opacity)
@@ -368,10 +515,80 @@ namespace PeachPDF.Svg
             return paint.Kind switch
             {
                 SvgPaintKind.Solid => g.GetSolidBrush(ApplyOpacity(paint.Color, opacity)),
-                SvgPaintKind.GradientRef when paint.GradientId is { } id && document.Gradients.TryGetValue(id, out var gradient)
+                SvgPaintKind.GradientRef when paint.ReferenceId is { } id && document.Gradients.TryGetValue(id, out var gradient)
                     => ResolveGradientBrush(g, owner, gradient, opacity),
                 _ => null,
             };
+        }
+
+        /// <summary>
+        /// Fills <paramref name="path"/> with a tiled <c>&lt;pattern&gt;</c>: renders the pattern's own
+        /// content once into a small Form XObject "tile" (via <see cref="RGraphics.CreateTile"/>), then
+        /// clips to the shape's own fill geometry and draws that SAME tile repeatedly across its
+        /// bounding box. Each repeated draw is a reference to the one already-vector tile content, so
+        /// this stays fully vector - never rasterizes, matching this renderer's core design principle
+        /// - unlike a "render once to a bitmap, then repeat the bitmap" approach would.
+        /// </summary>
+        private static void PaintPatternFill(RGraphics g, SvgDocument document, SvgElement element, RGraphicsPath path, double opacity)
+        {
+            if (element.Fill.ReferenceId is not { } id || !document.Patterns.TryGetValue(id, out var pattern))
+                return;
+
+            var (x, y, width, height) = ResolvePatternRect(element, pattern);
+            if (width <= 0 || height <= 0)
+                return;
+
+            var tile = g.CreateTile(width, height);
+            if (tile is not { } t)
+                return;
+
+            RenderViewport(t.Graphics, document, 0, 0, width, height, pattern.ViewBox, pattern.PreserveAspectRatio, pattern.Children, opacity);
+            t.Graphics.Dispose();
+
+            var bounds = SvgGeometryBounds.GetBoundingBox(element) ?? new RRect(x, y, width, height);
+
+            // One tile of margin on every side absorbs any shift introduced by patternTransform below,
+            // which the col/row computation itself (deliberately kept simple) doesn't account for -
+            // any surplus tiles are clipped away, so this only costs a few harmless extra draw calls.
+            var startCol = Math.Floor((bounds.X - x) / width) - 1;
+            var endCol = Math.Ceiling((bounds.X + bounds.Width - x) / width) + 1;
+            var startRow = Math.Floor((bounds.Y - y) / height) - 1;
+            var endRow = Math.Ceiling((bounds.Y + bounds.Height - y) / height) + 1;
+
+            const int maxTiles = 10_000;
+            if ((endCol - startCol) * (endRow - startRow) is <= 0 or > maxTiles)
+                return;
+
+            g.PushClip(path);
+
+            var pushedPatternTransform = pattern.PatternTransform is not null;
+            if (pushedPatternTransform)
+                g.PushTransform(pattern.PatternTransform!.Value);
+
+            for (var row = startRow; row < endRow; row++)
+            {
+                for (var col = startCol; col < endCol; col++)
+                {
+                    g.DrawImage(t.Image, new RRect(x + col * width, y + row * height, width, height));
+                }
+            }
+
+            if (pushedPatternTransform)
+                g.PopTransform();
+
+            g.PopClip();
+        }
+
+        /// <summary>Resolves a pattern's tile rect, same objectBoundingBox/userSpaceOnUse handling as <see cref="ResolveGradientPoint"/>.</summary>
+        private static (double X, double Y, double Width, double Height) ResolvePatternRect(SvgElement owner, SvgPattern pattern)
+        {
+            if (pattern.PatternUnitsUserSpaceOnUse)
+                return (pattern.X, pattern.Y, pattern.Width, pattern.Height);
+
+            if (SvgGeometryBounds.GetBoundingBox(owner) is not { } bbox)
+                return (pattern.X, pattern.Y, pattern.Width, pattern.Height);
+
+            return (bbox.X + pattern.X * bbox.Width, bbox.Y + pattern.Y * bbox.Height, pattern.Width * bbox.Width, pattern.Height * bbox.Height);
         }
 
         private static RBrush? ResolveGradientBrush(RGraphics g, SvgElement owner, SvgGradient gradient, double opacity)
@@ -452,7 +669,7 @@ namespace PeachPDF.Svg
                 pen = g.GetPen(ApplyOpacity(element.Stroke.Color, opacity));
             }
             else if (element.Stroke.Kind == SvgPaintKind.GradientRef &&
-                     element.Stroke.GradientId is { } id &&
+                     element.Stroke.ReferenceId is { } id &&
                      document.Gradients.TryGetValue(id, out var gradient))
             {
                 var brush = ResolveGradientBrush(g, element, gradient, opacity);

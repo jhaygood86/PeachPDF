@@ -540,6 +540,196 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task InlineSvg_Marker_RendersAtEachVertexOfAPolyline()
+        {
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <defs>
+                    <marker id="dot" markerWidth="4" markerHeight="4" refX="2" refY="2" markerUnits="userSpaceOnUse">
+                      <circle cx="2" cy="2" r="2" fill="#ff00ff"/>
+                    </marker>
+                  </defs>
+                  <polyline points="10,10 50,50 90,10" fill="none" stroke="#000000" marker="url(#dot)"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            // The marker's own magenta fill (#ff00ff -> "1 0 1 rg") must appear once per vertex (start,
+            // mid, end) of the 3-point polyline - a single shared marker definition painted three times
+            // at three distinct transformed positions.
+            var occurrences = 0;
+            var index = 0;
+            while ((index = pdfText.IndexOf("1 0 1 rg", index, StringComparison.Ordinal)) >= 0)
+            {
+                occurrences++;
+                index += 1;
+            }
+
+            Assert.True(occurrences >= 3, $"Expected at least 3 marker instances, found {occurrences}");
+        }
+
+        [Fact]
+        public async Task InlineSvg_Marker_DoesNotApplyToRect()
+        {
+            // Per spec, markers only attach to path/line/polyline/polygon - a <rect> with marker-start
+            // set must not paint the marker at all.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <defs>
+                    <marker id="dot" markerWidth="4" markerHeight="4" refX="2" refY="2">
+                      <circle cx="2" cy="2" r="2" fill="#ff00ff"/>
+                    </marker>
+                  </defs>
+                  <rect x="10" y="10" width="80" height="80" fill="none" stroke="#000000" marker-start="url(#dot)"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.DoesNotContain("1 0 1 rg", pdfText);
+        }
+
+        [Fact]
+        public async Task InlineSvg_PatternFill_RendersFormXObjectTiledMultipleTimes()
+        {
+            // Unlike a gradient (a native PDF shading), this renderer's <pattern> support is a
+            // Form XObject "tile" drawn repeatedly (clipped to the shape's fill geometry) rather than
+            // a native PDF tiling pattern object - still fully vector (each repeat is a reference to
+            // the same underlying vector content, never a rasterized bitmap), but the PDF-level
+            // evidence to check for is "/Subtype /Form" plus multiple "Do" (XObject invoke) operators,
+            // not "/PatternType".
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <defs>
+                    <pattern id="dots" patternUnits="userSpaceOnUse" width="10" height="10">
+                      <circle cx="5" cy="5" r="4" fill="#ff00ff"/>
+                    </pattern>
+                  </defs>
+                  <rect x="0" y="0" width="100" height="100" fill="url(#dots)"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("/Subtype /Form", pdfText);
+            Assert.DoesNotContain("/Subtype /Image", pdfText);
+
+            var doCount = 0;
+            var index = 0;
+            while ((index = pdfText.IndexOf(" Do ", index, StringComparison.Ordinal)) >= 0)
+            {
+                doCount++;
+                index += 1;
+            }
+
+            Assert.True(doCount >= 2, $"Expected at least 2 tile placements, found {doCount}");
+        }
+
+        [Fact]
+        public async Task InlineSvg_ObjectBoundingBoxPattern_TilesWithinShapeBounds()
+        {
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <defs>
+                    <pattern id="dots" width="0.25" height="0.25">
+                      <rect x="0" y="0" width="5" height="5" fill="#00ffff"/>
+                    </pattern>
+                  </defs>
+                  <circle cx="50" cy="50" r="40" fill="url(#dots)"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("/Subtype /Form", pdfText);
+        }
+
+        [Fact]
+        public async Task ImgSvg_PatternFill_RendersFormXObject()
+        {
+            var svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100"><defs><pattern id="dots" patternUnits="userSpaceOnUse" width="10" height="10"><circle cx="5" cy="5" r="4" fill="#ff00ff"/></pattern></defs><rect x="0" y="0" width="100" height="100" fill="url(#dots)"/></svg>""";
+            var dataUri = "data:image/svg+xml;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(svg));
+            var html = $"""<!DOCTYPE html><html><body><img src="{dataUri}" width="100" height="100"/></body></html>""";
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("/Subtype /Form", pdfText);
+        }
+
+        [Fact]
+        public async Task InlineSvg_Mask_RendersSoftMaskExtGState()
+        {
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <defs>
+                    <mask id="fade" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
+                      <rect x="0" y="0" width="100" height="100" fill="#ffffff"/>
+                    </mask>
+                  </defs>
+                  <rect x="10" y="10" width="80" height="80" fill="#000000" mask="url(#fade)"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("/SMask", pdfText);
+            Assert.Contains("/Luminosity", pdfText);
+            Assert.Contains("/Subtype /Form", pdfText);
+        }
+
+        [Fact]
+        public async Task InlineSvg_MaskWithGradientContent_RendersShadingInsideMaskForm()
+        {
+            // A mask's own content can itself use fill/gradients (a full paint, not just geometry,
+            // unlike clip-path) - a gradient-filled mask rect must still produce a real shading.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <defs>
+                    <linearGradient id="fadeGrad" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0" stop-color="#000000"/>
+                      <stop offset="1" stop-color="#ffffff"/>
+                    </linearGradient>
+                    <mask id="fade" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
+                      <rect x="0" y="0" width="100" height="100" fill="url(#fadeGrad)"/>
+                    </mask>
+                  </defs>
+                  <rect x="10" y="10" width="80" height="80" fill="#000000" mask="url(#fade)"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("/SMask", pdfText);
+            Assert.Contains("/ShadingType", pdfText);
+        }
+
+        [Fact]
+        public async Task ImgSvg_Mask_RendersSoftMaskExtGState()
+        {
+            var svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100"><defs><mask id="fade" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100"><rect x="0" y="0" width="100" height="100" fill="#ffffff"/></mask></defs><rect x="10" y="10" width="80" height="80" fill="#000000" mask="url(#fade)"/></svg>""";
+            var dataUri = "data:image/svg+xml;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(svg));
+            var html = $"""<!DOCTYPE html><html><body><img src="{dataUri}" width="100" height="100"/></body></html>""";
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("/SMask", pdfText);
+            Assert.Contains("/Luminosity", pdfText);
+        }
+
+        [Fact]
         public async Task InlineSvg_GroupFillInheritedByUnstyledChild()
         {
             var html = """

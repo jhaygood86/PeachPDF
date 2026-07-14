@@ -210,6 +210,30 @@ namespace PeachPDF.Html.Adapters
         public abstract RGraphicsPath GetGraphicsPath();
 
         /// <summary>
+        /// Creates a fresh, independent (<paramref name="width"/> x <paramref name="height"/>)
+        /// drawing surface for tile-based content (e.g. an SVG <c>&lt;pattern&gt;</c>'s cell): draw
+        /// into the returned <c>Graphics</c> using ordinary <see cref="RGraphics"/> calls, then use the
+        /// returned <c>Image</c> with <see cref="DrawImage(RImage, RRect)"/> - repeated calls tile it,
+        /// each one a real reference to the same underlying vector content (a PDF Form XObject), never
+        /// rasterized. Null when creating one isn't supported in the current rendering context (e.g. a
+        /// measure-only pass with no real PDF page to own the new object).
+        /// </summary>
+        public abstract (RGraphics Graphics, RImage Image)? CreateTile(double width, double height);
+
+        /// <summary>
+        /// Applies a luminosity soft mask - built the same way as an <see cref="RImage"/> tile (see
+        /// <see cref="CreateTile"/>) - to everything drawn until the matching <see cref="PopSoftMask"/>.
+        /// White areas of <paramref name="maskImage"/> are fully visible, black fully transparent,
+        /// matching PDF's/SVG's own <c>&lt;mask&gt;</c> luminosity semantics. A no-op if
+        /// <paramref name="maskImage"/> wasn't created via <see cref="CreateTile"/> on this same
+        /// <see cref="RGraphics"/>.
+        /// </summary>
+        public abstract void PushSoftMask(RImage maskImage);
+
+        /// <summary>Ends the effect of the most recent <see cref="PushSoftMask"/>.</summary>
+        public abstract void PopSoftMask();
+
+        /// <summary>
         /// Measure the width and height of string <paramref name="str"/> when drawn on device context HDC
         /// using the given font <paramref name="font"/>.
         /// </summary>

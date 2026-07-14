@@ -35,7 +35,7 @@ namespace PeachPDF.Svg
     /// <summary>
     /// Common definition shared by <c>&lt;linearGradient&gt;</c>/<c>&lt;radialGradient&gt;</c>. Lives
     /// only in <see cref="SvgDocument"/>'s gradient registry - never painted directly, only referenced
-    /// by a <see cref="SvgPaint.GradientId"/>.
+    /// by a <see cref="SvgPaint.ReferenceId"/>.
     /// </summary>
     internal abstract class SvgGradient
     {

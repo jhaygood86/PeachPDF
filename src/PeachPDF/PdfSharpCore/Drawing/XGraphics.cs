@@ -1863,6 +1863,21 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         }
 
         /// <summary>
+        /// Applies a luminosity soft mask, driven by <paramref name="maskForm"/>'s own rendered
+        /// content, to everything drawn until the matching <see cref="PopSoftMask"/>.
+        /// </summary>
+        internal void PushSoftMask(XForm maskForm)
+        {
+            (_renderer as XGraphicsPdfRenderer)?.PushSoftMask(maskForm);
+        }
+
+        /// <summary>Ends the effect of the most recent <see cref="PushSoftMask"/>.</summary>
+        internal void PopSoftMask()
+        {
+            (_renderer as XGraphicsPdfRenderer)?.PopSoftMask();
+        }
+
+        /// <summary>
         /// Provides access to internal data structures of the XGraphics class.
         /// </summary>
         internal class XGraphicsInternals

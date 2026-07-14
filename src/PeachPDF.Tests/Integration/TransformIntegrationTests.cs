@@ -362,6 +362,9 @@ namespace PeachPDF.Tests.Integration
             public override void ReturnPreviousSmoothingMode(object? prevMode) { }
             public override RBrush GetTextureBrush(RImage image, RRect dstRect, RPoint translateTransformLocation) => null!;
             public override RGraphicsPath GetGraphicsPath() => null!;
+            public override (RGraphics Graphics, RImage Image)? CreateTile(double width, double height) => null;
+            public override void PushSoftMask(RImage maskImage) { }
+            public override void PopSoftMask() { }
             public override RSize MeasureString(string str, RFont font) => new(0, 12);
             public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth)
             {

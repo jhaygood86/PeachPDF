@@ -735,6 +735,9 @@ namespace PeachPDF.Tests.Html.Core.Dom
             public override void DrawPath(PeachPDF.Html.Adapters.RBrush brush, PeachPDF.Html.Adapters.RGraphicsPath path) { }
             public override void DrawPolygon(PeachPDF.Html.Adapters.RBrush brush, PeachPDF.Html.Adapters.Entities.RPoint[] points) { }
             public override PeachPDF.Html.Adapters.RGraphicsPath GetGraphicsPath() => new RecordingGraphicsPath();
+            public override (PeachPDF.Html.Adapters.RGraphics Graphics, PeachPDF.Html.Adapters.RImage Image)? CreateTile(double width, double height) => null;
+            public override void PushSoftMask(PeachPDF.Html.Adapters.RImage maskImage) { }
+            public override void PopSoftMask() { }
             public override PeachPDF.Html.Adapters.RBrush GetTextureBrush(PeachPDF.Html.Adapters.RImage image, PeachPDF.Html.Adapters.Entities.RRect dstRect, PeachPDF.Html.Adapters.Entities.RPoint translateTransformLocation)
                 => GetSolidBrush(PeachPDF.Html.Adapters.Entities.RColor.Black);
             public override void Dispose() { }

@@ -64,7 +64,19 @@ namespace PeachPDF.Svg
 
         public string? ClipPathRef { get; set; }
 
+        /// <summary>Not inherited (like <see cref="ClipPathRef"/>). Id of a <c>&lt;mask&gt;</c> def (see <see cref="SvgDocument.Masks"/>), or null for none.</summary>
+        public string? MaskRef { get; set; }
+
         public RMatrix? Transform { get; set; }
+
+        /// <summary>Inherited. Id of a <c>&lt;marker&gt;</c> def (see <see cref="SvgDocument.Markers"/>), or null for none. Only consulted for shapes markers can attach to - see <see cref="SvgMarkerGeometry"/>.</summary>
+        public string? MarkerStartRef { get; set; }
+
+        /// <summary>Inherited. See <see cref="MarkerStartRef"/>.</summary>
+        public string? MarkerMidRef { get; set; }
+
+        /// <summary>Inherited. See <see cref="MarkerStartRef"/>.</summary>
+        public string? MarkerEndRef { get; set; }
     }
 
     internal class SvgGroupElement : SvgElement
@@ -182,6 +194,39 @@ namespace PeachPDF.Svg
     {
         public RRect? ViewBox { get; set; }
         public SvgPreserveAspectRatio PreserveAspectRatio { get; set; } = SvgPreserveAspectRatio.Default;
+        public List<SvgElement> Children { get; } = [];
+    }
+
+    /// <summary>
+    /// A <c>&lt;marker&gt;</c> definition - never painted directly (like <c>&lt;defs&gt;</c> content),
+    /// only through a shape's <c>marker-start</c>/<c>marker-mid</c>/<c>marker-end</c> reference (see
+    /// <see cref="SvgDocument.Markers"/>). Not an <see cref="SvgElement"/> itself, matching
+    /// <see cref="SvgGradient"/>/<see cref="SvgClipPath"/>'s precedent for pure definitions.
+    /// </summary>
+    internal sealed class SvgMarkerElement
+    {
+        public double RefX { get; set; }
+        public double RefY { get; set; }
+
+        /// <summary>Defaults per spec.</summary>
+        public double MarkerWidth { get; set; } = 3;
+        public double MarkerHeight { get; set; } = 3;
+
+        public RRect? ViewBox { get; set; }
+        public SvgPreserveAspectRatio PreserveAspectRatio { get; set; } = SvgPreserveAspectRatio.Default;
+
+        /// <summary>True for <c>orient="auto"</c> or <c>"auto-start-reverse"</c> - rotate to match the attachment vertex's tangent direction, rather than a fixed <see cref="OrientAngle"/>.</summary>
+        public bool OrientAuto { get; set; }
+
+        /// <summary>True only for <c>orient="auto-start-reverse"</c> - like <see cref="OrientAuto"/>, but a marker placed at a shape's start vertex is additionally rotated 180 degrees.</summary>
+        public bool OrientAutoStartReverse { get; set; }
+
+        /// <summary>Fixed rotation in degrees, used when neither <see cref="OrientAuto"/> nor <see cref="OrientAutoStartReverse"/> is set.</summary>
+        public double OrientAngle { get; set; }
+
+        /// <summary>True (the spec default) for <c>markerUnits="strokeWidth"</c> - scale the marker by the host shape's stroke-width; false for <c>"userSpaceOnUse"</c> (no scaling).</summary>
+        public bool MarkerUnitsStrokeWidth { get; set; } = true;
+
         public List<SvgElement> Children { get; } = [];
     }
 }

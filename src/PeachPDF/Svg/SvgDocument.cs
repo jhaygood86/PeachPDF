@@ -37,5 +37,14 @@ namespace PeachPDF.Svg
 
         /// <summary>ClipPath definitions keyed by <c>id</c> (ids are case-sensitive per XML).</summary>
         public Dictionary<string, SvgClipPath> ClipPaths { get; init; } = new(StringComparer.Ordinal);
+
+        /// <summary>Marker definitions keyed by <c>id</c> (ids are case-sensitive per XML).</summary>
+        public Dictionary<string, SvgMarkerElement> Markers { get; init; } = new(StringComparer.Ordinal);
+
+        /// <summary>Pattern definitions keyed by <c>id</c> (ids are case-sensitive per XML).</summary>
+        public Dictionary<string, SvgPattern> Patterns { get; init; } = new(StringComparer.Ordinal);
+
+        /// <summary>Mask definitions keyed by <c>id</c> (ids are case-sensitive per XML).</summary>
+        public Dictionary<string, SvgMask> Masks { get; init; } = new(StringComparer.Ordinal);
     }
 }

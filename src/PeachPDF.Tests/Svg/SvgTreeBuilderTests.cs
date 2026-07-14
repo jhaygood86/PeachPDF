@@ -586,6 +586,271 @@ namespace PeachPDF.Tests.Svg
         }
 
         [Fact]
+        public void Marker_MarkerStartMidEnd_ResolveDistinctDefs()
+        {
+            var document = BuildFrom("""
+                <svg xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <marker id="startMark"><circle cx="0" cy="0" r="1"/></marker>
+                    <marker id="midMark"><circle cx="0" cy="0" r="1"/></marker>
+                    <marker id="endMark"><circle cx="0" cy="0" r="1"/></marker>
+                  </defs>
+                  <path d="M0,0 L10,0 L20,0" marker-start="url(#startMark)" marker-mid="url(#midMark)" marker-end="url(#endMark)"/>
+                </svg>
+                """);
+
+            var path = Assert.IsType<SvgPathElement>(Assert.Single(document.Children));
+            Assert.Equal("startMark", path.MarkerStartRef);
+            Assert.Equal("midMark", path.MarkerMidRef);
+            Assert.Equal("endMark", path.MarkerEndRef);
+            Assert.Equal(3, document.Markers.Count);
+        }
+
+        [Fact]
+        public void Marker_Shorthand_SetsAllThreeProperties()
+        {
+            var document = BuildFrom("""
+                <svg xmlns="http://www.w3.org/2000/svg">
+                  <defs><marker id="dot"><circle cx="0" cy="0" r="1"/></marker></defs>
+                  <path d="M0,0 L10,0" marker="url(#dot)"/>
+                </svg>
+                """);
+
+            var path = Assert.IsType<SvgPathElement>(Assert.Single(document.Children));
+            Assert.Equal("dot", path.MarkerStartRef);
+            Assert.Equal("dot", path.MarkerMidRef);
+            Assert.Equal("dot", path.MarkerEndRef);
+        }
+
+        [Fact]
+        public void Marker_IndividualProperty_OverridesShorthand()
+        {
+            var document = BuildFrom("""
+                <svg xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <marker id="dot"><circle cx="0" cy="0" r="1"/></marker>
+                    <marker id="arrow"><circle cx="0" cy="0" r="1"/></marker>
+                  </defs>
+                  <path d="M0,0 L10,0" marker="url(#dot)" marker-end="url(#arrow)"/>
+                </svg>
+                """);
+
+            var path = Assert.IsType<SvgPathElement>(Assert.Single(document.Children));
+            Assert.Equal("dot", path.MarkerStartRef);
+            Assert.Equal("dot", path.MarkerMidRef);
+            Assert.Equal("arrow", path.MarkerEndRef);
+        }
+
+        [Fact]
+        public void Marker_IsInheritedFromGroup()
+        {
+            var document = BuildFrom("""
+                <svg xmlns="http://www.w3.org/2000/svg">
+                  <defs><marker id="dot"><circle cx="0" cy="0" r="1"/></marker></defs>
+                  <g marker-end="url(#dot)"><path d="M0,0 L10,0"/></g>
+                </svg>
+                """);
+
+            var group = Assert.IsType<SvgGroupElement>(Assert.Single(document.Children));
+            var path = Assert.IsType<SvgPathElement>(Assert.Single(group.Children));
+            Assert.Equal("dot", path.MarkerEndRef);
+        }
+
+        [Fact]
+        public void Marker_Attributes_AreParsed()
+        {
+            var document = BuildFrom("""
+                <svg xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <marker id="arrow" refX="5" refY="3" markerWidth="10" markerHeight="6" orient="auto" markerUnits="userSpaceOnUse">
+                      <path d="M0,0 L10,3 L0,6 z"/>
+                    </marker>
+                  </defs>
+                  <path d="M0,0 L10,0" marker-end="url(#arrow)"/>
+                </svg>
+                """);
+
+            var marker = document.Markers["arrow"];
+            Assert.Equal(5, marker.RefX);
+            Assert.Equal(3, marker.RefY);
+            Assert.Equal(10, marker.MarkerWidth);
+            Assert.Equal(6, marker.MarkerHeight);
+            Assert.True(marker.OrientAuto);
+            Assert.False(marker.MarkerUnitsStrokeWidth);
+            Assert.Single(marker.Children);
+        }
+
+        [Fact]
+        public void Marker_NotReferencedDirectly_IsNotPaintedAsOrdinaryChild()
+        {
+            var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><marker id="dot"><circle cx="0" cy="0" r="1"/></marker></svg>""");
+            Assert.Empty(document.Children);
+        }
+
+        [Fact]
+        public void Pattern_UrlReference_ResolvesToPatternRefNotGradientRef()
+        {
+            var document = BuildFrom("""
+                <svg xmlns="http://www.w3.org/2000/svg">
+                  <defs><pattern id="dots" width="10" height="10"><circle cx="5" cy="5" r="2" fill="#ff0000"/></pattern></defs>
+                  <rect x="0" y="0" width="50" height="50" fill="url(#dots)"/>
+                </svg>
+                """);
+
+            var rect = Assert.IsType<SvgRectElement>(Assert.Single(document.Children));
+            Assert.Equal(SvgPaintKind.PatternRef, rect.Fill.Kind);
+            Assert.Equal("dots", rect.Fill.ReferenceId);
+        }
+
+        [Fact]
+        public void Gradient_UrlReference_StaysGradientRef()
+        {
+            var document = BuildFrom("""
+                <svg xmlns="http://www.w3.org/2000/svg">
+                  <defs><linearGradient id="g"><stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#fff"/></linearGradient></defs>
+                  <rect x="0" y="0" width="50" height="50" fill="url(#g)"/>
+                </svg>
+                """);
+
+            var rect = Assert.IsType<SvgRectElement>(Assert.Single(document.Children));
+            Assert.Equal(SvgPaintKind.GradientRef, rect.Fill.Kind);
+        }
+
+        [Fact]
+        public void Pattern_UserSpaceOnUse_AttributesAreParsedDirectly()
+        {
+            var document = BuildFrom("""
+                <svg xmlns="http://www.w3.org/2000/svg">
+                  <defs><pattern id="dots" patternUnits="userSpaceOnUse" x="1" y="2" width="10" height="20">
+                    <circle cx="5" cy="5" r="2"/>
+                  </pattern></defs>
+                  <rect x="0" y="0" width="50" height="50" fill="url(#dots)"/>
+                </svg>
+                """);
+
+            var pattern = document.Patterns["dots"];
+            Assert.True(pattern.PatternUnitsUserSpaceOnUse);
+            Assert.Equal(1, pattern.X);
+            Assert.Equal(2, pattern.Y);
+            Assert.Equal(10, pattern.Width);
+            Assert.Equal(20, pattern.Height);
+            Assert.Single(pattern.Children);
+        }
+
+        [Fact]
+        public void Pattern_NoPatternUnitsAttribute_DefaultsToObjectBoundingBoxFractions()
+        {
+            var document = BuildFrom("""
+                <svg xmlns="http://www.w3.org/2000/svg">
+                  <defs><pattern id="dots" width="0.2" height="0.2"><circle cx="5" cy="5" r="2"/></pattern></defs>
+                  <rect x="0" y="0" width="50" height="50" fill="url(#dots)"/>
+                </svg>
+                """);
+
+            var pattern = document.Patterns["dots"];
+            Assert.False(pattern.PatternUnitsUserSpaceOnUse);
+            Assert.Equal(0.2, pattern.Width);
+        }
+
+        [Fact]
+        public void Pattern_Transform_IsParsed()
+        {
+            var document = BuildFrom("""
+                <svg xmlns="http://www.w3.org/2000/svg">
+                  <defs><pattern id="dots" patternUnits="userSpaceOnUse" width="10" height="10" patternTransform="translate(5,5)">
+                    <circle cx="5" cy="5" r="2"/>
+                  </pattern></defs>
+                  <rect x="0" y="0" width="50" height="50" fill="url(#dots)"/>
+                </svg>
+                """);
+
+            Assert.NotNull(document.Patterns["dots"].PatternTransform);
+        }
+
+        [Fact]
+        public void Pattern_NotReferencedDirectly_IsNotPaintedAsOrdinaryChild()
+        {
+            var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><pattern id="dots" width="10" height="10"><circle cx="5" cy="5" r="2"/></pattern></svg>""");
+            Assert.Empty(document.Children);
+        }
+
+        [Fact]
+        public void Mask_UrlReference_ResolvesMaskRef()
+        {
+            var document = BuildFrom("""
+                <svg xmlns="http://www.w3.org/2000/svg">
+                  <defs><mask id="fade"><rect x="0" y="0" width="10" height="10" fill="#ffffff"/></mask></defs>
+                  <rect x="0" y="0" width="50" height="50" mask="url(#fade)"/>
+                </svg>
+                """);
+
+            var rect = Assert.IsType<SvgRectElement>(Assert.Single(document.Children));
+            Assert.Equal("fade", rect.MaskRef);
+            Assert.Single(document.Masks["fade"].Children);
+        }
+
+        [Fact]
+        public void Mask_NoUnitsAttribute_DefaultsToObjectBoundingBoxSpecDefaults()
+        {
+            var document = BuildFrom("""
+                <svg xmlns="http://www.w3.org/2000/svg">
+                  <defs><mask id="fade"><rect x="0" y="0" width="10" height="10"/></mask></defs>
+                  <rect x="0" y="0" width="50" height="50" mask="url(#fade)"/>
+                </svg>
+                """);
+
+            var mask = document.Masks["fade"];
+            Assert.False(mask.MaskUnitsUserSpaceOnUse);
+            Assert.Equal(-0.1, mask.X, 3);
+            Assert.Equal(-0.1, mask.Y, 3);
+            Assert.Equal(1.2, mask.Width, 3);
+            Assert.Equal(1.2, mask.Height, 3);
+        }
+
+        [Fact]
+        public void Mask_UserSpaceOnUse_AttributesAreParsedDirectly()
+        {
+            var document = BuildFrom("""
+                <svg xmlns="http://www.w3.org/2000/svg">
+                  <defs><mask id="fade" maskUnits="userSpaceOnUse" x="1" y="2" width="30" height="40">
+                    <rect x="0" y="0" width="10" height="10"/>
+                  </mask></defs>
+                  <rect x="0" y="0" width="50" height="50" mask="url(#fade)"/>
+                </svg>
+                """);
+
+            var mask = document.Masks["fade"];
+            Assert.True(mask.MaskUnitsUserSpaceOnUse);
+            Assert.Equal(1, mask.X);
+            Assert.Equal(2, mask.Y);
+            Assert.Equal(30, mask.Width);
+            Assert.Equal(40, mask.Height);
+        }
+
+        [Fact]
+        public void Mask_NotReferencedDirectly_IsNotPaintedAsOrdinaryChild()
+        {
+            var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><mask id="fade"><rect x="0" y="0" width="10" height="10"/></mask></svg>""");
+            Assert.Empty(document.Children);
+        }
+
+        [Fact]
+        public void Mask_IsNotInherited()
+        {
+            var document = BuildFrom("""
+                <svg xmlns="http://www.w3.org/2000/svg">
+                  <defs><mask id="fade"><rect x="0" y="0" width="10" height="10"/></mask></defs>
+                  <g mask="url(#fade)"><circle cx="5" cy="5" r="5"/></g>
+                </svg>
+                """);
+
+            var group = Assert.IsType<SvgGroupElement>(Assert.Single(document.Children));
+            Assert.Equal("fade", group.MaskRef);
+            var circle = Assert.IsType<SvgCircleElement>(Assert.Single(group.Children));
+            Assert.Null(circle.MaskRef);
+        }
+
+        [Fact]
         public void Rect_UsedAsClipPathShape_ContributesGeometry()
         {
             var document = BuildFrom("""
