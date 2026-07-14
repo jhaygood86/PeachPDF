@@ -413,7 +413,7 @@ isPseudoBefore: true,
         {
             if (box.HtmlTag?.Name.Equals(tagName, StringComparison.OrdinalIgnoreCase) == true)
             {
-                var classAttr = box.HtmlTag.TryGetAttribute("class", "");
+                var classAttr = box.HtmlTag.TryGetAttribute("class", "") ?? "";
                 if (classAttr.Contains(className))
                 {
                     return box;

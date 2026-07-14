@@ -5,6 +5,7 @@ using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Fonts;
 using PeachPDF.PdfSharpCore.Internal;
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -18,10 +19,11 @@ namespace PeachPDF.PdfSharpCore.Utils
 
     internal class FontResolver : IFontResolver
     {
-        private static readonly Dictionary<string, string> _SystemFontPaths = [];
+        private static readonly FrozenDictionary<string, string> _systemFontPaths;
+        private static readonly FrozenDictionary<string, FontFamilyModel> _systemFamilies;
 
         private readonly Dictionary<string, byte[]> _CustomFonts = [];
-        private readonly Dictionary<string, FontFamilyModel> InstalledFonts = [];
+        private readonly Dictionary<string, FontFamilyModel> InstalledFonts;
 
         public static string[] SupportedFonts { get; }
 
@@ -56,6 +58,8 @@ namespace PeachPDF.PdfSharpCore.Utils
             var isWindows = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows);
 
             SupportedFonts = DiscoverSupportedFonts(isOSX, isLinux, isWindows, isAndroid, isIOS);
+
+            (_systemFontPaths, _systemFamilies) = ParseSystemFonts(SupportedFonts);
         }
 
         internal static string[] DiscoverSupportedFonts(bool isOSX, bool isLinux, bool isWindows, bool isAndroid, bool isIOS)
@@ -121,7 +125,7 @@ namespace PeachPDF.PdfSharpCore.Utils
 
         public FontResolver()
         {
-            SetupFontsFiles(SupportedFonts);
+            InstalledFonts = new Dictionary<string, FontFamilyModel>(_systemFamilies);
         }
 
         private readonly struct FontFileInfo
@@ -159,22 +163,34 @@ namespace PeachPDF.PdfSharpCore.Utils
             memoryStream.Seek(0, SeekOrigin.Begin);
 
             var fontFileInfo = FontFileInfo.Load(memoryStream);
+            var key = fontFamilyName.ToLower();
 
-            if (InstalledFonts.TryGetValue(fontFamilyName.ToLower(), out var family))
+            if (InstalledFonts.TryGetValue(key, out var family))
             {
-                family.FontFiles[fontFileInfo.GuessFontStyle()] = fontFileInfo.FontDescription;
+                // family may be a shared static FontFamilyModel from _systemFamilies (or an
+                // already-private clone from a prior AddFont call on this instance). Clone
+                // before mutating so we never write into state shared with other FontResolver
+                // instances/threads.
+                var clonedFamily = new FontFamilyModel { Name = family.Name };
+                foreach (var fontFile in family.FontFiles)
+                {
+                    clonedFamily.FontFiles[fontFile.Key] = fontFile.Value;
+                }
+                clonedFamily.FontFiles[fontFileInfo.GuessFontStyle()] = fontFileInfo.FontDescription;
+                InstalledFonts[key] = clonedFamily;
             }
             else
             {
-                var fontFamilyModel = DeserializeFontFamily(fontFamilyName.ToLower(), [fontFileInfo]);
-                InstalledFonts.Add(fontFamilyName.ToLower(), fontFamilyModel);
+                var fontFamilyModel = DeserializeFontFamily(key, [fontFileInfo]);
+                InstalledFonts.Add(key, fontFamilyModel);
             }
 
             _CustomFonts[fontFileInfo.FontDescription.FontNameInvariantCulture] = fontBytes;
         }
 
-        public void SetupFontsFiles(string[] sSupportedFonts)
+        private static (FrozenDictionary<string, string> Paths, FrozenDictionary<string, FontFamilyModel> Families) ParseSystemFonts(string[] sSupportedFonts)
         {
+            var fontPaths = new Dictionary<string, string>();
             var tempFontInfoList = new List<FontFileInfo>();
 
             foreach (var fontPathFile in sSupportedFonts)
@@ -185,11 +201,9 @@ namespace PeachPDF.PdfSharpCore.Utils
                     Debug.WriteLine(fontPathFile);
                     tempFontInfoList.Add(fontInfo);
 
-                    lock(_SystemFontPaths){
-                        if (!_SystemFontPaths.ContainsKey(fontInfo.FontDescription.FontNameInvariantCulture))
-                        {
-                            _SystemFontPaths.Add(fontInfo.FontDescription.FontNameInvariantCulture, fontPathFile);
-                        }
+                    if (!fontPaths.ContainsKey(fontInfo.FontDescription.FontNameInvariantCulture))
+                    {
+                        fontPaths.Add(fontInfo.FontDescription.FontNameInvariantCulture, fontPathFile);
                     }
                 }
                 catch (System.Exception e)
@@ -200,13 +214,15 @@ namespace PeachPDF.PdfSharpCore.Utils
                 }
             }
 
+            var families = new Dictionary<string, FontFamilyModel>();
+
             // Deserialize all font families
             foreach (var familyGroup in tempFontInfoList.GroupBy(info => info.FamilyName))
                 try
                 {
                     var familyName = familyGroup.Key;
                     var family = DeserializeFontFamily(familyName, familyGroup);
-                    InstalledFonts.Add(familyName.ToLower(), family);
+                    families.Add(familyName.ToLower(), family);
                 }
                 catch (System.Exception e)
                 {
@@ -214,6 +230,8 @@ namespace PeachPDF.PdfSharpCore.Utils
                     System.Console.Error.WriteLine(e);
 #endif
                 }
+
+            return (fontPaths.ToFrozenDictionary(), families.ToFrozenDictionary());
         }
 
 
@@ -245,7 +263,7 @@ namespace PeachPDF.PdfSharpCore.Utils
                 return fontBytes;
             }
 
-            if (_SystemFontPaths.TryGetValue(fontFaceName, out var fontPath))
+            if (_systemFontPaths.TryGetValue(fontFaceName, out var fontPath))
             {
                 return File.ReadAllBytes(fontPath);
             }
@@ -255,7 +273,7 @@ namespace PeachPDF.PdfSharpCore.Utils
 
         public bool HasFont(string fontFaceName)
         {
-            return _CustomFonts.ContainsKey(fontFaceName) || _SystemFontPaths.ContainsKey(fontFaceName);
+            return _CustomFonts.ContainsKey(fontFaceName) || _systemFontPaths.ContainsKey(fontFaceName);
         }
 
         public bool NullIfFontNotFound { get; set; } = false;

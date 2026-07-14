@@ -20,7 +20,7 @@ namespace PeachPDF.Tests.CSS
             // var firstCssProperty = info.Style.BackgroundColor;
 
             // Get the info out - New way
-            var info = stylesheet.StyleRules.First() as StyleRule;
+            var info = (StyleRule)stylesheet.StyleRules.First();
             var selector = info.SelectorText;
             var backgroundColor = info.Style.BackgroundColor;
             var foregroundColor = info.Style.Color;

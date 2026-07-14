@@ -180,7 +180,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Tests whether two structures have equal coordinates.
         /// </summary>
-        public static bool operator ==(PdfRectangle left, PdfRectangle right)
+        public static bool operator ==(PdfRectangle? left, PdfRectangle? right)
         {
             // ReSharper disable CompareOfFloatsByEqualityOperator
             // use: if (Object.ReferenceEquals(left, null))
@@ -197,7 +197,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Tests whether two structures differ in one or more coordinates.
         /// </summary>
-        public static bool operator !=(PdfRectangle left, PdfRectangle right)
+        public static bool operator !=(PdfRectangle? left, PdfRectangle? right)
         {
             return !(left == right);
         }

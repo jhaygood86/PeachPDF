@@ -264,7 +264,7 @@ namespace PeachPDF.Html.Adapters
         /// <param name="str">the string to measure</param>
         /// <param name="font">the font to measure string with</param>
         /// <param name="maxWidth">the max width to calculate fit characters</param>
-        /// <param name="charFit">the number of characters that will fit under <see cref="maxWidth"/> restriction</param>
+        /// <param name="charFit">the number of characters that will fit under <paramref name="maxWidth"/> restriction</param>
         /// <param name="charFitWidth">the width that only the characters that fit into max width take</param>
         public abstract void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth);
 

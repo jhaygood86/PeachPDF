@@ -39,7 +39,7 @@ namespace PeachPDF.Tests.CSS
                 var style = CssConstructionFunctions.ParseDeclarations(string.Empty);
 
                 property.SetValue(style, Keywords.Inherit);
-                var value = (string)property.GetValue(style) ?? "";
+                var value = (string?)property.GetValue(style) ?? "";
 
                 // A handful of names exposed on StyleDeclaration (e.g. "Accelerator",
                 // "AlignmentBaseline") have a PropertyNames constant and a get/set pair here, but no
@@ -86,7 +86,7 @@ namespace PeachPDF.Tests.CSS
         public void CssText_Setter_UpdatesDeclarationsAndRaisesChanged()
         {
             var style = CssConstructionFunctions.ParseDeclarations(string.Empty);
-            string raised = null;
+            string? raised = null;
             style.Changed += text => raised = text;
 
             style.CssText = "color: blue";

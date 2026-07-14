@@ -3,6 +3,8 @@ using PeachPDF.PdfSharpCore.Utils;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests
 {
@@ -247,6 +249,72 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
                 isOSX: false, isLinux: false, isWindows: false, isAndroid: false, isIOS: true);
 
             Assert.Empty(fonts);
+        }
+
+        [Fact]
+        public void AddFont_CollidingWithSystemFamily_DoesNotMutateOtherInstances()
+        {
+            // System-font family data is parsed once and shared (read-only) across every
+            // FontResolver instance. AddFont must clone a family before overriding one of
+            // its styles, or a custom font registered on one instance would corrupt the
+            // family every other FontResolver instance -- and every other thread's
+            // PdfGenerator -- resolves for that same family name.
+            if (FontResolver.SupportedFonts.Length == 0)
+                Assert.Skip("No system fonts detected on this host to collide with.");
+
+            var familyName = TtfFontDescription.LoadDescription(FontResolver.SupportedFonts[0]).FontFamilyInvariantCulture;
+            var bundledFaceName = TtfFontDescription.LoadDescription(BundledFonts.Ttf).FontNameInvariantCulture;
+
+            var expectedFaceName = new FontResolver()
+                .ResolveTypeface(familyName, isBold: false, isItalic: false).FaceName;
+
+            // A different family's file would never collide with the bundled test font's own
+            // name, which is the whole point: registering it under `familyName` overrides the
+            // Regular style of an otherwise-unrelated system family on this instance only.
+            Assert.NotEqual(bundledFaceName, expectedFaceName);
+
+            var mutated = new FontResolver();
+            using (var stream = File.OpenRead(BundledFonts.Ttf))
+            {
+                mutated.AddFont(stream, familyName);
+            }
+
+            var mutatedFaceName = mutated.ResolveTypeface(familyName, isBold: false, isItalic: false).FaceName;
+            Assert.Equal(bundledFaceName, mutatedFaceName);
+
+            // A resolver constructed after `mutated.AddFont` must still see the original
+            // system font for this family -- proving the shared family data was cloned
+            // rather than mutated in place.
+            var untouchedFaceName = new FontResolver()
+                .ResolveTypeface(familyName, isBold: false, isItalic: false).FaceName;
+
+            Assert.Equal(expectedFaceName, untouchedFaceName);
+        }
+
+        [Fact]
+        public async Task ConcurrentConstructionAndLocalFontResolution_DoesNotThrow()
+        {
+            // Regression test for a race between FontResolver's system-font initialization
+            // and instance construction/local-font lookups running concurrently across many
+            // threads, simulating many PdfGenerator instances (one per thread) in concurrent
+            // use.
+            var tasks = Enumerable.Range(0, 50).Select(_ => Task.Run(() =>
+            {
+                for (var i = 0; i < 20; i++)
+                {
+                    var resolver = new FontResolver();
+                    var familyName = BundledFonts.GetOrRegisterKnownFamily(resolver);
+                    var info = resolver.ResolveTypeface(familyName, isBold: false, isItalic: false);
+
+                    Assert.NotNull(info);
+                    Assert.True(resolver.HasFont(info.FaceName));
+
+                    var bytes = resolver.GetFont(info.FaceName);
+                    Assert.True(bytes.Length > 0);
+                }
+            }));
+
+            await Task.WhenAll(tasks);
         }
     }
 }
