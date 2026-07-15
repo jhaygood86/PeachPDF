@@ -127,6 +127,7 @@ namespace PeachPDF.CSS
         public static readonly string GlyphOrientationHorizontal = "glyph-orientation-horizontal";
         public static readonly string GlyphOrientationVertical = "glyph-orientation-vertical";
         public static readonly string Height = "height";
+        public static readonly string Hyphens = "hyphens";
         public static readonly string ImeMode = "ime-mode";
         public static readonly string JustifyContent = "justify-content";
         public static readonly string LayoutGrid = "layout-grid";

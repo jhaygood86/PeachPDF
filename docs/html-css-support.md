@@ -231,7 +231,7 @@ Percentages are relative to the border-box width (horizontal radius) and height 
 | `font-family` | [font-family](https://developer.mozilla.org/en-US/docs/Web/CSS/font-family) | Full support; generic families (`serif`, `sans-serif`, `monospace`) resolve to system fonts |
 | `font-size` | [font-size](https://developer.mozilla.org/en-US/docs/Web/CSS/font-size) | Full support including absolute sizes (`medium`, `large`, etc.), relative sizes (`smaller`, `larger`), lengths, and percentages |
 | `font-style` | [font-style](https://developer.mozilla.org/en-US/docs/Web/CSS/font-style) | `normal`, `italic`, `oblique` |
-| `font-variant` | [font-variant](https://developer.mozilla.org/en-US/docs/Web/CSS/font-variant) | `normal` and `small-caps` |
+| `font-variant` | [font-variant](https://developer.mozilla.org/en-US/docs/Web/CSS/font-variant) | `normal` and `small-caps` are parsed and actually rendered: since PeachPDF has no OpenType shaping engine for real `smcp`/`c2sc` glyph substitution, `small-caps` is synthesized — originally-lowercase letters are upper-cased and drawn at a reduced size relative to the rest of the run. Non-standard/proprietary function-token values (e.g. Prince's `prince-opentype(...)`) are not recognized and resolve to `normal` |
 | `font-weight` | [font-weight](https://developer.mozilla.org/en-US/docs/Web/CSS/font-weight) | Keyword (`bold`, `normal`, `lighter`, `bolder`) and numeric (`100`–`900`) values |
 | `line-height` | [line-height](https://developer.mozilla.org/en-US/docs/Web/CSS/line-height) | Full support |
 | `vertical-align` | [vertical-align](https://developer.mozilla.org/en-US/docs/Web/CSS/vertical-align) | `baseline`, `sub`, `super`, `top`, `middle`, `bottom`, and length/percentage values |
@@ -241,6 +241,7 @@ Percentages are relative to the border-box width (horizontal radius) and height 
 | Property | MDN Reference | Notes |
 |----------|--------------|-------|
 | `direction` | [direction](https://developer.mozilla.org/en-US/docs/Web/CSS/direction) | `ltr` and `rtl` |
+| `hyphens` | [hyphens](https://developer.mozilla.org/en-US/docs/Web/CSS/hyphens) | `none`, `manual`, `auto` are parsed, cascaded, and inherited. `manual` and `auto` both honor an explicit soft hyphen (`&shy;`/U+00AD) as a line-break opportunity, and now correctly render a literal `-` glyph when that break is actually used (a break that's never used never shows one). `auto` additionally performs real pattern-based automatic hyphenation (Liang's algorithm, American-English pattern data) — but only when the text's language is known, per spec: PeachPDF reads `<html lang="...">` (`HtmlContainerInt.DocumentLanguage`), and a calling application can supply `PdfGenerateConfig.DefaultLanguage` as a fallback for documents that declare no language of their own. With no language available from either source, `auto` behaves like `manual` (no algorithmic hyphenation) rather than guessing. Only `en`/`en-*` are currently supported; other languages fall back to the same no-op |
 | `text-align` | [text-align](https://developer.mozilla.org/en-US/docs/Web/CSS/text-align) | `left`, `right`, `center`, `justify` |
 | `text-decoration` | [text-decoration](https://developer.mozilla.org/en-US/docs/Web/CSS/text-decoration) | Shorthand supported |
 | `text-decoration-color` | [text-decoration-color](https://developer.mozilla.org/en-US/docs/Web/CSS/text-decoration-color) | Full support |
@@ -285,6 +286,23 @@ CSS Flexbox Level 1 (`display: flex` / `inline-flex`) is supported, including mu
 | `gap` / `row-gap` / `column-gap` | [gap](https://developer.mozilla.org/en-US/docs/Web/CSS/gap) | Full support on flex containers |
 | `margin` auto values | [margin](https://developer.mozilla.org/en-US/docs/Web/CSS/margin) | `auto` on a main-axis margin absorbs free space on that line (e.g. `margin-left: auto` to push a flex item to the end) |
 
+### Multi-column Layout
+
+CSS Multi-column Layout (`column-count`/`column-width`/`columns`) is supported with one deliberate simplification: children are fragmented at whole-child granularity, never split partway through — a single paragraph always moves to the next column/page as one atomic unit rather than having some of its lines flow into one column and the rest into the next. For content made of many short block-level children (dictionary entries, list items, cards — the common real-world shape), this produces correct-looking column geometry. True inline-level fragmentation (splitting one element's own line boxes across a column boundary) is not implemented.
+
+| Property | MDN Reference | Notes |
+|----------|--------------|-------|
+| `column-count` | [column-count](https://developer.mozilla.org/en-US/docs/Web/CSS/column-count) | Full support |
+| `column-width` | [column-width](https://developer.mozilla.org/en-US/docs/Web/CSS/column-width) | Full support; resolves to as many columns as fit at at-least this width |
+| `columns` | [columns](https://developer.mozilla.org/en-US/docs/Web/CSS/columns) | Shorthand for `column-width` and `column-count`, in either order |
+| `column-gap` | [column-gap](https://developer.mozilla.org/en-US/docs/Web/CSS/column-gap) | Same underlying property as flexbox/grid's `gap`. When left unset, resolves to `1em` (matching real-world browser behavior for multicol, historically distinct from flex/grid's `0` default) rather than the shared field's own default |
+| `column-rule` | [column-rule](https://developer.mozilla.org/en-US/docs/Web/CSS/column-rule) | Shorthand for `column-rule-width`/`column-rule-style`/`column-rule-color`; renders as a real vertical line between columns, one segment per page-row the container spans |
+| `column-rule-width` | [column-rule-width](https://developer.mozilla.org/en-US/docs/Web/CSS/column-rule-width) | Full support, including `thin`/`medium`/`thick` |
+| `column-rule-style` | [column-rule-style](https://developer.mozilla.org/en-US/docs/Web/CSS/column-rule-style) | `solid`, `dashed`, `dotted`; `double`/`groove`/`ridge`/`inset`/`outset` render as `solid` |
+| `column-rule-color` | [column-rule-color](https://developer.mozilla.org/en-US/docs/Web/CSS/column-rule-color) | Full support, including `currentcolor` |
+| `column-fill` | [column-fill](https://developer.mozilla.org/en-US/docs/Web/CSS/column-fill) | `balance` (the default) is solved per row via a binary search for the minimum column height that still packs as many children into the row as the full page budget would — tighter than a single closed-form estimate, especially with unevenly-sized children, though still constrained to whole-child (never split) placement. `auto` fills each column to capacity before starting the next |
+| `column-span` | [column-span](https://developer.mozilla.org/en-US/docs/Web/CSS/column-span) | Parsed and accepted but has no effect — a `column-span: all` element does not yet break out of the column flow |
+
 ### Positioning
 
 Used with `position: relative`, `absolute`, or `fixed`.
@@ -314,6 +332,8 @@ These properties control how content breaks across PDF pages. Both the legacy `p
 | `break-before` / `page-break-before` | [break-before](https://developer.mozilla.org/en-US/docs/Web/CSS/break-before) | `auto`, `always`, `page`, `avoid` |
 | `break-after` / `page-break-after` | [break-after](https://developer.mozilla.org/en-US/docs/Web/CSS/break-after) | `auto`, `always`, `page`, `avoid` |
 | `break-inside` / `page-break-inside` | [break-inside](https://developer.mozilla.org/en-US/docs/Web/CSS/break-inside) | `auto`, `avoid` |
+| `orphans` | [orphans](https://developer.mozilla.org/en-US/docs/Web/CSS/orphans) | Enforced in plain (non-multi-column) block flow: if fewer than `orphans` lines of a paragraph-like box would precede a page boundary, the whole box is pushed to the next page — a coarser-than-spec approximation (a spec-conformant UA pulls only the minimum lines needed across the break; PeachPDF moves the entire box, since it has no per-line fragmentation) that's skipped when the box itself is taller than one page (pushing it whole can't help there). Has no effect inside [Multi-column Layout](#multi-column-layout) — its atomic whole-child-only fragmentation already structurally prevents an orphaned/widowed line, since a child is never split across a column in the first place |
+| `widows` | [widows](https://developer.mozilla.org/en-US/docs/Web/CSS/widows) | Same mechanism and caveats as `orphans`, for the trailing side of a page break |
 
 ### Tables
 
@@ -344,7 +364,7 @@ These properties control how content breaks across PDF pages. Both the legacy `p
 | `@keyframes` | Not supported |
 | `@supports` | Not supported |
 | `@layer` | Not supported |
-| `@import` | Not supported |
+| `@import` | Full support; the imported stylesheet is fetched and its rules merged in place, including transitively nested `@import`s (with circular-import protection). Relative `url()` references inside an imported stylesheet — including `@font-face src` — resolve against that stylesheet's own location, not the document's |
 
 ---
 
@@ -560,7 +580,7 @@ Margin boxes are sub-rules of `@page` that place text inside the page margins (o
 
 ### Named pages
 
-The CSS `page` property on an element activates a named `@page` rule for all PDF pages that contain that element. This lets different parts of a document use different page styles (e.g., wider margins for an appendix, or a different running header for each chapter).
+The CSS `page` property on an element activates a named `@page` rule starting on the page containing that element — and, matching the CSS spec's propagation behavior, stays active on every subsequent page in the normal flow until a later element activates a different named page. This lets different parts of a document use different page styles (e.g., wider margins for an appendix, or a different running header per chapter, continuing correctly across a chapter's own multi-page span).
 
 ```css
 @page chapter {
@@ -581,9 +601,19 @@ div.chapter { page: chapter; }
 | Value | Behavior |
 |-------|---------|
 | `page: auto` (default) | Uses the base `@page { }` rule |
-| `page: <ident>` | Activates `@page <ident> { }` for pages containing this element |
+| `page: <ident>` | Activates `@page <ident> { }` starting on the page containing this element |
 
 If multiple elements with different `page` values appear on the same page, the last one in document order wins.
+
+An `@page` rule's selector may also list several comma-separated names, sharing one rule across all of them:
+
+```css
+@page chapter1, chapter2, chapter3 {
+  @top-center { content: "Running Header"; }
+}
+```
+
+Page names are case-sensitive (`page: Chapter` will not activate `@page chapter { }`).
 
 ### Named strings (`string-set` / `string()`)
 

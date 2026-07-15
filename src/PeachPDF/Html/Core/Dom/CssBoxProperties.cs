@@ -82,6 +82,7 @@ namespace PeachPDF.Html.Core.Dom
         private double _actualBorderLeftWidth = double.NaN;
         private double _actualBorderBottomWidth = double.NaN;
         private double _actualBorderRightWidth = double.NaN;
+        private double _actualColumnRuleWidth = double.NaN;
 
         /// <summary>
         /// the width of whitespace between words
@@ -94,6 +95,7 @@ namespace PeachPDF.Html.Core.Dom
         private RColor _actualBorderLeftColor = RColor.Empty;
         private RColor _actualBorderBottomColor = RColor.Empty;
         private RColor _actualBorderRightColor = RColor.Empty;
+        private RColor _actualColumnRuleColor = RColor.Empty;
         private RColor _actualBackgroundColor = RColor.Empty;
         private RFont? _actualFont;
         private string _display = "inline";
@@ -369,6 +371,14 @@ namespace PeachPDF.Html.Core.Dom
         public string BreakInside { get; set; } = CssConstants.Auto;
         public string BreakAfter { get; set; } = CssConstants.Auto;
 
+        // Parsed, cascaded, and inherited like any other CSS property, but currently have no effect on
+        // pagination: PeachPDF's block flow relies on paint-time per-page clipping (no explicit per-line
+        // page-break decision to arbitrate) and the multicol engine only fragments at whole-child
+        // granularity (see CssLayoutEngineColumns), so neither has a break point orphans/widows could
+        // apply to. Same posture as background-attachment elsewhere in this file.
+        public string Orphans { get; set; } = "2";
+        public string Widows { get; set; } = "2";
+
         public string Left { get; set; } = CssConstants.Auto;
 
         public string Top { get; set; } = CssConstants.Auto;
@@ -485,6 +495,14 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         public string WordBreak { get; set; } = "normal";
+
+        /// <summary>
+        /// <c>none</c>/<c>manual</c>/<c>auto</c>. <c>manual</c> and <c>auto</c> both honor an explicit
+        /// soft hyphen (U+00AD) as a line-break opportunity; only <c>auto</c> additionally implies
+        /// dictionary-based automatic hyphenation, which PeachPDF does not implement (see
+        /// docs/html-css-support.md) — so in practice <c>auto</c> behaves like <c>manual</c> here.
+        /// </summary>
+        public string Hyphens { get; set; } = "manual";
 
         public string? FontFamily { get; set; }
 
@@ -785,6 +803,25 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Gets the actual column-rule width (the line drawn between columns in a multi-column container)
+        /// </summary>
+        public double ActualColumnRuleWidth
+        {
+            get
+            {
+                if (!double.IsNaN(_actualColumnRuleWidth)) return _actualColumnRuleWidth;
+
+                _actualColumnRuleWidth = CssValueParser.GetActualBorderWidth(ColumnRuleWidth, this);
+                if (string.IsNullOrEmpty(ColumnRuleStyle) || ColumnRuleStyle == CssConstants.None)
+                {
+                    _actualColumnRuleWidth = 0f;
+                }
+
+                return _actualColumnRuleWidth;
+            }
+        }
+
+        /// <summary>
         /// Gets the actual top border Color
         /// </summary>
         public RColor ActualBorderTopColor
@@ -843,6 +880,21 @@ namespace PeachPDF.Html.Core.Dom
                     _actualBorderRightColor = GetActualColor(BorderRightColor);
                 }
                 return _actualBorderRightColor;
+            }
+        }
+
+        /// <summary>
+        /// Gets the actual column-rule color (the line drawn between columns in a multi-column container)
+        /// </summary>
+        public RColor ActualColumnRuleColor
+        {
+            get
+            {
+                if (_actualColumnRuleColor.IsEmpty)
+                {
+                    _actualColumnRuleColor = GetActualColor(ColumnRuleColor);
+                }
+                return _actualColumnRuleColor;
             }
         }
 
@@ -1087,24 +1139,7 @@ namespace PeachPDF.Html.Core.Dom
                     FontSize = CssConstants.FontSize.ToString(CultureInfo.InvariantCulture) + "pt";
                 }
 
-                RFontStyle st = RFontStyle.Regular;
-
-                if (FontStyle is CssConstants.Italic or CssConstants.Oblique)
-                {
-                    st |= RFontStyle.Italic;
-                }
-
-                if (int.TryParse(FontWeight, out var fontWeightValue))
-                {
-                    if (fontWeightValue >= 700)
-                    {
-                        st |= RFontStyle.Bold;
-                    }
-                }
-                else if (FontWeight is CssConstants.Bold or CssConstants.Bolder)
-                {
-                    st |= RFontStyle.Bold;
-                }
+                var st = GetActualFontStyleFlags();
 
                 double fsize;
                 double parentSize = CssConstants.FontSize;
@@ -1122,24 +1157,7 @@ namespace PeachPDF.Html.Core.Dom
                     remSize = CssConstants.FontSize;
                 }
 
-                fsize = FontSize switch
-                {
-                    CssConstants.Medium => CssConstants.FontSize,
-                    CssConstants.XXSmall => CssConstants.FontSize - 4,
-                    CssConstants.XSmall => CssConstants.FontSize - 3,
-                    CssConstants.Small => CssConstants.FontSize - 2,
-                    CssConstants.Large => CssConstants.FontSize + 2,
-                    CssConstants.XLarge => CssConstants.FontSize + 3,
-                    CssConstants.XXLarge => CssConstants.FontSize + 4,
-                    CssConstants.Smaller => parentSize - 2,
-                    CssConstants.Larger => parentSize + 2,
-                    _ => CssValueParser.ParseLength(FontSize, parentSize, parentSize, remSize, null, true, true)
-                };
-
-                if (fsize <= 1f)
-                {
-                    fsize = CssConstants.FontSize;
-                }
+                fsize = FontSizeResolver.Resolve(FontSize, parentSize, remSize);
 
                 _actualFont = GetCachedFont(FontFamily, fsize, st) ?? GetCachedFont(CssConstants.DefaultFont, fsize, st);
 
@@ -1149,6 +1167,65 @@ namespace PeachPDF.Html.Core.Dom
                 }
 
                 return _actualFont!;
+            }
+        }
+
+        /// <summary>
+        /// Computes the <see cref="RFontStyle"/> flags (italic/bold) for this box's own
+        /// <see cref="FontStyle"/>/<see cref="FontWeight"/> — shared between <see cref="ActualFont"/> and
+        /// any derived font (e.g. a synthesized small-caps run) that needs the same style bits at a
+        /// different size, so the two never drift apart.
+        /// </summary>
+        private RFontStyle GetActualFontStyleFlags()
+        {
+            var st = RFontStyle.Regular;
+
+            if (FontStyle is CssConstants.Italic or CssConstants.Oblique)
+            {
+                st |= RFontStyle.Italic;
+            }
+
+            if (int.TryParse(FontWeight, out var fontWeightValue))
+            {
+                if (fontWeightValue >= 700)
+                {
+                    st |= RFontStyle.Bold;
+                }
+            }
+            else if (FontWeight is CssConstants.Bold or CssConstants.Bolder)
+            {
+                st |= RFontStyle.Bold;
+            }
+
+            return st;
+        }
+
+        /// <summary>
+        /// Size ratio applied to an originally-lowercase run when synthesizing
+        /// <c>font-variant: small-caps</c> (see <see cref="ActualSmallCapsFont"/>, <see cref="CssRect.FontSizeScale"/>).
+        /// Not derived from any real OpenType metric (PeachPDF has no shaping engine to measure a font's
+        /// actual <c>smcp</c> cap-height) — a representative approximation, tuned by eye.
+        /// </summary>
+        public const double SmallCapsFontScale = 0.72;
+
+        private RFont? _smallCapsFont;
+
+        /// <summary>
+        /// A cached font derived from <see cref="ActualFont"/> at a reduced size (same family/style),
+        /// used to synthesize <c>font-variant: small-caps</c> — PeachPDF has no OpenType shaping engine
+        /// to do real <c>smcp</c>/<c>c2sc</c> glyph substitution, so originally-lowercase runs are
+        /// upper-cased and drawn at this smaller size instead. See <see cref="CssBox.ParseToWords"/>.
+        /// </summary>
+        public RFont ActualSmallCapsFont
+        {
+            get
+            {
+                if (_smallCapsFont != null) return _smallCapsFont;
+
+                var font = ActualFont;
+                _smallCapsFont = GetCachedFont(FontFamily!, font.Size * SmallCapsFontScale, GetActualFontStyleFlags())
+                                 ?? font;
+                return _smallCapsFont;
             }
         }
 
@@ -1243,6 +1320,24 @@ namespace PeachPDF.Html.Core.Dom
         public string FlexRowGap    { get; set; } = "0";
         public string FlexColumnGap { get; set; } = "0";
 
+        // Multi-column layout container properties. column-gap itself is shared with flex/grid (the
+        // same CSS property, see FlexColumnGap above); these are the multicol-only ones.
+        public string ColumnCount     { get; set; } = CssConstants.Auto;
+        public string ColumnWidth     { get; set; } = CssConstants.Auto;
+        public string ColumnFill      { get; set; } = "balance";
+        public string ColumnSpan      { get; set; } = CssConstants.None;
+        public string ColumnRuleWidth { get; set; } = CssConstants.Medium;
+        public string ColumnRuleStyle { get; set; } = CssConstants.None;
+        public string ColumnRuleColor { get; set; } = CssConstants.CurrentColor;
+
+        /// <summary>
+        /// Whether this box establishes a CSS multi-column formatting context, per spec: <c>column-width</c>
+        /// is not <c>auto</c>, or <c>column-count</c> is not <c>auto</c>.
+        /// </summary>
+        public bool EstablishesMultiColumnContext =>
+            (!string.IsNullOrEmpty(ColumnCount) && ColumnCount != CssConstants.Auto) ||
+            (!string.IsNullOrEmpty(ColumnWidth) && ColumnWidth != CssConstants.Auto);
+
         /// <summary>
         /// Get the parent of this css properties instance.
         /// </summary>
@@ -1250,12 +1345,14 @@ namespace PeachPDF.Html.Core.Dom
         protected abstract CssBoxProperties? GetParent();
 
         /// <summary>
-        /// Gets the height of the font in the specified units
+        /// Gets the size of 1em in the specified units, per spec: an element's own computed
+        /// font-size, not the font's line-spacing metric (ascent+descent+leading), which is
+        /// typically 15-30%+ larger and would inflate every em-based margin/padding/line-height.
         /// </summary>
         /// <returns></returns>
         public double GetEmHeight()
         {
-            return ActualFont.Height;
+            return ActualFont.Size;
         }
 
         /// <summary>
@@ -1357,6 +1454,9 @@ namespace PeachPDF.Html.Core.Dom
             WordBreak = p.WordBreak;
             Direction = p.Direction;
             BoxSizing = p.BoxSizing;
+            Orphans = p.Orphans;
+            Widows = p.Widows;
+            Hyphens = p.Hyphens;
 
             if (!everything) return;
 

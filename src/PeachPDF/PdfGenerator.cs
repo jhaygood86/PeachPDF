@@ -239,8 +239,27 @@ namespace PeachPDF
             {
                 pageNumber++;
 
-                var pageY = -scrollOffset;
+                // Content's own coordinate system starts at container.MarginTop, not 0 (see
+                // container.Location = new XPoint(MarginLeft, MarginTop) in SetContent), so a page's
+                // true content range is [pageY+MarginTop, pageY+MarginTop+PageSize.Height), not
+                // [pageY, pageY+PageSize.Height) - omitting +MarginTop here misattributes content
+                // landing in that leading margin-sized band to this page when it's still visually on
+                // the previous one (only visible via multi-column's atomic "may overrun its nominal
+                // row boundary" placement, since ordinary block flow never lands content there).
+                var pageY = -scrollOffset + container.MarginTop;
                 var applicableRule = SelectPageRule(
+                    container.PageRules,
+                    pageNumber,
+                    container.NamedPageElements,
+                    pageY,
+                    container.PageSize.Height);
+                var applicableMargins = SelectApplicableMarginRules(
+                    container.PageRules,
+                    pageNumber,
+                    container.NamedPageElements,
+                    pageY,
+                    container.PageSize.Height);
+                var applicablePageStyle = SelectApplicablePageStyle(
                     container.PageRules,
                     pageNumber,
                     container.NamedPageElements,
@@ -276,7 +295,7 @@ namespace PeachPDF
                 // Restore to pre-content state so margin boxes render in absolute page coordinates
                 g.Restore(preContentState);
 
-                if (applicableRule?.Margins.Any() == true)
+                if (applicableMargins.Count > 0)
                 {
                     MarginBoxRenderer.Render(
                         g,
@@ -285,12 +304,13 @@ namespace PeachPDF
                         mT,
                         mR,
                         mB,
-                        applicableRule,
+                        applicableMargins,
                         pageNumber,
                         totalPages,
                         pageY,
                         container.NamedStrings,
-                        _pdfSharpAdapter);
+                        _pdfSharpAdapter,
+                        applicablePageStyle);
                 }
 
                 scrollOffset -= container.PageSize.Height;
@@ -318,7 +338,7 @@ namespace PeachPDF
             if (metadata.Date.HasValue)                   info.CreationDate = metadata.Date.Value;
         }
 
-        private static async Task SetContent(HtmlContainer container, PdfGenerateConfig config, string html, PeachPdfCssContent? cssData, XSize orgPageSize)
+        internal static async Task SetContent(HtmlContainer container, PdfGenerateConfig config, string html, PeachPdfCssContent? cssData, XSize orgPageSize)
         {
             container.MarginBottom = config.MarginBottom;
             container.MarginLeft = config.MarginLeft;
@@ -326,6 +346,13 @@ namespace PeachPDF
             container.MarginTop = config.MarginTop;
 
             await container.SetHtml(html, cssData?.CssData);
+
+            // The document's own <html lang> always wins; config.DefaultLanguage only fills in when the
+            // document declares none — PeachPDF itself never guesses a language on its own initiative.
+            if (string.IsNullOrEmpty(container.HtmlContainerInt.DocumentLanguage) && !string.IsNullOrEmpty(config.DefaultLanguage))
+            {
+                container.HtmlContainerInt.DocumentLanguage = config.DefaultLanguage;
+            }
 
             // Just in case @page rules got applied
             var pageSize = new XSize(orgPageSize.Width - container.MarginLeft - container.MarginRight, orgPageSize.Height - container.MarginTop - container.MarginBottom);
@@ -380,53 +407,196 @@ namespace PeachPDF
         /// Selects the most specific @page rule for the given page.
         /// Priority (last wins): base → named page → :right/:left → :first.
         /// </summary>
-        private static PageRule? SelectPageRule(
+        internal static PageRule? SelectPageRule(
             IReadOnlyList<PageRule> rules,
             int pageNumber,
             IReadOnlyList<NamedPageElement> namedPageElements,
             double pageY,
             double pageHeight)
         {
-            if (rules.Count == 0)
-                return null;
+            var ordered = GetOrderedApplicableRules(rules, pageNumber, namedPageElements, pageY, pageHeight);
+            return ordered.Count > 0 ? ordered[^1] : null;
+        }
 
-            PageRule? baseRule = null;
-            PageRule? overrideRule = null;
+        /// <summary>
+        /// Resolves the effective set of margin-box declarations (<c>@top-left</c>, <c>@bottom-right</c>,
+        /// etc.) for the given page — the CSS cascade for <c>@page</c> rules is per-declaration, not
+        /// per-rule, so a page can (and, in css4.pub's real dictionary CSS, does) simultaneously match a
+        /// low-specificity base named-page rule that defines <c>@top-left/@top-center/@top-right</c> AND
+        /// a higher-specificity compound <c>name:left</c>/<c>name:right</c> rule that only defines
+        /// <c>@bottom-left</c>/<c>@bottom-right</c>/<c>@right-top</c> — both sets of margin boxes must
+        /// render together (merged by box name, with a more specific rule's own definition of a given
+        /// box name winning over a less specific rule's), not just whichever single rule
+        /// <see cref="SelectPageRule"/> would pick as "the" applicable one for page-level properties like
+        /// <c>margin</c>/<c>size</c>.
+        /// </summary>
+        internal static IReadOnlyList<MarginStyleRule> SelectApplicableMarginRules(
+            IReadOnlyList<PageRule> rules,
+            int pageNumber,
+            IReadOnlyList<NamedPageElement> namedPageElements,
+            double pageY,
+            double pageHeight)
+        {
+            var ordered = GetOrderedApplicableRules(rules, pageNumber, namedPageElements, pageY, pageHeight);
+            var merged = new Dictionary<string, MarginStyleRule>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var rule in rules)
+            foreach (var rule in ordered)
             {
-                var selector = rule.Selector?.Text?.Trim() ?? "";
-                var selectorLower = selector.ToLowerInvariant();
+                foreach (var margin in rule.Margins)
+                {
+                    var name = margin.Selector?.Text?.Trim().ToLowerInvariant();
+                    if (string.IsNullOrEmpty(name)) continue;
 
-                if (string.IsNullOrEmpty(selector))
-                {
-                    baseRule = rule;
-                }
-                else if (!selector.StartsWith(":"))
-                {
-                    // Named page rule — matches if any element with page: <name> is on this page
-                    var elementOnPage = namedPageElements.Any(e =>
-                        e.Name == selectorLower &&
-                        e.Y >= pageY &&
-                        e.Y < pageY + pageHeight);
-                    if (elementOnPage)
-                        overrideRule = rule;
-                }
-                else if (selectorLower == ":right" && pageNumber % 2 != 0)
-                {
-                    overrideRule = rule;
-                }
-                else if (selectorLower == ":left" && pageNumber % 2 == 0)
-                {
-                    overrideRule = rule;
-                }
-                else if (selectorLower == ":first" && pageNumber == 1)
-                {
-                    overrideRule = rule;
+                    if (!merged.TryGetValue(name, out var mergedRule))
+                    {
+                        mergedRule = new MarginStyleRule(margin.Parser) { Selector = margin.Selector };
+                        merged[name] = mergedRule;
+                    }
+
+                    // Per-declaration merge, not whole-rule replacement: a later (higher-precedence)
+                    // rule's own properties win, but properties it doesn't redeclare survive from an
+                    // earlier, less-specific rule for the same box name - matching real CSS cascade
+                    // (and Prince), which resolves @page per-declaration like any other stylesheet rule.
+                    MergeDeclarationsInto(mergedRule.Style, margin.Style);
                 }
             }
 
-            return overrideRule ?? baseRule;
+            return merged.Values.ToList();
+        }
+
+        /// <summary>
+        /// Resolves the effective, per-declaration-merged page-context style (the properties declared
+        /// directly on matching <c>@page</c> rules themselves, not inside any margin-box block) for the
+        /// given page. Per CSS Paged Media, margin boxes inherit these when they don't declare a property
+        /// themselves - see <see cref="MarginBoxRenderer.Render"/>'s <c>pageStyle</c> parameter. Uses the
+        /// same ascending-precedence merge as <see cref="SelectApplicableMarginRules"/>, independently of
+        /// <see cref="SelectPageRule"/>'s single-winner selection (still used, unchanged, for page-level
+        /// <c>margin</c>/<c>size</c> via <see cref="ResolvePageMargins"/>).
+        /// </summary>
+        internal static StyleDeclaration? SelectApplicablePageStyle(
+            IReadOnlyList<PageRule> rules,
+            int pageNumber,
+            IReadOnlyList<NamedPageElement> namedPageElements,
+            double pageY,
+            double pageHeight)
+        {
+            var ordered = GetOrderedApplicableRules(rules, pageNumber, namedPageElements, pageY, pageHeight);
+            StyleDeclaration? merged = null;
+
+            foreach (var rule in ordered)
+            {
+                if (rule.Style is null) continue;
+
+                merged ??= new StyleDeclaration(rule.Parser);
+                MergeDeclarationsInto(merged, rule.Style);
+            }
+
+            return merged;
+        }
+
+        /// <summary>
+        /// Copies every declared property from <paramref name="source"/> into <paramref name="target"/>,
+        /// overwriting same-named properties already present - the shared per-declaration merge step for
+        /// <see cref="SelectApplicableMarginRules"/> and <see cref="SelectApplicablePageStyle"/>.
+        /// </summary>
+        private static void MergeDeclarationsInto(StyleDeclaration target, StyleDeclaration source)
+        {
+            foreach (var property in source.Declarations)
+            {
+                target.SetProperty(property);
+            }
+        }
+
+        /// <summary>
+        /// Every <c>@page</c> rule that applies to this page, in ascending cascade precedence (base rule
+        /// first if present, then named/pseudo matches from lowest to highest specificity score —
+        /// preserving declaration order among equal scores, so a later-declared rule still wins ties —
+        /// then <c>:first</c> last, since it always outranks everything else per spec). Shared by
+        /// <see cref="SelectPageRule"/> (single-winner page-level properties) and
+        /// <see cref="SelectApplicableMarginRules"/> (per-margin-box-name cascade merge).
+        /// </summary>
+        private static List<PageRule> GetOrderedApplicableRules(
+            IReadOnlyList<PageRule> rules,
+            int pageNumber,
+            IReadOnlyList<NamedPageElement> namedPageElements,
+            double pageY,
+            double pageHeight)
+        {
+            var result = new List<PageRule>();
+            if (rules.Count == 0)
+                return result;
+
+            PageRule? baseRule = null;
+            PageRule? firstRule = null;
+            var matches = new List<(PageRule Rule, int Score)>();
+
+            // The CSS "page" property propagates forward through the normal flow until a later element
+            // sets a different one — it isn't a one-page-only tag. So the name in effect for this page
+            // is whichever named-page assignment most recently took effect at or before this page's end
+            // (the highest Y that's still < pageY + pageHeight), not just an assignment whose own Y
+            // happens to fall inside this specific page's range. The small epsilon guards against an
+            // element's Y and the page boundary being computed via independent accumulation paths that
+            // can differ by a hairline of floating-point noise (see MarginBoxRenderer.PageBoundaryEpsilon).
+            var activeNamedPage = namedPageElements
+                .Where(e => e.Y < pageY + pageHeight - MarginBoxRenderer.PageBoundaryEpsilon)
+                .OrderByDescending(e => e.Y)
+                .Select(e => e.Name)
+                .FirstOrDefault();
+
+            foreach (var rule in rules)
+            {
+                var entries = (rule.Selector as PageSelector)?.Entries;
+
+                if (entries is not { Count: > 0 })
+                {
+                    baseRule = rule;
+                    continue;
+                }
+
+                foreach (var entry in entries)
+                {
+                    // Page names are case-sensitive CSS custom-idents; pseudo-class keywords
+                    // (first/left/right) are matched case-insensitively.
+                    var nameMatches = entry.Name is null || entry.Name == activeNamedPage;
+                    var pseudo = entry.Pseudo?.ToLowerInvariant();
+                    var isFirst = pseudo == "first";
+
+                    // ":first" (optionally combined with a matching name) always outranks every other
+                    // selector shape, regardless of declaration order — per the CSS Paged Media spec,
+                    // this is a special case, not part of the additive name/pseudo specificity score
+                    // below (a compound "chapter1:first" still requires the name to match; a bare
+                    // ":first" applies unconditionally on page 1).
+                    if (isFirst)
+                    {
+                        if (nameMatches && pageNumber == 1)
+                            firstRule = rule;
+                        continue;
+                    }
+
+                    var pseudoMatches = pseudo switch
+                    {
+                        null => true,
+                        "left" => pageNumber % 2 == 0,
+                        "right" => pageNumber % 2 != 0,
+                        _ => false
+                    };
+
+                    if (!nameMatches || !pseudoMatches) continue;
+
+                    // Specificity: name+pseudo(left/right) > name-alone > pseudo(left/right)-alone.
+                    var score = (entry.Name != null ? 2 : 0) + (entry.Pseudo != null ? 1 : 0);
+                    matches.Add((rule, score));
+                }
+            }
+
+            if (baseRule != null) result.Add(baseRule);
+            // OrderBy is a stable sort — equal-score matches keep their original (declaration) order, so
+            // the later-declared one still ends up last (highest precedence), matching the prior single-
+            // winner behavior's ">=" tie-break.
+            result.AddRange(matches.OrderBy(m => m.Score).Select(m => m.Rule));
+            if (firstRule != null) result.Add(firstRule);
+
+            return result;
         }
 
         private static (double L, double T, double R, double B) ResolvePageMargins(

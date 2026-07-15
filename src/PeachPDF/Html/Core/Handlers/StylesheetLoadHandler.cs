@@ -32,20 +32,38 @@ namespace PeachPDF.Html.Core.Handlers
         /// </summary>
         /// <param name="htmlContainer">the container of the html to handle load stylesheet for</param>
         /// <param name="src">the file path or uri to load the stylesheet from</param>
-        /// <returns>the stylesheet string</returns>
-        public static async Task<string?> LoadStylesheet(HtmlContainerInt htmlContainer, string src)
+        /// <param name="importingBaseUri">
+        /// When resolving a reference found inside another already-loaded stylesheet (e.g. a nested
+        /// <c>@import</c> or an <c>@font-face src</c>), the resolved location of that stylesheet. Relative
+        /// references in fetched CSS always resolve against the stylesheet's own URL, not the document's
+        /// base — so when this is given it takes precedence over the document's &lt;base&gt;/adapter base.
+        /// Null for top-level loads (a document's own &lt;link&gt;/&lt;style&gt;), which keep resolving
+        /// against the document base as before.
+        /// </param>
+        /// <returns>the stylesheet string, and the absolute URI it was resolved/fetched from (both null on failure)</returns>
+        public static async Task<(string? Content, RUri? ResolvedUri)> LoadStylesheet(HtmlContainerInt htmlContainer, string src, RUri? importingBaseUri = null)
         {
             try
             {
-                var baseElement = DomUtils.GetBoxByTagName(htmlContainer.Root, "base");
-                var baseUrl = "";
+                RUri? baseUri;
 
-                if (baseElement is not null)
+                if (importingBaseUri is not null)
                 {
-                    baseUrl = baseElement.HtmlTag!.TryGetAttribute("href", "");
+                    baseUri = importingBaseUri;
+                }
+                else
+                {
+                    var baseElement = DomUtils.GetBoxByTagName(htmlContainer.Root, "base");
+                    var baseUrl = "";
+
+                    if (baseElement is not null)
+                    {
+                        baseUrl = baseElement.HtmlTag!.TryGetAttribute("href", "");
+                    }
+
+                    baseUri = string.IsNullOrWhiteSpace(baseUrl) ? htmlContainer.Adapter.BaseUri : new RUri(baseUrl);
                 }
 
-                var baseUri = string.IsNullOrWhiteSpace(baseUrl) ? htmlContainer.Adapter.BaseUri : new RUri(baseUrl);
                 var href = baseUri is null ? src : new RUri(baseUri, src).AbsoluteUri;
 
                 var uri = CommonUtils.TryGetUri(href)!;
@@ -83,22 +101,22 @@ namespace PeachPDF.Html.Core.Handlers
 
                 if (isInvalidNetworkResponse)
                 {
-                    return string.Empty;
+                    return (string.Empty, uri);
                 }
 
                 if (stream is null)
                 {
                     htmlContainer.ReportError(HtmlRenderErrorType.CssParsing, "No stylesheet found by path: " + src);
-                    return string.Empty;
+                    return (string.Empty, uri);
                 }
 
                 using var sr = new StreamReader(stream);
-                return await sr.ReadToEndAsync();
+                return (await sr.ReadToEndAsync(), uri);
             }
             catch (Exception ex)
             {
                 htmlContainer.ReportError(HtmlRenderErrorType.CssParsing, "Exception in handling stylesheet source", ex);
-                return null;
+                return (null, null);
             }
         }
     }

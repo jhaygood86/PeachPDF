@@ -528,21 +528,48 @@ namespace PeachPDF.CSS
 
         private PageSelector CreatePageSelector(ref Token token)
         {
-            PageSelector selector;
+            // Parses the CSS Paged Media selector grammar per comma-separated entry: an optional
+            // <ident> page name followed by an optional :<ident> pseudo-class, e.g.
+            // "@page chapter1:left, chapter2:left { ... }" (name+pseudo), "@page chapter { ... }"
+            // (name only), "@page :first { ... }" (pseudo only). Page names are case-sensitive
+            // custom-idents; pseudo-class keywords (first/left/right) are matched case-insensitively
+            // by the caller. Chaining multiple pseudo-classes on one entry (e.g. ":first:left") isn't
+            // supported — out of scope, not used by any known real-world stylesheet.
+            var entries = new List<PageSelectorEntry>();
 
-            if (token.Type == TokenType.Colon)
+            while (true)
             {
-                // Add the pseudo class selector
-                token = NextToken();
-                selector = token.Type == TokenType.Ident ? new PageSelector(token.Data) : new PageSelector();
+                string name = null;
+                string pseudo = null;
 
-                //Skip past the pseudo class identifier
+                if (token.Type == TokenType.Ident)
+                {
+                    name = token.Data;
+                    token = NextToken();
+                }
+
+                if (token.Type == TokenType.Colon)
+                {
+                    token = NextToken();
+                    if (token.Type == TokenType.Ident)
+                    {
+                        pseudo = token.Data;
+                        token = NextToken();
+                    }
+                }
+
+                if (name != null || pseudo != null)
+                    entries.Add(new PageSelectorEntry(name, pseudo));
+
+                ParseComments(ref token);
+
+                if (token.Type != TokenType.Comma) break;
+
                 token = NextToken();
+                ParseComments(ref token);
             }
-            else
-            {
-                selector = new PageSelector();
-            }
+
+            var selector = new PageSelector(entries);
 
             //var start = token.Position;
 

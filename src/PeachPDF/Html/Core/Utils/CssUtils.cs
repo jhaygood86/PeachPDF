@@ -71,6 +71,9 @@ namespace PeachPDF.Html.Core.Utils
                 "break-after" => cssBox.BreakAfter,
                 "break-before" => cssBox.BreakBefore,
                 "break-inside" => cssBox.BreakInside,
+                "orphans" => cssBox.Orphans,
+                "widows" => cssBox.Widows,
+                "hyphens" => cssBox.Hyphens,
                 "border-top-left-radius" => cssBox.BorderTopLeftRadius,
                 "border-top-right-radius" => cssBox.BorderTopRightRadius,
                 "border-bottom-right-radius" => cssBox.BorderBottomRightRadius,
@@ -154,6 +157,13 @@ namespace PeachPDF.Html.Core.Utils
                 "order"           => cssBox.Order,
                 "row-gap"         => cssBox.FlexRowGap,
                 "column-gap"      => cssBox.FlexColumnGap,
+                "column-count"      => cssBox.ColumnCount,
+                "column-width"      => cssBox.ColumnWidth,
+                "column-fill"       => cssBox.ColumnFill,
+                "column-span"       => cssBox.ColumnSpan,
+                "column-rule-width" => cssBox.ColumnRuleWidth,
+                "column-rule-style" => cssBox.ColumnRuleStyle,
+                "column-rule-color" => cssBox.ColumnRuleColor,
                 _ => null
             };
         }
@@ -171,7 +181,7 @@ namespace PeachPDF.Html.Core.Utils
             "border-top-color", "border-top-style", "border-top-width",
             "border-top-left-radius", "border-top-right-radius",
             "bottom", "box-sizing",
-            "break-after", "break-before", "break-inside",
+            "break-after", "break-before", "break-inside", "orphans", "widows", "hyphens",
             "clear", "color", "content",
             "counter-increment", "counter-reset", "counter-set",
             "direction", "display",
@@ -196,6 +206,8 @@ namespace PeachPDF.Html.Core.Utils
             "flex", "flex-basis", "flex-direction", "flex-flow", "flex-grow", "flex-shrink", "flex-wrap",
             "justify-content", "order",
             "gap", "row-gap", "column-gap",
+            "columns", "column-count", "column-width", "column-fill", "column-span",
+            "column-rule", "column-rule-width", "column-rule-style", "column-rule-color",
         ];
 
         /// <summary>
@@ -444,6 +456,27 @@ namespace PeachPDF.Html.Core.Utils
                 case "break-inside":
                     cssBox.BreakInside = value;
                     break;
+                case "orphans":
+                    if (int.TryParse(value, out var orphans) && orphans >= 1)
+                    {
+                        cssBox.Orphans = value;
+                    }
+
+                    break;
+                case "widows":
+                    if (int.TryParse(value, out var widows) && widows >= 1)
+                    {
+                        cssBox.Widows = value;
+                    }
+
+                    break;
+                case "hyphens":
+                    if (value is CssConstants.None or "manual" or CssConstants.Auto)
+                    {
+                        cssBox.Hyphens = value;
+                    }
+
+                    break;
                 case "left":
                     cssBox.Left = value;
                     break;
@@ -676,6 +709,61 @@ namespace PeachPDF.Html.Core.Utils
                 case "column-gap":
                     cssBox.FlexColumnGap = value;
                     break;
+                case "column-count":
+                    if (value is CssConstants.Auto || (int.TryParse(value, out var columnCount) && columnCount > 0))
+                    {
+                        cssBox.ColumnCount = value;
+                    }
+
+                    break;
+                case "column-width":
+                    if (value is CssConstants.Auto || CssValueParser.IsValidLength(value))
+                    {
+                        cssBox.ColumnWidth = value;
+                    }
+
+                    break;
+                case "columns":
+                    SetColumnsShorthand(cssBox, value);
+                    break;
+                case "column-fill":
+                    if (value is CssConstants.Auto or "balance")
+                    {
+                        cssBox.ColumnFill = value;
+                    }
+
+                    break;
+                case "column-span":
+                    if (value is CssConstants.None or "all")
+                    {
+                        cssBox.ColumnSpan = value;
+                    }
+
+                    break;
+                case "column-rule":
+                    SetColumnRuleShorthand(valueParser, cssBox, value);
+                    break;
+                case "column-rule-width":
+                    if (IsValidLengthProperty(value))
+                    {
+                        cssBox.ColumnRuleWidth = value;
+                    }
+
+                    break;
+                case "column-rule-style":
+                    if (IsValidBorderStyleProperty(value))
+                    {
+                        cssBox.ColumnRuleStyle = value;
+                    }
+
+                    break;
+                case "column-rule-color":
+                    if (IsValidColorProperty(valueParser, value))
+                    {
+                        cssBox.ColumnRuleColor = value;
+                    }
+
+                    break;
                 case "unicode-bidi":
                 case "background-attachment":
                 case "overflow-wrap":
@@ -736,6 +824,50 @@ namespace PeachPDF.Html.Core.Utils
             cssBox.FlexColumnGap = parts.Length > 1 ? parts[1] : parts[0];
         }
 
+        // <'column-width'> || <'column-count'> — each token is either "auto" (leave that longhand at
+        // its default), an integer (column-count), or a length (column-width).
+        private static void SetColumnsShorthand(CssBox cssBox, string value)
+        {
+            cssBox.ColumnCount = CssConstants.Auto;
+            cssBox.ColumnWidth = CssConstants.Auto;
+
+            foreach (var part in value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (part is CssConstants.Auto) continue;
+
+                if (int.TryParse(part, out var count) && count > 0)
+                {
+                    cssBox.ColumnCount = part;
+                }
+                else if (CssValueParser.IsValidLength(part))
+                {
+                    cssBox.ColumnWidth = part;
+                }
+            }
+        }
+
+        private static void SetColumnRuleShorthand(CssValueParser valueParser, CssBox cssBox, string value)
+        {
+            // column-rule has the exact same <width> || <style> || <color> grammar as a border side,
+            // so it reuses the same shorthand tokenizer rather than a second copy of the same parsing rules.
+            ParseBorder(valueParser, value, out var width, out var style, out var color);
+
+            if (width is not null)
+            {
+                cssBox.ColumnRuleWidth = width;
+            }
+
+            if (style is not null)
+            {
+                cssBox.ColumnRuleStyle = style;
+            }
+
+            if (color is not null)
+            {
+                cssBox.ColumnRuleColor = color;
+            }
+        }
+
         public static void ApplyCurrentColor(CssBox box, CssValueParser valueParser)
         {
             string[] colorProperties =
@@ -744,7 +876,8 @@ namespace PeachPDF.Html.Core.Utils
                 "border-bottom-color",
                 "border-left-color",
                 "border-right-color",
-                "background-color"
+                "background-color",
+                "column-rule-color"
             ];
 
             var colorValue = GetPropertyValue(box, "color") ?? CssConstants.Initial;

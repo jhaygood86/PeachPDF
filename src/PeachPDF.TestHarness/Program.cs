@@ -2247,4 +2247,69 @@ Console.WriteLine("Saved test_text_transform.pdf");
 
 File.Delete("test_text_transform.html");
 File.WriteAllText("test_text_transform.html", textTransformHtml);
+
+// --- CSS Multi-column Layout showcase ---
+
+static string McSection(string title, string bodyHtml) =>
+    $"<h2>{title}</h2>{bodyHtml}";
+
+static string McEntry(string term, string body) =>
+    $"<p><b>{term}</b> — {body}</p>";
+
+static string McEntries(int count, string prefix = "entry") =>
+    string.Concat(Enumerable.Range(1, count).Select(i =>
+        McEntry($"{prefix}-{i}", $"a short definition for {prefix} number {i}, just long enough to wrap onto a second line in a narrow column.")));
+
+const string MulticolCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
+    .mc p { margin: 0 0 0.4em; text-align: justify }
+    .frame { border: 1px solid #bbb; padding: 6px; margin-bottom: 8px; background: #fafafa }
+    .label { font-size: 6.5pt; color: #666; margin-bottom: 3px }
+    </style>
+    """;
+
+var multicolHtml = "<!DOCTYPE html><html><head>" + MulticolCss + "</head><body>" +
+
+    "<h1>CSS Multi-column Layout Test Page</h1>" +
+    "<p class=\"intro\">Each frame below is one multi-column container. Compare column count/width/rule placement against the label.</p>" +
+
+    McSection("1 &mdash; column-count: 2, short entries",
+        "<div class=\"frame\"><div class=\"label\">columns: 2; column-rule: 0.5pt solid #000</div>" +
+        "<div class=\"mc\" style=\"columns:2;column-rule:0.5pt solid #000\">" + McEntries(10) + "</div></div>") +
+
+    McSection("2 &mdash; column-count: 3, colored rule",
+        "<div class=\"frame\"><div class=\"label\">column-count: 3; column-rule: 2px dashed #c0392b; column-gap: 20px</div>" +
+        "<div class=\"mc\" style=\"column-count:3;column-rule:2px dashed #c0392b;column-gap:20px\">" + McEntries(9) + "</div></div>") +
+
+    McSection("3 &mdash; column-width (auto column count)",
+        "<div class=\"frame\"><div class=\"label\">column-width: 140px; column-rule: 1px dotted #2980b9 (as many columns as fit)</div>" +
+        "<div class=\"mc\" style=\"column-width:140px;column-rule:1px dotted #2980b9\">" + McEntries(8) + "</div></div>") +
+
+    McSection("4 &mdash; page-spanning columns",
+        "<div class=\"frame\"><div class=\"label\">columns: 2; enough entries to overflow onto a second page, still 2 columns wide there</div>" +
+        "<div class=\"mc\" style=\"columns:2;column-rule:0.5pt solid #000\">" + McEntries(40) + "</div></div>") +
+
+    McSection("5 &mdash; dictionary-style (mirrors css4.pub's Icelandic dictionary)",
+        "<div class=\"frame\"><div class=\"label\">columns: 2; column-rule: 0.2pt solid black; text-align: justify; large centered heading as first child</div>" +
+        "<div class=\"mc\" style=\"columns:2;column-rule:0.2pt solid black\">" +
+        "<h2 style=\"font-size:28pt;text-align:center;margin:0 0 0.2em;border:none\">A</h2>" +
+        McEntries(14, "word") + "</div></div>") +
+
+    "</body></html>";
+
+var multicolStream = new MemoryStream();
+var multicolDocument = await generator.GeneratePdf(multicolHtml, pdfConfig);
+multicolDocument.Save(multicolStream);
+
+File.Delete("test_multicol.pdf");
+File.WriteAllBytes("test_multicol.pdf", multicolStream.ToArray());
+Console.WriteLine("Saved test_multicol.pdf");
+
+File.Delete("test_multicol.html");
+File.WriteAllText("test_multicol.html", multicolHtml);
 Console.WriteLine("Saved test_text_transform.html");

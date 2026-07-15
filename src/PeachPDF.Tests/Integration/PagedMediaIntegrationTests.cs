@@ -282,7 +282,7 @@ namespace PeachPDF.Tests.Integration
         // ── named pages ────────────────────────────────────────────────────────
 
         [Fact]
-        public async Task AtPage_NamedPage_SelectorApplied_NoError()
+        public async Task AtPage_NamedPage_SelectorApplied_GeneratesExpectedPageCount()
         {
             var html = """
                 <!DOCTYPE html>
@@ -303,10 +303,43 @@ namespace PeachPDF.Tests.Integration
                 </html>
                 """;
 
-            var ex = await Record.ExceptionAsync(() =>
-                new PdfGenerator().GeneratePdf(html, PageSize.A4));
+            var doc = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
 
-            Assert.Null(ex);
+            Assert.True(doc.PdfDocument.PageCount >= 3,
+                $"Expected at least 3 pages but got {doc.PdfDocument.PageCount}");
+        }
+
+        [Fact]
+        public async Task AtPage_NamedPage_CommaSeparatedSelector_AppliesToEveryListedChapter()
+        {
+            // Mirrors css4.pub's real Icelandic dictionary CSS, which shares one @page rule's margin
+            // boxes across many chapter names via a comma-separated selector list
+            // ("@page chapter1, chapter2, ..., chapter8 { ... }"). See PdfGeneratorSelectPageRuleTests
+            // and PageRuleTests for the precise regression coverage of the two bugs this exercises
+            // end-to-end (named-page Y registration, and comma-list selector parsing).
+            var html = """
+                <!DOCTYPE html>
+                <html>
+                <head>
+                <style>
+                @page { size: A4; margin: 20mm; }
+                @page chapter1, chapter2, chapter3 { @top-right { content: "Chapter"; font-size: 8pt; } }
+                </style>
+                </head>
+                <body>
+                """ +
+                string.Concat(Enumerable.Range(1, 3).Select(i =>
+                    $"<h1 style=\"page: chapter{i}\">Chapter {i}</h1>" +
+                    string.Concat(Enumerable.Range(1, 15).Select(j => $"<p>Paragraph {j}</p>")))) +
+                """
+                </body>
+                </html>
+                """;
+
+            var doc = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
+
+            Assert.True(doc.PdfDocument.PageCount >= 3,
+                $"Expected at least 3 pages but got {doc.PdfDocument.PageCount}");
         }
 
         // ── margin box explicit width ───────────────────────────────────────────

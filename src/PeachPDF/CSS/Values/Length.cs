@@ -231,22 +231,27 @@ namespace PeachPDF.CSS
         /// <param name="fontAdjust">If the length is in pixels and font related, apply the 72/96 factor.</param>
         internal double ToPixels(double emFactor, double remFactor, double hundredPercent, bool fontAdjust = false)
         {
+            // Physical units (in/cm/mm/pc/pt) resolve directly against points, not the browser's
+            // 96dpi CSS-px convention: this engine's native "pixel" unit already equals 1 point at
+            // the default PixelsPerInch=72 (matching @page's own mm->pt conversion in DomParser and
+            // font-size resolution in FontSizeResolver), so no 96dpi scaling belongs here - applying
+            // one inflated every pt/in/cm/mm length by 96/72 relative to the rest of the engine.
             return Type switch
             {
                 Unit.Em => emFactor * Value,
                 Unit.Rem => remFactor * Value,
                 Unit.Ex => emFactor / 2 * Value,
                 Unit.Px => (fontAdjust ? 72d / 96d : 1d) * Value, //TODO: a check support for hi dpi
-                Unit.In => // 1 in = 2.54 cm
-                    96d * Value,
-                Unit.Mm => // 1 mm = 0.1 cm
-                    3.779527559d * Value,
+                Unit.In => // 1 in = 72 pt
+                    72d * Value,
+                Unit.Mm => // 1 mm = 72/25.4 pt
+                    (72d / 25.4d) * Value,
                 Unit.Pc => // 1 pc = 12 pt
-                    16d * Value,
-                Unit.Pt => // 1 pt = 1/72 in
-                    96d / 72d * Value,
-                Unit.Cm => // 1 cm = 50/127 in
-                    37.795275591d * Value,
+                    12d * Value,
+                Unit.Pt => // 1 pt = 1 pt
+                    Value,
+                Unit.Cm => // 1 cm = 72/2.54 pt
+                    (72d / 2.54d) * Value,
                 Unit.Percent => hundredPercent / 100d * Value,
                 _ => 0d
             };
@@ -258,17 +263,17 @@ namespace PeachPDF.CSS
 
             return unit switch
             {
-                Unit.In => // 1 in = 2.54 cm
-                    value / 96f,
-                Unit.Mm => // 1 mm = 0.1 cm
-                    value * 127f / (5f * 96f),
+                Unit.In => // 1 in = 72 pt
+                    value / 72f,
+                Unit.Mm => // 1 mm = 72/25.4 pt
+                    value * 25.4f / 72f,
                 Unit.Pc => // 1 pc = 12 pt
-                    value * 72f / (12f * 96f),
-                Unit.Pt => // 1 pt = 1/72 in
-                    value * 72f / 96f,
-                Unit.Cm => // 1 cm = 50/127 in
-                    value * 127f / (50f * 96f),
-                Unit.Px => // 1 px = 1/96 in
+                    value / 12f,
+                Unit.Pt => // 1 pt = 1 pt
+                    value,
+                Unit.Cm => // 1 cm = 72/2.54 pt
+                    value * 2.54f / 72f,
+                Unit.Px => // 1 px = 1 pt
                     value,
                 _ => throw new InvalidOperationException("An absolute unit cannot be converted to a relative one.")
             };

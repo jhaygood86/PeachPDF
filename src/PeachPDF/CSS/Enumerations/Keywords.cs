@@ -7,6 +7,7 @@
         public static readonly string Initial = "initial";
         public static readonly string None = "none";
         public static readonly string Auto = "auto";
+        public static readonly string Manual = "manual";
         public static readonly string From = "from";
         public static readonly string To = "to";
         public static readonly string Always = "always";

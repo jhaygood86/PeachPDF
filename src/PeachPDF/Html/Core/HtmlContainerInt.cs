@@ -141,8 +141,12 @@ namespace PeachPDF.Html.Core
 
         internal IReadOnlyList<NamedPageElement> NamedPageElements => _namedPageElements;
 
-        internal void RegisterNamedPageElement(string name, double y) =>
-            _namedPageElements.Add(new NamedPageElement(name, y));
+        internal NamedPageElement RegisterNamedPageElement(string name, double y)
+        {
+            var element = new NamedPageElement(name, y);
+            _namedPageElements.Add(element);
+            return element;
+        }
 
         internal void ClearNamedPageElements() => _namedPageElements.Clear();
 
@@ -268,6 +272,16 @@ namespace PeachPDF.Html.Core
         internal HtmlDocumentMetadata? DocumentMetadata { get; private set; }
 
         /// <summary>
+        /// The document's language, from the root <c>&lt;html lang="..."&gt;</c> attribute — <c>null</c>
+        /// if the document declares none. Used by <c>hyphens: auto</c> (per the CSS Text spec, automatic
+        /// hyphenation requires knowing the language; when unknown, a spec-compliant renderer doesn't
+        /// hyphenate). <see cref="PdfGenerateConfig.DefaultLanguage"/> can supply an app-level fallback
+        /// when a document declares none, applied by the caller (see <see cref="PdfGenerator"/>) — this
+        /// property itself only ever reflects what the document actually declared.
+        /// </summary>
+        internal string? DocumentLanguage { get; set; }
+
+        /// <summary>
         /// Init with optional document and stylesheet.
         /// </summary>
         /// <param name="htmlSource">the html to init with, init empty if not given</param>
@@ -292,6 +306,7 @@ namespace PeachPDF.Html.Core
 
             Root.Dispose();
             Root = null;
+            DocumentLanguage = null;
             ClearNamedStrings();
             ClearNamedPageElements();
         }

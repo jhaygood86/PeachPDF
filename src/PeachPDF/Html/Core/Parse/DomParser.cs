@@ -62,6 +62,14 @@ namespace PeachPDF.Html.Core.Parse
             root.IsRoot = true;
             root.HtmlContainer = htmlContainer;
 
+            // Must happen before CorrectTextBoxes (below) parses every text box's words - hyphens:auto
+            // needs to know the document's language (see CssBox.ParseToWords) at that point, not after
+            // this whole method returns. Root is a synthetic wrapper box, not the document's actual
+            // <html> element, so it must be located by tag name.
+            var htmlBox = DomUtils.GetBoxByTagName(root, "html");
+            var lang = htmlBox?.HtmlTag?.TryGetAttribute("lang", "");
+            htmlContainer.DocumentLanguage = string.IsNullOrEmpty(lang) ? null : lang;
+
             var metadata = ExtractMetadata(root);
 
             const bool cssDataChanged = false;
@@ -122,8 +130,7 @@ namespace PeachPDF.Html.Core.Parse
 
                     if (!isLoaded && fontFaceDefinition.Url is not null)
                     {
-
-                        await adapter.AddFontFamilyFromUrl(fontFamilyName, fontFaceDefinition.Url, fontFaceDefinition.Format);
+                        await adapter.AddFontFamilyFromUrl(fontFamilyName, fontFaceDefinition.Url, fontFaceDefinition.Format, stylesheet.BaseUri);
                     }
                 }
             }
@@ -147,9 +154,9 @@ namespace PeachPDF.Html.Core.Parse
                    box.GetAttribute("rel", string.Empty).Equals("stylesheet", StringComparison.CurrentCultureIgnoreCase))
                 {
                     CloneCssData(ref cssData, ref cssDataChanged);
-                    var stylesheet = await StylesheetLoadHandler.LoadStylesheet(htmlContainer, box.GetAttribute("href", string.Empty));
+                    var (stylesheet, resolvedUri) = await StylesheetLoadHandler.LoadStylesheet(htmlContainer, box.GetAttribute("href", string.Empty));
                     if (stylesheet != null)
-                        await _cssParser.ParseStyleSheet(cssData, stylesheet);
+                        await _cssParser.ParseStyleSheet(cssData, stylesheet, resolvedUri);
                 }
 
                 // Check for the <style> tag
