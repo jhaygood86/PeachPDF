@@ -75,6 +75,38 @@ namespace PeachPDF.Tests.Integration
                 Assert.Equal(actualYs[i], registeredYs[i], 1);
         }
 
+        [Fact]
+        public async Task NamedPageElement_InlineElement_Registers()
+        {
+            // Regression coverage for the inline-element gap shared with string-set: an inline element
+            // inside a text-flow container (ContainsInlinesOnly, laid out via CssLayoutEngine.FlowBox)
+            // never got its own PerformLayoutImp call, so RegisterNamedPageElement never ran for it -
+            // previously this would have registered zero NamedPageElements, failing Assert.Single below.
+            var html = Wrap("""<p id="para"><b id="chapter" style="page:chapter">Chapter 2</b> starts here.</p>""");
+
+            var (root, container) = await BuildAndLayout(html);
+            var paraBox = FindById(root, "para")!;
+
+            var registered = Assert.Single(container.NamedPageElements, e => e.Name == "chapter");
+            // <b> is the paragraph's first inline content on its first line, so it should land at the
+            // same Y as the paragraph's own top (no padding/border in this fixture).
+            Assert.Equal(paraBox.Location.Y, registered.Y, 1);
+        }
+
+        [Fact]
+        public async Task NamedPageElement_InlineElement_RegistersActualLocationY_NotZero()
+        {
+            var html = Wrap("""
+                <div style="height:500px"></div>
+                <p><b id="chapter" style="page:chapter">Chapter 3</b> starts here.</p>
+                """);
+
+            var (root, container) = await BuildAndLayout(html);
+
+            var registered = Assert.Single(container.NamedPageElements, e => e.Name == "chapter");
+            Assert.True(registered.Y > 100, $"expected a Y well past the filler div, got {registered.Y}");
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>

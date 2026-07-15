@@ -704,6 +704,19 @@ namespace PeachPDF.Html.Core.Dom
             var startY = coordinates.CurrentY;
             box.FirstHostingLineBox = coordinates.Line;
 
+            // Inline elements (e.g. <b>/<span>) never get their own PerformLayoutImp call - that only
+            // happens for block children (CssBox.PerformLayoutImp's childBox.PerformLayout loop), which
+            // is exactly the path skipped when a block's children are ContainsInlinesOnly and flowed
+            // here instead. FlowBox's own entry/exit (this line and LastHostingLineBox below) is the one
+            // place that visits every inline box, in DOM order, exactly once - so it's where string-set
+            // and named-page registration (normally done near the top/bottom of PerformLayoutImp) have to
+            // happen for inline boxes. blockBox itself is excluded since its own PerformLayoutImp already
+            // handles it correctly before CreateLineBoxes is even called.
+            if (box != blockBox && !string.IsNullOrEmpty(box.StringSet) && box.StringSet != CssConstants.None)
+            {
+                CssNamedStringEngine.ApplyStringSet(box);
+            }
+
             var boxes = box.Boxes;
 
             if (boxes.Count is 0 && box.Words.Count > 0)
@@ -842,6 +855,23 @@ namespace PeachPDF.Html.Core.Dom
                     b.FirstHostingLineBox = coordinates.Line;
                     b.LastHostingLineBox  = coordinates.Line;
 
+                    // Unlike a plain inline box, b.Location is already final here, so string-set/named-page
+                    // can be applied and finalized together rather than split across entry/exit like the
+                    // FlowBox recursion case above.
+                    if (!string.IsNullOrEmpty(b.StringSet) && b.StringSet != CssConstants.None)
+                    {
+                        CssNamedStringEngine.ApplyStringSet(b);
+                        foreach (var namedString in b.NamedStrings.Values)
+                        {
+                            namedString.Y = b.Location.Y;
+                        }
+                    }
+
+                    if (!string.IsNullOrEmpty(b.PageName) && b.PageName != "auto")
+                    {
+                        b.HtmlContainer?.RegisterNamedPageElement(b.PageName, b.Location.Y);
+                    }
+
                     await CssLayoutEngineFlex.PerformLayout(g, b);
 
                     // Advance to content-right so that the outer rightSpacing addition lands correctly.
@@ -879,6 +909,26 @@ namespace PeachPDF.Html.Core.Dom
             if (box.Text is { Length: > 0 } && string.IsNullOrWhiteSpace(box.Text) && !box.IsImage && box.IsInline && box.Boxes.Count == 0 && box.Words.Count == 0)
             {
                 coordinates.CurrentX += box.ActualWordSpacing;
+            }
+
+            // Finalize what was captured at entry, now that this box's content has actually been placed
+            // and coordinates.CurrentY reflects where it landed - mirrors CssBox.PerformLayoutImp's own
+            // late-stage Y-correction/named-page registration (done there once Location is final), which
+            // a plain inline box never gets a Location for in the first place.
+            if (box != blockBox)
+            {
+                if (box.NamedStrings.Count > 0)
+                {
+                    foreach (var namedString in box.NamedStrings.Values)
+                    {
+                        namedString.Y = coordinates.CurrentY;
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(box.PageName) && box.PageName != "auto")
+                {
+                    box.HtmlContainer?.RegisterNamedPageElement(box.PageName, coordinates.CurrentY);
+                }
             }
 
             box.LastHostingLineBox = coordinates.Line;

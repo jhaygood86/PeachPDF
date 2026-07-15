@@ -100,6 +100,51 @@ namespace PeachPDF.Tests.Integration
             Assert.Contains("Section A", sectionBox.NamedStrings["section"].Value);
         }
 
+        [Fact]
+        public async Task NamedString_InlineElement_Registers()
+        {
+            // Regression coverage for the inline-string-set bug: an element inside a text-flow container
+            // (ContainsInlinesOnly, laid out via CssLayoutEngine.FlowBox) never got its own
+            // PerformLayoutImp call, so ApplyStringSet never ran for it at all - previously this would
+            // have registered zero NamedStrings, failing Assert.Single below.
+            var html = Wrap("""<p id="para"><b id="term" style="string-set: term content()">Apple</b> is a fruit.</p>""");
+
+            var (root, container) = await BuildAndLayout(html);
+            var paraBox = FindById(root, "para")!;
+
+            var registered = Assert.Single(container.NamedStrings, s => s.Name == "term");
+            Assert.Equal("Apple", registered.Value);
+            // <b> is the paragraph's first inline content on its first line, so it should land at the
+            // same Y as the paragraph's own top (no padding/border in this fixture).
+            Assert.Equal(paraBox.Location.Y, registered.Y, 1);
+        }
+
+        [Fact]
+        public async Task NamedString_InlineElement_RegistersActualLocationY_NotZero()
+        {
+            var html = Wrap("""
+                <div style="height:500px"></div>
+                <p><b id="term" style="string-set: term content()">Banana</b> is a fruit.</p>
+                """);
+
+            var (root, container) = await BuildAndLayout(html);
+
+            var registered = Assert.Single(container.NamedStrings, s => s.Name == "term");
+            Assert.True(registered.Y > 100, $"expected a Y well past the filler div, got {registered.Y}");
+        }
+
+        [Fact]
+        public async Task NamedString_NestedInlineInInline_Registers()
+        {
+            var html = Wrap("""<p><b><i id="term" style="string-set: term content()">Cherry</i></b> is a fruit.</p>""");
+
+            var (root, container) = await BuildAndLayout(html);
+            Assert.NotNull(FindById(root, "term"));
+
+            var registered = Assert.Single(container.NamedStrings, s => s.Name == "term");
+            Assert.Equal("Cherry", registered.Value);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>
