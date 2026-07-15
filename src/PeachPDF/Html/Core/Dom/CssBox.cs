@@ -629,45 +629,46 @@ namespace PeachPDF.Html.Core.Dom
         {
             Words.Clear();
 
+            var text = ApplyTextTransform(_text!, TextTransform);
             var startIdx = 0;
             var preserveSpaces = WhiteSpace is CssConstants.Pre or CssConstants.PreWrap;
             var respectNewLines = preserveSpaces || WhiteSpace == CssConstants.PreLine || IsBrElement;
 
-            while (startIdx < _text!.Length)
+            while (startIdx < text.Length)
             {
-                while (startIdx < _text.Length && _text[startIdx] == '\r')
+                while (startIdx < text.Length && text[startIdx] == '\r')
                     startIdx++;
 
-                if (startIdx < _text.Length)
+                if (startIdx < text.Length)
                 {
                     var endIdx = startIdx;
-                    while (endIdx < _text.Length && char.IsWhiteSpace(_text[endIdx]) && _text[endIdx] != '\n')
+                    while (endIdx < text.Length && char.IsWhiteSpace(text[endIdx]) && text[endIdx] != '\n')
                         endIdx++;
 
                     if (endIdx > startIdx)
                     {
                         if (preserveSpaces)
-                            Words.Add(new CssRectWord(this, HtmlUtils.DecodeHtml(_text.Substring(startIdx, endIdx - startIdx)), false, false));
+                            Words.Add(new CssRectWord(this, HtmlUtils.DecodeHtml(text.Substring(startIdx, endIdx - startIdx)), false, false));
                     }
                     else
                     {
                         endIdx = startIdx;
-                        while (endIdx < _text.Length && !char.IsWhiteSpace(_text[endIdx]) && _text[endIdx] != '-' && WordBreak != CssConstants.BreakAll && !CommonUtils.IsAsianCharacter(_text[endIdx]))
+                        while (endIdx < text.Length && !char.IsWhiteSpace(text[endIdx]) && text[endIdx] != '-' && WordBreak != CssConstants.BreakAll && !CommonUtils.IsAsianCharacter(text[endIdx]))
                             endIdx++;
 
-                        if (endIdx < _text.Length && (_text[endIdx] == '-' || WordBreak == CssConstants.BreakAll || CommonUtils.IsAsianCharacter(_text[endIdx])))
+                        if (endIdx < text.Length && (text[endIdx] == '-' || WordBreak == CssConstants.BreakAll || CommonUtils.IsAsianCharacter(text[endIdx])))
                             endIdx++;
 
                         if (endIdx > startIdx)
                         {
-                            var hasSpaceBefore = !preserveSpaces && (startIdx > 0 && Words.Count == 0 && char.IsWhiteSpace(_text[startIdx - 1]));
-                            var hasSpaceAfter = !preserveSpaces && (endIdx < _text.Length && char.IsWhiteSpace(_text[endIdx]));
-                            Words.Add(new CssRectWord(this, HtmlUtils.DecodeHtml(_text.Substring(startIdx, endIdx - startIdx)), hasSpaceBefore, hasSpaceAfter));
+                            var hasSpaceBefore = !preserveSpaces && (startIdx > 0 && Words.Count == 0 && char.IsWhiteSpace(text[startIdx - 1]));
+                            var hasSpaceAfter = !preserveSpaces && (endIdx < text.Length && char.IsWhiteSpace(text[endIdx]));
+                            Words.Add(new CssRectWord(this, HtmlUtils.DecodeHtml(text.Substring(startIdx, endIdx - startIdx)), hasSpaceBefore, hasSpaceAfter));
                         }
                     }
 
                     // create new-line word so it will effect the layout
-                    if (endIdx < _text.Length && _text[endIdx] == '\n')
+                    if (endIdx < text.Length && text[endIdx] == '\n')
                     {
                         endIdx++;
                         if (respectNewLines)
@@ -676,6 +677,57 @@ namespace PeachPDF.Html.Core.Dom
 
                     startIdx = endIdx;
                 }
+            }
+        }
+
+        /// <summary>
+        /// Applies the box's <see cref="TextTransform"/> to <paramref name="text"/>.
+        /// Operates character-by-character (not via <see cref="string.ToUpperInvariant()"/>/
+        /// <see cref="string.ToLowerInvariant()"/>) so the result is always the same length as the
+        /// input - callers rely on word/whitespace boundary indices computed against the transformed
+        /// text remaining valid.
+        /// </summary>
+        private static string ApplyTextTransform(string text, string transform)
+        {
+            if (string.IsNullOrEmpty(text))
+                return text;
+
+            switch (transform)
+            {
+                case CssConstants.Uppercase:
+                {
+                    var chars = text.ToCharArray();
+                    for (var i = 0; i < chars.Length; i++)
+                        chars[i] = char.ToUpperInvariant(chars[i]);
+                    return new string(chars);
+                }
+                case CssConstants.Lowercase:
+                {
+                    var chars = text.ToCharArray();
+                    for (var i = 0; i < chars.Length; i++)
+                        chars[i] = char.ToLowerInvariant(chars[i]);
+                    return new string(chars);
+                }
+                case CssConstants.Capitalize:
+                {
+                    var chars = text.ToCharArray();
+                    var atWordStart = true;
+                    for (var i = 0; i < chars.Length; i++)
+                    {
+                        if (char.IsWhiteSpace(chars[i]))
+                        {
+                            atWordStart = true;
+                        }
+                        else if (atWordStart && char.IsLetter(chars[i]))
+                        {
+                            chars[i] = char.ToUpperInvariant(chars[i]);
+                            atWordStart = false;
+                        }
+                    }
+                    return new string(chars);
+                }
+                default:
+                    return text;
             }
         }
 
