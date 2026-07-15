@@ -82,6 +82,7 @@ namespace PeachPDF.Html.Core.Dom
         private double _actualBorderLeftWidth = double.NaN;
         private double _actualBorderBottomWidth = double.NaN;
         private double _actualBorderRightWidth = double.NaN;
+        private double _actualColumnRuleWidth = double.NaN;
 
         /// <summary>
         /// the width of whitespace between words
@@ -94,6 +95,7 @@ namespace PeachPDF.Html.Core.Dom
         private RColor _actualBorderLeftColor = RColor.Empty;
         private RColor _actualBorderBottomColor = RColor.Empty;
         private RColor _actualBorderRightColor = RColor.Empty;
+        private RColor _actualColumnRuleColor = RColor.Empty;
         private RColor _actualBackgroundColor = RColor.Empty;
         private RFont? _actualFont;
         private string _display = "inline";
@@ -369,6 +371,14 @@ namespace PeachPDF.Html.Core.Dom
         public string BreakInside { get; set; } = CssConstants.Auto;
         public string BreakAfter { get; set; } = CssConstants.Auto;
 
+        // Parsed, cascaded, and inherited like any other CSS property, but currently have no effect on
+        // pagination: PeachPDF's block flow relies on paint-time per-page clipping (no explicit per-line
+        // page-break decision to arbitrate) and the multicol engine only fragments at whole-child
+        // granularity (see CssLayoutEngineColumns), so neither has a break point orphans/widows could
+        // apply to. Same posture as background-attachment elsewhere in this file.
+        public string Orphans { get; set; } = "2";
+        public string Widows { get; set; } = "2";
+
         public string Left { get; set; } = CssConstants.Auto;
 
         public string Top { get; set; } = CssConstants.Auto;
@@ -485,6 +495,14 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         public string WordBreak { get; set; } = "normal";
+
+        /// <summary>
+        /// <c>none</c>/<c>manual</c>/<c>auto</c>. <c>manual</c> and <c>auto</c> both honor an explicit
+        /// soft hyphen (U+00AD) as a line-break opportunity; only <c>auto</c> additionally implies
+        /// dictionary-based automatic hyphenation, which PeachPDF does not implement (see
+        /// docs/html-css-support.md) — so in practice <c>auto</c> behaves like <c>manual</c> here.
+        /// </summary>
+        public string Hyphens { get; set; } = "manual";
 
         public string? FontFamily { get; set; }
 
@@ -785,6 +803,25 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Gets the actual column-rule width (the line drawn between columns in a multi-column container)
+        /// </summary>
+        public double ActualColumnRuleWidth
+        {
+            get
+            {
+                if (!double.IsNaN(_actualColumnRuleWidth)) return _actualColumnRuleWidth;
+
+                _actualColumnRuleWidth = CssValueParser.GetActualBorderWidth(ColumnRuleWidth, this);
+                if (string.IsNullOrEmpty(ColumnRuleStyle) || ColumnRuleStyle == CssConstants.None)
+                {
+                    _actualColumnRuleWidth = 0f;
+                }
+
+                return _actualColumnRuleWidth;
+            }
+        }
+
+        /// <summary>
         /// Gets the actual top border Color
         /// </summary>
         public RColor ActualBorderTopColor
@@ -843,6 +880,21 @@ namespace PeachPDF.Html.Core.Dom
                     _actualBorderRightColor = GetActualColor(BorderRightColor);
                 }
                 return _actualBorderRightColor;
+            }
+        }
+
+        /// <summary>
+        /// Gets the actual column-rule color (the line drawn between columns in a multi-column container)
+        /// </summary>
+        public RColor ActualColumnRuleColor
+        {
+            get
+            {
+                if (_actualColumnRuleColor.IsEmpty)
+                {
+                    _actualColumnRuleColor = GetActualColor(ColumnRuleColor);
+                }
+                return _actualColumnRuleColor;
             }
         }
 
@@ -1243,6 +1295,24 @@ namespace PeachPDF.Html.Core.Dom
         public string FlexRowGap    { get; set; } = "0";
         public string FlexColumnGap { get; set; } = "0";
 
+        // Multi-column layout container properties. column-gap itself is shared with flex/grid (the
+        // same CSS property, see FlexColumnGap above); these are the multicol-only ones.
+        public string ColumnCount     { get; set; } = CssConstants.Auto;
+        public string ColumnWidth     { get; set; } = CssConstants.Auto;
+        public string ColumnFill      { get; set; } = "balance";
+        public string ColumnSpan      { get; set; } = CssConstants.None;
+        public string ColumnRuleWidth { get; set; } = CssConstants.Medium;
+        public string ColumnRuleStyle { get; set; } = CssConstants.None;
+        public string ColumnRuleColor { get; set; } = CssConstants.CurrentColor;
+
+        /// <summary>
+        /// Whether this box establishes a CSS multi-column formatting context, per spec: <c>column-width</c>
+        /// is not <c>auto</c>, or <c>column-count</c> is not <c>auto</c>.
+        /// </summary>
+        public bool EstablishesMultiColumnContext =>
+            (!string.IsNullOrEmpty(ColumnCount) && ColumnCount != CssConstants.Auto) ||
+            (!string.IsNullOrEmpty(ColumnWidth) && ColumnWidth != CssConstants.Auto);
+
         /// <summary>
         /// Get the parent of this css properties instance.
         /// </summary>
@@ -1357,6 +1427,9 @@ namespace PeachPDF.Html.Core.Dom
             WordBreak = p.WordBreak;
             Direction = p.Direction;
             BoxSizing = p.BoxSizing;
+            Orphans = p.Orphans;
+            Widows = p.Widows;
+            Hyphens = p.Hyphens;
 
             if (!everything) return;
 

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using PeachPDF.Network;
 
 // ReSharper disable UnusedMember.Global
 
@@ -19,6 +20,14 @@ namespace PeachPDF.CSS
         internal RuleList Rules { get; }
 
         internal bool IsUserAgent { get; set; }
+
+        /// <summary>
+        /// The resolved absolute URI this stylesheet was loaded from (null for stylesheets with no
+        /// external location, e.g. an inline &lt;style&gt; block or caller-supplied CSS text). Relative
+        /// <c>url()</c> references inside this stylesheet (nested <c>@import</c>, <c>@font-face src</c>)
+        /// resolve against this, not the document's base URI, matching browser behavior for fetched CSS.
+        /// </summary>
+        internal RUri? BaseUri { get; set; }
 
         public IEnumerable<ICharsetRule> CharacterSetRules => Rules.Where(r => r is CharsetRule).Cast<ICharsetRule>();
         public IEnumerable<IFontFaceRule> FontfaceSetRules => Rules.Where(r => r is FontFaceRule).Cast<IFontFaceRule>();

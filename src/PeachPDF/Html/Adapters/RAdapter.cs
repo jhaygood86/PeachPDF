@@ -17,6 +17,7 @@ using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
@@ -184,9 +185,36 @@ namespace PeachPDF.Html.Adapters
             _fontsHandler.AddFontFamily(fontFamily);
         }
 
-        public async Task AddFontFamilyFromUrl(string fontFamilyName, string url, string? format)
+        /// <param name="fontFamilyName">the font family name declared by the <c>@font-face</c> rule</param>
+        /// <param name="url">the (possibly relative) <c>url()</c> the font file is served from</param>
+        /// <param name="format">the <c>@font-face</c> <c>format()</c> hint, if any</param>
+        /// <param name="baseUri">
+        /// The location <paramref name="url"/> should be resolved against when it's relative — normally
+        /// the <c>@font-face</c> rule's own stylesheet location (see <see cref="PeachPDF.CSS.Stylesheet.BaseUri"/>),
+        /// not the document's base, matching how relative <c>url()</c> references in fetched CSS resolve
+        /// against the CSS file's own location. Null falls back to treating <paramref name="url"/> as
+        /// already-absolute, which fails gracefully (font simply doesn't load) instead of throwing when
+        /// it isn't.
+        /// </param>
+        public async Task AddFontFamilyFromUrl(string fontFamilyName, string url, string? format, RUri? baseUri = null)
         {
-            var resourceStream = await GetResourceStream(new RUri(url));
+            RUri resolvedUri;
+
+            try
+            {
+                resolvedUri = baseUri is not null ? new RUri(baseUri, url) : new RUri(url, UriKind.RelativeOrAbsolute);
+            }
+            catch (UriFormatException)
+            {
+                return;
+            }
+
+            if (!resolvedUri.IsAbsoluteUri)
+            {
+                return;
+            }
+
+            var resourceStream = await GetResourceStream(resolvedUri);
 
             if (resourceStream?.ResourceStream is not null)
             {

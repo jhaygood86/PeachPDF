@@ -231,6 +231,7 @@ namespace PeachPDF.CSS
                 PropertyNames.ColumnGap);
 
             AddLonghand(PropertyNames.Height, () => new HeightProperty(), true);
+            AddLonghand(PropertyNames.Hyphens, () => new HyphensProperty());
 
             AddLonghand(PropertyNames.JustifyContent, () => new JustifyContentProperty());
 

@@ -122,8 +122,7 @@ namespace PeachPDF.Html.Core.Parse
 
                     if (!isLoaded && fontFaceDefinition.Url is not null)
                     {
-
-                        await adapter.AddFontFamilyFromUrl(fontFamilyName, fontFaceDefinition.Url, fontFaceDefinition.Format);
+                        await adapter.AddFontFamilyFromUrl(fontFamilyName, fontFaceDefinition.Url, fontFaceDefinition.Format, stylesheet.BaseUri);
                     }
                 }
             }
@@ -147,9 +146,9 @@ namespace PeachPDF.Html.Core.Parse
                    box.GetAttribute("rel", string.Empty).Equals("stylesheet", StringComparison.CurrentCultureIgnoreCase))
                 {
                     CloneCssData(ref cssData, ref cssDataChanged);
-                    var stylesheet = await StylesheetLoadHandler.LoadStylesheet(htmlContainer, box.GetAttribute("href", string.Empty));
+                    var (stylesheet, resolvedUri) = await StylesheetLoadHandler.LoadStylesheet(htmlContainer, box.GetAttribute("href", string.Empty));
                     if (stylesheet != null)
-                        await _cssParser.ParseStyleSheet(cssData, stylesheet);
+                        await _cssParser.ParseStyleSheet(cssData, stylesheet, resolvedUri);
                 }
 
                 // Check for the <style> tag

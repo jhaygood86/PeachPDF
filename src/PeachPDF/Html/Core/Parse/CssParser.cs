@@ -18,7 +18,9 @@ using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Handlers;
+using PeachPDF.Network;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Parse
@@ -94,11 +96,17 @@ namespace PeachPDF.Html.Core.Parse
         /// </summary>
         /// <param name="cssData">the CSS data to fill with parsed CSS objects</param>
         /// <param name="stylesheet">raw css stylesheet to parse</param>
-        public async Task ParseStyleSheet(CssData cssData, string stylesheet)
+        /// <param name="baseUri">
+        /// The resolved absolute URI this stylesheet was loaded from (e.g. a &lt;link&gt; href), so that
+        /// relative references inside it (nested <c>@import</c>, <c>@font-face src</c>) resolve against
+        /// its own location rather than the document's base. Null for inline &lt;style&gt; content or
+        /// caller-supplied CSS text, which resolve against the document base as before.
+        /// </param>
+        public async Task ParseStyleSheet(CssData cssData, string stylesheet, RUri? baseUri = null)
         {
             if (!string.IsNullOrEmpty(stylesheet))
             {
-                await ParseStyle(cssData, stylesheet);
+                await ParseStyle(cssData, stylesheet, baseUri, new HashSet<string>());
             }
         }
 
@@ -117,9 +125,17 @@ namespace PeachPDF.Html.Core.Parse
             return _valueParser.IsColorValid(colorValue);
         }
 
-        private async Task ParseStyle(CssData data, string stylesheetText)
+        private async Task ParseStyle(CssData data, string stylesheetText, RUri? baseUri, HashSet<string> visitedImportUris)
         {
             var stylesheet = ParseStyleSheet(stylesheetText);
+            stylesheet.BaseUri = baseUri;
+
+            // Guards against circular @import chains (A imports B imports A) recursing forever; also
+            // stops a stylesheet from importing itself directly.
+            if (baseUri is not null)
+            {
+                visitedImportUris.Add(baseUri.AbsoluteUri);
+            }
 
             var hasReachedNonImportRules = false;
 
@@ -134,11 +150,13 @@ namespace PeachPDF.Html.Core.Parse
                         throw new HtmlRenderException("Cannot import stylesheet without html container", HtmlRenderErrorType.CssParsing);
                     }
 
-                    var importedStylesheet = await StylesheetLoadHandler.LoadStylesheet(_htmlContainer, importRule.Href);
+                    // Relative references inside an already-loaded stylesheet resolve against that
+                    // stylesheet's own location, not the document's base.
+                    var (importedContent, importedUri) = await StylesheetLoadHandler.LoadStylesheet(_htmlContainer, importRule.Href, baseUri);
 
-                    if (importedStylesheet is not null)
+                    if (importedContent is not null && (importedUri is null || visitedImportUris.Add(importedUri.AbsoluteUri)))
                     {
-                        await ParseStyle(data, importedStylesheet);
+                        await ParseStyle(data, importedContent, importedUri, visitedImportUris);
                     }
                 }
                 else

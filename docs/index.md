@@ -9,7 +9,7 @@ Targets .NET 8 and .NET 10.
 - Native vector SVG rendering (inline `<svg>` and standalone `<img src="x.svg">`/`data:image/svg+xml`) — never rasterized
 - CSS custom properties (`--foo`) and `var()`, including fallbacks and inheritance
 - CSS math functions: `calc()`, `min()`, `max()`, `clamp()`
-- 2D and 3D CSS transforms, and Flexbox layout (CSS Flexbox Level 1)
+- 2D and 3D CSS transforms, Flexbox layout (CSS Flexbox Level 1), and CSS Multi-column Layout
 - All five CSS-wide keywords: `inherit`, `initial`, `unset`, `revert`, `revert-layer`
 - Gradients with CSS Color Level 4 interpolation
 - CSS Paged Media: `@page` rules, named pages, margin boxes, and running headers/footers

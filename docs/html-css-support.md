@@ -241,6 +241,7 @@ Percentages are relative to the border-box width (horizontal radius) and height 
 | Property | MDN Reference | Notes |
 |----------|--------------|-------|
 | `direction` | [direction](https://developer.mozilla.org/en-US/docs/Web/CSS/direction) | `ltr` and `rtl` |
+| `hyphens` | [hyphens](https://developer.mozilla.org/en-US/docs/Web/CSS/hyphens) | `none`, `manual`, `auto` are parsed, cascaded, and inherited. `manual` and `auto` both honor an explicit soft hyphen (`&shy;`/U+00AD) as a line-break opportunity — the character itself is never rendered, since PeachPDF doesn't implement the "show a hyphen glyph only when a break actually occurs here" behavior that requires. `auto`'s dictionary-based automatic hyphenation is not implemented, so it behaves like `manual` |
 | `text-align` | [text-align](https://developer.mozilla.org/en-US/docs/Web/CSS/text-align) | `left`, `right`, `center`, `justify` |
 | `text-decoration` | [text-decoration](https://developer.mozilla.org/en-US/docs/Web/CSS/text-decoration) | Shorthand supported |
 | `text-decoration-color` | [text-decoration-color](https://developer.mozilla.org/en-US/docs/Web/CSS/text-decoration-color) | Full support |
@@ -285,6 +286,23 @@ CSS Flexbox Level 1 (`display: flex` / `inline-flex`) is supported, including mu
 | `gap` / `row-gap` / `column-gap` | [gap](https://developer.mozilla.org/en-US/docs/Web/CSS/gap) | Full support on flex containers |
 | `margin` auto values | [margin](https://developer.mozilla.org/en-US/docs/Web/CSS/margin) | `auto` on a main-axis margin absorbs free space on that line (e.g. `margin-left: auto` to push a flex item to the end) |
 
+### Multi-column Layout
+
+CSS Multi-column Layout (`column-count`/`column-width`/`columns`) is supported with one deliberate simplification: children are fragmented at whole-child granularity, never split partway through — a single paragraph always moves to the next column/page as one atomic unit rather than having some of its lines flow into one column and the rest into the next. For content made of many short block-level children (dictionary entries, list items, cards — the common real-world shape), this produces correct-looking column geometry. True inline-level fragmentation (splitting one element's own line boxes across a column boundary) is not implemented.
+
+| Property | MDN Reference | Notes |
+|----------|--------------|-------|
+| `column-count` | [column-count](https://developer.mozilla.org/en-US/docs/Web/CSS/column-count) | Full support |
+| `column-width` | [column-width](https://developer.mozilla.org/en-US/docs/Web/CSS/column-width) | Full support; resolves to as many columns as fit at at-least this width |
+| `columns` | [columns](https://developer.mozilla.org/en-US/docs/Web/CSS/columns) | Shorthand for `column-width` and `column-count`, in either order |
+| `column-gap` | [column-gap](https://developer.mozilla.org/en-US/docs/Web/CSS/column-gap) | Same underlying property as flexbox/grid's `gap`. When left unset, resolves to `1em` (matching real-world browser behavior for multicol, historically distinct from flex/grid's `0` default) rather than the shared field's own default |
+| `column-rule` | [column-rule](https://developer.mozilla.org/en-US/docs/Web/CSS/column-rule) | Shorthand for `column-rule-width`/`column-rule-style`/`column-rule-color`; renders as a real vertical line between columns, one segment per page-row the container spans |
+| `column-rule-width` | [column-rule-width](https://developer.mozilla.org/en-US/docs/Web/CSS/column-rule-width) | Full support, including `thin`/`medium`/`thick` |
+| `column-rule-style` | [column-rule-style](https://developer.mozilla.org/en-US/docs/Web/CSS/column-rule-style) | `solid`, `dashed`, `dotted`; `double`/`groove`/`ridge`/`inset`/`outset` render as `solid` |
+| `column-rule-color` | [column-rule-color](https://developer.mozilla.org/en-US/docs/Web/CSS/column-rule-color) | Full support, including `currentcolor` |
+| `column-fill` | [column-fill](https://developer.mozilla.org/en-US/docs/Web/CSS/column-fill) | `balance` (the default) is approximated — the remaining content's height is estimated and divided evenly across the row's columns, clamped to the actual page budget — rather than solved with a true iterative balancing algorithm. `auto` fills each column to capacity before starting the next |
+| `column-span` | [column-span](https://developer.mozilla.org/en-US/docs/Web/CSS/column-span) | Parsed and accepted but has no effect — a `column-span: all` element does not yet break out of the column flow |
+
 ### Positioning
 
 Used with `position: relative`, `absolute`, or `fixed`.
@@ -314,6 +332,8 @@ These properties control how content breaks across PDF pages. Both the legacy `p
 | `break-before` / `page-break-before` | [break-before](https://developer.mozilla.org/en-US/docs/Web/CSS/break-before) | `auto`, `always`, `page`, `avoid` |
 | `break-after` / `page-break-after` | [break-after](https://developer.mozilla.org/en-US/docs/Web/CSS/break-after) | `auto`, `always`, `page`, `avoid` |
 | `break-inside` / `page-break-inside` | [break-inside](https://developer.mozilla.org/en-US/docs/Web/CSS/break-inside) | `auto`, `avoid` |
+| `orphans` | [orphans](https://developer.mozilla.org/en-US/docs/Web/CSS/orphans) | Parsed, cascaded, and inherited, but has no effect: PeachPDF's ordinary block flow relies on paint-time per-page clipping rather than an explicit per-line page-break decision, and the multi-column engine only fragments at whole-child granularity (see [Multi-column Layout](#multi-column-layout)) — neither has a line-count break point for `orphans` to apply to |
+| `widows` | [widows](https://developer.mozilla.org/en-US/docs/Web/CSS/widows) | Same as `orphans` — parsed, cascaded, and inherited, but has no effect |
 
 ### Tables
 
@@ -344,7 +364,7 @@ These properties control how content breaks across PDF pages. Both the legacy `p
 | `@keyframes` | Not supported |
 | `@supports` | Not supported |
 | `@layer` | Not supported |
-| `@import` | Not supported |
+| `@import` | Full support; the imported stylesheet is fetched and its rules merged in place, including transitively nested `@import`s (with circular-import protection). Relative `url()` references inside an imported stylesheet — including `@font-face src` — resolve against that stylesheet's own location, not the document's |
 
 ---
 

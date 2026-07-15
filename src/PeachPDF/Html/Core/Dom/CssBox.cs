@@ -210,6 +210,13 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         internal Dictionary<int, double>? PageBreakBottoms { get; set; }
 
+        /// <summary>
+        /// The vertical line segments (in absolute document coordinates) to draw between adjacent
+        /// columns of a multi-column container — one segment per gap per page-row actually used.
+        /// Set by <see cref="CssLayoutEngineColumns"/>, painted by <see cref="PaintImp"/>.
+        /// </summary>
+        internal List<(double X, double Top, double Bottom)>? ColumnRuleSegments { get; set; }
+
         public virtual bool IsTableCell => Display is CssConstants.TableCell;
 
         /// <summary>
@@ -654,11 +661,22 @@ namespace PeachPDF.Html.Core.Dom
                     }
                     else
                     {
+                        // A soft hyphen (U+00AD) is an extra break opportunity honored for hyphens:
+                        // manual/auto (the default is manual - see CssBoxProperties.Hyphens); unlike a
+                        // literal '-' it is never itself part of the rendered text, since PeachPDF
+                        // doesn't implement the "show a hyphen glyph only when a break actually occurs
+                        // here" behavior real hyphenation requires - see docs/html-css-support.md.
+                        var honorSoftHyphen = Hyphens != CssConstants.None;
+
                         endIdx = startIdx;
-                        while (endIdx < text.Length && !char.IsWhiteSpace(text[endIdx]) && text[endIdx] != '-' && WordBreak != CssConstants.BreakAll && !CommonUtils.IsAsianCharacter(text[endIdx]))
+                        while (endIdx < text.Length && !char.IsWhiteSpace(text[endIdx]) && text[endIdx] != '-'
+                               && !(honorSoftHyphen && text[endIdx] == '­')
+                               && WordBreak != CssConstants.BreakAll && !CommonUtils.IsAsianCharacter(text[endIdx]))
                             endIdx++;
 
-                        if (endIdx < text.Length && (text[endIdx] == '-' || WordBreak == CssConstants.BreakAll || CommonUtils.IsAsianCharacter(text[endIdx])))
+                        var brokeAtSoftHyphen = honorSoftHyphen && endIdx < text.Length && text[endIdx] == '­';
+
+                        if (!brokeAtSoftHyphen && endIdx < text.Length && (text[endIdx] == '-' || WordBreak == CssConstants.BreakAll || CommonUtils.IsAsianCharacter(text[endIdx])))
                             endIdx++;
 
                         if (endIdx > startIdx)
@@ -667,6 +685,10 @@ namespace PeachPDF.Html.Core.Dom
                             var hasSpaceAfter = !preserveSpaces && (endIdx < text.Length && char.IsWhiteSpace(text[endIdx]));
                             Words.Add(new CssRectWord(this, HtmlUtils.DecodeHtml(text.Substring(startIdx, endIdx - startIdx)), hasSpaceBefore, hasSpaceAfter));
                         }
+
+                        // Consume the soft hyphen itself so it never appears in either fragment's text.
+                        if (brokeAtSoftHyphen)
+                            endIdx++;
                     }
 
                     // create new-line word so it will effect the layout
@@ -887,6 +909,10 @@ namespace PeachPDF.Html.Core.Dom
                         }
 #endif
 
+                    }
+                    else if (EstablishesMultiColumnContext && Boxes.Count > 0)
+                    {
+                        await CssLayoutEngineColumns.PerformLayout(g, this);
                     }
                     else if (Boxes.Count > 0)
                     {
@@ -1557,7 +1583,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Calculate the actual right of the box by the actual right of the child boxes if this box actual right is not set.
         /// </summary>
         /// <returns>the calculated actual right value</returns>
-        private double CalculateActualRight()
+        internal double CalculateActualRight()
         {
             if (!(ActualRight > 90999)) return ActualRight;
 
@@ -1592,7 +1618,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Gets the result of collapsing the vertical margins of the two boxes
         /// </summary>
         /// <returns>Resulting bottom margin</returns>
-        private double MarginBottomCollapse()
+        internal double MarginBottomCollapse()
         {
             var lastNonFloatingBox = Boxes.Last(b => !b.IsOutOfFlow);
 
@@ -1735,6 +1761,11 @@ namespace PeachPDF.Html.Core.Dom
                 BordersDrawHandler.DrawBoxBorders(g, this, rectForBorders, i == 0, i == rects.Length - 1);
             }
 
+            if (ColumnRuleSegments is { Count: > 0 } && ActualColumnRuleWidth > 0)
+            {
+                PaintColumnRules(g, offset, clip);
+            }
+
             PaintWords(g, offset);
 
             for (var i = 0; i < rects.Length; i++)
@@ -1787,6 +1818,33 @@ namespace PeachPDF.Html.Core.Dom
             PaintContentImage(g);
 
             _hasPainted = true;
+        }
+
+        /// <summary>
+        /// Draws the vertical rule lines between columns of a multi-column container, one segment per
+        /// gap per page-row (see <see cref="ColumnRuleSegments"/>).
+        /// </summary>
+        private void PaintColumnRules(RGraphics g, RPoint offset, RRect clip)
+        {
+            var pen = g.GetPen(ActualColumnRuleColor);
+            pen.Width = ActualColumnRuleWidth;
+            pen.DashStyle = ColumnRuleStyle switch
+            {
+                CssConstants.Dashed => RDashStyle.Dash,
+                CssConstants.Dotted => RDashStyle.Dot,
+                _ => RDashStyle.Solid,
+            };
+
+            foreach (var (x, top, bottom) in ColumnRuleSegments!)
+            {
+                var visualX = x + offset.X;
+                var visualTop = top + offset.Y;
+                var visualBottom = bottom + offset.Y;
+
+                if (!IsRectVisible(new RRect(visualX - 1, visualTop, 2, visualBottom - visualTop), clip)) continue;
+
+                g.DrawLine(pen, visualX, visualTop, visualX, visualBottom);
+            }
         }
 
         private static bool IsRectVisible(RRect rect, RRect clip)
