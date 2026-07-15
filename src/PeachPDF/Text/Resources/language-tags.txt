@@ -1,0 +1,28 @@
+# Maps a BCP-47 language tag (lowercased) to the pattern-file tag to load, for the cases where
+# they differ. This table is only consulted as a fallback: HyphenationEngine first tries the
+# document's language tag verbatim (and each of its progressively-shorter subtag prefixes)
+# directly against the available pattern-file tags, since most of those already match real
+# BCP-47 forms one-for-one (e.g. "fr" document language -> "hyph-fr" pattern file needs no entry
+# here at all). This file exists only for:
+#   - base languages that ship multiple pattern variants, mapping the bare language tag (and any
+#     other tag that isn't itself one of the variant tags) to a sensible default variant
+#     (e.g. "de" -> "de-1996", the current reformed German orthography)
+#   - real BCP-47 codes that differ from the pattern set's own (often legacy/ISO 639-3) tag
+#     (e.g. "sr" -> "sh-cyrl", since the pattern data predates modern Serbian's BCP-47 code)
+#
+# Format: one mapping per line, "bcp47-tag=pattern-tag". Lines starting with # are comments.
+
+de=de-1996
+de-at=de-1996
+de-ch=de-ch-1901
+el=el-monoton
+en=en-us
+sh=sh-latn
+sr=sh-cyrl
+hr=sh-latn
+bs=sh-latn
+mn=mn-cyrl
+no=nb
+ku=kmr
+am=mul-ethi
+ti=mul-ethi
