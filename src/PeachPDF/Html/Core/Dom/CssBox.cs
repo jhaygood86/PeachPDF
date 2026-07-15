@@ -67,7 +67,10 @@ namespace PeachPDF.Html.Core.Dom
         internal bool _tableFixed;
 
         protected bool _wordsSizeMeasured;
-        private CssBox? _listItemBox;
+        private string? _listItemMarkerText;
+        private string? _listItemMarkerShape;
+        private RPoint _listItemMarkerPosition;
+        private RSize _listItemMarkerSize;
         public CssImage? ContentImage { get; internal set; }
 
 
@@ -439,8 +442,6 @@ namespace PeachPDF.Html.Core.Dom
         internal void ResetPaint()
         {
             _hasPainted = false;
-
-            _listItemBox?.ResetPaint();
 
             foreach (var childBox in Boxes)
             {
@@ -911,7 +912,7 @@ namespace PeachPDF.Html.Core.Dom
             CssLayoutEngine.ApplyHeight(this);
             CssLayoutEngine.ApplyParentHeight(this);
 
-            await CreateListItemBox(g);
+            LayoutListItemMarker(g);
 
             if (BreakInside is CssConstants.Avoid)
             {
@@ -1047,11 +1048,15 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Creates the <see cref="_listItemBox"/>
+        /// Computes the marker's shape/text and position for a list-item box, ready to be
+        /// drawn directly by <see cref="PaintListStyleShapeMarker"/>/<see cref="PaintListStyleTextMarker"/>.
         /// </summary>
         /// <param name="g"></param>
-        private async ValueTask CreateListItemBox(RGraphics g)
+        private void LayoutListItemMarker(RGraphics g)
         {
+            _listItemMarkerShape = null;
+            _listItemMarkerText = null;
+
             if (Display != CssConstants.ListItem) return;
 
             // Any CSS image (URL or gradient) is painted by PaintListStyleImageMarker — no text-bullet box needed.
@@ -1059,44 +1064,84 @@ namespace PeachPDF.Html.Core.Dom
 
             if (ListStyleType == CssConstants.None) return;
 
-            if (_listItemBox == null)
+            double markerTop;
+
+            if (ListStyleType.Equals(CssConstants.Disc, StringComparison.InvariantCultureIgnoreCase) ||
+                ListStyleType.Equals(CssConstants.Circle, StringComparison.InvariantCultureIgnoreCase) ||
+                ListStyleType.Equals(CssConstants.Square, StringComparison.InvariantCultureIgnoreCase))
             {
-                _listItemBox = new CssBox(null, null);
-                _listItemBox.InheritStyle(this);
-                _listItemBox.Display = CssConstants.Inline;
-                _listItemBox.HtmlContainer = HtmlContainer;
+                _listItemMarkerShape = ListStyleType.ToLowerInvariant();
+                var shapeSize = ActualFont.Height * 0.35;
+                _listItemMarkerSize = new RSize(shapeSize, shapeSize);
 
-                if (ListStyleType.Equals(CssConstants.Disc, StringComparison.InvariantCultureIgnoreCase))
-                    {
-                        _listItemBox.Text = "•";
-                    }
-                    else if (ListStyleType.Equals(CssConstants.Circle, StringComparison.InvariantCultureIgnoreCase))
-                    {
-                        _listItemBox.Text = "o";
-                    }
-                    else if (ListStyleType.Equals(CssConstants.Square, StringComparison.InvariantCultureIgnoreCase))
-                    {
-                        _listItemBox.Text = "\u25a0";
-                    }
-                    else if (ListStyleType.Equals(CssConstants.Decimal, StringComparison.InvariantCultureIgnoreCase))
-                    {
-                        _listItemBox.Text = GetIndexForList().ToString(CultureInfo.InvariantCulture) + ".";
-                    }
-                    else if (ListStyleType.Equals(CssConstants.DecimalLeadingZero, StringComparison.InvariantCultureIgnoreCase))
-                    {
-                        _listItemBox.Text = GetIndexForList().ToString("00", CultureInfo.InvariantCulture) + ".";
-                    }
-                    else
-                    {
-                        _listItemBox.Text = CommonUtils.ConvertToAlphaNumber(GetIndexForList(), ListStyleType) + ".";
-                    }
-
-                _listItemBox.ParseToWords();
-                await _listItemBox.PerformLayoutImp(g);
-                _listItemBox.Size = new RSize(_listItemBox.Words[0].Width, _listItemBox.Words[0].Height);
+                // Text is drawn top-aligned at ActualPaddingTop; center the (much smaller) shape
+                // within the font's line box instead of also top-aligning it, so it sits level
+                // with the middle of the adjacent text rather than hugging the top of the line.
+                markerTop = Location.Y + ActualPaddingTop + (ActualFont.Height - shapeSize) / 2;
             }
-            _listItemBox.Words[0].Left = Location.X - _listItemBox.Size.Width - 5;
-            _listItemBox.Words[0].Top = Location.Y + ActualPaddingTop;
+            else
+            {
+                if (ListStyleType.Equals(CssConstants.Decimal, StringComparison.InvariantCultureIgnoreCase))
+                {
+                    _listItemMarkerText = GetIndexForList().ToString(CultureInfo.InvariantCulture) + ".";
+                }
+                else if (ListStyleType.Equals(CssConstants.DecimalLeadingZero, StringComparison.InvariantCultureIgnoreCase))
+                {
+                    _listItemMarkerText = GetIndexForList().ToString("00", CultureInfo.InvariantCulture) + ".";
+                }
+                else
+                {
+                    _listItemMarkerText = CommonUtils.ConvertToAlphaNumber(GetIndexForList(), ListStyleType) + ".";
+                }
+
+                _listItemMarkerSize = g.MeasureString(_listItemMarkerText, ActualFont);
+                markerTop = Location.Y + ActualPaddingTop;
+            }
+
+            _listItemMarkerPosition = new RPoint(Location.X - _listItemMarkerSize.Width - 5, markerTop);
+        }
+
+        private void PaintListStyleShapeMarker(RGraphics g)
+        {
+            if (Display != CssConstants.ListItem || _listItemMarkerShape == null) return;
+
+            var offset = IsFixed ? RPoint.Empty : HtmlContainer!.ScrollOffset;
+            var rect = new RRect(
+                _listItemMarkerPosition.X + offset.X,
+                _listItemMarkerPosition.Y + offset.Y,
+                _listItemMarkerSize.Width,
+                _listItemMarkerSize.Height);
+
+            if (_listItemMarkerShape == CssConstants.Square)
+            {
+                using var brush = g.GetSolidBrush(ActualColor);
+                g.DrawRectangle(brush, rect.X, rect.Y, rect.Width, rect.Height);
+                return;
+            }
+
+            var rx = rect.Width / 2;
+            var ry = rect.Height / 2;
+            using var path = RenderUtils.GetRoundRect(g, rect, rx, ry, rx, ry, rx, ry, rx, ry);
+
+            if (_listItemMarkerShape == CssConstants.Disc)
+            {
+                using var brush = g.GetSolidBrush(ActualColor);
+                g.DrawPath(brush, path);
+            }
+            else // circle: hollow ring
+            {
+                var pen = g.GetPen(ActualColor);
+                g.DrawPath(pen, path);
+            }
+        }
+
+        private void PaintListStyleTextMarker(RGraphics g)
+        {
+            if (Display != CssConstants.ListItem || string.IsNullOrEmpty(_listItemMarkerText)) return;
+
+            var offset = IsFixed ? RPoint.Empty : HtmlContainer!.ScrollOffset;
+            var point = new RPoint(_listItemMarkerPosition.X + offset.X, _listItemMarkerPosition.Y + offset.Y);
+            g.DrawString(_listItemMarkerText, ActualFont, ActualColor, point, _listItemMarkerSize, Direction == CssConstants.Rtl);
         }
 
         private void PaintListStyleImageMarker(RGraphics g)
@@ -1534,7 +1579,7 @@ namespace PeachPDF.Html.Core.Dom
                 b.OffsetTop(amount);
             }
 
-            _listItemBox?.OffsetTop(amount);
+            _listItemMarkerPosition = _listItemMarkerPosition with { Y = _listItemMarkerPosition.Y + amount };
 
             Location = Location with { Y = Location.Y + amount };
         }
@@ -1565,7 +1610,7 @@ namespace PeachPDF.Html.Core.Dom
                 b.OffsetLeft(amount);
             }
 
-            _listItemBox?.OffsetLeft(amount);
+            _listItemMarkerPosition = _listItemMarkerPosition with { X = _listItemMarkerPosition.X + amount };
 
             Location = Location with { X = Location.X + amount };
         }
@@ -1682,11 +1727,8 @@ namespace PeachPDF.Html.Core.Dom
             if (clipped)
                 g.PopClip();
 
-            if (_listItemBox is not null)
-            {
-                await _listItemBox.Paint(g);
-            }
-
+            PaintListStyleShapeMarker(g);
+            PaintListStyleTextMarker(g);
             PaintListStyleImageMarker(g);
             PaintContentImage(g);
 

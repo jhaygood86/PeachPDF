@@ -88,5 +88,35 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Contains("/ShadingType", pdfText);
         }
+
+        [Theory]
+        [InlineData("disc")]
+        [InlineData("circle")]
+        [InlineData("square")]
+        [InlineData("decimal")]
+        public async Task ListStyleType_RendersMoreContentThanNoneMarker(string listStyleType)
+        {
+            // Regression test: markers used to be silently culled during paint (a detached,
+            // never-positioned marker box was invisible to the paint pipeline), so the marker
+            // variant's content stream was nearly identical to `list-style-type: none` even
+            // though nothing painted. Asserting non-empty text alone did not catch this.
+            var markerPdfText = await GetPdfText(ListHtml($"list-style-type: {listStyleType};"));
+            var nonePdfText = await GetPdfText(ListHtml("list-style-type: none;"));
+
+            Assert.True(markerPdfText.Length > nonePdfText.Length + 20,
+                $"Expected '{listStyleType}' marker to emit measurably more content than 'none' " +
+                $"(marker: {markerPdfText.Length} chars, none: {nonePdfText.Length} chars)");
+        }
+
+        [Fact]
+        public async Task ListStyleType_Disc_And_Circle_ProduceDifferentContent()
+        {
+            // circle used to render as the literal ASCII letter "o", identical in kind to any
+            // other text marker. Now disc is a filled shape and circle is a stroked (hollow) one.
+            var discPdfText = await GetPdfText(ListHtml("list-style-type: disc;"));
+            var circlePdfText = await GetPdfText(ListHtml("list-style-type: circle;"));
+
+            Assert.NotEqual(discPdfText, circlePdfText);
+        }
     }
 }
