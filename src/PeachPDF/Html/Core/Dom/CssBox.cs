@@ -988,6 +988,21 @@ namespace PeachPDF.Html.Core.Dom
                 HtmlContainer?.RegisterNamedPageElement(PageName, Location.Y);
             }
 
+            // Correct the Y captured too early by ApplyStringSet (called near the top of this method,
+            // before Location was known) now that it's final. NamedStrings holds the exact same object
+            // references already registered in HtmlContainer's document-level list (ApplyStringSet
+            // stores one shared instance in both places), so mutating Y here updates both — no need to
+            // touch the document-level list's API, and safe regardless of when other boxes read the
+            // document-level list's *value*, since nothing but paint-time margin-box resolution ever
+            // reads Y.
+            if (NamedStrings.Count > 0)
+            {
+                foreach (var namedString in NamedStrings.Values)
+                {
+                    namedString.Y = Location.Y;
+                }
+            }
+
 #if DEBUG
             Console.WriteLine($"layout finish: {ToString()} [x: {Location.X}, y: {Location.Y}, b: {ActualBottom}, r: {ActualRight}, h: {Size.Height}, w: {Size.Width}]");
 #endif

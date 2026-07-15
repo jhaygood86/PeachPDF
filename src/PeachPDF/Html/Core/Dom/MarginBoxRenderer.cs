@@ -109,7 +109,7 @@ namespace PeachPDF.Html.Core.Dom
             return sb.Length > 0 ? sb.ToString() : null;
         }
 
-        private static string ResolveNamedString(
+        internal static string ResolveNamedString(
             string name,
             string keyword,
             double pageY,

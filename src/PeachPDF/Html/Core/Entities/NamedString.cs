@@ -9,5 +9,8 @@ namespace PeachPDF.Html.Core.Entities
         string Name,
         string Value,
         double Y = 0
-    );
+    )
+    {
+        public double Y { get; set; } = Y;
+    }
 }
