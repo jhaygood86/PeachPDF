@@ -219,7 +219,14 @@ namespace PeachPDF.Adapters
 
         protected override async Task AddFontFromStream(string fontFamilyName, Stream stream, string? format)
         {
-            if (format is "truetype" or "woff" or "woff2" or "opentype")
+            // A missing format() hint is valid CSS (it's an optional hint, not a requirement) and must
+            // still be attempted - real-world stylesheets (e.g. css4.pub's Icelandic dictionary page)
+            // ship bare `src: url("Font.otf")` with no format() at all. AddFont itself is already
+            // format-agnostic (FontFormatConverter.ToOpenType sniffs actual byte content; TtfFontDescription
+            // just walks the sfnt table directory), so there's nothing to lose by attempting the load here
+            // - only explicitly-declared, genuinely unsupported formats (embedded-opentype, svg, collection)
+            // should still be skipped.
+            if (format is null or "truetype" or "woff" or "woff2" or "opentype")
             {
                 await AddFont(stream, fontFamilyName);
             }

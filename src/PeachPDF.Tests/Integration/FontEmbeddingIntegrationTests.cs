@@ -49,6 +49,33 @@ body {{ font-family: 'TestTtf', serif; font-size: 14pt; }}
         }
 
         // -------------------------------------------------------------------------
+        // Regression: a @font-face src with no format() hint at all (valid CSS - format() is an
+        // optional hint) must still be attempted, not silently dropped. Real-world stylesheets (e.g.
+        // css4.pub's Icelandic dictionary page) ship bare `src: url("Font.otf")` with no format().
+        // -------------------------------------------------------------------------
+
+        [Fact]
+        public async Task TtfFont_ViaFontFaceDataUri_NoFormatHint_StillEmbedsAs_FontFile2()
+        {
+            var ttfBytes = File.ReadAllBytes(BundledFonts.Ttf);
+            var b64 = Convert.ToBase64String(ttfBytes);
+
+            var html = $@"<!DOCTYPE html>
+<html><head><style>
+@font-face {{ font-family: 'TestTtfNoFormat'; src: url('data:font/truetype;base64,{b64}'); }}
+body {{ font-family: 'TestTtfNoFormat', serif; font-size: 14pt; }}
+</style></head>
+<body>Hello TrueType, no format hint</body>
+</html>";
+
+            var generator = new PdfGenerator();
+            var doc = await generator.GeneratePdf(html, PageSize.A4);
+            var pdfText = GetPdfText(doc);
+
+            Assert.Contains("/FontFile2", pdfText);
+        }
+
+        // -------------------------------------------------------------------------
         // CFF embedding fix: must use /FontFile3 with /OpenType subtype
         // -------------------------------------------------------------------------
 
@@ -64,6 +91,34 @@ body {{ font-family: 'TestTtf', serif; font-size: 14pt; }}
 body {{ font-family: 'TestCff', serif; font-size: 14pt; }}
 </style></head>
 <body>Hello CFF</body>
+</html>";
+
+            var generator = new PdfGenerator();
+            var doc = await generator.GeneratePdf(html, PageSize.A4);
+            var pdfText = GetPdfText(doc);
+
+            Assert.Contains("/FontFile3", pdfText);
+            Assert.Contains("/OpenType", pdfText);
+        }
+
+        // -------------------------------------------------------------------------
+        // Direct regression for the reported bug: a CFF/OTF font (Satyr10.otf's actual shape - OTTO
+        // sfnt tag, /CFF table, no glyf/loca) with no format() hint at all must still embed correctly,
+        // not silently fall back to a different font.
+        // -------------------------------------------------------------------------
+
+        [Fact]
+        public async Task CffFont_ViaFontFaceDataUri_NoFormatHint_StillEmbedsAs_FontFile3_OpenType()
+        {
+            var otfBytes = File.ReadAllBytes(BundledFonts.Otf);
+            var b64 = Convert.ToBase64String(otfBytes);
+
+            var html = $@"<!DOCTYPE html>
+<html><head><style>
+@font-face {{ font-family: 'TestCffNoFormat'; src: url('data:font/opentype;base64,{b64}'); }}
+body {{ font-family: 'TestCffNoFormat', serif; font-size: 14pt; }}
+</style></head>
+<body>Hello CFF, no format hint</body>
 </html>";
 
             var generator = new PdfGenerator();
