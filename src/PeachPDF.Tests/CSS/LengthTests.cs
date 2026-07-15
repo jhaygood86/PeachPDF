@@ -174,6 +174,14 @@ namespace PeachPDF.Tests.CSS
         }
 
         [Fact]
+        public void To_In_ConvertsFromPoints()
+        {
+            var length = new Length(72f, Length.Unit.Pt);
+
+            Assert.Equal(1f, length.To(Length.Unit.In));
+        }
+
+        [Fact]
         public void To_Mm_ConvertsFromPoints()
         {
             var length = new Length(72f, Length.Unit.Pt);

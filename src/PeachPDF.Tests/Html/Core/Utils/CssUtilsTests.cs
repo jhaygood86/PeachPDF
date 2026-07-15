@@ -196,6 +196,30 @@ namespace PeachPDF.Tests.Html.Core.Utils
         }
 
         [Fact]
+        public async Task SetPropertyValue_ColumnFill_AcceptsAutoAndBalance()
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, "column-fill", "balance");
+            Assert.Equal("balance", box.ColumnFill);
+
+            CssUtils.SetPropertyValue(parser, box, "column-fill", "auto");
+            Assert.Equal("auto", box.ColumnFill);
+        }
+
+        [Fact]
+        public async Task SetPropertyValue_ColumnSpan_AcceptsNoneAndAll()
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, "column-span", "all");
+            Assert.Equal("all", box.ColumnSpan);
+
+            CssUtils.SetPropertyValue(parser, box, "column-span", "none");
+            Assert.Equal("none", box.ColumnSpan);
+        }
+
+        [Fact]
         public async Task SetPropertyValue_ColumnRuleShorthand_SetsWidthStyleAndColor()
         {
             var (box, parser) = await FindDivBoxAndParser("");

@@ -38,7 +38,13 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task NoChildren_ActualBottomEqualsLocationPlusBoxSizeIncludedHeight()
         {
-            var box = await FindByIdAsync("<div id='mc' style='columns:2; padding:5px'></div>", "mc");
+            // A genuinely childless box (Boxes.Count == 0) never reaches CssLayoutEngineColumns at all -
+            // the CssBox.PerformLayoutImp dispatch gate itself requires Boxes.Count > 0. To reach
+            // Layout's own internal "no substantive children" branch, the box needs a child that passes
+            // the outer dispatch gate but gets filtered out by Layout's own Display/IsOutOfFlow/
+            // IsSpaceOrEmpty check - a display:none child does exactly that.
+            var box = await FindByIdAsync(
+                "<div id='mc' style='columns:2; padding:5px'><span style='display:none'>hidden</span></div>", "mc");
 
             Assert.Equal(box.Location.Y + box.ActualBoxSizeIncludedHeight, box.ActualBottom);
         }
@@ -235,6 +241,25 @@ namespace PeachPDF.Tests.Integration
             // real draw call - drive the real Paint() pipeline and record what actually reached RGraphics.
             var html = Wrap(@"
                 <div id='mc' style='columns:2; column-rule:1px solid black; column-gap:0; width:200px'>
+                    <div class='item' style='height:20px'></div>
+                    <div class='item' style='height:20px'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 1000);
+            var mc = FindById(root, "mc")!;
+
+            var spy = new DrawLineSpyGraphics();
+            await mc.Paint(spy);
+
+            Assert.True(spy.DrawLineCallCount > 0);
+        }
+
+        [Theory]
+        [InlineData("dashed")]
+        [InlineData("dotted")]
+        public async Task ColumnRule_DashedOrDotted_StillPaintsALine(string style)
+        {
+            var html = Wrap($@"
+                <div id='mc' style='columns:2; column-rule:1px {style} black; column-gap:0; width:200px'>
                     <div class='item' style='height:20px'></div>
                     <div class='item' style='height:20px'></div>
                 </div>");
