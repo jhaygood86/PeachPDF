@@ -220,7 +220,7 @@ namespace PeachPDF.Html.Core.Dom
             CssLineBoxCoordinates coordinates = new()
             {
                 Line = new CssLineBox(blockBox),
-                CurrentX = startX + blockBox.ActualTextIndent,
+                CurrentX = startX + blockBox.ActualTextIndent + blockBox._pendingListItemMarkerReservedWidth,
                 CurrentY = startY,
                 MaxRight = startX,
                 MaxBottom = startY

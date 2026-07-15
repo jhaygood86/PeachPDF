@@ -71,6 +71,8 @@ namespace PeachPDF.Html.Core.Dom
         private string? _listItemMarkerShape;
         private RPoint _listItemMarkerPosition;
         private RSize _listItemMarkerSize;
+        internal double _pendingListItemMarkerReservedWidth;
+        private const double ListItemMarkerGap = 5;
         public CssImage? ContentImage { get; internal set; }
 
 
@@ -803,6 +805,10 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
+            // Must run before this box (or a descendant reached via the recursive layout below) builds
+            // its first line box, so an "inside" marker's reserved width is already in place for it.
+            MeasureListItemMarker(g);
+
             if (IsBlock || Display == CssConstants.ListItem || Display == CssConstants.Table || Display == CssConstants.InlineTable || Display == CssConstants.TableCell || Display == CssConstants.Flex || Display == CssConstants.InlineFlex)
             {
                 // Because their width and height are set by CssTable or CssLayoutEngineFlex
@@ -912,7 +918,7 @@ namespace PeachPDF.Html.Core.Dom
             CssLayoutEngine.ApplyHeight(this);
             CssLayoutEngine.ApplyParentHeight(this);
 
-            LayoutListItemMarker(g);
+            PositionListItemMarker();
 
             if (BreakInside is CssConstants.Avoid)
             {
@@ -1048,38 +1054,33 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Computes the marker's shape/text and position for a list-item box, ready to be
-        /// drawn directly by <see cref="PaintListStyleShapeMarker"/>/<see cref="PaintListStyleTextMarker"/>.
+        /// Computes the marker's shape/text/size for a list-item box (independent of <c>Location</c>,
+        /// so it's safe to call before line-box layout). When <c>ListStylePosition</c> is "inside",
+        /// also pushes the reserved marker width onto whichever descendant box will host the first line.
         /// </summary>
         /// <param name="g"></param>
-        private void LayoutListItemMarker(RGraphics g)
+        private void MeasureListItemMarker(RGraphics g)
         {
             _listItemMarkerShape = null;
             _listItemMarkerText = null;
 
             if (Display != CssConstants.ListItem) return;
 
-            // Any CSS image (URL or gradient) is painted by PaintListStyleImageMarker — no text-bullet box needed.
-            if (ListStyleImage != null) return;
-
-            if (ListStyleType == CssConstants.None) return;
-
-            double markerTop;
-
-            if (ListStyleType.Equals(CssConstants.Disc, StringComparison.InvariantCultureIgnoreCase) ||
-                ListStyleType.Equals(CssConstants.Circle, StringComparison.InvariantCultureIgnoreCase) ||
-                ListStyleType.Equals(CssConstants.Square, StringComparison.InvariantCultureIgnoreCase))
+            if (ListStyleImage != null)
+            {
+                // Any CSS image (URL or gradient) is painted by PaintListStyleImageMarker, sized the
+                // same square as the text/shape markers so line-1 reservation stays consistent.
+                _listItemMarkerSize = new RSize(ActualFont.Height, ActualFont.Height);
+            }
+            else if (ListStyleType.Equals(CssConstants.Disc, StringComparison.InvariantCultureIgnoreCase) ||
+                     ListStyleType.Equals(CssConstants.Circle, StringComparison.InvariantCultureIgnoreCase) ||
+                     ListStyleType.Equals(CssConstants.Square, StringComparison.InvariantCultureIgnoreCase))
             {
                 _listItemMarkerShape = ListStyleType.ToLowerInvariant();
                 var shapeSize = ActualFont.Height * 0.35;
                 _listItemMarkerSize = new RSize(shapeSize, shapeSize);
-
-                // Text is drawn top-aligned at ActualPaddingTop; center the (much smaller) shape
-                // within the font's line box instead of also top-aligning it, so it sits level
-                // with the middle of the adjacent text rather than hugging the top of the line.
-                markerTop = Location.Y + ActualPaddingTop + (ActualFont.Height - shapeSize) / 2;
             }
-            else
+            else if (ListStyleType != CssConstants.None)
             {
                 if (ListStyleType.Equals(CssConstants.Decimal, StringComparison.InvariantCultureIgnoreCase))
                 {
@@ -1095,10 +1096,64 @@ namespace PeachPDF.Html.Core.Dom
                 }
 
                 _listItemMarkerSize = g.MeasureString(_listItemMarkerText, ActualFont);
+            }
+            else
+            {
+                return; // list-style-type: none, no image - no marker at all
+            }
+
+            if (ListStylePosition == CssConstants.Inside)
+            {
+                var hostBox = FindListItemMarkerHostBox();
+                if (hostBox != null)
+                    hostBox._pendingListItemMarkerReservedWidth = _listItemMarkerSize.Width + ListItemMarkerGap;
+            }
+        }
+
+        /// <summary>
+        /// Walks down from this list-item box to the descendant that will actually build the first
+        /// line box (skipping anonymous/block wrappers), so an "inside" marker can reserve room on
+        /// that box's first line even when the &lt;li&gt; itself contains block-level children.
+        /// </summary>
+        private CssBox? FindListItemMarkerHostBox()
+        {
+            var box = this;
+            while (!DomUtils.ContainsInlinesOnly(box))
+            {
+                var firstInFlowChild = box.Boxes.FirstOrDefault(b => !b.IsOutOfFlow);
+                if (firstInFlowChild == null) return null;
+                box = firstInFlowChild;
+            }
+            return box;
+        }
+
+        /// <summary>
+        /// Computes the marker's paint position from its already-measured size and this box's
+        /// <c>Location</c>. Must run after <c>Location</c> is assigned.
+        /// </summary>
+        private void PositionListItemMarker()
+        {
+            if (Display != CssConstants.ListItem) return;
+            if (ListStyleImage == null && _listItemMarkerShape == null && _listItemMarkerText == null) return;
+
+            double markerTop;
+            if (_listItemMarkerShape != null)
+            {
+                // Text is drawn top-aligned at ActualPaddingTop; center the (much smaller) shape
+                // within the font's line box instead of also top-aligning it, so it sits level
+                // with the middle of the adjacent text rather than hugging the top of the line.
+                markerTop = Location.Y + ActualPaddingTop + (ActualFont.Height - _listItemMarkerSize.Height) / 2;
+            }
+            else
+            {
                 markerTop = Location.Y + ActualPaddingTop;
             }
 
-            _listItemMarkerPosition = new RPoint(Location.X - _listItemMarkerSize.Width - 5, markerTop);
+            var markerLeft = ListStylePosition == CssConstants.Inside
+                ? ClientLeft
+                : ClientLeft - _listItemMarkerSize.Width - ListItemMarkerGap;
+
+            _listItemMarkerPosition = new RPoint(markerLeft, markerTop);
         }
 
         private void PaintListStyleShapeMarker(RGraphics g)
@@ -1148,12 +1203,11 @@ namespace PeachPDF.Html.Core.Dom
         {
             if (Display != CssConstants.ListItem || ListStyleImage == null) return;
             var offset = IsFixed ? RPoint.Empty : HtmlContainer!.ScrollOffset;
-            var size = ActualFont.Height;
             var markerRect = new RRect(
-                Location.X - size - 5 + offset.X,
-                Location.Y + ActualPaddingTop + offset.Y,
-                size,
-                size);
+                _listItemMarkerPosition.X + offset.X,
+                _listItemMarkerPosition.Y + offset.Y,
+                _listItemMarkerSize.Width,
+                _listItemMarkerSize.Height);
             CssImagePainter.Paint(g, ListStyleImage, layerIndex: 0, isFirst: true,
                 originRect: markerRect, clipRect: markerRect, roundedClipPath: null,
                 positionList: "center", sizeList: CssConstants.Auto, repeatList: "no-repeat", box: this,

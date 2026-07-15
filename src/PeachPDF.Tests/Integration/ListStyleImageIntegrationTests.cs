@@ -118,5 +118,47 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotEqual(discPdfText, circlePdfText);
         }
+
+        [Fact]
+        public async Task ListStylePosition_InsideAndOutside_ProduceDifferentContent()
+        {
+            // Regression test: list-style-position was parsed/cascaded but never read anywhere
+            // in layout or paint, so "inside" and "outside" rendered byte-for-byte identically.
+            var insidePdfText = await GetPdfText(ListHtml("list-style: inside disc;"));
+            var outsidePdfText = await GetPdfText(ListHtml("list-style: outside disc;"));
+
+            Assert.NotEqual(insidePdfText, outsidePdfText);
+        }
+
+        [Fact]
+        public async Task ListStylePosition_Inside_WrappingText_RendersWithoutCrash()
+        {
+            // Forces the reserved line-1 width to actually matter: the first line has less room,
+            // so the marker's reservation should push some words onto a wrapped second line.
+            var html = "<!DOCTYPE html><html><head><style>body { margin: 0; } " +
+                        "ul { list-style: inside disc; width: 120px; font-size: 14pt; }</style></head>" +
+                        "<body><ul><li>This is a long list item that should wrap onto multiple lines</li></ul></body></html>";
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.NotEmpty(pdfText);
+        }
+
+        [Fact]
+        public async Task ListStylePosition_Inside_WithBlockChildInListItem_RendersAndDiffersFromOutside()
+        {
+            // Covers FindListItemMarkerHostBox descending through a block-level child (<p>) to find
+            // the box that actually builds the first line box, since the <li> itself doesn't.
+            string Html(string position) =>
+                "<!DOCTYPE html><html><head><style>body { margin: 0; } " +
+                $"ul {{ list-style: {position} disc; }}</style></head>" +
+                "<body><ul><li><p>Paragraph inside a list item</p></li></ul></body></html>";
+
+            var insidePdfText = await GetPdfText(Html("inside"));
+            var outsidePdfText = await GetPdfText(Html("outside"));
+
+            Assert.NotEmpty(insidePdfText);
+            Assert.NotEqual(insidePdfText, outsidePdfText);
+        }
     }
 }
