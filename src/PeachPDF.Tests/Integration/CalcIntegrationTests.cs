@@ -108,8 +108,8 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotNull(child);
             // GetRemHeight() walks up to the outermost box (the container's root, not <html>) and reads
-            // its ActualFont.Height - that's what calc()'s "rem" unit multiplies against.
-            var expected = (root.ActualFont.Height + 4 * (72.0 / 96.0)) / 72.0;
+            // its ActualFont.Size - that's what calc()'s "rem" unit multiplies against.
+            var expected = (root.ActualFont.Size + 4 * (72.0 / 96.0)) / 72.0;
             Assert.Equal(expected, child!.ActualFont.Size, 8);
         }
 

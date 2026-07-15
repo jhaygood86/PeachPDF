@@ -1345,12 +1345,14 @@ namespace PeachPDF.Html.Core.Dom
         protected abstract CssBoxProperties? GetParent();
 
         /// <summary>
-        /// Gets the height of the font in the specified units
+        /// Gets the size of 1em in the specified units, per spec: an element's own computed
+        /// font-size, not the font's line-spacing metric (ascent+descent+leading), which is
+        /// typically 15-30%+ larger and would inflate every em-based margin/padding/line-height.
         /// </summary>
         /// <returns></returns>
         public double GetEmHeight()
         {
-            return ActualFont.Height;
+            return ActualFont.Size;
         }
 
         /// <summary>
