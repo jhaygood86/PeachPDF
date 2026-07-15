@@ -31,10 +31,20 @@ namespace PeachPDF.CSS
     internal sealed class PageSelector : StylesheetNode, ISelector
     {
         private readonly string _name;
+        private readonly bool _isPseudo;
 
-        public PageSelector(string name)
+        /// <param name="name">
+        /// For a pseudo-class selector (<paramref name="isPseudo"/> true, the default — e.g. <c>:first</c>,
+        /// <c>:left</c>, <c>:right</c>), the pseudo-class name without its leading colon. For a named-page
+        /// selector (<paramref name="isPseudo"/> false — e.g. <c>@page chapter</c>, or a comma-separated
+        /// list <c>@page chapter1, chapter2</c>), the raw page name(s) as written, joined with ", " if more
+        /// than one — never colon-prefixed, since CSS page names are plain custom-idents, not pseudo-classes.
+        /// </param>
+        /// <param name="isPseudo">Whether <paramref name="name"/> is a pseudo-class name (colon-prefixed in <see cref="Text"/>) rather than a named-page identifier.</param>
+        public PageSelector(string name, bool isPseudo = true)
         {
             _name = name;
+            _isPseudo = isPseudo;
         }
 
         public PageSelector() : this(string.Empty)
@@ -43,7 +53,7 @@ namespace PeachPDF.CSS
 
         public override void ToCss(TextWriter writer, IStyleFormatter formatter)
         {
-            var pseudo = _name == string.Empty ? "" : ":";
+            var pseudo = _name != string.Empty && _isPseudo ? ":" : "";
             writer.Write($"{pseudo}{_name}");
         }
 

@@ -799,12 +799,6 @@ namespace PeachPDF.Html.Core.Dom
                 CssNamedStringEngine.ApplyStringSet(this);
             }
 
-            // Register named page element if page property is set
-            if (!string.IsNullOrEmpty(PageName) && PageName != "auto")
-            {
-                HtmlContainer?.RegisterNamedPageElement(PageName, Location.Y);
-            }
-
             // Spec (css-break §3.1): a forced break occurs at a class A break point if
             // the earlier sibling's break-after OR the later sibling's break-before has a
             // forced break value — at least one is sufficient.
@@ -979,6 +973,19 @@ namespace PeachPDF.Html.Core.Dom
 
                     OffsetLeft(delta);
                 }
+            }
+
+            // Register named page element if page property is set. Must run here, after every branch
+            // above that can still move this box's own Location (Position: static/relative/absolute/
+            // fixed, the BreakInside: avoid OffsetTop nudge, and the absolute right-edge OffsetLeft
+            // adjustment) — registering earlier (e.g. at the top of this method) would capture
+            // Location's default (0, 0), since it isn't assigned until those branches run. Note this
+            // still can't see a *later* reposition by an ancestor's layout engine after this box's own
+            // PerformLayoutImp has returned (e.g. CssLayoutEngineColumns re-banding a column child via
+            // OffsetTop) — a narrower, currently-unhandled edge case.
+            if (!string.IsNullOrEmpty(PageName) && PageName != "auto")
+            {
+                HtmlContainer?.RegisterNamedPageElement(PageName, Location.Y);
             }
 
 #if DEBUG

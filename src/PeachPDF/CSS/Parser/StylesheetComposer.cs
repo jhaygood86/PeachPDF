@@ -539,6 +539,28 @@ namespace PeachPDF.CSS
                 //Skip past the pseudo class identifier
                 token = NextToken();
             }
+            else if (token.Type == TokenType.Ident)
+            {
+                // Named page selector(s) — CSS Paged Media's named-page extension, e.g.
+                // "@page chapter { ... }" or a comma-separated list "@page chapter1, chapter2 { ... }".
+                // Not a pseudo-class: no leading colon, and (unlike :first/:left/:right) page names are
+                // case-sensitive custom-idents — see PageSelector's isPseudo flag.
+                var names = new List<string>();
+
+                while (token.Type == TokenType.Ident)
+                {
+                    names.Add(token.Data);
+                    token = NextToken();
+                    ParseComments(ref token);
+
+                    if (token.Type != TokenType.Comma) break;
+
+                    token = NextToken();
+                    ParseComments(ref token);
+                }
+
+                selector = new PageSelector(string.Join(", ", names), isPseudo: false);
+            }
             else
             {
                 selector = new PageSelector();

@@ -380,7 +380,7 @@ namespace PeachPDF
         /// Selects the most specific @page rule for the given page.
         /// Priority (last wins): base → named page → :right/:left → :first.
         /// </summary>
-        private static PageRule? SelectPageRule(
+        internal static PageRule? SelectPageRule(
             IReadOnlyList<PageRule> rules,
             int pageNumber,
             IReadOnlyList<NamedPageElement> namedPageElements,
@@ -393,6 +393,17 @@ namespace PeachPDF
             PageRule? baseRule = null;
             PageRule? overrideRule = null;
 
+            // The CSS "page" property propagates forward through the normal flow until a later element
+            // sets a different one — it isn't a one-page-only tag. So the name in effect for this page
+            // is whichever named-page assignment most recently took effect at or before this page's end
+            // (the highest Y that's still < pageY + pageHeight), not just an assignment whose own Y
+            // happens to fall inside this specific page's range.
+            var activeNamedPage = namedPageElements
+                .Where(e => e.Y < pageY + pageHeight)
+                .OrderByDescending(e => e.Y)
+                .Select(e => e.Name)
+                .FirstOrDefault();
+
             foreach (var rule in rules)
             {
                 var selector = rule.Selector?.Text?.Trim() ?? "";
@@ -404,13 +415,16 @@ namespace PeachPDF
                 }
                 else if (!selector.StartsWith(":"))
                 {
-                    // Named page rule — matches if any element with page: <name> is on this page
-                    var elementOnPage = namedPageElements.Any(e =>
-                        e.Name == selectorLower &&
-                        e.Y >= pageY &&
-                        e.Y < pageY + pageHeight);
-                    if (elementOnPage)
-                        overrideRule = rule;
+                    // Named page rule — matches if the page name in effect for this page is one of the
+                    // (possibly comma-separated, e.g. "chapter1, chapter2") names this rule applies to.
+                    // Page names are case-sensitive CSS custom-idents, so compare the raw selector text
+                    // (not selectorLower) against the case-preserved NamedPageElement.Name.
+                    if (activeNamedPage is not null)
+                    {
+                        var names = selector.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+                        if (Array.IndexOf(names, activeNamedPage) >= 0)
+                            overrideRule = rule;
+                    }
                 }
                 else if (selectorLower == ":right" && pageNumber % 2 != 0)
                 {

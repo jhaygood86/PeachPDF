@@ -82,6 +82,49 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.Equal(":right", rule.SelectorText);
         }
 
+        // ── @page named selectors ──────────────────────────────────────────────
+        // Regression coverage: a bare identifier selector used to make the whole rule fail to parse
+        // (CreatePageSelector only handled the leading-colon pseudo-class case), so `@page chapter { }`
+        // silently vanished instead of producing a PageRule at all.
+
+        [Fact]
+        public void AtPage_NamedSelector_SelectorTextIsName()
+        {
+            var sheet = ParseStyleSheet("@page chapter { margin-top: 0; }");
+            var rule = sheet.Rules.OfType<PageRule>().FirstOrDefault();
+            Assert.NotNull(rule);
+            Assert.Equal("chapter", rule.SelectorText);
+        }
+
+        [Fact]
+        public void AtPage_NamedSelector_IsNotColonPrefixed()
+        {
+            // Distinguishes a named-page selector from a pseudo-class one: SelectPageRule's matching
+            // logic branches on whether the selector text starts with ':'.
+            var sheet = ParseStyleSheet("@page chapter { margin-top: 0; }");
+            var rule = sheet.Rules.OfType<PageRule>().FirstOrDefault();
+            Assert.NotNull(rule);
+            Assert.False(rule.SelectorText.StartsWith(':'));
+        }
+
+        [Fact]
+        public void AtPage_CommaSeparatedNamedSelectors_AllNamesPresent()
+        {
+            var sheet = ParseStyleSheet("@page chapter1, chapter2, chapter3 { margin-top: 0; }");
+            var rule = sheet.Rules.OfType<PageRule>().FirstOrDefault();
+            Assert.NotNull(rule);
+            Assert.Equal("chapter1, chapter2, chapter3", rule.SelectorText);
+        }
+
+        [Fact]
+        public void AtPage_NamedSelector_PreservesCase()
+        {
+            var sheet = ParseStyleSheet("@page Chapter { margin-top: 0; }");
+            var rule = sheet.Rules.OfType<PageRule>().FirstOrDefault();
+            Assert.NotNull(rule);
+            Assert.Equal("Chapter", rule.SelectorText);
+        }
+
         // ── @page margin boxes ─────────────────────────────────────────────────
 
         [Fact]

@@ -580,7 +580,7 @@ Margin boxes are sub-rules of `@page` that place text inside the page margins (o
 
 ### Named pages
 
-The CSS `page` property on an element activates a named `@page` rule for all PDF pages that contain that element. This lets different parts of a document use different page styles (e.g., wider margins for an appendix, or a different running header for each chapter).
+The CSS `page` property on an element activates a named `@page` rule starting on the page containing that element — and, matching the CSS spec's propagation behavior, stays active on every subsequent page in the normal flow until a later element activates a different named page. This lets different parts of a document use different page styles (e.g., wider margins for an appendix, or a different running header per chapter, continuing correctly across a chapter's own multi-page span).
 
 ```css
 @page chapter {
@@ -601,9 +601,19 @@ div.chapter { page: chapter; }
 | Value | Behavior |
 |-------|---------|
 | `page: auto` (default) | Uses the base `@page { }` rule |
-| `page: <ident>` | Activates `@page <ident> { }` for pages containing this element |
+| `page: <ident>` | Activates `@page <ident> { }` starting on the page containing this element |
 
 If multiple elements with different `page` values appear on the same page, the last one in document order wins.
+
+An `@page` rule's selector may also list several comma-separated names, sharing one rule across all of them:
+
+```css
+@page chapter1, chapter2, chapter3 {
+  @top-center { content: "Running Header"; }
+}
+```
+
+Page names are case-sensitive (`page: Chapter` will not activate `@page chapter { }`).
 
 ### Named strings (`string-set` / `string()`)
 
