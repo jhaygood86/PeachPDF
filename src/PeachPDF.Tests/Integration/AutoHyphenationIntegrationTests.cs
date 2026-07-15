@@ -60,6 +60,20 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task HyphensAuto_NoCandidateFitsAvailableWidth_WordStaysWhole()
+        {
+            // Regression coverage for TryHyphenateWord's fallback when hyphenation candidates genuinely
+            // exist but every one of them (even the shortest hyphenated prefix, one letter plus a literal
+            // "-") is still wider than the sliver of line space actually available - the word must be
+            // left whole (falling back to ordinary wrapping) rather than forcing an ill-fitting split.
+            var box = await FindWordsBoxAsync(
+                "<html lang=\"en\"><body><p id=\"p\" style=\"width:2px;hyphens:auto\">antidisestablishmentarianism</p></body></html>");
+
+            Assert.Single(box.Words);
+            Assert.Equal("antidisestablishmentarianism", box.Words[0].Text);
+        }
+
+        [Fact]
         public async Task HyphensAuto_ShortWordThatFits_IsNeverSplit()
         {
             var box = await FindWordsBoxAsync(

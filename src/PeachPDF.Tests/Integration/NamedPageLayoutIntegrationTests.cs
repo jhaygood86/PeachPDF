@@ -107,6 +107,40 @@ namespace PeachPDF.Tests.Integration
             Assert.True(registered.Y > 100, $"expected a Y well past the filler div, got {registered.Y}");
         }
 
+        [Fact]
+        public async Task NamedString_InlineFlexElement_RegistersActualLocationY()
+        {
+            // Companion to NamedPageElement_InlineFlexElement_Registers - the same InlineFlex branch in
+            // CssLayoutEngine.FlowBox also finalizes string-set eagerly (mirroring CssBox.PerformLayoutImp's
+            // own late-stage NamedStrings correction) since its Location is already final at that point.
+            var html = Wrap("""<p id="para"><span id="entry" style="display:inline-flex; string-set: term content(text)">Chapter 2</span> starts here.</p>""");
+
+            var (root, container) = await BuildAndLayout(html);
+            var entryBox = FindById(root, "entry")!;
+
+            var namedString = Assert.Single(entryBox.NamedStrings.Values);
+            Assert.Equal(entryBox.Location.Y, namedString.Y, 1);
+
+            var documentEntry = container.NamedStrings.Single(ns => ns.Name == "term");
+            Assert.Equal(entryBox.Location.Y, documentEntry.Y, 1);
+        }
+
+        [Fact]
+        public async Task NamedPageElement_InlineFlexElement_Registers()
+        {
+            // display:inline-flex inside a text-flow container is treated as an atomic inline element
+            // (CssLayoutEngine.FlowBox's dedicated InlineFlex branch), a separate code path from the
+            // plain-inline case above - it finalizes its own Location eagerly rather than deferring to
+            // FlowBox's generic "box != blockBox" late correction, so needs its own regression coverage.
+            var html = Wrap("""<p id="para"><span id="chapter" style="display:inline-flex; page:chapter">Chapter 2</span> starts here.</p>""");
+
+            var (root, container) = await BuildAndLayout(html);
+            var chapterBox = FindById(root, "chapter")!;
+
+            var registered = Assert.Single(container.NamedPageElements, e => e.Name == "chapter");
+            Assert.Equal(chapterBox.Location.Y, registered.Y, 1);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>

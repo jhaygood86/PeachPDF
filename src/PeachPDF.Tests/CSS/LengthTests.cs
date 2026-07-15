@@ -157,12 +157,52 @@ namespace PeachPDF.Tests.CSS
         }
 
         [Fact]
+        public void ToPixels_Pc_TwelvePointsPerPica()
+        {
+            var length = new Length(1f, Length.Unit.Pc);
+
+            Assert.Equal(12d, length.ToPixels(0, 0, 0));
+        }
+
+        [Fact]
         public void To_ConvertsBetweenAbsoluteUnits()
         {
             var length = new Length(1f, Length.Unit.In);
 
             // This engine's native unit is points (1in = 72pt), not the browser's 96dpi CSS px.
             Assert.Equal(72f, length.To(Length.Unit.Px));
+        }
+
+        [Fact]
+        public void To_Mm_ConvertsFromPoints()
+        {
+            var length = new Length(72f, Length.Unit.Pt);
+
+            Assert.Equal(25.4f, length.To(Length.Unit.Mm), 3);
+        }
+
+        [Fact]
+        public void To_Pc_ConvertsFromPoints()
+        {
+            var length = new Length(12f, Length.Unit.Pt);
+
+            Assert.Equal(1f, length.To(Length.Unit.Pc));
+        }
+
+        [Fact]
+        public void To_Pt_ReturnsSameValue()
+        {
+            var length = new Length(42f, Length.Unit.Pt);
+
+            Assert.Equal(42f, length.To(Length.Unit.Pt));
+        }
+
+        [Fact]
+        public void To_Cm_ConvertsFromPoints()
+        {
+            var length = new Length(72f, Length.Unit.Pt);
+
+            Assert.Equal(2.54f, length.To(Length.Unit.Cm), 3);
         }
 
         [Fact]

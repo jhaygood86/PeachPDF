@@ -114,6 +114,75 @@ body {{ font-size: 20pt; }}
             Assert.True(doc.PageCount >= 1);
         }
 
+        [Fact]
+        public async Task LinkedStylesheet_MissingResource_DoesNotThrow_AndStillRenders()
+        {
+            // StylesheetLoadHandler.LoadStylesheet's networkResponse is null (resource never registered) -
+            // isInvalidNetworkResponse stays true and the handler returns an empty stylesheet rather than
+            // throwing, so the rest of the document still renders.
+            var loader = new InMemoryNetworkLoader(DocumentUri, primaryHtml: $@"<!DOCTYPE html>
+<html><head>
+<link rel=""stylesheet"" href=""css/missing.css"">
+</head>
+<body>Hello Missing</body>
+</html>");
+
+            var generator = new PdfGenerator();
+            var config = new PdfGenerateConfig { NetworkLoader = loader, PageSize = PageSize.A4 };
+
+            var doc = await generator.GeneratePdf(null, config);
+
+            Assert.NotNull(doc);
+            Assert.True(doc.PageCount >= 1);
+        }
+
+        [Fact]
+        public async Task LinkedStylesheet_WrongContentType_IsTreatedAsInvalid_AndStillRenders()
+        {
+            // A resource does exist at the URL, but with a non-CSS content-type - the same
+            // isInvalidNetworkResponse path as a missing resource, exercised via the opposite cause.
+            var loader = new InMemoryNetworkLoader(DocumentUri, primaryHtml: $@"<!DOCTYPE html>
+<html><head>
+<link rel=""stylesheet"" href=""css/notcss.css"">
+</head>
+<body>Hello WrongType</body>
+</html>");
+
+            loader.AddTextResource("https://example.test/docs/css/notcss.css", "<html>not css</html>", "text/html");
+
+            var generator = new PdfGenerator();
+            var config = new PdfGenerateConfig { NetworkLoader = loader, PageSize = PageSize.A4 };
+
+            var doc = await generator.GeneratePdf(null, config);
+
+            Assert.NotNull(doc);
+            Assert.True(doc.PageCount >= 1);
+        }
+
+        [Fact]
+        public async Task LinkedStylesheet_ResolvesAgainstBaseHref_NotDocumentLocation()
+        {
+            // Regression coverage for the <base href> resolution branch in
+            // StylesheetLoadHandler.LoadStylesheet, only reachable for a top-level (non-@import) load.
+            var loader = new InMemoryNetworkLoader(DocumentUri, primaryHtml: $@"<!DOCTYPE html>
+<html><head>
+<base href=""https://example.test/other/"">
+<link rel=""stylesheet"" href=""sheet.css"">
+</head>
+<body>Hello Base</body>
+</html>");
+
+            loader.AddTextResource("https://example.test/other/sheet.css", "body { font-size: 14pt; }", "text/css");
+
+            var generator = new PdfGenerator();
+            var config = new PdfGenerateConfig { NetworkLoader = loader, PageSize = PageSize.A4 };
+
+            var doc = await generator.GeneratePdf(null, config);
+
+            Assert.NotNull(doc);
+            Assert.True(doc.PageCount >= 1);
+        }
+
         private static string GetPdfText(PeachPdfDocument doc)
         {
             var ms = new MemoryStream();

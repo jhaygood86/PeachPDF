@@ -174,6 +174,40 @@ namespace PeachPDF.Tests.Html.Core.Utils
         }
 
         [Fact]
+        public async Task SetPropertyValue_ColumnsShorthand_CountAndWidth_SetsBothLonghands()
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, "columns", "2 100px");
+
+            Assert.Equal("2", box.ColumnCount);
+            Assert.Equal("100px", box.ColumnWidth);
+        }
+
+        [Fact]
+        public async Task SetPropertyValue_ColumnsShorthand_Auto_LeavesLonghandsAtDefault()
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, "columns", "auto");
+
+            Assert.Equal("auto", box.ColumnCount);
+            Assert.Equal("auto", box.ColumnWidth);
+        }
+
+        [Fact]
+        public async Task SetPropertyValue_ColumnRuleShorthand_SetsWidthStyleAndColor()
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, "column-rule", "2px solid black");
+
+            Assert.Equal("2px", box.ColumnRuleWidth);
+            Assert.Equal("solid", box.ColumnRuleStyle);
+            Assert.Equal("black", box.ColumnRuleColor);
+        }
+
+        [Fact]
         public async Task SetPropertyValue_ZIndex_AutoOrInteger_IsAccepted()
         {
             var (box, parser) = await FindDivBoxAndParser("");
@@ -212,6 +246,24 @@ namespace PeachPDF.Tests.Html.Core.Utils
         public void IsValidBoxSizing_ChecksKnownValues(string value, bool expected)
         {
             Assert.Equal(expected, CssUtils.IsValidBoxSizing(value));
+        }
+
+        [Fact]
+        public async Task NumericFontWeight_700OrAbove_ResolvesToBoldFont()
+        {
+            var box = await FindDivBox("font-weight: 700;");
+
+            var font = (PeachPDF.Adapters.FontAdapter)box.ActualFont;
+            Assert.True(font.Font.Bold);
+        }
+
+        [Fact]
+        public async Task NumericFontWeight_Below700_DoesNotResolveToBoldFont()
+        {
+            var box = await FindDivBox("font-weight: 400;");
+
+            var font = (PeachPDF.Adapters.FontAdapter)box.ActualFont;
+            Assert.False(font.Font.Bold);
         }
 
         [Fact]

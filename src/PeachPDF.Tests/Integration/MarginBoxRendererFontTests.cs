@@ -74,6 +74,39 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public void FontWeightBold_ResolvesToBoldFont()
+        {
+            var marginStyle = ParseDeclarations("font-weight: bold;");
+            var adapter = NewAdapter();
+
+            var font = MarginBoxRenderer.BuildFont(marginStyle, null, adapter);
+
+            Assert.True(font.Bold);
+        }
+
+        [Fact]
+        public void FontWeightNumeric700_ResolvesToBoldFont()
+        {
+            var marginStyle = ParseDeclarations("font-weight: 700;");
+            var adapter = NewAdapter();
+
+            var font = MarginBoxRenderer.BuildFont(marginStyle, null, adapter);
+
+            Assert.True(font.Bold);
+        }
+
+        [Fact]
+        public void FontStyleItalic_ResolvesToItalicFont()
+        {
+            var marginStyle = ParseDeclarations("font-style: italic;");
+            var adapter = NewAdapter();
+
+            var font = MarginBoxRenderer.BuildFont(marginStyle, null, adapter);
+
+            Assert.True(font.Italic);
+        }
+
+        [Fact]
         public void KeywordFontSize_ResolvesViaSharedTable()
         {
             var marginStyle = ParseDeclarations("font-size: large;");

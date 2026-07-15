@@ -122,6 +122,18 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task Widows2_ParagraphStartingOnSecondPage_StillNudgedCorrectly()
+        {
+            // Regression coverage for the "own top relative to page" modulo loop only having ever been
+            // exercised with a box on the first page (Location.Y < pageHeight, loop body never runs) -
+            // a filler tall enough to push the paragraph's own start onto the second page forces that
+            // loop to actually iterate.
+            var box = await FindByIdInPagedDocAsync(130, FourLineParagraph);
+
+            Assert.Equal(200, box.Location.Y, 1);
+        }
+
+        [Fact]
         public async Task Orphans1Widows1_MatchesDictionaryCssValues_NoEffect_Regression()
         {
             // css4.pub's real dictionary sets "widows: 1; orphans: 1" - already maximally permissive

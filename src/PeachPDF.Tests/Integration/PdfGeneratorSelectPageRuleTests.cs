@@ -214,6 +214,24 @@ namespace PeachPDF.Tests.Integration
             Assert.Same(baseRule, result);
         }
 
+        [Fact]
+        public void UnrecognizedPseudoClass_NeverMatches_BaseRuleApplies()
+        {
+            // ":blank" is a real CSS Paged Media pseudo-class this engine doesn't implement - it must
+            // never match any page (falls through GetOrderedApplicableRules' pseudo switch default),
+            // leaving the base rule as the only applicable one, rather than throwing or matching wrongly.
+            var rules = ParsePageRules("""
+                @page { margin: 10mm; }
+                @page :blank { margin: 30mm; }
+                """);
+            var baseRule = rules[0];
+            Assert.Equal(2, rules.Count);
+
+            var result = PdfGenerator.SelectPageRule(rules, pageNumber: 1, [], pageY: 0, pageHeight: 800);
+
+            Assert.Same(baseRule, result);
+        }
+
         // ─── Compound name:pseudo selectors ─────────────────────────────────────
         // Regression coverage for a parser bug found alongside the primary Y-timing one: "@page
         // chapter1:left { ... }" used to fail to parse at all (CreatePageSelector stopped consuming

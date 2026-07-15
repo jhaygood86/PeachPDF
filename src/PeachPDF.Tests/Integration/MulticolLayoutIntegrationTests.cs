@@ -1,4 +1,6 @@
 using PeachPDF.Adapters;
+using PeachPDF.Html.Adapters;
+using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -31,6 +33,51 @@ namespace PeachPDF.Tests.Integration
         {
             var box = await FindByIdAsync("<div id='mc'></div>", "mc");
             Assert.False(box.EstablishesMultiColumnContext);
+        }
+
+        [Fact]
+        public async Task NoChildren_ActualBottomEqualsLocationPlusBoxSizeIncludedHeight()
+        {
+            var box = await FindByIdAsync("<div id='mc' style='columns:2; padding:5px'></div>", "mc");
+
+            Assert.Equal(box.Location.Y + box.ActualBoxSizeIncludedHeight, box.ActualBottom);
+        }
+
+        [Fact]
+        public async Task ColumnCount1_DegeneratesToOrdinaryBlockFlow()
+        {
+            var html = Wrap(@"
+                <div id='mc' style='columns:1; width:200px'>
+                    <div class='item' style='height:20px'></div>
+                    <div class='item' style='height:20px'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 1000);
+            var items = FindAllByClass(root, "item");
+            var mc = FindById(root, "mc")!;
+
+            Assert.Equal(2, items.Count);
+            // Ordinary block flow: both items stack vertically at the same X, second directly below first.
+            Assert.Equal(items[0].Location.X, items[1].Location.X);
+            Assert.True(items[1].Location.Y > items[0].Location.Y);
+            Assert.Equal(mc.ActualBottom, items[1].ActualBottom);
+        }
+
+        [Fact]
+        public async Task ColumnCountAndWidthBothSpecified_CountActsAsMaximum()
+        {
+            // column-count is a maximum: never more columns than fit at >= column-width, so a
+            // wide column-width here caps the actual column count below the requested count.
+            var html = Wrap(@"
+                <div id='mc' style='column-count:5; column-width:80px; column-gap:0; width:200px'>
+                    <div class='item' style='height:20px'></div>
+                    <div class='item' style='height:20px'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 1000);
+            var items = FindAllByClass(root, "item");
+
+            // 200px / 80px => at most 2 columns fit, even though column-count asked for 5.
+            var distinctX = items.Select(i => System.Math.Round(i.Location.X)).Distinct().ToList();
+            Assert.True(distinctX.Count <= 2);
         }
 
         // ─── Basic column geometry ──────────────────────────────────────────────────
@@ -180,6 +227,26 @@ namespace PeachPDF.Tests.Integration
             AssertNoOverlaps(items);
         }
 
+        [Fact]
+        public async Task ColumnRule_ActuallyPainted_DrawsALine()
+        {
+            // Regression coverage per this repo's painting-test convention: a passing layout-level
+            // assertion on ColumnRuleSegments alone doesn't prove PaintColumnRules ever runs or issues a
+            // real draw call - drive the real Paint() pipeline and record what actually reached RGraphics.
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-rule:1px solid black; column-gap:0; width:200px'>
+                    <div class='item' style='height:20px'></div>
+                    <div class='item' style='height:20px'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 1000);
+            var mc = FindById(root, "mc")!;
+
+            var spy = new DrawLineSpyGraphics();
+            await mc.Paint(spy);
+
+            Assert.True(spy.DrawLineCallCount > 0);
+        }
+
         // ─── column-fill: balance precision (binary-search solver) ─────────────────
 
         [Fact]
@@ -314,6 +381,46 @@ namespace PeachPDF.Tests.Integration
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
+
+        // Minimal RGraphics spy recording only DrawLine calls - per this repo's painting-test
+        // convention (see SpyGraphics in TransformIntegrationTests.cs), used to prove PaintColumnRules
+        // actually issues a real draw call rather than trusting a layout-level assertion alone.
+        private sealed class DrawLineSpyGraphics : RGraphics
+        {
+            public int DrawLineCallCount { get; private set; }
+
+            public DrawLineSpyGraphics() : base(new PdfSharpAdapter(), new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
+
+            public override void DrawLine(RPen pen, double x1, double y1, double x2, double y2) => DrawLineCallCount++;
+
+            public override void PushTransform(RMatrix matrix) { }
+            public override void PopTransform() { }
+            public override void PushClip(RRect rect) => _clipStack.Push(rect);
+            public override void PushClip(RGraphicsPath path) => _clipStack.Push(_clipStack.Peek());
+            public override void PopClip() { if (_clipStack.Count > 1) _clipStack.Pop(); }
+            public override void PushClipExclude(RRect rect) { }
+            public override object SetAntiAliasSmoothingMode() => new object();
+            public override void ReturnPreviousSmoothingMode(object? prevMode) { }
+            public override RGraphicsPath GetGraphicsPath() => null!;
+            public override (RGraphics Graphics, RImage Image)? CreateTile(double width, double height) => null;
+            public override void DrawImageMasked(RImage image, RImage maskImage, RRect destRect) { }
+            public override void DrawImageWithOpacity(RImage image, RRect destRect, double opacity) { }
+            public override RSize MeasureString(string str, RFont font) => new(0, 12);
+            public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth)
+            {
+                charFit = str?.Length ?? 0;
+                charFitWidth = 0;
+            }
+            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl) { }
+            public override void DrawRectangle(RPen pen, double x, double y, double width, double height) { }
+            public override void DrawRectangle(RBrush brush, double x, double y, double width, double height) { }
+            public override void DrawImage(RImage image, RRect destRect, RRect srcRect) { }
+            public override void DrawImage(RImage image, RRect destRect) { }
+            public override void DrawPath(RPen pen, RGraphicsPath path) { }
+            public override void DrawPath(RBrush brush, RGraphicsPath path) { }
+            public override void DrawPolygon(RBrush brush, RPoint[] points) { }
+            public override void Dispose() { }
+        }
 
         private static string Wrap(string body) =>
             $"<!DOCTYPE html><html><head></head><body>{body}</body></html>";

@@ -45,10 +45,6 @@ namespace PeachPDF.CSS
             _entries = new List<PageSelectorEntry>(entries);
         }
 
-        public PageSelector() : this([])
-        {
-        }
-
         public IReadOnlyList<PageSelectorEntry> Entries => _entries;
 
         public override void ToCss(TextWriter writer, IStyleFormatter formatter)

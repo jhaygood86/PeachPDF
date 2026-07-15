@@ -91,24 +91,6 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Get the top of this box line (the min top of all the words) — used by orphans/widows
-        /// break-avoidance (see <see cref="CssBox.PerformLayoutImp"/>) to find each line's vertical
-        /// extent alongside <see cref="LineBottom"/>.
-        /// </summary>
-        public double LineTop
-        {
-            get
-            {
-                var top = double.MaxValue;
-                foreach (var rect in Rectangles)
-                {
-                    top = Math.Min(top, rect.Value.Top);
-                }
-                return top == double.MaxValue ? 0 : top;
-            }
-        }
-
-        /// <summary>
         /// Lets the linebox add the word an its box to their lists if necessary.
         /// </summary>
         /// <param name="word"></param>
