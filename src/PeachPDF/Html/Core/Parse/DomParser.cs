@@ -62,6 +62,14 @@ namespace PeachPDF.Html.Core.Parse
             root.IsRoot = true;
             root.HtmlContainer = htmlContainer;
 
+            // Must happen before CorrectTextBoxes (below) parses every text box's words - hyphens:auto
+            // needs to know the document's language (see CssBox.ParseToWords) at that point, not after
+            // this whole method returns. Root is a synthetic wrapper box, not the document's actual
+            // <html> element, so it must be located by tag name.
+            var htmlBox = DomUtils.GetBoxByTagName(root, "html");
+            var lang = htmlBox?.HtmlTag?.TryGetAttribute("lang", "");
+            htmlContainer.DocumentLanguage = string.IsNullOrEmpty(lang) ? null : lang;
+
             var metadata = ExtractMetadata(root);
 
             const bool cssDataChanged = false;

@@ -214,6 +214,125 @@ namespace PeachPDF.Tests.Integration
             Assert.Same(baseRule, result);
         }
 
+        // ─── Compound name:pseudo selectors ─────────────────────────────────────
+        // Regression coverage for a parser bug found alongside the primary Y-timing one: "@page
+        // chapter1:left { ... }" used to fail to parse at all (CreatePageSelector stopped consuming
+        // tokens at the first non-comma token after an ident), silently dropping the entire rule -
+        // discovered because css4.pub's real dictionary CSS uses exactly this compound form for page
+        // numbers ("@page chapter1:left, ..., chapter8:left { @bottom-left { content: counter(page) } }").
+
+        [Fact]
+        public void CompoundSelector_MatchesOnlyWhenBothNameAndPseudoMatch()
+        {
+            var rules = ParsePageRules("""
+                @page { margin: 10mm; }
+                @page chapter1:left { margin: 20mm; }
+                """);
+            var baseRule = rules[0];
+            var compoundRule = rules[1];
+            var elements = new List<NamedPageElement> { new("chapter1", 0) };
+
+            // Name matches, page is left (even) -> compound rule applies.
+            Assert.Same(compoundRule,
+                PdfGenerator.SelectPageRule(rules, pageNumber: 2, elements, pageY: 800, pageHeight: 800));
+
+            // Name matches but page is right (odd) -> pseudo half fails, base rule applies.
+            Assert.Same(baseRule,
+                PdfGenerator.SelectPageRule(rules, pageNumber: 1, elements, pageY: 0, pageHeight: 800));
+
+            // Page is left but the active name is different -> name half fails, base rule applies.
+            var otherElements = new List<NamedPageElement> { new("chapter2", 0) };
+            Assert.Same(baseRule,
+                PdfGenerator.SelectPageRule(rules, pageNumber: 2, otherElements, pageY: 800, pageHeight: 800));
+        }
+
+        [Fact]
+        public void CompoundSelector_CommaSeparatedList_EachEntryIndependentlyValid()
+        {
+            var rules = ParsePageRules("""
+                @page { margin: 10mm; }
+                @page chapter1:left, chapter2:left { margin: 20mm; }
+                """);
+            var compoundRule = rules[1];
+            var elements = new List<NamedPageElement> { new("chapter2", 0) };
+
+            var result = PdfGenerator.SelectPageRule(rules, pageNumber: 2, elements, pageY: 800, pageHeight: 800);
+
+            Assert.Same(compoundRule, result);
+        }
+
+        [Fact]
+        public void CompoundSelector_OutranksPseudoAloneRegardlessOfOrder()
+        {
+            // Specificity, not source order: a compound "chapter1:left" (name+pseudo) must beat a bare
+            // ":left" whichever one is declared first.
+            var elements = new List<NamedPageElement> { new("chapter1", 0) };
+
+            var compoundFirst = ParsePageRules("""
+                @page { margin: 10mm; }
+                @page chapter1:left { margin: 20mm; }
+                @page :left { margin: 30mm; }
+                """);
+            Assert.Same(compoundFirst[1],
+                PdfGenerator.SelectPageRule(compoundFirst, pageNumber: 2, elements, pageY: 800, pageHeight: 800));
+
+            var pseudoFirst = ParsePageRules("""
+                @page { margin: 10mm; }
+                @page :left { margin: 30mm; }
+                @page chapter1:left { margin: 20mm; }
+                """);
+            Assert.Same(pseudoFirst[2],
+                PdfGenerator.SelectPageRule(pseudoFirst, pageNumber: 2, elements, pageY: 800, pageHeight: 800));
+        }
+
+        [Fact]
+        public void PlainNamedRule_StillOutranksPseudoAlone_AsBefore()
+        {
+            // Behavior change from pure source-order: a plain named rule (specificity 2) now outranks a
+            // bare :left/:right pseudo-class rule (specificity 1) regardless of which is declared later.
+            var elements = new List<NamedPageElement> { new("chapter", 0) };
+
+            var namedFirst = ParsePageRules("""
+                @page { margin: 10mm; }
+                @page chapter { margin: 20mm; }
+                @page :left { margin: 30mm; }
+                """);
+            Assert.Same(namedFirst[1],
+                PdfGenerator.SelectPageRule(namedFirst, pageNumber: 2, elements, pageY: 0, pageHeight: 800));
+
+            var pseudoFirst = ParsePageRules("""
+                @page { margin: 10mm; }
+                @page :left { margin: 30mm; }
+                @page chapter { margin: 20mm; }
+                """);
+            Assert.Same(pseudoFirst[2],
+                PdfGenerator.SelectPageRule(pseudoFirst, pageNumber: 2, elements, pageY: 0, pageHeight: 800));
+        }
+
+        [Fact]
+        public void FirstPseudoSelector_StillOutranksEverythingRegardlessOfOrder()
+        {
+            // Regression: :first must remain an unconditional override, not folded into the additive
+            // name/pseudo specificity score (it must keep beating a plain named rule, unlike :left/:right).
+            var elements = new List<NamedPageElement> { new("chapter", 0) };
+
+            var rules = ParsePageRules("""
+                @page { margin: 10mm; }
+                @page chapter { margin: 20mm; }
+                @page :first { margin: 30mm; }
+                """);
+            Assert.Same(rules[2],
+                PdfGenerator.SelectPageRule(rules, pageNumber: 1, elements, pageY: 0, pageHeight: 800));
+
+            var reordered = ParsePageRules("""
+                @page { margin: 10mm; }
+                @page :first { margin: 30mm; }
+                @page chapter { margin: 20mm; }
+                """);
+            Assert.Same(reordered[1],
+                PdfGenerator.SelectPageRule(reordered, pageNumber: 1, elements, pageY: 0, pageHeight: 800));
+        }
+
         [Fact]
         public void LeftRightPseudoSelectors_AlternateByPageParity()
         {
@@ -228,6 +347,70 @@ namespace PeachPDF.Tests.Integration
             Assert.Same(rightRule, PdfGenerator.SelectPageRule(rules, pageNumber: 1, [], pageY: 0, pageHeight: 800));
             Assert.Same(leftRule, PdfGenerator.SelectPageRule(rules, pageNumber: 2, [], pageY: 800, pageHeight: 800));
             Assert.Same(rightRule, PdfGenerator.SelectPageRule(rules, pageNumber: 3, [], pageY: 1600, pageHeight: 800));
+        }
+
+        // ─── SelectApplicableMarginRules: cascade merge across matching rules ───
+        // Regression for a bug found while verifying the compound name:pseudo selector fix above against
+        // the real css4.pub dictionary page: @page rules cascade per-declaration like any other CSS, but
+        // SelectPageRule only ever returns ONE winning rule. Naively rendering only that one rule's
+        // margin boxes meant a page matching both a low-specificity base named rule (defining
+        // @top-left/@top-center/@top-right, e.g. running headers) AND a higher-specificity compound
+        // "name:left"/"name:right" rule (defining only @bottom-left/@bottom-right) lost the base rule's
+        // headers entirely — confirmed by an actual rasterized re-render of the live dictionary page,
+        // where running headers vanished the moment compound selectors started matching.
+
+        [Fact]
+        public void SelectApplicableMarginRules_MergesBaseAndCompoundRuleMarginsByName()
+        {
+            var rules = ParsePageRules("""
+                @page chapter { @top-left { content: "Term"; } @top-center { content: "Letter"; } }
+                @page chapter:left { @bottom-left { content: counter(page); } }
+                """);
+            var elements = new List<NamedPageElement> { new("chapter", 0) };
+
+            var margins = PdfGenerator.SelectApplicableMarginRules(rules, pageNumber: 2, elements, pageY: 0, pageHeight: 800);
+            var boxNames = margins.Select(m => m.Selector?.Text?.Trim().ToLowerInvariant()).ToList();
+
+            // Both the base rule's headers AND the compound rule's page number must be present together.
+            Assert.Contains("top-left", boxNames);
+            Assert.Contains("top-center", boxNames);
+            Assert.Contains("bottom-left", boxNames);
+        }
+
+        [Fact]
+        public void SelectApplicableMarginRules_MoreSpecificRuleWinsForTheSameBoxName()
+        {
+            var rules = ParsePageRules("""
+                @page chapter { @top-left { content: "Base"; } }
+                @page chapter:left { @top-left { content: "Compound"; } }
+                """);
+            var elements = new List<NamedPageElement> { new("chapter", 0) };
+
+            var margins = PdfGenerator.SelectApplicableMarginRules(rules, pageNumber: 2, elements, pageY: 0, pageHeight: 800);
+            var topLeft = Assert.Single(margins, m => m.Selector?.Text?.Trim().ToLowerInvariant() == "top-left");
+
+            Assert.Equal("\"Compound\"", topLeft.Style.Content);
+        }
+
+        [Fact]
+        public void SelectApplicableMarginRules_OnlyBaseRuleMatches_ReturnsItsMarginsAlone()
+        {
+            var rules = ParsePageRules("""
+                @page { @top-center { content: "Base only"; } }
+                """);
+
+            var margins = PdfGenerator.SelectApplicableMarginRules(rules, pageNumber: 1, [], pageY: 0, pageHeight: 800);
+
+            var box = Assert.Single(margins);
+            Assert.Equal("top-center", box.Selector?.Text?.Trim().ToLowerInvariant());
+        }
+
+        [Fact]
+        public void SelectApplicableMarginRules_NoRulesMatch_ReturnsEmpty()
+        {
+            var margins = PdfGenerator.SelectApplicableMarginRules([], pageNumber: 1, [], pageY: 0, pageHeight: 800);
+
+            Assert.Empty(margins);
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────

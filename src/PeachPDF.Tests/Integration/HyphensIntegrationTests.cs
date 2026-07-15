@@ -40,14 +40,18 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task SoftHyphen_ManualMode_IsBreakOpportunity_AndNotRendered()
+        public async Task SoftHyphen_ManualMode_IsBreakOpportunity_AndRendersHyphenWhenUsed()
         {
-            // "abc­def" should split into two words at the soft hyphen, and the soft hyphen
-            // character itself must not survive into either word's rendered text.
-            var box = await FindByIdAsync("<p id='p' style='width:10px'>abc­def</p>");
+            // Regression for the pre-existing "hyphen glyph never renders" gap (see
+            // docs/html-css-support.md's old note on this): a soft hyphen used as an actual line-break
+            // point must now show a literal "-" on the line it ends. 30px sits strictly between "abc-"'s
+            // measured width (~21.5) and the whole "abcdef" word's (~32.8), so the break is actually
+            // used here (unlike a container so narrow even the hyphenated prefix doesn't fit, where the
+            // word legitimately just overflows whole instead - see the width:10px case below).
+            var box = await FindByIdAsync("<p id='p' style='width:30px'>abc­def</p>");
             var words = box.Boxes.SelectMany(b => b.Words).ToList();
             Assert.All(words, w => Assert.DoesNotContain('­', w.Text ?? ""));
-            Assert.Contains(words, w => w.Text == "abc");
+            Assert.Contains(words, w => w.Text == "abc-");
             Assert.Contains(words, w => w.Text == "def");
         }
 

@@ -15,6 +15,12 @@ namespace PeachPDF.Html.Core.Dom
     {
         private const double DefaultFontSizePt = 10.0;
 
+        /// <summary>
+        /// Renders every applicable margin box. <paramref name="margins"/> is the effective, already
+        /// cascade-merged set of margin-box declarations for this page (see
+        /// <see cref="PdfGenerator.SelectApplicableMarginRules"/>) — not necessarily all from the same
+        /// <c>@page</c> rule, since <c>@page</c> rules cascade per-declaration like any other CSS.
+        /// </summary>
         public static void Render(
             XGraphics g,
             XSize pageSize,
@@ -22,14 +28,14 @@ namespace PeachPDF.Html.Core.Dom
             double marginTop,
             double marginRight,
             double marginBottom,
-            PageRule rule,
+            IReadOnlyList<MarginStyleRule> margins,
             int pageNumber,
             int totalPages,
             double pageY,
             IReadOnlyList<NamedString> namedStrings,
             RAdapter adapter)
         {
-            foreach (var marginRule in rule.Margins)
+            foreach (var marginRule in margins)
             {
                 var boxName = marginRule.Selector?.Text?.Trim().ToLowerInvariant();
                 if (string.IsNullOrEmpty(boxName))
@@ -45,7 +51,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (text == null)
                     continue;
 
-                var rect = GetMarginBoxRect(boxName, pageSize, marginLeft, marginTop, marginRight, marginBottom, rule);
+                var rect = GetMarginBoxRect(boxName, pageSize, marginLeft, marginTop, marginRight, marginBottom, margins);
                 if (rect.Width <= 0 || rect.Height <= 0)
                     continue;
 
@@ -145,7 +151,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Returns the rectangle (in PDF points) for a named margin box.
         /// Uses explicit width/height from each box's CSS rule if present; falls back to equal thirds.
         /// </summary>
-        private static XRect GetMarginBoxRect(string name, XSize page, double mL, double mT, double mR, double mB, PageRule? rule)
+        private static XRect GetMarginBoxRect(string name, XSize page, double mL, double mT, double mR, double mB, IReadOnlyList<MarginStyleRule> margins)
         {
             var contentLeft   = mL;
             var contentRight  = page.Width - mR;
@@ -154,33 +160,33 @@ namespace PeachPDF.Html.Core.Dom
             var contentBottom = page.Height - mB;
             var contentHeight = contentBottom - contentTop;
 
-            var tlR = FindMargin(rule, "top-left");
-            var tcR = FindMargin(rule, "top-center");
-            var trR = FindMargin(rule, "top-right");
+            var tlR = FindMargin(margins, "top-left");
+            var tcR = FindMargin(margins, "top-center");
+            var trR = FindMargin(margins, "top-right");
             var (tL, tC, tR) = ComputeThreeBoxSizes(contentWidth,
                 PW(tlR), PMinW(tlR), PMaxW(tlR),
                 PW(tcR), PMinW(tcR), PMaxW(tcR),
                 PW(trR), PMinW(trR), PMaxW(trR));
 
-            var blR = FindMargin(rule, "bottom-left");
-            var bcR = FindMargin(rule, "bottom-center");
-            var brR = FindMargin(rule, "bottom-right");
+            var blR = FindMargin(margins, "bottom-left");
+            var bcR = FindMargin(margins, "bottom-center");
+            var brR = FindMargin(margins, "bottom-right");
             var (bL, bC, bR) = ComputeThreeBoxSizes(contentWidth,
                 PW(blR), PMinW(blR), PMaxW(blR),
                 PW(bcR), PMinW(bcR), PMaxW(bcR),
                 PW(brR), PMinW(brR), PMaxW(brR));
 
-            var rtR = FindMargin(rule, "right-top");
-            var rmR = FindMargin(rule, "right-middle");
-            var rbR = FindMargin(rule, "right-bottom");
+            var rtR = FindMargin(margins, "right-top");
+            var rmR = FindMargin(margins, "right-middle");
+            var rbR = FindMargin(margins, "right-bottom");
             var (rT, rM, rB) = ComputeThreeBoxSizes(contentHeight,
                 PH(rtR), PMinH(rtR), PMaxH(rtR),
                 PH(rmR), PMinH(rmR), PMaxH(rmR),
                 PH(rbR), PMinH(rbR), PMaxH(rbR));
 
-            var ltR = FindMargin(rule, "left-top");
-            var lmR = FindMargin(rule, "left-middle");
-            var lbR = FindMargin(rule, "left-bottom");
+            var ltR = FindMargin(margins, "left-top");
+            var lmR = FindMargin(margins, "left-middle");
+            var lbR = FindMargin(margins, "left-bottom");
             var (lT, lM, lB) = ComputeThreeBoxSizes(contentHeight,
                 PH(ltR), PMinH(ltR), PMaxH(ltR),
                 PH(lmR), PMinH(lmR), PMaxH(lmR),
@@ -216,8 +222,8 @@ namespace PeachPDF.Html.Core.Dom
             };
         }
 
-        private static MarginStyleRule? FindMargin(PageRule? rule, string name) =>
-            rule?.Margins.FirstOrDefault(m =>
+        private static MarginStyleRule? FindMargin(IReadOnlyList<MarginStyleRule> margins, string name) =>
+            margins.FirstOrDefault(m =>
                 (m.Selector?.Text?.Trim().ToLowerInvariant() ?? "") == name);
 
         private static double? PW(MarginStyleRule? r)  => r == null ? null : DomParser.ParseLengthToPdfPoints(r.Style.Width);

@@ -62,6 +62,105 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal("5", box.Orphans);
         }
 
+        // ─── Break-avoidance behavior ────────────────────────────────────────────
+        // Regression coverage for the actual break-avoidance effect: previously orphans/widows were
+        // parsed/cascaded/inherited (above) but never consulted by any layout code at all - a full-tree
+        // grep found zero non-storage read sites. Wired into plain block-flow pagination, at the same
+        // page-boundary check break-inside:avoid already uses (CssBox.PerformLayoutImp). Every scenario
+        // uses a 4-line, line-height:20px paragraph, a 100px page height, and a filler <div> before it
+        // whose height controls exactly how many lines land before/after the Y=100 page boundary (values
+        // below were confirmed empirically, not hand-derived, since exact line positions depend on
+        // layout metrics).
+
+        private const string FourLineParagraph =
+            "<p id='p' style='width:200px;line-height:20px;margin:0;padding:0'>Line1<br>Line2<br>Line3<br>Line4</p>";
+
+        [Fact]
+        public async Task Widows2_ParagraphNudgedWhenOnlyOneLineWouldFollowTheBreak()
+        {
+            // Natural position (filler=30px) splits the 4 lines 3-before/1-after the Y=100 boundary,
+            // violating the default widows:2. The whole paragraph must be pushed to start at Y=100.
+            var box = await FindByIdInPagedDocAsync(30, FourLineParagraph);
+
+            Assert.Equal(100, box.Location.Y, 1);
+        }
+
+        [Fact]
+        public async Task Orphans2_ParagraphNudgedWhenOnlyOneLineWouldPrecedeTheBreak()
+        {
+            // Natural position (filler=68px) splits the 4 lines 1-before/3-after the boundary, violating
+            // the default orphans:2. The whole paragraph must be pushed to start at Y=100.
+            var box = await FindByIdInPagedDocAsync(68, FourLineParagraph);
+
+            Assert.Equal(100, box.Location.Y, 1);
+        }
+
+        [Fact]
+        public async Task OrphansWidows_NoEffect_WhenSplitAlreadySatisfiesBothMinimums_Regression()
+        {
+            // Natural position (filler=50px) splits the 4 lines cleanly 2-before/2-after the boundary -
+            // satisfies both orphans:2 and widows:2 already, so the paragraph must be left exactly where
+            // ordinary layout put it (Y=58), not nudged at all.
+            var box = await FindByIdInPagedDocAsync(50, FourLineParagraph);
+
+            Assert.Equal(58, box.Location.Y, 1);
+        }
+
+        [Fact]
+        public async Task TallParagraph_ExceedsOnePage_IsNotNudged()
+        {
+            // An 8-line paragraph (160px) is taller than the 100px page itself - pushing it whole to the
+            // next page can't satisfy orphans/widows anyway (it would just recreate the same violation
+            // there), so this is a documented, accepted limitation: it's left exactly where ordinary
+            // layout put it, straddling the boundary, rather than being nudged pointlessly.
+            const string eightLineParagraph =
+                "<p id='p' style='width:200px;line-height:20px;margin:0;padding:0'>" +
+                "L1<br>L2<br>L3<br>L4<br>L5<br>L6<br>L7<br>L8</p>";
+            var box = await FindByIdInPagedDocAsync(30, eightLineParagraph);
+
+            Assert.Equal(38, box.Location.Y, 1);
+        }
+
+        [Fact]
+        public async Task Orphans1Widows1_MatchesDictionaryCssValues_NoEffect_Regression()
+        {
+            // css4.pub's real dictionary sets "widows: 1; orphans: 1" - already maximally permissive
+            // (a single line before/after a break is always enough), so this feature should never nudge
+            // anything on that document. Confirms explicit orphans:1/widows:1 never triggers a nudge even
+            // in a split (1-before/3-after) that WOULD violate the default orphans:2/widows:2.
+            const string paragraph =
+                "<p id='p' style='width:200px;line-height:20px;margin:0;padding:0;orphans:1;widows:1'>" +
+                "Line1<br>Line2<br>Line3<br>Line4</p>";
+            var box = await FindByIdInPagedDocAsync(68, paragraph);
+
+            Assert.Equal(76, box.Location.Y, 1);
+        }
+
+        private static async Task<CssBox> FindByIdInPagedDocAsync(int fillerHeightPx, string paragraphHtml)
+        {
+            var html = $"<!DOCTYPE html><html><head></head><body><div style='height:{fillerHeightPx}px'></div>{paragraphHtml}</body></html>";
+
+            var adapter = new PdfSharpAdapter();
+            adapter.PixelsPerPoint = 1.0;
+            var container = new HtmlContainerInt(adapter);
+            container.MarginTop = 0;
+            container.MarginLeft = 0;
+            container.MarginRight = 0;
+            container.MarginBottom = 0;
+            await container.SetHtml(html, null);
+
+            var size = new XSize(400, 100);
+            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+
+            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
+            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            await container.PerformLayout(graphics);
+
+            Assert.NotNull(container.Root);
+            return FindById(container.Root!, "p")!;
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>

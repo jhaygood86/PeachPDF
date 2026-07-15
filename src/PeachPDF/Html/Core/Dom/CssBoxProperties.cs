@@ -1139,24 +1139,7 @@ namespace PeachPDF.Html.Core.Dom
                     FontSize = CssConstants.FontSize.ToString(CultureInfo.InvariantCulture) + "pt";
                 }
 
-                RFontStyle st = RFontStyle.Regular;
-
-                if (FontStyle is CssConstants.Italic or CssConstants.Oblique)
-                {
-                    st |= RFontStyle.Italic;
-                }
-
-                if (int.TryParse(FontWeight, out var fontWeightValue))
-                {
-                    if (fontWeightValue >= 700)
-                    {
-                        st |= RFontStyle.Bold;
-                    }
-                }
-                else if (FontWeight is CssConstants.Bold or CssConstants.Bolder)
-                {
-                    st |= RFontStyle.Bold;
-                }
+                var st = GetActualFontStyleFlags();
 
                 double fsize;
                 double parentSize = CssConstants.FontSize;
@@ -1201,6 +1184,65 @@ namespace PeachPDF.Html.Core.Dom
                 }
 
                 return _actualFont!;
+            }
+        }
+
+        /// <summary>
+        /// Computes the <see cref="RFontStyle"/> flags (italic/bold) for this box's own
+        /// <see cref="FontStyle"/>/<see cref="FontWeight"/> — shared between <see cref="ActualFont"/> and
+        /// any derived font (e.g. a synthesized small-caps run) that needs the same style bits at a
+        /// different size, so the two never drift apart.
+        /// </summary>
+        private RFontStyle GetActualFontStyleFlags()
+        {
+            var st = RFontStyle.Regular;
+
+            if (FontStyle is CssConstants.Italic or CssConstants.Oblique)
+            {
+                st |= RFontStyle.Italic;
+            }
+
+            if (int.TryParse(FontWeight, out var fontWeightValue))
+            {
+                if (fontWeightValue >= 700)
+                {
+                    st |= RFontStyle.Bold;
+                }
+            }
+            else if (FontWeight is CssConstants.Bold or CssConstants.Bolder)
+            {
+                st |= RFontStyle.Bold;
+            }
+
+            return st;
+        }
+
+        /// <summary>
+        /// Size ratio applied to an originally-lowercase run when synthesizing
+        /// <c>font-variant: small-caps</c> (see <see cref="ActualSmallCapsFont"/>, <see cref="CssRect.FontSizeScale"/>).
+        /// Not derived from any real OpenType metric (PeachPDF has no shaping engine to measure a font's
+        /// actual <c>smcp</c> cap-height) — a representative approximation, tuned by eye.
+        /// </summary>
+        public const double SmallCapsFontScale = 0.72;
+
+        private RFont? _smallCapsFont;
+
+        /// <summary>
+        /// A cached font derived from <see cref="ActualFont"/> at a reduced size (same family/style),
+        /// used to synthesize <c>font-variant: small-caps</c> — PeachPDF has no OpenType shaping engine
+        /// to do real <c>smcp</c>/<c>c2sc</c> glyph substitution, so originally-lowercase runs are
+        /// upper-cased and drawn at this smaller size instead. See <see cref="CssBox.ParseToWords"/>.
+        /// </summary>
+        public RFont ActualSmallCapsFont
+        {
+            get
+            {
+                if (_smallCapsFont != null) return _smallCapsFont;
+
+                var font = ActualFont;
+                _smallCapsFont = GetCachedFont(FontFamily!, font.Size * SmallCapsFontScale, GetActualFontStyleFlags())
+                                 ?? font;
+                return _smallCapsFont;
             }
         }
 

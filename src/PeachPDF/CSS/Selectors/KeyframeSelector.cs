@@ -28,33 +28,39 @@ namespace PeachPDF.CSS
         public string Text => this.ToCss();
     }
 
+    /// <summary>
+    /// One comma-separated entry of an <c>@page</c> selector list, e.g. the two entries of
+    /// <c>@page chapter1:left, chapter2:left</c> are <c>(Name: "chapter1", Pseudo: "left")</c> and
+    /// <c>(Name: "chapter2", Pseudo: "left")</c>. Either part may be absent: <c>@page chapter</c> has
+    /// <c>Pseudo: null</c>; <c>@page :first</c> has <c>Name: null</c>.
+    /// </summary>
+    internal readonly record struct PageSelectorEntry(string? Name, string? Pseudo);
+
     internal sealed class PageSelector : StylesheetNode, ISelector
     {
-        private readonly string _name;
-        private readonly bool _isPseudo;
+        private readonly List<PageSelectorEntry> _entries;
 
-        /// <param name="name">
-        /// For a pseudo-class selector (<paramref name="isPseudo"/> true, the default — e.g. <c>:first</c>,
-        /// <c>:left</c>, <c>:right</c>), the pseudo-class name without its leading colon. For a named-page
-        /// selector (<paramref name="isPseudo"/> false — e.g. <c>@page chapter</c>, or a comma-separated
-        /// list <c>@page chapter1, chapter2</c>), the raw page name(s) as written, joined with ", " if more
-        /// than one — never colon-prefixed, since CSS page names are plain custom-idents, not pseudo-classes.
-        /// </param>
-        /// <param name="isPseudo">Whether <paramref name="name"/> is a pseudo-class name (colon-prefixed in <see cref="Text"/>) rather than a named-page identifier.</param>
-        public PageSelector(string name, bool isPseudo = true)
+        public PageSelector(IEnumerable<PageSelectorEntry> entries)
         {
-            _name = name;
-            _isPseudo = isPseudo;
+            _entries = new List<PageSelectorEntry>(entries);
         }
 
-        public PageSelector() : this(string.Empty)
+        public PageSelector() : this([])
         {
         }
+
+        public IReadOnlyList<PageSelectorEntry> Entries => _entries;
 
         public override void ToCss(TextWriter writer, IStyleFormatter formatter)
         {
-            var pseudo = _name != string.Empty && _isPseudo ? ":" : "";
-            writer.Write($"{pseudo}{_name}");
+            for (var i = 0; i < _entries.Count; i++)
+            {
+                if (i > 0) writer.Write(", ");
+
+                var entry = _entries[i];
+                if (entry.Name != null) writer.Write(entry.Name);
+                if (entry.Pseudo != null) writer.Write($":{entry.Pseudo}");
+            }
         }
 
         public Priority Specificity => Priority.Inline;

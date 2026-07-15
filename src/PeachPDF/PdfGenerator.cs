@@ -246,6 +246,12 @@ namespace PeachPDF
                     container.NamedPageElements,
                     pageY,
                     container.PageSize.Height);
+                var applicableMargins = SelectApplicableMarginRules(
+                    container.PageRules,
+                    pageNumber,
+                    container.NamedPageElements,
+                    pageY,
+                    container.PageSize.Height);
 
                 var (mL, mT, mR, mB) = ResolvePageMargins(
                     applicableRule,
@@ -276,7 +282,7 @@ namespace PeachPDF
                 // Restore to pre-content state so margin boxes render in absolute page coordinates
                 g.Restore(preContentState);
 
-                if (applicableRule?.Margins.Any() == true)
+                if (applicableMargins.Count > 0)
                 {
                     MarginBoxRenderer.Render(
                         g,
@@ -285,7 +291,7 @@ namespace PeachPDF
                         mT,
                         mR,
                         mB,
-                        applicableRule,
+                        applicableMargins,
                         pageNumber,
                         totalPages,
                         pageY,
@@ -318,7 +324,7 @@ namespace PeachPDF
             if (metadata.Date.HasValue)                   info.CreationDate = metadata.Date.Value;
         }
 
-        private static async Task SetContent(HtmlContainer container, PdfGenerateConfig config, string html, PeachPdfCssContent? cssData, XSize orgPageSize)
+        internal static async Task SetContent(HtmlContainer container, PdfGenerateConfig config, string html, PeachPdfCssContent? cssData, XSize orgPageSize)
         {
             container.MarginBottom = config.MarginBottom;
             container.MarginLeft = config.MarginLeft;
@@ -326,6 +332,13 @@ namespace PeachPDF
             container.MarginTop = config.MarginTop;
 
             await container.SetHtml(html, cssData?.CssData);
+
+            // The document's own <html lang> always wins; config.DefaultLanguage only fills in when the
+            // document declares none — PeachPDF itself never guesses a language on its own initiative.
+            if (string.IsNullOrEmpty(container.HtmlContainerInt.DocumentLanguage) && !string.IsNullOrEmpty(config.DefaultLanguage))
+            {
+                container.HtmlContainerInt.DocumentLanguage = config.DefaultLanguage;
+            }
 
             // Just in case @page rules got applied
             var pageSize = new XSize(orgPageSize.Width - container.MarginLeft - container.MarginRight, orgPageSize.Height - container.MarginTop - container.MarginBottom);
@@ -387,11 +400,68 @@ namespace PeachPDF
             double pageY,
             double pageHeight)
         {
+            var ordered = GetOrderedApplicableRules(rules, pageNumber, namedPageElements, pageY, pageHeight);
+            return ordered.Count > 0 ? ordered[^1] : null;
+        }
+
+        /// <summary>
+        /// Resolves the effective set of margin-box declarations (<c>@top-left</c>, <c>@bottom-right</c>,
+        /// etc.) for the given page — the CSS cascade for <c>@page</c> rules is per-declaration, not
+        /// per-rule, so a page can (and, in css4.pub's real dictionary CSS, does) simultaneously match a
+        /// low-specificity base named-page rule that defines <c>@top-left/@top-center/@top-right</c> AND
+        /// a higher-specificity compound <c>name:left</c>/<c>name:right</c> rule that only defines
+        /// <c>@bottom-left</c>/<c>@bottom-right</c>/<c>@right-top</c> — both sets of margin boxes must
+        /// render together (merged by box name, with a more specific rule's own definition of a given
+        /// box name winning over a less specific rule's), not just whichever single rule
+        /// <see cref="SelectPageRule"/> would pick as "the" applicable one for page-level properties like
+        /// <c>margin</c>/<c>size</c>.
+        /// </summary>
+        internal static IReadOnlyList<MarginStyleRule> SelectApplicableMarginRules(
+            IReadOnlyList<PageRule> rules,
+            int pageNumber,
+            IReadOnlyList<NamedPageElement> namedPageElements,
+            double pageY,
+            double pageHeight)
+        {
+            var ordered = GetOrderedApplicableRules(rules, pageNumber, namedPageElements, pageY, pageHeight);
+            var merged = new Dictionary<string, MarginStyleRule>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var rule in ordered)
+            {
+                foreach (var margin in rule.Margins)
+                {
+                    var name = margin.Selector?.Text?.Trim().ToLowerInvariant();
+                    if (string.IsNullOrEmpty(name)) continue;
+
+                    merged[name] = margin; // later (higher-precedence) rule's definition wins
+                }
+            }
+
+            return merged.Values.ToList();
+        }
+
+        /// <summary>
+        /// Every <c>@page</c> rule that applies to this page, in ascending cascade precedence (base rule
+        /// first if present, then named/pseudo matches from lowest to highest specificity score —
+        /// preserving declaration order among equal scores, so a later-declared rule still wins ties —
+        /// then <c>:first</c> last, since it always outranks everything else per spec). Shared by
+        /// <see cref="SelectPageRule"/> (single-winner page-level properties) and
+        /// <see cref="SelectApplicableMarginRules"/> (per-margin-box-name cascade merge).
+        /// </summary>
+        private static List<PageRule> GetOrderedApplicableRules(
+            IReadOnlyList<PageRule> rules,
+            int pageNumber,
+            IReadOnlyList<NamedPageElement> namedPageElements,
+            double pageY,
+            double pageHeight)
+        {
+            var result = new List<PageRule>();
             if (rules.Count == 0)
-                return null;
+                return result;
 
             PageRule? baseRule = null;
-            PageRule? overrideRule = null;
+            PageRule? firstRule = null;
+            var matches = new List<(PageRule Rule, int Score)>();
 
             // The CSS "page" property propagates forward through the normal flow until a later element
             // sets a different one — it isn't a one-page-only tag. So the name in effect for this page
@@ -406,41 +476,58 @@ namespace PeachPDF
 
             foreach (var rule in rules)
             {
-                var selector = rule.Selector?.Text?.Trim() ?? "";
-                var selectorLower = selector.ToLowerInvariant();
+                var entries = (rule.Selector as PageSelector)?.Entries;
 
-                if (string.IsNullOrEmpty(selector))
+                if (entries is not { Count: > 0 })
                 {
                     baseRule = rule;
+                    continue;
                 }
-                else if (!selector.StartsWith(":"))
+
+                foreach (var entry in entries)
                 {
-                    // Named page rule — matches if the page name in effect for this page is one of the
-                    // (possibly comma-separated, e.g. "chapter1, chapter2") names this rule applies to.
-                    // Page names are case-sensitive CSS custom-idents, so compare the raw selector text
-                    // (not selectorLower) against the case-preserved NamedPageElement.Name.
-                    if (activeNamedPage is not null)
+                    // Page names are case-sensitive CSS custom-idents; pseudo-class keywords
+                    // (first/left/right) are matched case-insensitively.
+                    var nameMatches = entry.Name is null || entry.Name == activeNamedPage;
+                    var pseudo = entry.Pseudo?.ToLowerInvariant();
+                    var isFirst = pseudo == "first";
+
+                    // ":first" (optionally combined with a matching name) always outranks every other
+                    // selector shape, regardless of declaration order — per the CSS Paged Media spec,
+                    // this is a special case, not part of the additive name/pseudo specificity score
+                    // below (a compound "chapter1:first" still requires the name to match; a bare
+                    // ":first" applies unconditionally on page 1).
+                    if (isFirst)
                     {
-                        var names = selector.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-                        if (Array.IndexOf(names, activeNamedPage) >= 0)
-                            overrideRule = rule;
+                        if (nameMatches && pageNumber == 1)
+                            firstRule = rule;
+                        continue;
                     }
-                }
-                else if (selectorLower == ":right" && pageNumber % 2 != 0)
-                {
-                    overrideRule = rule;
-                }
-                else if (selectorLower == ":left" && pageNumber % 2 == 0)
-                {
-                    overrideRule = rule;
-                }
-                else if (selectorLower == ":first" && pageNumber == 1)
-                {
-                    overrideRule = rule;
+
+                    var pseudoMatches = pseudo switch
+                    {
+                        null => true,
+                        "left" => pageNumber % 2 == 0,
+                        "right" => pageNumber % 2 != 0,
+                        _ => false
+                    };
+
+                    if (!nameMatches || !pseudoMatches) continue;
+
+                    // Specificity: name+pseudo(left/right) > name-alone > pseudo(left/right)-alone.
+                    var score = (entry.Name != null ? 2 : 0) + (entry.Pseudo != null ? 1 : 0);
+                    matches.Add((rule, score));
                 }
             }
 
-            return overrideRule ?? baseRule;
+            if (baseRule != null) result.Add(baseRule);
+            // OrderBy is a stable sort — equal-score matches keep their original (declaration) order, so
+            // the later-declared one still ends up last (highest precedence), matching the prior single-
+            // winner behavior's ">=" tie-break.
+            result.AddRange(matches.OrderBy(m => m.Score).Select(m => m.Rule));
+            if (firstRule != null) result.Add(firstRule);
+
+            return result;
         }
 
         private static (double L, double T, double R, double B) ResolvePageMargins(

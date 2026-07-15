@@ -109,6 +109,7 @@ namespace PeachPDF.Html.Core.Utils
         public const string Serif = "serif";
         public const string Show = "show";
         public const string Small = "small";
+        public const string SmallCaps = "small-caps";
         public const string Smaller = "smaller";
         public const string Solid = "solid";
         public const string Static = "static";

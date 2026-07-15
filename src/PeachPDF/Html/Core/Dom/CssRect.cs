@@ -12,6 +12,7 @@
 
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
+using System.Collections.Generic;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -164,6 +165,32 @@ namespace PeachPDF.Html.Core.Dom
         /// Gets the text of the word
         /// </summary>
         public virtual string? Text => null;
+
+        /// <summary>
+        /// Multiplier applied to the owner box's <see cref="CssBoxProperties.ActualFont"/> size when
+        /// measuring/painting this specific fragment. Used to synthesize <c>font-variant: small-caps</c>
+        /// (an upper-cased, originally-lowercase run is drawn smaller than the rest of its word) — 1.0
+        /// (no-op) for every other <see cref="CssRect"/>. See <see cref="CssBox.ParseToWords"/>.
+        /// </summary>
+        public double FontSizeScale { get; set; } = 1.0;
+
+        /// <summary>
+        /// When true, this fragment must never be treated as a line-break opportunity even if it would
+        /// otherwise overflow — used to glue synthesized small-caps case-run fragments (which together
+        /// make up what was originally one word) back together so splitting a word into runs never
+        /// introduces a spurious new wrap point. See <see cref="CssLayoutEngine.FlowBox"/>.
+        /// </summary>
+        public bool SuppressWrapBefore { get; set; } = false;
+
+        /// <summary>
+        /// Candidate hyphenation break indices into <see cref="Text"/> — index <c>i</c> means a hyphen
+        /// may be inserted between <c>Text[i-1]</c> and <c>Text[i]</c>. Populated by
+        /// <see cref="CssBox.ParseToWords"/> from either an explicit soft hyphen (<c>&amp;shy;</c>) or,
+        /// for <c>hyphens: auto</c> with a known document language, <c>PeachPDF.Text.HyphenationEngine</c>.
+        /// Null/empty for every word that isn't a hyphenation candidate. Consulted only at layout time,
+        /// in <see cref="CssLayoutEngine.FlowBox"/>, when a word would otherwise overflow the line.
+        /// </summary>
+        public IReadOnlyList<int>? HyphenationCandidates { get; set; }
 
         /// <summary>
         /// Represents this word for debugging purposes

@@ -125,6 +125,30 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.Equal("Chapter", rule.SelectorText);
         }
 
+        // ── @page compound name:pseudo selectors ───────────────────────────────
+        // Regression coverage: "@page chapter1:left { }" used to fail to parse entirely
+        // (CreatePageSelector stopped consuming tokens at the first non-comma token after an ident),
+        // silently dropping the whole rule - discovered because css4.pub's real dictionary CSS uses
+        // exactly this compound form for page numbers.
+
+        [Fact]
+        public void AtPage_CompoundNamePseudoSelector_ParsesAsOneRule()
+        {
+            var sheet = ParseStyleSheet("@page chapter1:left { margin-top: 0; }");
+            var rule = sheet.Rules.OfType<PageRule>().FirstOrDefault();
+            Assert.NotNull(rule);
+            Assert.Equal("chapter1:left", rule.SelectorText);
+        }
+
+        [Fact]
+        public void AtPage_CompoundCommaSeparatedSelectors_AllEntriesPresent()
+        {
+            var sheet = ParseStyleSheet("@page chapter1:left, chapter2:left { margin-top: 0; }");
+            var rule = sheet.Rules.OfType<PageRule>().FirstOrDefault();
+            Assert.NotNull(rule);
+            Assert.Equal("chapter1:left, chapter2:left", rule.SelectorText);
+        }
+
         // ── @page margin boxes ─────────────────────────────────────────────────
 
         [Fact]

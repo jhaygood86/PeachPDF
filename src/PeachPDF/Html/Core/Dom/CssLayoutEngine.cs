@@ -746,8 +746,10 @@ namespace PeachPDF.Html.Core.Dom
                     if (DomUtils.IsBoxHasWhitespace(b))
                         coordinates.CurrentX += box.ActualWordSpacing;
 
-                    foreach (var word in b.Words)
+                    for (var wordIndex = 0; wordIndex < b.Words.Count; wordIndex++)
                     {
+                        var word = b.Words[wordIndex];
+
                         if (coordinates.MaxBottom - coordinates.CurrentY < box.ActualLineHeight)
                             coordinates.MaxBottom += box.ActualLineHeight - (coordinates.MaxBottom - coordinates.CurrentY);
 
@@ -760,9 +762,25 @@ namespace PeachPDF.Html.Core.Dom
                                                lastRightIntersectingFloatBox.ActualMarginLeft - rightSpacing;
                         }
 
-                        if ((b.WhiteSpace != CssConstants.NoWrap && b.WhiteSpace != CssConstants.Pre && coordinates.CurrentX + word.Width + rightSpacing > actualLimitRight
-                             && (b.WhiteSpace != CssConstants.PreWrap || !word.IsSpaces))
-                            || word.IsLineBreak || wrapNoWrapBox)
+                        var overflows = b.WhiteSpace != CssConstants.NoWrap && b.WhiteSpace != CssConstants.Pre
+                                         && coordinates.CurrentX + word.Width + rightSpacing > actualLimitRight
+                                         && (b.WhiteSpace != CssConstants.PreWrap || !word.IsSpaces);
+
+                        // hyphens:auto/manual: before giving up and wrapping the whole word, see if a
+                        // cached candidate break point (from ParseToWords - either an explicit soft
+                        // hyphen or an automatic HyphenationEngine suggestion) lets a hyphenated prefix
+                        // fit in the space remaining on the current line instead.
+                        if (!word.SuppressWrapBefore && overflows && !word.IsLineBreak && !wrapNoWrapBox &&
+                            word.HyphenationCandidates is { Count: > 0 } &&
+                            TryHyphenateWord(g, b, word, actualLimitRight - coordinates.CurrentX - rightSpacing, out var prefixWord, out var suffixWord))
+                        {
+                            b.Words[wordIndex] = prefixWord!;
+                            b.Words.Insert(wordIndex + 1, suffixWord!);
+                            word = prefixWord!;
+                            overflows = false;
+                        }
+
+                        if (!word.SuppressWrapBefore && (overflows || word.IsLineBreak || wrapNoWrapBox))
                         {
                             wrapNoWrapBox = false;
                             coordinates.CurrentX = lineStartX;
@@ -866,9 +884,55 @@ namespace PeachPDF.Html.Core.Dom
             box.LastHostingLineBox = coordinates.Line;
         }
 
+        /// <summary>
+        /// Tries to split <paramref name="word"/> at the widest of its precomputed
+        /// <see cref="CssRect.HyphenationCandidates"/> (set by <see cref="CssBox.ParseToWords"/> — either
+        /// an explicit soft hyphen position or an automatic <c>HyphenationEngine</c> suggestion) whose
+        /// hyphenated prefix (with a literal trailing <c>-</c>, actually measured) still fits in
+        /// <paramref name="availableWidth"/>. Candidates are tried from the last (rightmost, keeping the
+        /// most text on the current line) to the first, so the result is the longest prefix that fits —
+        /// not just the first candidate found. Returns false (leaving <paramref name="prefix"/>/
+        /// <paramref name="suffix"/> null) if no candidate fits, in which case the caller falls back to
+        /// wrapping the whole word as before.
+        /// </summary>
+        private static bool TryHyphenateWord(RGraphics g, CssBox b, CssRect word, double availableWidth, out CssRectWord? prefix, out CssRectWord? suffix)
+        {
+            prefix = null;
+            suffix = null;
+
+            var text = word.Text;
+            var candidates = word.HyphenationCandidates;
+            if (string.IsNullOrEmpty(text) || candidates is not { Count: > 0 })
+                return false;
+
+            for (var i = candidates.Count - 1; i >= 0; i--)
+            {
+                var breakAt = candidates[i];
+                if (breakAt <= 0 || breakAt >= text.Length) continue;
+
+                var prefixText = text[..breakAt] + "-";
+                var prefixWidth = g.MeasureString(prefixText, b.ActualFont).Width;
+                if (prefixWidth > availableWidth) continue;
+
+                var suffixText = text[breakAt..];
+                prefix = new CssRectWord(b, prefixText, word.HasSpaceBefore, false)
+                {
+                    Width = prefixWidth,
+                    Height = b.ActualFont.Height
+                };
+                suffix = new CssRectWord(b, suffixText, false, word.HasSpaceAfter)
+                {
+                    Width = g.MeasureString(suffixText, b.ActualFont).Width,
+                    Height = b.ActualFont.Height
+                };
+                return true;
+            }
+
+            return false;
+        }
 
         /// <summary>
-        /// Recursively creates the rectangles of the blockBox, by bubbling from deep to outside the boxes 
+        /// Recursively creates the rectangles of the blockBox, by bubbling from deep to outside the boxes
         /// in the rectangle structure
         /// </summary>
         private static void BubbleRectangles(CssBox box, CssLineBox line)

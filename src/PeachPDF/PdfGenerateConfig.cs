@@ -93,6 +93,17 @@ namespace PeachPDF
         public RNetworkLoader? NetworkLoader { get; set; } = null;
 
         /// <summary>
+        /// A fallback language (e.g. <c>"en-US"</c>) used for language-dependent rendering — currently
+        /// <c>hyphens: auto</c> automatic hyphenation — only when the document itself declares none via
+        /// <c>&lt;html lang="..."&gt;</c>. A document's own <c>lang</c> attribute always takes priority
+        /// over this setting when present. Per the CSS Text spec, automatic hyphenation requires knowing
+        /// the text's language; PeachPDF never guesses one on its own, so a document with no <c>lang</c>
+        /// and no <see cref="DefaultLanguage"/> set will not be automatically hyphenated. Set this when
+        /// you know your content's language out-of-band and want automatic hyphenation to apply anyway.
+        /// </summary>
+        public string? DefaultLanguage { get; set; } = null;
+
+        /// <summary>
         /// the top margin between the page start and the text
         /// </summary>
         public int MarginTop

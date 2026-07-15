@@ -180,6 +180,63 @@ namespace PeachPDF.Tests.Integration
             AssertNoOverlaps(items);
         }
 
+        // ─── column-fill: balance precision (binary-search solver) ─────────────────
+
+        [Fact]
+        public async Task ColumnFillBalance_FindsTighterHeightThanNaiveEvenSplitEstimate()
+        {
+            // 6 items [50,50,50,40,40,40] (total 270) into 3 columns. The old single-formula estimate
+            // (total/columnCount = 90) is provably too short: sequential first-fit at height 90 can only
+            // place 4 of the 6 items (items 5/6 don't fit in any of the 3 columns at that height), forcing
+            // the remaining 2 into a synthetic next "row" - which, since row height here is the page
+            // height (1000), means they'd land ~1000 units below the rest. The true minimum height that
+            // fits all 6 in 3 columns is 100 (verified by hand: col0=[50,50], col1=[50,40], col2=[40,40]).
+            // The improved binary-search solver must find that and keep everything on the first row.
+            var html = Wrap(@"
+                <div id='mc' style='columns:3; column-gap:0; width:300px'>
+                    <div class='item' style='height:50px'></div>
+                    <div class='item' style='height:50px'></div>
+                    <div class='item' style='height:50px'></div>
+                    <div class='item' style='height:40px'></div>
+                    <div class='item' style='height:40px'></div>
+                    <div class='item' style='height:40px'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 1000);
+            var items = FindAllByClass(root, "item");
+
+            Assert.Equal(6, items.Count);
+            // None of the 6 items should have been pushed onto a synthetic next "row" (which, at this
+            // page height, would put them ~1000 units below the first row) - the old naive estimate
+            // would fail this assertion for items 5 and 6.
+            Assert.All(items, i => Assert.True(i.ActualBottom < 200,
+                $"expected all items to stay within the first balanced row, but one ended at Y={i.ActualBottom}"));
+        }
+
+        [Fact]
+        public async Task ColumnFillBalance_StillNeverSplitsAWholeChild_Regression()
+        {
+            // The binary-search solver must preserve the existing "whole child, never split" model -
+            // every item keeps its full natural height intact regardless of which column it lands in.
+            var html = Wrap(@"
+                <div id='mc' style='columns:3; column-gap:0; width:300px'>
+                    <div class='item' style='height:50px'></div>
+                    <div class='item' style='height:50px'></div>
+                    <div class='item' style='height:50px'></div>
+                    <div class='item' style='height:40px'></div>
+                    <div class='item' style='height:40px'></div>
+                    <div class='item' style='height:40px'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 1000);
+            var items = FindAllByClass(root, "item");
+
+            var expectedHeights = new[] { 50.0, 50.0, 50.0, 40.0, 40.0, 40.0 };
+            for (var i = 0; i < items.Count; i++)
+            {
+                Assert.Equal(expectedHeights[i], items[i].ActualBottom - items[i].Location.Y, 1);
+            }
+            AssertNoOverlaps(items);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>

@@ -23,6 +23,7 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Dom
@@ -662,33 +663,56 @@ namespace PeachPDF.Html.Core.Dom
                     else
                     {
                         // A soft hyphen (U+00AD) is an extra break opportunity honored for hyphens:
-                        // manual/auto (the default is manual - see CssBoxProperties.Hyphens); unlike a
-                        // literal '-' it is never itself part of the rendered text, since PeachPDF
-                        // doesn't implement the "show a hyphen glyph only when a break actually occurs
-                        // here" behavior real hyphenation requires - see docs/html-css-support.md.
+                        // manual/auto (the default is manual - see CssBoxProperties.Hyphens). Unlike a
+                        // literal '-' it's never part of the rendered word text; unlike the old
+                        // behavior, it no longer eagerly splits the word here either - at this
+                        // pre-layout stage there's no way to know whether a line break will actually
+                        // land at this exact position, so eagerly splitting could only ever show the
+                        // hyphen glyph always or never, both wrong. Its position (and, for hyphens:auto
+                        // with a known document language, HyphenationEngine's own suggested positions)
+                        // is instead recorded as a candidate on the whole word and consulted only when
+                        // CssLayoutEngine.FlowBox actually needs to break the line - see AddWord.
                         var honorSoftHyphen = Hyphens != CssConstants.None;
 
                         endIdx = startIdx;
                         while (endIdx < text.Length && !char.IsWhiteSpace(text[endIdx]) && text[endIdx] != '-'
-                               && !(honorSoftHyphen && text[endIdx] == '­')
                                && WordBreak != CssConstants.BreakAll && !CommonUtils.IsAsianCharacter(text[endIdx]))
                             endIdx++;
 
-                        var brokeAtSoftHyphen = honorSoftHyphen && endIdx < text.Length && text[endIdx] == '­';
-
-                        if (!brokeAtSoftHyphen && endIdx < text.Length && (text[endIdx] == '-' || WordBreak == CssConstants.BreakAll || CommonUtils.IsAsianCharacter(text[endIdx])))
+                        if (endIdx < text.Length && (text[endIdx] == '-' || WordBreak == CssConstants.BreakAll || CommonUtils.IsAsianCharacter(text[endIdx])))
                             endIdx++;
 
                         if (endIdx > startIdx)
                         {
                             var hasSpaceBefore = !preserveSpaces && (startIdx > 0 && Words.Count == 0 && char.IsWhiteSpace(text[startIdx - 1]));
                             var hasSpaceAfter = !preserveSpaces && (endIdx < text.Length && char.IsWhiteSpace(text[endIdx]));
-                            Words.Add(new CssRectWord(this, HtmlUtils.DecodeHtml(text.Substring(startIdx, endIdx - startIdx)), hasSpaceBefore, hasSpaceAfter));
-                        }
+                            var rawWord = text.Substring(startIdx, endIdx - startIdx);
 
-                        // Consume the soft hyphen itself so it never appears in either fragment's text.
-                        if (brokeAtSoftHyphen)
-                            endIdx++;
+                            List<int>? hyphenationCandidates = null;
+                            string cleanWord;
+
+                            if (honorSoftHyphen && rawWord.IndexOf('­') >= 0)
+                            {
+                                (cleanWord, hyphenationCandidates) = StripSoftHyphens(rawWord);
+                            }
+                            else
+                            {
+                                cleanWord = HtmlUtils.DecodeHtml(rawWord);
+
+                                if (Hyphens == CssConstants.Auto)
+                                {
+                                    var language = HtmlContainer?.DocumentLanguage;
+                                    if (!string.IsNullOrEmpty(language))
+                                    {
+                                        var autoPoints = PeachPDF.Text.HyphenationEngine.FindHyphenationPoints(cleanWord, language);
+                                        if (autoPoints.Count > 0)
+                                            hyphenationCandidates = new List<int>(autoPoints);
+                                    }
+                                }
+                            }
+
+                            AddWord(cleanWord, hasSpaceBefore, hasSpaceAfter, hyphenationCandidates);
+                        }
                     }
 
                     // create new-line word so it will effect the layout
@@ -702,6 +726,92 @@ namespace PeachPDF.Html.Core.Dom
                     startIdx = endIdx;
                 }
             }
+        }
+
+        /// <summary>
+        /// Adds one word to <see cref="Words"/> — or, when <see cref="FontVariant"/> is
+        /// <c>small-caps</c> and <paramref name="text"/> contains at least one lowercase letter, splits
+        /// it into consecutive lowercase/non-lowercase case-run fragments instead. PeachPDF has no
+        /// OpenType shaping engine to do real <c>smcp</c>/<c>c2sc</c> glyph substitution, so each
+        /// lowercase run is upper-cased and marked (<see cref="CssRect.FontSizeScale"/>) to be
+        /// measured/painted smaller than the rest of the word (see
+        /// <see cref="CssBoxProperties.ActualSmallCapsFont"/>). Every fragment after the first is marked
+        /// <see cref="CssRect.SuppressWrapBefore"/> so this split never introduces a new line-break
+        /// opportunity in the middle of what was one word. <paramref name="hyphenationCandidates"/> (see
+        /// <see cref="CssRect.HyphenationCandidates"/>) is only attached when the word is kept whole —
+        /// small-caps splitting and hyphenation are a separate, non-composing pair of features.
+        /// </summary>
+        private void AddWord(string text, bool hasSpaceBefore, bool hasSpaceAfter, List<int>? hyphenationCandidates = null)
+        {
+            if (FontVariant != CssConstants.SmallCaps || !ContainsLowerLetter(text))
+            {
+                Words.Add(new CssRectWord(this, text, hasSpaceBefore, hasSpaceAfter)
+                {
+                    HyphenationCandidates = hyphenationCandidates
+                });
+                return;
+            }
+
+            var runs = new List<(int Start, int Length, bool IsLower)>();
+            var runStart = 0;
+
+            while (runStart < text.Length)
+            {
+                var isLower = char.IsLower(text[runStart]);
+                var runEnd = runStart + 1;
+                while (runEnd < text.Length && char.IsLower(text[runEnd]) == isLower)
+                    runEnd++;
+
+                runs.Add((runStart, runEnd - runStart, isLower));
+                runStart = runEnd;
+            }
+
+            for (var i = 0; i < runs.Count; i++)
+            {
+                var (start, length, isLower) = runs[i];
+                var runText = text.Substring(start, length);
+
+                Words.Add(new CssRectWord(
+                    this,
+                    isLower ? runText.ToUpperInvariant() : runText,
+                    hasSpaceBefore: i == 0 && hasSpaceBefore,
+                    hasSpaceAfter: i == runs.Count - 1 && hasSpaceAfter)
+                {
+                    FontSizeScale = isLower ? CssBoxProperties.SmallCapsFontScale : 1.0,
+                    SuppressWrapBefore = i > 0
+                });
+            }
+        }
+
+        private static bool ContainsLowerLetter(string text)
+        {
+            foreach (var c in text)
+            {
+                if (char.IsLower(c)) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Removes every soft hyphen (U+00AD) from <paramref name="rawWord"/> — decoding HTML entities
+        /// segment-by-segment around each removed character so candidate indices stay correct against
+        /// the final, decoded, hyphen-free text — and returns the candidate break index for each one
+        /// removed (the position, in the resulting clean text, where a "-" may be inserted if
+        /// <see cref="CssLayoutEngine.FlowBox"/> later decides to break the word there).
+        /// </summary>
+        private static (string CleanText, List<int> Candidates) StripSoftHyphens(string rawWord)
+        {
+            var segments = rawWord.Split('­');
+            var sb = new StringBuilder();
+            var candidates = new List<int>(segments.Length - 1);
+
+            for (var i = 0; i < segments.Length; i++)
+            {
+                if (i > 0) candidates.Add(sb.Length);
+                sb.Append(HtmlUtils.DecodeHtml(segments[i]));
+            }
+
+            return (sb.ToString(), candidates);
         }
 
         /// <summary>
@@ -960,6 +1070,44 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
+            // orphans/widows: a paragraph-like box (real line boxes, not multicol's atomic-child model -
+            // which never splits a child, so this defect can't occur there in the first place) whose
+            // lines would otherwise straddle a page boundary with too few lines before/after it gets
+            // nudged, as a whole, to the next page - the same OffsetTop mechanism BreakInside:avoid uses
+            // just above. This is a coarser-than-spec approximation (a real UA pulls only the minimum
+            // lines needed across the break; this moves the entire box) - accepted deliberately, since
+            // real per-line fragmentation would need this engine's "whole child" layout model rewritten.
+            // A paragraph taller than one page is left alone: pushing it whole can't help; it would just
+            // recreate the same violation on the next page.
+            if (DomUtils.ContainsInlinesOnly(this) && LineBoxes.Count > 1
+                && int.TryParse(Orphans, out var orphans) && int.TryParse(Widows, out var widows)
+                && (orphans > 1 || widows > 1))
+            {
+                var owPageHeight = HtmlContainer!.PageSize.Height;
+
+                if (owPageHeight > 0 && ActualBottom - Location.Y <= owPageHeight)
+                {
+                    var ownTopRelativeToPage = Location.Y;
+                    while (ownTopRelativeToPage > owPageHeight)
+                        ownTopRelativeToPage -= owPageHeight;
+
+                    // Absolute Y of the first page boundary at or after this box's own top.
+                    var boundaryY = Location.Y - ownTopRelativeToPage + owPageHeight;
+
+                    if (boundaryY > Location.Y && boundaryY < ActualBottom)
+                    {
+                        var linesBefore = LineBoxes.Count(l => l.LineBottom <= boundaryY);
+                        var linesAfter = LineBoxes.Count - linesBefore;
+
+                        if (linesBefore > 0 && linesAfter > 0 && (linesBefore < orphans || linesAfter < widows))
+                        {
+                            var offset = boundaryY - Location.Y + HtmlContainer.MarginTop;
+                            OffsetTop(offset);
+                        }
+                    }
+                }
+            }
+
             if (Position is CssConstants.Absolute)
             {
                 if (Left is CssConstants.Auto && Right is not CssConstants.Auto)
@@ -1048,7 +1196,8 @@ namespace PeachPDF.Html.Core.Dom
                 foreach (var boxWord in Words)
                 {
                     if (boxWord.IsImage) continue;
-                    boxWord.Width = boxWord.Text != "\n" ? g.MeasureString(boxWord.Text!, ActualFont).Width : 0;
+                    var font = boxWord.FontSizeScale == 1.0 ? ActualFont : ActualSmallCapsFont;
+                    boxWord.Width = boxWord.Text != "\n" ? g.MeasureString(boxWord.Text!, font).Width : 0;
                     boxWord.Height = ActualFont.Height;
                 }
             }
@@ -2008,8 +2157,16 @@ namespace PeachPDF.Html.Core.Dom
                 clip.Intersect(wordRect);
 
                 if (clip == RRect.Empty) continue;
-                var wordPoint = new RPoint(word.Left + offset.X, word.Top + offset.Y);
-                g.DrawString(word.Text!, ActualFont, ActualColor, wordPoint, new RSize(word.Width, word.Height), isRtl);
+
+                // A synthesized small-caps run is drawn with a smaller font than the rest of its line
+                // (see ActualSmallCapsFont) — both are drawn top-anchored at the same word.Top (the
+                // shared line box's top), so without correction the smaller glyphs' baseline would sit
+                // higher than their full-size neighbors'. Shift down by the ascent difference so every
+                // fragment's baseline lines up regardless of its font size.
+                var font = word.FontSizeScale == 1.0 ? ActualFont : ActualSmallCapsFont;
+                var baselineAdjust = word.FontSizeScale == 1.0 ? 0 : ActualFont.Ascent - font.Ascent;
+                var wordPoint = new RPoint(word.Left + offset.X, word.Top + offset.Y + baselineAdjust);
+                g.DrawString(word.Text!, font, ActualColor, wordPoint, new RSize(word.Width, word.Height), isRtl);
             }
         }
 

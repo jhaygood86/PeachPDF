@@ -19,10 +19,12 @@ namespace PeachPDF.Html.Core.Dom
     /// does elsewhere in this engine (which relies on the paint phase's per-page clipping, not real
     /// fragmentation, to split a tall paragraph's lines across pages) — only a whole child moves as a unit.
     /// For content made of many short block children (the common real-world case: dictionary entries, list
-    /// items, cards) this produces correct-looking column geometry. <c>column-fill: balance</c> is
-    /// approximated (target an even split of remaining content per row, clamped to the page budget) rather
-    /// than solved exactly. True inline-level fragmentation (splitting a single child's own lines across a
-    /// column/page boundary) is not implemented; see docs/html-css-support.md.
+    /// items, cards) this produces correct-looking column geometry. <c>column-fill: balance</c> is solved
+    /// per row via a binary search (<see cref="BinarySearchRowTarget"/>) for the minimum column height
+    /// that still packs as many children into the row as the full page budget would — tighter than a
+    /// single closed-form estimate, especially with unevenly-sized children. True inline-level
+    /// fragmentation (splitting a single child's own lines across a column/page boundary) is not
+    /// implemented; see docs/html-css-support.md.
     /// </summary>
     internal static class CssLayoutEngineColumns
     {
@@ -128,32 +130,29 @@ namespace PeachPDF.Html.Core.Dom
 
             // column-fill: balance (the spec default, used whenever it isn't explicitly "auto") aims for
             // equal-height columns rather than filling one column all the way before starting the next.
-            // True balancing needs an iterative solver; this approximates it well enough for the common
-            // cases by targeting "however much of the *remaining* content divides evenly across this
-            // row's columns", clamped to the row's actual page budget. When remaining content is short
-            // (fits on one page), this naturally spreads it evenly across all columns. When remaining
-            // content spans many more page-rows, the clamp makes each row fill to capacity (indistinguishable
-            // from sequential fill) until the final, genuinely-balanced row.
+            // Solved per row via BinarySearchRowTarget below: the minimum column height that still packs
+            // as many of this row's remaining children into `columnCount` columns as the full page
+            // budget would — tighter than a single closed-form estimate, especially with unevenly-sized
+            // children, while still preserving the "whole child, never split" model (only ever moves
+            // entire children between (page, column) slots, exactly like the non-balanced case).
             var balanceFill = columnsBox.ColumnFill != CssConstants.Auto;
-            var totalNaturalBottom = children[^1].ActualBottom;
 
             // effectiveTop is RowTop(r), except when a taller-than-budget forced child (see columnEmpty
             // below) on an earlier row overran its nominal page boundary — then it's that overrun bottom,
             // so this row starts after the earlier overflow instead of visually colliding with it.
-            double RowTarget(int r, double effectiveTop, double remainingContentTop)
+            double RowTarget(int r, double effectiveTop, int remainingStartIndex)
             {
                 var pageBudget = RowBottom(r) - effectiveTop;
                 if (!balanceFill) return pageBudget;
 
-                var balanced = (totalNaturalBottom - remainingContentTop) / columnCount;
-                return Math.Min(pageBudget, Math.Max(1, balanced));
+                return BinarySearchRowTarget(children, remainingStartIndex, columnCount, pageBudget);
             }
 
             var row = 0;
             var col = 0;
             var colTop = RowTop(0);
             var colY = colTop;
-            var rowTarget = RowTarget(0, colTop, colTop);
+            var rowTarget = RowTarget(0, colTop, 0);
 
             var ruleSegments = new List<(double X, double Top, double Bottom)>();
             var rowMaxBottoms = new Dictionary<int, double>();
@@ -161,8 +160,9 @@ namespace PeachPDF.Html.Core.Dom
 
             double? previousChildNaturalBottom = null;
 
-            foreach (var child in children)
+            for (var childIndex = 0; childIndex < children.Count; childIndex++)
             {
+                var child = children[childIndex];
                 var naturalTop = child.Location.Y;
                 var naturalBottom = child.ActualBottom;
                 var height = naturalBottom - naturalTop;
@@ -185,7 +185,7 @@ namespace PeachPDF.Html.Core.Dom
                             ? Math.Max(nominalTop, previousRowOverflow)
                             : nominalTop;
                         rowActualTops[row] = colTop;
-                        rowTarget = RowTarget(row, colTop, naturalTop);
+                        rowTarget = RowTarget(row, colTop, childIndex);
                     }
 
                     colY = colTop;
@@ -230,6 +230,96 @@ namespace PeachPDF.Html.Core.Dom
 
             columnsBox.ColumnRuleSegments = ruleSegments;
             columnsBox.ActualBottom = rowMaxBottoms.Values.DefaultIfEmpty(boxTop).Max();
+        }
+
+        /// <summary>
+        /// Finds the minimum column height (between 1 and <paramref name="pageBudget"/>) that still
+        /// packs as many of the children starting at <paramref name="startIndex"/> into
+        /// <paramref name="columnCount"/> columns as using the full <paramref name="pageBudget"/> would —
+        /// i.e. the tightest height that doesn't force this row to hold fewer children than it
+        /// otherwise could, which is what <c>column-fill: balance</c> asks for. Assumes packed-child-
+        /// count is monotonically non-decreasing in the height budget (a taller budget can only fit the
+        /// same children or more, never fewer) — true for this atomic "whole child, never split" model,
+        /// including the forced-oversized-child-alone-in-a-column case (that child always claims exactly
+        /// one column regardless of budget, so it doesn't break monotonicity).
+        /// </summary>
+        private static double BinarySearchRowTarget(List<CssBox> children, int startIndex, int columnCount, double pageBudget)
+        {
+            if (pageBudget <= 1 || startIndex >= children.Count)
+                return Math.Max(1, pageBudget);
+
+            var (targetCount, _) = SimulateRowPacking(children, startIndex, columnCount, pageBudget);
+            if (targetCount == 0)
+                return pageBudget; // nothing fits even at the full budget - let the caller's forced-fit branch handle it
+
+            var lo = 1.0;
+            var hi = pageBudget;
+
+            // 30 iterations of bisection on a points-scale budget comfortably exceeds sub-pixel
+            // precision long before it matters visually.
+            for (var i = 0; i < 30; i++)
+            {
+                var mid = (lo + hi) / 2;
+                var (count, _) = SimulateRowPacking(children, startIndex, columnCount, mid);
+                if (count >= targetCount)
+                    hi = mid;
+                else
+                    lo = mid;
+            }
+
+            return hi;
+        }
+
+        /// <summary>
+        /// Read-only dry run of the real packing loop in <see cref="Layout"/>: given a candidate column
+        /// height (<paramref name="rowTarget"/>), returns how many of the children starting at
+        /// <paramref name="startIndex"/> fit within <paramref name="columnCount"/> columns before the
+        /// row would need to overflow into a new one, and the tallest column height that resulted.
+        /// Mirrors the real loop's fit-check/columnEmpty/natural-gap logic exactly (relative to the
+        /// row's own top, since a candidate height is being evaluated in isolation) so its child count is
+        /// a faithful prediction of what the real pass would do at that same target height. Never
+        /// mutates any child — only reads each child's <c>Location</c>/<c>ActualBottom</c>, already fixed
+        /// by this class's earlier real (single-virtual-column) layout pass.
+        /// </summary>
+        private static (int PlacedCount, double MaxColumnHeight) SimulateRowPacking(
+            List<CssBox> children, int startIndex, int columnCount, double rowTarget)
+        {
+            var col = 0;
+            var colTop = 0.0;
+            var colY = colTop;
+            var maxColumnHeight = 0.0;
+            double? previousChildNaturalBottom = null;
+
+            var i = startIndex;
+            for (; i < children.Count; i++)
+            {
+                var child = children[i];
+                var naturalTop = child.Location.Y;
+                var naturalBottom = child.ActualBottom;
+                var height = naturalBottom - naturalTop;
+
+                var remaining = colTop + rowTarget - colY;
+                var columnEmpty = Math.Abs(colY - colTop) < 0.01;
+
+                if (!columnEmpty && height > remaining)
+                {
+                    col++;
+                    if (col >= columnCount)
+                        break; // this row is full at this target height - child i belongs to the next row
+
+                    colY = colTop;
+                    previousChildNaturalBottom = null;
+                }
+
+                if (previousChildNaturalBottom.HasValue)
+                    colY += naturalTop - previousChildNaturalBottom.Value;
+
+                colY += height;
+                previousChildNaturalBottom = naturalBottom;
+                maxColumnHeight = Math.Max(maxColumnHeight, colY - colTop);
+            }
+
+            return (i - startIndex, maxColumnHeight);
         }
 
         /// <summary>
