@@ -122,6 +122,14 @@ namespace PeachPDF.Html.Core.Dom
             return sb.Length > 0 ? sb.ToString() : null;
         }
 
+        // A NamedString's Y and this page's boundary are computed via independent accumulation paths
+        // (row/column layout math vs. per-page scroll-offset accumulation), so a value genuinely meant
+        // to sit exactly at a page boundary can differ from it by a hairline of floating-point noise -
+        // without tolerance, that noise alone can exclude the true first/last string on a page. This is
+        // a boundary-precision fuzz factor only, not a layout unit - deliberately much smaller than any
+        // real line height.
+        internal const double PageBoundaryEpsilon = 0.5;
+
         internal static string ResolveNamedString(
             string name,
             string keyword,
@@ -130,26 +138,32 @@ namespace PeachPDF.Html.Core.Dom
             IReadOnlyList<NamedString> namedStrings)
         {
             var pageEnd = pageY + pageHeight;
+            // Widen the acceptance window outward on both ends by a hairline, rather than shrinking it -
+            // shrinking risks excluding a genuinely-valid boundary-adjacent value from its own true page;
+            // widening can only extend a value's reach into an adjacent page's window at the razor-thin
+            // margin where that ambiguity already exists in principle.
+            var pageStartInclusive = pageY - PageBoundaryEpsilon;
+            var pageEndInclusive = pageEnd + PageBoundaryEpsilon;
 
             return keyword.ToLowerInvariant() switch
             {
                 // last assignment that started before this page (running header)
                 "start" => namedStrings
-                    .LastOrDefault(s => s.Name == name && s.Y < pageY)?.Value ?? string.Empty,
+                    .LastOrDefault(s => s.Name == name && s.Y < pageStartInclusive)?.Value ?? string.Empty,
                 // first assignment on this page
                 "first" => namedStrings
-                    .FirstOrDefault(s => s.Name == name && s.Y >= pageY && s.Y < pageEnd)?.Value
-                    ?? namedStrings.LastOrDefault(s => s.Name == name && s.Y < pageY)?.Value
+                    .FirstOrDefault(s => s.Name == name && s.Y >= pageStartInclusive && s.Y < pageEndInclusive)?.Value
+                    ?? namedStrings.LastOrDefault(s => s.Name == name && s.Y < pageStartInclusive)?.Value
                     ?? string.Empty,
                 // last assignment on this page
                 "last" => namedStrings
-                    .LastOrDefault(s => s.Name == name && s.Y >= pageY && s.Y < pageEnd)?.Value
-                    ?? namedStrings.LastOrDefault(s => s.Name == name && s.Y < pageY)?.Value
+                    .LastOrDefault(s => s.Name == name && s.Y >= pageStartInclusive && s.Y < pageEndInclusive)?.Value
+                    ?? namedStrings.LastOrDefault(s => s.Name == name && s.Y < pageStartInclusive)?.Value
                     ?? string.Empty,
                 // first-except: return empty on the page where this string is first assigned
-                "first-except" => namedStrings.Any(s => s.Name == name && s.Y >= pageY && s.Y < pageEnd)
+                "first-except" => namedStrings.Any(s => s.Name == name && s.Y >= pageStartInclusive && s.Y < pageEndInclusive)
                     ? string.Empty
-                    : namedStrings.LastOrDefault(s => s.Name == name && s.Y < pageY)?.Value ?? string.Empty,
+                    : namedStrings.LastOrDefault(s => s.Name == name && s.Y < pageStartInclusive)?.Value ?? string.Empty,
                 _ => namedStrings.FirstOrDefault(s => s.Name == name)?.Value ?? string.Empty,
             };
         }

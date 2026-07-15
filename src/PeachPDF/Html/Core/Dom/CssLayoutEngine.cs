@@ -869,7 +869,7 @@ namespace PeachPDF.Html.Core.Dom
 
                     if (!string.IsNullOrEmpty(b.PageName) && b.PageName != "auto")
                     {
-                        b.HtmlContainer?.RegisterNamedPageElement(b.PageName, b.Location.Y);
+                        b.RegisteredNamedPageElement = b.HtmlContainer?.RegisterNamedPageElement(b.PageName, b.Location.Y);
                     }
 
                     await CssLayoutEngineFlex.PerformLayout(g, b);
@@ -927,7 +927,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (!string.IsNullOrEmpty(box.PageName) && box.PageName != "auto")
                 {
-                    box.HtmlContainer?.RegisterNamedPageElement(box.PageName, coordinates.CurrentY);
+                    box.RegisteredNamedPageElement = box.HtmlContainer?.RegisterNamedPageElement(box.PageName, coordinates.CurrentY);
                 }
             }
 

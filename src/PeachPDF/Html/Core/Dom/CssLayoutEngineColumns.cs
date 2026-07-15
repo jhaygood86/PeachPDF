@@ -98,10 +98,22 @@ namespace PeachPDF.Html.Core.Dom
             columnsBox.ActualRight = columnsBox.Location.X + columnWidth + columnsBox.ActualBoxSizeIncludedWidth;
             columnsBox.ActualBottom = columnsBox.Location.Y;
 
+            // Each child's own PerformLayoutImp unconditionally grows HtmlContainer.ActualSize's
+            // monotonic high-water mark using its Phase-1 virtual (un-banded, single-tall-column) bottom,
+            // which can be far larger than its real final position. That's harmless when later, real
+            // content elsewhere in the document legitimately supersedes it - but for the last multi-column
+            // container in a document, nothing supersedes it, permanently inflating the page count with
+            // phantom trailing pages. Snapshot/restore around the virtual pass so only Phase 2's real,
+            // re-banded geometry (via columnsBox's own ActualBottom below, which flows into ActualSize
+            // normally once this method returns) can grow it.
+            var actualSizeBeforeVirtualPass = htmlContainer.ActualSize;
+
             foreach (var childBox in children)
             {
                 await childBox.PerformLayout(g);
             }
+
+            htmlContainer.ActualSize = actualSizeBeforeVirtualPass;
 
             columnsBox.ActualRight = originalRight;
 

@@ -237,6 +237,82 @@ namespace PeachPDF.Tests.Integration
             AssertNoOverlaps(items);
         }
 
+        // ─── Phase-1/Phase-2 side-effect tracking (regression for stale Y after re-banding) ─
+
+        [Fact]
+        public async Task NamedString_Y_TracksRealPositionAfterRebanding()
+        {
+            // Same re-banding shape as OversizedForcedChild_DoesNotOverlapSubsequentContent: item i1
+            // alone claims column 1 (too tall to share), forcing i2/i3 into column 2 - a real move away
+            // from their Phase-1 virtual (single-tall-column) position.
+            var html = Wrap(@"
+                <style>.item { string-set: entry content(text); }</style>
+                <div id='mc' style='columns:2; column-gap:0; width:200px'>
+                    <div class='item' id='i1' style='height:80px'>one</div>
+                    <div class='item' id='i2' style='height:10px'>two</div>
+                    <div class='item' id='i3' style='height:10px'>three</div>
+                </div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 100);
+            var mc = FindById(root, "mc")!;
+            var i2 = FindById(root, "i2")!;
+
+            // Confirm the fixture actually forces re-banding before trusting the Y assertion below.
+            Assert.True(i2.Location.X > mc.ClientLeft + 50, "expected i2 to be re-banded into column 2");
+
+            var namedString = Assert.Single(i2.NamedStrings.Values);
+            Assert.Equal(i2.Location.Y, namedString.Y, 1);
+
+            var documentEntry = container.NamedStrings.Single(ns => ns.Name == "entry" && ns.Value == "two");
+            Assert.Equal(i2.Location.Y, documentEntry.Y, 1);
+        }
+
+        [Fact]
+        public async Task NamedPageElement_Y_TracksRealPositionAfterRebanding()
+        {
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:200px'>
+                    <div class='item' style='height:80px'></div>
+                    <div class='item' id='i2' style='height:10px; page:chapter'></div>
+                    <div class='item' style='height:10px'></div>
+                </div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 100);
+            var mc = FindById(root, "mc")!;
+            var i2 = FindById(root, "i2")!;
+
+            Assert.True(i2.Location.X > mc.ClientLeft + 50, "expected i2 to be re-banded into column 2");
+
+            var registered = Assert.Single(container.NamedPageElements, e => e.Name == "chapter");
+            Assert.Equal(i2.Location.Y, registered.Y, 1);
+        }
+
+        [Fact]
+        public async Task ActualSize_MatchesRealFinalGeometry_NotInflatedPhase1Height()
+        {
+            // 4 items of 80px each into 2 columns at a 100px page height. Phase 1's un-banded virtual
+            // pass would stack all 4 directly (4*80=320); the real, re-banded/paginated result is far
+            // shorter. Since this multicol container is the only content in the document, nothing
+            // subsequent can paper over an inflated Phase-1 contribution to ActualSize the way later
+            // real content does for a non-last chapter in the real dictionary document.
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:200px'>
+                    <div class='item' style='height:80px'></div>
+                    <div class='item' style='height:80px'></div>
+                    <div class='item' style='height:80px'></div>
+                    <div class='item' style='height:80px'></div>
+                </div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 100);
+            var mc = FindById(root, "mc")!;
+
+            // ActualSize must cover the real content (mc's own re-banded/paginated bottom, plus whatever
+            // legitimate margin collapse the surrounding body contributes) but must NOT be inflated all
+            // the way up toward Phase 1's un-banded virtual height (stacking all 4 80px items directly
+            // would give 320) - that's the actual defect under test here.
+            Assert.True(container.ActualSize.Height >= mc.ActualBottom - root.Location.Y,
+                $"expected ActualSize.Height to cover real content ({mc.ActualBottom - root.Location.Y}), got {container.ActualSize.Height}");
+            Assert.True(container.ActualSize.Height < 250,
+                $"expected ActualSize.Height well under Phase 1's un-banded 320, got {container.ActualSize.Height}");
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>

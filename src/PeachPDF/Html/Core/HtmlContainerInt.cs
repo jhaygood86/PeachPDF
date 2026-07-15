@@ -141,8 +141,12 @@ namespace PeachPDF.Html.Core
 
         internal IReadOnlyList<NamedPageElement> NamedPageElements => _namedPageElements;
 
-        internal void RegisterNamedPageElement(string name, double y) =>
-            _namedPageElements.Add(new NamedPageElement(name, y));
+        internal NamedPageElement RegisterNamedPageElement(string name, double y)
+        {
+            var element = new NamedPageElement(name, y);
+            _namedPageElements.Add(element);
+            return element;
+        }
 
         internal void ClearNamedPageElements() => _namedPageElements.Clear();
 

@@ -142,6 +142,13 @@ namespace PeachPDF.Html.Core.Dom
         public Dictionary<string, NamedString> NamedStrings { get; } = [];
 
         /// <summary>
+        /// The <c>page:</c>-selector tracking entry this box registered with <see cref="HtmlContainerInt"/>
+        /// (if any), retained so a later ancestor reposition (<see cref="OffsetTop"/>) can keep it in sync -
+        /// mirrors <see cref="NamedStrings"/>'s same purpose for string-set.
+        /// </summary>
+        internal NamedPageElement? RegisteredNamedPageElement { get; set; }
+
+        /// <summary>
         /// Is the box is of "br" element.
         /// </summary>
         public bool IsBrElement => HtmlTag != null && HtmlTag.Name.Equals("br", StringComparison.InvariantCultureIgnoreCase);
@@ -1127,13 +1134,13 @@ namespace PeachPDF.Html.Core.Dom
             // above that can still move this box's own Location (Position: static/relative/absolute/
             // fixed, the BreakInside: avoid OffsetTop nudge, and the absolute right-edge OffsetLeft
             // adjustment) — registering earlier (e.g. at the top of this method) would capture
-            // Location's default (0, 0), since it isn't assigned until those branches run. Note this
-            // still can't see a *later* reposition by an ancestor's layout engine after this box's own
-            // PerformLayoutImp has returned (e.g. CssLayoutEngineColumns re-banding a column child via
-            // OffsetTop) — a narrower, currently-unhandled edge case.
+            // Location's default (0, 0), since it isn't assigned until those branches run. A *later*
+            // reposition by an ancestor's layout engine after this box's own PerformLayoutImp has returned
+            // (e.g. CssLayoutEngineColumns re-banding a column child via OffsetTop) is handled by retaining
+            // the registered element on RegisteredNamedPageElement, which OffsetTop keeps in sync.
             if (!string.IsNullOrEmpty(PageName) && PageName != "auto")
             {
-                HtmlContainer?.RegisterNamedPageElement(PageName, Location.Y);
+                RegisteredNamedPageElement = HtmlContainer?.RegisterNamedPageElement(PageName, Location.Y);
             }
 
             // Correct the Y captured too early by ApplyStringSet (called near the top of this method,
@@ -1823,6 +1830,20 @@ namespace PeachPDF.Html.Core.Dom
             foreach (var word in Words)
             {
                 word.Top += amount;
+            }
+
+            // Keep this box's own registered string-set/named-page tracking in sync with a reposition
+            // that happens after this box's own PerformLayoutImp already returned (e.g. a later ancestor's
+            // layout engine re-banding this box, like CssLayoutEngineColumns's Phase 2) - the one-time
+            // absolute correction in PerformLayoutImp can't see this, since it already ran and returned.
+            foreach (var namedString in NamedStrings.Values)
+            {
+                namedString.Y += amount;
+            }
+
+            if (RegisteredNamedPageElement is not null)
+            {
+                RegisteredNamedPageElement.Y += amount;
             }
 
             foreach (var b in Boxes)

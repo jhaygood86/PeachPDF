@@ -239,7 +239,14 @@ namespace PeachPDF
             {
                 pageNumber++;
 
-                var pageY = -scrollOffset;
+                // Content's own coordinate system starts at container.MarginTop, not 0 (see
+                // container.Location = new XPoint(MarginLeft, MarginTop) in SetContent), so a page's
+                // true content range is [pageY+MarginTop, pageY+MarginTop+PageSize.Height), not
+                // [pageY, pageY+PageSize.Height) - omitting +MarginTop here misattributes content
+                // landing in that leading margin-sized band to this page when it's still visually on
+                // the previous one (only visible via multi-column's atomic "may overrun its nominal
+                // row boundary" placement, since ordinary block flow never lands content there).
+                var pageY = -scrollOffset + container.MarginTop;
                 var applicableRule = SelectPageRule(
                     container.PageRules,
                     pageNumber,
@@ -527,9 +534,11 @@ namespace PeachPDF
             // sets a different one — it isn't a one-page-only tag. So the name in effect for this page
             // is whichever named-page assignment most recently took effect at or before this page's end
             // (the highest Y that's still < pageY + pageHeight), not just an assignment whose own Y
-            // happens to fall inside this specific page's range.
+            // happens to fall inside this specific page's range. The small epsilon guards against an
+            // element's Y and the page boundary being computed via independent accumulation paths that
+            // can differ by a hairline of floating-point noise (see MarginBoxRenderer.PageBoundaryEpsilon).
             var activeNamedPage = namedPageElements
-                .Where(e => e.Y < pageY + pageHeight)
+                .Where(e => e.Y < pageY + pageHeight - MarginBoxRenderer.PageBoundaryEpsilon)
                 .OrderByDescending(e => e.Y)
                 .Select(e => e.Name)
                 .FirstOrDefault();
