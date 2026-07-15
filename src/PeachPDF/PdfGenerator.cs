@@ -252,6 +252,12 @@ namespace PeachPDF
                     container.NamedPageElements,
                     pageY,
                     container.PageSize.Height);
+                var applicablePageStyle = SelectApplicablePageStyle(
+                    container.PageRules,
+                    pageNumber,
+                    container.NamedPageElements,
+                    pageY,
+                    container.PageSize.Height);
 
                 var (mL, mT, mR, mB) = ResolvePageMargins(
                     applicableRule,
@@ -296,7 +302,8 @@ namespace PeachPDF
                         totalPages,
                         pageY,
                         container.NamedStrings,
-                        _pdfSharpAdapter);
+                        _pdfSharpAdapter,
+                        applicablePageStyle);
                 }
 
                 scrollOffset -= container.PageSize.Height;
@@ -433,11 +440,64 @@ namespace PeachPDF
                     var name = margin.Selector?.Text?.Trim().ToLowerInvariant();
                     if (string.IsNullOrEmpty(name)) continue;
 
-                    merged[name] = margin; // later (higher-precedence) rule's definition wins
+                    if (!merged.TryGetValue(name, out var mergedRule))
+                    {
+                        mergedRule = new MarginStyleRule(margin.Parser) { Selector = margin.Selector };
+                        merged[name] = mergedRule;
+                    }
+
+                    // Per-declaration merge, not whole-rule replacement: a later (higher-precedence)
+                    // rule's own properties win, but properties it doesn't redeclare survive from an
+                    // earlier, less-specific rule for the same box name - matching real CSS cascade
+                    // (and Prince), which resolves @page per-declaration like any other stylesheet rule.
+                    MergeDeclarationsInto(mergedRule.Style, margin.Style);
                 }
             }
 
             return merged.Values.ToList();
+        }
+
+        /// <summary>
+        /// Resolves the effective, per-declaration-merged page-context style (the properties declared
+        /// directly on matching <c>@page</c> rules themselves, not inside any margin-box block) for the
+        /// given page. Per CSS Paged Media, margin boxes inherit these when they don't declare a property
+        /// themselves - see <see cref="MarginBoxRenderer.Render"/>'s <c>pageStyle</c> parameter. Uses the
+        /// same ascending-precedence merge as <see cref="SelectApplicableMarginRules"/>, independently of
+        /// <see cref="SelectPageRule"/>'s single-winner selection (still used, unchanged, for page-level
+        /// <c>margin</c>/<c>size</c> via <see cref="ResolvePageMargins"/>).
+        /// </summary>
+        internal static StyleDeclaration? SelectApplicablePageStyle(
+            IReadOnlyList<PageRule> rules,
+            int pageNumber,
+            IReadOnlyList<NamedPageElement> namedPageElements,
+            double pageY,
+            double pageHeight)
+        {
+            var ordered = GetOrderedApplicableRules(rules, pageNumber, namedPageElements, pageY, pageHeight);
+            StyleDeclaration? merged = null;
+
+            foreach (var rule in ordered)
+            {
+                if (rule.Style is null) continue;
+
+                merged ??= new StyleDeclaration(rule.Parser);
+                MergeDeclarationsInto(merged, rule.Style);
+            }
+
+            return merged;
+        }
+
+        /// <summary>
+        /// Copies every declared property from <paramref name="source"/> into <paramref name="target"/>,
+        /// overwriting same-named properties already present - the shared per-declaration merge step for
+        /// <see cref="SelectApplicableMarginRules"/> and <see cref="SelectApplicablePageStyle"/>.
+        /// </summary>
+        private static void MergeDeclarationsInto(StyleDeclaration target, StyleDeclaration source)
+        {
+            foreach (var property in source.Declarations)
+            {
+                target.SetProperty(property);
+            }
         }
 
         /// <summary>

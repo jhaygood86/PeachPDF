@@ -1,8 +1,11 @@
+using PeachPDF;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
+using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
+using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore.Drawing;
 using System;
 using System.Collections.Generic;
@@ -13,13 +16,16 @@ namespace PeachPDF.Html.Core.Dom
 {
     internal static class MarginBoxRenderer
     {
-        private const double DefaultFontSizePt = 10.0;
-
         /// <summary>
         /// Renders every applicable margin box. <paramref name="margins"/> is the effective, already
         /// cascade-merged set of margin-box declarations for this page (see
         /// <see cref="PdfGenerator.SelectApplicableMarginRules"/>) — not necessarily all from the same
         /// <c>@page</c> rule, since <c>@page</c> rules cascade per-declaration like any other CSS.
+        /// <paramref name="pageStyle"/> is the page context's own top-level declarations (see
+        /// <see cref="PdfGenerator.SelectApplicablePageStyle"/>), consulted as a font-property
+        /// inheritance fallback for margin boxes that don't set their own <c>font-family</c>/
+        /// <c>font-size</c>/<c>font-weight</c>/<c>font-style</c> — per CSS Paged Media, margin boxes
+        /// inherit these from their page context.
         /// </summary>
         public static void Render(
             XGraphics g,
@@ -33,7 +39,8 @@ namespace PeachPDF.Html.Core.Dom
             int totalPages,
             double pageY,
             IReadOnlyList<NamedString> namedStrings,
-            RAdapter adapter)
+            RAdapter adapter,
+            StyleDeclaration? pageStyle)
         {
             foreach (var marginRule in margins)
             {
@@ -55,7 +62,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (rect.Width <= 0 || rect.Height <= 0)
                     continue;
 
-                var font = BuildFont(marginRule.Style, adapter);
+                var font = BuildFont(marginRule.Style, pageStyle, adapter);
                 var brush = BuildBrush(marginRule.Style);
                 var format = BuildStringFormat(marginRule.Style, boxName);
 
@@ -275,31 +282,53 @@ namespace PeachPDF.Html.Core.Dom
             return (a, b, c);
         }
 
-        private static XFont BuildFont(StyleDeclaration style, RAdapter adapter)
+        internal static XFont BuildFont(StyleDeclaration style, StyleDeclaration? pageStyle, RAdapter adapter)
         {
-            var fontResolver = (adapter as PdfSharpAdapter)?.FontResolver;
+            var familyList = FirstNonEmpty(style.FontFamily, pageStyle?.FontFamily) ?? CssConstants.DefaultFont;
+            var sizeStr = FirstNonEmpty(style.FontSize, pageStyle?.FontSize);
+            var weightStr = FirstNonEmpty(style.FontWeight, pageStyle?.FontWeight);
+            var styleStr = FirstNonEmpty(style.FontStyle, pageStyle?.FontStyle);
 
-            var familyName = style.FontFamily?.Trim('"', '\'');
-            if (string.IsNullOrWhiteSpace(familyName))
-                familyName = "Arial";
-
-            var sizeStr = style.FontSize;
             var sizePt = string.IsNullOrEmpty(sizeStr)
-                ? DefaultFontSizePt
-                : DomParser.ParseLengthToPdfPoints(sizeStr) ?? DefaultFontSizePt;
+                ? CssConstants.FontSize
+                : DomParser.ParseLengthToPdfPoints(sizeStr)
+                  ?? FontSizeResolver.Resolve(sizeStr, CssConstants.FontSize, CssConstants.FontSize);
 
-            var fontStyle = XFontStyle.Regular;
-            if (style.FontWeight?.Equals("bold", StringComparison.OrdinalIgnoreCase) == true ||
-                style.FontWeight?.Equals("700", StringComparison.OrdinalIgnoreCase) == true)
-                fontStyle |= XFontStyle.Bold;
-            if (style.FontStyle?.Equals("italic", StringComparison.OrdinalIgnoreCase) == true ||
-                style.FontStyle?.Equals("oblique", StringComparison.OrdinalIgnoreCase) == true)
-                fontStyle |= XFontStyle.Italic;
+            var fontStyle = RFontStyle.Regular;
+            if (weightStr is not null &&
+                (weightStr.Equals("bold", StringComparison.OrdinalIgnoreCase) ||
+                 (int.TryParse(weightStr, out var weight) && weight >= 700)))
+                fontStyle |= RFontStyle.Bold;
+            if (styleStr is not null &&
+                (styleStr.Equals("italic", StringComparison.OrdinalIgnoreCase) ||
+                 styleStr.Equals("oblique", StringComparison.OrdinalIgnoreCase)))
+                fontStyle |= RFontStyle.Italic;
 
-            return fontResolver != null
-                ? new XFont(familyName, sizePt, fontStyle, fontResolver)
-                : new XFont(familyName, sizePt, fontStyle, new PdfSharpAdapter().FontResolver);
+            // MarginBoxRenderer paints in raw, unshrunk PDF-point space (margin-box rects are computed
+            // directly from orgPageSize/margins), but RAdapter.GetFont -> PdfSharpAdapter.CreateFontInt
+            // divides its `size` argument by PixelsPerPoint (matching in-flow content, whose entire
+            // coordinate system - including font size - is uniformly in "pixel" space and shrunk together
+            // by that same later division). Since margin-box rect positions never go through that
+            // division, pre-multiply so the two cancel out to the CSS-specified point size regardless of
+            // PixelsPerPoint (normally 1.0, but not under ShrinkToFit/ScaleToPageSize or non-72
+            // PixelsPerInch).
+            var pixelsPerPoint = (adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+            var pixelSize = sizePt * pixelsPerPoint;
+            var resolvedFont = FontFamilyResolver.Resolve(adapter, familyList, pixelSize, fontStyle)
+                                ?? FontFamilyResolver.Resolve(adapter, CssConstants.DefaultFont, pixelSize, fontStyle);
+
+            if (resolvedFont is not FontAdapter fontAdapter)
+            {
+                throw new HtmlRenderException(
+                    $"Cannot find font: {familyList} and Default Font {CssConstants.DefaultFont} is not installed",
+                    HtmlRenderErrorType.General);
+            }
+
+            return fontAdapter.Font;
         }
+
+        private static string? FirstNonEmpty(string? a, string? b) =>
+            !string.IsNullOrEmpty(a) ? a : (!string.IsNullOrEmpty(b) ? b : null);
 
         private static XBrush BuildBrush(StyleDeclaration style)
         {

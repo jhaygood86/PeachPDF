@@ -413,6 +413,49 @@ namespace PeachPDF.Tests.Integration
             Assert.Empty(margins);
         }
 
+        [Fact]
+        public void SelectApplicableMarginRules_PreservesLessSpecificRulesUnredeclaredProperty()
+        {
+            // Regression for the per-declaration (not whole-rule) cascade gap: the base rule's @top-left
+            // sets both `content` and `font-family`; the more specific compound rule's @top-left only
+            // redeclares `content`. Real CSS cascade (and Prince) resolve per-declaration, so the base
+            // rule's font-family must survive - whole-rule-wins semantics would have silently dropped it.
+            var rules = ParsePageRules("""
+                @page chapter { @top-left { content: "Base"; font-family: "Satyr10"; } }
+                @page chapter:left { @top-left { content: "Compound"; } }
+                """);
+            var elements = new List<NamedPageElement> { new("chapter", 0) };
+
+            var margins = PdfGenerator.SelectApplicableMarginRules(rules, pageNumber: 2, elements, pageY: 0, pageHeight: 800);
+            var topLeft = Assert.Single(margins, m => m.Selector?.Text?.Trim().ToLowerInvariant() == "top-left");
+
+            Assert.Equal("\"Compound\"", topLeft.Style.Content);
+            Assert.Equal("\"Satyr10\"", topLeft.Style.FontFamily);
+        }
+
+        [Fact]
+        public void SelectApplicablePageStyle_MergesAcrossMatchingRules()
+        {
+            var rules = ParsePageRules("""
+                @page chapter { font-family: "Satyr10"; }
+                @page chapter:left { margin: 20mm; }
+                """);
+            var elements = new List<NamedPageElement> { new("chapter", 0) };
+
+            var style = PdfGenerator.SelectApplicablePageStyle(rules, pageNumber: 2, elements, pageY: 0, pageHeight: 800);
+
+            Assert.NotNull(style);
+            Assert.Equal("\"Satyr10\"", style!.FontFamily);
+        }
+
+        [Fact]
+        public void SelectApplicablePageStyle_ReturnsNull_WhenNoRuleMatches()
+        {
+            var style = PdfGenerator.SelectApplicablePageStyle([], pageNumber: 1, [], pageY: 0, pageHeight: 800);
+
+            Assert.Null(style);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static List<PageRule> ParsePageRules(string css) =>

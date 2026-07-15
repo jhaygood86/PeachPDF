@@ -1157,24 +1157,7 @@ namespace PeachPDF.Html.Core.Dom
                     remSize = CssConstants.FontSize;
                 }
 
-                fsize = FontSize switch
-                {
-                    CssConstants.Medium => CssConstants.FontSize,
-                    CssConstants.XXSmall => CssConstants.FontSize - 4,
-                    CssConstants.XSmall => CssConstants.FontSize - 3,
-                    CssConstants.Small => CssConstants.FontSize - 2,
-                    CssConstants.Large => CssConstants.FontSize + 2,
-                    CssConstants.XLarge => CssConstants.FontSize + 3,
-                    CssConstants.XXLarge => CssConstants.FontSize + 4,
-                    CssConstants.Smaller => parentSize - 2,
-                    CssConstants.Larger => parentSize + 2,
-                    _ => CssValueParser.ParseLength(FontSize, parentSize, parentSize, remSize, null, true, true)
-                };
-
-                if (fsize <= 1f)
-                {
-                    fsize = CssConstants.FontSize;
-                }
+                fsize = FontSizeResolver.Resolve(FontSize, parentSize, remSize);
 
                 _actualFont = GetCachedFont(FontFamily, fsize, st) ?? GetCachedFont(CssConstants.DefaultFont, fsize, st);
 

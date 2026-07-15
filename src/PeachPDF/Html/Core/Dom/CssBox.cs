@@ -2287,28 +2287,7 @@ namespace PeachPDF.Html.Core.Dom
 
         protected override RFont? GetCachedFont(string fontFamily, double fsize, RFontStyle st)
         {
-            var families = fontFamily.Split(',');
-
-            if (families.Length == 1)
-            {
-                return HtmlContainer!.Adapter.GetFont(fontFamily, fsize, st);
-            }
-
-            RFont? selectedFont = null;
-
-            foreach (var family in families)
-            {
-                var selectedFamily = family.TrimStart('"').TrimEnd('"');
-
-                selectedFont = HtmlContainer!.Adapter.GetFont(selectedFamily, fsize, st);
-
-                if (selectedFont is not null)
-                {
-                    break;
-                }
-            }
-
-            return selectedFont;
+            return FontFamilyResolver.Resolve(HtmlContainer!.Adapter, fontFamily, fsize, st);
         }
 
         protected override RColor GetActualColor(string colorStr)
