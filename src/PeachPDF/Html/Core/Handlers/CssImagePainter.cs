@@ -4,6 +4,7 @@ using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Utils;
+using PeachPDF.Svg;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -44,6 +45,10 @@ namespace PeachPDF.Html.Core.Handlers
                         g, urlImage.Image, sizeValue, positionValue, repeatValue, originRect, clipRect, roundedClipPath, box);
                     break;
                 }
+                case CssImage.Url urlImage when isFirst && urlImage.SvgDocument != null:
+                    PaintSvgLayer(g, urlImage.SvgDocument, layerIndex, originRect, clipRect, roundedClipPath,
+                        positionList, sizeList, repeatList, box);
+                    break;
                 case CssImage.LinearGradient lg:
                     PaintGradientLayer(g, originRect, clipRect, roundedClipPath, layerIndex, sizeList, positionList, repeatList, box,
                         (brushGraphics, rect) => GetLinearGradientBrush(brushGraphics, lg.Gradient, rect), drawBrush);
@@ -110,6 +115,49 @@ namespace PeachPDF.Html.Core.Handlers
             // BackgroundLayerResolver.ResolveSize's both-auto branch below - the tile was already
             // rendered at exactly the resolved layer size above, so it must be placed/repeated at
             // that same natural size, not re-stretched to the container (which "100% 100%" would do).
+            var positionValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(positionList), layerIndex);
+            var repeatValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(repeatList), layerIndex);
+            BackgroundImageDrawHandler.DrawBackgroundImage(
+                g, t.Image, CssConstants.Auto, positionValue, repeatValue, originRect, clipRect, roundedClipPath, box);
+        }
+
+        /// <summary>
+        /// Renders a <c>url()</c> SVG source once into a <see cref="RGraphics.CreateTile"/> tile sized to the
+        /// resolved <c>background-size</c>/<c>list-style-image</c> layer size (using the SVG's own intrinsic
+        /// width/height/ratio, via <see cref="SvgIntrinsicSize"/>, exactly as <see cref="Dom.CssBoxImage"/> does
+        /// for <c>&lt;img src="x.svg"&gt;</c>), then hands the tile to <see cref="BackgroundImageDrawHandler"/>
+        /// so it gets positioned/repeated exactly like a raster url() image - mirrors <see cref="PaintGradientLayer"/>.
+        /// </summary>
+        private static void PaintSvgLayer(
+            RGraphics g,
+            SvgDocument svgDocument,
+            int layerIndex, RRect originRect, RRect clipRect, RGraphicsPath? roundedClipPath,
+            string positionList, string sizeList, string repeatList,
+            CssBoxProperties box)
+        {
+            var (intrinsicWidth, intrinsicHeight) = SvgIntrinsicSize.Resolve(svgDocument);
+            double? intrinsicRatio = intrinsicWidth is > 0 && intrinsicHeight is > 0
+                ? intrinsicWidth.Value / intrinsicHeight.Value
+                : null;
+
+            var sizeValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(sizeList), layerIndex);
+            var (tileWidth, tileHeight) = BackgroundLayerResolver.ResolveSize(
+                sizeValue, originRect.Width, originRect.Height, intrinsicWidth, intrinsicHeight, intrinsicRatio, box);
+
+            if (tileWidth <= 0 || tileHeight <= 0)
+                return;
+
+            var tile = g.CreateTile(tileWidth, tileHeight);
+            if (tile is not { } t)
+            {
+                // No real page/document context to own a Form XObject in (e.g. a measure-only pass) -
+                // there is no untiled brush fallback for a vector image, so just skip this layer.
+                return;
+            }
+
+            SvgRenderer.RenderInto(t.Graphics, svgDocument, new RRect(0, 0, tileWidth, tileHeight));
+            t.Graphics.Dispose();
+
             var positionValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(positionList), layerIndex);
             var repeatValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(repeatList), layerIndex);
             BackgroundImageDrawHandler.DrawBackgroundImage(

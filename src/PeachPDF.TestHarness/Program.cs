@@ -448,6 +448,12 @@ const string Dot = "radial-gradient(circle, crimson, darkred)";
 // for the auto height axis (there's no ratio to compute a proportional height from), per spec.
 const string DotSize = "20px 20px";
 
+// A small square (1:1 intrinsic ratio, viewBox 0 0 20 20) vector SVG, reused below as an SVG
+// background-image/list-style-image url() source - unlike Dot above, this has a real intrinsic
+// size/ratio, so cover/contain/auto resolve against it exactly like a raster image would.
+var svgDotMarkup = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><rect width="20" height="20" fill="#c0392b"/><circle cx="10" cy="10" r="8" fill="#f1c40f"/></svg>""";
+var svgDotDataUri = "data:image/svg+xml;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(svgDotMarkup));
+
 var positionHtml = "<!DOCTYPE html><html><head>" + PositionCss + "</head><body>" +
 
     "<h1>CSS background-position &amp; background-size Test Page</h1>" +
@@ -516,6 +522,23 @@ var positionHtml = "<!DOCTYPE html><html><head>" + PositionCss + "</head><body>"
             "3 layers, position cycles: top left, bottom right, top left")
     ) +
 
+    "<h2>8 — SVG background-image</h2>" +
+    "<p class=\"intro\">A url() background-image source can now be an SVG - rendered as real vector content (a reusable Form XObject tile), not rasterized, exactly like &lt;img src=\"x.svg\"&gt; already was.</p>" +
+    Row(
+        OriginSwatch("basic (auto = SVG's own viewBox size)",
+            $"background-image: url('{svgDotDataUri}'); background-repeat: no-repeat; background-position: center",
+            "background-image: url(x.svg) (no background-size)"),
+        OriginSwatch("background-size: cover",
+            $"background-image: url('{svgDotDataUri}'); background-repeat: no-repeat; background-size: cover",
+            "background-size: cover (uses the SVG's 1:1 intrinsic ratio)"),
+        OriginSwatch("background-size: contain",
+            $"background-image: url('{svgDotDataUri}'); background-repeat: no-repeat; background-size: contain",
+            "background-size: contain"),
+        OriginSwatch("background-repeat: repeat (tiled)",
+            $"background-image: url('{svgDotDataUri}'); background-size: 20px 20px; background-repeat: repeat",
+            "background-repeat: repeat (one vector tile, reused per copy)")
+    ) +
+
     "</body></html>";
 
 var positionStream = new MemoryStream();
@@ -531,6 +554,13 @@ File.WriteAllText("test_background_position_size.html", positionHtml);
 Console.WriteLine("Saved test_background_position_size.html");
 
 // --- list-style-image showcase ---
+
+// A small vector SVG sized to match a marker box (roughly one font-height square) rather than the
+// larger svgDotDataUri used above for the background-image showcase's 60px-tall boxes - reusing that
+// larger one here would render at its full 20x20 intrinsic size (list-style-image has no analogue to
+// background-size), overflowing the ~10pt marker box and clipping down to just its solid center.
+var svgMarkerMarkup = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="#c0392b"/><circle cx="5" cy="5" r="4" fill="#f1c40f"/></svg>""";
+var svgMarkerDataUri = "data:image/svg+xml;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(svgMarkerMarkup));
 
 static string ListSwatch(string desc, string listCss, string itemLabel = "Item") =>
     "<td>" +
@@ -611,6 +641,15 @@ var listHtml = "<!DOCTYPE html><html><head>" + ListCss + "</head><body>" +
         ListSwatch("square (no image)", "list-style-type: square; list-style-image: none;")
     ) +
 
+    "<h2>7 — SVG list-style-image</h2>" +
+    "<p class=\"intro\">A url() list-style-image source can now be an SVG - rendered as real vector content, not rasterized, same as the SVG background-image support above.</p>" +
+    Row(
+        ListSwatch("SVG url() image", $"list-style-image: url('{svgMarkerDataUri}');"),
+        ListSwatch("shorthand: inside + SVG", $"list-style: inside url('{svgMarkerDataUri}');"),
+        ListSwatch("shorthand: outside + SVG", $"list-style: outside url('{svgMarkerDataUri}');"),
+        ListSwatch("missing SVG file (graceful fallback)", "list-style-image: url('nonexistent.svg');")
+    ) +
+
     "</body></html>";
 
 var listStream = new MemoryStream();
@@ -627,20 +666,64 @@ Console.WriteLine("Saved test_list_style_image.html");
 
 // --- content image showcase ---
 
-static string ContentSwatch(string desc, string contentValue, string pseudoElement = "before") =>
+static string ContentSwatch(string desc, string contentValue, string pseudoElement = "before", string width = "40px", string height = "28px", string? cssLabel = null) =>
     "<td>" +
-    $"<style>.ci-{pseudoElement}-{desc.GetHashCode() & 0x7FFFFFFF}::{ pseudoElement} {{ content: {contentValue}; display: inline-block; width: 40px; height: 28px; }}</style>" +
+    $"<style>.ci-{pseudoElement}-{desc.GetHashCode() & 0x7FFFFFFF}::{ pseudoElement} {{ content: {contentValue}; display: inline-block; width: {width}; height: {height}; }}</style>" +
     $"<div class=\"ci-{pseudoElement}-{desc.GetHashCode() & 0x7FFFFFFF}\"></div>" +
     $"<div class=\"desc\">{desc}</div>" +
-    $"<div class=\"css\">::{pseudoElement} {{ content: {contentValue} }}</div>" +
+    // A data: URI content value can be thousands of unbroken base64 characters - showing it
+    // verbatim here (as every other swatch does) isn't just unreadable, it's a real trigger for a
+    // word-break:break-all measurement bug (a single unbreakable token that long inflates
+    // ShrinkToFit's measured page width and squashes the whole page - see cssLabel callers below).
+    $"<div class=\"css\">::{pseudoElement} {{ content: {cssLabel ?? contentValue} }}</div>" +
     "</td>";
 
-static string ContentSwatchInline(string desc, string pseudoElement, string inlineCss) =>
+// A hand-drawn vector peach (two overlapping gradient-filled circles form the characteristic
+// cleft, plus a pair of small leaves) - used below to prove a url() content-image source can be
+// an SVG, rendered as real vector content, on-brand for PeachPDF's own showcase.
+var peachMarkup = """
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+      <defs>
+        <radialGradient id="peachL" cx="30%" cy="30%" r="80%">
+          <stop offset="0%" stop-color="#ffdca8"/>
+          <stop offset="60%" stop-color="#ffab6b"/>
+          <stop offset="100%" stop-color="#f4784a"/>
+        </radialGradient>
+        <radialGradient id="peachR" cx="35%" cy="30%" r="80%">
+          <stop offset="0%" stop-color="#ffd0c2"/>
+          <stop offset="60%" stop-color="#ff8f7d"/>
+          <stop offset="100%" stop-color="#e85d4a"/>
+        </radialGradient>
+      </defs>
+      <circle cx="12" cy="18" r="10" fill="url(#peachL)"/>
+      <circle cx="20" cy="18" r="10" fill="url(#peachR)"/>
+      <path d="M16 10 C14 5 10 3 7 4 C9 7 12 9 15 9 Z" fill="#5cb85c"/>
+      <path d="M16 10 C18 5 22 3 25 4 C23 7 20 9 17 9 Z" fill="#4a9e4a"/>
+    </svg>
+    """;
+var peachDataUri = "data:image/svg+xml;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(peachMarkup));
+
+// Regression: a <style> element nested in the document BODY (as every other swatch on this page
+// uses, one per <td>) that defines a pseudo-element rule whose content resolves to a REAL loaded
+// url() image (SVG or raster) previously corrupted ShrinkToFit's width measurement pass - a
+// display:none box's content (the <style> tag's own hidden text, which is unbroken for thousands
+// of base64 characters) was still being deep-scanned for the page's "longest word" during table
+// column-width measurement. Now that display:none subtrees are correctly skipped, these rules are
+// defined per-<td> like every other swatch on this page rather than hoisted into <head>.
+static string PeachTd(string desc, string className, string peachDataUri, string elementHtml, string pseudoElement, string cssLabel, string extraStyle = "") =>
+    "<td>" +
+    $"<style>.{className}::{pseudoElement} {{ content: url('{peachDataUri}'); display: inline-block; width: 32px; height: 32px;{extraStyle} }}</style>" +
+    elementHtml +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">{cssLabel}</div>" +
+    "</td>";
+
+static string ContentSwatchInline(string desc, string pseudoElement, string inlineCss, string? cssLabel = null) =>
     "<td>" +
     $"<style>.cci-{desc.GetHashCode() & 0x7FFFFFFF}::{pseudoElement} {{ {inlineCss} }}</style>" +
     $"<p class=\"cci-{desc.GetHashCode() & 0x7FFFFFFF}\">Text</p>" +
     $"<div class=\"desc\">{desc}</div>" +
-    $"<div class=\"css\">::{pseudoElement} {{ {inlineCss} }}</div>" +
+    $"<div class=\"css\">::{pseudoElement} {{ {cssLabel ?? inlineCss} }}</div>" +
     "</td>";
 
 const string ContentCss = """
@@ -709,6 +792,15 @@ var contentHtml = "<!DOCTYPE html><html><head>" + ContentCss + "</head><body>" +
         ContentSwatchInline("gradient + text", "before", "content: linear-gradient(to right, red, blue); display: inline-block; width: 40px; height: 20px;"),
         ContentSwatchInline("::after text", "after", "content: \" ★\"; color: orange;"),
         ContentSwatchInline("none (no output)", "before", "content: none;")
+    ) +
+
+    "<h2>7 — SVG url() content image</h2>" +
+    "<p class=\"intro\">A url() content-image source can also be an SVG, rendered as real vector content (not rasterized) - same as background-image and list-style-image. Note the image paints at the SVG's own intrinsic viewBox size (32x32 here), independent of the box size reserved by display:inline-block's width/height.</p>" +
+    Row(
+        PeachTd("::before peach", "peach-before", peachDataUri, "<div class=\"peach-before\"></div>", "before", "::before { content: url('data:image/svg+xml;base64,…') }"),
+        PeachTd("::after peach", "peach-after", peachDataUri, "<div class=\"peach-after\"></div>", "after", "::after { content: url('data:image/svg+xml;base64,…') }"),
+        PeachTd("peach + text (::after)", "peach-inline", peachDataUri, "<p class=\"peach-inline\">Text</p>", "after", "::after { content: url('data:image/svg+xml;base64,…') }", " vertical-align: middle;"),
+        ContentSwatch("missing SVG (no crash)", "url('nonexistent.svg')", "before", "32px", "32px")
     ) +
 
     "</body></html>";

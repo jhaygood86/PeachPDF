@@ -1,6 +1,6 @@
 # Supported SVG Features
 
-PeachPDF renders SVG — both inline `<svg>` elements in HTML and standalone SVG (`<img src="x.svg">` / `data:image/svg+xml`) — as real vector PDF content. Shapes become native PDF path-construction operators, gradients become native PDF shadings, and clips/masks/patterns become native PDF constructs. SVG is never rasterized to a bitmap: this preserves scalability and keeps the PDF's file size small regardless of the output resolution. This page documents exactly what is and is not supported. Where a feature is only partially supported, the specific gaps are noted.
+PeachPDF renders SVG — inline `<svg>` elements in HTML, standalone SVG (`<img src="x.svg">` / `data:image/svg+xml`), and SVG used as a CSS `background-image`/`list-style-image` url() source — as real vector PDF content. Shapes become native PDF path-construction operators, gradients become native PDF shadings, and clips/masks/patterns become native PDF constructs. SVG is never rasterized to a bitmap: this preserves scalability and keeps the PDF's file size small regardless of the output resolution. This page documents exactly what is and is not supported. Where a feature is only partially supported, the specific gaps are noted.
 
 ---
 
@@ -8,7 +8,7 @@ PeachPDF renders SVG — both inline `<svg>` elements in HTML and standalone SVG
 
 | Element | MDN Reference | Notes |
 |---------|--------------|-------|
-| `svg` | [svg](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/svg) | Both inline (`<svg>` inside HTML) and standalone (`<img src="x.svg">`, `data:image/svg+xml`) are supported. `viewBox`, `width`, `height`, and `preserveAspectRatio` are all honored. A nested `<svg>` establishes its own viewport, coordinate system, and clip |
+| `svg` | [svg](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/svg) | Inline (`<svg>` inside HTML), standalone (`<img src="x.svg">`, `data:image/svg+xml`), and as a CSS `background-image`/`list-style-image` url() source are all supported — see [HTML & CSS Support](html-css-support.md#backgrounds) for the CSS-side details. `viewBox`, `width`, `height`, and `preserveAspectRatio` are all honored. A nested `<svg>` establishes its own viewport, coordinate system, and clip |
 | `g` | [g](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/g) | Full support, including presentation-attribute inheritance |
 | `defs` | [defs](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/defs) | Content is never painted directly, only through a reference (`<use>`, `fill="url(#id)"`, `clip-path`, `mask`, marker properties) |
 | `symbol` | [symbol](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/symbol) | Never painted directly; establishes its own viewport (`viewBox`/`preserveAspectRatio`) only when referenced via `<use>`, sized by the `<use>` element's `width`/`height` (defaulting to the current viewport's size, per spec) |
