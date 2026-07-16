@@ -1,6 +1,7 @@
 using PeachPDF;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core.Handlers;
+using PeachPDF.Svg;
 using System;
 using System.Threading.Tasks;
 
@@ -18,9 +19,11 @@ namespace PeachPDF.Html.Core.Entities
 
             public RImage? Image => _handler?.Image;
 
+            public SvgDocument? SvgDocument => _handler?.SvgDocument;
+
             internal override async ValueTask EnsureLoadedAsync(HtmlContainerInt container)
             {
-                if (Image != null) return;
+                if (Image != null || SvgDocument != null) return;
                 _handler ??= new ImageLoadHandler(container);
                 await _handler.LoadImage(Href);
             }

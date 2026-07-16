@@ -1,5 +1,6 @@
 using PeachPDF;
 using PeachPDF.PdfSharpCore;
+using System;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
@@ -9,6 +10,16 @@ namespace PeachPDF.Tests.Integration
 {
     public class ContentImageIntegrationTests
     {
+        private const string SvgMarkup = """
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="20" height="20">
+              <rect width="20" height="20" fill="#C0392B"/>
+              <circle cx="10" cy="10" r="8" fill="#2980B9"/>
+            </svg>
+            """;
+
+        private static string SvgDataUri(string markup) =>
+            "data:image/svg+xml;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(markup));
+
         private static string PseudoHtml(string pseudoElement, string css, string extraStyle = "") =>
             $"<!DOCTYPE html><html><head><style>body {{ margin: 0; }} p::{pseudoElement} {{ content: {css}; display: inline-block; width: 30px; height: 20px; {extraStyle} }} </style></head><body><p>Text</p></body></html>";
 
@@ -89,6 +100,37 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotEmpty(pdfText);
             Assert.DoesNotContain("/ShadingType", pdfText);
+        }
+
+        [Fact]
+        public async Task ContentImage_SvgUrl_RendersAsVectorContentNotRasterImage()
+        {
+            var pdfText = await GetPdfText(PseudoHtml("before", $"url('{SvgDataUri(SvgMarkup)}')"));
+
+            // Same CssImagePainter/CreateTile path as background-image and list-style-image - real
+            // vector content (curve operators from the circle), never a rasterized /Image XObject.
+            Assert.DoesNotContain("/Subtype /Image", pdfText);
+            Assert.Contains(" c\n", pdfText);
+        }
+
+        [Fact]
+        public async Task ContentImage_SvgUrl_MissingFile_RendersWithoutCrash()
+        {
+            var pdfText = await GetPdfText(PseudoHtml("before", "url('nonexistent.svg')"));
+
+            Assert.NotEmpty(pdfText);
+        }
+
+        [Fact]
+        public async Task ContentImage_RasterUrl_RendersAsImageXObject()
+        {
+            // A real, loadable 1x1 pixel PNG (same constant used in
+            // BackgroundPositionSizeIntegrationTests.cs) - no prior test here proved a real url()
+            // content-image (as opposed to a missing one) actually paints anything.
+            const string pngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+            var pdfText = await GetPdfText(PseudoHtml("before", $"url('data:image/png;base64,{pngBase64}')"));
+
+            Assert.Contains("/Subtype /Image", pdfText);
         }
     }
 }

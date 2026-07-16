@@ -1,5 +1,6 @@
 using PeachPDF;
 using PeachPDF.PdfSharpCore;
+using System;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
@@ -9,6 +10,18 @@ namespace PeachPDF.Tests.Integration
 {
     public class ListStyleImageIntegrationTests
     {
+        // A small vector SVG - a filled square behind a filled circle - used as a url()
+        // list-style-image source in the SVG-specific tests below.
+        private const string SvgMarkup = """
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="20" height="20">
+              <rect width="20" height="20" fill="#C0392B"/>
+              <circle cx="10" cy="10" r="8" fill="#2980B9"/>
+            </svg>
+            """;
+
+        private static string SvgDataUri(string markup) =>
+            "data:image/svg+xml;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(markup));
+
         private static string ListHtml(string css) =>
             $"<!DOCTYPE html><html><head><style>body {{ margin: 0; }} ul {{ {css} }}</style></head><body><ul><li>Item one</li><li>Item two</li></ul></body></html>";
 
@@ -159,6 +172,45 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotEmpty(insidePdfText);
             Assert.NotEqual(insidePdfText, outsidePdfText);
+        }
+
+        [Fact]
+        public async Task ListStyleImage_SvgUrl_RendersAsVectorMarkerNotRasterImage()
+        {
+            var pdfText = await GetPdfText(ListHtml($"list-style-image: url('{SvgDataUri(SvgMarkup)}');"));
+
+            // Rendered via the same CreateTile Form XObject path used for gradient markers, not a
+            // rasterized /Image XObject; the circle's curve segments prove real vector content.
+            Assert.DoesNotContain("/Subtype /Image", pdfText);
+            Assert.Contains(" c\n", pdfText);
+        }
+
+        [Fact]
+        public async Task ListStyleShorthand_SvgUrl_RendersAsVectorMarker()
+        {
+            var pdfText = await GetPdfText(ListHtml($"list-style: inside url('{SvgDataUri(SvgMarkup)}');"));
+
+            Assert.DoesNotContain("/Subtype /Image", pdfText);
+            Assert.Contains(" c\n", pdfText);
+        }
+
+        [Fact]
+        public async Task ListStyleImage_SvgUrl_MissingFile_RendersWithoutCrash()
+        {
+            var pdfText = await GetPdfText(ListHtml("list-style-image: url('nonexistent.svg');"));
+
+            Assert.NotEmpty(pdfText);
+        }
+
+        [Fact]
+        public async Task ListStyleImage_SvgUrl_MalformedXml_ThrowsHtmlRenderException()
+        {
+            // Malformed SVG XML is a hard error throughout ImageLoadHandler.LoadSvgFromStream
+            // (shared with <img>) - not something list-style-image papers over.
+            var malformedDataUri = SvgDataUri("<svg xmlns=\"http://www.w3.org/2000/svg\"><rect unterminated");
+
+            await Assert.ThrowsAsync<HtmlRenderException>(
+                () => GetPdfText(ListHtml($"list-style-image: url('{malformedDataUri}');")));
         }
     }
 }
