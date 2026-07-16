@@ -12,6 +12,7 @@ Peach PDF is a pure .NET HTML -> PDF rendering library. This library does not de
 - Gradients (`linear-gradient`, `radial-gradient`, `conic-gradient`, and repeating variants) with CSS Color Level 4 interpolation
 - CSS Paged Media: `@page` rules, named pages, margin boxes, and running headers/footers via `string-set`/`string()`
 - Automatic PDF metadata extraction from HTML `<title>` and `<meta>` elements
+- Optional Tagged PDF (PDF/UA) output — logical structure tree, automatic document language, CSS-driven tag mapping via `-peachpdf-pdf-tag-type` (see `PdfGenerateConfig.EnableTaggedPdf`)
 - Web fonts (`@font-face`), custom fonts loaded from a stream, and system font discovery
 
 See [HTML & CSS Support](https://peachpdf.net/html-css-support.html) for the full compatibility matrix, and [Supported SVG Features](https://peachpdf.net/supported-svg-features.html) for the full SVG compatibility matrix.

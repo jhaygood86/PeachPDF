@@ -163,6 +163,16 @@ namespace PeachPDF
         public bool CompressContentStreams { get; set; } = true;
 
         /// <summary>
+        /// When set to <c>true</c>, PeachPDF emits a PDF/UA-style tagged structure tree
+        /// (StructTreeRoot, MarkInfo, per-element structure elements and marked content)
+        /// alongside the visual content, mapping the HTML element tree to standard PDF structure
+        /// types (see the <c>-peachpdf-pdf-tag-type</c> CSS property for how the mapping is
+        /// controlled). Defaults to <c>false</c> — tagging adds a real amount of extra
+        /// object-model bookkeeping per page, so it is an explicit, informed opt-in.
+        /// </summary>
+        public bool EnableTaggedPdf { get; set; } = false;
+
+        /// <summary>
         /// Set all 4 margins to the given value.
         /// </summary>
         /// <param name="value"></param>

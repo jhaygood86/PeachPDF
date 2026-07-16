@@ -4,6 +4,7 @@ namespace PeachPDF.CSS
     {
         public static readonly string Before = "before";
         public static readonly string After = "after";
+        public static readonly string Marker = "marker";
         public static readonly string Selection = "selection";
         public static readonly string FirstLine = "first-line";
         public static readonly string FirstLetter = "first-letter";

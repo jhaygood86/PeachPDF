@@ -1,7 +1,13 @@
 using PeachPDF;
+using PeachPDF.Adapters;
+using PeachPDF.Html.Adapters;
+using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.Html.Core;
 using PeachPDF.PdfSharpCore;
+using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using System.Linq;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -239,6 +245,105 @@ namespace PeachPDF.Tests.Integration
                 Assert.True(PageHasContent(pdfDocument.Pages[i]),
                    $"Page {i + 1} should have content");
             }
+        }
+
+        [Fact]
+        public async Task TableHeaderAndFooter_SinglePageTable_PaintsEachCellTextExactlyOnce()
+        {
+            // Regression test for two real bugs found together: (1) a <thead>/<tfoot> row never
+            // got its own Location/ActualRight/ActualBottom set (only its cells did), leaving it
+            // with a degenerate Bounds that the paint-time visibility-culling optimization then
+            // silently dropped from painting entirely - "Header"/"Footer" never appeared in the
+            // PDF at all; (2) CreateHeaderProxy/CreateFooterProxy's callers explicitly re-added
+            // the already-self-registering CssProxyBox to the table's children, so once (1) was
+            // fixed, every header/footer row painted TWICE at identical coordinates - invisible on
+            // the page but duplicated content-stream operators (and, with tagging on, duplicate
+            // MCID entries). Neither is provable by the page-count/non-empty-stream checks the
+            // other tests in this file use (see CLAUDE.md's testing-conventions warning about
+            // exactly this gap) - this asserts the actual DrawString call sequence instead.
+            var html = "<!DOCTYPE html><html><body><table>" +
+                "<thead><tr><th>Header</th></tr></thead>" +
+                "<tbody><tr><td>Body</td></tr></tbody>" +
+                "<tfoot><tr><th>Footer</th></tr></tfoot>" +
+                "</table></body></html>";
+
+            var adapter = new PdfSharpAdapter();
+            adapter.PixelsPerPoint = 1.0;
+            var container = new HtmlContainerInt(adapter);
+            await container.SetHtml(html, null);
+
+            var size = new XSize(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+
+            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
+            using var measureGraphics = new GraphicsAdapter(adapter, measure, 1.0);
+            await container.PerformLayout(measureGraphics);
+
+            var recorder = new DrawStringRecordingGraphics(adapter);
+            await container.PerformPaint(recorder);
+
+            Assert.Equal(1, recorder.DrawnStrings.Count(s => s == "Header"));
+            Assert.Equal(1, recorder.DrawnStrings.Count(s => s == "Body"));
+            Assert.Equal(1, recorder.DrawnStrings.Count(s => s == "Footer"));
+        }
+
+        /// <summary>
+        /// Minimal RGraphics mock recording every DrawString call's text - see
+        /// TaggedPdfPaintOrderTests.RecordingGraphics for the pattern this mirrors.
+        /// </summary>
+        sealed class DrawStringRecordingGraphics : RGraphics
+        {
+            public System.Collections.Generic.List<string> DrawnStrings { get; } = [];
+
+            public DrawStringRecordingGraphics(RAdapter adapter)
+                : base(adapter, new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
+
+            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl) => DrawnStrings.Add(str);
+
+            public override void BeginMarkedContent(string structureType, int mcid) { }
+            public override void EndMarkedContent() { }
+            public override void BeginArtifact() { }
+            public override void PushTransform(RMatrix matrix) { }
+            public override void PopTransform() { }
+            public override void PushClip(RRect rect) => _clipStack.Push(rect);
+            public override void PushClip(RGraphicsPath path) => _clipStack.Push(_clipStack.Peek());
+            public override void PopClip() { if (_clipStack.Count > 1) _clipStack.Pop(); }
+            public override void PushClipExclude(RRect rect) { }
+            public override object SetAntiAliasSmoothingMode() => new object();
+            public override void ReturnPreviousSmoothingMode(object? prevMode) { }
+            public override RGraphicsPath GetGraphicsPath() => new NoOpGraphicsPath();
+            public override (RGraphics Graphics, RImage Image)? CreateTile(double width, double height) => null;
+            public override void DrawImageMasked(RImage image, RImage maskImage, RRect destRect) { }
+            public override void DrawImageWithOpacity(RImage image, RRect destRect, double opacity) { }
+            public override RSize MeasureString(string str, RFont font) => new(str?.Length * 6 ?? 0, 12);
+            public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth)
+            {
+                charFit = str?.Length ?? 0;
+                charFitWidth = maxWidth;
+            }
+            public override void DrawLine(RPen pen, double x1, double y1, double x2, double y2) { }
+            public override void DrawRectangle(RPen pen, double x, double y, double width, double height) { }
+            public override void DrawRectangle(RBrush brush, double x, double y, double width, double height) { }
+            public override void DrawImage(RImage image, RRect destRect, RRect srcRect) { }
+            public override void DrawImage(RImage image, RRect destRect) { }
+            public override void DrawPath(RPen pen, RGraphicsPath path) { }
+            public override void DrawPath(RBrush brush, RGraphicsPath path) { }
+            public override void DrawPolygon(RBrush brush, RPoint[] points) { }
+            public override void Dispose() { }
+        }
+
+        sealed class NoOpGraphicsPath : RGraphicsPath
+        {
+            public override void Start(double x, double y) { }
+            public override void LineTo(double x, double y) { }
+            public override void ArcTo(double x, double y, double radiusX, double radiusY, Corner corner) { }
+            public override void AddMove(double x, double y) { }
+            public override void AddBezierTo(double x1, double y1, double x2, double y2, double x3, double y3) { }
+            public override void AddArc(double x, double y, double radiusX, double radiusY, double rotationAngle, bool isLargeArc, bool sweepClockwise) { }
+            public override void CloseFigure() { }
+            public override RFillMode FillMode { get; set; }
+            public override void Dispose() { }
         }
 
         /// <summary>

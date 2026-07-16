@@ -15,6 +15,7 @@ Targets .NET 8 and .NET 10.
 - CSS Paged Media: `@page` rules, named pages, margin boxes, and running headers/footers
 - Automatic PDF metadata extraction from HTML `<title>` and `<meta>` elements
 - Web fonts (`@font-face`), custom fonts loaded from a stream, and system font discovery
+- Optional Tagged PDF (PDF/UA) output — logical structure tree, automatic document language, CSS-driven tag mapping via `-peachpdf-pdf-tag-type` (see [Tagged PDF (PDF/UA) Support](html-css-support.md#tagged-pdf-pdfua-support))
 
 ## Guides
 

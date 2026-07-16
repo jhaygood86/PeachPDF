@@ -64,7 +64,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Paints the fragment
         /// </summary>
         /// <param name="g">the device to draw to</param>
-        protected override ValueTask PaintImp(RGraphics g)
+        protected override ValueTask PaintImpCore(RGraphics g)
         {
             EnsureDocument();
 
@@ -119,7 +119,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// The built <see cref="SvgDocument"/> and its unshifted (layout-time, not paint-time
         /// scroll-offset-adjusted) rendered rectangle, for <c>&lt;a&gt;</c> link-annotation discovery
-        /// (see <see cref="SvgRenderer.CollectLinks"/>) - deliberately not reusing <see cref="PaintImp"/>'s
+        /// (see <see cref="SvgRenderer.CollectLinks"/>) - deliberately not reusing <see cref="PaintImpCore"/>'s
         /// rect computation, since that one applies <see cref="Html.Core.HtmlContainerInt.ScrollOffset"/>,
         /// which varies per output page during pagination and would need to be un-applied again to get
         /// back to the single full-document-space rectangle link annotations need.

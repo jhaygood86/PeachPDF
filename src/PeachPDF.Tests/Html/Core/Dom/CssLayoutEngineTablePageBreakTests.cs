@@ -737,6 +737,9 @@ namespace PeachPDF.Tests.Html.Core.Dom
             public override (PeachPDF.Html.Adapters.RGraphics Graphics, PeachPDF.Html.Adapters.RImage Image)? CreateTile(double width, double height) => null;
             public override void DrawImageMasked(PeachPDF.Html.Adapters.RImage image, PeachPDF.Html.Adapters.RImage maskImage, PeachPDF.Html.Adapters.Entities.RRect destRect) { }
             public override void DrawImageWithOpacity(PeachPDF.Html.Adapters.RImage image, PeachPDF.Html.Adapters.Entities.RRect destRect, double opacity) { }
+            public override void BeginMarkedContent(string structureType, int mcid) { }
+            public override void EndMarkedContent() { }
+            public override void BeginArtifact() { }
             public override void Dispose() { }
         }
 

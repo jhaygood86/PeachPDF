@@ -24,6 +24,7 @@ namespace PeachPDF.Html.Core.Utils
     {
         public const string Absolute = "absolute";
         public const string After = "after";
+        public const string Marker = "marker";
         public const string Always = "always";
         public const string Auto = "auto";
         public const string Avoid = "avoid";

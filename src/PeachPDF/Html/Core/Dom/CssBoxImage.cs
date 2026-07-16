@@ -66,7 +66,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Paints the fragment
         /// </summary>
         /// <param name="g">the device to draw to</param>
-        protected override async ValueTask PaintImp(RGraphics g)
+        protected override async ValueTask PaintImpCore(RGraphics g)
         {
             // load image if it is in visible rectangle
             if (_imageLoadHandler == null)
@@ -178,7 +178,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// The parsed <see cref="SvgDocument"/> (for a <c>&lt;img src="x.svg"&gt;</c>) and its
         /// unshifted rendered rectangle, for <c>&lt;a&gt;</c> link-annotation discovery - see
-        /// <see cref="CssBoxSvg.GetLinkSource"/> for why this doesn't reuse <see cref="PaintImp"/>'s
+        /// <see cref="CssBoxSvg.GetLinkSource"/> for why this doesn't reuse <see cref="PaintImpCore"/>'s
         /// (scroll-offset-adjusted) rect computation. Null for an ordinary raster image.
         /// </summary>
         internal (SvgDocument Document, RRect Rect)? GetLinkSource()

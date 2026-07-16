@@ -83,6 +83,7 @@ namespace PeachPDF.Html.Core.Utils
                 "counter-set" => cssBox.CounterSet,
                 "string-set" => cssBox.StringSet,
                 "page" => cssBox.PageName,
+                "-peachpdf-pdf-tag-type" => cssBox.PdfTagType,
                 "margin-bottom" => cssBox.MarginBottom,
                 "margin-left" => cssBox.MarginLeft,
                 "margin-right" => cssBox.MarginRight,
@@ -403,6 +404,9 @@ namespace PeachPDF.Html.Core.Utils
                     break;
                 case "page":
                     cssBox.PageName = value;
+                    break;
+                case "-peachpdf-pdf-tag-type":
+                    cssBox.PdfTagType = value;
                     break;
                 case "margin":
                     SetMultiDirectionProperty(valueParser, cssBox, "margin", value);

@@ -18,5 +18,31 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf
             Assert.NotNull(names);
             Assert.True(names.IsIndirect);
         }
+
+        [Fact]
+        public void StructureTreeRoot_LazilyCreatesIndirectObject()
+        {
+            var doc = new PdfDocument();
+            var catalog = doc.Catalog;
+
+            var structureTreeRoot = catalog.StructureTreeRoot;
+
+            Assert.NotNull(structureTreeRoot);
+            Assert.True(structureTreeRoot.IsIndirect);
+            Assert.Same(structureTreeRoot, catalog.StructureTreeRoot);
+        }
+
+        [Fact]
+        public void MarkInfo_LazilyCreatesIndirectObject_AndMarkedRoundTrips()
+        {
+            var doc = new PdfDocument();
+            var catalog = doc.Catalog;
+
+            var markInfo = catalog.MarkInfo;
+            markInfo.Marked = true;
+
+            Assert.True(markInfo.IsIndirect);
+            Assert.True(catalog.MarkInfo.Marked);
+        }
     }
 }

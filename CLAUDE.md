@@ -89,6 +89,8 @@ Avoid writing tests against `PdfSharpCore.Fonts.FontFactory` (and OpenType neigh
 - CSS/SVG `opacity` double-blending in nested transparency groups (a real pre-existing gap, cross-cutting fix not yet attempted).
 - `background-attachment` (no visual effect possible in a static PDF).
 - A MimeKit HTML-tokenizer bug hoists a `<style>` element out of a nested inline `<svg>` block when parsed through the full HTML pipeline, so inline `<svg><style>` never applies. Standalone/`<img src="x.svg">` SVG is unaffected. Fix would live in `HtmlParser.cs`'s box-tree construction for foreign content, not in SVG-specific code.
+- Tagged PDF: `::marker` support is cascade-only (only meaningful for resolving `-peachpdf-pdf-tag-type` on `li::marker`), not visual marker styling — no `content`/`attr()` overrides, no marker `color`/`font`/`font-size`, no CSS Lists Level 3 marker box semantics. See [Pseudo-elements](docs/html-css-support.md#pseudo-elements).
+- Tagged PDF: anonymous (CSS-generated, e.g. `display: table-cell` on a `<div>`) table structure cannot have its `TR`/`TH`-or-`TD`/`THead`/`TBody`/`TFoot` tagging overridden via `-peachpdf-pdf-tag-type` — the synthesized anonymous boxes have no source element for any selector to match. Real `<table>`/`<tr>`/`<td>` markup is required for override control. See [Tagged PDF (PDF/UA) Support](docs/html-css-support.md#tagged-pdf-pdfua-support).
 
 ## Thread safety
 

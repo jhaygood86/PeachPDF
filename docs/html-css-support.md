@@ -429,15 +429,18 @@ PeachPDF evaluates a subset of CSS selectors. Selectors that are parsed but not 
 
 ### Pseudo-elements
 
-Only `::before` and `::after` are supported. All other pseudo-elements are parsed but have no effect.
+`::before`, `::after`, and (partially — see below) `::marker` are supported. All other pseudo-elements are parsed but have no effect.
 
 | Pseudo-element | Notes |
 |----------------|-------|
 | `::before` | Full support; use with the `content` property |
 | `::after` | Full support; use with the `content` property |
+| `::marker` | Partial support — see below |
 | All others | Parsed but ignored |
 
-Both the single-colon legacy syntax (`:before`, `:after`) and the modern double-colon syntax (`::before`, `::after`) are accepted.
+Both the single-colon legacy syntax (`:before`, `:after`) and the modern double-colon syntax (`::before`, `::after`) are accepted. `::marker` has no legacy single-colon form, matching the spec.
+
+**Known limitation — `::marker` support is cascade-only, not visual styling.** `::marker` only matches actual list items (`display: list-item`, i.e. `<li>` and, via the default `dir`/`menu` styling, their aliases) and is only meaningful as a selector target for the [`-peachpdf-pdf-tag-type`](#-peachpdf-pdf-tag-type-tagged-pdf-structure-type) property — see [Tagged PDF (PDF/UA) Support](#tagged-pdf-pdfua-support). No other property set on `::marker` has any effect: `content`/`attr()` overrides, marker `color`/`font`/`font-size`, and CSS Lists Level 3 marker box sizing/positioning are all **not supported**. The actual bullet/number/image glyph continues to be painted exactly as it always has, driven by `list-style-type`/`list-style-image`/`list-style-position` on the `<li>` itself, not by anything set on `::marker`.
 
 ### Pseudo-classes
 
@@ -780,6 +783,100 @@ PeachPDF supports [`calc()`](https://developer.mozilla.org/en-US/docs/Web/CSS/ca
 | A math function inside CSS Grid track sizing | Not applicable | PeachPDF doesn't support CSS Grid |
 
 Note: `background-position` and `background-size` are not listed in the table above because they're not part of the math-function-specific test matrix — both fully support `calc()` in their length/percentage values (e.g. `background-position: calc(50% - 10px) center`), resolved via the same length parser used everywhere else in this table.
+
+---
+
+## Tagged PDF (PDF/UA) Support
+
+PeachPDF can optionally produce a *tagged* PDF — one with a logical structure tree (`/StructTreeRoot`) exposing the document's headings, paragraphs, lists, tables, links, and images to assistive technology (e.g. screen readers), per ISO 32000-1's tagged-PDF conventions and in the direction of PDF/UA conformance.
+
+Tagging is **off by default**. Enable it with:
+
+```csharp
+var config = new PdfGenerateConfig
+{
+    EnableTaggedPdf = true
+};
+```
+
+When enabled:
+
+- The document's language (`/Lang`) is set automatically from `<html lang="...">` (falling back to `PdfGenerateConfig.DefaultLanguage` if the document declares none).
+- Every element's HTML tag is mapped to a PDF standard structure type (`/H1`, `/P`, `/Table`, etc.) using the default mapping table below.
+- `<img>` (and other elements with an `alt` attribute) carry their alt text into the structure element's `/Alt` entry.
+- `<a href="...">` links get a `/Link` structure element, and the underlying PDF Link annotation is cross-referenced with it in both directions (`/OBJR` from the structure element to the annotation, `/StructParent` from the annotation back to the structure element) — a reader can navigate from either side.
+- List items (`<li>`) are split into sibling `/Lbl` (the marker) and `/LBody` (the rest of the item's content) structure elements under `/LI`, per the tagged-PDF list convention.
+
+When `EnableTaggedPdf` is left at its default (`false`), none of this runs — output is byte-for-byte the same as if tagging didn't exist in the codebase at all.
+
+### `-peachpdf-pdf-tag-type` (tagged PDF structure type)
+
+The HTML-tag → PDF-structure-type mapping is not hardcoded — it's driven entirely by a custom CSS property, `-peachpdf-pdf-tag-type`, applied via ordinary CSS rules (PeachPDF's own default stylesheet sets it for standard HTML elements; author stylesheets can override it like any other property).
+
+| | |
+|---|---|
+| Initial value | `auto` |
+| Applies to | All elements, and the `::marker` pseudo-element (see [Pseudo-elements](#pseudo-elements) above) |
+| Inherited | No |
+| Percentages | N/A |
+
+```css
+/* Promote a styled <div> to a real BlockQuote in the structure tree */
+div.pull-quote { -peachpdf-pdf-tag-type: BlockQuote; }
+
+/* Make a purely decorative wrapper invisible to the structure tree - its children attach
+   directly to the nearest tagged ancestor instead */
+span.decorative-wrapper { -peachpdf-pdf-tag-type: none; }
+
+/* Suppress marker tagging for a purely decorative list */
+ul.decorative li::marker { -peachpdf-pdf-tag-type: none; }
+```
+
+Accepted values (case-insensitive): `auto`, `none`, `Part`, `Art`, `Sect`, `Div`, `Index`, `BlockQuote`, `Caption`, `TOC`, `TOCI`, `P`, `H1`–`H6`, `L`, `LI`, `Lbl`, `LBody`, `DL`, `DL-Div`, `DT`, `DD`, `Span`, `Quote`, `Table`, `TR`, `TH`, `TD`, `THead`, `TBody`, `TFoot`, `BibEntry`, `Code`, `Figure`, `Formula`, `Artifact`, `Note`, `Reference`, `Link`.
+
+- **`auto`** (the initial value) — resolved from the element's own HTML tag via the default mapping table below. An element with no default mapping and no author override resolves to `Div` (block-level) or `Span` (inline-level).
+- **`none`** — the element is fully transparent in the structure tree: no structure element is created for it, and its children attach directly to the nearest tagged ancestor. This is the escape hatch for purely presentational wrapper elements.
+- Any other value is used directly as the element's PDF standard structure type, author-overridable on any element regardless of what (if anything) the default stylesheet set.
+
+This property only has an effect when `EnableTaggedPdf` is `true` — with tagging disabled, it's parsed and cascades normally (so it doesn't break unrelated selector matching) but is never read by anything.
+
+#### Default tag-type mapping
+
+| HTML | `-peachpdf-pdf-tag-type` |
+|------|---------------------------|
+| `h1`–`h6` | `H1`–`H6` |
+| `p` | `P` |
+| `div`, `header`, `footer`, `main`, `address`, `hgroup`, `fieldset`, `form`, `center`, `dir`, `menu`, `pre` | `Div` |
+| `span` | `Span` |
+| `ul`, `ol` | `L` |
+| `li` | `LI` |
+| `li::marker` | `Lbl` |
+| `dl` | `DL` |
+| `dt` | `DT` |
+| `dd` | `DD` |
+| `table` | `Table` |
+| `tr` | `TR` |
+| `th` | `TH` |
+| `td` | `TD` |
+| `thead` | `THead` |
+| `tbody` | `TBody` |
+| `tfoot` | `TFoot` |
+| `caption`, `figcaption` | `Caption` |
+| `img`, `svg`, `figure` | `Figure` |
+| `blockquote` | `BlockQuote` |
+| `q` | `Quote` |
+| `article` | `Art` |
+| `section`, `nav`, `aside` | `Sect` |
+| `hr` | `Artifact` |
+| `code`, `kbd`, `samp`, `var` | `Code` |
+| `a[href]` | `Link` (a bare `<a>` with no `href` is not a hyperlink and does not default to `Link`) |
+| `html`, `body` | `none` (transparent — children attach to the synthetic document root) |
+
+Any tag not listed here (e.g. `<cite>`, `<mark>`, `<time>`) falls through to the `auto` fallback: block-level elements resolve to `Div`, inline-level elements to `Span`.
+
+#### Known limitation — anonymous (CSS-generated) table structure cannot be tag-overridden
+
+A table assembled purely through CSS (`display: table` / `table-row` / `table-cell` on arbitrary elements, rather than real `<table>`/`<tr>`/`<td>` markup) gets its row/cell/group tagging (`TR`/`TH`-or-`TD`/`THead`/`TBody`/`TFoot`) from a hardcoded fallback based on the computed `display` value, **not** from `-peachpdf-pdf-tag-type` — the synthesized anonymous boxes PeachPDF creates to complete the table model have no source HTML element for any selector, author or default stylesheet, to match against. Authors who need override control over table structure tagging (e.g. distinguishing header cells from data cells, which the anonymous fallback cannot do — it always tags anonymous cells `TD`) must use real `<table>`/`<tr>`/`<th>`/`<td>`/etc. markup rather than relying on CSS's table display model to synthesize the structure implicitly.
 
 ---
 

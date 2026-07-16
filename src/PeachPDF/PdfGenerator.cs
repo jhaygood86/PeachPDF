@@ -15,6 +15,7 @@ using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
+using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Parse;
 using System;
 using System.Linq;
@@ -24,6 +25,7 @@ using PeachPDF.PdfSharpCore;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using PeachPDF.PdfSharpCore.Pdf.Annotations;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
@@ -231,6 +233,21 @@ namespace PeachPDF
 
             ApplyDocumentMetadata(document.PdfDocument, container.DocumentMetadata);
 
+            // Wired unconditionally (independent of tagged-PDF output) - a document's own /Lang is
+            // useful metadata regardless, and DocumentLanguage is already resolved by SetContent
+            // (either from <html lang> or PdfGenerateConfig.DefaultLanguage).
+            if (!string.IsNullOrEmpty(container.HtmlContainerInt.DocumentLanguage))
+            {
+                document.PdfDocument.Language = container.HtmlContainerInt.DocumentLanguage;
+            }
+
+            // Only constructed when tagging is enabled - CssBox.PaintImp's tagging wrapper checks
+            // HtmlContainerInt.StructureTagBuilder for null and skips all classification/bookkeeping
+            // when it's not set, so this is the single point that gates the whole feature off by
+            // default.
+            var structureTagBuilder = config.EnableTaggedPdf ? new StructureTagBuilder(document.PdfDocument) : null;
+            container.HtmlContainerInt.StructureTagBuilder = structureTagBuilder;
+
             // while there is un-rendered HTML, create another PDF page and render with proper offset for the next page
             double scrollOffset = 0;
             int pageNumber = 0;
@@ -277,6 +294,8 @@ namespace PeachPDF
                 page.Height = orgPageSize.Height;
                 page.Width = orgPageSize.Width;
 
+                structureTagBuilder?.BeginPage(page);
+
                 using var g = XGraphics.FromPdfPage(page);
 
                 // Save state so the content transform can be undone for margin box rendering
@@ -316,8 +335,13 @@ namespace PeachPDF
                 scrollOffset -= container.PageSize.Height;
             }
 
+            // Finalizes /ParentTree page-keyed entries before HandleLinks (which, when tagging is
+            // enabled, appends further annotation-keyed entries to the same tree - see
+            // StructureTagBuilder.Finish and HandleLinks's own tagging-aware section below).
+            structureTagBuilder?.Finish();
+
             // add web links and anchors
-            HandleLinks(document.PdfDocument, container, orgPageSize, container.PageSize);
+            HandleLinks(document.PdfDocument, container, orgPageSize, container.PageSize, structureTagBuilder);
 
             measure?.Dispose();
         }
@@ -362,8 +386,12 @@ namespace PeachPDF
 
         /// <summary>
         /// Handle HTML links by create PDF Documents link either to external URL or to another page in the document.
+        /// <paramref name="structureTagBuilder"/> is non-null only when tagged PDF output is enabled -
+        /// used to attach each created Link annotation's "/OBJR" back to its owning "/Link" structure
+        /// element (see the tagging-aware section below), completing the bidirectional PDF/UA
+        /// linkage between the annotation and the structure tree.
         /// </summary>
-        private static void HandleLinks(PdfDocument document, HtmlContainer container, XSize orgPageSize, XSize pageSize)
+        private static void HandleLinks(PdfDocument document, HtmlContainer container, XSize orgPageSize, XSize pageSize, StructureTagBuilder? structureTagBuilder = null)
         {
             foreach (var link in container.GetLinks())
             {
@@ -374,6 +402,8 @@ namespace PeachPDF
 
                     // position is from the bottom of the page
                     var xRect = new XRect(link.Rectangle.Left, orgPageSize.Height - (link.Rectangle.Height + link.Rectangle.Top - offset), link.Rectangle.Width, link.Rectangle.Height);
+
+                    PdfLinkAnnotation annotation;
 
                     if (link.IsAnchor)
                     {
@@ -392,12 +422,17 @@ namespace PeachPDF
                         }
 
                         document.AddNamedDestination(link.AnchorId, anchorPageNumber, PdfNamedDestinationParameters.CreateFitVertically(top));
-                        document.Pages[i].AddDocumentLink(new PdfRectangle(xRect), link.AnchorId);
+                        annotation = document.Pages[i].AddDocumentLink(new PdfRectangle(xRect), link.AnchorId);
                     }
                     else
                     {
                         // create link to URL
-                        document.Pages[i].AddWebLink(new PdfRectangle(xRect), link.Href);
+                        annotation = document.Pages[i].AddWebLink(new PdfRectangle(xRect), link.Href);
+                    }
+
+                    if (structureTagBuilder != null && link.SourceBox != null)
+                    {
+                        structureTagBuilder.LinkAnnotationToStructureElement(link.SourceBox, document.Pages[i], annotation);
                     }
                 }
             }

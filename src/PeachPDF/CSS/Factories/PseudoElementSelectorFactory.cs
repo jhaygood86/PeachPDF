@@ -23,6 +23,7 @@ namespace PeachPDF.CSS
                     // some implementations are dubious (first-line, first-letter, ...)
                     PseudoElementNames.Before,
                     PseudoElementNames.After,
+                    PseudoElementNames.Marker,
                     PseudoElementNames.Selection,
                     PseudoElementNames.FirstLine,
                     PseudoElementNames.FirstLetter,

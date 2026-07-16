@@ -37,7 +37,7 @@ namespace PeachPDF.Html.Core.Dom
             return ExtendedBox.BreakPage();
         }
 
-        protected override async ValueTask PaintImp(RGraphics g)
+        protected override async ValueTask PaintImpCore(RGraphics g)
         {
             ExtendedBox.ResetPaint();
 

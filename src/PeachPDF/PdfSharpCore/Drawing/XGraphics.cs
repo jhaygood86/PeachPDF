@@ -1894,6 +1894,33 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         }
 
         /// <summary>
+        /// Begins a tagged marked-content sequence for the given structure type and marked-content
+        /// identifier - see <see cref="XGraphicsPdfRenderer.BeginMarkedContent"/>.
+        /// </summary>
+        internal void BeginMarkedContent(string structureType, int mcid)
+        {
+            (_renderer as XGraphicsPdfRenderer)?.BeginMarkedContent(structureType, mcid);
+        }
+
+        /// <summary>
+        /// Ends a marked-content sequence started by <see cref="BeginMarkedContent"/> or
+        /// <see cref="BeginArtifact"/>.
+        /// </summary>
+        internal void EndMarkedContent()
+        {
+            (_renderer as XGraphicsPdfRenderer)?.EndMarkedContent();
+        }
+
+        /// <summary>
+        /// Begins an artifact marked-content sequence - see
+        /// <see cref="XGraphicsPdfRenderer.BeginArtifact"/>.
+        /// </summary>
+        internal void BeginArtifact()
+        {
+            (_renderer as XGraphicsPdfRenderer)?.BeginArtifact();
+        }
+
+        /// <summary>
         /// Provides access to internal data structures of the XGraphics class.
         /// </summary>
         internal class XGraphicsInternals

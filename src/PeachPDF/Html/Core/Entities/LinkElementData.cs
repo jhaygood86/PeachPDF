@@ -10,6 +10,8 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.Html.Core.Dom;
+
 namespace PeachPDF.Html.Core.Entities
 {
     /// <summary>
@@ -21,11 +23,12 @@ namespace PeachPDF.Html.Core.Entities
         /// <summary>
         /// Init.
         /// </summary>
-        public LinkElementData(string id, string href, T rectangle)
+        public LinkElementData(string id, string href, T rectangle, CssBox? sourceBox = null)
         {
             Id = id;
             Href = href;
             Rectangle = rectangle;
+            SourceBox = sourceBox;
         }
 
         /// <summary>
@@ -42,6 +45,14 @@ namespace PeachPDF.Html.Core.Entities
         /// the rectangle of element as calculated by html layout
         /// </summary>
         public T Rectangle { get; }
+
+        /// <summary>
+        /// The box this link was collected from, if any - null for SVG-sourced links (see
+        /// <c>DomUtils.GetAllSvgLinks</c>), which don't participate in tagged-PDF structure
+        /// (see CLAUDE.md's inline-SVG-tokenizer gap). Used by <c>PdfGenerator.HandleLinks</c>
+        /// to look up this link's "/Link" structure element for "/OBJR" linkage.
+        /// </summary>
+        public CssBox? SourceBox { get; }
 
         /// <summary>
         /// Is the link is directed to another element in the html

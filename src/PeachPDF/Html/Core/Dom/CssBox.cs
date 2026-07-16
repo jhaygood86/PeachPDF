@@ -159,7 +159,19 @@ namespace PeachPDF.Html.Core.Dom
 
         public bool IsAfterPseudoElement { get; set; }
 
-        public bool IsPseudoElement => IsBeforePseudoElement || IsAfterPseudoElement;
+        /// <summary>
+        /// Is this box a synthesized <c>::marker</c> pseudo-element (see <see cref="CssData"/>'s
+        /// selector-matching synthesis). Unlike <see cref="IsBeforePseudoElement"/>/
+        /// <see cref="IsAfterPseudoElement"/>, this box carries no renderable content of its own -
+        /// it exists solely as a cascade target for properties like <c>-peachpdf-pdf-tag-type</c>,
+        /// and is deliberately excluded from normal layout and paint-child recursion. The actual
+        /// marker glyph continues to be painted procedurally by
+        /// <see cref="PaintListStyleShapeMarker"/>/<see cref="PaintListStyleTextMarker"/>/
+        /// <see cref="PaintListStyleImageMarker"/>.
+        /// </summary>
+        public bool IsMarkerPseudoElement { get; set; }
+
+        public bool IsPseudoElement => IsBeforePseudoElement || IsAfterPseudoElement || IsMarkerPseudoElement;
 
         /// <summary>
         /// is the box "Display" is "Inline", is this is an inline box and not block.
@@ -1895,10 +1907,116 @@ namespace PeachPDF.Html.Core.Dom
         private bool _hasPainted;
 
         /// <summary>
-        /// Paints the fragment
+        /// Paints the fragment, wrapping <see cref="PaintImpCore(RGraphics)"/> (the actual per-box
+        /// paint logic, overridden by replaced-element subclasses) with tagged-PDF structure-tree/
+        /// marked-content bookkeeping when tagging is enabled
+        /// (<c>HtmlContainer.StructureTagBuilder</c> is non-null). This is the single choke point
+        /// all tagging flows through, mirroring how <see cref="Paint"/> already conditionally wraps
+        /// <see cref="PaintImpCore(RGraphics)"/>/<see cref="PaintWithOpacity"/> for transform/opacity
+        /// handling. When tagging is disabled this adds one null check and otherwise behaves exactly
+        /// as calling <see cref="PaintImpCore(RGraphics)"/> directly would.
         /// </summary>
         /// <param name="g">the device to draw to</param>
-        protected virtual async ValueTask PaintImp(RGraphics g)
+        protected async ValueTask PaintImp(RGraphics g)
+        {
+            // Mirrors PaintImpCore's own early-out: skip classification/tagging entirely for a call
+            // that will paint nothing this pass (see PaintImpCore's identical _hasPainted check).
+            if (_hasPainted)
+                return;
+
+            var builder = HtmlContainer?.StructureTagBuilder;
+            if (builder == null)
+            {
+                await PaintImpCore(g);
+                return;
+            }
+
+            var classification = StructureTagMapper.Classify(this);
+            switch (classification.Kind)
+            {
+                case StructureTagKind.Artifact:
+                    using (builder.OpenArtifact(g))
+                        await PaintImpCore(g);
+                    break;
+
+                case StructureTagKind.Grouping when classification.StructureType == Keywords.Li:
+                    await PaintListItem(g, builder);
+                    break;
+
+                case StructureTagKind.Grouping:
+                    using (builder.OpenGroupingElement(this, classification.StructureType!))
+                        await PaintImpCore(g);
+                    break;
+
+                case StructureTagKind.Content:
+                    using (builder.OpenContentElement(g, this, classification.StructureType!, classification.AltText))
+                        await PaintImpCore(g);
+                    break;
+
+                default:
+                    await PaintImpCore(g);
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// Paints a tagged &lt;li&gt;'s marker and body as separate sibling structure elements under
+        /// "/LI" - "/Lbl" (the marker, via the synthesized <c>::marker</c> child from
+        /// <see cref="IsMarkerPseudoElement"/>, defaulting to "Lbl" per the UA stylesheet's
+        /// <c>li::marker</c> rule, or suppressed if an author set
+        /// <c>li::marker { -peachpdf-pdf-tag-type: none }</c>) and "/LBody" (everything else - not
+        /// itself a separate CSS signal, inferred as "whatever isn't the marker" per the design
+        /// decision this implements). The struct element for "/Lbl" is opened, and its own content
+        /// painted, before "/LBody"'s so the two land in that order under "/LI"'s "/K" (correct
+        /// reading order) - the marker's own on-page paint position is unaffected by this call-order
+        /// swap, since it's driven entirely by pre-computed layout coordinates, not paint order.
+        /// </summary>
+        private async ValueTask PaintListItem(RGraphics g, StructureTagBuilder builder)
+        {
+            using (builder.OpenGroupingElement(this, Keywords.Li))
+            {
+                var markerBox = Boxes.FirstOrDefault(b => b.IsMarkerPseudoElement);
+                if (markerBox != null)
+                {
+                    var markerClassification = StructureTagMapper.Classify(markerBox);
+                    if (markerClassification.Kind == StructureTagKind.None)
+                    {
+                        PaintListStyleMarkers(g);
+                    }
+                    else
+                    {
+                        using (builder.OpenContentElement(g, markerBox, markerClassification.StructureType ?? Keywords.Lbl))
+                            PaintListStyleMarkers(g);
+                    }
+                }
+
+                using (builder.OpenListItemBodyElement(this))
+                    await PaintImpCore(g, paintMarkers: false);
+            }
+        }
+
+        /// <summary>
+        /// Paints the fragment. Renamed from the historical "PaintImp" - <see cref="PaintImp"/> is
+        /// now a non-virtual wrapper around this method that adds tagged-PDF marked-content/struct-
+        /// element bookkeeping around whatever this override actually paints, when tagging is
+        /// enabled (see StructureTagMapper/StructureTagBuilder). Subclasses needing custom paint
+        /// logic still override this method, exactly as they overrode "PaintImp" before.
+        /// </summary>
+        /// <param name="g">the device to draw to</param>
+        protected virtual async ValueTask PaintImpCore(RGraphics g)
+        {
+            await PaintImpCore(g, paintMarkers: true);
+        }
+
+        /// <summary>
+        /// The actual paint logic, with list-marker painting optionally excluded. Only the base
+        /// <see cref="CssBox"/> needs this overload - it exists so the tagged-PDF &lt;li&gt; path in
+        /// <see cref="PaintImp"/> (always a plain <see cref="CssBox"/>, never one of the replaced-
+        /// element subclasses that override the virtual <see cref="PaintImpCore(RGraphics)"/>) can
+        /// paint an &lt;li&gt;'s body content and its marker as two separately MCID-tagged, sibling
+        /// structure elements ("/Lbl" and "/LBody") instead of one combined region.
+        /// </summary>
+        private async ValueTask PaintImpCore(RGraphics g, bool paintMarkers)
         {
             if (_hasPainted)
             {
@@ -2009,12 +2127,27 @@ namespace PeachPDF.Html.Core.Dom
             if (clipped)
                 g.PopClip();
 
-            PaintListStyleShapeMarker(g);
-            PaintListStyleTextMarker(g);
-            PaintListStyleImageMarker(g);
+            if (paintMarkers)
+            {
+                PaintListStyleMarkers(g);
+            }
+
             PaintContentImage(g);
 
             _hasPainted = true;
+        }
+
+        /// <summary>
+        /// Paints this box's list-item marker (bullet/number/image), if any. Extracted from
+        /// <see cref="PaintImpCore(RGraphics, bool)"/> so the tagged-PDF &lt;li&gt; path in
+        /// <see cref="PaintImp"/> can invoke it independently of the rest of the box's content, to
+        /// wrap it in its own "/Lbl" structure element.
+        /// </summary>
+        private void PaintListStyleMarkers(RGraphics g)
+        {
+            PaintListStyleShapeMarker(g);
+            PaintListStyleTextMarker(g);
+            PaintListStyleImageMarker(g);
         }
 
         /// <summary>

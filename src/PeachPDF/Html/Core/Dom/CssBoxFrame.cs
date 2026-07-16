@@ -60,7 +60,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Paints the fragment
         /// </summary>
         /// <param name="g">the device to draw to</param>
-        protected override ValueTask PaintImp(RGraphics g)
+        protected override ValueTask PaintImpCore(RGraphics g)
         {
             var rects = CommonUtils.GetFirstValueOrDefault(Rectangles);
 

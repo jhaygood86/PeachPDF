@@ -3,6 +3,7 @@ using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore.Drawing;
+using System.Linq;
 
 namespace PeachPDF.Tests.Html.Core.Dom
 {
@@ -509,6 +510,123 @@ Assert.NotNull(tbody);
      Assert.True(firstCellWidth >= 180, $"First cell should be approximately 200px wide (accounting for borders), but was {firstCellWidth}");
      Assert.True(secondCellWidth < 160, $"Second cell should be narrower than the explicitly-widened first cell (proving the rule is selective, not applied to every column), but was {secondCellWidth}");
      }
+
+        [Fact]
+        public async Task TableLayout_TbodyBox_GetsRealBoundsSpanningItsRows()
+        {
+            // Regression test: AssignBoxKinds flattens a <tbody>'s <tr> children directly into the
+            // layout engine's row list, laying each row/cell out individually, but historically never
+            // touched the <tbody> box itself - it kept whatever default Location/ActualRight/
+            // ActualBottom it started with (an effectively empty/zero-area Bounds). That's normally
+            // harmless (nothing sizes against a row-group's own box), but CssBox.Paint's
+            // visibility-culling optimization intersects a Rectangles.Count==0 box's own Bounds
+            // against the current clip whenever the whole document has no floated/absolute/fixed
+            // content anywhere - a <tbody> with a never-set Bounds fails that intersection and gets
+            // silently culled from painting along with its entire row/cell subtree, even though every
+            // row/cell inside it has a perfectly valid, already-computed position. This is exactly
+            // the scenario a bare table (the only content in the document) hits.
+            var html = "<html><body><table><tbody><tr><td>A</td><td>B</td></tr></tbody></table></body></html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var table = FindTableBox(rootBox)!;
+            var tbody = table.Boxes.Single(b => b.Display == CssConstants.TableRowGroup);
+            var row = tbody.Boxes.Single(b => b.Display == CssConstants.TableRow);
+
+            Assert.Equal(row.Location.X, tbody.Location.X);
+            Assert.Equal(row.Location.Y, tbody.Location.Y);
+            Assert.Equal(row.ActualRight, tbody.ActualRight);
+            Assert.Equal(row.ActualBottom, tbody.ActualBottom);
+            Assert.True(tbody.Bounds.Width > 0 && tbody.Bounds.Height > 0,
+                $"tbody must have a real, non-degenerate Bounds, but was {tbody.Bounds}");
+        }
+
+        [Fact]
+        public async Task TableLayout_EmptyTbody_DoesNotThrow_AndIsSkipped()
+        {
+            // A <tbody> with no <tr> children at all (legal but degenerate markup) has nothing to
+            // derive Location/ActualRight/ActualBottom from - SetRowGroupBoxDimensions must skip
+            // it rather than crash on an empty rows.Min()/Max() call.
+            var html = "<html><body><table>" +
+                "<tbody id=\"empty\"></tbody>" +
+                "<tbody id=\"real\"><tr><td>A</td></tr></tbody>" +
+                "</table></body></html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var table = FindTableBox(rootBox)!;
+            var tbodies = table.Boxes.Where(b => b.Display == CssConstants.TableRowGroup).ToList();
+
+            Assert.Equal(2, tbodies.Count);
+            var realTbody = tbodies.Single(b => b.Boxes.Count > 0);
+            Assert.True(realTbody.Bounds.Width > 0 && realTbody.Bounds.Height > 0);
+        }
+
+        [Fact]
+        public async Task TableLayout_TheadAndTfootRows_GetRealBoundsSpanningTheirCells()
+        {
+            // Regression test: unlike the regular body-row loop (which sets row.Location/
+            // ActualRight/ActualBottom right after laying out each row's cells), the header- and
+            // footer-rows-layout-once loops in LayoutCells only ever set bounds on the row GROUP
+            // (_headerBox/_footerBox) - never on each individual <tr> row inside it. A <tr> with a
+            // never-set (degenerate) Bounds fails the same paint-time visibility-culling
+            // intersection the tbody bug above hit, silently dropping the header/footer row (and
+            // therefore its cells' text) from painting even though the row-group and cells around
+            // it all have perfectly valid, already-computed positions.
+            var html = "<html><body><table>" +
+                "<thead><tr><th>H1</th><th>H2</th></tr></thead>" +
+                "<tbody><tr><td>A</td><td>B</td></tr></tbody>" +
+                "<tfoot><tr><th>F1</th><th>F2</th></tr></tfoot>" +
+                "</table></body></html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var table = FindTableBox(rootBox)!;
+
+            // The real <thead>/<tfoot> boxes are removed from the live tree in favor of one
+            // CssProxyBox per page (see RemoveHeaderFooterFromTree) - reach the original row via
+            // the proxy's SourceBox rather than the proxy's own (paint-time-only) Boxes.
+            var headerProxy = table.Boxes.OfType<CssProxyBox>().Single(b => b.Display == CssConstants.TableHeaderGroup);
+            var headerRow = headerProxy.SourceBox.Boxes.Single(b => b.Display == CssConstants.TableRow);
+            AssertRealBounds(headerRow, "thead row");
+
+            var footerProxy = table.Boxes.OfType<CssProxyBox>().Single(b => b.Display == CssConstants.TableFooterGroup);
+            var footerRow = footerProxy.SourceBox.Boxes.Single(b => b.Display == CssConstants.TableRow);
+            AssertRealBounds(footerRow, "tfoot row");
+
+            static void AssertRealBounds(CssBox row, string label)
+            {
+                Assert.True(row.Bounds.Width > 0 && row.Bounds.Height > 0,
+                    $"{label} must have a real, non-degenerate Bounds, but was {row.Bounds}");
+                Assert.Equal(row.Boxes.Min(c => c.Location.X), row.Location.X);
+                Assert.Equal(row.Boxes.Min(c => c.Location.Y), row.Location.Y);
+                Assert.Equal(row.Boxes.Max(c => c.ActualRight), row.ActualRight);
+            }
+        }
+
+        [Fact]
+        public async Task TableLayout_HeaderAndFooterGroups_ProduceExactlyOneProxyEach()
+        {
+            // Regression test: CssProxyBox's constructor already appends itself to its parent's
+            // Boxes via the base CssBox(parentBox, tag) constructor - CreateHeaderProxy/
+            // CreateFooterProxy's callers in LayoutCells also explicitly called
+            // _tableBox.Boxes.Add(proxy) right after construction, adding the exact same proxy
+            // instance to the table's children a second time. That made every header/footer row
+            // get painted (and MCID-tagged, once tagging is enabled) twice at identical
+            // coordinates - invisible on the page (exact overlap) but duplicated content-stream
+            // bytes and structure-tree entries.
+            var html = "<html><body><table>" +
+                "<thead><tr><th>H1</th></tr></thead>" +
+                "<tbody><tr><td>A</td></tr></tbody>" +
+                "<tfoot><tr><th>F1</th></tr></tfoot>" +
+                "</table></body></html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var table = FindTableBox(rootBox)!;
+
+            var headerProxies = table.Boxes.Count(b => b is CssProxyBox && b.Display == CssConstants.TableHeaderGroup);
+            var footerProxies = table.Boxes.Count(b => b is CssProxyBox && b.Display == CssConstants.TableFooterGroup);
+
+            Assert.Equal(1, headerProxies);
+            Assert.Equal(1, footerProxies);
+        }
 
         #endregion
 

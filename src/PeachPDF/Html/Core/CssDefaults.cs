@@ -34,6 +34,7 @@ namespace PeachPDF.Html.Core
             body, dd, div,
             dl, dt, fieldset, form,
             frame, frameset,
+            figure, figcaption,
             h1, h2, h3, h4,
             h5, h6, 
             hgroup, main, nav,
@@ -127,6 +128,51 @@ namespace PeachPDF.Html.Core
             base, param     { display:none }
             hr              { border-top-color: #9A9A9A; border-left-color: #9A9A9A; border-bottom-color: #EEEEEE; border-right-color: #EEEEEE; }
             pre             { font-size: 10pt; margin-top: 15px; }
+
+            /* Default -peachpdf-pdf-tag-type mapping (used only when tagged PDF output is
+               enabled; harmless no-op otherwise). Author stylesheets may override any of
+               these, or set -peachpdf-pdf-tag-type: none to suppress tagging entirely. */
+            h1              { -peachpdf-pdf-tag-type: H1 }
+            h2              { -peachpdf-pdf-tag-type: H2 }
+            h3              { -peachpdf-pdf-tag-type: H3 }
+            h4              { -peachpdf-pdf-tag-type: H4 }
+            h5              { -peachpdf-pdf-tag-type: H5 }
+            h6              { -peachpdf-pdf-tag-type: H6 }
+            p               { -peachpdf-pdf-tag-type: P }
+            html, body      { -peachpdf-pdf-tag-type: none }
+            div, header,
+            footer, main,
+            address, hgroup,
+            fieldset, form,
+            center, dir,
+            menu, pre       { -peachpdf-pdf-tag-type: Div }
+            span            { -peachpdf-pdf-tag-type: Span }
+            ul, ol          { -peachpdf-pdf-tag-type: L }
+            li              { -peachpdf-pdf-tag-type: LI }
+            li::marker      { -peachpdf-pdf-tag-type: Lbl; display: none }
+            dl              { -peachpdf-pdf-tag-type: DL }
+            dt              { -peachpdf-pdf-tag-type: DT }
+            dd              { -peachpdf-pdf-tag-type: DD }
+            table           { -peachpdf-pdf-tag-type: Table }
+            tr              { -peachpdf-pdf-tag-type: TR }
+            th              { -peachpdf-pdf-tag-type: TH }
+            td              { -peachpdf-pdf-tag-type: TD }
+            thead           { -peachpdf-pdf-tag-type: THead }
+            tbody           { -peachpdf-pdf-tag-type: TBody }
+            tfoot           { -peachpdf-pdf-tag-type: TFoot }
+            caption,
+            figcaption      { -peachpdf-pdf-tag-type: Caption }
+            img, svg,
+            figure          { -peachpdf-pdf-tag-type: Figure }
+            blockquote      { -peachpdf-pdf-tag-type: BlockQuote }
+            q               { -peachpdf-pdf-tag-type: Quote }
+            article         { -peachpdf-pdf-tag-type: Art }
+            section, nav,
+            aside           { -peachpdf-pdf-tag-type: Sect }
+            hr              { -peachpdf-pdf-tag-type: Artifact }
+            code, kbd,
+            samp, var       { -peachpdf-pdf-tag-type: Code }
+            a[href]         { -peachpdf-pdf-tag-type: Link }
         """;
 
         public static Dictionary<string, string> InitialValues = new()
@@ -166,7 +212,8 @@ namespace PeachPDF.Html.Core
             { "list-style-position", CssConstants.Outside },
             { "text-decoration-color", CssConstants.CurrentColor },
             { "text-decoration-style", CssConstants.Solid },
-            { "z-index", CssConstants.Auto }
+            { "z-index", CssConstants.Auto },
+            { PropertyNames.PdfTagType, CssConstants.Auto }
         };
 
         /// <summary>
@@ -274,6 +321,7 @@ namespace PeachPDF.Html.Core
             { "padding-left", "0" },
             { "padding-right", "0" },
             { "padding-top", "0" },
+            { PropertyNames.PdfTagType, CssConstants.Auto },
             { "position", "static" },
             { "right", CssConstants.Auto },
             { "string-set", CssConstants.None },
