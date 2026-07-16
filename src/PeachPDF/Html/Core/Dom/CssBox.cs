@@ -1561,7 +1561,10 @@ namespace PeachPDF.Html.Core.Dom
             else
             {
                 foreach (CssBox childBox in box.Boxes)
+                {
+                    if (childBox.Display == CssConstants.None) continue;
                     GetMinimumWidth_LongestWord(childBox, ref maxWidth, ref maxWidthWord);
+                }
             }
         }
 
@@ -1675,6 +1678,8 @@ namespace PeachPDF.Html.Core.Dom
                 // recursively on all the child boxes
                 foreach (var childBox in box.Boxes)
                 {
+                    if (childBox.Display == CssConstants.None) continue;
+
                     marginSum += childBox.ActualMarginLeft + childBox.ActualMarginRight;
 
                     //maxSum += childBox.ActualMarginLeft + childBox.ActualMarginRight;

@@ -705,20 +705,15 @@ var peachDataUri = "data:image/svg+xml;base64," + Convert.ToBase64String(Encodin
 
 // Regression: a <style> element nested in the document BODY (as every other swatch on this page
 // uses, one per <td>) that defines a pseudo-element rule whose content resolves to a REAL loaded
-// url() image (SVG or raster - not a permanently-unresolved "missing file") corrupts
-// ShrinkToFit's width measurement pass badly enough to squash the entire page down to a sliver.
-// Gradients and never-resolving url()s don't trigger it (see sections 1-6 above), which is why
-// this is the first content-image showcase entry to actually load a real url() image. Defining
-// these rules once in <head> instead - exactly like every other page's inline style="" swatches
-// already do - sidesteps the bug entirely.
-var peachHeadCss = "<style>" +
-    $".peach-before::before {{ content: url('{peachDataUri}'); display: inline-block; width: 32px; height: 32px; }}" +
-    $".peach-after::after {{ content: url('{peachDataUri}'); display: inline-block; width: 32px; height: 32px; }}" +
-    $".peach-inline::after {{ content: url('{peachDataUri}'); display: inline-block; width: 32px; height: 32px; vertical-align: middle; }}" +
-    "</style>";
-
-static string PeachTd(string desc, string elementHtml, string cssLabel) =>
-    "<td>" + elementHtml +
+// url() image (SVG or raster) previously corrupted ShrinkToFit's width measurement pass - a
+// display:none box's content (the <style> tag's own hidden text, which is unbroken for thousands
+// of base64 characters) was still being deep-scanned for the page's "longest word" during table
+// column-width measurement. Now that display:none subtrees are correctly skipped, these rules are
+// defined per-<td> like every other swatch on this page rather than hoisted into <head>.
+static string PeachTd(string desc, string className, string peachDataUri, string elementHtml, string pseudoElement, string cssLabel, string extraStyle = "") =>
+    "<td>" +
+    $"<style>.{className}::{pseudoElement} {{ content: url('{peachDataUri}'); display: inline-block; width: 32px; height: 32px;{extraStyle} }}</style>" +
+    elementHtml +
     $"<div class=\"desc\">{desc}</div>" +
     $"<div class=\"css\">{cssLabel}</div>" +
     "</td>";
@@ -745,7 +740,7 @@ const string ContentCss = """
     </style>
     """;
 
-var contentHtml = "<!DOCTYPE html><html><head>" + ContentCss + peachHeadCss + "</head><body>" +
+var contentHtml = "<!DOCTYPE html><html><head>" + ContentCss + "</head><body>" +
 
     "<h1>CSS content Image Test Page</h1>" +
     "<p class=\"intro\">Demonstrates url() and gradient functions in the CSS content property on ::before and ::after pseudo-elements. Image values require display: inline-block with explicit width/height.</p>" +
@@ -802,9 +797,9 @@ var contentHtml = "<!DOCTYPE html><html><head>" + ContentCss + peachHeadCss + "<
     "<h2>7 — SVG url() content image</h2>" +
     "<p class=\"intro\">A url() content-image source can also be an SVG, rendered as real vector content (not rasterized) - same as background-image and list-style-image. Note the image paints at the SVG's own intrinsic viewBox size (32x32 here), independent of the box size reserved by display:inline-block's width/height.</p>" +
     Row(
-        PeachTd("::before peach", "<div class=\"peach-before\"></div>", "::before { content: url('data:image/svg+xml;base64,…') }"),
-        PeachTd("::after peach", "<div class=\"peach-after\"></div>", "::after { content: url('data:image/svg+xml;base64,…') }"),
-        PeachTd("peach + text (::after)", "<p class=\"peach-inline\">Text</p>", "::after { content: url('data:image/svg+xml;base64,…') }"),
+        PeachTd("::before peach", "peach-before", peachDataUri, "<div class=\"peach-before\"></div>", "before", "::before { content: url('data:image/svg+xml;base64,…') }"),
+        PeachTd("::after peach", "peach-after", peachDataUri, "<div class=\"peach-after\"></div>", "after", "::after { content: url('data:image/svg+xml;base64,…') }"),
+        PeachTd("peach + text (::after)", "peach-inline", peachDataUri, "<p class=\"peach-inline\">Text</p>", "after", "::after { content: url('data:image/svg+xml;base64,…') }", " vertical-align: middle;"),
         ContentSwatch("missing SVG (no crash)", "url('nonexistent.svg')", "before", "32px", "32px")
     ) +
 

@@ -1045,6 +1045,8 @@ namespace PeachPDF.Html.Core.Dom
         {
             foreach (var childBox in box.Boxes)
             {
+                if (childBox.Display == CssConstants.None) continue;
+
                 await childBox.MeasureWordsSize(g);
                 await MeasureWords(childBox, g);
             }
