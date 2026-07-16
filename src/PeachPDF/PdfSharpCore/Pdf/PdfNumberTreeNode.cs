@@ -142,6 +142,13 @@ namespace PeachPDF.PdfSharpCore.Pdf
             }
             kidNode.Parent = this;
             kids.Elements.Add(kidNode);
+
+            // The /Kids array above is what actually gets written out, but ContainsNumber/
+            // GetValue/CollectKeys/the public Kids property all walk the in-memory _kids list
+            // (only otherwise populated by the dict-wrapping constructor parsing an existing
+            // /Kids array) - without this, a kid added at runtime via AddKid would be invisible
+            // to every includeKids:true traversal and to LeastKey/GreatestKey.
+            _kids.Add(kidNode);
             _updateRequired = true;
         }
 

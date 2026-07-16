@@ -28,6 +28,14 @@ namespace PeachPDF.Tests.Html.Core.Utils
         }
 
         [Fact]
+        public async Task GetPropertyValue_PdfTagType_ReturnsBoxPdfTagType()
+        {
+            var box = await FindDivBox("-peachpdf-pdf-tag-type: BlockQuote;");
+
+            Assert.Equal(box.PdfTagType, CssUtils.GetPropertyValue(box, "-peachpdf-pdf-tag-type"));
+        }
+
+        [Fact]
         public async Task GetPropertyValue_BackgroundAndListStyleImage_AlwaysReturnsNull()
         {
             var box = await FindDivBox("background-image: none; list-style-image: none;");

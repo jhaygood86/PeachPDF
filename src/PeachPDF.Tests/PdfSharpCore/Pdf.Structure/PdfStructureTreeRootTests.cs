@@ -16,6 +16,14 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf.Structure
         }
 
         [Fact]
+        public void ParameterlessConstructor_SetsTypeToStructTreeRoot()
+        {
+            var root = new PdfStructureTreeRoot();
+
+            Assert.Equal("/StructTreeRoot", root.Elements.GetName(PdfStructureTreeRoot.Keys.Type));
+        }
+
+        [Fact]
         public void SetRootKid_IsReachableViaPrepareForSave()
         {
             var doc = new PdfDocument();

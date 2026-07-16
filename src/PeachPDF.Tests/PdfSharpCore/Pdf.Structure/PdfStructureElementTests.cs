@@ -16,6 +16,31 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf.Structure
         }
 
         [Fact]
+        public void ParameterlessConstructor_SetsTypeToStructElem()
+        {
+            var element = new PdfStructureElement();
+
+            Assert.Equal("/StructElem", element.Elements.GetName(PdfStructureElement.Keys.Type));
+        }
+
+        [Fact]
+        public void DictionaryWrappingConstructor_SetsTypeToStructElem()
+        {
+            var doc = new PdfDocument();
+            var dict = new PdfDictionary(doc);
+
+            var element = new PdfStructureElement(dict);
+
+            Assert.Equal("/StructElem", element.Elements.GetName(PdfStructureElement.Keys.Type));
+        }
+
+        [Fact]
+        public void Keys_Meta_IsAccessible()
+        {
+            Assert.NotNull(new PdfStructureElement().Meta);
+        }
+
+        [Fact]
         public void StructureType_RoundTrips()
         {
             var doc = new PdfDocument();
@@ -97,6 +122,31 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf.Structure
 
             var kids = PdfStructureElement.GetKids(element.Elements).ToList();
             Assert.Empty(kids);
+        }
+
+        [Fact]
+        public void AppendKid_WhenKAlreadyHoldsBareSingleItem_WrapsIntoArrayPreservingIt()
+        {
+            // PrepareForSave's SimplifyKidsArray un-wraps a single-kid "/K" array back to a bare
+            // item - AppendKid must still be able to add a further kid afterward (e.g. a struct
+            // element that gets more content on a later page), re-wrapping into an array without
+            // losing the existing bare item. GetObject (what AppendKid reads the existing bare
+            // item back with) only resolves PdfObject-derived items - a single dictionary kid
+            // (not a bare MCID integer, which isn't a PdfObject) is what actually exercises it.
+            var doc = new PdfDocument();
+            var element = new PdfStructureElement(doc) { StructureType = "/P" };
+            doc.Internals.AddObject(element);
+            var firstKid = new PdfStructureElement(doc) { StructureType = "/Span", Parent = element };
+            doc.Internals.AddObject(firstKid);
+            element.Elements[PdfStructureElement.Keys.K] = firstKid;
+
+            var secondKid = new PdfStructureElement(doc) { StructureType = "/Span", Parent = element };
+            doc.Internals.AddObject(secondKid);
+            element.AppendKid(secondKid);
+
+            var array = element.Elements.GetArray(PdfStructureElement.Keys.K);
+            Assert.NotNull(array);
+            Assert.Equal(2, array!.Elements.Count);
         }
 
         [Fact]

@@ -80,14 +80,14 @@ namespace PeachPDF.Html.Core.Handlers
             if (string.Equals(pdfTagType, CssConstants.None, System.StringComparison.OrdinalIgnoreCase))
                 return StructureTagClassification.None;
 
-            if (!Map.PdfTagTypes.TryGetValue(pdfTagType, out var tagType) || tagType == PdfTagType.Auto)
-                // An invalid/unrecognized value should already have been rejected at CSS parse time
-                // (the property's Converter only accepts the fixed keyword set), but fall back to
-                // the same auto-resolution path defensively rather than emitting a bogus /S name.
+            // "auto" and "none" are both handled above via exact-string checks, and both are the
+            // only keywords in Map.PdfTagTypes mapping to PdfTagType.Auto/None respectively - so a
+            // successful TryGetValue here can never yield either value. Only a genuinely
+            // invalid/unrecognized value (which should already have been rejected at CSS parse
+            // time, since the property's Converter only accepts the fixed keyword set) reaches the
+            // fallback below, defensively, rather than emitting a bogus /S name.
+            if (!Map.PdfTagTypes.TryGetValue(pdfTagType, out var tagType))
                 return ClassifyAuto(box);
-
-            if (tagType == PdfTagType.None)
-                return StructureTagClassification.None;
 
             if (tagType == PdfTagType.Artifact)
                 return StructureTagClassification.Artifact;

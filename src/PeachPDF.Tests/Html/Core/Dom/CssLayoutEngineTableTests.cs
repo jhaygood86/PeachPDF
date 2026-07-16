@@ -541,6 +541,26 @@ Assert.NotNull(tbody);
         }
 
         [Fact]
+        public async Task TableLayout_EmptyTbody_DoesNotThrow_AndIsSkipped()
+        {
+            // A <tbody> with no <tr> children at all (legal but degenerate markup) has nothing to
+            // derive Location/ActualRight/ActualBottom from - SetRowGroupBoxDimensions must skip
+            // it rather than crash on an empty rows.Min()/Max() call.
+            var html = "<html><body><table>" +
+                "<tbody id=\"empty\"></tbody>" +
+                "<tbody id=\"real\"><tr><td>A</td></tr></tbody>" +
+                "</table></body></html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var table = FindTableBox(rootBox)!;
+            var tbodies = table.Boxes.Where(b => b.Display == CssConstants.TableRowGroup).ToList();
+
+            Assert.Equal(2, tbodies.Count);
+            var realTbody = tbodies.Single(b => b.Boxes.Count > 0);
+            Assert.True(realTbody.Bounds.Width > 0 && realTbody.Bounds.Height > 0);
+        }
+
+        [Fact]
         public async Task TableLayout_TheadAndTfootRows_GetRealBoundsSpanningTheirCells()
         {
             // Regression test: unlike the regular body-row loop (which sets row.Location/
