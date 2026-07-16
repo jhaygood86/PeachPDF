@@ -34,8 +34,10 @@
 	<ItemGroup>
 		<None Remove="PdfSharpCore\Resources\Messages.restext" />
 		<EmbeddedResource Include="PdfSharpCore\Resources\Messages.restext" />
-		<None Remove="Text\Resources\hyph-en-us.txt" />
-		<EmbeddedResource Include="Text\Resources\hyph-en-us.txt" />
+		<None Remove="Text\Resources\Patterns\*.br" />
+		<EmbeddedResource Include="Text\Resources\Patterns\*.br" />
+		<None Remove="Text\Resources\language-tags.txt" />
+		<EmbeddedResource Include="Text\Resources\language-tags.txt" />
 	</ItemGroup>
 	<ItemGroup>
 		<Folder Include="PdfSharpCore\Resources\images\" />

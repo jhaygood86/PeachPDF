@@ -241,7 +241,7 @@ Percentages are relative to the border-box width (horizontal radius) and height 
 | Property | MDN Reference | Notes |
 |----------|--------------|-------|
 | `direction` | [direction](https://developer.mozilla.org/en-US/docs/Web/CSS/direction) | `ltr` and `rtl` |
-| `hyphens` | [hyphens](https://developer.mozilla.org/en-US/docs/Web/CSS/hyphens) | `none`, `manual`, `auto` are parsed, cascaded, and inherited. `manual` and `auto` both honor an explicit soft hyphen (`&shy;`/U+00AD) as a line-break opportunity, and now correctly render a literal `-` glyph when that break is actually used (a break that's never used never shows one). `auto` additionally performs real pattern-based automatic hyphenation (Liang's algorithm, American-English pattern data) — but only when the text's language is known, per spec: PeachPDF reads `<html lang="...">` (`HtmlContainerInt.DocumentLanguage`), and a calling application can supply `PdfGenerateConfig.DefaultLanguage` as a fallback for documents that declare no language of their own. With no language available from either source, `auto` behaves like `manual` (no algorithmic hyphenation) rather than guessing. Only `en`/`en-*` are currently supported; other languages fall back to the same no-op |
+| `hyphens` | [hyphens](https://developer.mozilla.org/en-US/docs/Web/CSS/hyphens) | `none`, `manual`, `auto` are parsed, cascaded, and inherited. `manual` and `auto` both honor an explicit soft hyphen (`&shy;`/U+00AD) as a line-break opportunity, rendering a literal `-` glyph only when that break is actually used. `auto` additionally performs real pattern-based automatic hyphenation (Liang's algorithm) for ~73 languages — see the note below the table for language coverage and exclusions |
 | `text-align` | [text-align](https://developer.mozilla.org/en-US/docs/Web/CSS/text-align) | `left`, `right`, `center`, `justify` |
 | `text-decoration` | [text-decoration](https://developer.mozilla.org/en-US/docs/Web/CSS/text-decoration) | Shorthand supported |
 | `text-decoration-color` | [text-decoration-color](https://developer.mozilla.org/en-US/docs/Web/CSS/text-decoration-color) | Full support |
@@ -252,6 +252,29 @@ Percentages are relative to the border-box width (horizontal radius) and height 
 | `white-space` | [white-space](https://developer.mozilla.org/en-US/docs/Web/CSS/white-space) | `normal`, `nowrap`, `pre`, `pre-wrap`, `pre-line` |
 | `word-break` | [word-break](https://developer.mozilla.org/en-US/docs/Web/CSS/word-break) | `normal`, `break-all`, `keep-all` |
 | `word-spacing` | [word-spacing](https://developer.mozilla.org/en-US/docs/Web/CSS/word-spacing) | Full support |
+
+#### `hyphens: auto` language coverage
+
+`auto` performs real pattern-based automatic hyphenation only when the text's language is known: PeachPDF reads `<html lang="...">` (`HtmlContainerInt.DocumentLanguage`), and a calling application can supply `PdfGenerateConfig.DefaultLanguage` as a fallback for documents that declare no language of their own. With no language available from either source, `auto` behaves like `manual` (no algorithmic hyphenation) rather than guessing. A declared language resolves to the closest available pattern set — the tag itself, then progressively shorter subtag prefixes (e.g. `de-AT` falls back to `de`'s default variant, `de-1996`) — and a language with no match anywhere in that chain silently falls back to the same no-op rather than erroring.
+
+Pattern data is sourced from CTAN's [hyph-utf8](https://ctan.org/pkg/hyph-utf8) package (see [tools/Update-HyphenationPatterns.ps1](https://github.com/jhaygood86/PeachPDF/blob/main/tools/Update-HyphenationPatterns.ps1) for the reproducible download/build pipeline). PeachPDF ships only permissively licensed pattern sets (MIT/LPPL/BSD-style/public-domain), consistent with the library's own license — **73 languages/scripts** are supported:
+
+Afrikaans (`af`), Albanian (`sq`), Ancient Greek (`grc`), Assamese (`as`), Basque (`eu`), Belarusian (`be`), Bengali (`bn`), British English (`en-GB`), Bulgarian (`bg`), Catalan (`ca`), Chinese pinyin/Mandarin romanization (`zh-Latn-pinyin`), Church Slavonic (`cu`), Coptic (`cop`), Croatian (`hr`, via Serbo-Croatian Latin patterns), Danish (`da`), Dutch (`nl`), Esperanto (`eo`), Estonian (`et`), Finnish (`fi`, plus a `fi-x-school` school-method variant), French (`fr`), Friulan (`fur`), Galician (`gl`), Georgian (`ka`), German — traditional (`de-1901`), reformed/modern (`de-1996`, the default for bare `de`), and Swiss traditional (`de-ch-1901`, the default for `de-CH`), Gujarati (`gu`), Hindi (`hi`), American English (`en-US`, the default for bare `en`), Icelandic (`is`), Interlingua (`ia`), Irish (`ga`), Italian (`it`), Kannada (`kn`), Kazakh (`kk`), Kurmanji/Northern Kurdish (`kmr`, also the default for bare `ku`), Latin — modern/medieval (`la`), classical (`la-x-classic`), and liturgical (`la-x-liturgic`) variants, Lithuanian (`lt`), Malayalam (`ml`), Marathi (`mr`), Modern Greek — monotonic (`el-monoton`, the default for bare `el`) and polytonic (`el-polyton`), Mongolian, Cyrillic script (`mn-Cyrl`, the default for bare `mn`), Norwegian Bokmål (`nb`, also the default for bare `no`), Norwegian Nynorsk (`nn`), Occitan (`oc`), Oriya (`or`), Panjabi (`pa`), Pāli (`pi`), Piedmontese (`pms`), Polish (`pl`), Portuguese (`pt`, shared for `pt-BR`/`pt-PT`), Romansh (`rm`), Russian (`ru`), Sanskrit and Prakrit, Latin transliteration (`sa`), Serbo-Croatian — Cyrillic (`sh-Cyrl`, also the default for bare `sr`) and Latin (`sh-Latn`, also the default for bare `bs`) scripts, Slovak (`sk`), Slovenian (`sl`), Spanish (`es`), Swedish (`sv`), Tamil (`ta`), Telugu (`te`), Thai (`th`), Turkish (`tr`), Turkmen (`tk`), Ukrainian (`uk`), Upper Sorbian (`hsb`), Welsh (`cy`), and languages written in the Ethiopic script (`mul-Ethi`, covering Amharic `am` and Tigrinya `ti`).
+
+**Explicitly excluded** — these languages have hyphenation patterns in the upstream hyph-utf8 package, but PeachPDF does not ship them because the pattern file itself is GPL/LGPL-licensed (copyleft, stronger obligations than PeachPDF's own license) or states no license at all. `hyphens: auto` is a silent no-op for these languages exactly as if no pattern data existed for them at all:
+
+| Language | Tag | Reason |
+|---|---|---|
+| Armenian | `hy` | LGPL 3.0 |
+| Czech | `cs` | GPL 2+ |
+| Hungarian | `hu` | LGPL 2.1 |
+| Indonesian | `id` | GPL 2 |
+| Latvian | `lv` | GPL 2+ |
+| Macedonian | `mk` | GPL |
+| Romanian | `ro` | No license stated in the source file |
+| Serbian, Cyrillic script | `sr-Cyrl` | GPL |
+
+Regenerating the pattern set (`tools/Update-HyphenationPatterns.ps1`) re-checks each language's license against the same permissive-only rule on every run, so a language is only ever added back automatically if upstream re-licenses it.
 
 ### Display & Layout
 

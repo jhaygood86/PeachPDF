@@ -2312,4 +2312,55 @@ Console.WriteLine("Saved test_multicol.pdf");
 
 File.Delete("test_multicol.html");
 File.WriteAllText("test_multicol.html", multicolHtml);
+
+// --- hyphens: auto multi-language showcase ---
+// Document language is a whole-container setting (<html lang>, see CssBox/HtmlContainerInt), so
+// each language gets its own small document rather than one page per language like the other
+// showcases above.
+
+const string HyphenationCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 9pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
+    .col { width: 90px; border: 1px solid #bbb; padding: 6px; hyphens: auto; text-align: justify; float: left; margin-right: 10px }
+    </style>
+    """;
+
+// tag: the document's <html lang>. words: a few long words known to have real hyphenation
+// points in that language's pattern set, forced to wrap in a narrow column so any hyphenation
+// is actually exercised (a real fix for the ASCII-only alphabet gate bug — see
+// HyphenationEngine's Unicode-letter check — would have shipped correct-looking pattern data
+// that silently never activated for non-Latin scripts like Russian below).
+(string Tag, string Title, string[] Words)[] hyphenationShowcases =
+[
+    ("en-US", "English (en-US)", ["antidisestablishmentarianism", "internationalization", "hyphenation"]),
+    ("de-DE", "German (de-DE, reformed orthography default)", ["Rechtsschutzversicherungsgesellschaften", "Konstitution", "Donaudampfschifffahrt"]),
+    ("fr", "French (fr)", ["anticonstitutionnellement", "extraordinairement"]),
+    ("ru", "Russian (ru, Cyrillic script)", ["предпринимательство", "информационный", "образовательного"])
+];
+
+foreach (var (tag, title, words) in hyphenationShowcases)
+{
+    var wordsHtml = string.Concat(words.Select(w => $"<p>{w}</p>"));
+    var hyphenationHtml = $"<!DOCTYPE html><html lang=\"{tag}\">" +
+        "<head>" + HyphenationCss + "</head><body>" +
+        $"<h1>hyphens: auto — {title}</h1>" +
+        "<p class=\"intro\">Each narrow column below forces these long words to wrap; hyphens:auto should split them at real language-appropriate break points instead of just overflowing/wrapping whole.</p>" +
+        $"<div class=\"col\">{wordsHtml}</div>" +
+        "</body></html>";
+
+    var hyphenationDocument = await generator.GeneratePdf(hyphenationHtml, pdfConfig);
+    var hyphenationStream = new MemoryStream();
+    hyphenationDocument.Save(hyphenationStream);
+
+    var fileTag = tag.ToLowerInvariant().Replace("-", "_");
+    File.Delete($"test_hyphenation_{fileTag}.pdf");
+    File.WriteAllBytes($"test_hyphenation_{fileTag}.pdf", hyphenationStream.ToArray());
+    Console.WriteLine($"Saved test_hyphenation_{fileTag}.pdf");
+
+    File.Delete($"test_hyphenation_{fileTag}.html");
+    File.WriteAllText($"test_hyphenation_{fileTag}.html", hyphenationHtml);
+}
 Console.WriteLine("Saved test_text_transform.html");
