@@ -213,6 +213,19 @@ namespace PeachPDF.Html.Adapters
         public abstract (RGraphics Graphics, RImage Image)? CreateTile(double width, double height);
 
         /// <summary>
+        /// Whether this instance paints into an offscreen tile (e.g. one returned by
+        /// <see cref="CreateTile"/>, used by <c>CssBox.PaintWithOpacity</c> and SVG pattern/mask
+        /// content) rather than directly into the real page's own content stream. Tagged-PDF output
+        /// does not emit marked-content sequences into tile content streams in the current
+        /// implementation (doing so correctly needs <c>/MCR</c> with <c>/Stm</c>/<c>/StmOwn</c>
+        /// pointing at the tile's own content stream, not yet wired up) - callers use this to skip
+        /// MCID/BDC emission while still creating the struct element itself, so the tree shape stays
+        /// well-formed even though this particular occurrence contributes no reachable MCID.
+        /// Defaults to <c>false</c>.
+        /// </summary>
+        public virtual bool IsOffscreenTile => false;
+
+        /// <summary>
         /// Draws <paramref name="image"/> (a tile from <see cref="CreateTile"/>) at
         /// <paramref name="destRect"/> with <paramref name="maskImage"/> (another same-adapter tile,
         /// sharing <paramref name="image"/>'s own local width/height) applied as a luminosity soft
@@ -239,6 +252,27 @@ namespace PeachPDF.Html.Adapters
         /// <paramref name="image"/> wasn't created via <see cref="CreateTile"/> on this same <see cref="RGraphics"/>.
         /// </summary>
         public abstract void DrawImageWithOpacity(RImage image, RRect destRect, double opacity);
+
+        /// <summary>
+        /// Begins a tagged marked-content sequence in the page content stream, associated with the
+        /// given PDF structure type (e.g. "/H1", "/P") and marked-content identifier. Only called
+        /// when tagged PDF output is enabled. Must be paired with <see cref="EndMarkedContent"/>,
+        /// wrapping a whole leaf box's own paint calls - never part of one.
+        /// </summary>
+        public abstract void BeginMarkedContent(string structureType, int mcid);
+
+        /// <summary>
+        /// Ends a marked-content sequence started by <see cref="BeginMarkedContent"/> or
+        /// <see cref="BeginArtifact"/>.
+        /// </summary>
+        public abstract void EndMarkedContent();
+
+        /// <summary>
+        /// Begins an artifact marked-content sequence - marks the content that follows as not part
+        /// of the document's logical structure (e.g. a decorative &lt;hr&gt;). Must be paired with
+        /// <see cref="EndMarkedContent"/>.
+        /// </summary>
+        public abstract void BeginArtifact();
 
         /// <summary>
         /// Measure the width and height of string <paramref name="str"/> when drawn on device context HDC

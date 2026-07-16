@@ -318,6 +318,7 @@ namespace PeachPDF.Html.Core.Dom
         public string CounterSet { get; set; } = CssConstants.None;
         public string StringSet { get; set; } = CssConstants.None;
         public string PageName { get; set; } = string.Empty;
+        public string PdfTagType { get; set; } = CssConstants.Auto;
 
         public string MarginBottom { get; set; } = "0";
 
@@ -1512,6 +1513,13 @@ namespace PeachPDF.Html.Core.Dom
             MaxWidth = p.MaxWidth;
             MinWidth = p.MinWidth;
             _wordSpacing = p._wordSpacing;
+            // Not a real inherited property (never copied in the "always" section above, so
+            // ordinary parent->child cascade seeding never touches it) - but every "everything"
+            // call site here (CssProxyBox's repeated-header/footer clone, DomParser's inline/block
+            // box-splitting) represents a structural duplicate of the SAME source box's own
+            // resolved content, not real ancestor->descendant inheritance, so its own resolved
+            // tag type must carry over too.
+            PdfTagType = p.PdfTagType;
         }
     }
 

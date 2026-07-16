@@ -201,7 +201,7 @@ namespace PeachPDF
             foreach (var link in HtmlContainerInt.GetLinks())
             {
                 var href = link.Href.StartsWith('#') || baseUri is null ? link.Href : new RUri(baseUri, link.Href).AbsoluteUri;
-                linkElements.Add(new LinkElementData<XRect>(link.Id, href, Utils.Convert(link.Rectangle, PixelsPerPoint)));
+                linkElements.Add(new LinkElementData<XRect>(link.Id, href, Utils.Convert(link.Rectangle, PixelsPerPoint), link.SourceBox));
             }
 
             return linkElements;

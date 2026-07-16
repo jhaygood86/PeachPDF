@@ -39,6 +39,26 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf
         }
 
         [Fact]
+        public void StructParents_DefaultsToZero()
+        {
+            var doc = new PdfDocument();
+            var page = doc.AddPage();
+
+            Assert.Equal(0, page.StructParents);
+        }
+
+        [Fact]
+        public void StructParents_RoundTrips()
+        {
+            var doc = new PdfDocument();
+            var page = doc.AddPage();
+
+            page.StructParents = 4;
+
+            Assert.Equal(4, page.StructParents);
+        }
+
+        [Fact]
         public void Size_InvalidValue_Throws()
         {
             var doc = new PdfDocument();

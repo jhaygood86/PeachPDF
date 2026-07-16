@@ -1466,6 +1466,40 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         StreamMode _streamMode;
 
         /// <summary>
+        /// Begins a tagged marked-content sequence ("/Tag&lt;&lt;/MCID n&gt;&gt;BDC") associated
+        /// with the given marked-content identifier. <paramref name="structureType"/> must already
+        /// be a slash-prefixed PDF name (e.g. "/P", "/Span") - the BDC operator's tag operand is
+        /// written verbatim, with no prefix added here. PDF permits a marked-content sequence to
+        /// either fully contain a text object (BDC BT ... ET EMC) or be fully contained inside one
+        /// (BT BDC ... EMC ET), but never straddle a BT/ET boundary - callers must only wrap this
+        /// around a whole leaf box's own paint calls, never around part of one.
+        /// </summary>
+        internal void BeginMarkedContent(string structureType, int mcid)
+        {
+            BeginPage();
+            _content.Append($"{structureType}<</MCID {mcid}>>BDC\n");
+        }
+
+        /// <summary>
+        /// Ends a marked-content sequence started by <see cref="BeginMarkedContent"/> or
+        /// <see cref="BeginArtifact"/>.
+        /// </summary>
+        internal void EndMarkedContent()
+        {
+            _content.Append("EMC\n");
+        }
+
+        /// <summary>
+        /// Begins an artifact marked-content sequence ("/Artifact BMC") - used for content that is
+        /// not part of the document's logical structure (e.g. a decorative &lt;hr&gt;).
+        /// </summary>
+        internal void BeginArtifact()
+        {
+            BeginPage();
+            _content.Append("/Artifact BMC\n");
+        }
+
+        /// <summary>
         /// Makes the specified pen and brush to the current graphics objects.
         /// </summary>
         private void Realize(XPen pen, XBrush brush)

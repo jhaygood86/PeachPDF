@@ -320,6 +320,30 @@ namespace PeachPDF.PdfSharpCore.Pdf
             }
         }
 
+        /// <summary>
+        /// Gets or sets the /StructParents entry of the PDF page: the integer key of this page's
+        /// entry in the document's structural parent tree (/StructTreeRoot/ParentTree). Only
+        /// meaningful when the page contains tagged marked-content sequences.
+        /// </summary>
+        internal int StructParents
+        {
+            get { return _elements.GetInteger(Keys.StructParents); }
+            set { _elements.SetInteger(Keys.StructParents, value); }
+        }
+
+        /// <summary>
+        /// Gets or sets the /Tabs entry of the PDF page: the tab order for the page's
+        /// annotations ("R"/"C"/"S" - row/column/structure order). Set to "/S" once a page gains
+        /// an annotation linked into the structure tree (see StructureTagBuilder.
+        /// LinkAnnotationToStructureElement), per PDF/UA's requirement that tab order follow
+        /// structure order on such pages.
+        /// </summary>
+        internal string Tabs
+        {
+            get { return _elements.GetName(Keys.Tabs); }
+            set { _elements.SetName(Keys.Tabs, value); }
+        }
+
         // TODO: PdfAnnotations
         // TODO: PdfActions
         // TODO: PdfPageTransition

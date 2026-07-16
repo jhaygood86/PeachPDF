@@ -159,6 +159,48 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(PeachPdfProductInfo.Generator, info.Producer);
         }
 
+        [Fact]
+        public async Task Language_IsExtractedFromHtmlLangAttribute()
+        {
+            var html = "<html lang='fr'><body><p>Bonjour</p></body></html>";
+
+            var result = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
+
+            Assert.Equal("fr", result.PdfDocument.Language);
+        }
+
+        [Fact]
+        public async Task Language_FallsBackToConfigDefaultLanguage_WhenDocumentDeclaresNone()
+        {
+            var html = "<html><body><p>Hello</p></body></html>";
+            var config = new PdfGenerateConfig { PageSize = PageSize.A4, DefaultLanguage = "en-US" };
+
+            var result = await new PdfGenerator().GeneratePdf(html, config);
+
+            Assert.Equal("en-US", result.PdfDocument.Language);
+        }
+
+        [Fact]
+        public async Task Language_DocumentLangAttribute_OverridesConfigDefaultLanguage()
+        {
+            var html = "<html lang='de'><body><p>Hallo</p></body></html>";
+            var config = new PdfGenerateConfig { PageSize = PageSize.A4, DefaultLanguage = "en-US" };
+
+            var result = await new PdfGenerator().GeneratePdf(html, config);
+
+            Assert.Equal("de", result.PdfDocument.Language);
+        }
+
+        [Fact]
+        public async Task Language_IsEmptyByDefault_WhenNeitherDocumentNorConfigDeclareOne()
+        {
+            var html = "<html><body><p>Hello</p></body></html>";
+
+            var result = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
+
+            Assert.True(string.IsNullOrEmpty(result.PdfDocument.Language));
+        }
+
         #region Helpers
 
         private static async Task<PdfDocumentInformation> GenerateInfo(string html)

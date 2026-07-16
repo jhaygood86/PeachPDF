@@ -28,6 +28,7 @@
 #endregion
 
 using PeachPDF.PdfSharpCore.Pdf.IO;
+using PeachPDF.PdfSharpCore.Pdf.Structure;
 using System;
 
 namespace PeachPDF.PdfSharpCore.Pdf.Advanced
@@ -173,11 +174,33 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         }
 
         /// <summary>
+        /// Gets the structure tree root ("/StructTreeRoot"), lazily creating it on first access.
+        /// Only ever touched when tagged PDF output is enabled - untouched, this stays null and no
+        /// indirect object is allocated for it.
+        /// </summary>
+        internal PdfStructureTreeRoot StructureTreeRoot
+        {
+            get { return _structureTreeRoot ??= (PdfStructureTreeRoot)Elements.GetValue(Keys.StructTreeRoot, VCF.CreateIndirect); }
+        }
+        PdfStructureTreeRoot _structureTreeRoot = null!;
+
+        /// <summary>
+        /// Gets the mark information dictionary ("/MarkInfo"), lazily creating it on first access.
+        /// </summary>
+        internal PdfMarkInformation MarkInfo
+        {
+            get { return _markInfo ??= (PdfMarkInformation)Elements.GetValue(Keys.MarkInfo, VCF.CreateIndirect); }
+        }
+        PdfMarkInformation _markInfo = null!;
+
+        /// <summary>
         /// Dispatches PrepareForSave to the objects that need it.
         /// </summary>
         internal override void PrepareForSave()
         {
             _pages?.PrepareForSave();
+
+            _structureTreeRoot?.PrepareForSave();
 
             if (_outline == null || _outline.Outlines.Count <= 0) return;
 
@@ -274,14 +297,14 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             /// <summary>
             /// (Optional; PDF 1.3) The document�s structure tree root dictionary.
             /// </summary>
-            [KeyInfo("1.3", KeyType.Dictionary | KeyType.Optional)]
+            [KeyInfo("1.3", KeyType.Dictionary | KeyType.Optional, typeof(PdfStructureTreeRoot))]
             public const string StructTreeRoot = "/StructTreeRoot";
 
             /// <summary>
             /// (Optional; PDF 1.4) A mark information dictionary containing information
             /// about the document�s usage of Tagged PDF conventions.
             /// </summary>
-            [KeyInfo("1.4", KeyType.Dictionary | KeyType.Optional)]
+            [KeyInfo("1.4", KeyType.Dictionary | KeyType.Optional, typeof(PdfMarkInformation))]
             public const string MarkInfo = "/MarkInfo";
 
             /// <summary>

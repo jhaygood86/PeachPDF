@@ -700,6 +700,15 @@ namespace PeachPDF.Html.Core.Dom
                     var (newMaxRight, newMaxBottom) = await LayoutBodyRow(g, row, startX, headerRowsLayoutY, -1, new Dictionary<int, List<CssBox>>(), maxRight, headerRowsLayoutY);
                     maxRight = newMaxRight;
                     headerRowsLayoutY = newMaxBottom + GetVerticalSpacing();
+
+                    // Unlike the regular body-row loop below, this never set the row's own
+                    // Location/ActualRight/ActualBottom (only each cell's) - left it at a
+                    // degenerate (0,0,0,0) Bounds, which the paint-time visibility-culling
+                    // optimization (see SetRowGroupBoxDimensions's call-site comment for the same
+                    // bug at the row-group level) then silently drops from painting entirely.
+                    row.Location = new RPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
+                    row.ActualRight = row.Boxes.Max(x => x.ActualRight);
+                    row.ActualBottom = newMaxBottom;
                 }
 
                 // Set header box dimensions
@@ -713,10 +722,15 @@ namespace PeachPDF.Html.Core.Dom
 #endif
 
                 // Now create proxy that references the already-laid-out header
+                // CreateHeaderProxy's CssProxyBox constructor already appends itself to
+                // _tableBox.Boxes (see the base CssBox(parentBox, tag) constructor) - an explicit
+                // second Add here duplicated the same proxy instance in the list, causing every
+                // header row to be painted (and, once tagged, MCID-tagged) twice at identical
+                // coordinates - invisible on the page (exact overlap) but wasted content-stream
+                // bytes and duplicate structure-tree entries.
                 var headerProxy = CreateHeaderProxy(currentY);
                 if (headerProxy != null)
                 {
-                    _tableBox.Boxes.Add(headerProxy);  // Add at end instead of inserting at index
                     await headerProxy.PerformLayout(g);
 
                     currentY += _headerHeight + GetVerticalSpacing();
@@ -736,6 +750,11 @@ namespace PeachPDF.Html.Core.Dom
 
                     var (newMaxRight, newMaxBottom) = await LayoutBodyRow(g, row, startX, footerRowsLayoutY, -1, new Dictionary<int, List<CssBox>>(), maxRight, footerRowsLayoutY);
                     footerRowsLayoutY = newMaxBottom + GetVerticalSpacing();
+
+                    // See the identical fix in the header-rows loop above for why this is needed.
+                    row.Location = new RPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
+                    row.ActualRight = row.Boxes.Max(x => x.ActualRight);
+                    row.ActualBottom = newMaxBottom;
                 }
 
                 _footerBox.Location = new RPoint(startX, 0);
@@ -797,7 +816,6 @@ namespace PeachPDF.Html.Core.Dom
                         var footerProxy = CreateFooterProxy(footerY);
                         if (footerProxy != null)
                         {
-                            _tableBox.Boxes.Add(footerProxy);  // Add at end
                             await footerProxy.PerformLayout(g);
                             // Footer is part of this page's table slice — extend clip to cover it.
                             pageBreakBottomY = footerProxy.ActualBottom;
@@ -819,7 +837,6 @@ namespace PeachPDF.Html.Core.Dom
                         var headerProxy = CreateHeaderProxy(currentY);
                         if (headerProxy != null)
                         {
-                            _tableBox.Boxes.Add(headerProxy);  // Add at end
                             await headerProxy.PerformLayout(g);
                             currentY += _headerHeight + GetVerticalSpacing();
                             maxRight = Math.Max(maxRight, headerProxy.ActualRight);
@@ -847,7 +864,6 @@ namespace PeachPDF.Html.Core.Dom
                 var finalFooterProxy = CreateFooterProxy(currentY);
                 if (finalFooterProxy != null)
                 {
-                    _tableBox.Boxes.Add(finalFooterProxy);
                     await finalFooterProxy.PerformLayout(g);
                     currentY += _footerHeight + GetVerticalSpacing();
                     maxBottom = Math.Max(maxBottom, finalFooterProxy.ActualBottom);
@@ -855,7 +871,22 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
-            // Step 6: Set final table dimensions
+            // Step 6: Set row-group (<tbody>) box dimensions. Unlike <thead>/<tfoot> (always
+            // explicitly positioned above via _headerBox/_footerBox, since any <thead>/<tfoot>
+            // present is unconditionally treated as repeatable), a <tbody>'s own rows are flattened
+            // straight into _bodyRows by AssignBoxKinds and laid out directly - the <tbody> box
+            // itself is never otherwise touched, leaving its Location/ActualRight/ActualBottom at
+            // their unset defaults (an empty/degenerate Bounds). That's harmless for layout itself
+            // (nothing sizes against a row-group's own box), but CssBox.Paint's visibility-culling
+            // optimization intersects a Rectangles.Count==0 box's own Bounds against the current
+            // clip whenever the document has no floated/absolute/fixed content anywhere - a <tbody>
+            // with a never-set (0,0,0,0) Bounds fails that intersection and gets silently culled
+            // along with its entire row/cell subtree, even though every row/cell inside it has a
+            // perfectly valid, already-computed position. Give every row-group box a real bounding
+            // rect spanning its own row children so it participates in that check correctly.
+            SetRowGroupBoxDimensions();
+
+            // Step 7: Set final table dimensions
             maxRight = Math.Max(maxRight, _tableBox.Location.X + _tableBox.ActualWidth);
             _tableBox.ActualRight = maxRight + GetHorizontalSpacing() + _tableBox.ActualBorderRightWidth;
             _tableBox.ActualBottom = Math.Max(maxBottom, startY) + GetVerticalSpacing() + _tableBox.ActualBorderBottomWidth;
@@ -868,6 +899,30 @@ namespace PeachPDF.Html.Core.Dom
                 System.Console.WriteLine($"  TableBox child {i}: Type={box.GetType().Name}, Display={box.Display}");
             }
 #endif
+        }
+
+        /// <summary>
+        /// Sets Location/ActualRight/ActualBottom on every direct <c>&lt;tbody&gt;</c>
+        /// (table-row-group) child of the table, spanning the bounding box of its own row
+        /// children - see the call site's comment for why this is needed. &lt;thead&gt;/&lt;tfoot&gt;
+        /// are unaffected: they're already explicitly positioned above (as _headerBox/_footerBox),
+        /// since any present header/footer group is unconditionally treated as repeatable.
+        /// </summary>
+        private void SetRowGroupBoxDimensions()
+        {
+            foreach (var box in _tableBox.Boxes)
+            {
+                if (box.Display != CssConstants.TableRowGroup)
+                    continue;
+
+                var rows = box.Boxes.Where(b => b.Display == CssConstants.TableRow).ToList();
+                if (rows.Count == 0)
+                    continue;
+
+                box.Location = new RPoint(rows.Min(r => r.Location.X), rows.Min(r => r.Location.Y));
+                box.ActualRight = rows.Max(r => r.ActualRight);
+                box.ActualBottom = rows.Max(r => r.ActualBottom);
+            }
         }
 
         /// <summary>

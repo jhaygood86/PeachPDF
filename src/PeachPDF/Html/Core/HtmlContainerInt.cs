@@ -282,6 +282,14 @@ namespace PeachPDF.Html.Core
         internal string? DocumentLanguage { get; set; }
 
         /// <summary>
+        /// Orchestrates tagged-PDF structure-tree/MCID bookkeeping during painting. Set by
+        /// <c>PdfGenerator</c> before the page-render loop only when
+        /// <c>PdfGenerateConfig.EnableTaggedPdf</c> is set; null (the default) means tagging is
+        /// disabled and <c>CssBox.PaintImp</c>'s tagging wrapper is a no-op.
+        /// </summary>
+        internal Handlers.StructureTagBuilder? StructureTagBuilder { get; set; }
+
+        /// <summary>
         /// Init with optional document and stylesheet.
         /// </summary>
         /// <param name="htmlSource">the html to init with, init empty if not given</param>
@@ -323,7 +331,7 @@ namespace PeachPDF.Html.Core
             var linkElements = new List<LinkElementData<RRect>>();
             foreach (var box in linkBoxes)
             {
-                linkElements.Add(new LinkElementData<RRect>(box.GetAttribute("id"), box.GetAttribute("href"), CommonUtils.GetFirstValueOrDefault(box.Rectangles, box.Bounds)));
+                linkElements.Add(new LinkElementData<RRect>(box.GetAttribute("id"), box.GetAttribute("href"), CommonUtils.GetFirstValueOrDefault(box.Rectangles, box.Bounds), box));
             }
 
             var svgLinks = new List<(RRect Rect, string Href)>();

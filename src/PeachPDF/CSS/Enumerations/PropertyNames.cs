@@ -176,6 +176,7 @@ namespace PeachPDF.CSS
         public static readonly string PageBreakBefore = "page-break-before";
         public static readonly string PageBreakInside = "page-break-inside";
         public static readonly string PageName = "page";
+        public static readonly string PdfTagType = "-peachpdf-pdf-tag-type";
         public static readonly string Perspective = "perspective";
         public static readonly string PerspectiveOrigin = "perspective-origin";
         public static readonly string PointerEvents = "pointer-events";

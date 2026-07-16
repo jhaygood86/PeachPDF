@@ -2456,3 +2456,75 @@ foreach (var (tag, title, words) in hyphenationShowcases)
     File.WriteAllText($"test_hyphenation_{fileTag}.html", hyphenationHtml);
 }
 Console.WriteLine("Saved test_text_transform.html");
+
+// --- Tagged PDF (PDF/UA) showcase ---
+// Tags are invisible in a normal page render, so this showcase's value is manual inspection of
+// the structure tree (e.g. Acrobat's Tags panel, or another PDF/UA-aware checker) rather than
+// visual comparison - it's included anyway per this repo's convention that a new visible
+// capability gets a showcase, since several real rendering bugs elsewhere have only ever been
+// caught by someone actually opening a showcase's output (see CLAUDE.md's Testing conventions).
+
+const string TaggedPdfCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 10pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 16pt }
+    h2 { font-size: 11pt; margin-top: 1.2em }
+    table { border-collapse: collapse; width: 100% }
+    td, th { border: 0.5pt solid #999; padding: 4px; text-align: left }
+    .pull-quote { border-left: 3px solid #999; padding-left: 8px; color: #555; margin: 0.6em 0 }
+    </style>
+    """;
+
+// A 1x1 transparent PNG - same fixture used by TaggedPdfStructureTreeTests.
+const string TaggedPdfTinyPngBase64 =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+
+var taggedPdfHtml = "<!DOCTYPE html><html lang=\"en-US\"><head>" + TaggedPdfCss + "</head><body>" +
+
+    "<h1>Tagged PDF (PDF/UA) Showcase</h1>" +
+    "<p>This document exercises PeachPDF's optional tagged-PDF output (<code>PdfGenerateConfig.EnableTaggedPdf</code>): headings, a paragraph, lists, a table, an image with alt text, a link, HTML5 sectioning elements, and both an explicit <code>-peachpdf-pdf-tag-type</code> override and a <code>none</code> suppression.</p>" +
+
+    "<section>" +
+    "<h2>Lists</h2>" +
+    "<ul><li>First item</li><li>Second item</li></ul>" +
+    "<ol><li>Step one</li><li>Step two</li></ol>" +
+    "</section>" +
+
+    "<section>" +
+    "<h2>Table</h2>" +
+    "<table><thead><tr><th>Name</th><th>Role</th></tr></thead>" +
+    "<tbody>" +
+    "<tr><td>Ada Lovelace</td><td>Mathematician</td></tr>" +
+    "<tr><td>Alan Turing</td><td>Computer Scientist</td></tr>" +
+    "</tbody></table>" +
+    "</section>" +
+
+    "<section>" +
+    "<h2>Image and link</h2>" +
+    $"<img src=\"data:image/png;base64,{TaggedPdfTinyPngBase64}\" alt=\"A small red square\" width=\"16\" height=\"16\" />" +
+    "<p><a href=\"https://github.com/jhaygood86/PeachPDF\">PeachPDF on GitHub</a> - the underlying Link annotation is cross-referenced with its /Link structure element in both directions (/OBJR and /StructParent).</p>" +
+    "</section>" +
+
+    "<section>" +
+    "<h2>-peachpdf-pdf-tag-type overrides</h2>" +
+    "<div class=\"pull-quote\" style=\"-peachpdf-pdf-tag-type: BlockQuote\">This &lt;div&gt; is promoted to /BlockQuote via an explicit -peachpdf-pdf-tag-type override.</div>" +
+    "<div style=\"-peachpdf-pdf-tag-type: none\"><p>This paragraph's wrapper &lt;div&gt; is tagged none, so it is invisible in the structure tree - the &lt;p&gt; below attaches directly to the nearest tagged ancestor instead.</p></div>" +
+    "</section>" +
+
+    "<blockquote>A real &lt;blockquote&gt;, tagged /BlockQuote by the default stylesheet (no override needed).</blockquote>" +
+
+    "</body></html>";
+
+var taggedPdfConfig = new PdfGenerateConfig { PageSize = PageSize.A4, EnableTaggedPdf = true };
+var taggedPdfStream = new MemoryStream();
+var taggedPdfDocument = await generator.GeneratePdf(taggedPdfHtml, taggedPdfConfig);
+taggedPdfDocument.Save(taggedPdfStream);
+
+File.Delete("test_tagged_pdf.pdf");
+File.WriteAllBytes("test_tagged_pdf.pdf", taggedPdfStream.ToArray());
+Console.WriteLine("Saved test_tagged_pdf.pdf");
+
+File.Delete("test_tagged_pdf.html");
+File.WriteAllText("test_tagged_pdf.html", taggedPdfHtml);
+Console.WriteLine("Saved test_tagged_pdf.html");

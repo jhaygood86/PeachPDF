@@ -431,7 +431,7 @@ namespace PeachPDF.Html.Core
 
                 switch (pseudoElementSelector.Name)
                 {
-                    case CssConstants.Before:
+                    case CssConstants.Before when !box.Boxes.Any(b => b.IsBeforePseudoElement):
                         {
                             var beforePseudoBox = new CssBox(box, null)
                             {
@@ -443,7 +443,7 @@ namespace PeachPDF.Html.Core
                             box.Boxes.Insert(0, beforePseudoBox);
                             break;
                         }
-                    case CssConstants.After:
+                    case CssConstants.After when !box.Boxes.Any(b => b.IsAfterPseudoElement):
                         {
                             var afterPseudoBox = new CssBox(box, null)
                             {
@@ -453,6 +453,33 @@ namespace PeachPDF.Html.Core
                             afterPseudoBox.InheritStyle(box);
                             box.Boxes.Remove(afterPseudoBox);
                             box.Boxes.Add(afterPseudoBox);
+                            break;
+                        }
+                    // Same Remove-then-Insert synthesis pattern as Before/After above, and the
+                    // same "only create it once, even if matched again by a rule from a later
+                    // cascade origin/phase" guard - a box already present here just gets picked
+                    // up normally by that later phase's own cascade, layering its declarations on
+                    // top per the usual UA/author/inline precedence rather than creating a sibling
+                    // duplicate. No "is this actually a list-item" gate here (unlike the full CSS
+                    // Lists spec) - which elements this fires for is left entirely to the selector
+                    // itself (e.g. the UA stylesheet's "li::marker" rule already only ever matches
+                    // real <li> elements via its own type-selector part, the same way "li::before"
+                    // would). Gating on box.Display == list-item here doesn't work: rule matching
+                    // for a whole cascade pass happens before any of that same pass's declarations
+                    // (including "li { display: list-item }" itself) are applied, so Display isn't
+                    // reliably resolved yet at match time. Unlike Before/After, ::marker never
+                    // carries its own renderable content here - see CssBox.IsMarkerPseudoElement
+                    // for why.
+                    case CssConstants.Marker when !box.Boxes.Any(b => b.IsMarkerPseudoElement):
+                        {
+                            var markerPseudoBox = new CssBox(box, null)
+                            {
+                                IsMarkerPseudoElement = true
+                            };
+
+                            markerPseudoBox.InheritStyle(box);
+                            box.Boxes.Remove(markerPseudoBox);
+                            box.Boxes.Insert(0, markerPseudoBox);
                             break;
                         }
                 }
@@ -605,6 +632,7 @@ namespace PeachPDF.Html.Core
             {
                 case CssConstants.Before when box.IsBeforePseudoElement:
                 case CssConstants.After when box.IsAfterPseudoElement:
+                case CssConstants.Marker when box.IsMarkerPseudoElement:
                     return true;
                 default:
                     return false;

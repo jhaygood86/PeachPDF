@@ -108,6 +108,17 @@ namespace PeachPDF.PdfSharpCore.Pdf.Annotations
         }
 
         /// <summary>
+        /// Gets or sets the integer key of this annotation's entry in the structure parent
+        /// tree ("/ParentTree") - the reverse-lookup counterpart of a "/Link" structure
+        /// element's own "/OBJR" pointing back at this annotation (see StructureTagBuilder).
+        /// </summary>
+        internal int StructParent
+        {
+            get { return Elements.GetInteger(Keys.StructParent); }
+            set { Elements.SetInteger(Keys.StructParent, value); }
+        }
+
+        /// <summary>
         /// Gets or sets the text label to be displayed in the title bar of the annotation�s
         /// pop-up window when open and active. By convention, this entry identifies
         /// the user who added the annotation.
@@ -329,7 +340,14 @@ namespace PeachPDF.PdfSharpCore.Pdf.Annotations
             public const string A = "/A";
 
             // AA
-            // StructParent
+
+            /// <summary>
+            /// (Required if the annotation is a structural content item; PDF 1.3) The integer
+            /// key of the annotation's entry in the structure parent tree.
+            /// </summary>
+            [KeyInfo("1.3", KeyType.Integer | KeyType.Optional)]
+            public const string StructParent = "/StructParent";
+
             // OC
 
             // ----- Excerpt of entries specific to markup annotations ----------------------------------

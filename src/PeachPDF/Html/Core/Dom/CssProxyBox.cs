@@ -31,6 +31,14 @@ namespace PeachPDF.Html.Core.Dom
         private LayoutSnapshot? _snapshot;
 
         /// <summary>
+        /// The original box this proxy repeats (a repeating &lt;thead&gt;/&lt;tfoot&gt;, removed
+        /// from the live document tree in favor of one proxy per page - see
+        /// CssLayoutEngineTable.RemoveHeaderFooterFromTree). Exposed for test inspection of the
+        /// source's own row/cell layout, which is otherwise unreachable once removed from the tree.
+        /// </summary>
+        internal CssBox SourceBox => _sourceBox;
+
+        /// <summary>
         /// Creates a proxy box that references an original source box.
         /// </summary>
         /// <param name="parent">Parent box for this proxy in the document tree</param>
@@ -106,16 +114,16 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Paints by applying the captured snapshot to the source box and delegating paint.
         /// </summary>
-        protected override async ValueTask PaintImp(RGraphics g)
+        protected override async ValueTask PaintImpCore(RGraphics g)
         {
 #if DEBUG
-            System.Console.WriteLine($"CssProxyBox.PaintImp: START - Location={Location}, Snapshot={(_snapshot == null ? "NULL" : "EXISTS")}");
+            System.Console.WriteLine($"CssProxyBox.PaintImpCore: START - Location={Location}, Snapshot={(_snapshot == null ? "NULL" : "EXISTS")}");
 #endif
 
             if (_snapshot == null)
             {
 #if DEBUG
-                System.Console.WriteLine("CssProxyBox.PaintImp: No snapshot, returning");
+                System.Console.WriteLine("CssProxyBox.PaintImpCore: No snapshot, returning");
 #endif
                 return;
             }
@@ -128,28 +136,30 @@ namespace PeachPDF.Html.Core.Dom
             _sourceBox.ParentBox = this;
 
 #if DEBUG
-            System.Console.WriteLine($"CssProxyBox.PaintImp: After reparent - this.Boxes.Count={Boxes.Count}");
+            System.Console.WriteLine($"CssProxyBox.PaintImpCore: After reparent - this.Boxes.Count={Boxes.Count}");
 #endif
 
             // Step 3: Apply our snapshot to source box
             _snapshot.Apply(_sourceBox);
 
 #if DEBUG
-            System.Console.WriteLine($"CssProxyBox.PaintImp: After snapshot apply - Source.Location={_sourceBox.Location}");
+            System.Console.WriteLine($"CssProxyBox.PaintImpCore: After snapshot apply - Source.Location={_sourceBox.Location}");
 #endif
 
-            // Step 4: Directly paint the source box (don't call base - we ARE the wrapper)
+            // Step 4: Directly paint the source box (don't call base - we ARE the wrapper). This is
+            // a full Paint() call (not PaintImpCore) so the source box goes through its own tagging
+            // classification independently - see StructureTagMapper's CssProxyBox pass-through note.
             await _sourceBox.Paint(g);
 
 #if DEBUG
-            System.Console.WriteLine("CssProxyBox.PaintImp: After source paint");
+            System.Console.WriteLine("CssProxyBox.PaintImpCore: After source paint");
 #endif
 
             // Step 5: Remove from Boxes to avoid interference with other proxies
             Boxes.Remove(_sourceBox);
 
 #if DEBUG
-            System.Console.WriteLine("CssProxyBox.PaintImp: END");
+            System.Console.WriteLine("CssProxyBox.PaintImpCore: END");
 #endif
         }
 

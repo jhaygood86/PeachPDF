@@ -305,6 +305,7 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.StrokeWidth, () => new StrokeWidthProperty(), true);
             AddLonghand(PropertyNames.StringSet, () => new StringSetProperty());
             AddLonghand(PropertyNames.PageName, () => new PageNameProperty());
+            AddLonghand(PropertyNames.PdfTagType, () => new PdfTagTypeProperty());
             AddLonghand(PropertyNames.TableLayout, () => new TableLayoutProperty());
             AddLonghand(PropertyNames.TextAlign, () => new TextAlignProperty());
             AddLonghand(PropertyNames.TextAlignLast, () => new TextAlignLastProperty());

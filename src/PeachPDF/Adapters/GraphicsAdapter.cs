@@ -36,6 +36,13 @@ namespace PeachPDF.Adapters
         private double PixelsPerPoint { get; }
 
         /// <summary>
+        /// _releaseGraphics is set true exactly for tile-backed instances (see the constructor
+        /// comment and CreateTile below), making it the same signal as "paints into an offscreen
+        /// tile" - see RGraphics.IsOffscreenTile.
+        /// </summary>
+        public override bool IsOffscreenTile => _releaseGraphics;
+
+        /// <summary>
         /// Used to measure and draw strings
         /// </summary>
         private static readonly XStringFormat _stringFormat;
@@ -190,6 +197,21 @@ namespace PeachPDF.Adapters
         {
             if (((ImageAdapter)image).Image is XForm imageForm)
                 _g.DrawImageWithOpacity(imageForm, Utils.Convert(destRect, PixelsPerPoint), opacity);
+        }
+
+        public override void BeginMarkedContent(string structureType, int mcid)
+        {
+            _g.BeginMarkedContent(structureType, mcid);
+        }
+
+        public override void EndMarkedContent()
+        {
+            _g.EndMarkedContent();
+        }
+
+        public override void BeginArtifact()
+        {
+            _g.BeginArtifact();
         }
 
         public override void Dispose()

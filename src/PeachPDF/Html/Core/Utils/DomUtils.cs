@@ -580,6 +580,11 @@ namespace PeachPDF.Html.Core.Utils
 
             foreach (var childBox in box.Boxes)
             {
+                // ::marker pseudo-elements carry no renderable content of their own (the actual
+                // marker glyph is still painted procedurally by the list-item box itself) - they
+                // exist solely as a cascade target, so they must never enter the generic paint walk.
+                if (childBox.IsMarkerPseudoElement) continue;
+
                 if (!IsStackingContextBox(childBox))
                 {
                     yield return childBox;
