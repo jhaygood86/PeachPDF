@@ -220,7 +220,7 @@ namespace PeachPDF.Html.Core.Dom
             CssLineBoxCoordinates coordinates = new()
             {
                 Line = new CssLineBox(blockBox),
-                CurrentX = startX + blockBox.ActualTextIndent + blockBox._pendingListItemMarkerReservedWidth,
+                CurrentX = startX + blockBox.ActualTextIndent,
                 CurrentY = startY,
                 MaxRight = startX,
                 MaxBottom = startY
@@ -728,6 +728,13 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var b in boxes)
             {
+                // An "outside" ::marker (the CSS default) must not affect the layout of the rest of
+                // the list item it belongs to (CSS2.1 12.5.1 / CSS Lists Level 3) - it's positioned
+                // and sized entirely on its own (see CssBoxMarker.PerformLayoutImp), not as part of
+                // this inline flow. An "inside" marker has no such exclusion - it's simply the first
+                // ordinary inline child, flowed exactly like any other word/box below.
+                if (b is { IsMarkerPseudoElement: true, ListStylePosition: not CssConstants.Inside }) continue;
+
                 var leftSpacing = (b.Position != CssConstants.Absolute && b.Position != CssConstants.Fixed) ? b.ActualMarginLeft + b.ActualBorderLeftWidth + b.ActualPaddingLeft : 0;
                 var rightSpacing = (b.Position != CssConstants.Absolute && b.Position != CssConstants.Fixed) ? b.ActualMarginRight + b.ActualBorderRightWidth + b.ActualPaddingRight : 0;
 

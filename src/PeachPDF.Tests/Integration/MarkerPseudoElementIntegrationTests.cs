@@ -21,8 +21,13 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task MarkerBox_IsExcludedFromPaintWalk()
+        public async Task MarkerBox_IsExcludedFromGenericPaintWalk()
         {
+            // The marker is always painted via one explicit Paint(g)/PaintImpCore(g) call from
+            // CssBox.PaintImpCore/PaintListItem (see CssBoxMarker), never discovered generically here -
+            // both so the tagged-PDF path can wrap it in its own "/Lbl" element separately from the
+            // rest of the list item's "/LBody" content, and so an "outside" marker never gets treated
+            // as if it were normal in-flow content of the stacking context it belongs to.
             var (root, _) = await BuildAndLayout(Wrap("<ul><li id='li'>text</li></ul>"));
             var li = FindById(root, "li")!;
 
@@ -31,13 +36,30 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task MarkerBox_DisplayResolvesToNone()
+        public async Task MarkerBox_DisplayResolvesToInline()
         {
+            // Unlike the old cascade-only stub (display: none), a real ::marker box's Display is the
+            // ordinary CSS initial value ("inline") - it's a genuine, laid-out box now.
             var (root, _) = await BuildAndLayout(Wrap("<ul><li id='li'>text</li></ul>"));
             var li = FindById(root, "li")!;
 
             var marker = li.Boxes.Single(b => b.IsMarkerPseudoElement);
-            Assert.Equal("none", marker.Display, ignoreCase: true);
+            Assert.Equal("inline", marker.Display, ignoreCase: true);
+        }
+
+        [Fact]
+        public async Task MarkerBox_IsRealBox_WithLocationAndContentAfterLayout()
+        {
+            // The default (outside) marker for the first <li> in an <ol> shows "1." - proving
+            // CssBoxMarker.ResolveDefaultContent() actually ran and the box laid itself out with a
+            // real, non-zero Location/size (CssBoxMarker.PerformLayoutImp), not a display:none stub.
+            var (root, _) = await BuildAndLayout(Wrap("<ol><li id='li'>text</li></ol>"));
+            var li = FindById(root, "li")!;
+
+            var marker = (CssBoxMarker)li.Boxes.Single(b => b.IsMarkerPseudoElement);
+            Assert.Equal("1.", marker.Text);
+            Assert.True(marker.Location.X < li.ClientLeft, "outside marker should sit to the left of the list item's content edge");
+            Assert.True(marker.ActualRight - marker.Location.X > 0, "marker should have measured a non-zero width");
         }
 
         [Fact]

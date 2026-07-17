@@ -90,6 +90,9 @@ namespace PeachPDF.Html.Core
             ol, ul, dir,
             menu, dd        { margin-left: 40px }
             ol              { list-style-type: decimal }
+            ol, ul, dir,
+            menu            { counter-reset: list-item }
+            li::marker      { margin-right: 5px }
             ol ul, ul ol,
             ul ul, ol ol    { margin-top: 0; margin-bottom: 0 }
             ol ul, ul ul    { list-style-type: circle }
@@ -149,7 +152,7 @@ namespace PeachPDF.Html.Core
             span            { -peachpdf-pdf-tag-type: Span }
             ul, ol          { -peachpdf-pdf-tag-type: L }
             li              { -peachpdf-pdf-tag-type: LI }
-            li::marker      { -peachpdf-pdf-tag-type: Lbl; display: none }
+            li::marker      { -peachpdf-pdf-tag-type: Lbl }
             dl              { -peachpdf-pdf-tag-type: DL }
             dt              { -peachpdf-pdf-tag-type: DT }
             dd              { -peachpdf-pdf-tag-type: DD }

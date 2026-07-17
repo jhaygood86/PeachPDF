@@ -68,12 +68,6 @@ namespace PeachPDF.Html.Core.Dom
         internal bool _tableFixed;
 
         protected bool _wordsSizeMeasured;
-        private string? _listItemMarkerText;
-        private string? _listItemMarkerShape;
-        private RPoint _listItemMarkerPosition;
-        private RSize _listItemMarkerSize;
-        internal double _pendingListItemMarkerReservedWidth;
-        private const double ListItemMarkerGap = 5;
         public CssImage? ContentImage { get; internal set; }
 
 
@@ -139,6 +133,18 @@ namespace PeachPDF.Html.Core.Dom
 
         public Dictionary<string, CssCounter> Counters { get; } = [];
 
+        /// <summary>
+        /// Names of counters for which <see cref="CssCounterEngine"/> has already applied this box's
+        /// own counter-reset/counter-increment/counter-set contribution (as opposed to
+        /// <see cref="Counters"/> merely holding a value inherited/copied from a parent or preceding
+        /// sibling in scope, not yet finalized with this box's own contribution). Needed because a
+        /// box can be reached by more than one independent resolution chain - its own top-down
+        /// ancestor walk, and also as the "last child in scope" of a later sibling resolving its
+        /// inheritance - and without this guard the second visit would silently re-apply (e.g.
+        /// double-increment) an already-finalized counter.
+        /// </summary>
+        internal HashSet<string> FinalizedCounterNames { get; } = [];
+
         public Dictionary<string, NamedString> NamedStrings { get; } = [];
 
         /// <summary>
@@ -161,13 +167,11 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// Is this box a synthesized <c>::marker</c> pseudo-element (see <see cref="CssData"/>'s
-        /// selector-matching synthesis). Unlike <see cref="IsBeforePseudoElement"/>/
-        /// <see cref="IsAfterPseudoElement"/>, this box carries no renderable content of its own -
-        /// it exists solely as a cascade target for properties like <c>-peachpdf-pdf-tag-type</c>,
-        /// and is deliberately excluded from normal layout and paint-child recursion. The actual
-        /// marker glyph continues to be painted procedurally by
-        /// <see cref="PaintListStyleShapeMarker"/>/<see cref="PaintListStyleTextMarker"/>/
-        /// <see cref="PaintListStyleImageMarker"/>.
+        /// selector-matching synthesis, and <c>DomParser.EnsureListItemMarkers</c> for the computed-
+        /// <c>Display: list-item</c> case selector matching can't cover). It is always a
+        /// <see cref="CssBoxMarker"/>, which owns its own content resolution, sizing, positioning and
+        /// painting - a real, cascaded box, the same as <see cref="IsBeforePseudoElement"/>/
+        /// <see cref="IsAfterPseudoElement"/> boxes.
         /// </summary>
         public bool IsMarkerPseudoElement { get; set; }
 
@@ -950,10 +954,6 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
-            // Must run before this box (or a descendant reached via the recursive layout below) builds
-            // its first line box, so an "inside" marker's reserved width is already in place for it.
-            MeasureListItemMarker(g);
-
             if (IsBlock || Display == CssConstants.ListItem || Display == CssConstants.Table || Display == CssConstants.InlineTable || Display == CssConstants.TableCell || Display == CssConstants.Flex || Display == CssConstants.InlineFlex)
             {
                 // Because their width and height are set by CssTable or CssLayoutEngineFlex
@@ -1067,7 +1067,20 @@ namespace PeachPDF.Html.Core.Dom
             CssLayoutEngine.ApplyHeight(this);
             CssLayoutEngine.ApplyParentHeight(this);
 
-            PositionListItemMarker();
+            // An "outside" ::marker (the CSS default) is deliberately excluded from this box's own
+            // inline flow (CssLayoutEngine.FlowBox) and never gets a PerformLayoutImp call via the
+            // generic block-children loop either (it's not a block child) - so it needs this one
+            // explicit call, now that Location is final, to lay itself out (see
+            // CssBoxMarker.PerformLayoutImp). An "inside" marker already laid itself out as an
+            // ordinary flowed child above and no-ops here (ListStylePosition check).
+            if (Display == CssConstants.ListItem)
+            {
+                var markerBox = Boxes.FirstOrDefault(b => b.IsMarkerPseudoElement);
+                if (markerBox != null)
+                {
+                    await markerBox.PerformLayout(g);
+                }
+            }
 
             if (BreakInside is CssConstants.Avoid)
             {
@@ -1231,207 +1244,6 @@ namespace PeachPDF.Html.Core.Dom
         protected sealed override CssBoxProperties? GetParent()
         {
             return _parentBox;
-        }
-
-        /// <summary>
-        /// Gets the index of the box to be used on a (ordered) list
-        /// </summary>
-        /// <returns></returns>
-        private int GetIndexForList()
-        {
-            bool reversed = !string.IsNullOrEmpty(ParentBox!.GetAttribute("reversed"));
-            if (!int.TryParse(ParentBox.GetAttribute("start"), out var index))
-            {
-                if (reversed)
-                {
-                    index = 0;
-                    foreach (CssBox b in ParentBox.Boxes)
-                    {
-                        if (b.Display == CssConstants.ListItem)
-                            index++;
-                    }
-                }
-                else
-                {
-                    index = 1;
-                }
-            }
-
-            foreach (CssBox b in ParentBox.Boxes)
-            {
-                if (b.Equals(this))
-                    return index;
-
-                if (b.Display == CssConstants.ListItem)
-                    index += reversed ? -1 : 1;
-            }
-
-            return index;
-        }
-
-        /// <summary>
-        /// Computes the marker's shape/text/size for a list-item box (independent of <c>Location</c>,
-        /// so it's safe to call before line-box layout). When <c>ListStylePosition</c> is "inside",
-        /// also pushes the reserved marker width onto whichever descendant box will host the first line.
-        /// </summary>
-        /// <param name="g"></param>
-        private void MeasureListItemMarker(RGraphics g)
-        {
-            _listItemMarkerShape = null;
-            _listItemMarkerText = null;
-
-            if (Display != CssConstants.ListItem) return;
-
-            if (ListStyleImage != null)
-            {
-                // Any CSS image (URL or gradient) is painted by PaintListStyleImageMarker, sized the
-                // same square as the text/shape markers so line-1 reservation stays consistent.
-                _listItemMarkerSize = new RSize(ActualFont.Height, ActualFont.Height);
-            }
-            else if (ListStyleType.Equals(CssConstants.Disc, StringComparison.InvariantCultureIgnoreCase) ||
-                     ListStyleType.Equals(CssConstants.Circle, StringComparison.InvariantCultureIgnoreCase) ||
-                     ListStyleType.Equals(CssConstants.Square, StringComparison.InvariantCultureIgnoreCase))
-            {
-                _listItemMarkerShape = ListStyleType.ToLowerInvariant();
-                var shapeSize = ActualFont.Height * 0.35;
-                _listItemMarkerSize = new RSize(shapeSize, shapeSize);
-            }
-            else if (ListStyleType != CssConstants.None)
-            {
-                if (ListStyleType.Equals(CssConstants.Decimal, StringComparison.InvariantCultureIgnoreCase))
-                {
-                    _listItemMarkerText = GetIndexForList().ToString(CultureInfo.InvariantCulture) + ".";
-                }
-                else if (ListStyleType.Equals(CssConstants.DecimalLeadingZero, StringComparison.InvariantCultureIgnoreCase))
-                {
-                    _listItemMarkerText = GetIndexForList().ToString("00", CultureInfo.InvariantCulture) + ".";
-                }
-                else
-                {
-                    _listItemMarkerText = CommonUtils.ConvertToAlphaNumber(GetIndexForList(), ListStyleType) + ".";
-                }
-
-                _listItemMarkerSize = g.MeasureString(_listItemMarkerText, ActualFont);
-            }
-            else
-            {
-                return; // list-style-type: none, no image - no marker at all
-            }
-
-            if (ListStylePosition == CssConstants.Inside)
-            {
-                var hostBox = FindListItemMarkerHostBox();
-                if (hostBox != null)
-                    hostBox._pendingListItemMarkerReservedWidth = _listItemMarkerSize.Width + ListItemMarkerGap;
-            }
-        }
-
-        /// <summary>
-        /// Walks down from this list-item box to the descendant that will actually build the first
-        /// line box (skipping anonymous/block wrappers), so an "inside" marker can reserve room on
-        /// that box's first line even when the &lt;li&gt; itself contains block-level children.
-        /// </summary>
-        private CssBox? FindListItemMarkerHostBox()
-        {
-            var box = this;
-            while (!DomUtils.ContainsInlinesOnly(box))
-            {
-                var firstInFlowChild = box.Boxes.FirstOrDefault(b => !b.IsOutOfFlow);
-                if (firstInFlowChild == null) return null;
-                box = firstInFlowChild;
-            }
-            return box;
-        }
-
-        /// <summary>
-        /// Computes the marker's paint position from its already-measured size and this box's
-        /// <c>Location</c>. Must run after <c>Location</c> is assigned.
-        /// </summary>
-        private void PositionListItemMarker()
-        {
-            if (Display != CssConstants.ListItem) return;
-            if (ListStyleImage == null && _listItemMarkerShape == null && _listItemMarkerText == null) return;
-
-            double markerTop;
-            if (_listItemMarkerShape != null)
-            {
-                // Text is drawn top-aligned at ActualPaddingTop; center the (much smaller) shape
-                // within the font's line box instead of also top-aligning it, so it sits level
-                // with the middle of the adjacent text rather than hugging the top of the line.
-                markerTop = Location.Y + ActualPaddingTop + (ActualFont.Height - _listItemMarkerSize.Height) / 2;
-            }
-            else
-            {
-                markerTop = Location.Y + ActualPaddingTop;
-            }
-
-            var markerLeft = ListStylePosition == CssConstants.Inside
-                ? ClientLeft
-                : ClientLeft - _listItemMarkerSize.Width - ListItemMarkerGap;
-
-            _listItemMarkerPosition = new RPoint(markerLeft, markerTop);
-        }
-
-        private void PaintListStyleShapeMarker(RGraphics g)
-        {
-            if (Display != CssConstants.ListItem || _listItemMarkerShape == null) return;
-
-            var offset = IsFixed ? RPoint.Empty : HtmlContainer!.ScrollOffset;
-            var rect = new RRect(
-                _listItemMarkerPosition.X + offset.X,
-                _listItemMarkerPosition.Y + offset.Y,
-                _listItemMarkerSize.Width,
-                _listItemMarkerSize.Height);
-
-            if (_listItemMarkerShape == CssConstants.Square)
-            {
-                using var brush = g.GetSolidBrush(ActualColor);
-                g.DrawRectangle(brush, rect.X, rect.Y, rect.Width, rect.Height);
-                return;
-            }
-
-            var rx = rect.Width / 2;
-            var ry = rect.Height / 2;
-            using var path = RenderUtils.GetRoundRect(g, rect, rx, ry, rx, ry, rx, ry, rx, ry);
-
-            if (_listItemMarkerShape == CssConstants.Disc)
-            {
-                using var brush = g.GetSolidBrush(ActualColor);
-                g.DrawPath(brush, path);
-            }
-            else // circle: hollow ring
-            {
-                var pen = g.GetPen(ActualColor);
-                g.DrawPath(pen, path);
-            }
-        }
-
-        private void PaintListStyleTextMarker(RGraphics g)
-        {
-            if (Display != CssConstants.ListItem || string.IsNullOrEmpty(_listItemMarkerText)) return;
-
-            var offset = IsFixed ? RPoint.Empty : HtmlContainer!.ScrollOffset;
-            var point = new RPoint(_listItemMarkerPosition.X + offset.X, _listItemMarkerPosition.Y + offset.Y);
-            g.DrawString(_listItemMarkerText, ActualFont, ActualColor, point, _listItemMarkerSize, Direction == CssConstants.Rtl);
-        }
-
-        private void PaintListStyleImageMarker(RGraphics g)
-        {
-            if (Display != CssConstants.ListItem || ListStyleImage == null) return;
-            var offset = IsFixed ? RPoint.Empty : HtmlContainer!.ScrollOffset;
-            var markerRect = new RRect(
-                _listItemMarkerPosition.X + offset.X,
-                _listItemMarkerPosition.Y + offset.Y,
-                _listItemMarkerSize.Width,
-                _listItemMarkerSize.Height);
-            CssImagePainter.Paint(g, ListStyleImage, layerIndex: 0, isFirst: true,
-                originRect: markerRect, clipRect: markerRect, roundedClipPath: null,
-                positionList: "center", sizeList: CssConstants.Auto, repeatList: "no-repeat", box: this,
-                drawBrush: brush =>
-                {
-                    g.DrawRectangle(brush, markerRect.X, markerRect.Y, markerRect.Width, markerRect.Height);
-                    brush.Dispose();
-                });
         }
 
         private void PaintContentImage(RGraphics g)
@@ -1868,8 +1680,6 @@ namespace PeachPDF.Html.Core.Dom
                 b.OffsetTop(amount);
             }
 
-            _listItemMarkerPosition = _listItemMarkerPosition with { Y = _listItemMarkerPosition.Y + amount };
-
             Location = Location with { Y = Location.Y + amount };
         }
 
@@ -1898,8 +1708,6 @@ namespace PeachPDF.Html.Core.Dom
             {
                 b.OffsetLeft(amount);
             }
-
-            _listItemMarkerPosition = _listItemMarkerPosition with { X = _listItemMarkerPosition.X + amount };
 
             Location = Location with { X = Location.X + amount };
         }
@@ -1981,12 +1789,12 @@ namespace PeachPDF.Html.Core.Dom
                     var markerClassification = StructureTagMapper.Classify(markerBox);
                     if (markerClassification.Kind == StructureTagKind.None)
                     {
-                        PaintListStyleMarkers(g);
+                        await markerBox.PaintImpCore(g);
                     }
                     else
                     {
                         using (builder.OpenContentElement(g, markerBox, markerClassification.StructureType ?? Keywords.Lbl))
-                            PaintListStyleMarkers(g);
+                            await markerBox.PaintImpCore(g);
                     }
                 }
 
@@ -2129,25 +1937,16 @@ namespace PeachPDF.Html.Core.Dom
 
             if (paintMarkers)
             {
-                PaintListStyleMarkers(g);
+                var markerBox = Boxes.FirstOrDefault(b => b.IsMarkerPseudoElement);
+                if (markerBox != null)
+                {
+                    await markerBox.PaintImpCore(g);
+                }
             }
 
             PaintContentImage(g);
 
             _hasPainted = true;
-        }
-
-        /// <summary>
-        /// Paints this box's list-item marker (bullet/number/image), if any. Extracted from
-        /// <see cref="PaintImpCore(RGraphics, bool)"/> so the tagged-PDF &lt;li&gt; path in
-        /// <see cref="PaintImp"/> can invoke it independently of the rest of the box's content, to
-        /// wrap it in its own "/Lbl" structure element.
-        /// </summary>
-        private void PaintListStyleMarkers(RGraphics g)
-        {
-            PaintListStyleShapeMarker(g);
-            PaintListStyleTextMarker(g);
-            PaintListStyleImageMarker(g);
         }
 
         /// <summary>

@@ -467,15 +467,16 @@ namespace PeachPDF.Html.Core
                     // would). Gating on box.Display == list-item here doesn't work: rule matching
                     // for a whole cascade pass happens before any of that same pass's declarations
                     // (including "li { display: list-item }" itself) are applied, so Display isn't
-                    // reliably resolved yet at match time. Unlike Before/After, ::marker never
-                    // carries its own renderable content here - see CssBox.IsMarkerPseudoElement
-                    // for why.
+                    // reliably resolved yet at match time. Unlike Before/After, this only covers the
+                    // common tag-selector-matched case (e.g. the UA "li::marker" rule) - an element
+                    // that only reaches Display: list-item via computed style (not matched by any
+                    // ::marker selector) still gets one too, via DomParser's separate post-cascade
+                    // EnsureListItemMarkers pass, since selector matching can't key off a computed
+                    // Display value. See CssBoxMarker for how the marker box owns its own content
+                    // resolution, sizing, and painting from here on.
                     case CssConstants.Marker when !box.Boxes.Any(b => b.IsMarkerPseudoElement):
                         {
-                            var markerPseudoBox = new CssBox(box, null)
-                            {
-                                IsMarkerPseudoElement = true
-                            };
+                            var markerPseudoBox = new CssBoxMarker(box);
 
                             markerPseudoBox.InheritStyle(box);
                             box.Boxes.Remove(markerPseudoBox);
