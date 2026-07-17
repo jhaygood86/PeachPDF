@@ -58,6 +58,46 @@ public class StructuralPseudoClassSelectorTests
         Assert.All(boxes, b => Assert.Equal("transparent", b.BackgroundColor));
     }
 
+    // ── :root ──────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Root_Matches_HtmlElement()
+    {
+        var html = Html(":root { background-color: #ff0000; }", "<p>content</p>");
+        var box = await FindBoxByTag(html, "html");
+        Assert.NotEqual("transparent", box.BackgroundColor);
+    }
+
+    [Fact]
+    public async Task Root_DoesNotMatch_BodyOrDescendants()
+    {
+        var html = Html(":root { background-color: #ff0000; }", "<div><p>content</p></div>");
+        var body = await FindBoxByTag(html, "body");
+        var div = await FindBoxByTag(html, "div");
+        Assert.Equal("transparent", body.BackgroundColor);
+        Assert.Equal("transparent", div.BackgroundColor);
+    }
+
+    [Fact]
+    public async Task Root_CompoundWithTypeSelector_StillMatches()
+    {
+        var html = Html("html:root { background-color: #ff0000; }", "<p>content</p>");
+        var box = await FindBoxByTag(html, "html");
+        Assert.NotEqual("transparent", box.BackgroundColor);
+    }
+
+    [Fact]
+    public async Task Root_Specificity_OutranksTypeSelector_RegardlessOfSourceOrder()
+    {
+        // ":root" is (0,0,1,0), "html" is (0,0,0,1) - :root must win the cascade even though it's
+        // declared after "html", where a naive source-order-only cascade would pick "html"'s blue.
+        var html = Html(
+            "html { background-color: #0000ff; } :root { background-color: #ff0000; }",
+            "<p>content</p>");
+        var box = await FindBoxByTag(html, "html");
+        Assert.Equal("rgb(255, 0, 0)", box.BackgroundColor);
+    }
+
     // ── :nth-child() — literal, formula, keywords, negative offset ────────────
 
     [Fact]

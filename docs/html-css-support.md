@@ -449,6 +449,7 @@ Because PeachPDF renders a static PDF with no interactive or dynamic state, stat
 | Pseudo-class | Notes |
 |--------------|-------|
 | `:link` | Matches `<a>` elements that have an `href` attribute |
+| `:root` | Matches the document's root element (the `<html>` element) |
 | `:first-child`, `:last-child` | Equivalent to `:nth-child(1)` / `:nth-last-child(1)` |
 | `:only-child` | Matches an element with no other element siblings |
 | `:first-of-type`, `:last-of-type` | Equivalent to `:nth-of-type(1)` / `:nth-last-of-type(1)` |
@@ -464,7 +465,7 @@ Because PeachPDF renders a static PDF with no interactive or dynamic state, stat
 
 Known gap: `:nth-column()`/`:nth-last-column()`'s same-row-only limitation described above.
 
-State-based pseudo-classes other than `:link` (`:hover`, `:focus`, `:active`, `:checked`, `:disabled`, `:root`, `:empty`, etc.) are parsed but not applied.
+State-based pseudo-classes other than `:link` (`:hover`, `:focus`, `:active`, `:checked`, `:disabled`, `:empty`, etc.) are parsed but not applied.
 
 ### Cascade & Specificity
 

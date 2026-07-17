@@ -618,6 +618,13 @@ namespace PeachPDF.Html.Core
 
         private static bool DoesSelectorMatch(PseudoClassSelector pseudoClassSelector, CssBox? box)
         {
+            if (pseudoClassSelector.Class == PseudoClassNames.Root)
+            {
+                return box?.HtmlTag is not null
+                    && box.HtmlTag.Name.Equals("html", StringComparison.OrdinalIgnoreCase)
+                    && DomUtils.GetNearestParentElementBox(box) is null;
+            }
+
             return pseudoClassSelector.Class == "link" && box is not null && box.IsClickable;
         }
 
