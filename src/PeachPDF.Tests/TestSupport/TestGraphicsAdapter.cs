@@ -66,12 +66,13 @@ namespace PeachPDF.Tests.TestSupport
         public override void Dispose() { }
     }
 
-    /// <summary>A pen that remembers the color it was created with.</summary>
+    /// <summary>A pen that remembers the color/width/dash-style it was created with.</summary>
     internal sealed class TestPen(RColor color) : RPen
     {
         public RColor Color { get; } = color;
         public override double Width { get; set; }
-        public override RDashStyle DashStyle { set { } }
+        public RDashStyle RecordedDashStyle { get; private set; }
+        public override RDashStyle DashStyle { set => RecordedDashStyle = value; }
         public override double MiterLimit { get; set; }
         public override RLineCap LineCap { set { } }
         public override RLineJoin LineJoin { set { } }
@@ -116,6 +117,8 @@ namespace PeachPDF.Tests.TestSupport
         public sealed record DrawStringCall(string Text, RFont Font, RColor Color, RPoint Point, RSize Size, bool Rtl);
         public sealed record DrawRectCall(RColor Color, double X, double Y, double Width, double Height);
         public sealed record DrawPathCall(RColor Color);
+        public sealed record DrawLineCall(RColor Color, double Width, RDashStyle DashStyle, double X1, double Y1, double X2, double Y2);
+        public sealed record DrawPolygonCall(RColor Color, RPoint[] Points);
 
         public List<object> Log { get; } = [];
         public List<DrawStringCall> DrawStringCalls { get; } = [];
@@ -172,10 +175,22 @@ namespace PeachPDF.Tests.TestSupport
             charFit = str?.Length ?? 0;
             charFitWidth = charFit * font.Size * 0.6;
         }
-        public override void DrawLine(RPen pen, double x1, double y1, double x2, double y2) { }
+        public override void DrawLine(RPen pen, double x1, double y1, double x2, double y2)
+        {
+            var call = pen is TestPen tp
+                ? new DrawLineCall(tp.Color, tp.Width, tp.RecordedDashStyle, x1, y1, x2, y2)
+                : new DrawLineCall(RColor.Empty, 0, RDashStyle.Solid, x1, y1, x2, y2);
+            Log.Add(call);
+        }
         public override void DrawImage(RImage image, RRect destRect, RRect srcRect) { }
         public override void DrawImage(RImage image, RRect destRect) { }
-        public override void DrawPolygon(RBrush brush, RPoint[] points) { }
+        public override void DrawPolygon(RBrush brush, RPoint[] points)
+        {
+            var color = brush is TestBrush tb ? tb.Color : RColor.Empty;
+            // _borderPts (BordersDrawHandler) is a shared, reused array - clone so this log entry
+            // isn't silently mutated by later calls that overwrite the same backing array.
+            Log.Add(new DrawPolygonCall(color, (RPoint[])points.Clone()));
+        }
         public override void Dispose() { }
     }
 }

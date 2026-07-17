@@ -193,6 +193,8 @@ Form elements are rendered as static boxes. There is no interactive behavior —
 
 Percentages are relative to the border-box width (horizontal radius) and height (vertical radius). Overlapping adjacent radii are automatically reduced proportionally per the CSS spec.
 
+Known limitation: `double`/`groove`/`ridge` combined with `border-radius` on the same edge falls back to a single solid-colored stroke at the full border width — full rounded rendering of these three styles (two concentric arcs, or a two-tone beveled arc) is out of scope for CSS1 compliance.
+
 ### Transforms
 
 | Property | MDN Reference | Notes |
@@ -395,6 +397,8 @@ These properties control how content breaks across PDF pages. Both the legacy `p
 
 PeachPDF evaluates a subset of CSS selectors. Selectors that are parsed but not implemented are silently ignored — rules using them will not apply.
 
+CSS comments (`/* ... */`) are supported anywhere in a stylesheet, including between selectors and declarations, and are stripped before parsing.
+
 ### Basic Selectors
 
 | Selector | Syntax | Notes |
@@ -478,7 +482,7 @@ Because PeachPDF renders a static PDF with no interactive or dynamic state, stat
 
 Known gap: `:nth-column()`/`:nth-last-column()`'s same-row-only limitation described above.
 
-State-based pseudo-classes other than `:link` (`:hover`, `:focus`, `:active`, `:checked`, `:disabled`, `:empty`, etc.) are parsed but not applied.
+State-based pseudo-classes other than `:link` (`:hover`, `:focus`, `:active`, `:visited`, `:checked`, `:disabled`, `:empty`, etc.) are parsed but not applied — PeachPDF renders a static PDF with no browsing history or interaction state, so `:visited`/`:active` never match by design.
 
 ### Cascade & Specificity
 

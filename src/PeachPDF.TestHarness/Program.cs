@@ -27,6 +27,13 @@ static string RadiusSwatch(string desc, string borderRadiusCss, string boxCss = 
     $"<div class=\"css\">border-radius: {borderRadiusCss}</div>" +
     "</td>";
 
+static string BorderStyleSwatch(string desc, string style) =>
+    "<td>" +
+    $"<div class=\"bsbox\" style=\"border: 16px {style} #4a90d9\"></div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">border-style: {style}</div>" +
+    "</td>";
+
 static string OriginSwatch(string desc, string inlineCss, string cssLabel = "") =>
     "<td>" +
     $"<div class=\"obox\" style=\"{inlineCss}\"></div>" +
@@ -2619,3 +2626,55 @@ Console.WriteLine("Saved test_tagged_pdf.pdf");
 File.Delete("test_tagged_pdf.html");
 File.WriteAllText("test_tagged_pdf.html", taggedPdfHtml);
 Console.WriteLine("Saved test_tagged_pdf.html");
+
+// --- border-style showcase ---
+
+const string BorderStyleCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
+    table.sw td { padding: 3px; vertical-align: top; width: 25% }
+    .bsbox { height: 48px; background: #eee; margin-bottom: 3px }
+    .desc { font-size: 7pt; font-weight: bold; color: #444; margin-bottom: 1px }
+    .css { font-size: 6pt; color: #666; line-height: 1.3; word-break: break-all }
+    </style>
+    """;
+
+var borderStyleHtml = "<!DOCTYPE html><html><head>" + BorderStyleCss + "</head><body>" +
+
+    "<h1>CSS1 border-style Test Page</h1>" +
+
+    "<h2>All CSS1 border-style keywords</h2>" +
+    Row(
+        BorderStyleSwatch("none", "none"),
+        BorderStyleSwatch("hidden", "hidden"),
+        BorderStyleSwatch("solid", "solid"),
+        BorderStyleSwatch("dotted", "dotted")
+    ) +
+    Row(
+        BorderStyleSwatch("dashed", "dashed"),
+        BorderStyleSwatch("double", "double"),
+        BorderStyleSwatch("groove", "groove"),
+        BorderStyleSwatch("ridge", "ridge")
+    ) +
+    Row(
+        BorderStyleSwatch("inset", "inset"),
+        BorderStyleSwatch("outset", "outset")
+    ) +
+
+    "</body></html>";
+
+var borderStyleStream = new MemoryStream();
+var borderStyleDocument = await generator.GeneratePdf(borderStyleHtml, pdfConfig);
+borderStyleDocument.Save(borderStyleStream);
+
+File.Delete("test_border_style.pdf");
+File.WriteAllBytes("test_border_style.pdf", borderStyleStream.ToArray());
+Console.WriteLine("Saved test_border_style.pdf");
+
+File.Delete("test_border_style.html");
+File.WriteAllText("test_border_style.html", borderStyleHtml);
+Console.WriteLine("Saved test_border_style.html");
