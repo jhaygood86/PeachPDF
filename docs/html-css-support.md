@@ -79,7 +79,7 @@ PeachPDF renders a subset of the HTML and CSS specifications. This page document
 
 | Element | MDN Reference | Notes |
 |---------|--------------|-------|
-| `a` | [a](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/a) | `href` links are embedded as clickable PDF hyperlinks. Anchor links (`href="#id"`) for in-document navigation are also supported. Elements with `id` or `name` attributes act as anchor targets only |
+| `a` | [a](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/a) | `href` links are embedded as clickable PDF hyperlinks, regardless of whether the `<a>` also carries an `id`/`name` (both a link source and a fragment target, e.g. `<a id="toc-1" href="#ch1">`, is a common and fully-supported pattern). Anchor links (`href="#id"`) for in-document navigation are also supported. Any element (not just `<a>`) with an `id` or `name` attribute can serve as a fragment-link target |
 | `b` | [b](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/b) | Full support |
 | `bdo` | [bdo](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/bdo) | Full support |
 | `big` | [big](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/big) | Deprecated element; rendered with a larger font size |

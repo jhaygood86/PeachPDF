@@ -192,9 +192,14 @@ namespace PeachPDF.Html.Core.Dom
         public bool IsOutOfFlow => IsFloated || Position is CssConstants.Absolute or CssConstants.Fixed;
 
         /// <summary>
-        /// Is the css box clickable (by default only "a" element is clickable)
+        /// Is the css box clickable (by default only an "a" element with an href is clickable) - per
+        /// WHATWG, an element is a hyperlink purely by virtue of being an &lt;a&gt; with an href
+        /// attribute; a coexisting id/name (e.g. `&lt;a id="toc-1" href="#ch1"&gt;`, both a link source
+        /// and a fragment target - a common real-world pattern) has no bearing on that and must not
+        /// exclude it, since this also drives real PDF link-annotation generation
+        /// (<see cref="DomUtils.GetAllLinkBoxes"/>) and tagged-PDF /Link mapping, not just :link matching.
         /// </summary>
-        public virtual bool IsClickable => HtmlTag is { Name: HtmlConstants.A } && !HtmlTag.HasAttribute("id") && !HtmlTag.HasAttribute("name");
+        public virtual bool IsClickable => HtmlTag is { Name: HtmlConstants.A } && HtmlTag.HasAttribute("href");
 
         /// <summary>
         /// Gets a value indicating whether this instance or one of its parents has Position = fixed.
