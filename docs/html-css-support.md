@@ -224,6 +224,10 @@ Known limitation: `double`/`groove`/`ridge` combined with `border-radius` on the
 | `background-attachment` | [background-attachment](https://developer.mozilla.org/en-US/docs/Web/CSS/background-attachment) | Parsed and accepted but has no effect |
 | `background-clip` | [background-clip](https://developer.mozilla.org/en-US/docs/Web/CSS/background-clip) | Full support; `border-box`, `padding-box`, `content-box`. Comma-separated multi-layer values cycle against the number of `background-image` layers; when there are multiple values, `background-color` uses the last (bottom-most) one, per spec |
 
+#### Canvas background (`<html>`/`<body>`)
+
+Per CSS2.1 §14.2, the root element's background doesn't just paint its own box — it propagates to fill the whole *canvas* (here: every page). PeachPDF resolves this once per document: `<body>`'s own background (`background-color` and/or `background-image` layers) is used if it declares one; otherwise `<html>`'s; otherwise no canvas fill happens at all. Whichever element was used for the canvas fill isn't separately re-painted at its own (possibly much smaller than a page) laid-out rect — the canvas fill already covers it. A non-`<body>`/`<html>` element's own background (e.g. a `<div>`) is unaffected and continues to paint normally. The fill repeats identically on every page the document spans. `@page` background isn't implemented yet, so there's no additional precedence tier there currently.
+
 ### Color & Typography
 
 | Property | MDN Reference | Notes |

@@ -240,6 +240,34 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         internal bool FirstLineProcessed { get; set; }
 
+        /// <summary>
+        /// Set (on the real <c>&lt;body&gt;</c> or <c>&lt;html&gt;</c> box, whichever was chosen) by
+        /// <c>PdfGenerator.ResolveCanvasBackground</c> per CSS2.1 §14.2: that box's background has been
+        /// "promoted" to fill the whole page canvas on every page (see
+        /// <see cref="PaintCanvasBackground"/>), so this box's own normal <see cref="PaintBackground"/>
+        /// call must no-op instead of painting the same background a second time at its own (possibly
+        /// much smaller than the page) laid-out rect.
+        /// </summary>
+        internal bool SuppressOwnBackgroundPaint { get; set; }
+
+        /// <summary>
+        /// Paints this box's own background (see <see cref="PaintBackground"/>) at <paramref name="rect"/>
+        /// instead of this box's own laid-out rect - used by <c>PdfGenerator.AddPdfPages</c> to fill the
+        /// whole page canvas with the <c>&lt;body&gt;</c>/<c>&lt;html&gt;</c> background per CSS2.1 §14.2,
+        /// reusing the exact same background-image/-position/-size/-repeat/-origin/-clip resolution the
+        /// box's own normal paint path uses so canvas-fill behavior matches per-box behavior exactly.
+        /// </summary>
+        internal void PaintCanvasBackground(RGraphics g, RRect rect) => PaintBackground(g, rect, isFirst: true);
+
+        /// <summary>
+        /// Whether this box declares any background of its own (a visible <c>background-color</c> and/or
+        /// at least one <c>background-image</c>/gradient layer) - used by
+        /// <c>PdfGenerator.ResolveCanvasBackground</c> to decide, per CSS2.1 §14.2, whether
+        /// <c>&lt;body&gt;</c>'s own background should be promoted to fill the page canvas, falling back
+        /// to <c>&lt;html&gt;</c>'s only when body has none.
+        /// </summary>
+        internal bool HasOwnBackground => RenderUtils.IsColorVisible(ActualBackgroundColor) || BackgroundImages is { Count: > 0 };
+
         public bool IsPseudoElement => IsBeforePseudoElement || IsAfterPseudoElement || IsMarkerPseudoElement || IsFirstLetterPseudoElement;
 
         /// <summary>
@@ -2023,7 +2051,11 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (!IsRectVisible(actualRect, clip)) continue;
 
-                PaintBackground(g, actualRect, i == 0, GetFirstLineStyleForRect(rectEntries[i].Line));
+                // A box whose background was "promoted" to fill the whole page canvas (see
+                // PdfGenerator.ResolveCanvasBackground / PaintCanvasBackground) already had it painted
+                // for every page - skip this box's own normal paint pass so it isn't painted twice.
+                if (!SuppressOwnBackgroundPaint)
+                    PaintBackground(g, actualRect, i == 0, GetFirstLineStyleForRect(rectEntries[i].Line));
 
                 // For multi-page tables, draw the outer bottom border at the page-break Y on
                 // intermediate pages (instead of at actualRect.Bottom which is off-page).
@@ -2179,7 +2211,7 @@ namespace PeachPDF.Html.Core.Dom
         /// When set, this rect is on the target's first formatted line under a <c>::first-line</c>
         /// rule - its resolved <c>background-color</c> is used instead of this box's own. Only
         /// <c>background-color</c> is first-line-aware, not <c>background-image</c>/-position/-size/
-        /// -repeat/-origin/-clip layers (a documented narrowing - seeoutline in docs/html-css-support.md);
+        /// -repeat/-origin/-clip layers (a documented narrowing - see docs/html-css-support.md);
         /// those, like border/padding/border-radius (genuine box-model properties CSS2.1 never allows
         /// on <c>::first-line</c> at all), always come from this box's own resolved style.
         /// </param>

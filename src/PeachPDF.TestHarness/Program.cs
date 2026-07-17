@@ -2878,3 +2878,29 @@ Console.WriteLine("Saved test_first_line.pdf");
 File.Delete("test_first_line.html");
 File.WriteAllText("test_first_line.html", firstLineHtml);
 Console.WriteLine("Saved test_first_line.html");
+
+// --- CSS1 canvas background showcase ---
+
+var canvasBackgroundHtml = "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    "body { font: 11pt Georgia, serif; margin: 0; background-color: rgb(230,240,255) }" +
+    "h1 { font-size: 15pt; margin: 0; padding: 15mm 15mm 0.3em; font-family: Arial, sans-serif }" +
+    "p { margin: 0 15mm 0.8em }" +
+    "</style></head><body>" +
+    "<h1>CSS1 Canvas Background Test Page</h1>" +
+    "<p>The pale blue background here comes from &lt;body&gt;'s own background-color, but it fills the " +
+    "whole page canvas (per CSS2.1 &sect;14.2) - not just the height of this short paragraph, which is " +
+    "nowhere near a full page tall.</p>" +
+    "</body></html>";
+
+var canvasBackgroundStream = new MemoryStream();
+var canvasBackgroundDocument = await generator.GeneratePdf(canvasBackgroundHtml, pdfConfig);
+canvasBackgroundDocument.Save(canvasBackgroundStream);
+
+File.Delete("test_canvas_background.pdf");
+File.WriteAllBytes("test_canvas_background.pdf", canvasBackgroundStream.ToArray());
+Console.WriteLine("Saved test_canvas_background.pdf");
+
+File.Delete("test_canvas_background.html");
+File.WriteAllText("test_canvas_background.html", canvasBackgroundHtml);
+Console.WriteLine("Saved test_canvas_background.html");

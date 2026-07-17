@@ -12,6 +12,7 @@
 
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
+using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
@@ -248,6 +249,12 @@ namespace PeachPDF
             var structureTagBuilder = config.EnableTaggedPdf ? new StructureTagBuilder(document.PdfDocument) : null;
             container.HtmlContainerInt.StructureTagBuilder = structureTagBuilder;
 
+            // Per CSS2.1 §14.2, the "canvas" (here: every page) is filled with body's background if it
+            // declares one, else html's - resolved once, up front, since which box (if either) is chosen
+            // never changes page to page. Whichever box was chosen also gets its own normal background
+            // paint pass suppressed (see SuppressOwnBackgroundPaint), so it isn't painted twice.
+            var canvasBackgroundBox = ResolveCanvasBackground(container.HtmlContainerInt.Root);
+
             // while there is un-rendered HTML, create another PDF page and render with proper offset for the next page
             double scrollOffset = 0;
             int pageNumber = 0;
@@ -298,6 +305,15 @@ namespace PeachPDF
 
                 using var g = XGraphics.FromPdfPage(page);
 
+                if (canvasBackgroundBox != null)
+                {
+                    // Must paint before the content clip below is applied (page.304's IntersectClip),
+                    // so the fill reaches the true full page bleed (including the margin-box area), not
+                    // just the content rect.
+                    using var canvasGraphics = new GraphicsAdapter(_pdfSharpAdapter, g, _pdfSharpAdapter.PixelsPerPoint);
+                    canvasBackgroundBox.PaintCanvasBackground(canvasGraphics, new RRect(0, 0, page.Width * _pdfSharpAdapter.PixelsPerPoint, page.Height * _pdfSharpAdapter.PixelsPerPoint));
+                }
+
                 // Save state so the content transform can be undone for margin box rendering
                 var preContentState = g.Save();
 
@@ -347,6 +363,25 @@ namespace PeachPDF
         }
 
         #region Private/Protected methods
+
+        /// <summary>
+        /// Resolves which box's background (if any) should fill the whole page canvas, per CSS2.1 §14.2:
+        /// <c>&lt;body&gt;</c>'s own background if it declares one, else <c>&lt;html&gt;</c>'s, else no
+        /// canvas fill at all. The chosen box (if any) has <see cref="CssBox.SuppressOwnBackgroundPaint"/>
+        /// set so its own normal paint pass doesn't also paint the same background a second time at its
+        /// own (possibly much smaller than a page) laid-out rect.
+        /// </summary>
+        private static CssBox? ResolveCanvasBackground(CssBox? root)
+        {
+            var html = DomUtils.GetBoxByTagName(root, "html");
+            var body = DomUtils.GetBoxByTagName(root, "body");
+
+            var chosen = body is { HasOwnBackground: true } ? body : html is { HasOwnBackground: true } ? html : null;
+            if (chosen != null)
+                chosen.SuppressOwnBackgroundPaint = true;
+
+            return chosen;
+        }
 
         private static void ApplyDocumentMetadata(PdfDocument pdfDocument, HtmlDocumentMetadata? metadata)
         {
