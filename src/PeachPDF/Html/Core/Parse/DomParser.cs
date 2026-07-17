@@ -92,6 +92,8 @@ namespace PeachPDF.Html.Core.Parse
 
             EnsureListItemMarkers(cssValueParser, root, cssData, media);
 
+            ApplyFirstLetterPseudoElements(cssValueParser, root, cssData, media);
+
             CorrectTextBoxes(root);
 
             CorrectReplacedElementBoxes(root);
@@ -495,6 +497,151 @@ namespace PeachPDF.Html.Core.Parse
                     EnsureListItemMarkers(valueParser, childBox, cssData, media);
                 }
             }
+        }
+
+        /// <summary>
+        /// Synthesizes a <c>::first-letter</c> pseudo-element for every box flagged by
+        /// <see cref="CssBox.MatchesFirstLetterSelector"/> during <see cref="CascadeApplyStyles"/>
+        /// above, by splitting the first letter (CSS1 §1.2: including any immediately-preceding
+        /// punctuation) off the box's first real text-bearing descendant. Must run after
+        /// <see cref="CascadeApplyStyles"/> (so descendant <c>Display</c> values are resolved - needed
+        /// to correctly stop at block-level boundaries) and before <see cref="CorrectTextBoxes"/> (so
+        /// the new box's content gets word-parsed by that same pass, like every other pseudo-element).
+        /// Unlike <c>::before</c>/<c>::after</c>/<c>::marker</c> (synthesized as a new child of the
+        /// matched element itself, inline within <c>CascadeApplyStyles</c>' own per-box processing),
+        /// the split point here is a descendant text box possibly several inline levels below the
+        /// matched element - see <see cref="CssBox.MatchesFirstLetterSelector"/>'s doc comment for why
+        /// that forces this into a separate, later pass instead.
+        /// </summary>
+        private static void ApplyFirstLetterPseudoElements(CssValueParser valueParser, CssBox box, CssData cssData, string media)
+        {
+            if (box.MatchesFirstLetterSelector && !box.FirstLetterProcessed)
+            {
+                box.FirstLetterProcessed = true;
+
+                var textBox = FindFirstLetterTargetTextBox(box);
+                if (textBox != null)
+                {
+                    SplitFirstLetter(valueParser, cssData, media, box, textBox);
+                }
+            }
+
+            foreach (var childBox in box.Boxes.ToArray())
+            {
+                if (!childBox.IsFirstLetterPseudoElement)
+                {
+                    ApplyFirstLetterPseudoElements(valueParser, childBox, cssData, media);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Depth-first, first-child-first search for the first descendant of <paramref name="box"/>
+        /// carrying real, non-whitespace element text - the target for a <c>::first-letter</c> split.
+        /// Stops at (does not descend into) any descendant that starts its own independent formatting
+        /// context (block-level, table-parts, or an atomic inline-level box like inline-block) - CSS1's
+        /// "first formatted line"/first-letter concept is scoped to <paramref name="box"/>'s own inline
+        /// content, not a nested one. Also skips <c>::before</c>-generated content: first-letter targets
+        /// the element's own real text only (a documented narrowing versus full CSS2.1, which does allow
+        /// targeting generated content in some cases).
+        /// </summary>
+        private static CssBox? FindFirstLetterTargetTextBox(CssBox box)
+        {
+            foreach (var child in box.Boxes)
+            {
+                if (child.IsBeforePseudoElement || child.IsMarkerPseudoElement)
+                    continue;
+
+                if (child.Text != null)
+                {
+                    if (!string.IsNullOrWhiteSpace(child.Text))
+                        return child;
+                    continue;
+                }
+
+                if (IsFirstLetterScopeBoundary(child))
+                    continue;
+
+                var found = FindFirstLetterTargetTextBox(child);
+                if (found != null) return found;
+            }
+
+            return null;
+        }
+
+        private static bool IsFirstLetterScopeBoundary(CssBox box) =>
+            box.Display is CssConstants.Block or CssConstants.Table or CssConstants.TableRow
+                or CssConstants.TableRowGroup or CssConstants.TableCell or CssConstants.ListItem
+                or CssConstants.Flex or CssConstants.InlineBlock or CssConstants.InlineTable
+                or CssConstants.InlineFlex;
+
+        /// <summary>
+        /// Splits <paramref name="textBox"/>'s text at the CSS1 §1.2 "first letter" boundary (skipping
+        /// leading whitespace, then any leading run of Unicode punctuation categories Ps/Pe/Pi/Pf/Po
+        /// immediately followed by one more character), inserting a new box holding that first-letter
+        /// substring as <paramref name="textBox"/>'s preceding sibling and truncating
+        /// <paramref name="textBox"/> to the remainder. The new box's <see cref="CssBox.ParentBox"/> is
+        /// <paramref name="textBox"/>'s own real structural parent (so it inherits normally, e.g. bold
+        /// from a nested <c>&lt;b&gt;</c>), while <see cref="CssBox.FirstLetterOriginatingBox"/> is set
+        /// to <paramref name="originatingBox"/> (<c>E</c>, the element the <c>::first-letter</c>
+        /// selector actually matched) purely for selector re-matching. Gives the new box a full,
+        /// independent <see cref="CascadeApplyStyles"/> pass of its own - not just
+        /// <see cref="CssBox.InheritStyle(CssBox?, bool)"/> - so author <c>E::first-letter</c>
+        /// declarations actually apply on top of that inherited baseline, the same as
+        /// <see cref="EnsureListItemMarkers"/> does for its own synthesized marker box.
+        /// </summary>
+        private static void SplitFirstLetter(CssValueParser valueParser, CssData cssData, string media, CssBox originatingBox, CssBox textBox)
+        {
+            var text = textBox.Text!;
+            var idx = 0;
+
+            while (idx < text.Length && char.IsWhiteSpace(text[idx]))
+                idx++;
+
+            if (idx >= text.Length) return;
+
+            var letterStart = idx;
+
+            while (idx < text.Length && IsFirstLetterPunctuation(text[idx]))
+                idx++;
+
+            if (idx < text.Length)
+                idx++;
+
+            var firstLetterText = text[letterStart..idx];
+            var remainder = text[idx..];
+
+            var parentBox = textBox.ParentBox!;
+            var insertIndex = parentBox.Boxes.IndexOf(textBox);
+
+            var firstLetterBox = new CssBox(parentBox, null)
+            {
+                IsFirstLetterPseudoElement = true,
+                FirstLetterOriginatingBox = originatingBox,
+                Text = firstLetterText
+            };
+
+            parentBox.Boxes.Remove(firstLetterBox);
+            parentBox.Boxes.Insert(insertIndex, firstLetterBox);
+
+            textBox.Text = remainder;
+
+            firstLetterBox.InheritStyle(parentBox);
+            CascadeApplyStyles(valueParser, firstLetterBox, cssData, media);
+        }
+
+        /// <summary>
+        /// CSS1 §1.2's first-letter punctuation categories: Ps/Pe/Pi/Pf/Po (open/close/initial-quote/
+        /// final-quote/other punctuation) - deliberately excludes Pd (dash) and Pc (connector).
+        /// </summary>
+        private static bool IsFirstLetterPunctuation(char c)
+        {
+            var category = System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c);
+            return category is System.Globalization.UnicodeCategory.OpenPunctuation
+                or System.Globalization.UnicodeCategory.ClosePunctuation
+                or System.Globalization.UnicodeCategory.InitialQuotePunctuation
+                or System.Globalization.UnicodeCategory.FinalQuotePunctuation
+                or System.Globalization.UnicodeCategory.OtherPunctuation;
         }
 
         /// <summary>

@@ -434,13 +434,14 @@ CSS comments (`/* ... */`) are supported anywhere in a stylesheet, including bet
 
 ### Pseudo-elements
 
-`::before`, `::after`, and `::marker` are supported. All other pseudo-elements are parsed but have no effect.
+`::before`, `::after`, `::marker`, and `::first-letter` are supported. All other pseudo-elements are parsed but have no effect.
 
 | Pseudo-element | Notes |
 |----------------|-------|
 | `::before` | Full support; use with the `content` property |
 | `::after` | Full support; use with the `content` property |
 | `::marker` | Full support for every property the spec allows on markers — see below |
+| `::first-letter` | Full support — see below |
 | All others | Parsed but ignored |
 
 Both the single-colon legacy syntax (`:before`, `:after`) and the modern double-colon syntax (`::before`, `::after`) are accepted. `::marker` has no legacy single-colon form, matching the spec.
@@ -458,6 +459,13 @@ li::marker { content: "→ "; color: crimson; }
 
 /* Big, bold chapter numbers */
 ol.chapters > li::marker { font-size: 1.5em; font-weight: bold; }
+```
+
+**`::first-letter`** splits the first letter of an element's own real text into a separate, independently styled box. Per CSS1 §1.2, any leading punctuation immediately before the first letter (e.g. an opening quote mark) is included as part of the same unit. The target text may be several inline levels deep (e.g. `p::first-letter` on `<p><em>Hello</em> world</p>` styles the "H" inside the `<em>`) — the search stops at (does not cross into) a nested block-level or atomic inline-level descendant (e.g. a nested `<div>` or `inline-block`), which starts its own independent first-letter scope. Targets the element's own real text only, not `::before`-generated content.
+
+```css
+/* Classic drop cap */
+p.intro::first-letter { font-size: 300%; float: left; color: crimson; }
 ```
 
 ### Pseudo-classes

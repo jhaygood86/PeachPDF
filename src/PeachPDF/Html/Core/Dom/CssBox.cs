@@ -175,7 +175,50 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         public bool IsMarkerPseudoElement { get; set; }
 
-        public bool IsPseudoElement => IsBeforePseudoElement || IsAfterPseudoElement || IsMarkerPseudoElement;
+        /// <summary>
+        /// Is this box a synthesized <c>::first-letter</c> pseudo-element - unlike
+        /// <see cref="IsBeforePseudoElement"/>/<see cref="IsAfterPseudoElement"/>/
+        /// <see cref="IsMarkerPseudoElement"/> (all inserted as a new child of the matched element
+        /// itself, since their content is author-declared), this box replaces a real descendant text
+        /// box possibly several inline levels below the matched element (see
+        /// <see cref="FirstLetterOriginatingBox"/>) - see <c>CssData.DoesSelectorMatch</c>'s
+        /// <c>CssConstants.FirstLetter</c> case for the split logic.
+        /// </summary>
+        public bool IsFirstLetterPseudoElement { get; set; }
+
+        /// <summary>
+        /// For a synthesized <see cref="IsFirstLetterPseudoElement"/> box, the real element <c>E</c>
+        /// that <c>E::first-letter</c> matched - used only for selector re-matching (see
+        /// <c>CssData.DoesSelectorMatch</c>'s <c>referenceBox</c> logic), so a rule like
+        /// <c>p::first-letter</c> re-matches against the real <c>&lt;p&gt;</c>, not this box's
+        /// structural <see cref="ParentBox"/> (which may be a nested inline element,
+        /// e.g. <c>&lt;b&gt;</c>, several levels below <c>E</c>). <see cref="ParentBox"/>
+        /// itself deliberately stays the real structural parent so ordinary style inheritance (e.g.
+        /// that nested <c>&lt;b&gt;</c>'s bold weight) still applies correctly to this box.
+        /// </summary>
+        public CssBox? FirstLetterOriginatingBox { get; set; }
+
+        /// <summary>
+        /// Idempotency guard set on the real matched element <c>E</c> (not the split box, since the
+        /// split point may be several levels below <c>E</c> and isn't necessarily among its direct
+        /// children) once <c>::first-letter</c> synthesis has been attempted for it.
+        /// </summary>
+        public bool FirstLetterProcessed { get; set; }
+
+        /// <summary>
+        /// Set during <see cref="CssData.DoesSelectorMatch(CSS.CompoundSelector, CssBox?)"/> when some
+        /// rule's <c>*::first-letter</c> selector matches this box. The actual DFS-and-split (see
+        /// <c>DomParser.ApplyFirstLetterPseudoElements</c>) is deliberately deferred to a separate
+        /// pass run after the whole document's cascade completes, rather than performed immediately
+        /// here like <see cref="IsBeforePseudoElement"/>/<see cref="IsAfterPseudoElement"/>/
+        /// <see cref="IsMarkerPseudoElement"/> are - finding the right descendant to split needs to
+        /// know which descendants are block-level, and <c>Display</c> isn't reliably resolved for any
+        /// of this box's descendants until their own cascade pass has run (this box's own cascade
+        /// pass, where selector matching happens, completes *before* recursing into children).
+        /// </summary>
+        internal bool MatchesFirstLetterSelector { get; set; }
+
+        public bool IsPseudoElement => IsBeforePseudoElement || IsAfterPseudoElement || IsMarkerPseudoElement || IsFirstLetterPseudoElement;
 
         /// <summary>
         /// is the box "Display" is "Inline", is this is an inline box and not block.

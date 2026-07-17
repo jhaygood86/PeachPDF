@@ -2787,3 +2787,44 @@ Console.WriteLine("Saved test_letter_word_spacing.pdf");
 File.Delete("test_letter_word_spacing.html");
 File.WriteAllText("test_letter_word_spacing.html", spacingHtml);
 Console.WriteLine("Saved test_letter_word_spacing.html");
+
+// --- ::first-letter showcase ---
+
+const string FirstLetterCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 11pt Georgia, serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em; font-family: Arial, sans-serif }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; font-family: Arial, sans-serif }
+    p { margin: 0 0 0.8em }
+    .dropcap::first-letter { font-size: 300%; float: left; color: crimson; font-weight: bold; line-height: 0.8; padding-right: 4px }
+    .colored::first-letter { color: rgb(0,102,204); font-size: 150% }
+    </style>
+    """;
+
+var firstLetterHtml = "<!DOCTYPE html><html><head>" + FirstLetterCss + "</head><body>" +
+
+    "<h1>CSS1 ::first-letter Test Page</h1>" +
+
+    "<h2>Classic drop cap</h2>" +
+    "<p class=\"dropcap\">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation.</p>" +
+
+    "<h2>Nested inline content</h2>" +
+    "<p class=\"colored\"><em>Emphasized</em> text starts this paragraph, and the very first letter should still pick up the first-letter color even though it begins inside the nested &lt;em&gt;.</p>" +
+
+    "<h2>Leading punctuation</h2>" +
+    "<p class=\"colored\">&#8220;Quoted&#8221; text at the start of a paragraph includes the opening quote mark as part of the first-letter unit, per CSS1 &sect;1.2.</p>" +
+
+    "</body></html>";
+
+var firstLetterStream = new MemoryStream();
+var firstLetterDocument = await generator.GeneratePdf(firstLetterHtml, pdfConfig);
+firstLetterDocument.Save(firstLetterStream);
+
+File.Delete("test_first_letter.pdf");
+File.WriteAllBytes("test_first_letter.pdf", firstLetterStream.ToArray());
+Console.WriteLine("Saved test_first_letter.pdf");
+
+File.Delete("test_first_letter.html");
+File.WriteAllText("test_first_letter.html", firstLetterHtml);
+Console.WriteLine("Saved test_first_letter.html");

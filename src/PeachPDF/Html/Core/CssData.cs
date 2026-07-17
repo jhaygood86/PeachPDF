@@ -416,7 +416,8 @@ namespace PeachPDF.Html.Core
 
             if (lastSelector is PseudoElementSelector pseudoElementSelector)
             {
-                var referenceBox = box.IsPseudoElement ? box.ParentBox : box;
+                var referenceBox = box.IsFirstLetterPseudoElement ? box.FirstLetterOriginatingBox
+                    : box.IsPseudoElement ? box.ParentBox : box;
 
                 var isMatchWithoutPseudoElement = compoundSelector
                     .Where(x => x is not PseudoElementSelector)
@@ -483,6 +484,15 @@ namespace PeachPDF.Html.Core
                             box.Boxes.Insert(0, markerPseudoBox);
                             break;
                         }
+                    // Unlike Before/After/Marker, no box is synthesized here directly - the actual
+                    // descendant-text split is deferred to a post-cascade pass (see
+                    // CssBox.MatchesFirstLetterSelector's doc comment and
+                    // DomParser.ApplyFirstLetterPseudoElements) since it needs to know which of this
+                    // box's descendants are block-level, which isn't reliably resolved until each
+                    // descendant's own cascade pass has run.
+                    case CssConstants.FirstLetter:
+                        box.MatchesFirstLetterSelector = true;
+                        break;
                 }
             }
 
@@ -641,6 +651,7 @@ namespace PeachPDF.Html.Core
                 case CssConstants.Before when box.IsBeforePseudoElement:
                 case CssConstants.After when box.IsAfterPseudoElement:
                 case CssConstants.Marker when box.IsMarkerPseudoElement:
+                case CssConstants.FirstLetter when box.IsFirstLetterPseudoElement:
                     return true;
                 default:
                     return false;
