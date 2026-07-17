@@ -580,9 +580,13 @@ namespace PeachPDF.Html.Core.Utils
 
             foreach (var childBox in box.Boxes)
             {
-                // ::marker pseudo-elements carry no renderable content of their own (the actual
-                // marker glyph is still painted procedurally by the list-item box itself) - they
-                // exist solely as a cascade target, so they must never enter the generic paint walk.
+                // ::marker boxes (inside or outside position) are always painted via one explicit
+                // Paint(g) call from CssBox.PaintImpCore/PaintListItem, not discovered generically here
+                // - both so the tagged-PDF path can wrap the marker in its own "/Lbl" structure element
+                // separately from the rest of the list item's "/LBody" content, and so an "outside"
+                // marker (which must not affect - or be discovered through - the owning list item's own
+                // stacking context, per CSS2.1 12.5.1 / CSS Lists Level 3) never gets bubbled up as if
+                // it were normal in-flow content. Yielding it here too would double-paint it.
                 if (childBox.IsMarkerPseudoElement) continue;
 
                 if (!IsStackingContextBox(childBox))

@@ -664,6 +664,97 @@ File.Delete("test_list_style_image.html");
 File.WriteAllText("test_list_style_image.html", listHtml);
 Console.WriteLine("Saved test_list_style_image.html");
 
+// --- ::marker styling showcase ---
+
+// ::marker rules can't be expressed via an inline style="..." attribute (pseudo-elements aren't
+// targetable that way), so each swatch gets its own scoped <style> block instead - mirrors
+// ContentSwatch's own approach below for the same reason. The scoping class goes on the list
+// container (matching ListSwatch's own convention above), so the selector needs a descendant
+// combinator ("li::marker", not "::marker" directly on the class) - ::marker's own compound-
+// selector matching checks the non-pseudo part against the marker's *parent* (the <li>), not
+// against whatever box the class happens to be on.
+static string MarkerSwatch(string desc, string markerCss, string tag = "ul", string itemLabel = "Item") =>
+    "<td>" +
+    $"<style>.mk-{desc.GetHashCode() & 0x7FFFFFFF} li::marker {{ {markerCss} }}</style>" +
+    $"<{tag} class=\"mk-{desc.GetHashCode() & 0x7FFFFFFF}\" style=\"margin: 0; padding-left: 2em;\">" +
+    $"<li>{itemLabel} one</li><li>{itemLabel} two</li><li>{itemLabel} three</li>" +
+    $"</{tag}>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">::marker {{ {markerCss} }}</div>" +
+    "</td>";
+
+var markerHtml = "<!DOCTYPE html><html><head>" + ListCss + "</head><body>" +
+
+    "<h1>CSS ::marker Test Page</h1>" +
+
+    "<h2>1 — color and font styling</h2>" +
+    "<p class=\"intro\">::marker is a real, independently styled box now - its color/font are its own, not the list item's.</p>" +
+    Row(
+        MarkerSwatch("red marker, black text", "color: red;", "ol"),
+        MarkerSwatch("large bold marker", "font-size: 13pt; font-weight: bold;", "ol"),
+        MarkerSwatch("marker color vs. text color", "color: green;", "ul"),
+        MarkerSwatch("both color and font-size", "color: #8e44ad; font-size: 13pt;", "ol")
+    ) +
+
+    "<h2>2 — content overrides</h2>" +
+    "<p class=\"intro\">An explicit content value fully replaces the automatic bullet/number - no automatic \".\" suffix, so any spacing/punctuation must be in the string itself.</p>" +
+    Row(
+        MarkerSwatch("custom string", "content: \"→  \";", "ul"),
+        MarkerSwatch("counter() override", "content: counter(list-item) \")  \";", "ol"),
+        MarkerSwatch("content: none (suppressed)", "content: none;", "ul"),
+        MarkerSwatch("content: normal (baseline)", "content: normal;", "ol")
+    ) +
+
+    "<h2>3 — direction</h2>" +
+    "<p class=\"intro\">The marker's own direction is independent of the list item's own text direction.</p>" +
+    Row(
+        MarkerSwatch("marker: rtl, text: ltr", "direction: rtl;", "ol"),
+        MarkerSwatch("marker: ltr (baseline)", "direction: ltr;", "ol")
+    ) +
+
+    "<h2>4 — list-style-position: inside vs outside</h2>" +
+    "<p class=\"intro\">An \"inside\" marker is a real first inline child of the list item's own content, flowing (and wrapping) like ordinary text; an \"outside\" marker (the default) hangs to the left, never affecting the item's own line-wrap.</p>" +
+    Row(
+        "<td>" +
+        "<ul style=\"margin: 0; padding-left: 2em; list-style-position: outside\">" +
+        "<li>Outside position (default): this list item has enough text in it to wrap onto a second line, so the effect on the hanging indent is visible.</li>" +
+        "</ul>" +
+        "<div class=\"desc\">outside (default)</div>" +
+        "<div class=\"css\">list-style-position: outside</div>" +
+        "</td>",
+        "<td>" +
+        "<ul style=\"margin: 0; padding-left: 2em; list-style-position: inside\">" +
+        "<li>Inside position: this list item has enough text in it to wrap onto a second line, so the marker's effect on where the wrapped line starts is visible.</li>" +
+        "</ul>" +
+        "<div class=\"desc\">inside</div>" +
+        "<div class=\"css\">list-style-position: inside</div>" +
+        "</td>",
+        // The reserved width for an "inside" marker follows the marker's own (possibly overridden)
+        // font, not the item's - this large marker font visibly pushes the wrapped line further right.
+        "<td>" +
+        "<style>.mk-inside-big li::marker { font-size: 20pt; }</style>" +
+        "<ol class=\"mk-inside-big\" style=\"margin: 0; padding-left: 2em; list-style-position: inside\">" +
+        "<li>Inside position with a much larger marker font-size: this item's text also wraps, showing the reserved width grow with it.</li>" +
+        "</ol>" +
+        "<div class=\"desc\">inside + large marker font-size</div>" +
+        "<div class=\"css\">list-style-position: inside; ::marker { font-size: 20pt }</div>" +
+        "</td>"
+    ) +
+
+    "</body></html>";
+
+var markerStream = new MemoryStream();
+var markerDocument = await generator.GeneratePdf(markerHtml, pdfConfig);
+markerDocument.Save(markerStream);
+
+File.Delete("test_marker_styling.pdf");
+File.WriteAllBytes("test_marker_styling.pdf", markerStream.ToArray());
+Console.WriteLine("Saved test_marker_styling.pdf");
+
+File.Delete("test_marker_styling.html");
+File.WriteAllText("test_marker_styling.html", markerHtml);
+Console.WriteLine("Saved test_marker_styling.html");
+
 // --- content image showcase ---
 
 static string ContentSwatch(string desc, string contentValue, string pseudoElement = "before", string width = "40px", string height = "28px", string? cssLabel = null) =>

@@ -90,6 +90,8 @@ namespace PeachPDF.Html.Core.Parse
 
             CascadeApplyStyles(cssValueParser, root, cssData, media);
 
+            EnsureListItemMarkers(cssValueParser, root, cssData, media);
+
             CorrectTextBoxes(root);
 
             CorrectReplacedElementBoxes(root);
@@ -458,6 +460,40 @@ namespace PeachPDF.Html.Core.Parse
             foreach (var childBox in box.Boxes)
             {
                 CascadeApplyStyles(valueParser, childBox, cssData, media);
+            }
+        }
+
+        /// <summary>
+        /// Ensures every box whose <c>Display</c> resolves to <c>list-item</c> has a synthesized
+        /// <c>::marker</c> child, per CSS2.1 12.5.1 / CSS Lists Level 3 - marker generation is driven
+        /// by the *computed* <c>Display</c> value, not by any particular selector or tag. The common
+        /// <c>&lt;li&gt;</c> case already gets one during <see cref="CascadeApplyStyles"/> above (via
+        /// the UA stylesheet's <c>li::marker</c> rule's selector-match-time synthesis in
+        /// <see cref="CssData.DoesSelectorMatch(CSS.CompoundSelector, CssBox?)"/>) - this only needs to
+        /// cover elements that reach <c>Display: list-item</c> WITHOUT that selector matching (e.g.
+        /// <c>div { display: list-item }</c>), since selector matching can't key off a computed
+        /// <c>Display</c> value (it isn't resolved yet at match time within a cascade pass). Must run
+        /// after <see cref="CascadeApplyStyles"/> (so <c>Display</c> is resolved) and before
+        /// <see cref="CorrectTextBoxes"/> (so the new box's content gets resolved by that same pass,
+        /// same as every other marker box).
+        /// </summary>
+        private static void EnsureListItemMarkers(CssValueParser valueParser, CssBox box, CssData cssData, string media)
+        {
+            if (box.Display == CssConstants.ListItem && !box.Boxes.Any(b => b.IsMarkerPseudoElement))
+            {
+                var markerBox = new CssBoxMarker(box);
+                box.Boxes.Remove(markerBox);
+                box.Boxes.Insert(0, markerBox);
+                markerBox.InheritStyle(box);
+                CascadeApplyStyles(valueParser, markerBox, cssData, media);
+            }
+
+            foreach (var childBox in box.Boxes.ToArray())
+            {
+                if (!childBox.IsMarkerPseudoElement)
+                {
+                    EnsureListItemMarkers(valueParser, childBox, cssData, media);
+                }
             }
         }
 
@@ -1128,6 +1164,11 @@ namespace PeachPDF.Html.Core.Parse
                 var childBox = box.Boxes[i];
 
                 CssContentEngine.ApplyContent(childBox);
+
+                if (childBox is CssBoxMarker markerBox)
+                {
+                    markerBox.ResolveDefaultContent();
+                }
 
                 if (childBox.Text != null)
                 {

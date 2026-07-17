@@ -369,8 +369,8 @@ These properties control how content breaks across PDF pages. Both the legacy `p
 | Property | MDN Reference | Notes |
 |----------|--------------|-------|
 | `content` | [content](https://developer.mozilla.org/en-US/docs/Web/CSS/content) | Used with `::before` / `::after` pseudo-elements; string, counter, `attr()`, and `none` values supported; `url()` (including an SVG source, rendered as real vector content) and all CSS gradient functions (`linear-gradient`, `radial-gradient`, `conic-gradient`, and repeating variants) are supported — image values require `display: inline-block` with explicit `width`/`height` on the pseudo-element |
-| `counter-reset` | [counter-reset](https://developer.mozilla.org/en-US/docs/Web/CSS/counter-reset) | Full support |
-| `counter-increment` | [counter-increment](https://developer.mozilla.org/en-US/docs/Web/CSS/counter-increment) | Full support |
+| `counter-reset` | [counter-reset](https://developer.mozilla.org/en-US/docs/Web/CSS/counter-reset) | Full support, including the `reversed(<counter-name>)` functional notation — a bare `reversed(name)` with no explicit value starts at the number of elements in scope that will increment it, counting down so the last one lands on 1 |
+| `counter-increment` | [counter-increment](https://developer.mozilla.org/en-US/docs/Web/CSS/counter-increment) | Full support. Every element whose *computed* `display` is `list-item` (not just `<li>`) automatically increments the implicit `list-item` counter, per CSS2.1 12.5.1 / CSS Lists Level 3 — the same counter `content: counter(list-item)` and `::marker`'s default numbering both read, so they always agree. `<ol start>`/`<ol reversed>` and `<li value>` are honored as presentational hints (lowest precedence — literal author `counter-reset`/`counter-set` targeting `list-item` still wins) |
 | `counter-set` | [counter-set](https://developer.mozilla.org/en-US/docs/Web/CSS/counter-set) | Full support |
 | `string-set` | [string-set](https://developer.mozilla.org/en-US/docs/Web/CSS/string-set) | CSS Paged Media property for running headers/footers |
 | `page` | [page](https://developer.mozilla.org/en-US/docs/Web/CSS/page) | Activates a named `@page` rule for pages containing the element |
@@ -429,18 +429,31 @@ PeachPDF evaluates a subset of CSS selectors. Selectors that are parsed but not 
 
 ### Pseudo-elements
 
-`::before`, `::after`, and (partially — see below) `::marker` are supported. All other pseudo-elements are parsed but have no effect.
+`::before`, `::after`, and `::marker` are supported. All other pseudo-elements are parsed but have no effect.
 
 | Pseudo-element | Notes |
 |----------------|-------|
 | `::before` | Full support; use with the `content` property |
 | `::after` | Full support; use with the `content` property |
-| `::marker` | Partial support — see below |
+| `::marker` | Full support for every property the spec allows on markers — see below |
 | All others | Parsed but ignored |
 
 Both the single-colon legacy syntax (`:before`, `:after`) and the modern double-colon syntax (`::before`, `::after`) are accepted. `::marker` has no legacy single-colon form, matching the spec.
 
-**Known limitation — `::marker` support is cascade-only, not visual styling.** `::marker` only matches actual list items (`display: list-item`, i.e. `<li>` and, via the default `dir`/`menu` styling, their aliases) and is only meaningful as a selector target for the [`-peachpdf-pdf-tag-type`](#-peachpdf-pdf-tag-type-tagged-pdf-structure-type) property — see [Tagged PDF (PDF/UA) Support](#tagged-pdf-pdfua-support). No other property set on `::marker` has any effect: `content`/`attr()` overrides, marker `color`/`font`/`font-size`, and CSS Lists Level 3 marker box sizing/positioning are all **not supported**. The actual bullet/number/image glyph continues to be painted exactly as it always has, driven by `list-style-type`/`list-style-image`/`list-style-position` on the `<li>` itself, not by anything set on `::marker`.
+**`::marker`** is a real, independently laid-out and painted box (the same as `::before`/`::after`), matching CSS2.1 §12.5.1 / CSS Lists Level 3. It's generated for any element whose *computed* `display` is `list-item` — not just `<li>` — so `<div style="display: list-item">` gets a real marker and numbering too, exactly like a `<li>` would.
+
+- **`content`** — `normal` (the default; the marker shows the automatic bullet/number/image driven by `list-style-type`/`list-style-image` on the list item) or an explicit override: a string, `counter()`/`counters()`, `attr()`, `url()`/gradient (rendered as a real image, same as `content: url()` on `::before`/`::after`), or `none` (no marker at all). An explicit override fully replaces the automatic bullet/number/shape — unlike the automatic case, no `"."` suffix is added, so include any trailing punctuation/spacing in the string yourself.
+- **`color`**, **font properties** (`font`, `font-family`, `font-size`, `font-style`, `font-weight`, `font-variant`, to the extent PeachPDF supports them generally) and **`direction`** all take effect on the marker's own glyph/shape, independent of the list item's own styling.
+- List numbering (the default, non-overridden case, and any `content: counter(list-item)` override) is backed by the real CSS `list-item` counter (see [Generated Content](#generated-content) below), so both always agree — including with `<ol start>`/`<ol reversed>`/`<li value>` in play.
+- Properties outside this set (e.g. `background`, `border`, `width`) have no defined effect on `::marker` — this isn't a PeachPDF gap: CSS Lists Level 3 §3.1.1 itself declares marker-box width/height/margin/padding/alignment layout "not fully defined," and restricts applicable properties to the set above (plus `white-space`/`text-combine-upright`/`unicode-bidi`, and animation/transition properties — none of which apply to PeachPDF's static PDF output anyway). No browser implements box-model properties on `::marker` either, for the same reason.
+
+```css
+/* Custom bullet + color, independent of the list item's own text color */
+li::marker { content: "→ "; color: crimson; }
+
+/* Big, bold chapter numbers */
+ol.chapters > li::marker { font-size: 1.5em; font-weight: bold; }
+```
 
 ### Pseudo-classes
 
