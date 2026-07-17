@@ -236,7 +236,7 @@ Known limitation: `double`/`groove`/`ridge` combined with `border-radius` on the
 | `font-variant` | [font-variant](https://developer.mozilla.org/en-US/docs/Web/CSS/font-variant) | `normal` and `small-caps` are parsed and actually rendered: since PeachPDF has no OpenType shaping engine for real `smcp`/`c2sc` glyph substitution, `small-caps` is synthesized — originally-lowercase letters are upper-cased and drawn at a reduced size relative to the rest of the run. Non-standard/proprietary function-token values (e.g. Prince's `prince-opentype(...)`) are not recognized and resolve to `normal` |
 | `font-weight` | [font-weight](https://developer.mozilla.org/en-US/docs/Web/CSS/font-weight) | Keyword (`bold`, `normal`, `lighter`, `bolder`) and numeric (`100`–`900`) values |
 | `line-height` | [line-height](https://developer.mozilla.org/en-US/docs/Web/CSS/line-height) | Full support |
-| `vertical-align` | [vertical-align](https://developer.mozilla.org/en-US/docs/Web/CSS/vertical-align) | `baseline`, `sub`, `super`, `top`, `middle`, `bottom`, and length/percentage values |
+| `vertical-align` | [vertical-align](https://developer.mozilla.org/en-US/docs/Web/CSS/vertical-align) | `baseline`, `sub`, `super`, `top`, `middle`, `bottom`, `text-top`, `text-bottom`, and length/percentage values — full support for any inline-level box relative to its line box, not just table cells (which use a separate, table-specific alignment algorithm — see [Tables](#tables)) |
 
 ### Text Layout
 

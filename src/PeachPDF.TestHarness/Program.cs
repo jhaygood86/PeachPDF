@@ -2678,3 +2678,64 @@ Console.WriteLine("Saved test_border_style.pdf");
 File.Delete("test_border_style.html");
 File.WriteAllText("test_border_style.html", borderStyleHtml);
 Console.WriteLine("Saved test_border_style.html");
+
+// --- vertical-align showcase ---
+
+static string VerticalAlignSwatch(string desc, string va) =>
+    "<td>" +
+    "<p class=\"vabox\">" +
+    "<span class=\"tall\">TALL</span> " +
+    $"<span class=\"target\" style=\"vertical-align:{va}\">aligned</span>" +
+    "</p>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">vertical-align: {va}</div>" +
+    "</td>";
+
+const string VerticalAlignCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
+    table.sw td { padding: 3px; vertical-align: top; width: 25% }
+    .vabox { border: 1px solid #999; margin-bottom: 3px; white-space: nowrap }
+    .tall { font-size: 30pt }
+    .target { font-size: 10pt; background: #ffe58a }
+    .desc { font-size: 7pt; font-weight: bold; color: #444; margin-bottom: 1px }
+    .css { font-size: 6pt; color: #666; line-height: 1.3; word-break: break-all }
+    </style>
+    """;
+
+var verticalAlignHtml = "<!DOCTYPE html><html><head>" + VerticalAlignCss + "</head><body>" +
+
+    "<h1>CSS1 vertical-align Test Page</h1>" +
+    "<p class=\"intro\" style=\"font-size:7pt;color:#555\">Each swatch shows a 30pt \"TALL\" span establishing the line's height, with a highlighted 10pt \"aligned\" span positioned per the labeled value.</p>" +
+
+    "<h2>All CSS1 vertical-align keywords</h2>" +
+    Row(
+        VerticalAlignSwatch("baseline (default)", "baseline"),
+        VerticalAlignSwatch("sub", "sub"),
+        VerticalAlignSwatch("super", "super"),
+        VerticalAlignSwatch("top", "top")
+    ) +
+    Row(
+        VerticalAlignSwatch("middle", "middle"),
+        VerticalAlignSwatch("bottom", "bottom"),
+        VerticalAlignSwatch("text-top", "text-top"),
+        VerticalAlignSwatch("text-bottom", "text-bottom")
+    ) +
+
+    "</body></html>";
+
+var verticalAlignStream = new MemoryStream();
+var verticalAlignDocument = await generator.GeneratePdf(verticalAlignHtml, pdfConfig);
+verticalAlignDocument.Save(verticalAlignStream);
+
+File.Delete("test_vertical_align.pdf");
+File.WriteAllBytes("test_vertical_align.pdf", verticalAlignStream.ToArray());
+Console.WriteLine("Saved test_vertical_align.pdf");
+
+File.Delete("test_vertical_align.html");
+File.WriteAllText("test_vertical_align.html", verticalAlignHtml);
+Console.WriteLine("Saved test_vertical_align.html");

@@ -1138,29 +1138,90 @@ namespace PeachPDF.Html.Core.Dom
 
             var boxes = new List<CssBox>(lineBox.Rectangles.Keys);
 
+            // Snapshot the line's own top/bottom extents up front, from the original (pre-alignment)
+            // rectangles - same convention this method already uses for "baseline" above, so every
+            // case below aligns against the line's original geometry rather than a value some earlier
+            // box in this loop already shifted.
+            var lineTop = double.MaxValue;
+            var lineBottom = double.MinValue;
             foreach (var box in boxes)
             {
+                var r = lineBox.Rectangles[box];
+                lineTop = Math.Min(lineTop, r.Top);
+                lineBottom = Math.Max(lineBottom, r.Bottom);
+            }
+
+            foreach (var box in boxes)
+            {
+                var rect = lineBox.Rectangles[box];
+
                 //Important notes on http://www.w3.org/TR/CSS21/tables.html#height-layout
                 switch (box.VerticalAlign)
                 {
                     case CssConstants.Sub:
-                        lineBox.SetBaseLine(box, baseline + lineBox.Rectangles[box].Height * .5f);
+                        lineBox.SetBaseLine(box, baseline + rect.Height * .5f);
                         break;
                     case CssConstants.Super:
-                        lineBox.SetBaseLine(box, baseline - lineBox.Rectangles[box].Height * .2f);
+                        lineBox.SetBaseLine(box, baseline - rect.Height * .2f);
+                        break;
+                    case CssConstants.Top:
+                        OffsetBoxWithinLine(lineBox, box, lineTop - rect.Top);
+                        break;
+                    case CssConstants.Bottom:
+                        OffsetBoxWithinLine(lineBox, box, lineBottom - rect.Bottom);
+                        break;
+                    case CssConstants.Middle:
+                        var lineMiddleTop = lineTop + (lineBottom - lineTop - rect.Height) / 2;
+                        OffsetBoxWithinLine(lineBox, box, lineMiddleTop - rect.Top);
                         break;
                     case CssConstants.TextTop:
                     case CssConstants.TextBottom:
-                    case CssConstants.Top:
-                    case CssConstants.Bottom:
-                    case CssConstants.Middle:
-
+                        // Align with the top/bottom of the parent's font box, per CSS1 §5.6.11 - not
+                        // the line's own extents (that's top/bottom above), so this references the
+                        // parent element's own ActualFont rather than lineTop/lineBottom.
+                        //
+                        // "box" here may be an anonymous text-node box rather than the real element
+                        // vertical-align was declared on (e.g. for "<span style='vertical-align:
+                        // text-top'>text</span>", the word's owner is an anonymous child of the span,
+                        // whose own ParentBox is the span itself, not the span's real CSS parent) - so
+                        // walk up to the nearest ancestor that has an HtmlTag before reading ParentBox,
+                        // otherwise this would reference the span's own font instead of its parent's.
+                        var styledBox = box;
+                        while (styledBox.HtmlTag is null && styledBox.ParentBox is not null)
+                            styledBox = styledBox.ParentBox;
+                        var referenceFont = (styledBox.ParentBox ?? styledBox).ActualFont;
+                        var fontTop = baseline - referenceFont.Ascent;
+                        var target = box.VerticalAlign == CssConstants.TextTop
+                            ? fontTop
+                            : fontTop + referenceFont.Height - rect.Height;
+                        OffsetBoxWithinLine(lineBox, box, target - rect.Top);
                         break;
                     default:
                         //case: baseline
                         lineBox.SetBaseLine(box, baseline);
                         break;
                 }
+            }
+        }
+
+        /// <summary>
+        /// Shifts a single box's rectangle and words within one specific line box by <paramref name="delta"/>.
+        /// Scoped to this <paramref name="lineBox"/> only (via <see cref="CssLineBox.WordsOf"/>/
+        /// <see cref="CssLineBox.Rectangles"/>) rather than <see cref="CssBox.OffsetTop"/>'s all-lines,
+        /// all-descendants offset - necessary since a single inline box can participate in multiple
+        /// line boxes (when its content wraps), each needing independent vertical alignment.
+        /// </summary>
+        private static void OffsetBoxWithinLine(CssLineBox lineBox, CssBox box, double delta)
+        {
+            if (delta == 0) return;
+
+            if (lineBox.Rectangles.TryGetValue(box, out var r))
+                lineBox.Rectangles[box] = new RRect(r.X, r.Y + delta, r.Width, r.Height);
+
+            foreach (var word in lineBox.WordsOf(box))
+            {
+                if (!word.IsImage)
+                    word.Top += delta;
             }
         }
 
