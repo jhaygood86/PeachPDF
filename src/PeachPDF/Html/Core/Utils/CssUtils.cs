@@ -37,7 +37,12 @@ namespace PeachPDF.Html.Core.Utils
 
             if (!(string.IsNullOrEmpty(box.WordSpacing) || box.WordSpacing == CssConstants.Normal))
             {
-                w += CssValueParser.ParseLength(box.WordSpacing, 0, box, true);
+                // word-spacing is a plain length in the same layout coordinate space as margin/padding/
+                // width/etc. (all of which call ParseLength without fontAdjust) - not a font-size-
+                // relative value, so it must not get the 72/96 dpi correction fontAdjust applies for
+                // genuinely font-relative lengths (see FontSizeResolver). Passing fontAdjust:true here
+                // silently shrank every declared word-spacing value to 75% of its CSS value.
+                w += CssValueParser.ParseLength(box.WordSpacing, 0, box);
             }
 
             return w;
@@ -136,6 +141,7 @@ namespace PeachPDF.Html.Core.Utils
                 "word-break" => cssBox.WordBreak,
                 "visibility" => cssBox.Visibility,
                 "word-spacing" => cssBox.WordSpacing,
+                "letter-spacing" => cssBox.LetterSpacing,
                 "font-family" => cssBox.FontFamily,
                 "font-size" => cssBox.FontSize,
                 "font-style" => cssBox.FontStyle,
@@ -189,7 +195,7 @@ namespace PeachPDF.Html.Core.Utils
             "empty-cells", "float",
             "font-family", "font-size", "font-style", "font-variant", "font-weight",
             "height",
-            "left", "line-height",
+            "left", "letter-spacing", "line-height",
             "list-style-image", "list-style-position", "list-style-type",
             "margin-bottom", "margin-left", "margin-right", "margin-top",
             "max-width", "min-width", "max-height", "min-height",
@@ -624,6 +630,9 @@ namespace PeachPDF.Html.Core.Utils
                     break;
                 case "word-spacing":
                     cssBox.WordSpacing = value;
+                    break;
+                case "letter-spacing":
+                    cssBox.LetterSpacing = value;
                     break;
                 case "font-family":
                     cssBox.FontFamily = valueParser.GetFontFamilyByName(value);

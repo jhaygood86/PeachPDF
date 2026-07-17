@@ -299,7 +299,7 @@ namespace PeachPDF.Tests.Integration
             public DrawStringRecordingGraphics(RAdapter adapter)
                 : base(adapter, new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
 
-            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl) => DrawnStrings.Add(str);
+            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl, double letterSpacing = 0) => DrawnStrings.Add(str);
 
             public override void BeginMarkedContent(string structureType, int mcid) { }
             public override void EndMarkedContent() { }

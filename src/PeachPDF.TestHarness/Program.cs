@@ -2739,3 +2739,51 @@ Console.WriteLine("Saved test_vertical_align.pdf");
 File.Delete("test_vertical_align.html");
 File.WriteAllText("test_vertical_align.html", verticalAlignHtml);
 Console.WriteLine("Saved test_vertical_align.html");
+
+// --- letter-spacing / word-spacing showcase ---
+
+const string SpacingCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 12pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    .row { margin-bottom: 0.6em }
+    .label { font-size: 7pt; font-weight: bold; color: #444; margin-bottom: 1px }
+    </style>
+    """;
+
+var spacingHtml = "<!DOCTYPE html><html><head>" + SpacingCss + "</head><body>" +
+
+    "<h1>CSS1 letter-spacing / word-spacing Test Page</h1>" +
+
+    "<h2>letter-spacing</h2>" +
+    "<div class=\"row\"><div class=\"label\">normal</div><div style=\"letter-spacing:normal\">The quick brown fox jumps over the lazy dog</div></div>" +
+    "<div class=\"row\"><div class=\"label\">1px</div><div style=\"letter-spacing:1px\">The quick brown fox jumps over the lazy dog</div></div>" +
+    "<div class=\"row\"><div class=\"label\">4px</div><div style=\"letter-spacing:4px\">The quick brown fox jumps over the lazy dog</div></div>" +
+    "<div class=\"row\"><div class=\"label\">-1px (tightened)</div><div style=\"letter-spacing:-1px\">The quick brown fox jumps over the lazy dog</div></div>" +
+
+    "<h2>word-spacing (for contrast)</h2>" +
+    "<div class=\"row\"><div class=\"label\">normal</div><div style=\"word-spacing:normal\">The quick brown fox jumps over the lazy dog</div></div>" +
+    "<div class=\"row\"><div class=\"label\">10px</div><div style=\"word-spacing:10px\">The quick brown fox jumps over the lazy dog</div></div>" +
+    "<div class=\"row\"><div class=\"label\">25px</div><div style=\"word-spacing:25px\">The quick brown fox jumps over the lazy dog</div></div>" +
+
+    "<h2>Combined (inherited from parent, per CSS1)</h2>" +
+    "<div class=\"row\" style=\"letter-spacing:2px; word-spacing:8px\">" +
+    "<div class=\"label\">div has letter-spacing:2px; word-spacing:8px - nested span inherits both</div>" +
+    "<span>The quick brown fox</span> <b>jumps over</b> the lazy dog" +
+    "</div>" +
+
+    "</body></html>";
+
+var spacingStream = new MemoryStream();
+var spacingDocument = await generator.GeneratePdf(spacingHtml, pdfConfig);
+spacingDocument.Save(spacingStream);
+
+File.Delete("test_letter_word_spacing.pdf");
+File.WriteAllBytes("test_letter_word_spacing.pdf", spacingStream.ToArray());
+Console.WriteLine("Saved test_letter_word_spacing.pdf");
+
+File.Delete("test_letter_word_spacing.html");
+File.WriteAllText("test_letter_word_spacing.html", spacingHtml);
+Console.WriteLine("Saved test_letter_word_spacing.html");

@@ -345,6 +345,7 @@ namespace PeachPDF.Html.Core
             { "width", CssConstants.Auto },
             { "word-break", CssConstants.Normal },
             { "word-spacing", CssConstants.Normal },
+            { "letter-spacing", CssConstants.Normal },
             { "z-index", CssConstants.Auto },
         }.ToFrozenDictionary(System.StringComparer.OrdinalIgnoreCase);
 

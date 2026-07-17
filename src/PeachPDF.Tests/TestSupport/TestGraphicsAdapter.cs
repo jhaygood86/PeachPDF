@@ -114,7 +114,7 @@ namespace PeachPDF.Tests.TestSupport
     /// </summary>
     internal sealed class TestRecordingGraphics : RGraphics
     {
-        public sealed record DrawStringCall(string Text, RFont Font, RColor Color, RPoint Point, RSize Size, bool Rtl);
+        public sealed record DrawStringCall(string Text, RFont Font, RColor Color, RPoint Point, RSize Size, bool Rtl, double LetterSpacing = 0);
         public sealed record DrawRectCall(RColor Color, double X, double Y, double Width, double Height);
         public sealed record DrawPathCall(RColor Color);
         public sealed record DrawLineCall(RColor Color, double Width, RDashStyle DashStyle, double X1, double Y1, double X2, double Y2);
@@ -125,9 +125,9 @@ namespace PeachPDF.Tests.TestSupport
 
         public TestRecordingGraphics() : base(new TestGraphicsAdapter(), new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
 
-        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl)
+        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl, double letterSpacing = 0)
         {
-            var call = new DrawStringCall(str, font, color, point, size, rtl);
+            var call = new DrawStringCall(str, font, color, point, size, rtl, letterSpacing);
             DrawStringCalls.Add(call);
             Log.Add(call);
         }

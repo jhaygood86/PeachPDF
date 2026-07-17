@@ -52,6 +52,7 @@ namespace PeachPDF.Html.Core.Dom
         private string? _right;
         private string _textIndent = "0";
         private string _wordSpacing = "normal";
+        private string _letterSpacing = "normal";
 
         /// <summary>
         /// Specified (not var()-resolved) values of this box's CSS custom properties (--foo), keyed by
@@ -88,6 +89,11 @@ namespace PeachPDF.Html.Core.Dom
         /// the width of whitespace between words
         /// </summary>
         private double _actualWordSpacing = double.NaN;
+
+        /// <summary>
+        /// the extra space added between each pair of adjacent characters
+        /// </summary>
+        private double _actualLetterSpacing = double.NaN;
         private double _actualTextIndent = double.NaN;
         private double _actualBorderSpacingHorizontal = double.NaN;
         private double _actualBorderSpacingVertical = double.NaN;
@@ -493,6 +499,12 @@ namespace PeachPDF.Html.Core.Dom
         {
             get => _wordSpacing;
             set => _wordSpacing = NoEms(value);
+        }
+
+        public string LetterSpacing
+        {
+            get => _letterSpacing;
+            set => _letterSpacing = NoEms(value);
         }
 
         public string WordBreak { get; set; } = "normal";
@@ -1089,6 +1101,11 @@ namespace PeachPDF.Html.Core.Dom
         public double ActualWordSpacing => _actualWordSpacing;
 
         /// <summary>
+        /// Gets the actual extra space added between each pair of adjacent characters.
+        /// </summary>
+        public double ActualLetterSpacing => _actualLetterSpacing;
+
+        /// <summary>
         /// 
         /// Gets the actual color for the text.
         /// </summary>
@@ -1412,10 +1429,25 @@ namespace PeachPDF.Html.Core.Dom
         {
             if (!double.IsNaN(ActualWordSpacing)) return;
 
+            // CssUtils.WhiteSpace already adds the declared word-spacing length itself (on top of the
+            // whitespace glyph's own width) when WordSpacing isn't "normal" - a second addition here
+            // used to double-count the declared value on top of that.
             _actualWordSpacing = CssUtils.WhiteSpace(g, this);
-            if (WordSpacing == CssConstants.Normal) return;
+        }
 
-            _actualWordSpacing += CssValueParser.ParseLength(WordSpacing, 1, this);
+        /// <summary>
+        /// Measures the extra space added between each pair of adjacent characters (set
+        /// <see cref="ActualLetterSpacing"/>). Unlike <see cref="MeasureWordSpacing"/>, there's no
+        /// whitespace-glyph base width to add to - the base is always 0 for <c>normal</c>, so this
+        /// needs no <see cref="RGraphics"/>/font-metric input.
+        /// </summary>
+        protected void MeasureLetterSpacing()
+        {
+            if (!double.IsNaN(ActualLetterSpacing)) return;
+
+            _actualLetterSpacing = LetterSpacing == CssConstants.Normal
+                ? 0
+                : CssValueParser.ParseLength(LetterSpacing, 1, this);
         }
 
         /// <summary>
@@ -1452,6 +1484,8 @@ namespace PeachPDF.Html.Core.Dom
             ListStylePosition = p.ListStylePosition;
             ListStyleType = p.ListStyleType;
             LineHeight = p.LineHeight;
+            _wordSpacing = p._wordSpacing;
+            _letterSpacing = p._letterSpacing;
             WordBreak = p.WordBreak;
             Direction = p.Direction;
             BoxSizing = p.BoxSizing;
@@ -1512,7 +1546,6 @@ namespace PeachPDF.Html.Core.Dom
             Width = p.Width;
             MaxWidth = p.MaxWidth;
             MinWidth = p.MinWidth;
-            _wordSpacing = p._wordSpacing;
             // Not a real inherited property (never copied in the "always" section above, so
             // ordinary parent->child cascade seeding never touches it) - but every "everything"
             // call site here (CssProxyBox's repeated-header/footer clone, DomParser's inline/block

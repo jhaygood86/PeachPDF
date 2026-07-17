@@ -151,13 +151,18 @@ namespace PeachPDF.Adapters
             throw new NotSupportedException();
         }
 
-        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl)
+        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl, double letterSpacing = 0)
         {
             var xBrush = ((BrushAdapter)_adapter.GetSolidBrush(color)).Brush;
-
             var xPoint = Utils.Convert(point, PixelsPerPoint);
 
-            _g.DrawString(str, ((FontAdapter)font).Font, xBrush, xPoint.X, xPoint.Y, _stringFormat);
+            // Realized via the PDF `Tc` character-spacing operator (XGraphicsPdfRenderer/
+            // PdfGraphicsState) rather than drawing character-by-character - `Tc` applies additively to
+            // every glyph shown by the one text-showing operation below, so letter-spacing needs no
+            // extra draw calls and the string stays a single, contiguous, copy/paste- and
+            // tagged-PDF-friendly text run regardless of its value.
+            var xLetterSpacing = letterSpacing / PixelsPerPoint;
+            _g.DrawString(str, ((FontAdapter)font).Font, xBrush, xPoint.X, xPoint.Y, _stringFormat, xLetterSpacing);
         }
 
         public override RGraphicsPath GetGraphicsPath()

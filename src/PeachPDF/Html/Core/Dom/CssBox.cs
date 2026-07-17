@@ -1222,6 +1222,7 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             MeasureWordSpacing(g);
+            MeasureLetterSpacing();
 
             if (Words.Count > 0)
             {
@@ -1230,6 +1231,10 @@ namespace PeachPDF.Html.Core.Dom
                     if (boxWord.IsImage) continue;
                     var font = boxWord.FontSizeScale == 1.0 ? ActualFont : ActualSmallCapsFont;
                     boxWord.Width = boxWord.Text != "\n" ? g.MeasureString(boxWord.Text!, font).Width : 0;
+                    // Letter-spacing adds space between each pair of adjacent characters (N-1 gaps for
+                    // an N-character word), not trailing - matching CSS1/2.1 wording.
+                    if (boxWord.Text != "\n" && ActualLetterSpacing != 0)
+                        boxWord.Width += Math.Max(0, boxWord.Text!.Length - 1) * ActualLetterSpacing;
                     boxWord.Height = ActualFont.Height;
                 }
             }
@@ -2124,7 +2129,7 @@ namespace PeachPDF.Html.Core.Dom
                 var font = word.FontSizeScale == 1.0 ? ActualFont : ActualSmallCapsFont;
                 var baselineAdjust = word.FontSizeScale == 1.0 ? 0 : ActualFont.Ascent - font.Ascent;
                 var wordPoint = new RPoint(word.Left + offset.X, word.Top + offset.Y + baselineAdjust);
-                g.DrawString(word.Text!, font, ActualColor, wordPoint, new RSize(word.Width, word.Height), isRtl);
+                g.DrawString(word.Text!, font, ActualColor, wordPoint, new RSize(word.Width, word.Height), isRtl, ActualLetterSpacing);
             }
         }
 

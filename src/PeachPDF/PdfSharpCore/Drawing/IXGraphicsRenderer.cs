@@ -111,7 +111,17 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Draws a series of glyphs identified by the specified text and font.
         /// </summary>
-        void DrawString(string s, XFont font, XBrush brush, XRect layoutRectangle, XStringFormat format);
+        /// <param name="s">The text to draw.</param>
+        /// <param name="font">The font used to draw the text.</param>
+        /// <param name="brush">The brush used to fill the glyphs.</param>
+        /// <param name="layoutRectangle">The layout rectangle for the text.</param>
+        /// <param name="format">The alignment/formatting of the text.</param>
+        /// <param name="letterSpacing">
+        /// Extra space (in XGraphics units) to add between each pair of adjacent characters (CSS
+        /// `letter-spacing`), realized via the PDF `Tc` character-spacing operator - the whole string
+        /// is still shown with a single text-showing operation.
+        /// </param>
+        void DrawString(string s, XFont font, XBrush brush, XRect layoutRectangle, XStringFormat format, double letterSpacing = 0);
 
         /// <summary>
         /// Draws an image.
