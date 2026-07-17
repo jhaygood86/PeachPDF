@@ -459,10 +459,54 @@ namespace PeachPDF.Html.Core.Parse
                 box.TextDecorationColor = string.Empty;
             }
 
+            if (!box.FirstLineProcessed)
+            {
+                box.FirstLineProcessed = true;
+                ResolveFirstLineStyle(valueParser, box, cssData, media);
+            }
+
             foreach (var childBox in box.Boxes)
             {
                 CascadeApplyStyles(valueParser, childBox, cssData, media);
             }
+        }
+
+        /// <summary>
+        /// Resolves <see cref="CssBox.ResolvedFirstLineStyle"/> for <paramref name="box"/>: gathers
+        /// whichever stylesheet rules actually apply via a <c>*::first-line</c> selector (see
+        /// <see cref="CssData.GetFirstLineStyleRules"/> - deliberately NOT the same <c>uaRules</c>/
+        /// <c>authorRules</c> already computed above for <paramref name="box"/>'s own normal cascade,
+        /// since the ordinary matcher those rely on always excludes first-line-suffixed selectors, to
+        /// avoid ever applying first-line-only declarations directly to the real box), and - if any do -
+        /// applies just those declarations, in the same UA-normal / author-normal / author-important /
+        /// UA-important order <see cref="CascadeApplyStyles"/> itself uses, to a throwaway shadow
+        /// <see cref="CssBox"/> seeded from <paramref name="box"/>'s own already-resolved style via
+        /// <see cref="CssBox.InheritStyle(CssBox?, bool)"/>. Unlike the real cascade, <c>revert</c>/
+        /// <c>revert-layer</c> targets aren't tracked here (accepted as an unlikely-to-matter
+        /// simplification for what's already a narrow combination); everything else reuses the exact
+        /// same declaration-application machinery as the real cascade. No inline-style handling either -
+        /// inline style can never carry a <c>::first-line</c> suffix, so it plays no part here.
+        /// </summary>
+        private static void ResolveFirstLineStyle(CssValueParser valueParser, CssBox box, CssData cssData, string media)
+        {
+            var firstLineUaRules = cssData.GetFirstLineStyleRules(media, box, userAgentOnly: true).ToList();
+            var firstLineAuthorRules = cssData.GetFirstLineStyleRules(media, box, userAgentOnly: false).ToList();
+
+            if (firstLineUaRules.Count == 0 && firstLineAuthorRules.Count == 0) return;
+
+            var shadowBox = new CssBox(box, null);
+            box.Boxes.Remove(shadowBox); // this is a detached resolution helper, never a real tree member
+            shadowBox.InheritStyle(box);
+
+            var pendingVarProperties = new Dictionary<string, string>();
+            AssignCssBlocks(valueParser, shadowBox, firstLineUaRules, importantPass: false, null, null, pendingVarProperties);
+            AssignCssBlocks(valueParser, shadowBox, firstLineAuthorRules, importantPass: false, null, null, pendingVarProperties);
+            AssignCssBlocks(valueParser, shadowBox, firstLineAuthorRules, importantPass: true, null, null, pendingVarProperties);
+            AssignCssBlocks(valueParser, shadowBox, firstLineUaRules, importantPass: true, null, null, pendingVarProperties);
+            ResolveDeferredVarProperties(valueParser, shadowBox, pendingVarProperties);
+            CssUtils.ApplyCurrentColor(shadowBox, valueParser);
+
+            box.ResolvedFirstLineStyle = shadowBox;
         }
 
         /// <summary>

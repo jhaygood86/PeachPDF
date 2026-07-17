@@ -24,12 +24,14 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="text">the word chars </param>
         /// <param name="hasSpaceBefore">was there a whitespace before the word chars (before trim)</param>
         /// <param name="hasSpaceAfter">was there a whitespace after the word chars (before trim)</param>
-        public CssRectWord(CssBox owner, string text, bool hasSpaceBefore, bool hasSpaceAfter)
+        /// <param name="originalText">the pre-text-transform source text (see <see cref="CssRect.OriginalText"/>), if different from <paramref name="text"/></param>
+        public CssRectWord(CssBox owner, string text, bool hasSpaceBefore, bool hasSpaceAfter, string? originalText = null)
             : base(owner)
         {
             Text = text;
             HasSpaceBefore = hasSpaceBefore;
             HasSpaceAfter = hasSpaceAfter;
+            OriginalText = originalText ?? text;
         }
 
         /// <summary>

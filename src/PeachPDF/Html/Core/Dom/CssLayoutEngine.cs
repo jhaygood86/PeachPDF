@@ -741,6 +741,15 @@ namespace PeachPDF.Html.Core.Dom
                 b.RectanglesReset();
                 await b.MeasureWordsSize(g);
 
+                // Still on blockBox's first formatted line and a ::first-line rule applies to it -
+                // measure b's words using the first-line font/spacing instead of its own. If b's
+                // content turns out to straddle the line-1/2 boundary, the wrap-handling block below
+                // corrects the words that actually end up on line 2+ back to b's own normal style.
+                if (blockBox.ResolvedFirstLineStyle != null && coordinates.Line == blockBox.LineBoxes[0])
+                {
+                    b.ApplyFirstLineStyleOverride(g, blockBox.ResolvedFirstLineStyle);
+                }
+
                 coordinates.CurrentX += leftSpacing;
 
                 var lastLeftIntersectingFloatBox = DomUtils.GetLastLeftIntersectingFloatBox(box, coordinates);
@@ -804,6 +813,17 @@ namespace PeachPDF.Html.Core.Dom
 
                         if (!word.SuppressWrapBefore && (overflows || word.IsLineBreak || wrapNoWrapBox))
                         {
+                            // b's content straddles the line-1/2 boundary: its words were measured
+                            // using blockBox's first-line style (above), but word (and everything after
+                            // it in b) is wrapping off line 1 right now, so it/they are no longer
+                            // first-line content - correct their width back to b's own normal font/
+                            // spacing before placing them on the new line. Must be read before
+                            // coordinates.Line is reassigned just below.
+                            if (coordinates.Line == blockBox.LineBoxes[0] && word.FirstLineStyle != null)
+                            {
+                                b.RemeasureWordsTail(g, wordIndex);
+                            }
+
                             wrapNoWrapBox = false;
                             coordinates.CurrentX = lineStartX;
                             coordinates.CurrentY = coordinates.MaxBottom + lineSpacing;
@@ -1136,6 +1156,27 @@ namespace PeachPDF.Html.Core.Dom
                 baseline = Math.Max(baseline, lineBox.Rectangles[box].Top);
             }
 
+            // A ::first-line rule's vertical-align (if it sets one) applies to everything on the
+            // target's first formatted line, overriding each box's own value - ::first-line has no
+            // synthesized box of its own to carry a per-box override, and unlike font/color/spacing
+            // (resolved per-word in FlowBox/PaintWords), vertical-align is inherently a whole-line
+            // concept already (this method itself runs once per line), so the simplest, most direct
+            // application is a single line-wide override rather than per-word plumbing.
+            //
+            // ResolvedFirstLineStyle.VerticalAlign is NOT a reliable "did some ::first-line rule
+            // actually declare vertical-align" signal by itself: VerticalAlign is unconditionally
+            // copied by InheritStyle's "always" section, so the shadow box already has a non-null
+            // value (matching the block's own) even when no matched rule ever mentions vertical-align.
+            // Comparing against the block's own value is a cheap, good-enough proxy for "was this
+            // actually declared" (it only under-detects the harmless edge case of a rule re-declaring
+            // the same value the block already had).
+            var ownerBox = lineBox.OwnerBox;
+            var firstLineVerticalAlign = lineBox == ownerBox.LineBoxes.FirstOrDefault()
+                                         && ownerBox.ResolvedFirstLineStyle is { } firstLineStyle
+                                         && firstLineStyle.VerticalAlign != ownerBox.VerticalAlign
+                ? firstLineStyle.VerticalAlign
+                : null;
+
             var boxes = new List<CssBox>(lineBox.Rectangles.Keys);
 
             // Snapshot the line's own top/bottom extents up front, from the original (pre-alignment)
@@ -1154,9 +1195,10 @@ namespace PeachPDF.Html.Core.Dom
             foreach (var box in boxes)
             {
                 var rect = lineBox.Rectangles[box];
+                var effectiveVerticalAlign = firstLineVerticalAlign ?? box.VerticalAlign;
 
                 //Important notes on http://www.w3.org/TR/CSS21/tables.html#height-layout
-                switch (box.VerticalAlign)
+                switch (effectiveVerticalAlign)
                 {
                     case CssConstants.Sub:
                         lineBox.SetBaseLine(box, baseline + rect.Height * .5f);
@@ -1191,7 +1233,7 @@ namespace PeachPDF.Html.Core.Dom
                             styledBox = styledBox.ParentBox;
                         var referenceFont = (styledBox.ParentBox ?? styledBox).ActualFont;
                         var fontTop = baseline - referenceFont.Ascent;
-                        var target = box.VerticalAlign == CssConstants.TextTop
+                        var target = effectiveVerticalAlign == CssConstants.TextTop
                             ? fontTop
                             : fontTop + referenceFont.Height - rect.Height;
                         OffsetBoxWithinLine(lineBox, box, target - rect.Top);

@@ -2828,3 +2828,53 @@ Console.WriteLine("Saved test_first_letter.pdf");
 File.Delete("test_first_letter.html");
 File.WriteAllText("test_first_letter.html", firstLetterHtml);
 Console.WriteLine("Saved test_first_letter.html");
+
+// --- ::first-line showcase ---
+
+const string FirstLineCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 11pt Georgia, serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em; font-family: Arial, sans-serif }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; font-family: Arial, sans-serif }
+    p { margin: 0 0 0.8em; width: 350px }
+    .lede::first-line { font-weight: bold; color: darkslateblue; font-variant: small-caps }
+    .bigfont::first-line { font-size: 200% }
+    .allseven::first-line {
+      font-style: italic;
+      color: rgb(180,60,0);
+      background-color: rgb(255,240,200);
+      text-decoration: underline;
+      word-spacing: 6px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    </style>
+    """;
+
+var firstLineHtml = "<!DOCTYPE html><html><head>" + FirstLineCss + "</head><body>" +
+
+    "<h1>CSS2.1 ::first-line Test Page</h1>" +
+
+    "<h2>Non-width-affecting (font-weight/color/small-caps)</h2>" +
+    "<p class=\"lede\">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua, only the first line should look different from the rest of this paragraph.</p>" +
+
+    "<h2>Width-affecting (bigger first-line font-size, wrap point shifts)</h2>" +
+    "<p class=\"bigfont\">Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat, and this line wraps once the bigger first-line font runs out of room.</p>" +
+
+    "<h2>All 7 supported properties at once</h2>" +
+    "<p class=\"allseven\">Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur, demonstrating font-style, color, background, decoration, spacing, and text-transform together on line one only.</p>" +
+
+    "</body></html>";
+
+var firstLineStream = new MemoryStream();
+var firstLineDocument = await generator.GeneratePdf(firstLineHtml, pdfConfig);
+firstLineDocument.Save(firstLineStream);
+
+File.Delete("test_first_line.pdf");
+File.WriteAllBytes("test_first_line.pdf", firstLineStream.ToArray());
+Console.WriteLine("Saved test_first_line.pdf");
+
+File.Delete("test_first_line.html");
+File.WriteAllText("test_first_line.html", firstLineHtml);
+Console.WriteLine("Saved test_first_line.html");

@@ -434,7 +434,7 @@ CSS comments (`/* ... */`) are supported anywhere in a stylesheet, including bet
 
 ### Pseudo-elements
 
-`::before`, `::after`, `::marker`, and `::first-letter` are supported. All other pseudo-elements are parsed but have no effect.
+`::before`, `::after`, `::marker`, `::first-letter`, and `::first-line` are supported. All other pseudo-elements are parsed but have no effect.
 
 | Pseudo-element | Notes |
 |----------------|-------|
@@ -442,6 +442,7 @@ CSS comments (`/* ... */`) are supported anywhere in a stylesheet, including bet
 | `::after` | Full support; use with the `content` property |
 | `::marker` | Full support for every property the spec allows on markers — see below |
 | `::first-letter` | Full support — see below |
+| `::first-line` | Full support for every property CSS2.1 allows — see below |
 | All others | Parsed but ignored |
 
 Both the single-colon legacy syntax (`:before`, `:after`) and the modern double-colon syntax (`::before`, `::after`) are accepted. `::marker` has no legacy single-colon form, matching the spec.
@@ -467,6 +468,17 @@ ol.chapters > li::marker { font-size: 1.5em; font-weight: bold; }
 /* Classic drop cap */
 p.intro::first-letter { font-size: 300%; float: left; color: crimson; }
 ```
+
+**`::first-line`** styles whichever content ends up on a block's first formatted line — no box is synthesized (unlike `::before`/`::after`/`::first-letter`), since CSS2.1 restricts it to properties with no layout/box-model effect: `color`, `background` (solid `background-color` only — see note below), `text-decoration`, and the font-metric/spacing set `font-*`, `word-spacing`, `letter-spacing`, `vertical-align`, `text-transform`. Any other property set via `::first-line` (e.g. `margin`, `border`) has no effect, per spec.
+
+Width-affecting properties (`font-size`, `word-spacing`, `letter-spacing`) are fully supported even when a single inline element's content straddles the boundary between the first and second line — the words that actually land on line 1 use the first-line styling and the words that overflow to line 2 correctly revert to the element's own normal styling, rather than one or the other leaking across the boundary.
+
+```css
+/* Small-caps drop-in lede, common in print typesetting */
+p.lede::first-line { font-weight: bold; color: darkslateblue; font-variant: small-caps; }
+```
+
+Known narrowing: a `background-image` layer (as opposed to a solid `background-color`) set via `::first-line` is not first-line-aware and paints using the element's own normal background instead.
 
 ### Pseudo-classes
 

@@ -276,7 +276,20 @@ namespace PeachPDF.Html.Core
         internal IEnumerable<IStyleRule> GetAuthorStyleRules(string media, CssBox box) =>
             GetStyleRulesByOrigin(media, box, userAgentOnly: false);
 
-        private IEnumerable<IStyleRule> GetStyleRulesByOrigin(string media, CssBox box, bool? userAgentOnly)
+        /// <summary>
+        /// Same candidate-gathering (tag/class/id/universal index buckets) as
+        /// <see cref="GetUserAgentStyleRules"/>/<see cref="GetAuthorStyleRules"/>, but matched via
+        /// <see cref="MatchesAsFirstLineSelector"/> instead of the ordinary <see cref="DoesSelectorMatch(ISelector, CssBox?)"/>.
+        /// Needed because the ordinary matcher deliberately returns false for a real (non-pseudo-element)
+        /// box against any `*::first-line` selector - unlike `::before`/`::after`/`::marker`/
+        /// `::first-letter`, first-line has no synthesized box of its own for a later, separate cascade
+        /// pass to re-match against, so this is the only way its declarations are ever gathered at all.
+        /// See <c>DomParser.ResolveFirstLineStyle</c>, its only caller.
+        /// </summary>
+        internal IEnumerable<IStyleRule> GetFirstLineStyleRules(string media, CssBox box, bool userAgentOnly) =>
+            GetStyleRulesByOrigin(media, box, userAgentOnly, firstLineOnly: true);
+
+        private IEnumerable<IStyleRule> GetStyleRulesByOrigin(string media, CssBox box, bool? userAgentOnly, bool firstLineOnly = false)
         {
             EnsureIndex();
 
@@ -290,7 +303,10 @@ namespace PeachPDF.Html.Core
             {
                 if (userAgentOnly.HasValue && indexed.IsUserAgent != userAgentOnly.Value) return;
                 if (!EnclosingMediaMatches(indexed.EnclosingMedia, media)) return;
-                if (!DoesSelectorMatch(indexed.Rule.Selector, box)) return;
+                var isMatch = firstLineOnly
+                    ? MatchesAsFirstLineSelector(indexed.Rule.Selector, box!)
+                    : DoesSelectorMatch(indexed.Rule.Selector, box);
+                if (!isMatch) return;
                 seen ??= [];
                 if (!seen.Add(indexed.Rule)) return;
                 matched.Add(indexed);
@@ -332,8 +348,14 @@ namespace PeachPDF.Html.Core
             // Stable sort by specificity, tie-broken by DocumentOrder (true source order, including
             // across the plain-rule/@media boundary, assigned once up front by IndexRules) - equal-
             // specificity rules keep true document order for correct source-order tiebreaking.
+            // GetMatchedSpecificity's own ListSelector-alternative resolution calls the ordinary
+            // DoesSelectorMatch, which (like the main Collect filter above) can't correctly identify
+            // which alternative of a mixed list actually matched via ::first-line - firstLineOnly uses
+            // the selector's own overall specificity instead, a documented simplification for the rare
+            // case of multiple ::first-line rules of equal origin/importance whose relative order
+            // depends on a mixed-list specificity nuance.
             return matched
-                .OrderBy(indexed => GetMatchedSpecificity(indexed.Rule.Selector, box))
+                .OrderBy(indexed => firstLineOnly ? indexed.Rule.Selector.Specificity : GetMatchedSpecificity(indexed.Rule.Selector, box))
                 .ThenBy(indexed => indexed.DocumentOrder)
                 .Select(indexed => indexed.Rule);
         }
@@ -397,6 +419,58 @@ namespace PeachPDF.Html.Core
         {
             return listSelector.Any(selector => DoesSelectorMatch(selector, box));
         }
+
+        /// <summary>
+        /// Pure (non-mutating) check: does an alternative within <paramref name="selector"/> whose
+        /// subject is a <c>::first-line</c> pseudo-element match <paramref name="box"/> on its
+        /// non-pseudo-element part? Used by <c>DomParser</c> to gather exactly the declarations that
+        /// apply to <c>box::first-line</c> - deliberately does NOT dispatch through the ordinary
+        /// <see cref="DoesSelectorMatch(CompoundSelector, CssBox?)"/>/
+        /// <see cref="DoesSelectorMatch(ComplexSelector, CssBox?)"/> entry points, since those
+        /// synthesize <c>::before</c>/<c>::after</c>/<c>::marker</c> boxes as a side effect when a
+        /// compound selector's subject ends in one of those (different) pseudo-elements - this method
+        /// must never trigger that, so it re-derives the "match ignoring the trailing pseudo-element"
+        /// check itself instead of calling the stateful compound matcher.
+        /// </summary>
+        /// <remarks>
+        /// Ancestor-combinator selectors (e.g. <c>article p::first-line</c>) are matched more loosely
+        /// here than a dedicated matcher would: for a <see cref="ComplexSelector"/> subject, this
+        /// trusts that the rule already appears in the caller's pre-matched rule list (from
+        /// <see cref="GetUserAgentStyleRules"/>/<see cref="GetAuthorStyleRules"/>) rather than
+        /// re-verifying the ancestor chain itself, and does not special-case a <see cref="ListSelector"/>
+        /// alternative whose *other* (non-first-line) members matched a different element than
+        /// <paramref name="box"/>. Both are accepted, narrow simplifications for what is already an
+        /// uncommon combination (::first-line qualified by an ancestor combinator, or mixed into a
+        /// comma-list alongside unrelated selectors) - a plain <c>selector::first-line</c> or
+        /// <c>selector1, selector2::first-line</c> (the overwhelming majority of real usage) is matched
+        /// with full precision via the <see cref="CompoundSelector"/> case below.
+        /// </remarks>
+        internal static bool MatchesAsFirstLineSelector(ISelector selector, CssBox box)
+        {
+            switch (selector)
+            {
+                case ListSelector list:
+                    return list.Any(s => MatchesAsFirstLineSelector(s, box));
+
+                case ComplexSelector complex:
+                    var lastSegmentSelector = complex.LastOrDefault().Selector;
+                    return lastSegmentSelector is not null && HasFirstLineSubject(lastSegmentSelector);
+
+                case CompoundSelector compound:
+                    return HasFirstLineSubject(compound) &&
+                           compound.Where(x => x is not PseudoElementSelector).All(s => DoesSelectorMatch(s, box));
+
+                default:
+                    return false;
+            }
+        }
+
+        private static bool HasFirstLineSubject(ISelector selector) => selector switch
+        {
+            CompoundSelector compound => compound.LastOrDefault() is PseudoElementSelector { Name: CssConstants.FirstLine },
+            PseudoElementSelector pseudo => pseudo.Name == CssConstants.FirstLine,
+            _ => false
+        };
 
         private static bool DoesSelectorMatch(CompoundSelector compoundSelector, CssBox? box)
         {
