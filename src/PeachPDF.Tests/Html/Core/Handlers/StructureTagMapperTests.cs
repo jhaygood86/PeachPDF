@@ -94,18 +94,19 @@ namespace PeachPDF.Tests.Html.Core.Handlers
         }
 
         [Fact]
-        public void Classify_BareAnchorWithNoHrefIdOrName_FallsBackToLinkViaIsClickable()
+        public void Classify_BareAnchorWithNoHref_FallsBackToDisplayBasedType()
         {
             // a[href] { -peachpdf-pdf-tag-type: Link } in the default stylesheet only fires for
-            // an <a> with an href - a bare <a> (no href, no id, no name) never matches that rule,
-            // stays at PdfTagType "auto", and falls through to the auto-resolution's IsClickable
-            // check instead (CssBox.IsClickable is true for exactly this shape of <a>).
+            // an <a> with an href - a bare <a> (no href) never matches that rule, stays at
+            // PdfTagType "auto", and CssBox.IsClickable (which requires an href per WHATWG - an
+            // element without one isn't a hyperlink regardless of id/name) is false for it too, so
+            // it falls through to the plain display-based fallback like any other inline element.
             var box = new CssBox(null, new HtmlTag("a", false)) { PdfTagType = CssConstants.Auto };
 
             var classification = StructureTagMapper.Classify(box);
 
             Assert.Equal(StructureTagKind.Grouping, classification.Kind);
-            Assert.Equal("Link", classification.StructureType);
+            Assert.Equal("Span", classification.StructureType);
         }
 
         [Theory]

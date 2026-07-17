@@ -175,7 +175,100 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         public bool IsMarkerPseudoElement { get; set; }
 
-        public bool IsPseudoElement => IsBeforePseudoElement || IsAfterPseudoElement || IsMarkerPseudoElement;
+        /// <summary>
+        /// Is this box a synthesized <c>::first-letter</c> pseudo-element - unlike
+        /// <see cref="IsBeforePseudoElement"/>/<see cref="IsAfterPseudoElement"/>/
+        /// <see cref="IsMarkerPseudoElement"/> (all inserted as a new child of the matched element
+        /// itself, since their content is author-declared), this box replaces a real descendant text
+        /// box possibly several inline levels below the matched element (see
+        /// <see cref="FirstLetterOriginatingBox"/>) - see <c>CssData.DoesSelectorMatch</c>'s
+        /// <c>CssConstants.FirstLetter</c> case for the split logic.
+        /// </summary>
+        public bool IsFirstLetterPseudoElement { get; set; }
+
+        /// <summary>
+        /// For a synthesized <see cref="IsFirstLetterPseudoElement"/> box, the real element <c>E</c>
+        /// that <c>E::first-letter</c> matched - used only for selector re-matching (see
+        /// <c>CssData.DoesSelectorMatch</c>'s <c>referenceBox</c> logic), so a rule like
+        /// <c>p::first-letter</c> re-matches against the real <c>&lt;p&gt;</c>, not this box's
+        /// structural <see cref="ParentBox"/> (which may be a nested inline element,
+        /// e.g. <c>&lt;b&gt;</c>, several levels below <c>E</c>). <see cref="ParentBox"/>
+        /// itself deliberately stays the real structural parent so ordinary style inheritance (e.g.
+        /// that nested <c>&lt;b&gt;</c>'s bold weight) still applies correctly to this box.
+        /// </summary>
+        public CssBox? FirstLetterOriginatingBox { get; set; }
+
+        /// <summary>
+        /// Idempotency guard set on the real matched element <c>E</c> (not the split box, since the
+        /// split point may be several levels below <c>E</c> and isn't necessarily among its direct
+        /// children) once <c>::first-letter</c> synthesis has been attempted for it.
+        /// </summary>
+        public bool FirstLetterProcessed { get; set; }
+
+        /// <summary>
+        /// Set during <see cref="CssData.DoesSelectorMatch(CSS.CompoundSelector, CssBox?)"/> when some
+        /// rule's <c>*::first-letter</c> selector matches this box. The actual DFS-and-split (see
+        /// <c>DomParser.ApplyFirstLetterPseudoElements</c>) is deliberately deferred to a separate
+        /// pass run after the whole document's cascade completes, rather than performed immediately
+        /// here like <see cref="IsBeforePseudoElement"/>/<see cref="IsAfterPseudoElement"/>/
+        /// <see cref="IsMarkerPseudoElement"/> are - finding the right descendant to split needs to
+        /// know which descendants are block-level, and <c>Display</c> isn't reliably resolved for any
+        /// of this box's descendants until their own cascade pass has run (this box's own cascade
+        /// pass, where selector matching happens, completes *before* recursing into children).
+        /// </summary>
+        internal bool MatchesFirstLetterSelector { get; set; }
+
+        /// <summary>
+        /// When non-null, this box establishes an inline formatting context (e.g. a <c>&lt;p&gt;</c>)
+        /// whose <c>::first-line</c> is styled by some rule - a fully-cascaded, detached shadow
+        /// <see cref="CssBox"/> (never attached to the real tree) holding the resolved subset of
+        /// properties CSS2.1 allows on <c>::first-line</c> (font, color, background,
+        /// text-decoration, word/letter-spacing, vertical-align). Unlike <c>::before</c>/<c>::after</c>/
+        /// <c>::marker</c>/<c>::first-letter</c>, no box is spliced into the real tree - "the first
+        /// formatted line" is a layout-time-only concept (which words end up on it depends on line-
+        /// wrapping, not known until <see cref="CssLayoutEngine.FlowBox"/> runs), so this is consulted
+        /// there and at paint time per-word (see <see cref="CssRect.FirstLineStyle"/>) instead. Resolved
+        /// once, in <c>DomParser.CascadeApplyStyles</c>, right after this box's own normal cascade
+        /// completes (its own properties are needed as this shadow box's inherited baseline).
+        /// </summary>
+        internal CssBox? ResolvedFirstLineStyle { get; set; }
+
+        /// <summary>
+        /// Idempotency guard for <see cref="ResolvedFirstLineStyle"/>'s resolution, since a box's own
+        /// cascade phase (where it's set) can run more than once is never expected in practice, but
+        /// this mirrors <see cref="FirstLetterProcessed"/>'s defensive convention.
+        /// </summary>
+        internal bool FirstLineProcessed { get; set; }
+
+        /// <summary>
+        /// Set (on the real <c>&lt;body&gt;</c> or <c>&lt;html&gt;</c> box, whichever was chosen) by
+        /// <c>PdfGenerator.ResolveCanvasBackground</c> per CSS2.1 §14.2: that box's background has been
+        /// "promoted" to fill the whole page canvas on every page (see
+        /// <see cref="PaintCanvasBackground"/>), so this box's own normal <see cref="PaintBackground"/>
+        /// call must no-op instead of painting the same background a second time at its own (possibly
+        /// much smaller than the page) laid-out rect.
+        /// </summary>
+        internal bool SuppressOwnBackgroundPaint { get; set; }
+
+        /// <summary>
+        /// Paints this box's own background (see <see cref="PaintBackground"/>) at <paramref name="rect"/>
+        /// instead of this box's own laid-out rect - used by <c>PdfGenerator.AddPdfPages</c> to fill the
+        /// whole page canvas with the <c>&lt;body&gt;</c>/<c>&lt;html&gt;</c> background per CSS2.1 §14.2,
+        /// reusing the exact same background-image/-position/-size/-repeat/-origin/-clip resolution the
+        /// box's own normal paint path uses so canvas-fill behavior matches per-box behavior exactly.
+        /// </summary>
+        internal void PaintCanvasBackground(RGraphics g, RRect rect) => PaintBackground(g, rect, isFirst: true);
+
+        /// <summary>
+        /// Whether this box declares any background of its own (a visible <c>background-color</c> and/or
+        /// at least one <c>background-image</c>/gradient layer) - used by
+        /// <c>PdfGenerator.ResolveCanvasBackground</c> to decide, per CSS2.1 §14.2, whether
+        /// <c>&lt;body&gt;</c>'s own background should be promoted to fill the page canvas, falling back
+        /// to <c>&lt;html&gt;</c>'s only when body has none.
+        /// </summary>
+        internal bool HasOwnBackground => RenderUtils.IsColorVisible(ActualBackgroundColor) || BackgroundImages is { Count: > 0 };
+
+        public bool IsPseudoElement => IsBeforePseudoElement || IsAfterPseudoElement || IsMarkerPseudoElement || IsFirstLetterPseudoElement;
 
         /// <summary>
         /// is the box "Display" is "Inline", is this is an inline box and not block.
@@ -192,9 +285,14 @@ namespace PeachPDF.Html.Core.Dom
         public bool IsOutOfFlow => IsFloated || Position is CssConstants.Absolute or CssConstants.Fixed;
 
         /// <summary>
-        /// Is the css box clickable (by default only "a" element is clickable)
+        /// Is the css box clickable (by default only an "a" element with an href is clickable) - per
+        /// WHATWG, an element is a hyperlink purely by virtue of being an &lt;a&gt; with an href
+        /// attribute; a coexisting id/name (e.g. `&lt;a id="toc-1" href="#ch1"&gt;`, both a link source
+        /// and a fragment target - a common real-world pattern) has no bearing on that and must not
+        /// exclude it, since this also drives real PDF link-annotation generation
+        /// (<see cref="DomUtils.GetAllLinkBoxes"/>) and tagged-PDF /Link mapping, not just :link matching.
         /// </summary>
-        public virtual bool IsClickable => HtmlTag is { Name: HtmlConstants.A } && !HtmlTag.HasAttribute("id") && !HtmlTag.HasAttribute("name");
+        public virtual bool IsClickable => HtmlTag is { Name: HtmlConstants.A } && HtmlTag.HasAttribute("href");
 
         /// <summary>
         /// Gets a value indicating whether this instance or one of its parents has Position = fixed.
@@ -710,17 +808,27 @@ namespace PeachPDF.Html.Core.Dom
                             var hasSpaceBefore = !preserveSpaces && (startIdx > 0 && Words.Count == 0 && char.IsWhiteSpace(text[startIdx - 1]));
                             var hasSpaceAfter = !preserveSpaces && (endIdx < text.Length && char.IsWhiteSpace(text[endIdx]));
                             var rawWord = text.Substring(startIdx, endIdx - startIdx);
+                            // TextTransform is applied character-by-character and is always
+                            // length-preserving (see ApplyTextTransform), so the same start/end indices
+                            // slice out the pre-transform equivalent of rawWord from the original text -
+                            // kept alongside so a ::first-line rule's own text-transform (if different
+                            // from this box's) can be re-derived later without the information a transform
+                            // like uppercase would otherwise destroy. See CssRect.OriginalText.
+                            var rawOriginalWord = _text!.Substring(startIdx, endIdx - startIdx);
 
                             List<int>? hyphenationCandidates = null;
                             string cleanWord;
+                            string cleanOriginalWord;
 
                             if (honorSoftHyphen && rawWord.IndexOf('­') >= 0)
                             {
                                 (cleanWord, hyphenationCandidates) = StripSoftHyphens(rawWord);
+                                (cleanOriginalWord, _) = StripSoftHyphens(rawOriginalWord);
                             }
                             else
                             {
                                 cleanWord = HtmlUtils.DecodeHtml(rawWord);
+                                cleanOriginalWord = HtmlUtils.DecodeHtml(rawOriginalWord);
 
                                 if (Hyphens == CssConstants.Auto)
                                 {
@@ -734,7 +842,7 @@ namespace PeachPDF.Html.Core.Dom
                                 }
                             }
 
-                            AddWord(cleanWord, hasSpaceBefore, hasSpaceAfter, hyphenationCandidates);
+                            AddWord(cleanWord, hasSpaceBefore, hasSpaceAfter, hyphenationCandidates, cleanOriginalWord);
                         }
                     }
 
@@ -764,11 +872,19 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="CssRect.HyphenationCandidates"/>) is only attached when the word is kept whole —
         /// small-caps splitting and hyphenation are a separate, non-composing pair of features.
         /// </summary>
-        private void AddWord(string text, bool hasSpaceBefore, bool hasSpaceAfter, List<int>? hyphenationCandidates = null)
+        private void AddWord(string text, bool hasSpaceBefore, bool hasSpaceAfter, List<int>? hyphenationCandidates = null, string? originalText = null)
         {
+            // The small-caps split path below re-slices by run position, which only lines up against
+            // originalText when the two strings are the same length (true for the vast majority of real
+            // content - see the ParseToWords call site comment - but not guaranteed if HTML-entity
+            // decoding happened to produce a different length for the two). Fall back to treating text
+            // itself as its own original in that rare case rather than slicing out of bounds.
+            if (originalText is null || originalText.Length != text.Length)
+                originalText = text;
+
             if (FontVariant != CssConstants.SmallCaps || !ContainsLowerLetter(text))
             {
-                Words.Add(new CssRectWord(this, text, hasSpaceBefore, hasSpaceAfter)
+                Words.Add(new CssRectWord(this, text, hasSpaceBefore, hasSpaceAfter, originalText)
                 {
                     HyphenationCandidates = hyphenationCandidates
                 });
@@ -793,12 +909,14 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var (start, length, isLower) = runs[i];
                 var runText = text.Substring(start, length);
+                var runOriginalText = originalText.Substring(start, length);
 
                 Words.Add(new CssRectWord(
                     this,
                     isLower ? runText.ToUpperInvariant() : runText,
                     hasSpaceBefore: i == 0 && hasSpaceBefore,
-                    hasSpaceAfter: i == runs.Count - 1 && hasSpaceAfter)
+                    hasSpaceAfter: i == runs.Count - 1 && hasSpaceAfter,
+                    runOriginalText)
                 {
                     FontSizeScale = isLower ? CssBoxProperties.SmallCapsFontScale : 1.0,
                     SuppressWrapBefore = i > 0
@@ -1222,6 +1340,7 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             MeasureWordSpacing(g);
+            MeasureLetterSpacing();
 
             if (Words.Count > 0)
             {
@@ -1230,11 +1349,85 @@ namespace PeachPDF.Html.Core.Dom
                     if (boxWord.IsImage) continue;
                     var font = boxWord.FontSizeScale == 1.0 ? ActualFont : ActualSmallCapsFont;
                     boxWord.Width = boxWord.Text != "\n" ? g.MeasureString(boxWord.Text!, font).Width : 0;
+                    // Letter-spacing adds space between each pair of adjacent characters (N-1 gaps for
+                    // an N-character word), not trailing - matching CSS1/2.1 wording.
+                    if (boxWord.Text != "\n" && ActualLetterSpacing != 0)
+                        boxWord.Width += Math.Max(0, boxWord.Text!.Length - 1) * ActualLetterSpacing;
                     boxWord.Height = ActualFont.Height;
                 }
             }
 
             _wordsSizeMeasured = true;
+        }
+
+        /// <summary>
+        /// Re-measures every word in this box using <paramref name="firstLineStyle"/>'s font/letter-
+        /// spacing instead of this box's own, and marks each with <see cref="CssRect.FirstLineStyle"/>
+        /// so paint time (and <see cref="RemeasureWordsTail"/>, if this box's content later turns out
+        /// to straddle the line-1/2 boundary) can find their way back to it. Called from
+        /// <see cref="CssLayoutEngine.FlowBox"/> right after the ordinary (one-time, cached)
+        /// <see cref="MeasureWordsSize"/> pass, only while still on the target's first line - unlike
+        /// that method, this always re-runs (no "already measured" guard), since which words actually
+        /// end up using first-line style can change (see <see cref="RemeasureWordsTail"/>).
+        /// </summary>
+        internal void ApplyFirstLineStyleOverride(RGraphics g, CssBox firstLineStyle)
+        {
+            firstLineStyle.MeasureWordSpacing(g);
+            firstLineStyle.MeasureLetterSpacing();
+
+            foreach (var boxWord in Words)
+            {
+                if (boxWord.IsImage) continue;
+
+                boxWord.FirstLineStyle = firstLineStyle;
+
+                // A ::first-line rule's own text-transform (if it declares one different from this
+                // box's own) must be re-derived from OriginalText rather than Text - Text may already be
+                // case-transformed by this box's own TextTransform, which for a value like uppercase has
+                // irreversibly destroyed the casing information capitalize/lowercase would need.
+                boxWord.FirstLineText = firstLineStyle.TextTransform != TextTransform && boxWord.Text != "\n"
+                    ? ApplyTextTransform(boxWord.OriginalText ?? boxWord.Text!, firstLineStyle.TextTransform)
+                    : null;
+                var effectiveText = boxWord.FirstLineText ?? boxWord.Text;
+
+                var font = boxWord.FontSizeScale == 1.0 ? firstLineStyle.ActualFont : firstLineStyle.ActualSmallCapsFont;
+                boxWord.Width = effectiveText != "\n" ? g.MeasureString(effectiveText!, font).Width : 0;
+                if (effectiveText != "\n" && firstLineStyle.ActualLetterSpacing != 0)
+                    boxWord.Width += Math.Max(0, effectiveText!.Length - 1) * firstLineStyle.ActualLetterSpacing;
+                boxWord.Height = font.Height;
+            }
+        }
+
+        /// <summary>
+        /// Reverts words from <paramref name="fromWordIndex"/> onward back to this box's own (non-
+        /// first-line) font/letter-spacing, clearing their <see cref="CssRect.FirstLineStyle"/>. Called
+        /// by <see cref="CssLayoutEngine.FlowBox"/> at the exact moment a box's content is found to
+        /// straddle the line-1/2 boundary: words up to <paramref name="fromWordIndex"/> already
+        /// committed to line 1 (and genuinely render with first-line style - CSS2.1 first-line
+        /// applies to whatever ends up on the first formatted line, which these words did), but
+        /// <paramref name="fromWordIndex"/> onward are wrapping to a later line and are no longer
+        /// first-line content, so their width (measured using the first-line font/spacing, which may
+        /// differ from this box's own) needs correcting before line-2+ placement continues. This is
+        /// the piece that makes width-affecting ::first-line properties (font-size, letter-spacing,
+        /// word-spacing) fully correct even when a single inline element's content spans the boundary,
+        /// rather than only approximately so.
+        /// </summary>
+        internal void RemeasureWordsTail(RGraphics g, int fromWordIndex)
+        {
+            for (var i = fromWordIndex; i < Words.Count; i++)
+            {
+                var boxWord = Words[i];
+                if (boxWord.IsImage) continue;
+
+                boxWord.FirstLineStyle = null;
+                boxWord.FirstLineText = null;
+
+                var font = boxWord.FontSizeScale == 1.0 ? ActualFont : ActualSmallCapsFont;
+                boxWord.Width = boxWord.Text != "\n" ? g.MeasureString(boxWord.Text!, font).Width : 0;
+                if (boxWord.Text != "\n" && ActualLetterSpacing != 0)
+                    boxWord.Width += Math.Max(0, boxWord.Text!.Length - 1) * ActualLetterSpacing;
+                boxWord.Height = font.Height;
+            }
         }
 
         /// <summary>
@@ -1836,9 +2029,14 @@ namespace PeachPDF.Html.Core.Dom
 
             var clipped = RenderUtils.ClipGraphicsByOverflow(g, this);
 
-            var areas = Rectangles.Count == 0 ? new List<RRect>([Bounds]) : new List<RRect>(Rectangles.Values);
+            // Captured together (not as two separate Rectangles.Keys/.Values calls) so each rect's
+            // associated line box - needed to resolve first-line style per rect below - can never
+            // misalign with its rect by index.
+            var rectEntries = Rectangles.Count == 0
+                ? new (CssLineBox? Line, RRect Rect)[] { (null, Bounds) }
+                : Rectangles.Select(kv => (Line: (CssLineBox?)kv.Key, Rect: kv.Value)).ToArray();
             var clip = g.GetClip();
-            var rects = areas.ToArray();
+            var rects = rectEntries.Select(e => e.Rect).ToArray();
             var offset = RPoint.Empty;
 
             if (!IsFixed)
@@ -1853,7 +2051,11 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (!IsRectVisible(actualRect, clip)) continue;
 
-                PaintBackground(g, actualRect, i == 0);
+                // A box whose background was "promoted" to fill the whole page canvas (see
+                // PdfGenerator.ResolveCanvasBackground / PaintCanvasBackground) already had it painted
+                // for every page - skip this box's own normal paint pass so it isn't painted twice.
+                if (!SuppressOwnBackgroundPaint)
+                    PaintBackground(g, actualRect, i == 0, GetFirstLineStyleForRect(rectEntries[i].Line));
 
                 // For multi-page tables, draw the outer bottom border at the page-break Y on
                 // intermediate pages (instead of at actualRect.Bottom which is off-page).
@@ -1898,7 +2100,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (IsRectVisible(actualRect, clip))
                 {
-                    PaintDecoration(g, actualRect, i == 0, i == rects.Length - 1);
+                    PaintDecoration(g, actualRect, i == 0, i == rects.Length - 1, GetFirstLineStyleForRect(rectEntries[i].Line));
                 }
             }
 
@@ -1986,12 +2188,34 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Resolves the <c>::first-line</c> style (if any) that applies to a rectangle painted for
+        /// <paramref name="lineBox"/> - true exactly when the line's own owner (the block establishing
+        /// that inline formatting context - see <see cref="CssLineBox.OwnerBox"/>) has a resolved
+        /// first-line style and this is genuinely that owner's first line. Used to make
+        /// <see cref="PaintBackground"/>/<see cref="PaintDecoration"/> first-line-aware without either
+        /// method needing to know its own relationship to the block establishing its inline formatting
+        /// context - the line box already knows.
+        /// </summary>
+        private static CssBox? GetFirstLineStyleForRect(CssLineBox? lineBox) =>
+            lineBox is not null && lineBox.OwnerBox.ResolvedFirstLineStyle is not null && lineBox == lineBox.OwnerBox.LineBoxes.FirstOrDefault()
+                ? lineBox.OwnerBox.ResolvedFirstLineStyle
+                : null;
+
+        /// <summary>
         /// Paints the background of the box
         /// </summary>
         /// <param name="g">the device to draw into</param>
         /// <param name="rect">the bounding rectangle to draw in</param>
         /// <param name="isFirst">is it the first rectangle of the element</param>
-        protected void PaintBackground(RGraphics g, RRect rect, bool isFirst)
+        /// <param name="firstLineStyle">
+        /// When set, this rect is on the target's first formatted line under a <c>::first-line</c>
+        /// rule - its resolved <c>background-color</c> is used instead of this box's own. Only
+        /// <c>background-color</c> is first-line-aware, not <c>background-image</c>/-position/-size/
+        /// -repeat/-origin/-clip layers (a documented narrowing - see docs/html-css-support.md);
+        /// those, like border/padding/border-radius (genuine box-model properties CSS2.1 never allows
+        /// on <c>::first-line</c> at all), always come from this box's own resolved style.
+        /// </param>
+        protected void PaintBackground(RGraphics g, RRect rect, bool isFirst, CssBox? firstLineStyle = null)
         {
             if (rect is { Width: > 0, Height: > 0 })
             {
@@ -2016,8 +2240,9 @@ namespace PeachPDF.Html.Core.Dom
                 var originLayers = BackgroundLayerResolver.SplitLayers(BackgroundOrigin);
                 var clipLayers   = BackgroundLayerResolver.SplitLayers(BackgroundClip);
 
-                RBrush? solidBrush = RenderUtils.IsColorVisible(ActualBackgroundColor)
-                    ? g.GetSolidBrush(ActualBackgroundColor)
+                var actualBackgroundColor = firstLineStyle?.ActualBackgroundColor ?? ActualBackgroundColor;
+                RBrush? solidBrush = RenderUtils.IsColorVisible(actualBackgroundColor)
+                    ? g.GetSolidBrush(actualBackgroundColor)
                     : null;
 
                 // background-color is always the bottom-most layer (CSS Backgrounds 3 §3.6/§3.8) -
@@ -2116,15 +2341,22 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (clip == RRect.Empty) continue;
 
+                // A word on the target's first formatted line, under a ::first-line rule, uses that
+                // resolved shadow box's font/color/letter-spacing instead of this box's own - it was
+                // already measured against this same styleSource (see ApplyFirstLineStyleOverride), so
+                // word.Top/Height are already consistent with it.
+                var styleSource = word.FirstLineStyle ?? this;
+
                 // A synthesized small-caps run is drawn with a smaller font than the rest of its line
                 // (see ActualSmallCapsFont) — both are drawn top-anchored at the same word.Top (the
                 // shared line box's top), so without correction the smaller glyphs' baseline would sit
                 // higher than their full-size neighbors'. Shift down by the ascent difference so every
                 // fragment's baseline lines up regardless of its font size.
-                var font = word.FontSizeScale == 1.0 ? ActualFont : ActualSmallCapsFont;
-                var baselineAdjust = word.FontSizeScale == 1.0 ? 0 : ActualFont.Ascent - font.Ascent;
+                var font = word.FontSizeScale == 1.0 ? styleSource.ActualFont : styleSource.ActualSmallCapsFont;
+                var baselineAdjust = word.FontSizeScale == 1.0 ? 0 : styleSource.ActualFont.Ascent - font.Ascent;
                 var wordPoint = new RPoint(word.Left + offset.X, word.Top + offset.Y + baselineAdjust);
-                g.DrawString(word.Text!, font, ActualColor, wordPoint, new RSize(word.Width, word.Height), isRtl);
+                var text = word.FirstLineText ?? word.Text!;
+                g.DrawString(text, font, styleSource.ActualColor, wordPoint, new RSize(word.Width, word.Height), isRtl, styleSource.ActualLetterSpacing);
             }
         }
 
@@ -2135,13 +2367,19 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="rectangle"> </param>
         /// <param name="isFirst"> </param>
         /// <param name="isLast"> </param>
-        protected void PaintDecoration(RGraphics g, RRect rectangle, bool isFirst, bool isLast)
+        /// <param name="firstLineStyle">
+        /// When set, this rectangle is on the target's first formatted line under a <c>::first-line</c>
+        /// rule - its resolved text-decoration/color/font (for underline-offset) are used instead of
+        /// this box's own.
+        /// </param>
+        protected void PaintDecoration(RGraphics g, RRect rectangle, bool isFirst, bool isLast, CssBox? firstLineStyle = null)
         {
-            var textDecorationLine = TextDecorationLine;
-            var textDecorationStyle = TextDecorationStyle;
-            var textDecorationColor = TextDecorationColor;
+            var styleSource = firstLineStyle ?? this;
+            var textDecorationLine = styleSource.TextDecorationLine;
+            var textDecorationStyle = styleSource.TextDecorationStyle;
+            var textDecorationColor = styleSource.TextDecorationColor;
 
-            var textDecorationParts = TextDecoration?.Split(' ') ?? [];
+            var textDecorationParts = styleSource.TextDecoration?.Split(' ') ?? [];
 
 
             if (textDecorationParts.Length > 0)
@@ -2187,11 +2425,11 @@ namespace PeachPDF.Html.Core.Dom
                 textDecorationColor = string.Empty;
             }
 
-            var textDecorationActualColor = string.IsNullOrEmpty(textDecorationColor) ? ActualColor : HtmlContainer!.CssParser.ParseColor(textDecorationColor);
+            var textDecorationActualColor = string.IsNullOrEmpty(textDecorationColor) ? styleSource.ActualColor : HtmlContainer!.CssParser.ParseColor(textDecorationColor);
 
             double y = textDecorationLine switch
             {
-                CssConstants.Underline => Math.Round(rectangle.Top + ActualFont.UnderlineOffset),
+                CssConstants.Underline => Math.Round(rectangle.Top + styleSource.ActualFont.UnderlineOffset),
                 CssConstants.LineThrough => rectangle.Top + rectangle.Height / 2f,
                 CssConstants.Overline => rectangle.Top,
                 _ => 0f

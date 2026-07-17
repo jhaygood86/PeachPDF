@@ -303,7 +303,14 @@ namespace PeachPDF.Html.Adapters
         /// <param name="point">the location to start string draw (top-left)</param>
         /// <param name="size">used to know the size of the rendered text for transparent text support</param>
         /// <param name="rtl">is to render the string right-to-left (true - RTL, false - LTR)</param>
-        public abstract void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl);
+        /// <param name="letterSpacing">
+        /// extra space to add between each pair of adjacent characters (CSS <c>letter-spacing</c>),
+        /// in the same units as <paramref name="point"/>. 0 (the default/common case) must draw
+        /// <paramref name="str"/> as a single atomic string, identically to how this always worked
+        /// before this parameter existed - implementations should only fall back to a slower
+        /// per-character draw loop when this is non-zero.
+        /// </param>
+        public abstract void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl, double letterSpacing = 0);
 
         /// <summary>
         /// Draws a line connecting the two points specified by the coordinate pairs.

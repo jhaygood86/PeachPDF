@@ -118,6 +118,10 @@ namespace PeachPDF.Html.Core.Handlers
                     SetInOutsetRectanglePoints(border, box, rect, isLineStart, isLineEnd);
                     g.DrawPolygon(g.GetSolidBrush(color), _borderPts);
                 }
+                else if (style is CssConstants.Double or CssConstants.Groove or CssConstants.Ridge)
+                {
+                    DrawDoubleOrGrooveRidgeBorder(border, box, g, rect, style, color);
+                }
                 else
                 {
                     // solid/dotted/dashed border draw as simple line
@@ -186,6 +190,66 @@ namespace PeachPDF.Html.Core.Handlers
                     _borderPts[1] = new RPoint(r.Left + b.ActualBorderLeftWidth, r.Top + b.ActualBorderTopWidth);
                     _borderPts[2] = new RPoint(r.Left + b.ActualBorderLeftWidth, r.Bottom - b.ActualBorderBottomWidth);
                     _borderPts[3] = new RPoint(r.Left, r.Bottom);
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// Draws a "double", "groove", or "ridge" border as two solid stripes. A <see cref="RDashStyle"/>
+        /// pen can't represent two parallel strokes with a gap (double) or a two-tone bevel
+        /// (groove/ridge), so this paints the two stripes directly with their own pens instead of
+        /// going through <see cref="GetPen"/>.
+        /// </summary>
+        private static void DrawDoubleOrGrooveRidgeBorder(Border border, CssBox box, RGraphics g, RRect rect, string style, RColor color)
+        {
+            var width = GetWidth(border, box);
+
+            double outerWidth;
+            double innerWidth;
+            RColor outerColor;
+            RColor innerColor;
+
+            if (style == CssConstants.Double)
+            {
+                outerWidth = innerWidth = Math.Max(1, Math.Floor(width / 3));
+                outerColor = innerColor = color;
+            }
+            else
+            {
+                // groove looks carved in (dark outer stripe, light inner stripe); ridge is its
+                // mirror image (light outer, dark inner). CSS2.1 leaves the exact shading direction
+                // UA-defined - the only spec-relevant property is that groove/ridge are visually
+                // distinct from each other and from solid/double/inset/outset.
+                outerWidth = innerWidth = width / 2;
+                outerColor = style == CssConstants.Groove ? Darken(color) : color;
+                innerColor = style == CssConstants.Groove ? color : Darken(color);
+            }
+
+            var outerPen = g.GetPen(outerColor);
+            outerPen.Width = outerWidth;
+            outerPen.DashStyle = RDashStyle.Solid;
+
+            var innerPen = g.GetPen(innerColor);
+            innerPen.Width = innerWidth;
+            innerPen.DashStyle = RDashStyle.Solid;
+
+            switch (border)
+            {
+                case Border.Top:
+                    g.DrawLine(outerPen, rect.Left, rect.Top + outerWidth / 2, rect.Right, rect.Top + outerWidth / 2);
+                    g.DrawLine(innerPen, rect.Left, rect.Top + width - innerWidth / 2, rect.Right, rect.Top + width - innerWidth / 2);
+                    break;
+                case Border.Left:
+                    g.DrawLine(outerPen, rect.Left + outerWidth / 2, rect.Top, rect.Left + outerWidth / 2, rect.Bottom);
+                    g.DrawLine(innerPen, rect.Left + width - innerWidth / 2, rect.Top, rect.Left + width - innerWidth / 2, rect.Bottom);
+                    break;
+                case Border.Bottom:
+                    g.DrawLine(outerPen, rect.Left, rect.Bottom - outerWidth / 2, rect.Right, rect.Bottom - outerWidth / 2);
+                    g.DrawLine(innerPen, rect.Left, rect.Bottom - width + innerWidth / 2, rect.Right, rect.Bottom - width + innerWidth / 2);
+                    break;
+                case Border.Right:
+                    g.DrawLine(outerPen, rect.Right - outerWidth / 2, rect.Top, rect.Right - outerWidth / 2, rect.Bottom);
+                    g.DrawLine(innerPen, rect.Right - width + innerWidth / 2, rect.Top, rect.Right - width + innerWidth / 2, rect.Bottom);
                     break;
             }
         }
@@ -277,7 +341,12 @@ namespace PeachPDF.Html.Core.Handlers
                 "solid" => RDashStyle.Solid,
                 "dotted" => RDashStyle.Dot,
                 "dashed" => RDashStyle.Dash,
-                _ => throw new ArgumentOutOfRangeException(nameof(style))
+                // double/groove/ridge are handled by DrawDoubleOrGrooveRidgeBorder and never reach
+                // here for non-rounded borders; a rounded border with one of these styles falls back
+                // to a single solid-colored stroke here (GetRoundedBorderPath has no double/groove/
+                // ridge concept - border-radius is CSS2/3 territory, out of scope for CSS1
+                // compliance). Any other unexpected style also degrades to solid rather than crashing.
+                _ => RDashStyle.Solid
             };
 
             return p;

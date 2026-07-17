@@ -352,7 +352,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         int _realizedRenderingMode;  // Reference: TABLE 5.2  Text state operators / Page 398
         double _realizedCharSpace;  // Reference: TABLE 5.2  Text state operators / Page 398
 
-        public void RealizeFont(XFont font, XBrush brush, int renderingMode)
+        public void RealizeFont(XFont font, XBrush brush, int renderingMode, double letterSpacing = 0)
         {
             const string format = Config.SignificantFigures3;
 
@@ -366,18 +366,22 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 _realizedRenderingMode = renderingMode;
             }
 
-            // Realize character spacing.
+            // Realize character spacing. CSS `letter-spacing` maps directly onto the PDF `Tc` operator
+            // (TABLE 5.2, Page 398) - it applies additively to every glyph shown by a subsequent Tj/TJ,
+            // so a single text-showing operation still suffices; no need to draw character-by-character.
             if (_realizedRenderingMode == 0)
             {
-                if (_realizedCharSpace != 0)
+                if (_realizedCharSpace != letterSpacing)
                 {
-                    _renderer.Append("0 Tc\n");
-                    _realizedCharSpace = 0;
+                    _renderer.AppendFormatDouble("{0:" + format + "} Tc\n", letterSpacing);
+                    _realizedCharSpace = letterSpacing;
                 }
             }
             else  // _realizedRenderingMode is 2.
             {
-                double charSpace = font.Size * Const.BoldEmphasis;
+                // Bold-emphasis simulation already uses Tc for its own purpose (thickening strokes) -
+                // letter-spacing adds on top of that, rather than overriding it.
+                double charSpace = font.Size * Const.BoldEmphasis + letterSpacing;
                 if (_realizedCharSpace != charSpace)
                 {
                     _renderer.AppendFormatDouble("{0:" + format + "} Tc\n", charSpace);

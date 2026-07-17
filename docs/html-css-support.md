@@ -79,7 +79,7 @@ PeachPDF renders a subset of the HTML and CSS specifications. This page document
 
 | Element | MDN Reference | Notes |
 |---------|--------------|-------|
-| `a` | [a](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/a) | `href` links are embedded as clickable PDF hyperlinks. Anchor links (`href="#id"`) for in-document navigation are also supported. Elements with `id` or `name` attributes act as anchor targets only |
+| `a` | [a](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/a) | `href` links are embedded as clickable PDF hyperlinks, regardless of whether the `<a>` also carries an `id`/`name` (both a link source and a fragment target, e.g. `<a id="toc-1" href="#ch1">`, is a common and fully-supported pattern). Anchor links (`href="#id"`) for in-document navigation are also supported. Any element (not just `<a>`) with an `id` or `name` attribute can serve as a fragment-link target |
 | `b` | [b](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/b) | Full support |
 | `bdo` | [bdo](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/bdo) | Full support |
 | `big` | [big](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/big) | Deprecated element; rendered with a larger font size |
@@ -193,6 +193,8 @@ Form elements are rendered as static boxes. There is no interactive behavior —
 
 Percentages are relative to the border-box width (horizontal radius) and height (vertical radius). Overlapping adjacent radii are automatically reduced proportionally per the CSS spec.
 
+Known limitation: `double`/`groove`/`ridge` combined with `border-radius` on the same edge falls back to a single solid-colored stroke at the full border width — full rounded rendering of these three styles (two concentric arcs, or a two-tone beveled arc) is out of scope for CSS1 compliance.
+
 ### Transforms
 
 | Property | MDN Reference | Notes |
@@ -222,6 +224,10 @@ Percentages are relative to the border-box width (horizontal radius) and height 
 | `background-attachment` | [background-attachment](https://developer.mozilla.org/en-US/docs/Web/CSS/background-attachment) | Parsed and accepted but has no effect |
 | `background-clip` | [background-clip](https://developer.mozilla.org/en-US/docs/Web/CSS/background-clip) | Full support; `border-box`, `padding-box`, `content-box`. Comma-separated multi-layer values cycle against the number of `background-image` layers; when there are multiple values, `background-color` uses the last (bottom-most) one, per spec |
 
+#### Canvas background (`<html>`/`<body>`)
+
+Per CSS2.1 §14.2, the root element's background doesn't just paint its own box — it propagates to fill the whole *canvas* (here: every page). PeachPDF resolves this once per document: `<body>`'s own background (`background-color` and/or `background-image` layers) is used if it declares one; otherwise `<html>`'s; otherwise no canvas fill happens at all. Whichever element was used for the canvas fill isn't separately re-painted at its own (possibly much smaller than a page) laid-out rect — the canvas fill already covers it. A non-`<body>`/`<html>` element's own background (e.g. a `<div>`) is unaffected and continues to paint normally. The fill repeats identically on every page the document spans. `@page` background isn't implemented yet, so there's no additional precedence tier there currently.
+
 ### Color & Typography
 
 | Property | MDN Reference | Notes |
@@ -234,7 +240,7 @@ Percentages are relative to the border-box width (horizontal radius) and height 
 | `font-variant` | [font-variant](https://developer.mozilla.org/en-US/docs/Web/CSS/font-variant) | `normal` and `small-caps` are parsed and actually rendered: since PeachPDF has no OpenType shaping engine for real `smcp`/`c2sc` glyph substitution, `small-caps` is synthesized — originally-lowercase letters are upper-cased and drawn at a reduced size relative to the rest of the run. Non-standard/proprietary function-token values (e.g. Prince's `prince-opentype(...)`) are not recognized and resolve to `normal` |
 | `font-weight` | [font-weight](https://developer.mozilla.org/en-US/docs/Web/CSS/font-weight) | Keyword (`bold`, `normal`, `lighter`, `bolder`) and numeric (`100`–`900`) values |
 | `line-height` | [line-height](https://developer.mozilla.org/en-US/docs/Web/CSS/line-height) | Full support |
-| `vertical-align` | [vertical-align](https://developer.mozilla.org/en-US/docs/Web/CSS/vertical-align) | `baseline`, `sub`, `super`, `top`, `middle`, `bottom`, and length/percentage values |
+| `vertical-align` | [vertical-align](https://developer.mozilla.org/en-US/docs/Web/CSS/vertical-align) | `baseline`, `sub`, `super`, `top`, `middle`, `bottom`, `text-top`, `text-bottom`, and length/percentage values — full support for any inline-level box relative to its line box, not just table cells (which use a separate, table-specific alignment algorithm — see [Tables](#tables)) |
 
 ### Text Layout
 
@@ -242,6 +248,7 @@ Percentages are relative to the border-box width (horizontal radius) and height 
 |----------|--------------|-------|
 | `direction` | [direction](https://developer.mozilla.org/en-US/docs/Web/CSS/direction) | `ltr` and `rtl` |
 | `hyphens` | [hyphens](https://developer.mozilla.org/en-US/docs/Web/CSS/hyphens) | `none`, `manual`, `auto` are parsed, cascaded, and inherited. `manual` and `auto` both honor an explicit soft hyphen (`&shy;`/U+00AD) as a line-break opportunity, rendering a literal `-` glyph only when that break is actually used. `auto` additionally performs real pattern-based automatic hyphenation (Liang's algorithm) for ~73 languages — see the note below the table for language coverage and exclusions |
+| `letter-spacing` | [letter-spacing](https://developer.mozilla.org/en-US/docs/Web/CSS/letter-spacing) | Full support, including negative values; spacing is added between each pair of adjacent characters (not trailing after the last one), realized via the PDF `Tc` character-spacing operator |
 | `text-align` | [text-align](https://developer.mozilla.org/en-US/docs/Web/CSS/text-align) | `left`, `right`, `center`, `justify` |
 | `text-decoration` | [text-decoration](https://developer.mozilla.org/en-US/docs/Web/CSS/text-decoration) | Shorthand supported |
 | `text-decoration-color` | [text-decoration-color](https://developer.mozilla.org/en-US/docs/Web/CSS/text-decoration-color) | Full support |
@@ -395,6 +402,8 @@ These properties control how content breaks across PDF pages. Both the legacy `p
 
 PeachPDF evaluates a subset of CSS selectors. Selectors that are parsed but not implemented are silently ignored — rules using them will not apply.
 
+CSS comments (`/* ... */`) are supported anywhere in a stylesheet, including between selectors and declarations, and are stripped before parsing.
+
 ### Basic Selectors
 
 | Selector | Syntax | Notes |
@@ -429,13 +438,15 @@ PeachPDF evaluates a subset of CSS selectors. Selectors that are parsed but not 
 
 ### Pseudo-elements
 
-`::before`, `::after`, and `::marker` are supported. All other pseudo-elements are parsed but have no effect.
+`::before`, `::after`, `::marker`, `::first-letter`, and `::first-line` are supported. All other pseudo-elements are parsed but have no effect.
 
 | Pseudo-element | Notes |
 |----------------|-------|
 | `::before` | Full support; use with the `content` property |
 | `::after` | Full support; use with the `content` property |
 | `::marker` | Full support for every property the spec allows on markers — see below |
+| `::first-letter` | Full support — see below |
+| `::first-line` | Full support for every property CSS2.1 allows — see below |
 | All others | Parsed but ignored |
 
 Both the single-colon legacy syntax (`:before`, `:after`) and the modern double-colon syntax (`::before`, `::after`) are accepted. `::marker` has no legacy single-colon form, matching the spec.
@@ -454,6 +465,24 @@ li::marker { content: "→ "; color: crimson; }
 /* Big, bold chapter numbers */
 ol.chapters > li::marker { font-size: 1.5em; font-weight: bold; }
 ```
+
+**`::first-letter`** splits the first letter of an element's own real text into a separate, independently styled box. Per CSS1 §1.2, any leading punctuation immediately before the first letter (e.g. an opening quote mark) is included as part of the same unit. The target text may be several inline levels deep (e.g. `p::first-letter` on `<p><em>Hello</em> world</p>` styles the "H" inside the `<em>`) — the search stops at (does not cross into) a nested block-level or atomic inline-level descendant (e.g. a nested `<div>` or `inline-block`), which starts its own independent first-letter scope. Targets the element's own real text only, not `::before`-generated content.
+
+```css
+/* Classic drop cap */
+p.intro::first-letter { font-size: 300%; float: left; color: crimson; }
+```
+
+**`::first-line`** styles whichever content ends up on a block's first formatted line — no box is synthesized (unlike `::before`/`::after`/`::first-letter`), since CSS2.1 restricts it to properties with no layout/box-model effect: `color`, `background` (solid `background-color` only — see note below), `text-decoration`, and the font-metric/spacing set `font-*`, `word-spacing`, `letter-spacing`, `vertical-align`, `text-transform`. Any other property set via `::first-line` (e.g. `margin`, `border`) has no effect, per spec.
+
+Width-affecting properties (`font-size`, `word-spacing`, `letter-spacing`) are fully supported even when a single inline element's content straddles the boundary between the first and second line — the words that actually land on line 1 use the first-line styling and the words that overflow to line 2 correctly revert to the element's own normal styling, rather than one or the other leaking across the boundary.
+
+```css
+/* Small-caps drop-in lede, common in print typesetting */
+p.lede::first-line { font-weight: bold; color: darkslateblue; font-variant: small-caps; }
+```
+
+Known narrowing: a `background-image` layer (as opposed to a solid `background-color`) set via `::first-line` is not first-line-aware and paints using the element's own normal background instead.
 
 ### Pseudo-classes
 
@@ -478,7 +507,7 @@ Because PeachPDF renders a static PDF with no interactive or dynamic state, stat
 
 Known gap: `:nth-column()`/`:nth-last-column()`'s same-row-only limitation described above.
 
-State-based pseudo-classes other than `:link` (`:hover`, `:focus`, `:active`, `:checked`, `:disabled`, `:empty`, etc.) are parsed but not applied.
+State-based pseudo-classes other than `:link` (`:hover`, `:focus`, `:active`, `:visited`, `:checked`, `:disabled`, `:empty`, etc.) are parsed but not applied — PeachPDF renders a static PDF with no browsing history or interaction state, so `:visited`/`:active` never match by design.
 
 ### Cascade & Specificity
 
@@ -902,7 +931,6 @@ The following CSS features are not supported:
 - **3D perspective** — the `perspective()` transform function, and the `perspective`/`perspective-origin`/`transform-style`/`backface-visibility` properties
 - **Transitions and animations** — `transition`, `animation`, `@keyframes`
 - **Filters and effects** — `filter`, `backdrop-filter`, `mix-blend-mode` (not parsed at all)
-- **`letter-spacing`** — parsed and accepted but has no effect
 - **`text-shadow`**
 - **`word-wrap` / `overflow-wrap`**
 - **`outline`** and `outline-*` properties

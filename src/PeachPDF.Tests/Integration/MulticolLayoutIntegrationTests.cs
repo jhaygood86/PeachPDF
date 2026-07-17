@@ -439,7 +439,7 @@ namespace PeachPDF.Tests.Integration
                 charFit = str?.Length ?? 0;
                 charFitWidth = 0;
             }
-            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl) { }
+            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl, double letterSpacing = 0) { }
             public override void DrawRectangle(RPen pen, double x, double y, double width, double height) { }
             public override void DrawRectangle(RBrush brush, double x, double y, double width, double height) { }
             public override void DrawImage(RImage image, RRect destRect, RRect srcRect) { }

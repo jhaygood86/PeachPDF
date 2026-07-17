@@ -27,6 +27,13 @@ static string RadiusSwatch(string desc, string borderRadiusCss, string boxCss = 
     $"<div class=\"css\">border-radius: {borderRadiusCss}</div>" +
     "</td>";
 
+static string BorderStyleSwatch(string desc, string style) =>
+    "<td>" +
+    $"<div class=\"bsbox\" style=\"border: 16px {style} #4a90d9\"></div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">border-style: {style}</div>" +
+    "</td>";
+
 static string OriginSwatch(string desc, string inlineCss, string cssLabel = "") =>
     "<td>" +
     $"<div class=\"obox\" style=\"{inlineCss}\"></div>" +
@@ -2619,3 +2626,281 @@ Console.WriteLine("Saved test_tagged_pdf.pdf");
 File.Delete("test_tagged_pdf.html");
 File.WriteAllText("test_tagged_pdf.html", taggedPdfHtml);
 Console.WriteLine("Saved test_tagged_pdf.html");
+
+// --- border-style showcase ---
+
+const string BorderStyleCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
+    table.sw td { padding: 3px; vertical-align: top; width: 25% }
+    .bsbox { height: 48px; background: #eee; margin-bottom: 3px }
+    .desc { font-size: 7pt; font-weight: bold; color: #444; margin-bottom: 1px }
+    .css { font-size: 6pt; color: #666; line-height: 1.3; word-break: break-all }
+    </style>
+    """;
+
+var borderStyleHtml = "<!DOCTYPE html><html><head>" + BorderStyleCss + "</head><body>" +
+
+    "<h1>CSS1 border-style Test Page</h1>" +
+
+    "<h2>All CSS1 border-style keywords</h2>" +
+    Row(
+        BorderStyleSwatch("none", "none"),
+        BorderStyleSwatch("hidden", "hidden"),
+        BorderStyleSwatch("solid", "solid"),
+        BorderStyleSwatch("dotted", "dotted")
+    ) +
+    Row(
+        BorderStyleSwatch("dashed", "dashed"),
+        BorderStyleSwatch("double", "double"),
+        BorderStyleSwatch("groove", "groove"),
+        BorderStyleSwatch("ridge", "ridge")
+    ) +
+    Row(
+        BorderStyleSwatch("inset", "inset"),
+        BorderStyleSwatch("outset", "outset")
+    ) +
+
+    "</body></html>";
+
+var borderStyleStream = new MemoryStream();
+var borderStyleDocument = await generator.GeneratePdf(borderStyleHtml, pdfConfig);
+borderStyleDocument.Save(borderStyleStream);
+
+File.Delete("test_border_style.pdf");
+File.WriteAllBytes("test_border_style.pdf", borderStyleStream.ToArray());
+Console.WriteLine("Saved test_border_style.pdf");
+
+File.Delete("test_border_style.html");
+File.WriteAllText("test_border_style.html", borderStyleHtml);
+Console.WriteLine("Saved test_border_style.html");
+
+// --- vertical-align showcase ---
+
+static string VerticalAlignSwatch(string desc, string va) =>
+    "<td>" +
+    "<p class=\"vabox\">" +
+    "<span class=\"tall\">TALL</span> " +
+    $"<span class=\"target\" style=\"vertical-align:{va}\">aligned</span>" +
+    "</p>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">vertical-align: {va}</div>" +
+    "</td>";
+
+const string VerticalAlignCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
+    table.sw td { padding: 3px; vertical-align: top; width: 25% }
+    .vabox { border: 1px solid #999; margin-bottom: 3px; white-space: nowrap }
+    .tall { font-size: 30pt }
+    .target { font-size: 10pt; background: #ffe58a }
+    .desc { font-size: 7pt; font-weight: bold; color: #444; margin-bottom: 1px }
+    .css { font-size: 6pt; color: #666; line-height: 1.3; word-break: break-all }
+    </style>
+    """;
+
+var verticalAlignHtml = "<!DOCTYPE html><html><head>" + VerticalAlignCss + "</head><body>" +
+
+    "<h1>CSS1 vertical-align Test Page</h1>" +
+    "<p class=\"intro\" style=\"font-size:7pt;color:#555\">Each swatch shows a 30pt \"TALL\" span establishing the line's height, with a highlighted 10pt \"aligned\" span positioned per the labeled value.</p>" +
+
+    "<h2>All CSS1 vertical-align keywords</h2>" +
+    Row(
+        VerticalAlignSwatch("baseline (default)", "baseline"),
+        VerticalAlignSwatch("sub", "sub"),
+        VerticalAlignSwatch("super", "super"),
+        VerticalAlignSwatch("top", "top")
+    ) +
+    Row(
+        VerticalAlignSwatch("middle", "middle"),
+        VerticalAlignSwatch("bottom", "bottom"),
+        VerticalAlignSwatch("text-top", "text-top"),
+        VerticalAlignSwatch("text-bottom", "text-bottom")
+    ) +
+
+    "</body></html>";
+
+var verticalAlignStream = new MemoryStream();
+var verticalAlignDocument = await generator.GeneratePdf(verticalAlignHtml, pdfConfig);
+verticalAlignDocument.Save(verticalAlignStream);
+
+File.Delete("test_vertical_align.pdf");
+File.WriteAllBytes("test_vertical_align.pdf", verticalAlignStream.ToArray());
+Console.WriteLine("Saved test_vertical_align.pdf");
+
+File.Delete("test_vertical_align.html");
+File.WriteAllText("test_vertical_align.html", verticalAlignHtml);
+Console.WriteLine("Saved test_vertical_align.html");
+
+// --- letter-spacing / word-spacing showcase ---
+
+const string SpacingCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 12pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    .row { margin-bottom: 0.6em }
+    .label { font-size: 7pt; font-weight: bold; color: #444; margin-bottom: 1px }
+    </style>
+    """;
+
+var spacingHtml = "<!DOCTYPE html><html><head>" + SpacingCss + "</head><body>" +
+
+    "<h1>CSS1 letter-spacing / word-spacing Test Page</h1>" +
+
+    "<h2>letter-spacing</h2>" +
+    "<div class=\"row\"><div class=\"label\">normal</div><div style=\"letter-spacing:normal\">The quick brown fox jumps over the lazy dog</div></div>" +
+    "<div class=\"row\"><div class=\"label\">1px</div><div style=\"letter-spacing:1px\">The quick brown fox jumps over the lazy dog</div></div>" +
+    "<div class=\"row\"><div class=\"label\">4px</div><div style=\"letter-spacing:4px\">The quick brown fox jumps over the lazy dog</div></div>" +
+    "<div class=\"row\"><div class=\"label\">-1px (tightened)</div><div style=\"letter-spacing:-1px\">The quick brown fox jumps over the lazy dog</div></div>" +
+
+    "<h2>word-spacing (for contrast)</h2>" +
+    "<div class=\"row\"><div class=\"label\">normal</div><div style=\"word-spacing:normal\">The quick brown fox jumps over the lazy dog</div></div>" +
+    "<div class=\"row\"><div class=\"label\">10px</div><div style=\"word-spacing:10px\">The quick brown fox jumps over the lazy dog</div></div>" +
+    "<div class=\"row\"><div class=\"label\">25px</div><div style=\"word-spacing:25px\">The quick brown fox jumps over the lazy dog</div></div>" +
+
+    "<h2>Combined (inherited from parent, per CSS1)</h2>" +
+    "<div class=\"row\" style=\"letter-spacing:2px; word-spacing:8px\">" +
+    "<div class=\"label\">div has letter-spacing:2px; word-spacing:8px - nested span inherits both</div>" +
+    "<span>The quick brown fox</span> <b>jumps over</b> the lazy dog" +
+    "</div>" +
+
+    "</body></html>";
+
+var spacingStream = new MemoryStream();
+var spacingDocument = await generator.GeneratePdf(spacingHtml, pdfConfig);
+spacingDocument.Save(spacingStream);
+
+File.Delete("test_letter_word_spacing.pdf");
+File.WriteAllBytes("test_letter_word_spacing.pdf", spacingStream.ToArray());
+Console.WriteLine("Saved test_letter_word_spacing.pdf");
+
+File.Delete("test_letter_word_spacing.html");
+File.WriteAllText("test_letter_word_spacing.html", spacingHtml);
+Console.WriteLine("Saved test_letter_word_spacing.html");
+
+// --- ::first-letter showcase ---
+
+const string FirstLetterCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 11pt Georgia, serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em; font-family: Arial, sans-serif }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; font-family: Arial, sans-serif }
+    p { margin: 0 0 0.8em }
+    .dropcap::first-letter { font-size: 300%; float: left; color: crimson; font-weight: bold; line-height: 0.8; padding-right: 4px }
+    .colored::first-letter { color: rgb(0,102,204); font-size: 150% }
+    </style>
+    """;
+
+var firstLetterHtml = "<!DOCTYPE html><html><head>" + FirstLetterCss + "</head><body>" +
+
+    "<h1>CSS1 ::first-letter Test Page</h1>" +
+
+    "<h2>Classic drop cap</h2>" +
+    "<p class=\"dropcap\">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation.</p>" +
+
+    "<h2>Nested inline content</h2>" +
+    "<p class=\"colored\"><em>Emphasized</em> text starts this paragraph, and the very first letter should still pick up the first-letter color even though it begins inside the nested &lt;em&gt;.</p>" +
+
+    "<h2>Leading punctuation</h2>" +
+    "<p class=\"colored\">&#8220;Quoted&#8221; text at the start of a paragraph includes the opening quote mark as part of the first-letter unit, per CSS1 &sect;1.2.</p>" +
+
+    "</body></html>";
+
+var firstLetterStream = new MemoryStream();
+var firstLetterDocument = await generator.GeneratePdf(firstLetterHtml, pdfConfig);
+firstLetterDocument.Save(firstLetterStream);
+
+File.Delete("test_first_letter.pdf");
+File.WriteAllBytes("test_first_letter.pdf", firstLetterStream.ToArray());
+Console.WriteLine("Saved test_first_letter.pdf");
+
+File.Delete("test_first_letter.html");
+File.WriteAllText("test_first_letter.html", firstLetterHtml);
+Console.WriteLine("Saved test_first_letter.html");
+
+// --- ::first-line showcase ---
+
+const string FirstLineCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 11pt Georgia, serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em; font-family: Arial, sans-serif }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; font-family: Arial, sans-serif }
+    p { margin: 0 0 0.8em; width: 350px }
+    .lede::first-line { font-weight: bold; color: darkslateblue; font-variant: small-caps }
+    .bigfont::first-line { font-size: 200% }
+    .allseven::first-line {
+      font-style: italic;
+      color: rgb(180,60,0);
+      background-color: rgb(255,240,200);
+      text-decoration: underline;
+      word-spacing: 6px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    </style>
+    """;
+
+var firstLineHtml = "<!DOCTYPE html><html><head>" + FirstLineCss + "</head><body>" +
+
+    "<h1>CSS2.1 ::first-line Test Page</h1>" +
+
+    "<h2>Non-width-affecting (font-weight/color/small-caps)</h2>" +
+    "<p class=\"lede\">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua, only the first line should look different from the rest of this paragraph.</p>" +
+
+    "<h2>Width-affecting (bigger first-line font-size, wrap point shifts)</h2>" +
+    "<p class=\"bigfont\">Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat, and this line wraps once the bigger first-line font runs out of room.</p>" +
+
+    "<h2>All 7 supported properties at once</h2>" +
+    "<p class=\"allseven\">Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur, demonstrating font-style, color, background, decoration, spacing, and text-transform together on line one only.</p>" +
+
+    "</body></html>";
+
+var firstLineStream = new MemoryStream();
+var firstLineDocument = await generator.GeneratePdf(firstLineHtml, pdfConfig);
+firstLineDocument.Save(firstLineStream);
+
+File.Delete("test_first_line.pdf");
+File.WriteAllBytes("test_first_line.pdf", firstLineStream.ToArray());
+Console.WriteLine("Saved test_first_line.pdf");
+
+File.Delete("test_first_line.html");
+File.WriteAllText("test_first_line.html", firstLineHtml);
+Console.WriteLine("Saved test_first_line.html");
+
+// --- CSS1 canvas background showcase ---
+
+var canvasBackgroundHtml = "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    "body { font: 11pt Georgia, serif; margin: 0; background-color: rgb(230,240,255) }" +
+    "h1 { font-size: 15pt; margin: 0; padding: 15mm 15mm 0.3em; font-family: Arial, sans-serif }" +
+    "p { margin: 0 15mm 0.8em }" +
+    "</style></head><body>" +
+    "<h1>CSS1 Canvas Background Test Page</h1>" +
+    "<p>The pale blue background here comes from &lt;body&gt;'s own background-color, but it fills the " +
+    "whole page canvas (per CSS2.1 &sect;14.2) - not just the height of this short paragraph, which is " +
+    "nowhere near a full page tall.</p>" +
+    "</body></html>";
+
+var canvasBackgroundStream = new MemoryStream();
+var canvasBackgroundDocument = await generator.GeneratePdf(canvasBackgroundHtml, pdfConfig);
+canvasBackgroundDocument.Save(canvasBackgroundStream);
+
+File.Delete("test_canvas_background.pdf");
+File.WriteAllBytes("test_canvas_background.pdf", canvasBackgroundStream.ToArray());
+Console.WriteLine("Saved test_canvas_background.pdf");
+
+File.Delete("test_canvas_background.html");
+File.WriteAllText("test_canvas_background.html", canvasBackgroundHtml);
+Console.WriteLine("Saved test_canvas_background.html");

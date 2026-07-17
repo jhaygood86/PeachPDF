@@ -93,9 +93,24 @@ namespace PeachPDF.Html.Core.Dom
         public double FullWidth => _rect.Width + ActualWordSpacing;
 
         /// <summary>
-        /// Gets the actual width of whitespace between words.
+        /// Gets the actual width of whitespace between words - consults <see cref="FirstLineStyle"/>
+        /// instead of <see cref="OwnerBox"/> when this word is on the target's first formatted line
+        /// and a <c>::first-line</c> rule overrides <c>word-spacing</c>.
         /// </summary>
-        public double ActualWordSpacing => (HasSpaceAfter ? OwnerBox.ActualWordSpacing : 0) + (IsImage ? OwnerBox.ActualWordSpacing : 0);
+        public double ActualWordSpacing =>
+            (HasSpaceAfter ? (FirstLineStyle?.ActualWordSpacing ?? OwnerBox.ActualWordSpacing) : 0) +
+            (IsImage ? (FirstLineStyle?.ActualWordSpacing ?? OwnerBox.ActualWordSpacing) : 0);
+
+        /// <summary>
+        /// When set, this word lands on its block's first formatted line and a <c>::first-line</c>
+        /// rule applies - measurement/painting must use this (a fully-cascaded, detached shadow
+        /// <see cref="CssBox"/> - see <c>CssBox.ResolvedFirstLineStyle</c>) instead of
+        /// <see cref="OwnerBox"/>'s own font/color/spacing/etc for this specific word. Null for every
+        /// ordinary word. Set in <see cref="CssLayoutEngine.FlowBox"/>, and cleared again there for
+        /// any word that turns out to actually land on a later line once wrapping is known (see the
+        /// boundary re-measurement it performs when a box's content straddles the line-1/2 boundary).
+        /// </summary>
+        public CssBox? FirstLineStyle { get; set; }
 
         /// <summary>
         /// Height of the rectangle
@@ -165,6 +180,28 @@ namespace PeachPDF.Html.Core.Dom
         /// Gets the text of the word
         /// </summary>
         public virtual string? Text => null;
+
+        /// <summary>
+        /// The pre-<see cref="CssBoxProperties.TextTransform"/> source text this word was produced from
+        /// (still HTML-decoded/soft-hyphen-stripped, just not case-transformed) - null for words that
+        /// never carry real text (e.g. line breaks). All 3 CSS1 <c>text-transform</c> values are
+        /// character-by-character and length-preserving, so this lets <see cref="FirstLineText"/> be
+        /// derived independently under a <c>::first-line</c> rule's own <c>text-transform</c>, which may
+        /// differ from <see cref="OwnerBox"/>'s own - re-deriving from the box's own already-transformed
+        /// <see cref="Text"/> would lose information a transform like <c>uppercase</c> destroys (e.g. which
+        /// letters were originally lowercase, needed to redo <c>capitalize</c> correctly).
+        /// </summary>
+        public string? OriginalText { get; set; }
+
+        /// <summary>
+        /// When set, overrides <see cref="Text"/> for measurement/painting - the result of re-running
+        /// <see cref="OriginalText"/> through a <c>::first-line</c> rule's own <c>text-transform</c> value
+        /// (see <see cref="CssBox.ApplyFirstLineStyleOverride"/>), only when that differs from
+        /// <see cref="OwnerBox"/>'s own. Null for every ordinary word, and cleared again (see
+        /// <see cref="CssBox.RemeasureWordsTail"/>) for any word that turns out to land on a later line
+        /// once wrapping is known.
+        /// </summary>
+        public string? FirstLineText { get; set; }
 
         /// <summary>
         /// Multiplier applied to the owner box's <see cref="CssBoxProperties.ActualFont"/> size when

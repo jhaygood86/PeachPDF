@@ -386,7 +386,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
         // ----- DrawString ---------------------------------------------------------------------------
 
-        public void DrawString(string s, XFont font, XBrush brush, XRect rect, XStringFormat format)
+        public void DrawString(string s, XFont font, XBrush brush, XRect rect, XStringFormat format, double letterSpacing = 0)
         {
             double x = rect.X;
             double y = rect.Y;
@@ -403,7 +403,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             bool strikeout = (font.Style & XFontStyle.Strikeout) != 0;
             bool underline = (font.Style & XFontStyle.Underline) != 0;
 
-            Realize(font, brush, boldSimulation ? 2 : 0);
+            Realize(font, brush, boldSimulation ? 2 : 0, letterSpacing);
 
             switch (format.Alignment)
             {
@@ -1537,12 +1537,12 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// <summary>
         /// Makes the specified font and brush to the current graphics objects.
         /// </summary>
-        void Realize(XFont font, XBrush brush, int renderingMode)
+        void Realize(XFont font, XBrush brush, int renderingMode, double letterSpacing = 0)
         {
             BeginPage();
             RealizeTransform();
             BeginTextMode();
-            _gfxState.RealizeFont(font, brush, renderingMode);
+            _gfxState.RealizeFont(font, brush, renderingMode, letterSpacing);
         }
 
         /// <summary>

@@ -220,7 +220,7 @@ namespace PeachPDF.Tests.Integration
             public RecordingGraphics(RAdapter adapter)
                 : base(adapter, new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
 
-            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl)
+            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl, double letterSpacing = 0)
                 => DrawStringCalls.Add((str, font, point));
 
             public override void PushTransform(RMatrix matrix) { }
