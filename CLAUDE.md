@@ -44,6 +44,8 @@ CI enforces 90% diff coverage on PRs (`diff-cover` against the PR base, via `.gi
 dotnet test --collect:"XPlat Code Coverage" --settings PeachPDF.Tests/coverlet.runsettings --results-directory coverage
 ```
 
+Before considering any non-trivial code change complete, run the command above and check diff coverage on the lines you changed. If new/changed code falls short of the 90% diff-coverage threshold CI enforces, add tests to close the gap before finishing — don't leave it for CI to catch.
+
 Avoid writing tests against `PdfSharpCore.Fonts.FontFactory` (and OpenType neighbors) without care — it caches resolved fonts in `static readonly Dictionary` fields shared process-wide, and xUnit's parallel test-class execution makes new tests here a real order-dependent-flakiness risk against the rest of the suite.
 
 ## Testing conventions
