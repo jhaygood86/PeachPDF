@@ -566,18 +566,22 @@ namespace PeachPDF.Html.Core.Utils
             return null;
         }
 
-        public static IEnumerable<CssBox> FlattenStackingContext(CssBox box)
-        {
-            // Out-of-flow descendants (floated/absolute/fixed) need to be hoisted up through normal-flow
-            // wrapper boxes so their painting box's stacking context can order them correctly relative to
-            // its own layers. Normal in-flow descendants do NOT need hoisting - they're already painted
-            // correctly by their own parent's Paint() call, which recurses into this same method for its
-            // own direct children. Recursing here regardless of flow used to re-yield (and repaint) every
-            // in-flow descendant once per ancestor level between it and this box - an O(depth) blowup on
-            // top of the O(tree size) this method already does. Skip that recursion entirely unless the
-            // document actually has out-of-flow content somewhere to hoist.
-            var hasOutOfFlowBoxes = box.HtmlContainer?.HasOutOfFlowBoxes ?? true;
+        // One box to paint as part of a stacking context's own layer ordering, plus the chain of DOM
+        // ancestor boxes (outer to inner, between the claiming stacking context and Box itself) that
+        // Box was hoisted past. Empty for a direct plain child - it paints via ordinary nested Paint()
+        // recursion, so its ancestors' own overflow clipping is already correctly active on the
+        // graphics clip stack from their own (still-running) Paint() calls. Non-empty for a hoisted
+        // participant - it paints via the claiming stacking context's own paint loop instead, bypassing
+        // those ancestors' Paint() calls entirely, so their overflow clipping must be reapplied
+        // explicitly (see RenderUtils.PushAncestorOverflowClips) around its own Paint() call.
+        internal readonly record struct StackingParticipant(CssBox Box, IReadOnlyList<CssBox> ClipAncestors);
 
+        public static IEnumerable<StackingParticipant> FlattenStackingContext(CssBox box)
+        {
+            // Plain in-flow, non-stacking-context children always paint here, nested normally - this is
+            // what keeps this box's own overflow-clip scope (pushed/popped around this same children
+            // loop in CssBox.PaintImpCore) wrapped around them, and their own further plain descendants
+            // are handled the same way, recursively, by their own subsequent Paint() call.
             foreach (var childBox in box.Boxes)
             {
                 // ::marker boxes (inside or outside position) are always painted via one explicit
@@ -589,20 +593,73 @@ namespace PeachPDF.Html.Core.Utils
                 // it were normal in-flow content. Yielding it here too would double-paint it.
                 if (childBox.IsMarkerPseudoElement) continue;
 
-                if (!IsStackingContextBox(childBox))
+                if (!NeedsStackingHoist(childBox))
                 {
-                    yield return childBox;
+                    yield return new StackingParticipant(childBox, []);
+                }
+            }
+
+            // Only the nearest enclosing stacking context is responsible for finding and ordering every
+            // out-of-flow / stacking-context-establishing descendant reachable through plain wrapper
+            // boxes, at any depth - a non-stacking-context box contributes nothing further here; any such
+            // descendants of its own are claimed by whichever ancestor above it actually is one. This is
+            // what fixes two bugs in the old, position/z-index-only version of this method: (1) a box
+            // that itself establishes a stacking context (e.g. position:relative;z-index, or now also
+            // opacity<1/transform) was never yielded by its own parent at all, so it and its whole
+            // subtree never painted; (2) an out-of-flow stacking-context descendant nested a few plain
+            // wrapper boxes deep was discovered "naturally" via the ordinary parent-to-child Paint()
+            // cascade before its true ancestor stacking context ever reached its own z-index layer, so it
+            // visually painted as if z-index had no effect.
+            if (!IsStackingContextBox(box)) yield break;
+            if (!(box.HtmlContainer?.HasStackingHoistCandidates ?? true)) yield break;
+
+            foreach (var participant in SearchForHoistableDescendants(box, []))
+            {
+                yield return participant;
+            }
+        }
+
+        // A box needs to escape its immediate DOM position to compete for z-order at the nearest
+        // enclosing stacking context, rather than paint nested within its immediate parent: either
+        // because it's out-of-flow (floated/absolute/fixed - always subject to z-ordering against its
+        // nearest positioned/stacking ancestor, not its DOM parent), or because it establishes its own
+        // stacking context (which must be ordered as one atomic unit among its true siblings, not
+        // wherever it happens to sit in a plain wrapper's local scope). Internal (not private) so
+        // HtmlContainerInt's HasStackingHoistCandidates computation can reuse the exact same predicate
+        // rather than duplicating it.
+        internal static bool NeedsStackingHoist(CssBox box) => box.IsOutOfFlow || IsStackingContextBox(box);
+
+        // Tunnels through plain wrapper boxes AND non-stacking-context out-of-flow boxes alike (a float,
+        // or e.g. position:absolute with z-index:auto, doesn't block descendants further down from
+        // needing to reach this same level) looking for content that needs to compete at `box`'s own
+        // stacking-context level. Recursion stops at (but includes) each stacking-context-establishing
+        // box found - its own subtree is its own business, resolved independently once its own Paint()
+        // call later invokes FlattenStackingContext on itself. `ancestorPath` accumulates every DOM
+        // ancestor walked through along the way (both plain pass-through wrappers and hoisted-but-non-
+        // stacking-context boxes like a plain position:absolute) - each yielded participant snapshots
+        // it as its ClipAncestors, so the caller can re-apply those ancestors' own overflow clipping
+        // (which it never picks up naturally, having been hoisted past their own Paint() calls). Mutating
+        // one shared list via add-before-recurse/remove-after is safe here: the whole sequence is drained
+        // eagerly and synchronously by FlattenStackingContext's caller before anything else touches it.
+        private static IEnumerable<StackingParticipant> SearchForHoistableDescendants(
+            CssBox box, List<CssBox> ancestorPath)
+        {
+            foreach (var childBox in box.Boxes)
+            {
+                if (childBox.IsMarkerPseudoElement) continue;
+
+                if (NeedsStackingHoist(childBox))
+                {
+                    yield return new StackingParticipant(childBox, ancestorPath.ToArray());
+                    if (IsStackingContextBox(childBox)) continue;
                 }
 
-                if (!hasOutOfFlowBoxes) continue;
-
-                foreach (var flattenedBox in FlattenStackingContext(childBox))
+                ancestorPath.Add(childBox);
+                foreach (var descendant in SearchForHoistableDescendants(childBox, ancestorPath))
                 {
-                    if (!IsStackingContextBox(flattenedBox) && flattenedBox.IsOutOfFlow)
-                    {
-                        yield return flattenedBox;
-                    }
+                    yield return descendant;
                 }
+                ancestorPath.RemoveAt(ancestorPath.Count - 1);
             }
         }
 
@@ -623,20 +680,43 @@ namespace PeachPDF.Html.Core.Utils
                 return true;
             }
 
+            // Flex item with a z-index other than auto establishes a stacking context even without a
+            // `position` value of its own (CSS Flexible Box Layout §z-order), unlike a plain block/
+            // inline child, which needs position:relative/absolute for z-index to have any effect at all.
+            if (box.ZIndex is not CssConstants.Auto &&
+                box.ParentBox?.Display is CssConstants.Flex or CssConstants.InlineFlex)
+            {
+                return true;
+            }
+
+            // Opacity less than 1 and any non-identity transform each establish a stacking context per
+            // spec, regardless of `position` - both are already rendered as isolated, self-contained
+            // units (an offscreen composited group for opacity; a pushed/popped matrix for transform), so
+            // painting their descendants as one atomic block here matches what already happens visually.
+            if (!box.IsOpaque)
+            {
+                return true;
+            }
+
+            if (box.IsTransformed)
+            {
+                return true;
+            }
+
             return false;
         }
 
-        public static IEnumerable<List<CssBox>> GetBoxesByLayers(IEnumerable<CssBox> cssBoxes)
+        public static IEnumerable<List<StackingParticipant>> GetBoxesByLayers(IEnumerable<StackingParticipant> participants)
         {
-            var boxesByLayer = new Dictionary<int, List<CssBox>>();
+            var boxesByLayer = new Dictionary<int, List<StackingParticipant>>();
 
-            foreach (var cssBox in cssBoxes)
+            foreach (var participant in participants)
             {
                 var zIndex = 0;
 
-                if (cssBox.ZIndex is not CssConstants.Auto)
+                if (participant.Box.ZIndex is not CssConstants.Auto)
                 {
-                    zIndex = int.Parse(cssBox.ZIndex);
+                    zIndex = int.Parse(participant.Box.ZIndex);
                 }
 
                 if (!boxesByLayer.ContainsKey(zIndex))
@@ -644,7 +724,7 @@ namespace PeachPDF.Html.Core.Utils
                     boxesByLayer[zIndex] = [];
                 }
 
-                boxesByLayer[zIndex].Add(cssBox);
+                boxesByLayer[zIndex].Add(participant);
             }
 
             return boxesByLayer.OrderBy(x => x.Key).Select(x => x.Value);

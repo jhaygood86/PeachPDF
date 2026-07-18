@@ -110,7 +110,12 @@ namespace PeachPDF.Tests.TestSupport
     /// Records painting calls into a single ordered log (per this repo's painting-test convention -
     /// see <c>CssLayoutEngineTablePageBreakTests.RecordingGraphics</c>), backed by
     /// <see cref="TestGraphicsAdapter"/> so brush/pen colors are introspectable via
-    /// <see cref="TestBrush"/>/<see cref="TestPen"/>.
+    /// <see cref="TestBrush"/>/<see cref="TestPen"/>. <see cref="PushClip(RRect)"/>/<see cref="PopClip"/>
+    /// are also logged (as <see cref="PushClipCall"/>/<see cref="PopClipCall"/>) alongside the draw
+    /// calls, not just tracked in the internal clip stack, so tests can assert clip pushes happen in
+    /// the right order relative to specific draw calls (e.g. that a clip is pushed before the content
+    /// it's meant to constrain) - per this class's own convention of extending the single ordered log
+    /// for new call types rather than building a separate parallel mechanism.
     /// </summary>
     internal sealed class TestRecordingGraphics : RGraphics
     {
@@ -119,6 +124,8 @@ namespace PeachPDF.Tests.TestSupport
         public sealed record DrawPathCall(RColor Color);
         public sealed record DrawLineCall(RColor Color, double Width, RDashStyle DashStyle, double X1, double Y1, double X2, double Y2);
         public sealed record DrawPolygonCall(RColor Color, RPoint[] Points);
+        public sealed record PushClipCall(RRect Rect);
+        public sealed record PopClipCall;
 
         public List<object> Log { get; } = [];
         public List<DrawStringCall> DrawStringCalls { get; } = [];
@@ -156,9 +163,22 @@ namespace PeachPDF.Tests.TestSupport
 
         public override void PushTransform(RMatrix matrix) { }
         public override void PopTransform() { }
-        public override void PushClip(RRect rect) => _clipStack.Push(rect);
-        public override void PushClip(RGraphicsPath path) => _clipStack.Push(_clipStack.Peek());
-        public override void PopClip() { if (_clipStack.Count > 1) _clipStack.Pop(); }
+        public override void PushClip(RRect rect)
+        {
+            _clipStack.Push(rect);
+            Log.Add(new PushClipCall(rect));
+        }
+        public override void PushClip(RGraphicsPath path)
+        {
+            var rect = _clipStack.Peek();
+            _clipStack.Push(rect);
+            Log.Add(new PushClipCall(rect));
+        }
+        public override void PopClip()
+        {
+            if (_clipStack.Count > 1) _clipStack.Pop();
+            Log.Add(new PopClipCall());
+        }
         public override void PushClipExclude(RRect rect) { }
         public override object SetAntiAliasSmoothingMode() => new object();
         public override void ReturnPreviousSmoothingMode(object? prevMode) { }

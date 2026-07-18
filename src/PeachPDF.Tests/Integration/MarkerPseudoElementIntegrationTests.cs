@@ -32,7 +32,7 @@ namespace PeachPDF.Tests.Integration
             var li = FindById(root, "li")!;
 
             var flattened = PeachPDF.Html.Core.Utils.DomUtils.FlattenStackingContext(li).ToList();
-            Assert.DoesNotContain(flattened, b => b.IsMarkerPseudoElement);
+            Assert.DoesNotContain(flattened, p => p.Box.IsMarkerPseudoElement);
         }
 
         [Fact]

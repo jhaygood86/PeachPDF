@@ -161,7 +161,7 @@ Form elements are rendered as static boxes. There is no interactive behavior —
 | Property | MDN Reference | Notes |
 |----------|--------------|-------|
 | `width` | [width](https://developer.mozilla.org/en-US/docs/Web/CSS/width) | Full support |
-| `height` | [height](https://developer.mozilla.org/en-US/docs/Web/CSS/height) | Full support |
+| `height` | [height](https://developer.mozilla.org/en-US/docs/Web/CSS/height) | Full support. When content is taller than an explicit `height`, the box does not grow to fit it — content overflows past the box's bottom edge (same behavior as `max-height`/`overflow: hidden` elsewhere in this engine) |
 | `max-width` | [max-width](https://developer.mozilla.org/en-US/docs/Web/CSS/max-width) | Full support, including replaced elements (images), absolutely/fixed positioned boxes, flex items, and table cells (a cell's `max-width` caps its column) |
 | `min-width` | [min-width](https://developer.mozilla.org/en-US/docs/Web/CSS/min-width) | Full support, including replaced elements (images), absolutely/fixed positioned boxes, flex items, and table cells (a cell's `min-width` widens its column) |
 | `max-height` | [max-height](https://developer.mozilla.org/en-US/docs/Web/CSS/max-height) | Full support, including replaced elements (images), absolutely/fixed positioned boxes, and flex items. When content is taller than `max-height`, the box does not grow to fit it — content overflows past the box's bottom edge (same behavior as `overflow: hidden` elsewhere in this engine) |
@@ -299,6 +299,23 @@ Regenerating the pattern set (`tools/Update-HyphenationPatterns.ps1`) re-checks 
 | `overflow` | [overflow](https://developer.mozilla.org/en-US/docs/Web/CSS/overflow) | Affects clipping regions; there is no interactive scrolling in PDF output |
 | `visibility` | [visibility](https://developer.mozilla.org/en-US/docs/Web/CSS/visibility) | `visible`, `hidden` |
 | `z-index` | [z-index](https://developer.mozilla.org/en-US/docs/Web/CSS/z-index) | Full support for positioned elements |
+
+### Stacking Context
+
+Paint order follows the CSS [stacking context](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Positioned_layout/Stacking_context) model. A new stacking context is established by:
+
+- the document root
+- `position: relative` or `absolute` with a `z-index` other than `auto`
+- `position: fixed` or `sticky` (unconditionally, regardless of `z-index`)
+- a flex item (a direct child of a `display: flex`/`inline-flex` container) with a `z-index` other than `auto`
+- `opacity` less than 1
+- a `transform` other than `none`
+
+Elements are painted as one self-contained, atomic unit once they establish a stacking context — for example, everything inside an `opacity: 0.5` box (including any absolutely-positioned descendants) fades together as a single composited group, and a `z-index`-ordered element's own descendants are ordered independently of the rest of the page.
+
+The following triggers from the CSS specification are **not** supported, since the underlying properties themselves have no effect in PeachPDF (see [Unsupported CSS Features](#unsupported-css-features)): `isolation`, `will-change`, `mix-blend-mode`, `contain`, and 3D `perspective`.
+
+An element that needs to escape a plain (non-stacking-context) ancestor to compete for z-order at its true enclosing stacking context — for example, a `z-index`-ordered element nested inside a plain `position: absolute` wrapper that has no `z-index` of its own — is still correctly clipped by every `overflow: hidden` ancestor it passes through along the way, including when multiple such ancestors are nested.
 
 ### Flexbox
 

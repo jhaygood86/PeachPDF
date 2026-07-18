@@ -191,10 +191,21 @@ namespace PeachPDF.Html.Core
         /// <summary>
         /// Whether any box in the current document is out-of-flow (floated, absolutely positioned, or
         /// fixed). Computed alongside <see cref="HasFloatedBoxes"/> and used by
-        /// <see cref="Utils.DomUtils.FlattenStackingContext"/> to skip hoisting out-of-flow descendants
-        /// past normal-flow wrapper boxes entirely when there's nothing to hoist.
+        /// <see cref="CssBox.Paint"/> to decide whether Bounds-based page-visibility pruning is safe (an
+        /// out-of-flow descendant's visual position can fall outside its "invisible" ancestor's own
+        /// Bounds, so that pruning is only safe with none anywhere in the document).
         /// </summary>
         internal bool HasOutOfFlowBoxes { get; private set; }
+
+        /// <summary>
+        /// Whether any non-root box in the current document either is out-of-flow or establishes its own
+        /// stacking context (see <see cref="Utils.DomUtils.IsStackingContextBox"/> - position+z-index,
+        /// fixed/sticky, a flex item with z-index, opacity &lt; 1, or a non-identity transform). Computed
+        /// alongside <see cref="HasFloatedBoxes"/>/<see cref="HasOutOfFlowBoxes"/> and used by
+        /// <see cref="Utils.DomUtils.FlattenStackingContext"/> to skip searching for stacking-context
+        /// participants to hoist past normal-flow wrapper boxes entirely when there's nothing to hoist.
+        /// </summary>
+        internal bool HasStackingHoistCandidates { get; private set; }
 
         public RSize PageSize { get; set; }
 
@@ -371,7 +382,13 @@ namespace PeachPDF.Html.Core
             ActualSize = RSize.Empty;
             if (Root is null) return;
 
-            (HasFloatedBoxes, HasOutOfFlowBoxes) = ComputeFlowFlags(Root);
+            // includeStackingHoistCandidates: false here - IsStackingContextBox reads IsTransformed,
+            // which lazily computes and permanently caches ActualTransformMatrix against this box's own
+            // border-box size on first access. Before layout, every box's size is still unset/default,
+            // so triggering that computation this early would cache a wrong transform matrix forever
+            // (this box never gets asked for its transform again once the cache is populated) - see the
+            // "actualTransformComputed" cache in CssBoxProperties.ActualTransformMatrix.
+            (HasFloatedBoxes, HasOutOfFlowBoxes, _) = ComputeFlowFlags(Root, includeStackingHoistCandidates: false);
 
             // if width is not restricted we set it to large value to get the actual later
             Root.Size = new RSize(MaxSize.Width > 0 ? MaxSize.Width : PageSize.Width, 0);
@@ -390,30 +407,42 @@ namespace PeachPDF.Html.Core
             ReapplyPseudoElementContent(Root);
 
             // Recompute after layout in case pseudo-element reapplication added any out-of-flow boxes.
-            (HasFloatedBoxes, HasOutOfFlowBoxes) = ComputeFlowFlags(Root);
+            // Every box's size is final now, so it's safe to also compute HasStackingHoistCandidates.
+            (HasFloatedBoxes, HasOutOfFlowBoxes, HasStackingHoistCandidates) =
+                ComputeFlowFlags(Root, includeStackingHoistCandidates: true);
         }
 
         /// <summary>
-        /// Recursively checks whether any box in the tree is floated and/or out-of-flow, short-circuiting
-        /// once both have been confirmed true.
+        /// Recursively checks whether any box in the tree is floated, out-of-flow, and/or (when
+        /// <paramref name="includeStackingHoistCandidates"/> is true, and excluding the root itself,
+        /// which trivially always establishes a stacking context) needs hoisting for stacking-context
+        /// purposes, short-circuiting once every requested flag has been confirmed true.
         /// </summary>
-        private static (bool HasFloated, bool HasOutOfFlow) ComputeFlowFlags(CssBox box)
+        private static (bool HasFloated, bool HasOutOfFlow, bool HasStackingHoistCandidates) ComputeFlowFlags(
+            CssBox box, bool includeStackingHoistCandidates)
         {
             var hasFloated = false;
             var hasOutOfFlow = false;
-            ComputeFlowFlags(box, ref hasFloated, ref hasOutOfFlow);
-            return (hasFloated, hasOutOfFlow);
+            var hasStackingHoistCandidates = false;
+            ComputeFlowFlags(box, isRoot: true, includeStackingHoistCandidates,
+                ref hasFloated, ref hasOutOfFlow, ref hasStackingHoistCandidates);
+            return (hasFloated, hasOutOfFlow, hasStackingHoistCandidates);
         }
 
-        private static void ComputeFlowFlags(CssBox box, ref bool hasFloated, ref bool hasOutOfFlow)
+        private static void ComputeFlowFlags(CssBox box, bool isRoot, bool includeStackingHoistCandidates,
+            ref bool hasFloated, ref bool hasOutOfFlow, ref bool hasStackingHoistCandidates)
         {
             if (box.IsFloated) hasFloated = true;
             if (box.IsOutOfFlow) hasOutOfFlow = true;
+            if (includeStackingHoistCandidates && !isRoot && DomUtils.NeedsStackingHoist(box))
+                hasStackingHoistCandidates = true;
 
             foreach (var childBox in box.Boxes)
             {
-                if (hasFloated && hasOutOfFlow) return;
-                ComputeFlowFlags(childBox, ref hasFloated, ref hasOutOfFlow);
+                if (hasFloated && hasOutOfFlow && (!includeStackingHoistCandidates || hasStackingHoistCandidates))
+                    return;
+                ComputeFlowFlags(childBox, false, includeStackingHoistCandidates,
+                    ref hasFloated, ref hasOutOfFlow, ref hasStackingHoistCandidates);
             }
         }
 

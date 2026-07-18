@@ -41,6 +41,35 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task Height_ClampsBlock_ContentOverflowsPastActualBottom()
+        {
+            // CSS 2.1 §10.6.3: a definite (non-auto) height is the used height regardless of
+            // content - a taller child overflows past it rather than growing the box. Regression:
+            // CssLayoutEngine.GetBoxHeight previously only ever applied explicit `height` as a floor
+            // (via Math.Max against the content-driven height), so a box with height smaller than
+            // its content silently grew to fit the content instead of being constrained to it - the
+            // exact same shape max-height already correctly handles above via a separate, unconditional
+            // clamp in ApplyHeight.
+            var html = Wrap(@"
+                <div id='item' style='height:50px;'>
+                    <div style='height:200px;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var item = FindById(root, "item")!;
+            Assert.InRange(item.ActualBoxSizingHeight, 46, 54);
+        }
+
+        [Fact]
+        public async Task MinHeight_WinsOverConflictingHeight()
+        {
+            // CSS 2.1 §10.7: when min-height and height conflict, min-height wins.
+            var html = Wrap(@"<div id='item' style='height:50px; min-height:150px;'></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var item = FindById(root, "item")!;
+            Assert.InRange(item.ActualBoxSizingHeight, 148, 152);
+        }
+
+        [Fact]
         public async Task MinWidth_WinsOverConflictingMaxWidth()
         {
             var html = Wrap(@"

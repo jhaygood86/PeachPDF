@@ -470,6 +470,20 @@ namespace PeachPDF.Html.Core.Dom
                 height = Math.Max(height, box.Words.Sum(w => w.Height));
             }
 
+            // CSS 2.1 §10.6.3: a definite (non-auto) `height` is the used height regardless of
+            // content - content taller than it overflows past ActualBottom (clipped or not per
+            // `overflow`), it does not grow the box. This must run BEFORE min-height, not after (as
+            // the previous order here had it), so min-height can still win on conflict per §10.7.
+            if (CssValueParser.IsValidLength(box.Height))
+            {
+                if (!box.ContainingBlock.IsHeightCalculated && box.Height.EndsWith('%'))
+                {
+                    return null;
+                }
+
+                height = CssValueParser.ParseLength(box.Height, box.ContainingBlock.Size.Height, box) + box.ActualBoxSizeIncludedHeight;
+            }
+
             if (CssValueParser.IsValidLength(box.MinHeight) &&
                 (box.ContainingBlock.IsHeightCalculated || !box.MinHeight.EndsWith('%')))
             {
@@ -478,21 +492,6 @@ namespace PeachPDF.Html.Core.Dom
                 if (minHeight > height)
                 {
                     height = minHeight;
-                }
-            }
-
-            if (CssValueParser.IsValidLength(box.Height))
-            {
-                if (!box.ContainingBlock.IsHeightCalculated && box.Height.EndsWith('%'))
-                {
-                    return null;
-                }
-
-                var cssHeight = CssValueParser.ParseLength(box.Height, box.ContainingBlock.Size.Height, box) + box.ActualBoxSizeIncludedHeight;
-
-                if (cssHeight > height)
-                {
-                    height = cssHeight;
                 }
             }
 
@@ -512,7 +511,17 @@ namespace PeachPDF.Html.Core.Dom
         {
             var boxHeight = GetBoxHeight(box);
             var height = boxHeight ?? 0;
-            box.ActualBottom = Math.Max(box.ActualBottom, box.Location.Y + height);
+
+            // GetBoxHeight already resolves the correct used height when it can (content height for
+            // auto, clamped by min-height; the explicit height itself, also clamped by min-height,
+            // when set) - assign it directly so a definite height smaller than content actually
+            // shrinks ActualBottom instead of leaving it at the content-driven value. Null means
+            // GetBoxHeight couldn't resolve a value at all (e.g. a percentage height against an
+            // indefinite containing block) - keep the existing Math.Max fallback there so the box
+            // keeps its content-driven height instead of collapsing to zero.
+            box.ActualBottom = boxHeight is not null
+                ? box.Location.Y + height
+                : Math.Max(box.ActualBottom, box.Location.Y + height);
             box.IsHeightCalculated = boxHeight is not null;
 
             // Apply max-height constraint. Unlike min-height/explicit-height above (which only ever
