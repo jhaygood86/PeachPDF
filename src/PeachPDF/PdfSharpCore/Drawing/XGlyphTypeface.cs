@@ -29,6 +29,7 @@
 
 using PeachPDF.PdfSharpCore.Fonts;
 using PeachPDF.PdfSharpCore.Fonts.OpenType;
+using PeachPDF.PdfSharpCore.Utils;
 using System;
 using System.Diagnostics;
 using System.Globalization;
@@ -53,13 +54,14 @@ namespace PeachPDF.PdfSharpCore.Drawing
 
         const string KeyPrefix = "tk:";  // "typeface key"
 
-        public XGlyphTypeface(string key, XFontSource fontSource)
+        public XGlyphTypeface(string key, XFontSource fontSource, XStyleSimulations styleSimulations = XStyleSimulations.None)
         {
             string familyName = fontSource.Fontface.name.Name;
             _fontFamily = new XFontFamily(familyName, false);
             _fontface = fontSource.Fontface;
             _isBold = _fontface.os2.IsBold;
             _isItalic = _fontface.os2.IsItalic;
+            _styleSimulations = styleSimulations;
 
             _key = key;
             //_fontFamily =xfont  FontFamilyCache.GetFamilyByName(familyName);
@@ -82,43 +84,91 @@ namespace PeachPDF.PdfSharpCore.Drawing
 
         public static XGlyphTypeface GetOrCreateFrom(string familyName, FontResolvingOptions fontResolvingOptions, IFontResolver fontResolver)
         {
-            // Check cache for requested type face.
             string typefaceKey = ComputeKey(familyName, fontResolvingOptions);
-            if (GlyphTypefaceCache.TryGetGlyphTypeface(typefaceKey, out var glyphTypeface))
+
+            // Custom (AddFont/@font-face-registered) families must never share the global, process-wide
+            // caches below with a different FontResolver instance (i.e. a different PdfGenerator) that
+            // might have registered DIFFERENT bytes under the same family name - route those through
+            // this specific instance's own cache instead. Pure system-font requests keep using the
+            // global caches unchanged, preserving real cross-instance sharing for the common case (no
+            // need to re-resolve e.g. "Arial Bold" separately per PdfGenerator).
+            var instanceResolver = fontResolver as FontResolver;
+            bool useInstanceCache = instanceResolver != null && instanceResolver.IsCustomFamily(familyName);
+
+            if (useInstanceCache)
             {
-                // Just return existing one.
-                return glyphTypeface;
+                if (instanceResolver!.InstanceGlyphTypefacesByKey.TryGetValue(typefaceKey, out var instanceCached))
+                    return instanceCached;
+            }
+            else if (GlyphTypefaceCache.TryGetGlyphTypeface(typefaceKey, out var globalCached))
+            {
+                return globalCached;
             }
 
-            // Resolve typeface by FontFactory.
-            FontResolverInfo fontResolverInfo = FontFactory.ResolveTypeface(familyName, fontResolvingOptions, typefaceKey, fontResolver);
-            if (fontResolverInfo == null)
+            FontResolverInfo? fontResolverInfo;
+            XFontSource fontSource;
+
+            if (useInstanceCache)
             {
-                // No fallback - just stop.
-                throw new InvalidOperationException("No appropriate font found.");
-            }
-            // Now create the font family at the first.
-            XFontFamily fontFamily;
-            if (fontResolverInfo is PlatformFontResolverInfo platformFontResolverInfo)
-            {
+                if (!instanceResolver!.InstanceFontResolverInfosByTypefaceKey.TryGetValue(typefaceKey, out fontResolverInfo))
+                {
+                    fontResolverInfo = instanceResolver.ResolveTypeface(familyName, fontResolvingOptions.Weight, fontResolvingOptions.IsItalic, fontResolvingOptions.Stretch);
+                    if (fontResolverInfo == null)
+                        throw new InvalidOperationException("No appropriate font found.");
+
+                    instanceResolver.InstanceFontResolverInfosByTypefaceKey[typefaceKey] = fontResolverInfo;
+                }
+
+                // The actual glyph bytes still safely reuse FontFactory's global, content-addressed
+                // XFontSource cache (keyed by a hash of the font's own bytes, not by family/face name -
+                // confirmed collision-free across instances, so there's no need for a third cache here).
+                byte[] bytes = instanceResolver.GetFont(fontResolverInfo.FaceName);
+                fontSource = XFontSource.GetOrCreateFrom(bytes);
             }
             else
             {
-                // Create new and exclusively used font family for custom font resolver retrieved font source.
-                fontFamily = XFontFamily.CreateSolitary(fontResolverInfo.FaceName);
+                // Resolve typeface by FontFactory.
+                fontResolverInfo = FontFactory.ResolveTypeface(familyName, fontResolvingOptions, typefaceKey, fontResolver);
+                if (fontResolverInfo == null)
+                {
+                    // No fallback - just stop.
+                    throw new InvalidOperationException("No appropriate font found.");
+                }
+
+                // We have a valid font resolver info. That means we also have an XFontSource object loaded in the cache.
+                fontSource = FontFactory.GetFontSourceByFontName(fontResolverInfo.FaceName);
+                Debug.Assert(fontSource != null);
             }
 
-            // We have a valid font resolver info. That means we also have an XFontSource object loaded in the cache.
-            ////XFontSource fontSource = FontFactory.GetFontSourceByTypefaceKey(fontResolverInfo.FaceName);
-            XFontSource fontSource = FontFactory.GetFontSourceByFontName(fontResolverInfo.FaceName);
-            Debug.Assert(fontSource != null);
+            // Each font source already contains its OpenTypeFontface. Carry through whichever
+            // bold/italic simulation flags the resolver decided this face needs (see
+            // FontResolver.ResolveTypeface's nearest-weight/style matching) - previously computed here
+            // and then dropped, since this constructor never used to accept them at all.
+            var glyphTypeface = new XGlyphTypeface(typefaceKey, fontSource, fontResolverInfo.StyleSimulations);
 
-            // Each font source already contains its OpenTypeFontface.
-            glyphTypeface = new XGlyphTypeface(typefaceKey, fontSource);
-            GlyphTypefaceCache.AddGlyphTypeface(glyphTypeface);
+            if (useInstanceCache)
+            {
+                glyphTypeface.OwningInstanceResolver = instanceResolver;
+                instanceResolver!.InstanceGlyphTypefacesByKey[typefaceKey] = glyphTypeface;
+            }
+            else
+            {
+                GlyphTypefaceCache.AddGlyphTypeface(glyphTypeface);
+            }
 
             return glyphTypeface;
         }
+        /// <summary>
+        /// The specific <see cref="Utils.FontResolver"/> instance this typeface was resolved through its
+        /// OWN per-instance cache for (i.e. a custom/<c>@font-face</c>-registered family - see
+        /// <see cref="GetOrCreateFrom"/>), or null if it came from the global, process-wide caches (a
+        /// pure system-font request, safe to share). <see cref="Drawing.XFont"/> reads this to route
+        /// <see cref="Fonts.FontDescriptorCache"/> lookups the same way - that cache is ALSO keyed by
+        /// this typeface's <see cref="Key"/> string alone, so without this it would silently reintroduce
+        /// the exact cross-instance collision the split above fixes, just one layer further down.
+        /// </summary>
+        internal FontResolver? OwningInstanceResolver { get; set; }
+
         public XFontFamily FontFamily
         {
             get { return _fontFamily; }
@@ -288,8 +338,9 @@ namespace PeachPDF.PdfSharpCore.Drawing
                 }
             }
             string key = KeyPrefix + familyName.ToLowerInvariant()
-                + (fontResolvingOptions.IsItalic ? "/i" : "/n") // normal / oblique / italic  
-                + (fontResolvingOptions.IsBold ? "/700" : "/400") + "/5" // Stretch.Normal
+                + (fontResolvingOptions.IsItalic ? "/i" : "/n") // normal / oblique / italic
+                + "/" + fontResolvingOptions.Weight
+                + "/" + fontResolvingOptions.Stretch
                 + simulationSuffix;
             return key;
         }

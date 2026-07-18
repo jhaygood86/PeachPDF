@@ -70,6 +70,100 @@ namespace PeachPDF.Tests.Integration
             Assert.Contains("Arial", el.FontFamily);
         }
 
+        [Fact]
+        public async Task FontShorthand_WithVar_ResetsUnspecifiedSubPropertiesToInitial()
+        {
+            // Regression: DomParser.ApplyResolvedPropertyValue (the var()-containing shorthand path)
+            // used to skip any sub-property the shorthand text didn't mention instead of resetting it to
+            // its CSS-spec initial value - unlike the non-var() shorthand path, which already did this
+            // correctly via the "initial" sentinel. A prior font-style: italic must not survive a later
+            // "font: bold var(--fs)/1.4 Arial" (which declares no font-style at all).
+            var html = """
+                <!DOCTYPE html><html><body>
+                <div id="el" style="--fs: 16px; font-style: italic; font: bold var(--fs)/1.4 Arial"></div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var el = FindById(root, "el");
+
+            Assert.NotNull(el);
+            Assert.Equal("normal", el!.FontStyle);
+            Assert.Equal("bold", el.FontWeight);
+            Assert.Equal("16px", el.FontSize);
+        }
+
+        [Theory]
+        [InlineData("300", "bolder", 400)]
+        [InlineData("400", "bolder", 700)]
+        [InlineData("600", "bolder", 900)]
+        [InlineData("300", "lighter", 100)]
+        [InlineData("600", "lighter", 400)]
+        [InlineData("800", "lighter", 700)]
+        public async Task FontWeight_BolderLighter_StepsRelativeToRealParentWeight(string parentWeight, string childKeyword, int expected)
+        {
+            var html = $"""
+                <!DOCTYPE html><html><body>
+                <div style="font-weight: {parentWeight}"><span id="el" style="font-weight: {childKeyword}">text</span></div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var el = FindById(root, "el");
+
+            Assert.NotNull(el);
+            Assert.Equal(expected, el!.ActualNumericWeight);
+        }
+
+        [Theory]
+        [InlineData("condensed", 3)]
+        [InlineData("expanded", 7)]
+        [InlineData("ultra-condensed", 1)]
+        [InlineData("ultra-expanded", 9)]
+        public async Task FontStretch_ResolvesToExpectedNumericScale(string keyword, int expected)
+        {
+            var html = $"""
+                <!DOCTYPE html><html><body>
+                <div id="el" style="font-stretch: {keyword}">text</div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var el = FindById(root, "el");
+
+            Assert.NotNull(el);
+            Assert.Equal(keyword, el!.FontStretch);
+            Assert.Equal(expected, el.ActualStretch);
+        }
+
+        [Fact]
+        public async Task FontStretch_IsInherited_FromParentToChild()
+        {
+            var html = """
+                <!DOCTYPE html><html><body>
+                <div style="font-stretch: condensed"><span id="el">text</span></div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var el = FindById(root, "el");
+
+            Assert.NotNull(el);
+            Assert.Equal("condensed", el!.FontStretch);
+            Assert.Equal(3, el.ActualStretch);
+        }
+
+        [Fact]
+        public async Task FontStretch_DefaultsToNormal_WhenUnspecified()
+        {
+            var root = await BuildBoxTree(FontHtml("16px Arial"));
+            var el = FindById(root, "el");
+
+            Assert.NotNull(el);
+            Assert.Equal("normal", el!.FontStretch);
+            Assert.Equal(5, el.ActualStretch);
+        }
+
         // ── helpers ───────────────────────────────────────────────────────────
 
         private static string FontHtml(string fontValue) => $"""

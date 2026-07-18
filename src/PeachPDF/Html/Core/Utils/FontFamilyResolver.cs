@@ -11,13 +11,13 @@ namespace PeachPDF.Html.Core.Utils
     /// </summary>
     internal static class FontFamilyResolver
     {
-        internal static RFont? Resolve(RAdapter adapter, string fontFamilyList, double fsize, RFontStyle style)
+        internal static RFont? Resolve(RAdapter adapter, string fontFamilyList, double fsize, RFontStyle style, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null)
         {
             var families = fontFamilyList.Split(',');
 
             if (families.Length == 1)
             {
-                return adapter.GetFont(fontFamilyList, fsize, style);
+                return adapter.GetFont(fontFamilyList, fsize, style, weight, stretch, obliqueSkewSinus);
             }
 
             RFont? selectedFont = null;
@@ -26,7 +26,7 @@ namespace PeachPDF.Html.Core.Utils
             {
                 var selectedFamily = family.Trim().TrimStart('"', '\'').TrimEnd('"', '\'');
 
-                selectedFont = adapter.GetFont(selectedFamily, fsize, style);
+                selectedFont = adapter.GetFont(selectedFamily, fsize, style, weight, stretch, obliqueSkewSinus);
 
                 if (selectedFont is not null)
                 {

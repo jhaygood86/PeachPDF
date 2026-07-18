@@ -45,6 +45,14 @@ namespace PeachPDF.Html.Core.Utils
         public const string Capitalize = "capitalize";
         public const string Center = "center";
         public const string Collapse = "collapse";
+        public const string Condensed = "condensed";
+        public const string SemiCondensed = "semi-condensed";
+        public const string ExtraCondensed = "extra-condensed";
+        public const string UltraCondensed = "ultra-condensed";
+        public const string Expanded = "expanded";
+        public const string SemiExpanded = "semi-expanded";
+        public const string ExtraExpanded = "extra-expanded";
+        public const string UltraExpanded = "ultra-expanded";
         public const string Counter = "counter";
         public const string ContentBox = "content-box";
         public const string CurrentColor = "currentcolor";

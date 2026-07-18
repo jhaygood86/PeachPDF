@@ -512,21 +512,26 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             }
 
 #if ITALIC_SIMULATION
+            // A declared "oblique <angle>" (see XFont.ObliqueSkewSinus) drives the exact shear amount;
+            // plain "italic"/bare "oblique" (the common case, ObliqueSkewSinus null) keeps the fixed
+            // sin(20°) approximation this renderer has always used.
+            double skewSinus = font.ObliqueSkewSinus ?? Const.ItalicSkewAngleSinus;
+
             if (italicSimulation)
             {
                 if (_gfxState.ItalicSimulationOn)
                 {
-                    AdjustTdOffset(ref pos, verticalOffset, true);
+                    AdjustTdOffset(ref pos, verticalOffset, skewSinus);
                     AppendFormatArgs("{0:" + format2 + "} {1:" + format2 + "} Td\n{2} Tj\n", pos.X, pos.Y, text);
                 }
                 else
                 {
-                    // Italic simulation is done by skewing characters 20° to the right.
-                    XMatrix m = new XMatrix(1, 0, Const.ItalicSkewAngleSinus, 1, pos.X, pos.Y);
+                    // Italic simulation is done by skewing characters to the right.
+                    XMatrix m = new XMatrix(1, 0, skewSinus, 1, pos.X, pos.Y);
                     AppendFormatArgs("{0:" + format2 + "} {1:" + format2 + "} {2:" + format2 + "} {3:" + format2 + "} {4:" + format2 + "} {5:" + format2 + "} Tm\n{6} Tj\n",
                         m.M11, m.M12, m.M21, m.M22, m.OffsetX, m.OffsetY, text);
                     _gfxState.ItalicSimulationOn = true;
-                    AdjustTdOffset(ref pos, verticalOffset, false);
+                    AdjustTdOffset(ref pos, verticalOffset, null);
                 }
             }
             else
@@ -537,11 +542,11 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                     AppendFormatArgs("{0:" + format2 + "} {1:" + format2 + "} {2:" + format2 + "} {3:" + format2 + "} {4:" + format2 + "} {5:" + format2 + "} Tm\n{6} Tj\n",
                         m.M11, m.M12, m.M21, m.M22, m.OffsetX, m.OffsetY, text);
                     _gfxState.ItalicSimulationOn = false;
-                    AdjustTdOffset(ref pos, verticalOffset, false);
+                    AdjustTdOffset(ref pos, verticalOffset, null);
                 }
                 else
                 {
-                    AdjustTdOffset(ref pos, verticalOffset, false);
+                    AdjustTdOffset(ref pos, verticalOffset, null);
                     AppendFormatArgs("{0:" + format2 + "} {1:" + format2 + "} Td {2} Tj\n", pos.X, pos.Y, text);
                 }
             }
@@ -1551,18 +1556,20 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// </summary>
         /// <param name="pos">The absolute text position.</param>
         /// <param name="dy">The dy.</param>
-        /// <param name="adjustSkew">true if skewing for italic simulation is currently on.</param>
-        void AdjustTdOffset(ref XPoint pos, double dy, bool adjustSkew)
+        /// <param name="skewSinus">Non-null (the sine of the italic-simulation skew angle actually in
+        /// effect - see <see cref="XFont.ObliqueSkewSinus"/>) if skewing for italic simulation is
+        /// currently on; null otherwise.</param>
+        void AdjustTdOffset(ref XPoint pos, double dy, double? skewSinus)
         {
             pos.Y += dy;
             // Reference: TABLE 5.5  Text-positioning operators / Page 406
             XPoint posSave = pos;
             // Map from absolute to relative position.
             pos = pos - new XVector(_gfxState.RealizedTextPosition.X, _gfxState.RealizedTextPosition.Y);
-            if (adjustSkew)
+            if (skewSinus is { } sinus)
             {
                 // In case that italic simulation is on X must be adjusted according to Y offset. Weird but works :-)
-                pos.X -= Const.ItalicSkewAngleSinus * pos.Y;
+                pos.X -= sinus * pos.Y;
             }
             _gfxState.RealizedTextPosition = posSave;
         }

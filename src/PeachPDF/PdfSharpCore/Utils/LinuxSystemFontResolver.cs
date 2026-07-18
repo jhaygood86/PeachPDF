@@ -72,6 +72,17 @@ namespace PeachPDF.PdfSharpCore.Utils
         [DllImport(libfontconfig)] public static extern FcFontSetHandle FcFontList(IntPtr config, FcPatternHandle pattern, FcObjectSetHandle os);
         [DllImport(libfontconfig)] public static extern void FcFontSetDestroy(IntPtr fs);
 
+        // Generic-family alias resolution (the managed equivalent of the `fc-match serif` CLI command):
+        // build a pattern requesting the generic family name, let fontconfig apply the user/system config's
+        // own substitution rules (exactly what maps "serif"/"sans-serif"/etc. to a real installed family on
+        // this distro), then read back the resolved family from the matched pattern.
+        [DllImport(libfontconfig)] private static extern int FcPatternAddString(FcPatternHandle pattern, [MarshalAs(UnmanagedType.LPStr)] string obj, [MarshalAs(UnmanagedType.LPStr)] string value);
+        [DllImport(libfontconfig)] private static extern void FcConfigSubstitute(IntPtr config, FcPatternHandle pattern, int kind);
+        [DllImport(libfontconfig)] private static extern void FcDefaultSubstitute(FcPatternHandle pattern);
+        [DllImport(libfontconfig)] private static extern FcPatternHandle FcFontMatch(IntPtr config, FcPatternHandle pattern, ref int result);
+
+        private const int FcMatchPattern = 0;
+
         internal struct FcFontSet
         {
             public int nfont;
@@ -132,6 +143,44 @@ namespace PeachPDF.PdfSharpCore.Utils
             }
         }
 
+
+        /// <summary>
+        /// Resolves a CSS generic family name (<c>serif</c>/<c>sans-serif</c>/<c>monospace</c>/
+        /// <c>cursive</c>/<c>fantasy</c>) to the real installed family fontconfig maps it to on this
+        /// system - the managed equivalent of running <c>fc-match &lt;genericFamily&gt;</c>. This is how
+        /// Chromium itself resolves generic families on Linux: it delegates to the platform's own
+        /// fontconfig configuration rather than hardcoding one specific family name that would be wrong
+        /// for whichever distro doesn't happen to have it (unlike Windows/macOS/Android, where Chromium
+        /// does hardcode specific names - see <see cref="Html.Core.Utils.GenericFontFamilyResolver"/>).
+        /// Returns null if <c>libfontconfig.so.1</c> isn't available or resolution otherwise fails, so the
+        /// caller can fall back to a reasonable hardcoded substitute.
+        /// </summary>
+        public static string? ResolveGenericFamily(string genericFamily)
+        {
+            try
+            {
+                var config = fcConfig.Value;
+                using var pattern = FcPatternCreate();
+                if (pattern.IsInvalid) return null;
+
+                FcPatternAddString(pattern, "family", genericFamily);
+                FcConfigSubstitute(config, pattern, FcMatchPattern);
+                FcDefaultSubstitute(pattern);
+
+                var result = 0;
+                using var matched = FcFontMatch(config, pattern, ref result);
+                if (matched.IsInvalid) return null;
+
+                return GetString(matched.DangerousGetHandle(), "family");
+            }
+            catch (Exception ex)
+            {
+#if DEBUG
+                Console.Error.WriteLine(ex.ToString());
+#endif
+                return null;
+            }
+        }
 
         internal static bool IsSupportedFontFile(string path) =>
             path.EndsWith(".ttf", StringComparison.OrdinalIgnoreCase) ||

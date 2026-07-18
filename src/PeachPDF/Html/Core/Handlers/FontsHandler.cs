@@ -41,9 +41,16 @@ namespace PeachPDF.Html.Core.Handlers
         private readonly Dictionary<string, RFontFamily> _existingFontFamilies = new(StringComparer.InvariantCultureIgnoreCase);
 
         /// <summary>
-        /// cache of all the font used not to create same font again and again
+        /// cache of all the font used not to create same font again and again - keyed by (style, weight,
+        /// stretch, obliqueSkewSinus) since two different CSS numeric weights (e.g. 300 and 600) can
+        /// share the same RFontStyle.Bold bit (both "not bold" by the &gt;=700 threshold) while still
+        /// resolving to different nearest-weight-matched faces, and must not collide in this cache;
+        /// likewise for stretch (e.g. condensed vs. normal at the same weight/style). The declared
+        /// oblique angle (when any - see FontObliqueAngleResolver) is a rendering-only detail that
+        /// doesn't affect face selection, but two requests differing only in it would otherwise
+        /// incorrectly share one cached RFont and silently keep whichever angle was cached first.
         /// </summary>
-        private readonly Dictionary<string, Dictionary<double, Dictionary<RFontStyle, RFont?>>> _fontsCache = new(StringComparer.InvariantCultureIgnoreCase);
+        private readonly Dictionary<string, Dictionary<double, Dictionary<(RFontStyle Style, int Weight, int Stretch, double? ObliqueSkewSinus), RFont?>>> _fontsCache = new(StringComparer.InvariantCultureIgnoreCase);
 
         #endregion
 
@@ -111,10 +118,21 @@ namespace PeachPDF.Html.Core.Handlers
         /// Get cached font instance for the given font properties.<br/>
         /// Improve performance not to create same font multiple times.
         /// </summary>
+        /// <param name="family">the font family name</param>
+        /// <param name="size">font size</param>
+        /// <param name="style">font style</param>
+        /// <param name="weight">The real CSS Fonts numeric weight (1-1000) - defaults to a value derived
+        /// from <paramref name="style"/>'s Bold bit (700/400) for callers that don't have a numeric
+        /// weight to hand.</param>
+        /// <param name="stretch">The real CSS Fonts numeric stretch (1-9, 5 = normal) - defaults to
+        /// normal for callers that don't have one to hand.</param>
+        /// <param name="obliqueSkewSinus">The sine of a declared <c>oblique &lt;angle&gt;</c>, when any.</param>
         /// <returns>cached font instance</returns>
-        public RFont? GetCachedFont(string family, double size, RFontStyle style)
+        public RFont? GetCachedFont(string family, double size, RFontStyle style, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null)
         {
-            var font = TryGetFont(family, size, style);
+            var resolvedWeight = weight ?? ((style & RFontStyle.Bold) != 0 ? 700 : 400);
+            var resolvedStretch = stretch ?? 5;
+            var font = TryGetFont(family, size, style, resolvedWeight, resolvedStretch, obliqueSkewSinus);
 
             if (font == null)
             {
@@ -122,21 +140,21 @@ namespace PeachPDF.Html.Core.Handlers
                 {
                     if (_fontsMapping.TryGetValue(family, out var mappedFamily))
                     {
-                        font = TryGetFont(mappedFamily, size, style);
+                        font = TryGetFont(mappedFamily, size, style, resolvedWeight, resolvedStretch, obliqueSkewSinus);
                         if (font == null)
                         {
-                            font = CreateFont(mappedFamily, size, style);
-                            _fontsCache[mappedFamily][size][style] = font;
+                            font = CreateFont(mappedFamily, size, style, resolvedWeight, resolvedStretch, obliqueSkewSinus);
+                            _fontsCache[mappedFamily][size][(style, resolvedWeight, resolvedStretch, obliqueSkewSinus)] = font;
                         }
                     }
                 }
 
                 if (existingFontFamily is not null)
                 {
-                    font = CreateFont(existingFontFamily.Name, size, style);
+                    font = CreateFont(existingFontFamily.Name, size, style, resolvedWeight, resolvedStretch, obliqueSkewSinus);
                 }
 
-                _fontsCache[family][size][style] = font;
+                _fontsCache[family][size][(style, resolvedWeight, resolvedStretch, obliqueSkewSinus)] = font;
             }
 
             return font;
@@ -148,7 +166,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// <summary>
         /// Get cached font if it exists in cache or null if it is not.
         /// </summary>
-        private RFont? TryGetFont(string family, double size, RFontStyle style)
+        private RFont? TryGetFont(string family, double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus)
         {
             RFont? font = null;
 
@@ -156,7 +174,7 @@ namespace PeachPDF.Html.Core.Handlers
             {
                 if (a.TryGetValue(size, out var b))
                 {
-                    b.TryGetValue(style, out font);
+                    b.TryGetValue((style, weight, stretch, obliqueSkewSinus), out font);
                 }
                 else
                 {
@@ -165,7 +183,7 @@ namespace PeachPDF.Html.Core.Handlers
             }
             else
             {
-                _fontsCache[family] = new Dictionary<double, Dictionary<RFontStyle, RFont?>>
+                _fontsCache[family] = new Dictionary<double, Dictionary<(RFontStyle, int, int, double?), RFont?>>
                 {
                     [size] = new()
                 };
@@ -176,21 +194,21 @@ namespace PeachPDF.Html.Core.Handlers
         /// <summary>
         /// create font (try using existing font family to support custom fonts)
         /// </summary>
-        private RFont CreateFont(string family, double size, RFontStyle style)
+        private RFont CreateFont(string family, double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus)
         {
             RFontFamily? fontFamily;
             try
             {
                 return _existingFontFamilies.TryGetValue(family, out fontFamily)
-                    ? _adapter.CreateFont(fontFamily, size, style)
-                    : _adapter.CreateFont(family, size, style);
+                    ? _adapter.CreateFont(fontFamily, size, style, weight, stretch, obliqueSkewSinus)
+                    : _adapter.CreateFont(family, size, style, weight, stretch, obliqueSkewSinus);
             }
             catch
             {
                 // handle possibility of no requested style exists for the font, use regular then
                 return _existingFontFamilies.TryGetValue(family, out fontFamily)
-                    ? _adapter.CreateFont(fontFamily, size, RFontStyle.Regular)
-                    : _adapter.CreateFont(family, size, RFontStyle.Regular);
+                    ? _adapter.CreateFont(fontFamily, size, RFontStyle.Regular, weight, stretch, obliqueSkewSinus)
+                    : _adapter.CreateFont(family, size, RFontStyle.Regular, weight, stretch, obliqueSkewSinus);
             }
         }
 

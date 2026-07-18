@@ -137,9 +137,18 @@ namespace PeachPDF.Adapters
             if (!(font.Height < 0)) return Utils.Convert(size, PixelsPerPoint);
 
             var height = realFont.Height;
-            var fontResolver = ((PdfSharpAdapter)_adapter).FontResolver;
-            var descent = realFont.Size * realFont.FontFamily.GetCellDescent(realFont.Style, fontResolver) / realFont.FontFamily.GetEmHeight(realFont.Style, fontResolver);
-            var ascent = realFont.Size * realFont.FontFamily.GetCellAscent(realFont.Style, fontResolver) / realFont.FontFamily.GetEmHeight(realFont.Style, fontResolver);
+            // Read ascent/descent/em-height directly off realFont's OWN already-resolved descriptor
+            // instead of re-deriving them via XFontFamily.GetCellAscent/GetCellDescent/GetEmHeight, which
+            // re-resolve a font by realFont.FontFamily.Name (the physical font's own internal name, e.g.
+            // "Source Code Pro" - not the CSS-facing family alias that was actually registered) through
+            // IFontResolver - for a custom/@font-face-registered family this can resolve to an entirely
+            // unrelated font (no family is registered under the font's own internal name), and even when
+            // it does find something, it bypasses the per-instance cache routing that keeps two
+            // PdfGenerators' same-named custom fonts from colliding (see XFont.Descriptor and
+            // XGlyphTypeface.OwningInstanceResolver).
+            var descriptor = realFont.Descriptor;
+            var descent = realFont.Size * descriptor.Descender / descriptor.UnitsPerEm;
+            var ascent = realFont.Size * descriptor.Ascender / descriptor.UnitsPerEm;
             fontAdapter.SetMetrics(height, (int)Math.Round((height - descent + 1f)), (int)Math.Round(ascent));
 
             return Utils.Convert(size, PixelsPerPoint);

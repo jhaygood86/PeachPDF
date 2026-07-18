@@ -234,13 +234,18 @@ Per CSS2.1 §14.2, the root element's background doesn't just paint its own box 
 |----------|--------------|-------|
 | `color` | [color](https://developer.mozilla.org/en-US/docs/Web/CSS/color) | Full support including named colors, hex, `rgb()`, `rgba()` |
 | `font` | [font](https://developer.mozilla.org/en-US/docs/Web/CSS/font) | Shorthand supported; all components are parsed |
-| `font-family` | [font-family](https://developer.mozilla.org/en-US/docs/Web/CSS/font-family) | Full support; generic families (`serif`, `sans-serif`, `monospace`) resolve to system fonts |
+| `font-family` | [font-family](https://developer.mozilla.org/en-US/docs/Web/CSS/font-family) | Full support. Generic families (`serif`, `sans-serif`, `monospace`, `cursive`, `fantasy`) and `system-ui` resolve to a real installed substitute matching actual Chromium behavior per platform (hardcoded specific families on Windows/macOS/Android, delegated to the OS's own fontconfig on Linux) — see [Fonts](index.md#fonts) for the full per-platform table. Every mapping is verified against the system's actually-installed fonts before use, falling back to the platform default font otherwise, so a requested substitute that isn't present never silently resolves to an arbitrary, unrelated font |
 | `font-size` | [font-size](https://developer.mozilla.org/en-US/docs/Web/CSS/font-size) | Full support including absolute sizes (`medium`, `large`, etc.), relative sizes (`smaller`, `larger`), lengths, and percentages |
-| `font-style` | [font-style](https://developer.mozilla.org/en-US/docs/Web/CSS/font-style) | `normal`, `italic`, `oblique` |
+| `font-stretch` | [font-stretch](https://developer.mozilla.org/en-US/docs/Web/CSS/font-stretch) | The 9 CSS Fonts Level 3 keywords (`ultra-condensed` … `normal` … `ultra-expanded`); inherited and cascaded, and consulted for real face selection when a family has multiple registered faces at different stretch values (e.g. two `@font-face` rules with different `font-stretch` descriptors) — nearest-stretch matching per CSS Fonts Level 4 §5.2. Percentage/range values (the variable-font syntax) are not supported |
+| `font-style` | [font-style](https://developer.mozilla.org/en-US/docs/Web/CSS/font-style) | `normal`, `italic`, `oblique`, and CSS Fonts Level 4's `oblique <angle>` (e.g. `oblique 10deg`) — when no real oblique/italic face is available and the renderer has to synthesize one, an explicitly declared angle drives the exact synthesized shear amount instead of a fixed default |
 | `font-variant` | [font-variant](https://developer.mozilla.org/en-US/docs/Web/CSS/font-variant) | `normal` and `small-caps` are parsed and actually rendered: since PeachPDF has no OpenType shaping engine for real `smcp`/`c2sc` glyph substitution, `small-caps` is synthesized — originally-lowercase letters are upper-cased and drawn at a reduced size relative to the rest of the run. Non-standard/proprietary function-token values (e.g. Prince's `prince-opentype(...)`) are not recognized and resolve to `normal` |
-| `font-weight` | [font-weight](https://developer.mozilla.org/en-US/docs/Web/CSS/font-weight) | Keyword (`bold`, `normal`, `lighter`, `bolder`) and numeric (`100`–`900`) values |
+| `font-weight` | [font-weight](https://developer.mozilla.org/en-US/docs/Web/CSS/font-weight) | Keyword (`bold`, `normal`) and numeric (`1`–`1000`) values. `bolder`/`lighter` step relative to the parent's own resolved weight per the CSS2.1 §15.6 worked table, not a fixed always-bold/always-normal result. Face selection uses real CSS Fonts Level 4 §5.2 nearest-weight matching (not just an exact Regular/Bold pick) among every face registered for a family; when no face close enough to the request exists, a faux-bold is synthesized (fill+stroke render mode) rather than rendering with no visual distinction |
 | `line-height` | [line-height](https://developer.mozilla.org/en-US/docs/Web/CSS/line-height) | Full support |
 | `vertical-align` | [vertical-align](https://developer.mozilla.org/en-US/docs/Web/CSS/vertical-align) | `baseline`, `sub`, `super`, `top`, `middle`, `bottom`, `text-top`, `text-bottom`, and length/percentage values — full support for any inline-level box relative to its line box, not just table cells (which use a separate, table-specific alignment algorithm — see [Tables](#tables)) |
+
+#### Font selection is per-run, not per-character
+
+PeachPDF resolves one font for an entire text run (a `CssBox`'s contiguous text), not per individual character. A run whose resolved font lacks a glyph for some of its characters (e.g. mixed-script text, or an emoji/symbol the font doesn't cover) shows missing-glyph boxes for those characters rather than falling back to a different, glyph-covering font — there is no per-character glyph-coverage fallback across multiple fonts. Splitting mixed-script content into separate elements with their own `font-family` is the current workaround.
 
 ### Text Layout
 
@@ -388,7 +393,7 @@ These properties control how content breaks across PDF pages. Both the legacy `p
 
 | At-rule | Notes |
 |---------|-------|
-| `@font-face` | Full support; see [Fonts](index.md#fonts) |
+| `@font-face` | `src` supports `url()` (remote/data-URI, with a comma-separated fallback list — each candidate is tried in order until one loads) and `local()`. The rule's own `font-weight`/`font-style`/`font-stretch` descriptors are authoritative for how that specific resource participates in matching, independent of what the font file's own internal tables say — this is what makes real multi-variant families (e.g. separate rules for weight 400 and 700) work reliably. `unicode-range` is parsed but not honored: all sources apply to the full character range regardless of a declared subset. See [Fonts](index.md#fonts) |
 | `@page` | Full support; see [CSS Paged Media](#css-paged-media) below |
 | `@media` | Partial support; `print` and `all` media types apply, `screen` is ignored; see [CSS Media Queries](#css-media-queries) below |
 | `@keyframes` | Not supported |

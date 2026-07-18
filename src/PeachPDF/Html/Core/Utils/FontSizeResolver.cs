@@ -1,3 +1,4 @@
+using System;
 using PeachPDF.Html.Core.Parse;
 
 namespace PeachPDF.Html.Core.Utils
@@ -31,7 +32,10 @@ namespace PeachPDF.Html.Core.Utils
                 _ => CssValueParser.ParseLength(fontSizeValue, parentSize, parentSize, remSize, null, true, true)
             };
 
-            return fsize <= 1f ? CssConstants.FontSize : fsize;
+            // A legitimately-parsed font-size of 0 (or any other small value) must be honored, not
+            // silently replaced with the medium default - only a negative computed value (e.g. from a
+            // calc() expression) is spec-clamped, to zero, not to the default.
+            return Math.Max(0, fsize);
         }
     }
 }

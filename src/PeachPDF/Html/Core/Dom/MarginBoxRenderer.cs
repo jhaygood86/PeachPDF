@@ -309,13 +309,13 @@ namespace PeachPDF.Html.Core.Dom
                   ?? FontSizeResolver.Resolve(sizeStr, CssConstants.FontSize, CssConstants.FontSize);
 
             var fontStyle = RFontStyle.Regular;
-            if (weightStr is not null &&
-                (weightStr.Equals("bold", StringComparison.OrdinalIgnoreCase) ||
-                 (int.TryParse(weightStr, out var weight) && weight >= 700)))
+            // Margin boxes have no real inheritance chain (see FontSizeResolver's own doc comment), so
+            // bolder/lighter step relative to the CSS initial weight (400) rather than a real parent's.
+            if (weightStr is not null && FontWeightResolver.Resolve(weightStr, 400) >= 700)
                 fontStyle |= RFontStyle.Bold;
             if (styleStr is not null &&
                 (styleStr.Equals("italic", StringComparison.OrdinalIgnoreCase) ||
-                 styleStr.Equals("oblique", StringComparison.OrdinalIgnoreCase)))
+                 styleStr.StartsWith("oblique", StringComparison.OrdinalIgnoreCase)))
                 fontStyle |= RFontStyle.Italic;
 
             // MarginBoxRenderer paints in raw, unshrunk PDF-point space (margin-box rects are computed

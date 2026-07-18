@@ -339,7 +339,14 @@ namespace PeachPDF.Html.Core.Parse
             };
         }
 
-        public string GetFontFamilyByName(string propValue)
+        /// <returns>
+        /// The first comma-separated candidate that's actually installed/registered, or null if none of
+        /// them are - callers fall back to <see cref="CssConstants.DefaultFont"/> in that case (see
+        /// <c>CssBoxProperties.ActualFont</c>), same as when the whole family list fails to resolve any
+        /// other way. Previously returned the literal string "inherit" as a not-found sentinel, which was
+        /// confusable with the real CSS <c>inherit</c> keyword downstream.
+        /// </returns>
+        public string? GetFontFamilyByName(string propValue)
         {
             int start = 0;
             while (start < propValue.Length)
@@ -363,7 +370,7 @@ namespace PeachPDF.Html.Core.Parse
                 start = end;
             }
 
-            return CssConstants.Inherit;
+            return null;
         }
 
         /// <summary>
@@ -380,16 +387,45 @@ namespace PeachPDF.Html.Core.Parse
             return urlToken is not null ? new CssImage.Url(urlToken.Data) : null;
         }
 
-        public static CssFontFace GetFontFacePropertyValue(string propValue)
+        /// <summary>
+        /// Parses an <c>@font-face</c> <c>src</c> value into one <see cref="CssFontFace"/> candidate per
+        /// comma-separated entry, in declaration order (e.g. <c>url(a.woff2) format('woff2'), url(a.woff)
+        /// format('woff'), local('Foo')</c>) - the real, common <c>src</c> fallback-list shape. Splitting on
+        /// top-level <see cref="TokenType.Comma"/> tokens first (rather than matching a single <c>url()</c>/
+        /// <c>format()</c>/etc. across the whole value) is required: matching across the whole token stream
+        /// at once threw <see cref="InvalidOperationException"/> the moment more than one <c>url()</c> was
+        /// present, since each candidate token match used to be an unqualified <c>.SingleOrDefault()</c> over
+        /// the entire list.
+        /// </summary>
+        public static List<CssFontFace> GetFontFacePropertyValue(string propValue)
         {
             var tokens = GetCssTokens(propValue);
+            var result = new List<CssFontFace>();
+            var segment = new List<Token>();
 
-            var urlToken = tokens.OfType<UrlToken>().SingleOrDefault();
-            var formatToken = tokens.OfType<FunctionToken>().SingleOrDefault(x => x.Data == "format");
-            var techToken = tokens.OfType<FunctionToken>().SingleOrDefault(x => x.Data == "tech");
-            var localToken = tokens.OfType<FunctionToken>().SingleOrDefault(x => x.Data == "local");
+            void FlushSegment()
+            {
+                if (segment.Count == 0) return;
 
-            return new CssFontFace(urlToken?.Data, formatToken?.ArgumentTokens?.FirstOrDefault()?.Data, techToken?.ArgumentTokens?.FirstOrDefault()?.Data, localToken?.ArgumentTokens?.FirstOrDefault()?.Data);
+                var urlToken = segment.OfType<UrlToken>().SingleOrDefault();
+                var formatToken = segment.OfType<FunctionToken>().SingleOrDefault(x => x.Data == "format");
+                var techToken = segment.OfType<FunctionToken>().SingleOrDefault(x => x.Data == "tech");
+                var localToken = segment.OfType<FunctionToken>().SingleOrDefault(x => x.Data == "local");
+
+                result.Add(new CssFontFace(urlToken?.Data, formatToken?.ArgumentTokens?.FirstOrDefault()?.Data, techToken?.ArgumentTokens?.FirstOrDefault()?.Data, localToken?.ArgumentTokens?.FirstOrDefault()?.Data));
+                segment = [];
+            }
+
+            foreach (var token in tokens)
+            {
+                if (token.Type == TokenType.Comma)
+                    FlushSegment();
+                else
+                    segment.Add(token);
+            }
+            FlushSegment();
+
+            return result;
         }
 
         public static List<Token> GetCssTokens(string propValue)

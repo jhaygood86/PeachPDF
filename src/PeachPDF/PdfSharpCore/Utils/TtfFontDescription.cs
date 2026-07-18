@@ -9,9 +9,33 @@ namespace PeachPDF.PdfSharpCore.Utils
 {
     internal readonly struct TtfFontDescription
     {
+        /// <summary>Default CSS Fonts numeric weight (400 = "normal") used when a font has no OS/2 table, or its <see cref="Weight"/> field is out of the valid 1-1000 range.</summary>
+        public const int DefaultWeight = 400;
+
+        /// <summary>Default CSS Fonts stretch value (5 = "normal" on the 1-9 <c>usWidthClass</c> scale) used when a font has no OS/2 table, or its value is out of the valid 1-9 range.</summary>
+        public const int DefaultStretch = 5;
+
         public string FontFamilyInvariantCulture { get; init; }
         public string FontNameInvariantCulture { get; init; }
         public XFontStyle Style { get; init; }
+
+        /// <summary>
+        /// CSS Fonts Level 4 numeric weight (1-1000), read from the OS/2 table's <c>usWeightClass</c>
+        /// field when present and valid; falls back to a value derived from <see cref="Style"/>'s
+        /// name-table-subfamily-sniffed Bold bit (700 if bold, else <see cref="DefaultWeight"/>) when
+        /// OS/2 is absent or its <c>usWeightClass</c> is 0 (a real font can legitimately omit/zero this
+        /// field even though the spec range is 1-1000). Used by <see cref="FontResolver"/>'s nearest-
+        /// weight matching (CSS Fonts Level 4 §5.2) instead of the coarser 4-slot <see cref="Style"/>
+        /// bucket alone.
+        /// </summary>
+        public int Weight { get; init; }
+
+        /// <summary>
+        /// CSS Fonts Level 3 <c>font-stretch</c> classification (1-9, matching the OS/2 <c>usWidthClass</c>
+        /// scale directly: 1=ultra-condensed ... 5=normal ... 9=ultra-expanded), read from the OS/2 table
+        /// when present and valid; <see cref="DefaultStretch"/> (normal) otherwise.
+        /// </summary>
+        public int Stretch { get; init; }
 
         public static TtfFontDescription LoadDescription(string path)
         {
@@ -21,7 +45,7 @@ namespace PeachPDF.PdfSharpCore.Utils
 
         public static TtfFontDescription LoadDescription(Stream stream)
         {
-            // TTF/OTF files are big-endian. Read the offset table to locate the name table.
+            // TTF/OTF files are big-endian. Read the offset table to locate the name/OS2 tables.
             Span<byte> buf4 = stackalloc byte[4];
             Span<byte> buf2 = stackalloc byte[2];
 
@@ -33,6 +57,7 @@ namespace PeachPDF.PdfSharpCore.Utils
             stream.ReadExactly(buf2); // rangeShift
 
             long nameTableOffset = -1;
+            long os2TableOffset = -1;
             for (int i = 0; i < numTables; i++)
             {
                 stream.ReadExactly(buf4);
@@ -44,6 +69,8 @@ namespace PeachPDF.PdfSharpCore.Utils
 
                 if (tag == "name")
                     nameTableOffset = tableOffset;
+                else if (tag == "OS/2")
+                    os2TableOffset = tableOffset;
             }
 
             if (nameTableOffset < 0)
@@ -87,12 +114,41 @@ namespace PeachPDF.PdfSharpCore.Utils
                 _                               => XFontStyle.Regular
             };
 
+            var (weight, stretch) = ReadOs2WeightAndStretch(stream, os2TableOffset);
+            if (weight == 0)
+                weight = style is XFontStyle.Bold or XFontStyle.BoldItalic ? 700 : DefaultWeight;
+
             return new TtfFontDescription
             {
                 FontFamilyInvariantCulture = familyName ?? fullName ?? string.Empty,
                 FontNameInvariantCulture   = fullName   ?? familyName ?? string.Empty,
-                Style                      = style
+                Style                      = style,
+                Weight                     = weight,
+                Stretch                    = stretch
             };
+        }
+
+        /// <summary>
+        /// Reads <c>usWeightClass</c> (offset 4) and <c>usWidthClass</c> (offset 6) from the OS/2 table,
+        /// per the OpenType spec's OS/2 table layout (both fields are present in every OS/2 table
+        /// version, including the oldest version 0). Returns (0, <see cref="DefaultStretch"/>) - a
+        /// sentinel the caller substitutes a Style-derived default for - when there's no OS/2 table at
+        /// all, or a value is outside its spec-valid range (weight: 1-1000, stretch: 1-9).
+        /// </summary>
+        private static (int Weight, int Stretch) ReadOs2WeightAndStretch(Stream stream, long os2TableOffset)
+        {
+            if (os2TableOffset < 0) return (0, DefaultStretch);
+
+            Span<byte> buf2 = stackalloc byte[2];
+            stream.Seek(os2TableOffset + 4, SeekOrigin.Begin);
+            stream.ReadExactly(buf2);
+            var weightClass = ReadUInt16BE(buf2);
+            stream.ReadExactly(buf2);
+            var widthClass = ReadUInt16BE(buf2);
+
+            var weight = weightClass is >= 1 and <= 1000 ? weightClass : 0;
+            var stretch = widthClass is >= 1 and <= 9 ? widthClass : DefaultStretch;
+            return (weight, stretch);
         }
 
         // Prefers platformID=3/encodingID=1 (Windows Unicode) with en-US, then any language,

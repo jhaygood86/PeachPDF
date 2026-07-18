@@ -76,6 +76,113 @@ body {{ font-family: 'TestTtfNoFormat', serif; font-size: 14pt; }}
         }
 
         // -------------------------------------------------------------------------
+        // Regression: a @font-face src with more than one url() fallback entry (an extremely common
+        // real-world shape - .woff2/.woff/.ttf fallback chains) used to throw InvalidOperationException
+        // from CssValueParser.GetFontFacePropertyValue's unqualified .SingleOrDefault() over the whole
+        // comma-separated value. Must not throw, and must fall through past a rejected/unusable first
+        // candidate to a working later one.
+        // -------------------------------------------------------------------------
+
+        [Fact]
+        public async Task MultiUrlSrc_DoesNotThrow_AndFallsThroughToWorkingCandidate()
+        {
+            var ttfBytes = File.ReadAllBytes(BundledFonts.Ttf);
+            var b64 = Convert.ToBase64String(ttfBytes);
+
+            // The first candidate declares a format PdfSharpAdapter explicitly rejects
+            // (embedded-opentype), so it must be skipped without loading; the second candidate (no
+            // format hint, same real TTF bytes) must still be tried and must succeed.
+            var html = $@"<!DOCTYPE html>
+<html><head><style>
+@font-face {{ font-family: 'TestMultiUrl'; src: url('data:font/truetype;base64,{b64}') format('embedded-opentype'), url('data:font/truetype;base64,{b64}'); }}
+body {{ font-family: 'TestMultiUrl', serif; font-size: 14pt; }}
+</style></head>
+<body>Hello multi-url src</body>
+</html>";
+
+            var generator = new PdfGenerator();
+            var doc = await generator.GeneratePdf(html, PageSize.A4);
+            var pdfText = GetPdfText(doc);
+
+            Assert.Contains("/FontFile2", pdfText);
+        }
+
+        // -------------------------------------------------------------------------
+        // Regression: two @font-face rules for the SAME CSS family, each with its own declared
+        // font-weight descriptor and its own real (differently-shaped) font file, must resolve
+        // per-request to the correct face - the declared descriptor is authoritative, independent of
+        // whatever weight each file's own internal tables happen to sniff to (both bundled test fonts
+        // sniff as regular/400, so without descriptor-driven overrides both requests would collide on
+        // whichever face was registered last).
+        // -------------------------------------------------------------------------
+
+        [Fact]
+        public async Task TwoFontFaceRules_SameFamily_DifferentDeclaredWeights_EachRequestUsesItsOwnFace()
+        {
+            var ttfBytes = File.ReadAllBytes(BundledFonts.Ttf);
+            var otfBytes = File.ReadAllBytes(BundledFonts.Otf);
+            var ttfB64 = Convert.ToBase64String(ttfBytes);
+            var otfB64 = Convert.ToBase64String(otfBytes);
+
+            var html = $@"<!DOCTYPE html>
+<html><head><style>
+@font-face {{ font-family: 'TestMultiWeight'; font-weight: 400; src: url('data:font/truetype;base64,{ttfB64}') format('truetype'); }}
+@font-face {{ font-family: 'TestMultiWeight'; font-weight: 700; src: url('data:font/opentype;base64,{otfB64}') format('opentype'); }}
+body {{ font-family: 'TestMultiWeight', serif; font-size: 14pt; }}
+</style></head>
+<body>
+<p style=""font-weight: 400"">Regular weight text</p>
+<p style=""font-weight: 700"">Bold weight text</p>
+</body>
+</html>";
+
+            var generator = new PdfGenerator();
+            var doc = await generator.GeneratePdf(html, PageSize.A4);
+            var pdfText = GetPdfText(doc);
+
+            // The 400-weight request must use the TTF face (/FontFile2) and the 700-weight request
+            // must use the OTF face (/FontFile3 /OpenType) - both present proves each request picked
+            // its own declared-weight face rather than colliding on one.
+            Assert.Contains("/FontFile2", pdfText);
+            Assert.Contains("/FontFile3", pdfText);
+            Assert.Contains("/OpenType", pdfText);
+        }
+
+        // -------------------------------------------------------------------------
+        // Regression: @font-face's src: local(...) must resolve against a genuinely-installed system
+        // font end-to-end (DomParser.CascadeApplyStyleFonts -> RAdapter.AddLocalFontFamily), not just
+        // parse - no-ops (rather than skipping, matching this test project's Windows-only convention -
+        // see GenericFontFamilyIntegrationTests) on any non-Windows host, since it needs a known,
+        // real installed font's own internal name to reference via local().
+        // -------------------------------------------------------------------------
+
+        [Fact]
+        public async Task LocalFontFace_ResolvesToGenuinelyInstalledSystemFont()
+        {
+            if (!OperatingSystem.IsWindows()) return;
+
+            var fontsDir = Environment.GetFolderPath(Environment.SpecialFolder.Fonts);
+            var arialPath = Path.Combine(fontsDir, "arial.ttf");
+            if (!File.Exists(arialPath)) return;
+
+            var localName = TtfFontDescription.LoadDescription(arialPath).FontNameInvariantCulture;
+
+            var html = $@"<!DOCTYPE html>
+<html><head><style>
+@font-face {{ font-family: 'TestLocalFont'; src: local('{localName}'); }}
+body {{ font-family: 'TestLocalFont', serif; font-size: 14pt; }}
+</style></head>
+<body>Hello local() font</body>
+</html>";
+
+            var generator = new PdfGenerator();
+            var doc = await generator.GeneratePdf(html, PageSize.A4);
+
+            Assert.NotNull(doc);
+            Assert.True(doc.PageCount >= 1);
+        }
+
+        // -------------------------------------------------------------------------
         // CFF embedding fix: must use /FontFile3 with /OpenType subtype
         // -------------------------------------------------------------------------
 

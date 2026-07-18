@@ -222,6 +222,34 @@ namespace PeachPDF.Tests.CSS
         }
 
         [Fact]
+        public void CssFontStyleObliqueWithAngleLegal()
+        {
+            var snippet = "font-style : oblique 10deg";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("font-style", property.Name);
+            Assert.False(property.IsImportant);
+            Assert.IsType<FontStyleProperty>(property);
+            var concrete = (FontStyleProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal("oblique 10deg", concrete.Value);
+        }
+
+        [Fact]
+        public void CssFontStyleObliqueWithNegativeAngleLegal()
+        {
+            var snippet = "font-style : oblique -10deg";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("font-style", property.Name);
+            Assert.False(property.IsImportant);
+            Assert.IsType<FontStyleProperty>(property);
+            var concrete = (FontStyleProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal("oblique -10deg", concrete.Value);
+        }
+
+        [Fact]
         public void CssFontStyleNormalImportantLegal()
         {
             var snippet = "font-style : normal !important";

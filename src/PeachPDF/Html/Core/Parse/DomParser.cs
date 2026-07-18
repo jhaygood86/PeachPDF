@@ -123,18 +123,34 @@ namespace PeachPDF.Html.Core.Parse
                 foreach (var fontRule in stylesheet.FontfaceSetRules)
                 {
                     var fontFamilyName = CssValueParser.GetFontFaceFamilyName(fontRule.Family);
-                    var fontFaceDefinition = CssValueParser.GetFontFacePropertyValue(fontRule.Source);
+                    var fontFaceCandidates = CssValueParser.GetFontFacePropertyValue(fontRule.Source);
 
-                    var isLoaded = false;
+                    // The @font-face rule's own font-weight/font-style/font-stretch descriptors are
+                    // authoritative for how THIS specific resource participates in matching, independent
+                    // of what the file's own internal tables say - resolve them once per rule and apply
+                    // to every src candidate it declares.
+                    var weightOverride = FontFaceDescriptorResolver.ResolveWeight(fontRule.Weight);
+                    var isItalicOverride = FontFaceDescriptorResolver.ResolveIsItalic(fontRule.Style);
+                    var stretchOverride = FontFaceDescriptorResolver.ResolveStretch(fontRule.Stretch);
 
-                    if (fontFaceDefinition.Local is not null)
+                    // src is itself a comma-separated fallback list (e.g. woff2, then woff, then a local()
+                    // match) - try each candidate in declaration order, local() before url() within a
+                    // candidate exactly as before, and stop at the first one that actually loads.
+                    foreach (var fontFaceDefinition in fontFaceCandidates)
                     {
-                        isLoaded = await adapter.AddLocalFontFamily(fontFamilyName, fontFaceDefinition.Local);
-                    }
+                        var isLoaded = false;
 
-                    if (!isLoaded && fontFaceDefinition.Url is not null)
-                    {
-                        await adapter.AddFontFamilyFromUrl(fontFamilyName, fontFaceDefinition.Url, fontFaceDefinition.Format, stylesheet.BaseUri);
+                        if (fontFaceDefinition.Local is not null)
+                        {
+                            isLoaded = await adapter.AddLocalFontFamily(fontFamilyName, fontFaceDefinition.Local, weightOverride, isItalicOverride, stretchOverride);
+                        }
+
+                        if (!isLoaded && fontFaceDefinition.Url is not null)
+                        {
+                            isLoaded = await adapter.AddFontFamilyFromUrl(fontFamilyName, fontFaceDefinition.Url, fontFaceDefinition.Format, stylesheet.BaseUri, weightOverride, isItalicOverride, stretchOverride);
+                        }
+
+                        if (isLoaded) break;
                     }
                 }
             }
@@ -894,8 +910,14 @@ namespace PeachPDF.Html.Core.Parse
 
                 foreach (var longhand in longhands)
                 {
-                    if (longhand.HasValue && IsStyleOnElementAllowed(box, longhand.Name, longhand.Value))
-                        CssUtils.SetPropertyValue(valueParser, box, longhand.Name, longhand.Value);
+                    // A sub-property the shorthand text didn't mention must still reset to its CSS-spec
+                    // initial value (e.g. a prior "font-style: italic" must not survive a later
+                    // "font: bold var(--sz) Arial") - matching what the non-var() shorthand path
+                    // (StyleDeclaration.SetShorthand/ShorthandProperty.Export, applied via the
+                    // "initial" sentinel in AssignCssBlock) already does correctly.
+                    var longhandValue = longhand.HasValue ? longhand.Value : CssDefaults.GetInitialValue(longhand.Name);
+                    if (longhandValue is not null && IsStyleOnElementAllowed(box, longhand.Name, longhandValue))
+                        CssUtils.SetPropertyValue(valueParser, box, longhand.Name, longhandValue);
                 }
 
                 return;

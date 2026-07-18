@@ -2904,3 +2904,116 @@ Console.WriteLine("Saved test_canvas_background.pdf");
 File.Delete("test_canvas_background.html");
 File.WriteAllText("test_canvas_background.html", canvasBackgroundHtml);
 Console.WriteLine("Saved test_canvas_background.html");
+
+// ─── Font resolution showcase (CSS font-resolution compliance pass) ───────
+// Uses only real, already-installed system font files (no bundled binary assets) so this
+// showcase runs on whatever machine generates it - sections that need a specific font file
+// this machine doesn't have (e.g. the font-stretch demo needs a real Arial Narrow install)
+// are skipped with a console message rather than faked.
+
+static string? FindFontFile(params string[] candidateFileNames)
+{
+    string fontsDir;
+    try
+    {
+        fontsDir = Environment.GetFolderPath(Environment.SpecialFolder.Fonts);
+    }
+    catch (PlatformNotSupportedException)
+    {
+        return null;
+    }
+
+    if (string.IsNullOrEmpty(fontsDir)) return null;
+
+    foreach (var name in candidateFileNames)
+    {
+        var path = Path.Combine(fontsDir, name);
+        if (File.Exists(path)) return path;
+    }
+    return null;
+}
+
+var fontShowcase = new StringBuilder();
+
+// Nearest-weight matching (CSS Fonts Level 4 §5.2): "Arial" ships only Regular (400) and
+// Bold (700) - every other requested weight below must be matched to one of those two.
+fontShowcase.Append("<h2>Nearest-weight matching (CSS Fonts Level 4 &sect;5.2)</h2>");
+fontShowcase.Append("<p class=\"note\">\"Arial\" ships only Regular (400) and Bold (700) faces - every other numeric weight below is matched to the nearest real one (100/300/500 &rarr; Regular, 600/900 &rarr; Bold).</p>");
+foreach (var weight in new[] { 100, 300, 400, 500, 600, 700, 900 })
+{
+    fontShowcase.Append($"<p style=\"font-family: Arial; font-weight: {weight}\">font-weight: {weight} &mdash; The quick brown fox jumps over the lazy dog</p>");
+}
+
+var synthDemoFontPath = FindFontFile("arial.ttf", "Arial.ttf");
+var narrowFontPath = FindFontFile("arialn.ttf", "ArialNarrow.ttf", "Arial Narrow.ttf", "ArialNarrow-Regular.ttf");
+
+if (synthDemoFontPath is not null)
+{
+    var synthB64 = Convert.ToBase64String(File.ReadAllBytes(synthDemoFontPath));
+
+    fontShowcase.Append("<h2>Faux-bold / faux-italic synthesis</h2>");
+    fontShowcase.Append("<p class=\"note\">\"SynthDemo\" is registered via @font-face from a single Regular-only face - bold/italic requests have no real matching face to use, so the renderer synthesizes them (fill+stroke render mode for bold, glyph shear for italic).</p>");
+    fontShowcase.Append($"<style>@font-face {{ font-family: 'SynthDemo'; src: url('data:font/truetype;base64,{synthB64}'); }}</style>");
+    fontShowcase.Append("<p style=\"font-family: SynthDemo\">Regular (the one real registered face)</p>");
+    fontShowcase.Append("<p style=\"font-family: SynthDemo; font-weight: bold\">Bold (synthesized: fill+stroke)</p>");
+    fontShowcase.Append("<p style=\"font-family: SynthDemo; font-style: italic\">Italic (synthesized: fixed default shear)</p>");
+    fontShowcase.Append("<p style=\"font-family: SynthDemo; font-weight: bold; font-style: italic\">Bold Italic (both synthesized)</p>");
+
+    fontShowcase.Append("<h2>CSS Fonts Level 4 <code>oblique &lt;angle&gt;</code></h2>");
+    fontShowcase.Append("<p class=\"note\">Each line requests a different explicit oblique angle against the same Regular-only face - the synthesized shear follows the declared angle exactly, not a fixed default.</p>");
+    foreach (var angle in new[] { 0, 8, 14, 20, 30 })
+    {
+        fontShowcase.Append($"<p style=\"font-family: SynthDemo; font-style: oblique {angle}deg\">oblique {angle}deg</p>");
+    }
+}
+else
+{
+    Console.WriteLine("Font showcase: skipping faux-synthesis/oblique-angle sections (no installed Arial.ttf found to embed).");
+}
+
+if (synthDemoFontPath is not null && narrowFontPath is not null)
+{
+    var normalB64 = Convert.ToBase64String(File.ReadAllBytes(synthDemoFontPath));
+    var condensedB64 = Convert.ToBase64String(File.ReadAllBytes(narrowFontPath));
+
+    fontShowcase.Append("<h2>font-stretch face selection</h2>");
+    fontShowcase.Append("<p class=\"note\">\"StretchDemo\" registers two real, differently-shaped faces under one family via two @font-face rules with declared <code>font-stretch</code> descriptors - selecting condensed picks the genuinely narrower face (a real Arial Narrow), not just a coincidentally-matching one.</p>");
+    fontShowcase.Append("<style>@font-face { font-family: 'StretchDemo'; font-stretch: normal; src: url('data:font/truetype;base64," + normalB64 + "'); } " +
+        "@font-face { font-family: 'StretchDemo'; font-stretch: condensed; src: url('data:font/truetype;base64," + condensedB64 + "'); }</style>");
+    fontShowcase.Append("<p style=\"font-family: StretchDemo; font-stretch: normal\">font-stretch: normal</p>");
+    fontShowcase.Append("<p style=\"font-family: StretchDemo; font-stretch: condensed\">font-stretch: condensed</p>");
+}
+else
+{
+    Console.WriteLine("Font showcase: skipping font-stretch section (no installed Arial Narrow found on this machine).");
+}
+
+// Generic families + system-ui: whichever real installed substitute each resolves to on
+// the OS actually generating this showcase (see GenericFontFamilyResolver / CssConstants.DefaultFont).
+fontShowcase.Append("<h2>Generic families (platform-matched, Chromium-verified)</h2>");
+foreach (var generic in new[] { "serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui" })
+{
+    fontShowcase.Append($"<p style=\"font-family: {generic}\">{generic}: The quick brown fox jumps over the lazy dog</p>");
+}
+
+var fontShowcaseHtml = "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm } body { margin: 0; font-size: 13pt }" +
+    "h1 { font: bold 18pt Arial, sans-serif; margin: 0 0 8px }" +
+    "h2 { font: bold 13pt Arial, sans-serif; margin: 18px 0 4px }" +
+    "p { margin: 3px 0 } p.note { font: italic 10pt Arial, sans-serif; color: #555; margin: 0 0 8px }" +
+    "</style></head><body>" +
+    "<h1>Font Resolution Showcase</h1>" +
+    fontShowcase +
+    "</body></html>";
+
+var fontShowcaseStream = new MemoryStream();
+var fontShowcaseDocument = await generator.GeneratePdf(fontShowcaseHtml, pdfConfig);
+fontShowcaseDocument.Save(fontShowcaseStream);
+
+File.Delete("test_font_resolution_showcase.pdf");
+File.WriteAllBytes("test_font_resolution_showcase.pdf", fontShowcaseStream.ToArray());
+Console.WriteLine("Saved test_font_resolution_showcase.pdf");
+
+File.Delete("test_font_resolution_showcase.html");
+File.WriteAllText("test_font_resolution_showcase.html", fontShowcaseHtml);
+Console.WriteLine("Saved test_font_resolution_showcase.html");

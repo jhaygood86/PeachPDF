@@ -2481,9 +2481,9 @@ namespace PeachPDF.Html.Core.Dom
             Rectangles.Clear();
         }
 
-        protected override RFont? GetCachedFont(string fontFamily, double fsize, RFontStyle st)
+        protected override RFont? GetCachedFont(string fontFamily, double fsize, RFontStyle st, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null)
         {
-            return FontFamilyResolver.Resolve(HtmlContainer!.Adapter, fontFamily, fsize, st);
+            return FontFamilyResolver.Resolve(HtmlContainer!.Adapter, fontFamily, fsize, st, weight, stretch, obliqueSkewSinus);
         }
 
         protected override RColor GetActualColor(string colorStr)

@@ -76,11 +76,32 @@ namespace PeachPDF.Tests.Html.Core.Utils
         }
 
         [Fact]
-        public void ZeroOrNegativeResult_FallsBackToCssConstantsFontSize()
+        public void ZeroFontSize_IsHonoredNotReplacedWithDefault()
         {
+            // Regression: font-size: 0 is a legitimate, deliberate CSS declaration (some sites use it to
+            // visually hide text while keeping it selectable/accessible) - it must not be silently
+            // replaced with the medium default.
             var result = FontSizeResolver.Resolve("0pt", parentSize: 999, remSize: 999);
 
-            Assert.Equal(CssConstants.FontSize, result);
+            Assert.Equal(0, result);
+        }
+
+        [Fact]
+        public void VerySmallFontSize_IsHonoredNotReplacedWithDefault()
+        {
+            var result = FontSizeResolver.Resolve("0.5pt", parentSize: 999, remSize: 999);
+
+            Assert.Equal(0.5, result);
+        }
+
+        [Fact]
+        public void NegativeComputedValue_ClampsToZero_NotToDefault()
+        {
+            // A negative computed font-size (e.g. from calc(-1px)) is spec-clamped to zero, not
+            // silently replaced with the medium default either.
+            var result = FontSizeResolver.Resolve("calc(-5pt)", parentSize: 999, remSize: 999);
+
+            Assert.Equal(0, result);
         }
     }
 }

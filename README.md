@@ -119,17 +119,25 @@ See [Thread safety](https://peachpdf.net/usage-examples.html#thread-safety) for 
 
 ### Default Font
 
-By default, PeachPDF uses Segoe UI. Segoe UI is installed by default on Windows, but isn't necessarily available on other platforms. You can remap Segoe UI to another font using
+By default, PeachPDF uses Segoe UI on Windows. Segoe UI isn't installed by default on other platforms, so PeachPDF picks a different platform-appropriate default there instead. You can remap the default font (or any other family) to another one using
 
 ```csharp
 PdfGenerator generator = new();
 generator.AddFontFamilyMapping("Segoe UI","sans-serif"); // or any other system installed font
 ```
 
+### Generic families and `system-ui`
+
+`serif`, `sans-serif`, `monospace`, `cursive`, `fantasy`, and `system-ui` resolve to a real installed font, matching actual Chromium behavior per platform (Times New Roman/Arial/Consolas/Comic Sans MS/Impact on Windows, Times/Helvetica/Menlo/Apple Chancery/Papyrus on macOS, Noto Serif/Roboto/Droid Sans Mono/Dancing Script on Android, and delegated to the system's own `fontconfig` on Linux) rather than one invented cross-platform table — see [Fonts](https://peachpdf.net/index.html#fonts) for the full breakdown. Every mapping, including custom ones set via `AddFontFamilyMapping`, is verified against what's actually installed before use.
+
+### Font weight, style, and stretch matching
+
+A requested `font-weight`/`font-style`/`font-stretch` PeachPDF can't find an exact face for is matched to the *nearest* registered face (CSS Fonts Level 4 §5.2 — the same algorithm real browsers use), not just Regular. When nothing close enough exists, PeachPDF synthesizes a faux-bold (fill+stroke) or faux-italic/oblique (glyph shear, following an explicit `oblique <angle>` when declared) instead of rendering with zero visual distinction. See [Fonts](https://peachpdf.net/index.html#fonts) for details.
+
 ### Adding custom fonts
 
 The recommended way to install custom fonts is to install them into your operating system.
-PeachPDF by default picks up TrueType fonts from the operating system (%SystemRoot%\Fonts and %LOCALAPPDATA%\Microsoft\Windows\Fonts on Windows, /Library/Fonts on Mac, and /usr/share/fonts, /usr/local/share/fonts/, and $HOME/.fonts on Linux)
+PeachPDF by default picks up TrueType/OpenType fonts from the operating system (`%SystemRoot%\Fonts` and `%LOCALAPPDATA%\Microsoft\Windows\Fonts` on Windows; `/System/Library/Fonts`, `/Library/Fonts`, and `~/Library/Fonts` on macOS; primarily the system's own `fontconfig` on Linux, falling back to `/usr/share/fonts`, `/usr/local/share/fonts`, and `$HOME/.fonts` if `fontconfig` isn't available; `/system/fonts`, `/product/fonts`, and `/data/fonts` on Android). iOS has no system font file discovery at all — apps must embed and register their own fonts via `AddFontFromStream` below.
 
 You can also add a font at runtime by loading the font into a Stream, and then using the AddFontFromStream API:
 
@@ -138,7 +146,7 @@ PdfGenerator generator = new();
 await generator.AddFontFromStream(fontStream); // Supports TrueType (TTF), CFF, WOFF, and WOFF2 formats
 ```
 
-Web fonts loaded via @font-face are also supported.
+Web fonts loaded via @font-face (`url()`, with fallback lists, and `local()`) are also supported.
 
 ### Supported font formats
 

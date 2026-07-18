@@ -53,7 +53,7 @@ var results = await Task.WhenAll(htmlDocuments.Select(async html =>
 }));
 ```
 
-Any state PeachPDF shares across `PdfGenerator` instances internally (such as system font discovery) is synchronized specifically to support many instances being used concurrently, one per thread.
+Every custom font registered on a `PdfGenerator` — via `@font-face` or `AddFontFromStream` — is owned exclusively by that instance, so two instances that register *different* font bytes under the *same* font family name (a realistic multi-tenant scenario) never collide. Pure system-font data (fonts already installed on the machine) is the one thing genuinely shared across instances internally, since it's read-only and safe to share — this is what actually supports many instances being used concurrently, one per thread.
 
 ## Rendering HTML from a local string
 

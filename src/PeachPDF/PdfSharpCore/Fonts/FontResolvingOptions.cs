@@ -39,6 +39,8 @@ namespace PeachPDF.PdfSharpCore.Fonts
         public FontResolvingOptions(XFontStyle fontStyle)
         {
             FontStyle = fontStyle;
+            Weight = IsBold ? 700 : 400;
+            Stretch = Utils.TtfFontDescription.DefaultStretch;
         }
 
         public FontResolvingOptions(XFontStyle fontStyle, XStyleSimulations styleSimulations)
@@ -46,7 +48,30 @@ namespace PeachPDF.PdfSharpCore.Fonts
             FontStyle = fontStyle;
             OverrideStyleSimulations = true;
             StyleSimulations = styleSimulations;
+            Weight = IsBold ? 700 : 400;
+            Stretch = Utils.TtfFontDescription.DefaultStretch;
         }
+
+        public FontResolvingOptions(XFontStyle fontStyle, int weight, int stretch = 5)
+        {
+            FontStyle = fontStyle;
+            Weight = weight;
+            Stretch = stretch;
+        }
+
+        /// <summary>
+        /// The real CSS Fonts Level 4 numeric weight (1-1000) this request should be matched against -
+        /// defaults to 700/400 (derived from <see cref="IsBold"/>) for callers that only ever specify a
+        /// bold/not-bold <see cref="XFontStyle"/>, so <see cref="Fonts.FontFactory"/>/<see cref="IFontResolver"/>
+        /// always have a real number to key/match on regardless of which constructor was used.
+        /// </summary>
+        public int Weight { get; }
+
+        /// <summary>
+        /// CSS Fonts Level 3 <c>font-stretch</c> value (1-9, matching OS/2 <c>usWidthClass</c> directly) this
+        /// request should be matched against - defaults to normal (5) for callers that don't specify one.
+        /// </summary>
+        public int Stretch { get; }
 
         public bool IsBold
         {
