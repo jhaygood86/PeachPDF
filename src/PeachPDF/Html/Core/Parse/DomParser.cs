@@ -169,9 +169,13 @@ namespace PeachPDF.Html.Core.Parse
         {
             if (box.HtmlTag != null)
             {
-                // Check for the <link rel=stylesheet> tag
+                // Check for the <link rel=stylesheet> tag. Per HTML4/5, `rel` is a space-separated set
+                // of link types (e.g. `rel="appendix stylesheet"` is still a stylesheet link), so this
+                // must check for the "stylesheet" token rather than requiring an exact match.
                 if (box.HtmlTag.Name.Equals("link", StringComparison.CurrentCultureIgnoreCase) &&
-                   box.GetAttribute("rel", string.Empty).Equals("stylesheet", StringComparison.CurrentCultureIgnoreCase))
+                   box.GetAttribute("rel", string.Empty)
+                       .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+                       .Any(token => token.Equals("stylesheet", StringComparison.CurrentCultureIgnoreCase)))
                 {
                     CloneCssData(ref cssData, ref cssDataChanged);
                     var (stylesheet, resolvedUri) = await StylesheetLoadHandler.LoadStylesheet(htmlContainer, box.GetAttribute("href", string.Empty));
@@ -913,9 +917,15 @@ namespace PeachPDF.Html.Core.Parse
                     // A sub-property the shorthand text didn't mention must still reset to its CSS-spec
                     // initial value (e.g. a prior "font-style: italic" must not survive a later
                     // "font: bold var(--sz) Arial") - matching what the non-var() shorthand path
-                    // (StyleDeclaration.SetShorthand/ShorthandProperty.Export, applied via the
-                    // "initial" sentinel in AssignCssBlock) already does correctly.
-                    var longhandValue = longhand.HasValue ? longhand.Value : CssDefaults.GetInitialValue(longhand.Name);
+                    // (StyleDeclaration.SetShorthand/ShorthandProperty.Export) does. Export now gives an
+                    // omitted longhand HasValue:true with the literal "initial" sentinel (rather than
+                    // HasValue:false) so it can win the normal cascade against an earlier rule's real
+                    // value - AssignCssBlock's switch resolves that sentinel for the non-var() path, but
+                    // this var()-resolution path calls SetPropertyValue directly, bypassing that switch,
+                    // so it must resolve the sentinel itself here (same as an explicit HasValue:false).
+                    var longhandValue = longhand.HasValue && longhand.Value != CssConstants.Initial
+                        ? longhand.Value
+                        : CssDefaults.GetInitialValue(longhand.Name);
                     if (longhandValue is not null && IsStyleOnElementAllowed(box, longhand.Name, longhandValue))
                         CssUtils.SetPropertyValue(valueParser, box, longhand.Name, longhandValue);
                 }
@@ -1758,9 +1768,20 @@ namespace PeachPDF.Html.Core.Parse
                     Console.WriteLine($"dom: if box {box.Id} is not a proper table child and parent is a table, then generate table around element");
 #endif
 
+                    var followingMatchingSiblings =
+                        DomUtils.GetFollowingSiblings(box, sibling => !DomUtils.IsProperTableChild(sibling), true)
+                            .ToList();
+
+                    // SetBeforeBox positions the new wrapper at C's original index in the grandparent
+                    // (the constructor above only appends it at the end) - required so the wrapper
+                    // takes C's place in document/column order instead of drifting to the end once C
+                    // itself is reparented into it below.
                     var tableRowBox = new CssBox(box.ParentBox, null);
                     tableRowBox.Display = CssConstants.TableRow;
+                    tableRowBox.SetBeforeBox(box);
                     box.ParentBox = tableRowBox;
+
+                    followingMatchingSiblings.ForEach(sib => sib.ParentBox = tableRowBox);
                 }
             }
 
@@ -1773,9 +1794,16 @@ namespace PeachPDF.Html.Core.Parse
                     Console.WriteLine($"dom: if box {box.Id} is not a table row and parent is a table row group box, then generate table-row around element");
 #endif
 
+                    var followingMatchingSiblings =
+                        DomUtils.GetFollowingSiblings(box, sibling => sibling.Display is not CssConstants.TableRow, true)
+                            .ToList();
+
                     var tableRowBox = new CssBox(box.ParentBox, null);
                     tableRowBox.Display = CssConstants.TableRow;
+                    tableRowBox.SetBeforeBox(box);
                     box.ParentBox = tableRowBox;
+
+                    followingMatchingSiblings.ForEach(sib => sib.ParentBox = tableRowBox);
                 }
             }
 
@@ -1790,11 +1818,12 @@ namespace PeachPDF.Html.Core.Parse
 #endif
 
                     var followingMatchingSiblings =
-                        DomUtils.GetFollowingSiblings(box, sibling => sibling.Display is CssConstants.TableCell, true)
+                        DomUtils.GetFollowingSiblings(box, sibling => sibling.Display is not CssConstants.TableCell, true)
                             .ToList();
 
                     var tableCellBox = new CssBox(box.ParentBox, null);
                     tableCellBox.Display = CssConstants.TableCell;
+                    tableCellBox.SetBeforeBox(box);
                     box.ParentBox = tableCellBox;
 
                     followingMatchingSiblings.ForEach(sib => sib.ParentBox = tableCellBox);
@@ -1815,6 +1844,7 @@ namespace PeachPDF.Html.Core.Parse
 
                     var tableRowBox = new CssBox(box.ParentBox, null);
                     tableRowBox.Display = CssConstants.TableRow;
+                    tableRowBox.SetBeforeBox(box);
                     box.ParentBox = tableRowBox;
 
                     followingMatchingSiblings.ForEach(sib => sib.ParentBox = tableRowBox);

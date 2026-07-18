@@ -153,10 +153,11 @@ namespace PeachPDF.Html.Core.Utils
         {
             try
             {
-                if (Uri.IsWellFormedUriString(path, UriKind.RelativeOrAbsolute))
-                {
-                    return new RUri(path);
-                }
+                // Deliberately not pre-filtered with Uri.IsWellFormedUriString: it applies stricter
+                // generic-syntax rules than Uri's own parser and rejects some URIs Uri/RUri parse
+                // correctly (e.g. certain percent-encoded `data:` URIs) - RUri's constructor already
+                // performs real validation, and any failure is caught below.
+                return new RUri(path);
             }
             catch
             { }

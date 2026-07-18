@@ -1,6 +1,7 @@
 ﻿#nullable enable
 
-using System;
+using PeachPDF.Html.Core.Utils;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 
@@ -31,23 +32,16 @@ namespace PeachPDF.Network
         {
             if (uri.Scheme is not "data") return Task.FromResult<RNetworkResponse?>(null);
 
-            var dataUri = uri.AbsoluteUri;
-            var uriComponents = dataUri.Split(':', 2);
-            var uriDataComponents = uriComponents[1].Split(';', 2);
+            if (!DataUriUtils.TryDecodeDataUri(uri.AbsoluteUri, out var mimeType, out var bytes))
+                return Task.FromResult<RNetworkResponse?>(null);
 
-            if (uriDataComponents[1].StartsWith("base64,"))
-            {
-                uriDataComponents[1] = uriDataComponents[1][7..];
-            }
-
-            uriDataComponents[1] = Uri.UnescapeDataString(uriDataComponents[1]);
-
-            var contents = Convert.FromBase64String(uriDataComponents[1]);
-
-            var response = new RNetworkResponse(new MemoryStream(contents), null);
+            // Report the data URI's own declared MIME type as a Content-Type header so consumers
+            // that content-type-sniff the response (e.g. StylesheetLoadHandler, for a
+            // data:text/css,... <link>) can recognize it - a data: URI has no real HTTP response.
+            var headers = new Dictionary<string, string[]> { ["Content-Type"] = [mimeType] };
+            var response = new RNetworkResponse(new MemoryStream(bytes), headers);
 
             return Task.FromResult<RNetworkResponse?>(response);
-
         }
     }
 }

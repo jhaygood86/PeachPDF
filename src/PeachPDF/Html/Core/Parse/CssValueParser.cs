@@ -1581,13 +1581,32 @@ namespace PeachPDF.Html.Core.Parse
         }
 
         /// <summary>
-        /// Get color by given name, including .NET name.
+        /// Get color by CSS named-color keyword (e.g. "red", "transparent", "currentcolor"). Delegates
+        /// the actual name table/grammar to the CSS-OM's own <see cref="Converters.ColorConverter"/>
+        /// (shared with every other color-accepting property in <c>PeachPDF.CSS</c>) rather than
+        /// re-implementing a second, independent color-name lookup here - this is what the previous
+        /// adapter-based lookup got wrong for "transparent": it used <c>color.A &gt; 0</c> as its own
+        /// "name not found" signal, which incorrectly also rejects any *validly* fully-transparent
+        /// color (alpha 0 is transparent's own correct, intentional value, not a failure sentinel).
         /// </summary>
         /// <returns>true - valid color, false - otherwise</returns>
         private bool GetColorByName(string str, int idx, int length, out RColor color)
         {
-            color = _adapter.GetColor(str.Substring(idx, length));
-            return color.A > 0;
+            var substring = str.Substring(idx, length);
+            var tokens = GetCssTokens(substring);
+            var value = Converters.ColorConverter.Convert(tokens);
+
+            if (value is not null)
+            {
+                // The CSS-OM's Color.ToString() always formats as a canonical rgb(...)/rgba(...) call,
+                // which this method's own sibling fast-paths (GetColorByRgb/GetColorByRgba, reached via
+                // TryGetColor) already parse correctly - re-entering through there avoids needing to
+                // reach into StructValueConverter<Color>'s private result wrapper.
+                return TryGetColor(value.CssText, 0, value.CssText.Length, out color);
+            }
+
+            color = RColor.Black;
+            return false;
         }
 
         /// <summary>

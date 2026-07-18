@@ -60,18 +60,25 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         /// <summary>
-        /// Recursively searches for the parent with the specified HTML Tag name
+        /// Walks up from <paramref name="box"/> (inclusive) looking for the nearest ancestor with the
+        /// given HTML tag name, and returns that ancestor's parent - i.e. "where parsing should
+        /// resume after closing this tag". Returns <c>null</c>, rather than <paramref name="root"/>,
+        /// when no matching ancestor exists at all: a closing tag with no corresponding open element
+        /// (e.g. a stray <c>&lt;/p&gt;</c> for a <c>&lt;p&gt;</c> already auto-closed by a nested
+        /// <c>&lt;table&gt;</c>, per CSS2.1/HTML4's "table closes p" rule) is a parse error that must be
+        /// ignored - see <see cref="Parse.HtmlParser.CloseElement"/>, whose caller falls back to leaving
+        /// the current box unchanged rather than corrupting the tree by jumping to <paramref name="root"/>.
         /// </summary>
         /// <param name="root"></param>
         /// <param name="tagName"></param>
         /// <param name="box"></param>
-        public static CssBox FindParent(CssBox root, string tagName, CssBox? box)
+        public static CssBox? FindParent(CssBox root, string tagName, CssBox? box)
         {
             while (true)
             {
                 if (box is null)
                 {
-                    return root;
+                    return null;
                 }
 
                 if (box.HtmlTag != null && box.HtmlTag.Name.Equals(tagName, StringComparison.CurrentCultureIgnoreCase))

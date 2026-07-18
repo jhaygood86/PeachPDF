@@ -681,6 +681,9 @@ namespace PeachPDF.Html.Core.Utils
                 case "background-clip":
                     cssBox.BackgroundClip = value;
                     break;
+                case "background-attachment":
+                    cssBox.BackgroundAttachment = value;
+                    break;
                 case "flex-direction":
                     cssBox.FlexDirection = value;
                     break;
@@ -782,7 +785,6 @@ namespace PeachPDF.Html.Core.Utils
 
                     break;
                 case "unicode-bidi":
-                case "background-attachment":
                 case "overflow-wrap":
                     break;
             }

@@ -1,0 +1,201 @@
+using PeachPDF;
+using PeachPDF.Adapters;
+using PeachPDF.Html.Core;
+using PeachPDF.Html.Core.Dom;
+using PeachPDF.PdfSharpCore;
+using PeachPDF.PdfSharpCore.Pdf;
+using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using System;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace PeachPDF.Tests.Integration
+{
+    /// <summary>
+    /// Full-fixture regression coverage for the real Acid2 test (http://acid2.acidtests.org/), loaded
+    /// byte-identical from <c>TestSupport/acid2.html</c> (mirrored from
+    /// <c>src/PeachPDF.TestHarness/acid2.html</c>, which is also the TestHarness showcase source) rather
+    /// than re-typed as a string, so this test tracks the genuine fixture. See
+    /// <see cref="Acid2FeatureVerificationTests"/> for coverage of the individual mechanisms Acid2
+    /// exercises in isolation.
+    ///
+    /// This is deliberately a smoke test plus a handful of landmark box-geometry sanity checks, not a
+    /// pixel-exact "matches the Acid2 reference rendering" assertion - a paginated PDF renderer has no
+    /// equivalent of the fixed-size, non-scrolling browser viewport Acid2 assumes (its huge `100em`
+    /// margins on `#top`/`.picture` are meant to be scrolled/clipped out of view via `overflow: hidden`
+    /// on `html`, not paginated), so some structural difference from an on-screen browser rendering is
+    /// inherent to the format, not a bug. The geometry bounds below exist specifically to catch the
+    /// class of regression that visual inspection during this test's development actually found: a
+    /// content-driven-height box being treated as having a "definite" height for its descendants'
+    /// percentage-height resolution (<see cref="PeachPDF.Html.Core.Dom.CssLayoutEngine.ApplyHeight"/>),
+    /// and a box's own bottom margin folding into its own border-box height when it doubles as its
+    /// parent's last child (<see cref="CssBox.MarginBottomCollapse"/>) - both of which inflated
+    /// `.picture` from roughly 230px tall to over 1100px tall, and are exactly the kind of thing a
+    /// PDF-content-stream-substring test would never catch (see this repo's testing conventions).
+    /// </summary>
+    public class Acid2RegressionTests
+    {
+        private static readonly string FixturePath = Path.Combine(AppContext.BaseDirectory, "TestSupport", "acid2.html");
+
+        [Fact]
+        public async Task FullFixture_GeneratesPdf_WithContentOnEveryPage()
+        {
+            var html = File.ReadAllText(FixturePath);
+            var generator = new PdfGenerator();
+            var document = await generator.GeneratePdf(html, PageSize.A4, margin: 0);
+
+            Assert.True(document.PageCount > 0, "the Acid2 fixture should generate at least one page");
+
+            for (var i = 0; i < document.PageCount; i++)
+            {
+                Assert.True(PageHasContent(document.Pages[i]), $"page {i + 1} of {document.PageCount} should have content");
+            }
+        }
+
+        [Fact]
+        public async Task FullFixture_DoesNotBalloonIntoExcessivePageCount()
+        {
+            // Regression guard for the MarginBottomCollapse/IsHeightCalculated bugs described in the
+            // class doc comment: both inflated ".picture" (and, transitively, total document height) by
+            // roughly 900px. A recurrence of either would push this well past a handful of pages again.
+            var html = File.ReadAllText(FixturePath);
+            var generator = new PdfGenerator();
+            var document = await generator.GeneratePdf(html, PageSize.A4, margin: 0);
+
+            Assert.True(document.PageCount <= 6,
+                $"expected a small handful of pages (the fixture's own huge, intentionally-off-screen " +
+                $"100em margins account for some unavoidable blank space), got {document.PageCount}");
+        }
+
+        [Fact]
+        public async Task Picture_HasCompactHeight_NotInflatedByItsOwnBottomMargin()
+        {
+            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var picture = FindByClass(root, "picture")!;
+
+            var height = picture.ActualBottom - picture.Location.Y;
+
+            // The real face content (forehead/eyes/nose/smile/chin/parser/table/image-height-test lines)
+            // is on the order of 200-300px tall. ".picture"'s own 100em (1200px) bottom margin must NOT
+            // be folded into this - if it is, height balloons past 1000px.
+            Assert.InRange(height, 50, 400);
+        }
+
+        [Fact]
+        public async Task Nose_PercentageHeightResolvesToAuto_CappedByMaxHeight()
+        {
+            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var nose = FindByClass(root, "nose")!;
+
+            var height = nose.ActualBottom - nose.Location.Y;
+
+            // ".nose { min-height: 80%; height: 60%; max-height: 3em; }" inside the auto-height
+            // ".picture" - per the fixture's own comment, both percentages resolve to auto/0 (CSS2.1
+            // §10.5/§10.7), so max-height:3em (36px at the fixture's 12px base font) is what actually
+            // constrains it, not hundreds of pixels resolved against ".picture"'s content height.
+            Assert.InRange(height, 0, 40);
+        }
+
+        [Fact]
+        public async Task LandmarkElements_AreFoundAndPositionedInDocumentOrder()
+        {
+            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+
+            var intro = FindByClass(root, "intro");
+            var top = FindById(root, "top");
+            var picture = FindByClass(root, "picture");
+            var forehead = FindByClass(root, "forehead");
+            var eyes = FindByClass(root, "eyes");
+
+            Assert.NotNull(intro);
+            Assert.NotNull(top);
+            Assert.NotNull(picture);
+            Assert.NotNull(forehead);
+            Assert.NotNull(eyes);
+
+            // Document order: intro, then #top, then .picture (and its descendants).
+            Assert.True(intro!.Location.Y <= top!.Location.Y);
+            Assert.True(top.Location.Y <= picture!.Location.Y);
+            Assert.True(picture.Location.Y <= forehead!.Location.Y);
+            Assert.True(picture.Location.Y <= eyes!.Location.Y);
+        }
+
+        // ─── Helpers ─────────────────────────────────────────────────────────────
+
+        private static bool PageHasContent(PdfPage page)
+        {
+            try
+            {
+                var content = page.Contents;
+                if (content == null)
+                    return false;
+
+                if (content.Elements.Count == 0)
+                    return false;
+
+                foreach (var item in content.Elements)
+                {
+                    if (item is PdfReference { Value: PdfDictionary dict })
+                    {
+                        var stream = dict.Stream;
+                        if (stream?.Value is { Length: > 0 })
+                            return true;
+                    }
+                }
+
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static async Task<(CssBox root, HtmlContainerInt container)> BuildAndLayout(string html)
+        {
+            var adapter = new PdfSharpAdapter();
+            adapter.PixelsPerPoint = 1.0;
+            var container = new HtmlContainerInt(adapter);
+            await container.SetHtml(html, null);
+
+            var size = new PeachPDF.PdfSharpCore.Drawing.XSize(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+
+            var measure = PeachPDF.PdfSharpCore.Drawing.XGraphics.CreateMeasureContext(
+                size, PeachPDF.PdfSharpCore.Drawing.XGraphicsUnit.Point, PeachPDF.PdfSharpCore.Drawing.XPageDirection.Downwards);
+            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            await container.PerformLayout(graphics);
+
+            Assert.NotNull(container.Root);
+            return (container.Root!, container);
+        }
+
+        private static CssBox? FindByClass(CssBox box, string className)
+        {
+            var val = box.HtmlTag?.TryGetAttribute("class", "");
+            if (val != null && val.Split(' ').Contains(className))
+                return box;
+            foreach (var child in box.Boxes)
+            {
+                var found = FindByClass(child, className);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+        private static CssBox? FindById(CssBox box, string id)
+        {
+            var val = box.HtmlTag?.TryGetAttribute("id", "");
+            if (val != null && val.Equals(id, StringComparison.OrdinalIgnoreCase))
+                return box;
+            foreach (var child in box.Boxes)
+            {
+                var found = FindById(child, id);
+                if (found != null) return found;
+            }
+            return null;
+        }
+    }
+}

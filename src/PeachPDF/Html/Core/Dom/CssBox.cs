@@ -485,6 +485,7 @@ namespace PeachPDF.Html.Core.Dom
                 HtmlConstants.Iframe => new CssBoxFrame(parent, tag),
                 HtmlConstants.Hr => new CssBoxHr(parent, tag),
                 HtmlConstants.Svg => new CssBoxSvg(parent, tag),
+                HtmlConstants.Object => new CssBoxObject(parent, tag),
                 _ => new CssBox(parent, tag)
             };
         }
@@ -1054,8 +1055,18 @@ namespace PeachPDF.Html.Core.Dom
             // the earlier sibling's break-after OR the later sibling's break-before has a
             // forced break value — at least one is sufficient.
             // Forced values include: page, always.
+            //
+            // Separately, CSS2.1 §13.2: a page break is also forced whenever a box's own explicit
+            // `page` value differs from the named page currently "in effect" in document flow (the
+            // most recently registered explicit page name so far - see HtmlContainerInt.ActivePageName),
+            // regardless of break-before/break-after. A box with no explicit `page` of its own (empty
+            // or "auto") never triggers this - it simply carries the active page name forward, so a
+            // chapter body's ordinary paragraphs don't each force their own break, only the heading
+            // that actually changes the named page does.
             var previousSiblingForBreak = DomUtils.GetPreviousSibling(this, false);
-            if (IsForcedBreakValue(BreakBefore) || IsForcedBreakValue(previousSiblingForBreak?.BreakAfter))
+            var hasExplicitPageName = !string.IsNullOrEmpty(PageName) && PageName != CssConstants.Auto;
+            var pageNameChanged = hasExplicitPageName && PageName != HtmlContainer!.ActivePageName;
+            if (IsForcedBreakValue(BreakBefore) || IsForcedBreakValue(previousSiblingForBreak?.BreakAfter) || pageNameChanged)
             {
                 if (previousSiblingForBreak is not null)
                 {
@@ -1451,7 +1462,8 @@ namespace PeachPDF.Html.Core.Dom
                 if (rect.Width <= 0 || rect.Height <= 0) continue;
                 CssImagePainter.Paint(g, ContentImage, layerIndex: 0, isFirst: true,
                     originRect: rect, clipRect: rect, roundedClipPath: null,
-                    positionList: "0% 0%", sizeList: CssConstants.Auto, repeatList: "no-repeat", box: this,
+                    positionList: "0% 0%", sizeList: CssConstants.Auto, repeatList: "no-repeat",
+                    attachmentList: CssConstants.Scroll, viewportRect: rect, box: this,
                     drawBrush: brush =>
                     {
                         g.DrawRectangle(brush, rect.X, rect.Y, rect.Width, rect.Height);
@@ -1739,7 +1751,7 @@ namespace PeachPDF.Html.Core.Dom
             double value;
             if (prevSibling != null)
             {
-                value = Math.Max(prevSibling.ActualMarginBottom, ActualMarginTop);
+                value = CollapseMargins(prevSibling.ActualMarginBottom, ActualMarginTop);
                 CollapsedMarginTop = value;
             }
             else if (_parentBox != null && ActualPaddingTop < 0.1 && ActualPaddingBottom < 0.1 && _parentBox.ActualPaddingTop < 0.1 && _parentBox.ActualPaddingBottom < 0.1)
@@ -1758,6 +1770,20 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             return value;
+        }
+
+        /// <summary>
+        /// Collapses two adjoining vertical margins per CSS2.1 §8.3.1: when both are non-negative the
+        /// result is their maximum (the common case); when both are negative the result is the more
+        /// negative of the two; when mixed, the result is the positive one plus the negative one. All
+        /// three cases reduce to the single expression <c>Max(a, b, 0) + Min(a, b, 0)</c> - a plain
+        /// <c>Math.Max</c> (this method's previous implementation) only happens to be correct
+        /// in the all-non-negative case, and silently clamps a would-be-negative collapsed margin to
+        /// zero otherwise (e.g. collapsing 0 and -10 must yield -10, not 0).
+        /// </summary>
+        private static double CollapseMargins(double a, double b)
+        {
+            return Math.Max(Math.Max(a, b), 0) + Math.Min(Math.Min(a, b), 0);
         }
 
         public virtual bool BreakPage()
@@ -1823,8 +1849,17 @@ namespace PeachPDF.Html.Core.Dom
             var lastNonFloatingBox = Boxes.Last(b => !b.IsOutOfFlow);
 
             double margin = 0;
+            // Per CSS 2.1 §8.3.1, a box's own bottom margin can only collapse with (i.e. be folded
+            // into) its last in-flow child's bottom margin when there is nothing of this box's own
+            // separating the two - non-zero bottom padding or a bottom border on THIS box blocks it,
+            // just like it blocks parent/child collapsing on the top side. Without this check, any
+            // auto-height, border-having box that happens to be its own parent's last child (e.g. the
+            // Acid2 fixture's `.picture { border: 1em solid transparent; margin-bottom: 100em }`) had
+            // its own large bottom margin folded into its own border-box height instead of remaining
+            // external spacing after it - inflating the box to feet-tall proportions.
             if (ParentBox == null || ParentBox.Boxes.IndexOf(this) != ParentBox.Boxes.Count - 1 ||
-                !(_parentBox!.ActualMarginBottom < 0.1))
+                !(_parentBox!.ActualMarginBottom < 0.1) ||
+                !(ActualPaddingBottom < 0.1) || !(ActualBorderBottomWidth < 0.1))
                 return Math.Max(ActualBottom,
                     lastNonFloatingBox.ActualBottom + margin + ActualPaddingBottom + ActualBorderBottomWidth);
 
@@ -2258,6 +2293,7 @@ namespace PeachPDF.Html.Core.Dom
                 // not once for the whole box.
                 var originLayers = BackgroundLayerResolver.SplitLayers(BackgroundOrigin);
                 var clipLayers   = BackgroundLayerResolver.SplitLayers(BackgroundClip);
+                var viewportRect = HtmlContainer!.PageBoxRect;
 
                 var actualBackgroundColor = firstLineStyle?.ActualBackgroundColor ?? ActualBackgroundColor;
                 RBrush? solidBrush = RenderUtils.IsColorVisible(actualBackgroundColor)
@@ -2311,7 +2347,8 @@ namespace PeachPDF.Html.Core.Dom
                     void DrawBrush(RBrush brush) => PaintClippedBrush(g, brush, clipRect, roundedClipPath);
 
                     CssImagePainter.Paint(g, BackgroundImages![layerIndex], layerIndex, isFirst, originRect, clipRect,
-                        roundedClipPath, BackgroundPosition, BackgroundSize, BackgroundRepeat, this, DrawBrush);
+                        roundedClipPath, BackgroundPosition, BackgroundSize, BackgroundRepeat, BackgroundAttachment,
+                        viewportRect, this, DrawBrush);
 
                     roundedClipPath?.Dispose();
                 }

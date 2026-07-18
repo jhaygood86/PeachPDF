@@ -3102,3 +3102,17 @@ Console.WriteLine("Saved test_font_resolution_showcase.pdf");
 File.Delete("test_font_resolution_showcase.html");
 File.WriteAllText("test_font_resolution_showcase.html", fontShowcaseHtml);
 Console.WriteLine("Saved test_font_resolution_showcase.html");
+
+// --- Acid2 showcase ---
+// The real, unmodified Acid2 test (http://acid2.acidtests.org/) - PeachPDF's non-interactive/static
+// subset compliance target. See CLAUDE.md and docs/html-css-support.md for what "compliance" means
+// for a static PDF renderer (no :hover/:active, no scripting).
+var acid2Html = File.ReadAllText("acid2.html");
+
+var acid2Stream = new MemoryStream();
+var acid2Document = await generator.GeneratePdf(acid2Html, pdfConfig);
+acid2Document.Save(acid2Stream);
+
+File.Delete("test_acid2.pdf");
+File.WriteAllBytes("test_acid2.pdf", acid2Stream.ToArray());
+Console.WriteLine("Saved test_acid2.pdf");

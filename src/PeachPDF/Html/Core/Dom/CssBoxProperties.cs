@@ -418,6 +418,8 @@ namespace PeachPDF.Html.Core.Dom
 
         public string BackgroundClip { get; set; } = CssConstants.BorderBox;
 
+        public string BackgroundAttachment { get; set; } = CssConstants.Scroll;
+
         public string Color
         {
             get => _color;
@@ -1552,6 +1554,7 @@ namespace PeachPDF.Html.Core.Dom
             BackgroundRepeat = p.BackgroundRepeat;
             BackgroundOrigin = p.BackgroundOrigin;
             BackgroundClip = p.BackgroundClip;
+            BackgroundAttachment = p.BackgroundAttachment;
             _borderTopWidth = p._borderTopWidth;
             _borderRightWidth = p._borderRightWidth;
             _borderBottomWidth = p._borderBottomWidth;

@@ -12,6 +12,7 @@
 
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.Html.Core.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -492,7 +493,7 @@ namespace PeachPDF.Svg
             ApplyCommon(image, node, inherited);
 
             var href = node.GetAttribute("href") ?? node.GetAttribute("xlink:href");
-            if (!TryDecodeDataUri(href, out var mimeType, out var bytes))
+            if (!DataUriUtils.TryDecodeDataUri(href, out var mimeType, out var bytes))
                 return image;
 
             if (mimeType.Equals("image/svg+xml", StringComparison.OrdinalIgnoreCase))
@@ -522,45 +523,6 @@ namespace PeachPDF.Svg
             }
 
             return image;
-        }
-
-        /// <summary>
-        /// Synchronous counterpart of <see cref="Network.DataUriNetworkLoader"/>'s <c>data:</c> URI
-        /// decoding, needed here since <see cref="Build"/> is synchronous while the general
-        /// network/file resource-loading pipeline (<see cref="Html.Core.Handlers.ImageLoadHandler"/>)
-        /// is async.
-        /// </summary>
-        private static bool TryDecodeDataUri(string? href, out string mimeType, out byte[] bytes)
-        {
-            mimeType = "";
-            bytes = [];
-
-            if (href is null || !href.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
-                return false;
-
-            var comma = href.IndexOf(',');
-            if (comma < 0)
-                return false;
-
-            var header = href[5..comma];
-            var data = href[(comma + 1)..];
-
-            var headerParts = header.Split(';');
-            mimeType = headerParts.Length > 0 && headerParts[0].Length > 0 ? headerParts[0] : "text/plain";
-            var isBase64 = headerParts.Any(p => p.Equals("base64", StringComparison.OrdinalIgnoreCase));
-
-            try
-            {
-                bytes = isBase64
-                    ? Convert.FromBase64String(data)
-                    : System.Text.Encoding.UTF8.GetBytes(Uri.UnescapeDataString(data));
-            }
-            catch (FormatException)
-            {
-                return false;
-            }
-
-            return true;
         }
 
         /// <summary>

@@ -164,7 +164,12 @@ namespace PeachPDF.Html.Core.Parse
 
         private static CssBox CloseElement(CssBox cssBox, string tagName)
         {
-            var currentBox = DomUtils.FindParent(cssBox.ParentBox!, tagName, cssBox);
+            // No matching open ancestor (e.g. a stray </p> for a <p> already auto-closed by a nested
+            // <table>, per HTML4's "table closes p" rule) is a parse error - per the HTML5 tree
+            // construction algorithm, an end tag with no matching open element is simply ignored,
+            // leaving the current insertion point unchanged, not "close everything up to the document
+            // root" (which would silently reparent all of the rest of the document under <body>/<html>).
+            var currentBox = DomUtils.FindParent(cssBox.ParentBox!, tagName, cssBox) ?? cssBox;
 
 #if DEBUG
             Console.WriteLine($"parse token, closing: {cssBox}. current box is now: {currentBox}");

@@ -7,6 +7,40 @@ namespace PeachPDF.Tests.CSS
     public class CssSheetTests : CssConstructionFunctions
     {
         [Fact]
+        public void CssSheetBareTopLevelSemicolonIsIgnoredAsEmptyStatement()
+        {
+            // A stray top-level ';' between rules is an empty statement per the CSS2.1 core grammar -
+            // it must not corrupt/drop the rule that follows it. Regression test: this exact shape
+            // (".parser { ... } ; .parser { height: 3em; }") appears in the real Acid2 test's CSS
+            // parser-torture-test block.
+            var sheet = ParseStyleSheet(@"
+            .a { color: red; }
+            ;
+            .b { color: blue; }
+            ");
+            Assert.Equal(2, sheet.Rules.Length);
+            Assert.IsType<StyleRule>(sheet.Rules[0]);
+            Assert.IsType<StyleRule>(sheet.Rules[1]);
+            var a = (StyleRule)sheet.Rules[0];
+            var b = (StyleRule)sheet.Rules[1];
+            Assert.Equal(".a", a.SelectorText);
+            Assert.Equal("rgb(255, 0, 0)", a.Style.Color);
+            Assert.Equal(".b", b.SelectorText);
+            Assert.Equal("rgb(0, 0, 255)", b.Style.Color);
+        }
+
+        [Fact]
+        public void CssSheetMultipleBareTopLevelSemicolonsAreIgnored()
+        {
+            var sheet = ParseStyleSheet(@";;.a { color: red; };;");
+            Assert.Equal(1, sheet.Rules.Length);
+            Assert.IsType<StyleRule>(sheet.Rules[0]);
+            var a = (StyleRule)sheet.Rules[0];
+            Assert.Equal(".a", a.SelectorText);
+            Assert.Equal("rgb(255, 0, 0)", a.Style.Color);
+        }
+
+        [Fact]
         public void CssSheetOnEofDuringRuleWithoutSemicolon()
         {
             var sheet = ParseStyleSheet(@"
@@ -961,8 +995,11 @@ p.info span::after {
         background: #FFF;
     }
 }"));
-            Assert.Equal(1, sheet.Rules.Length);
+            // The stray ';' inside the first @media block is an empty statement (a no-op) - it must
+            // not swallow the second, independently valid @media rule that follows.
+            Assert.Equal(2, sheet.Rules.Length);
             Assert.Equal(RuleType.Media, sheet.Rules[0].Type);
+            Assert.Equal(RuleType.Media, sheet.Rules[1].Type);
         }
 
         [Fact]
