@@ -566,7 +566,17 @@ namespace PeachPDF.Html.Core.Utils
             return null;
         }
 
-        public static IEnumerable<CssBox> FlattenStackingContext(CssBox box)
+        // One box to paint as part of a stacking context's own layer ordering, plus the chain of DOM
+        // ancestor boxes (outer to inner, between the claiming stacking context and Box itself) that
+        // Box was hoisted past. Empty for a direct plain child - it paints via ordinary nested Paint()
+        // recursion, so its ancestors' own overflow clipping is already correctly active on the
+        // graphics clip stack from their own (still-running) Paint() calls. Non-empty for a hoisted
+        // participant - it paints via the claiming stacking context's own paint loop instead, bypassing
+        // those ancestors' Paint() calls entirely, so their overflow clipping must be reapplied
+        // explicitly (see RenderUtils.PushAncestorOverflowClips) around its own Paint() call.
+        internal readonly record struct StackingParticipant(CssBox Box, IReadOnlyList<CssBox> ClipAncestors);
+
+        public static IEnumerable<StackingParticipant> FlattenStackingContext(CssBox box)
         {
             // Plain in-flow, non-stacking-context children always paint here, nested normally - this is
             // what keeps this box's own overflow-clip scope (pushed/popped around this same children
@@ -585,7 +595,7 @@ namespace PeachPDF.Html.Core.Utils
 
                 if (!NeedsStackingHoist(childBox))
                 {
-                    yield return childBox;
+                    yield return new StackingParticipant(childBox, []);
                 }
             }
 
@@ -603,7 +613,7 @@ namespace PeachPDF.Html.Core.Utils
             if (!IsStackingContextBox(box)) yield break;
             if (!(box.HtmlContainer?.HasStackingHoistCandidates ?? true)) yield break;
 
-            foreach (var participant in SearchForHoistableDescendants(box))
+            foreach (var participant in SearchForHoistableDescendants(box, []))
             {
                 yield return participant;
             }
@@ -624,8 +634,15 @@ namespace PeachPDF.Html.Core.Utils
         // needing to reach this same level) looking for content that needs to compete at `box`'s own
         // stacking-context level. Recursion stops at (but includes) each stacking-context-establishing
         // box found - its own subtree is its own business, resolved independently once its own Paint()
-        // call later invokes FlattenStackingContext on itself.
-        private static IEnumerable<CssBox> SearchForHoistableDescendants(CssBox box)
+        // call later invokes FlattenStackingContext on itself. `ancestorPath` accumulates every DOM
+        // ancestor walked through along the way (both plain pass-through wrappers and hoisted-but-non-
+        // stacking-context boxes like a plain position:absolute) - each yielded participant snapshots
+        // it as its ClipAncestors, so the caller can re-apply those ancestors' own overflow clipping
+        // (which it never picks up naturally, having been hoisted past their own Paint() calls). Mutating
+        // one shared list via add-before-recurse/remove-after is safe here: the whole sequence is drained
+        // eagerly and synchronously by FlattenStackingContext's caller before anything else touches it.
+        private static IEnumerable<StackingParticipant> SearchForHoistableDescendants(
+            CssBox box, List<CssBox> ancestorPath)
         {
             foreach (var childBox in box.Boxes)
             {
@@ -633,14 +650,16 @@ namespace PeachPDF.Html.Core.Utils
 
                 if (NeedsStackingHoist(childBox))
                 {
-                    yield return childBox;
+                    yield return new StackingParticipant(childBox, ancestorPath.ToArray());
                     if (IsStackingContextBox(childBox)) continue;
                 }
 
-                foreach (var descendant in SearchForHoistableDescendants(childBox))
+                ancestorPath.Add(childBox);
+                foreach (var descendant in SearchForHoistableDescendants(childBox, ancestorPath))
                 {
                     yield return descendant;
                 }
+                ancestorPath.RemoveAt(ancestorPath.Count - 1);
             }
         }
 
@@ -687,17 +706,17 @@ namespace PeachPDF.Html.Core.Utils
             return false;
         }
 
-        public static IEnumerable<List<CssBox>> GetBoxesByLayers(IEnumerable<CssBox> cssBoxes)
+        public static IEnumerable<List<StackingParticipant>> GetBoxesByLayers(IEnumerable<StackingParticipant> participants)
         {
-            var boxesByLayer = new Dictionary<int, List<CssBox>>();
+            var boxesByLayer = new Dictionary<int, List<StackingParticipant>>();
 
-            foreach (var cssBox in cssBoxes)
+            foreach (var participant in participants)
             {
                 var zIndex = 0;
 
-                if (cssBox.ZIndex is not CssConstants.Auto)
+                if (participant.Box.ZIndex is not CssConstants.Auto)
                 {
-                    zIndex = int.Parse(cssBox.ZIndex);
+                    zIndex = int.Parse(participant.Box.ZIndex);
                 }
 
                 if (!boxesByLayer.ContainsKey(zIndex))
@@ -705,7 +724,7 @@ namespace PeachPDF.Html.Core.Utils
                     boxesByLayer[zIndex] = [];
                 }
 
-                boxesByLayer[zIndex].Add(cssBox);
+                boxesByLayer[zIndex].Add(participant);
             }
 
             return boxesByLayer.OrderBy(x => x.Key).Select(x => x.Value);

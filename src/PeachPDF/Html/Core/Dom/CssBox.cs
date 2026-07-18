@@ -2109,28 +2109,28 @@ namespace PeachPDF.Html.Core.Dom
             foreach (var layerBoxes in DomUtils.GetBoxesByLayers(stackingContextBoxes))
             {
                 // split paint to handle z-order
-                foreach (var b in layerBoxes)
+                foreach (var p in layerBoxes)
                 {
-                    if (b.Position != CssConstants.Absolute && b is { IsFixed: false, IsFloated: false })
-                        await b.Paint(g);
+                    if (p.Box.Position != CssConstants.Absolute && p.Box is { IsFixed: false, IsFloated: false })
+                        await PaintStackingParticipant(g, p);
                 }
 
-                foreach (var b in layerBoxes)
+                foreach (var p in layerBoxes)
                 {
-                    if (b.IsFloated)
-                        await b.Paint(g);
+                    if (p.Box.IsFloated)
+                        await PaintStackingParticipant(g, p);
                 }
 
-                foreach (var b in layerBoxes)
+                foreach (var p in layerBoxes)
                 {
-                    if (b.Position == CssConstants.Absolute)
-                        await b.Paint(g);
+                    if (p.Box.Position == CssConstants.Absolute)
+                        await PaintStackingParticipant(g, p);
                 }
 
-                foreach (var b in layerBoxes)
+                foreach (var p in layerBoxes)
                 {
-                    if (b.IsFixed)
-                        await b.Paint(g);
+                    if (p.Box.IsFixed)
+                        await PaintStackingParticipant(g, p);
                 }
             }
 
@@ -2149,6 +2149,25 @@ namespace PeachPDF.Html.Core.Dom
             PaintContentImage(g);
 
             _hasPainted = true;
+        }
+
+        /// <summary>
+        /// Paints one stacking-context participant discovered by <see cref="DomUtils.FlattenStackingContext"/>.
+        /// A hoisted participant (non-empty <see cref="DomUtils.StackingParticipant.ClipAncestors"/>)
+        /// paints via this box's own paint loop rather than the ordinary nested parent-to-child
+        /// <see cref="Paint"/> cascade, so its ancestors' own <c>overflow: hidden</c> clipping - normally
+        /// picked up "for free" from still being active on the graphics clip stack during natural nested
+        /// painting - is never applied on its own. Re-apply it explicitly here instead, scoped to exactly
+        /// this participant's own paint call. A no-op for a direct plain child (empty ClipAncestors).
+        /// </summary>
+        private static async ValueTask PaintStackingParticipant(RGraphics g, DomUtils.StackingParticipant participant)
+        {
+            var pushedClips = RenderUtils.PushAncestorOverflowClips(g, participant.Box, participant.ClipAncestors);
+
+            await participant.Box.Paint(g);
+
+            for (var i = 0; i < pushedClips; i++)
+                g.PopClip();
         }
 
         /// <summary>

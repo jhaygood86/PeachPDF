@@ -142,7 +142,111 @@ namespace PeachPDF.Tests.Integration
             Assert.True(trIndex < posIndex, "the transformed box must paint before the positive-z-index sibling");
         }
 
+        [Fact]
+        public async Task HoistedBox_PastTwoNestedOverflowHiddenAncestors_GetsBothAncestorsClipsApplied()
+        {
+            // Regression: RenderUtils.ClipGraphicsByOverflow, called naturally inside a box's own
+            // PaintImpCore, only ever finds and pushes the NEAREST overflow:hidden ancestor along its
+            // own containing-block chain, then stops - so a box hoisted past TWO nested overflow:hidden
+            // wrappers (w1 outside, w2 inside) only ever got w2's clip applied via its own natural
+            // paint call; w1's clip normally comes "for free" from w1's own still-active Paint() call
+            // during ordinary nested painting, which never happens for hoisted content. A single
+            // intermediate overflow:hidden wrapper is already handled correctly without this fix - this
+            // scenario specifically needs two nested ones to exercise the gap. w1 (100x80) is smaller
+            // than w2 (200x200) in both dimensions, so if only w2's clip were applied (the pre-fix
+            // bug), the narrowest clip actually pushed would be bounded by 200/200, not w1's tighter
+            // 100/80.
+            var (root, _) = await BuildAndLayout(Wrap(
+                "<div id='w1' style='overflow:hidden;width:100px;height:80px;'>" +
+                "<div id='w2' style='overflow:hidden;width:200px;height:200px;'>" +
+                "<div id='h' style='position:absolute;top:0;left:0;z-index:5;width:300px;height:300px;background:rgb(200,0,0);'></div>" +
+                "</div></div>"));
+
+            var g = new TestRecordingGraphics();
+            await root.Paint(g);
+
+            var drawIndex = g.Log.FindIndex(e =>
+                e is TestRecordingGraphics.DrawRectCall r && r.Color == RColor.FromArgb(200, 0, 0));
+            Assert.True(drawIndex >= 0, "hoisted box never painted");
+
+            var pushesBeforeDraw = g.Log.Take(drawIndex).OfType<TestRecordingGraphics.PushClipCall>().ToList();
+
+            Assert.True(pushesBeforeDraw.Count >= 2,
+                $"expected at least 2 overflow-clip pushes (one per nested overflow:hidden ancestor) " +
+                $"before the hoisted box painted, got {pushesBeforeDraw.Count}");
+
+            var narrowestWidth = pushesBeforeDraw.Min(p => p.Rect.Width);
+            var narrowestHeight = pushesBeforeDraw.Min(p => p.Rect.Height);
+
+            Assert.True(narrowestWidth <= 100.5,
+                $"expected the cumulative clip to be bounded by w1's 100px width, got {narrowestWidth}");
+            Assert.True(narrowestHeight <= 80.5,
+                $"expected the cumulative clip to be bounded by w1's 80px height, got {narrowestHeight}");
+        }
+
+        [Fact]
+        public async Task HoistedBox_PastSingleOverflowHiddenAncestor_GetsItsClipApplied()
+        {
+            // Baseline/non-regression companion to the two-ancestor case above: a single intermediate
+            // overflow:hidden wrapper between a hoisted box and its true stacking context is already
+            // handled correctly by the hoisted box's own natural ClipGraphicsByOverflow call (it finds
+            // the nearest overflow:hidden ancestor regardless of hoisting) - confirm this still works.
+            var (root, _) = await BuildAndLayout(Wrap(
+                "<div id='w1' style='overflow:hidden;width:100px;height:80px;'>" +
+                "<div id='h' style='position:absolute;top:0;left:0;z-index:5;width:300px;height:300px;background:rgb(200,0,0);'></div>" +
+                "</div>"));
+
+            var g = new TestRecordingGraphics();
+            await root.Paint(g);
+
+            var drawIndex = g.Log.FindIndex(e =>
+                e is TestRecordingGraphics.DrawRectCall r && r.Color == RColor.FromArgb(200, 0, 0));
+            Assert.True(drawIndex >= 0, "hoisted box never painted");
+
+            var pushesBeforeDraw = g.Log.Take(drawIndex).OfType<TestRecordingGraphics.PushClipCall>().ToList();
+            Assert.Contains(pushesBeforeDraw, p => p.Rect.Width <= 100.5 && p.Rect.Height <= 80.5);
+        }
+
+        [Fact]
+        public async Task HoistedFloatBox_NestedInPlainWrappers_Paints()
+        {
+            // A float is out-of-flow (NeedsStackingHoist) but not itself a stacking context, so it
+            // must still be hoisted through plain wrapper divs like any other out-of-flow content,
+            // and paints via PaintImpCore's dedicated float bucket.
+            var (root, _) = await BuildAndLayout(Wrap(
+                "<div><div><div>" +
+                "<div id='f' style='float:left;width:50px;height:50px;background:rgb(10,20,30);'></div>" +
+                "</div></div></div>"));
+
+            var g = new TestRecordingGraphics();
+            await root.Paint(g);
+
+            var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
+            Assert.Contains(rects, r => r.Color == RColor.FromArgb(10, 20, 30));
+        }
+
+        [Fact]
+        public async Task HoistedFixedBox_NestedInPlainWrappers_Paints()
+        {
+            // position:fixed is unconditionally a stacking context, so it gets hoisted through plain
+            // wrapper divs like any other stacking-context-establishing content, and paints via
+            // PaintImpCore's dedicated fixed bucket.
+            var (root, _) = await BuildAndLayout(Wrap(
+                "<div><div><div>" +
+                "<div id='fx' style='position:fixed;top:0;left:0;width:50px;height:50px;background:rgb(11,22,33);'></div>" +
+                "</div></div></div>"));
+
+            var g = new TestRecordingGraphics();
+            await root.Paint(g);
+
+            var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
+            Assert.Contains(rects, r => r.Color == RColor.FromArgb(11, 22, 33));
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
+
+        private static CssBox? FindById(CssBox root, string id) =>
+            PeachPDF.Html.Core.Utils.DomUtils.GetBoxById(root, id);
 
         private static string Wrap(string body) =>
             $"<!DOCTYPE html><html><head></head><body>{body}</body></html>";

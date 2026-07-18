@@ -13,6 +13,7 @@
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
+using System.Collections.Generic;
 
 namespace PeachPDF.Html.Core.Utils
 {
@@ -44,32 +45,68 @@ namespace PeachPDF.Html.Core.Utils
             var containingBlock = box.ContainingBlock;
             while (true)
             {
-                if (containingBlock.Overflow == CssConstants.Hidden)
+                if (TryPushOverflowClip(g, containingBlock, box))
                 {
-                    var prevClip = g.GetClip();
-                    // CSS spec: overflow clips at the padding edge, not the content edge.
-                    // Expand ClientRectangle (content-box) outward by the containing block's padding.
-                    var rect = containingBlock.ClientRectangle;
-                    rect.X -= containingBlock.ActualPaddingLeft;
-                    rect.Width += containingBlock.ActualPaddingLeft + containingBlock.ActualPaddingRight;
-                    rect.Y -= containingBlock.ActualPaddingTop;
-                    rect.Height += containingBlock.ActualPaddingTop + containingBlock.ActualPaddingBottom;
-
-                    if (!box.IsFixed)
-                        rect.Offset(box.HtmlContainer!.ScrollOffset);
-
-                    rect.Intersect(prevClip);
-                    g.PushClip(rect);
                     return true;
                 }
-                else
-                {
-                    var cBlock = containingBlock.ContainingBlock;
-                    if (cBlock == containingBlock)
-                        return false;
-                    containingBlock = cBlock;
-                }
+
+                var cBlock = containingBlock.ContainingBlock;
+                if (cBlock == containingBlock)
+                    return false;
+                containingBlock = cBlock;
             }
+        }
+
+        /// <summary>
+        /// Pushes <paramref name="overflowBox"/>'s own clip (padding-edge rect, per CSS spec) if it has
+        /// <c>overflow: hidden</c>, scoped for painting <paramref name="forBox"/> (whose fixed-ness
+        /// determines whether the rect needs the page scroll offset applied). Shared by
+        /// <see cref="ClipGraphicsByOverflow"/> (which walks up a single box's own containing-block
+        /// chain looking for the nearest hidden ancestor) and <see cref="PushAncestorOverflowClips"/>
+        /// (which already knows the exact ancestor chain to check, with no walking needed).
+        /// </summary>
+        private static bool TryPushOverflowClip(RGraphics g, CssBox overflowBox, CssBox forBox)
+        {
+            if (overflowBox.Overflow != CssConstants.Hidden) return false;
+
+            var prevClip = g.GetClip();
+            // CSS spec: overflow clips at the padding edge, not the content edge.
+            // Expand ClientRectangle (content-box) outward by the containing block's padding.
+            var rect = overflowBox.ClientRectangle;
+            rect.X -= overflowBox.ActualPaddingLeft;
+            rect.Width += overflowBox.ActualPaddingLeft + overflowBox.ActualPaddingRight;
+            rect.Y -= overflowBox.ActualPaddingTop;
+            rect.Height += overflowBox.ActualPaddingTop + overflowBox.ActualPaddingBottom;
+
+            if (!forBox.IsFixed)
+                rect.Offset(forBox.HtmlContainer!.ScrollOffset);
+
+            rect.Intersect(prevClip);
+            g.PushClip(rect);
+            return true;
+        }
+
+        /// <summary>
+        /// Pushes the <c>overflow: hidden</c> clip of every box in <paramref name="ancestors"/> that has
+        /// one, in order. Used when painting a box that <see cref="DomUtils.FlattenStackingContext"/>
+        /// hoisted past one or more plain ancestor boxes for stacking-context z-order purposes - since it
+        /// paints via the claiming stacking context's own paint loop rather than those ancestors' own
+        /// (nested) <c>Paint()</c> calls, their overflow clipping isn't already active on the graphics
+        /// clip stack the way it would be for normally-painted content, and must be applied explicitly
+        /// here instead. <paramref name="ancestors"/> is the exact, already-known chain of DOM ancestors
+        /// between the claiming stacking context and the box being painted (see
+        /// <see cref="DomUtils.StackingParticipant"/>), so - unlike <see cref="ClipGraphicsByOverflow"/> -
+        /// no containing-block walk/search is needed; each ancestor is checked directly.
+        /// </summary>
+        /// <returns>the number of clips actually pushed (callers must pop exactly this many afterward)</returns>
+        public static int PushAncestorOverflowClips(RGraphics g, CssBox forBox, IReadOnlyList<CssBox> ancestors)
+        {
+            var pushed = 0;
+            foreach (var ancestor in ancestors)
+            {
+                if (TryPushOverflowClip(g, ancestor, forBox)) pushed++;
+            }
+            return pushed;
         }
 
 

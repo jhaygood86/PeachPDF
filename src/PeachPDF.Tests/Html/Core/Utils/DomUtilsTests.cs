@@ -183,6 +183,24 @@ namespace PeachPDF.Tests.Html.Core.Utils
         }
 
         [Fact]
+        public async Task IsStackingContextBox_Fixed_ReturnsTrue()
+        {
+            var root = await Render("<div><span id='inner' style='position: fixed;'>Text</span></div>");
+            var span = DomUtils.GetBoxById(root, "inner")!;
+
+            Assert.True(DomUtils.IsStackingContextBox(span));
+        }
+
+        [Fact]
+        public async Task IsStackingContextBox_Sticky_ReturnsTrue()
+        {
+            var root = await Render("<div><span id='inner' style='position: sticky;'>Text</span></div>");
+            var span = DomUtils.GetBoxById(root, "inner")!;
+
+            Assert.True(DomUtils.IsStackingContextBox(span));
+        }
+
+        [Fact]
         public async Task IsStackingContextBox_RelativeWithoutZIndex_ReturnsFalse()
         {
             // Per spec, position:relative/absolute alone does not establish a stacking context - only
@@ -290,11 +308,12 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var a = DomUtils.GetBoxById(root, "a")!;
             var b = DomUtils.GetBoxById(root, "b")!;
 
-            var layers = DomUtils.GetBoxesByLayers([a, b]).ToList();
+            var layers = DomUtils.GetBoxesByLayers(
+                [new DomUtils.StackingParticipant(a, []), new DomUtils.StackingParticipant(b, [])]).ToList();
 
             Assert.Equal(2, layers.Count);
-            Assert.Contains(a, layers[1]);
-            Assert.Contains(b, layers[0]);
+            Assert.Contains(layers[1], p => p.Box == a);
+            Assert.Contains(layers[0], p => p.Box == b);
         }
 
         [Fact]
@@ -311,7 +330,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
 
             var flattened = DomUtils.FlattenStackingContext(root).ToList();
 
-            Assert.Contains(inner, flattened);
+            Assert.Contains(flattened, p => p.Box == inner);
         }
 
         [Fact]
@@ -329,11 +348,11 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var abschild = DomUtils.GetBoxById(root, "abschild")!;
 
             var rootFlattened = DomUtils.FlattenStackingContext(root).ToList();
-            Assert.Contains(op, rootFlattened);
-            Assert.DoesNotContain(abschild, rootFlattened);
+            Assert.Contains(rootFlattened, p => p.Box == op);
+            Assert.DoesNotContain(rootFlattened, p => p.Box == abschild);
 
             var opFlattened = DomUtils.FlattenStackingContext(op).ToList();
-            Assert.Contains(abschild, opFlattened);
+            Assert.Contains(opFlattened, p => p.Box == abschild);
         }
 
         [Fact]
@@ -347,11 +366,11 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var abschild = DomUtils.GetBoxById(root, "abschild")!;
 
             var rootFlattened = DomUtils.FlattenStackingContext(root).ToList();
-            Assert.Contains(tr, rootFlattened);
-            Assert.DoesNotContain(abschild, rootFlattened);
+            Assert.Contains(rootFlattened, p => p.Box == tr);
+            Assert.DoesNotContain(rootFlattened, p => p.Box == abschild);
 
             var trFlattened = DomUtils.FlattenStackingContext(tr).ToList();
-            Assert.Contains(abschild, trFlattened);
+            Assert.Contains(trFlattened, p => p.Box == abschild);
         }
 
         [Fact]
@@ -369,7 +388,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
 
             var rootFlattened = DomUtils.FlattenStackingContext(root).ToList();
 
-            Assert.Contains(nested, rootFlattened);
+            Assert.Contains(rootFlattened, p => p.Box == nested);
         }
 
         [Fact]
@@ -388,11 +407,11 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var plainChild = DomUtils.GetBoxById(root, "plainChild")!;
 
             var rootFlattened = DomUtils.FlattenStackingContext(root).ToList();
-            Assert.DoesNotContain(wrapper, rootFlattened);
-            Assert.DoesNotContain(plainChild, rootFlattened);
+            Assert.DoesNotContain(rootFlattened, p => p.Box == wrapper);
+            Assert.DoesNotContain(rootFlattened, p => p.Box == plainChild);
 
             var wrapperFlattened = DomUtils.FlattenStackingContext(wrapper).ToList();
-            Assert.Contains(plainChild, wrapperFlattened);
+            Assert.Contains(wrapperFlattened, p => p.Box == plainChild);
         }
 
         // --- Helper ---
