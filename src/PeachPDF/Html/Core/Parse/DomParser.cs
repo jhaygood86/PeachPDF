@@ -1398,6 +1398,17 @@ namespace PeachPDF.Html.Core.Parse
                     // is the box has text
                     var keepBox = !string.IsNullOrWhiteSpace(childBox.Text);
 
+                    // A ::before/::after box's presence is governed entirely by whether its selector
+                    // matched (CssData.DoesSelectorMatch synthesizes it as a match side effect) and by
+                    // its own `content` value - never by these whitespace-collapse heuristics, which
+                    // exist for ordinary anonymous DOM text nodes. Without this, a pseudo-element box
+                    // whose `content` resolves to the empty string (a real, common pattern for a
+                    // border/background-only generated box, e.g. Acid2's
+                    // ".nose div div:before { content: ''; ...border/background... }") looks exactly
+                    // like meaningless inter-tag whitespace to every check below and gets deleted before
+                    // it's ever laid out or painted.
+                    keepBox = keepBox || childBox.IsBeforePseudoElement || childBox.IsAfterPseudoElement;
+
                     // if the box is a br
                     keepBox = keepBox || childBox.IsBrElement;
 

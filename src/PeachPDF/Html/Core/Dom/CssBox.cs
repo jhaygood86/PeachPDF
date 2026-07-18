@@ -1110,8 +1110,17 @@ namespace PeachPDF.Html.Core.Dom
 
                     if (Position is CssConstants.Relative)
                     {
-                        var left = Location.X + CssValueParser.ParseLength(Left, ActualWidth, this);
-                        var top = Location.Y + CssValueParser.ParseLength(Top, ActualHeight, this);
+                        // CSS 2.1 §9.4.3: for each axis, the "near" offset (left/top) wins when set; if
+                        // it's auto and the "far" offset (right/bottom) isn't, the far offset applies
+                        // with its sign flipped (moving the box the opposite direction from that edge);
+                        // if both are auto, the offset is 0. Previously only left/top were ever read, so
+                        // e.g. "bottom: -1em" with left/top both auto/unset was a silent no-op.
+                        var left = Location.X + (Left is not CssConstants.Auto || Right is CssConstants.Auto
+                            ? CssValueParser.ParseLength(Left, ActualWidth, this)
+                            : -CssValueParser.ParseLength(Right, ActualWidth, this));
+                        var top = Location.Y + (Top is not CssConstants.Auto || Bottom is CssConstants.Auto
+                            ? CssValueParser.ParseLength(Top, ActualHeight, this)
+                            : -CssValueParser.ParseLength(Bottom, ActualHeight, this));
 
                         Location = new RPoint(left, top);
                         ActualBottom = top;
@@ -1281,6 +1290,38 @@ namespace PeachPDF.Html.Core.Dom
                     var delta = actualRight - ActualRight;
 
                     OffsetLeft(delta);
+                }
+
+                // Symmetric vertical-axis counterpart to the right-edge fallback just above: `top` was
+                // already always honored when set (the primary Position-is-Absolute branch earlier in
+                // this method), but `bottom` was never read anywhere, so a box relying on `bottom` with
+                // `top: auto` silently stayed at the containing block's top edge instead of being placed
+                // relative to its bottom edge.
+                if (Top is CssConstants.Auto && Bottom is not CssConstants.Auto)
+                {
+                    var nearestPositionedAncestor = DomUtils.GetNearestPositionedAncestor(this);
+
+                    var bottom = CssValueParser.ParseLength(Bottom, nearestPositionedAncestor.ActualHeight, this);
+
+                    // Unlike ActualRight/ActualWidth (resolved for every box, including this ancestor,
+                    // before its children are laid out - see the GetBoxWidth call earlier in this
+                    // method), a block-container ancestor's ActualBottom is only finalized by
+                    // ApplyHeight/MarginBottomCollapse AFTER all of its children (including this box)
+                    // have already run their own PerformLayoutImp - so ClientBottom here would still be
+                    // reading a provisional, usually-wrong value. Resolve the ancestor's border-box
+                    // height directly from its own declared CSS Height (independent of child layout
+                    // order) when it has one; only fall back to its (possibly still-provisional)
+                    // ActualBottom for an auto-height ancestor, where there is no better source yet.
+                    var ancestorBorderBoxHeight = CssLayoutEngine.GetBoxHeight(nearestPositionedAncestor)
+                        ?? nearestPositionedAncestor.ActualBottom - nearestPositionedAncestor.Location.Y;
+                    var ancestorPaddingBoxBottom = nearestPositionedAncestor.Location.Y + ancestorBorderBoxHeight
+                        - nearestPositionedAncestor.ActualBorderBottomWidth;
+
+                    var actualBottom = ancestorPaddingBoxBottom - bottom;
+
+                    var delta = actualBottom - ActualBottom;
+
+                    OffsetTop(delta);
                 }
             }
 

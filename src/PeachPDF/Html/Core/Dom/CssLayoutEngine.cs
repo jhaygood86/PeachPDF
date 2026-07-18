@@ -1285,10 +1285,15 @@ namespace PeachPDF.Html.Core.Dom
             if (lineBox.Rectangles.TryGetValue(box, out var r))
                 lineBox.Rectangles[box] = new RRect(r.X, r.Y + delta, r.Width, r.Height);
 
+            // An image word's own Rectangle (not lineBox.Rectangles/box.Location) is exactly what
+            // CssBoxImage/CssBoxObject.PaintImpCore reads to position the drawn image
+            // ("var r = _imageWord.Rectangle; ...; g.DrawImage(_imageWord.Image, r)") - so it must move
+            // with everything else here. Previously excluded, which made `vertical-align: top/bottom/
+            // middle` a complete no-op for inline replaced elements (e.g. an <object>/<img>): the word
+            // kept its original flow-assigned Top forever, regardless of the declared alignment.
             foreach (var word in lineBox.WordsOf(box))
             {
-                if (!word.IsImage)
-                    word.Top += delta;
+                word.Top += delta;
             }
         }
 

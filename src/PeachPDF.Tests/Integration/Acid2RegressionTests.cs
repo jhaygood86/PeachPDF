@@ -6,6 +6,7 @@ using PeachPDF.PdfSharpCore;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -119,6 +120,50 @@ namespace PeachPDF.Tests.Integration
             Assert.True(top.Location.Y <= picture!.Location.Y);
             Assert.True(picture.Location.Y <= forehead!.Location.Y);
             Assert.True(picture.Location.Y <= eyes!.Location.Y);
+        }
+
+        [Fact]
+        public async Task Nose_GeneratedPseudoElementBoxes_SurviveWithRealGeometry()
+        {
+            // Regression for two Round 2 bugs found via visual inspection of this exact fixture:
+            // 1) ".nose div :after" (a pseudo-element preceded by a descendant combinator - note the
+            //    space) previously never got synthesized as a real box at all (SelectorConstructor only
+            //    wrapped a directly-attached trailing pseudo-element into a matchable CompoundSelector).
+            // 2) both this rule and ".nose div div:before" use "content: ''", which
+            //    DomParser.CorrectTextBoxes previously deleted before layout/paint ever ran (it treated
+            //    an empty-string Text exactly like meaningless inter-tag whitespace).
+            // Together these silently dropped the nose's border/background geometry entirely.
+            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var nose = FindByClass(root, "nose")!;
+
+            var pseudoBoxes = new List<CssBox>();
+            void CollectPseudoElements(CssBox box)
+            {
+                if (box.IsBeforePseudoElement || box.IsAfterPseudoElement) pseudoBoxes.Add(box);
+                foreach (var child in box.Boxes) CollectPseudoElements(child);
+            }
+            CollectPseudoElements(nose);
+
+            Assert.True(pseudoBoxes.Count >= 2,
+                $"expected at least 2 generated pseudo-element boxes under .nose (:before and :after), found {pseudoBoxes.Count}");
+            Assert.All(pseudoBoxes, b => Assert.True(b.ActualBottom - b.Location.Y >= 0,
+                "a generated pseudo-element box should have valid (non-negative) resolved geometry"));
+        }
+
+        [Fact]
+        public async Task SmileDiv_BottomOffset_ShiftsPositionAwayFromStaticFlow()
+        {
+            // Regression for the "bottom" offset property being entirely unimplemented: ".smile div {
+            // position:relative; bottom:-1em; }" (no "top" declared) previously never moved at all.
+            var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var smile = FindByClass(root, "smile")!;
+            var smileDiv = smile.Boxes.FirstOrDefault(b => b.Position == "relative");
+
+            Assert.NotNull(smileDiv);
+            // With top:auto and bottom:-1em, the used top offset is +1em (CSS2.1 §9.4.3's sign-flip
+            // rule) - i.e. the box must sit strictly below where plain static flow would have put it.
+            Assert.True(smileDiv!.Location.Y > smile.Location.Y,
+                "expected .smile div's bottom offset to shift it below its static flow position");
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────

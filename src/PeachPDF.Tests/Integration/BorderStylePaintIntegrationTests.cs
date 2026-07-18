@@ -2,6 +2,7 @@ using PeachPDF.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
@@ -127,6 +128,69 @@ namespace PeachPDF.Tests.Integration
             Assert.Null(exception);
             Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
             Assert.NotEmpty(g.Log.OfType<TestRecordingGraphics.DrawPathCall>());
+        }
+
+        // ─── border-style 2-value shorthand + per-side suppression (Acid2's "[class~=one].first.one") ──
+        // "border-style: none solid" must expand to top=bottom=none, left=right=solid (CSS2.1's 1/2/3/4-
+        // value box-shorthand expansion), and only the solid sides may actually paint.
+
+        [Fact]
+        public async Task BorderStyleTwoValueShorthand_OnlyPaintsTheSolidSides()
+        {
+            var (root, _) = await BuildAndLayout(Wrap(
+                "<div id='b' style='width:40px; height:40px; border-width:4px; border-color:rgb(51,51,51); border-style: none solid'>x</div>"));
+            var div = FindById(root, "b")!;
+
+            Assert.Equal(CssConstants.None, div.BorderTopStyle);
+            Assert.Equal(CssConstants.Solid, div.BorderRightStyle);
+            Assert.Equal(CssConstants.None, div.BorderBottomStyle);
+            Assert.Equal(CssConstants.Solid, div.BorderLeftStyle);
+
+            var g = new TestRecordingGraphics();
+            await div.Paint(g);
+
+            var lines = g.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToList();
+            // Two sides painted (left, right), each as a single line - top/bottom (none) draw nothing.
+            Assert.Equal(2, lines.Count);
+            Assert.All(lines, l => Assert.Equal(RColor.FromArgb(51, 51, 51), l.Color));
+
+            // A vertical (left/right) side line has equal Y and differing X; horizontal has equal X.
+            Assert.All(lines, l => Assert.True(System.Math.Abs(l.X1 - l.X2) < 0.01,
+                "expected only vertical (left/right) border lines, none horizontal"));
+        }
+
+        // ─── border-color/border-width 4-value and 2-value expansion resolve per-side ──
+        // Acid2's ".nose div div:before { border-color: red yellow black yellow; border-width: 1em; }"
+        // (4-value color) and ".picture p { ... }" style earlier "border-width: 0 2em" (2-value) shapes.
+
+        [Fact]
+        public async Task BorderColorFourValueShorthand_ResolvesTopRightBottomLeftPerSide()
+        {
+            var (root, _) = await BuildAndLayout(Wrap(
+                "<div id='b' style='border-style:solid; border-width:1px; border-color: rgb(1,0,0) rgb(0,1,0) rgb(0,0,1) rgb(1,1,0)'>x</div>"));
+            var div = FindById(root, "b")!;
+
+            Assert.Equal("rgb(1, 0, 0)", div.BorderTopColor);
+            Assert.Equal("rgb(0, 1, 0)", div.BorderRightColor);
+            Assert.Equal("rgb(0, 0, 1)", div.BorderBottomColor);
+            Assert.Equal("rgb(1, 1, 0)", div.BorderLeftColor);
+        }
+
+        [Fact]
+        public async Task BorderWidthTwoValueShorthand_ThenLaterOneValue_OverridesAllSidesPerSpecificity()
+        {
+            // Mirrors the fixture's own "border-width: 0 2em" (2-value: top/bottom=0, left/right=2em)
+            // followed later by a same-specificity "border-width: 1em" (all sides) - the later rule
+            // must win outright on every side, not merge/leave the 2-value expansion partially intact.
+            var (root, _) = await BuildAndLayout(Wrap(
+                "<div id='b' style='border-style:solid'></div>"
+                + "<style>#b { border-width: 0 2em; } #b { border-width: 1em; }</style>"));
+            var div = FindById(root, "b")!;
+
+            Assert.Equal("1em", div.BorderTopWidth);
+            Assert.Equal("1em", div.BorderRightWidth);
+            Assert.Equal("1em", div.BorderBottomWidth);
+            Assert.Equal("1em", div.BorderLeftWidth);
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
