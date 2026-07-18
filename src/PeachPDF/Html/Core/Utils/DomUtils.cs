@@ -568,16 +568,10 @@ namespace PeachPDF.Html.Core.Utils
 
         public static IEnumerable<CssBox> FlattenStackingContext(CssBox box)
         {
-            // Out-of-flow descendants (floated/absolute/fixed) need to be hoisted up through normal-flow
-            // wrapper boxes so their painting box's stacking context can order them correctly relative to
-            // its own layers. Normal in-flow descendants do NOT need hoisting - they're already painted
-            // correctly by their own parent's Paint() call, which recurses into this same method for its
-            // own direct children. Recursing here regardless of flow used to re-yield (and repaint) every
-            // in-flow descendant once per ancestor level between it and this box - an O(depth) blowup on
-            // top of the O(tree size) this method already does. Skip that recursion entirely unless the
-            // document actually has out-of-flow content somewhere to hoist.
-            var hasOutOfFlowBoxes = box.HtmlContainer?.HasOutOfFlowBoxes ?? true;
-
+            // Plain in-flow, non-stacking-context children always paint here, nested normally - this is
+            // what keeps this box's own overflow-clip scope (pushed/popped around this same children
+            // loop in CssBox.PaintImpCore) wrapped around them, and their own further plain descendants
+            // are handled the same way, recursively, by their own subsequent Paint() call.
             foreach (var childBox in box.Boxes)
             {
                 // ::marker boxes (inside or outside position) are always painted via one explicit
@@ -589,19 +583,63 @@ namespace PeachPDF.Html.Core.Utils
                 // it were normal in-flow content. Yielding it here too would double-paint it.
                 if (childBox.IsMarkerPseudoElement) continue;
 
-                if (!IsStackingContextBox(childBox))
+                if (!NeedsStackingHoist(childBox))
                 {
                     yield return childBox;
                 }
+            }
 
-                if (!hasOutOfFlowBoxes) continue;
+            // Only the nearest enclosing stacking context is responsible for finding and ordering every
+            // out-of-flow / stacking-context-establishing descendant reachable through plain wrapper
+            // boxes, at any depth - a non-stacking-context box contributes nothing further here; any such
+            // descendants of its own are claimed by whichever ancestor above it actually is one. This is
+            // what fixes two bugs in the old, position/z-index-only version of this method: (1) a box
+            // that itself establishes a stacking context (e.g. position:relative;z-index, or now also
+            // opacity<1/transform) was never yielded by its own parent at all, so it and its whole
+            // subtree never painted; (2) an out-of-flow stacking-context descendant nested a few plain
+            // wrapper boxes deep was discovered "naturally" via the ordinary parent-to-child Paint()
+            // cascade before its true ancestor stacking context ever reached its own z-index layer, so it
+            // visually painted as if z-index had no effect.
+            if (!IsStackingContextBox(box)) yield break;
+            if (!(box.HtmlContainer?.HasStackingHoistCandidates ?? true)) yield break;
 
-                foreach (var flattenedBox in FlattenStackingContext(childBox))
+            foreach (var participant in SearchForHoistableDescendants(box))
+            {
+                yield return participant;
+            }
+        }
+
+        // A box needs to escape its immediate DOM position to compete for z-order at the nearest
+        // enclosing stacking context, rather than paint nested within its immediate parent: either
+        // because it's out-of-flow (floated/absolute/fixed - always subject to z-ordering against its
+        // nearest positioned/stacking ancestor, not its DOM parent), or because it establishes its own
+        // stacking context (which must be ordered as one atomic unit among its true siblings, not
+        // wherever it happens to sit in a plain wrapper's local scope). Internal (not private) so
+        // HtmlContainerInt's HasStackingHoistCandidates computation can reuse the exact same predicate
+        // rather than duplicating it.
+        internal static bool NeedsStackingHoist(CssBox box) => box.IsOutOfFlow || IsStackingContextBox(box);
+
+        // Tunnels through plain wrapper boxes AND non-stacking-context out-of-flow boxes alike (a float,
+        // or e.g. position:absolute with z-index:auto, doesn't block descendants further down from
+        // needing to reach this same level) looking for content that needs to compete at `box`'s own
+        // stacking-context level. Recursion stops at (but includes) each stacking-context-establishing
+        // box found - its own subtree is its own business, resolved independently once its own Paint()
+        // call later invokes FlattenStackingContext on itself.
+        private static IEnumerable<CssBox> SearchForHoistableDescendants(CssBox box)
+        {
+            foreach (var childBox in box.Boxes)
+            {
+                if (childBox.IsMarkerPseudoElement) continue;
+
+                if (NeedsStackingHoist(childBox))
                 {
-                    if (!IsStackingContextBox(flattenedBox) && flattenedBox.IsOutOfFlow)
-                    {
-                        yield return flattenedBox;
-                    }
+                    yield return childBox;
+                    if (IsStackingContextBox(childBox)) continue;
+                }
+
+                foreach (var descendant in SearchForHoistableDescendants(childBox))
+                {
+                    yield return descendant;
                 }
             }
         }
@@ -619,6 +657,29 @@ namespace PeachPDF.Html.Core.Utils
             }
 
             if (box.Position is CssConstants.Fixed or CssConstants.Sticky)
+            {
+                return true;
+            }
+
+            // Flex item with a z-index other than auto establishes a stacking context even without a
+            // `position` value of its own (CSS Flexible Box Layout §z-order), unlike a plain block/
+            // inline child, which needs position:relative/absolute for z-index to have any effect at all.
+            if (box.ZIndex is not CssConstants.Auto &&
+                box.ParentBox?.Display is CssConstants.Flex or CssConstants.InlineFlex)
+            {
+                return true;
+            }
+
+            // Opacity less than 1 and any non-identity transform each establish a stacking context per
+            // spec, regardless of `position` - both are already rendered as isolated, self-contained
+            // units (an offscreen composited group for opacity; a pushed/popped matrix for transform), so
+            // painting their descendants as one atomic block here matches what already happens visually.
+            if (!box.IsOpaque)
+            {
+                return true;
+            }
+
+            if (box.IsTransformed)
             {
                 return true;
             }

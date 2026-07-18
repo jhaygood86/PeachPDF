@@ -2337,6 +2337,91 @@ File.Delete("test_opacity.html");
 File.WriteAllText("test_opacity.html", opacityHtml);
 Console.WriteLine("Saved test_opacity.html");
 
+// --- stacking context showcase ---
+//
+// These three cases were all previously silently broken by the stacking-context algorithm only
+// recognizing position+z-index (not opacity/transform), plus two pre-existing paint-order bugs it
+// had: (1) any box establishing its own stacking context - including plain position:relative;
+// z-index siblings - was dropped and never painted at all; (2) an out-of-flow stacking-context
+// descendant nested a few plain wrapper divs deep painted during the wrong z-index layer's timing.
+// See docs/html-css-support.md#stacking-context.
+
+static string StackingSwatch(string desc, string bodyHtml, string cssLabel) =>
+    "<td>" +
+    $"<div class=\"stage\">{bodyHtml}</div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">{cssLabel}</div>" +
+    "</td>";
+
+const string StackingCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
+    table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
+    table.sw td { padding: 3px; vertical-align: top; width: 33% }
+    .stage { height: 130px; border: 1px solid #999; position: relative; }
+    .chip { position: absolute; width: 90px; height: 90px; color: #fff; font-size: 8pt;
+            text-align: center; line-height: 90px; }
+    .desc { font-size: 7pt; font-weight: bold; color: #444; margin: 2px 0 1px }
+    .css { font-size: 5.5pt; color: #666; line-height: 1.3; word-break: break-all }
+    </style>
+    """;
+
+var stackingHtml = "<!DOCTYPE html><html><head>" + StackingCss + "</head><body>" +
+
+    "<h1>Stacking Context Test Page</h1>" +
+    "<p class=\"intro\">Exercises the CSS stacking-context algorithm (MDN: Positioned layout &gt; Stacking context) - z-index ordering, opacity/transform establishing a stacking context, and out-of-flow content escaping a plain wrapper to compete at its true enclosing stacking context.</p>" +
+
+    "<h2>1 &mdash; z-index siblings, negative and positive</h2>" +
+    "<table class=\"sw\"><tr>" +
+    StackingSwatch("both siblings paint, in z-index order",
+        "<div class=\"chip\" style=\"position:relative;left:10px;top:10px;z-index:1;background:#c0392b;\">z: 1 (back)</div>" +
+        "<div class=\"chip\" style=\"position:relative;left:55px;top:-55px;z-index:2;background:#2980b9;\">z: 2 (front)</div>",
+        "position:relative;z-index:1 / z-index:2") +
+    "</tr></table>" +
+
+    "<h2>2 &mdash; opacity establishes a stacking context</h2>" +
+    "<table class=\"sw\"><tr>" +
+    StackingSwatch("absolutely-positioned child fades with its opacity parent",
+        "<div style=\"position:absolute;left:5px;top:15px;width:180px;height:100px;opacity:0.5;background:#27ae60;\">" +
+        "<div class=\"chip\" style=\"left:50px;top:15px;background:#e67e22;\">abs child</div>" +
+        "</div>",
+        "opacity:0.5 parent, position:absolute child (no z-index)") +
+    StackingSwatch("transform establishes a stacking context",
+        "<div style=\"position:absolute;left:5px;top:15px;width:180px;height:100px;transform:rotate(6deg);background:#27ae60;\">" +
+        "<div class=\"chip\" style=\"left:50px;top:15px;background:#e67e22;\">abs child</div>" +
+        "</div>",
+        "transform:rotate(6deg) parent, position:absolute child (no z-index)") +
+    "</tr></table>" +
+
+    "<h2>3 &mdash; escaping a non-stacking-context wrapper</h2>" +
+    "<p class=\"intro\">The nested box's own z-index:-1 competes against its true enclosing stacking context (the page), not just its immediate position:absolute parent (which has no z-index of its own, so does not itself establish a stacking context) - it must paint behind the sibling, not be trapped painting whenever the wrapper happens to.</p>" +
+    "<table class=\"sw\"><tr>" +
+    StackingSwatch("z-index:-1 box nested in a plain absolute wrapper",
+        "<div class=\"chip\" style=\"position:relative;left:10px;top:10px;z-index:0;background:#8e44ad;\">sibling z: 0</div>" +
+        "<div style=\"position:absolute;left:70px;top:10px;width:90px;height:90px;\">" +
+        "<div class=\"chip\" style=\"position:relative;z-index:-1;background:#7f4020;\">nested z: -1</div>" +
+        "</div>",
+        "position:absolute wrapper (no z-index) &gt; position:relative;z-index:-1") +
+    "</tr></table>" +
+
+    "</body></html>";
+
+var stackingStream = new MemoryStream();
+var stackingDocument = await generator.GeneratePdf(stackingHtml, pdfConfig);
+stackingDocument.Save(stackingStream);
+
+File.Delete("test_stacking_context.pdf");
+File.WriteAllBytes("test_stacking_context.pdf", stackingStream.ToArray());
+Console.WriteLine("Saved test_stacking_context.pdf");
+
+File.Delete("test_stacking_context.html");
+File.WriteAllText("test_stacking_context.html", stackingHtml);
+Console.WriteLine("Saved test_stacking_context.html");
+
 // --- text-transform showcase ---
 
 static string TextTransformSwatch(string desc, string text, string cssValue) =>

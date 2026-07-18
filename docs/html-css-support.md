@@ -300,6 +300,23 @@ Regenerating the pattern set (`tools/Update-HyphenationPatterns.ps1`) re-checks 
 | `visibility` | [visibility](https://developer.mozilla.org/en-US/docs/Web/CSS/visibility) | `visible`, `hidden` |
 | `z-index` | [z-index](https://developer.mozilla.org/en-US/docs/Web/CSS/z-index) | Full support for positioned elements |
 
+### Stacking Context
+
+Paint order follows the CSS [stacking context](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Positioned_layout/Stacking_context) model. A new stacking context is established by:
+
+- the document root
+- `position: relative` or `absolute` with a `z-index` other than `auto`
+- `position: fixed` or `sticky` (unconditionally, regardless of `z-index`)
+- a flex item (a direct child of a `display: flex`/`inline-flex` container) with a `z-index` other than `auto`
+- `opacity` less than 1
+- a `transform` other than `none`
+
+Elements are painted as one self-contained, atomic unit once they establish a stacking context — for example, everything inside an `opacity: 0.5` box (including any absolutely-positioned descendants) fades together as a single composited group, and a `z-index`-ordered element's own descendants are ordered independently of the rest of the page.
+
+The following triggers from the CSS specification are **not** supported, since the underlying properties themselves have no effect in PeachPDF (see [Unsupported CSS Features](#unsupported-css-features)): `isolation`, `will-change`, `mix-blend-mode`, `contain`, and 3D `perspective`.
+
+**Caveat:** an element that needs to escape a plain (non-stacking-context) ancestor to compete for z-order at its true enclosing stacking context — for example, a `z-index`-ordered element nested inside a plain `position: absolute` wrapper that has no `z-index` of its own — may render outside that ancestor's `overflow: hidden` clip region instead of being clipped by it.
+
 ### Flexbox
 
 CSS Flexbox Level 1 (`display: flex` / `inline-flex`) is supported, including multi-line wrapping, all alignment properties, and auto margins on the main axis.
