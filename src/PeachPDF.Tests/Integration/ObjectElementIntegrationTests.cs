@@ -21,6 +21,27 @@ namespace PeachPDF.Tests.Integration
         private const string ValidPngDataUri =
             "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mP4/58BAAT/Af9jgNErAAAAAElFTkSuQmCC";
 
+        // The exact same PNG bytes as ValidPngDataUri above, but with its base64 payload's "/"
+        // characters percent-escaped as "%2F" - verbatim how the real Acid2 fixture writes its own
+        // embedded images (including the "eyes" object chain's real PNG).
+        private const string PercentEncodedPngDataUri =
+            "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mP4%2F58BAAT%2FAf9jgNErAAAAAElFTkSuQmCC";
+
+        [Fact]
+        public async Task PercentEncodedImageData_BecomesReplacedElement_DiscardsChildren()
+        {
+            // Regression for DataUriUtils.TryDecodeDataUri not percent-decoding a base64 payload before
+            // calling Convert.FromBase64String - this exact percent-escaped shape (not ValidPngDataUri
+            // above) is what silently made the real Acid2 fixture's "eyes" object chain fall back to
+            // rendering the literal text "ERROR" instead of the resolved image.
+            var html = Wrap($"<object id='o' data='{PercentEncodedPngDataUri}'>ERROR</object>");
+            var (root, _) = await BuildAndLayout(html);
+
+            var obj = FindById(root, "o")!;
+            Assert.Empty(obj.Boxes);
+            Assert.Contains(obj.Words, w => w.IsImage);
+        }
+
         [Fact]
         public async Task ValidImageData_BecomesReplacedElement_DiscardsChildren()
         {

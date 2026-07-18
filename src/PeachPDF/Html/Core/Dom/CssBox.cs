@@ -1130,10 +1130,19 @@ namespace PeachPDF.Html.Core.Dom
                     {
                         var nearestPositionedAncestor = DomUtils.GetNearestPositionedAncestor(this);
 
-                        var left = nearestPositionedAncestor.Location.X +
+                        // CSS 2.1 §10.3.7: `left`/`top` on an absolutely positioned box are measured
+                        // from the containing block's PADDING edge (ClientLeft/ClientTop - inside the
+                        // border), not its border-box edge (Location.X/Y) - and, like every other
+                        // positioning scheme, the box's own margin still applies on top of that offset
+                        // (previously dropped entirely here, unlike the static/relative branch above
+                        // which already adds ActualMarginLeft). Acid2's own
+                        // "[class~=one].first.one { position:absolute; margin: 36px 0 0 60px; }" inside
+                        // ".picture" (which has a 1em border) exercises both of these: the missing
+                        // margin alone lands the box ~36px/60px off, on top of the next sibling.
+                        var left = nearestPositionedAncestor.ClientLeft + ActualMarginLeft +
                                    CssValueParser.ParseLength(Left, nearestPositionedAncestor.ActualWidth, this);
 
-                        var top = nearestPositionedAncestor.Location.Y +
+                        var top = nearestPositionedAncestor.ClientTop + ActualMarginTop +
                                   CssValueParser.ParseLength(Top, nearestPositionedAncestor.ActualHeight, this);
 
                         Location = new RPoint(left, top);
@@ -2184,16 +2193,40 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var layerBoxes in DomUtils.GetBoxesByLayers(stackingContextBoxes))
             {
-                // split paint to handle z-order
+                // Split paint to handle z-order, per CSS2.1 Appendix E's within-a-stacking-context
+                // order: in-flow block-level descendants, then non-positioned floats, then in-flow
+                // inline-level descendants (text and inline replaced content), then positioned
+                // descendants. Block and inline normal-flow content used to share a single pass here
+                // (painted in tree order with no float-relative ordering guarantee at all) - Acid2's own
+                // ".eyes" trap (a block, a float, and an inline replaced <object> as siblings, each
+                // required to paint in a different layer) depends on inline being its own later pass.
+                //
+                // A plain (non-inline-itself) box whose entire content is inline - e.g. Acid2's own
+                // "#eyes-a" div, a block wrapper around nothing but its resolved inline <object> image -
+                // is treated as belonging to the inline pass too, via ActsAsInline below. Its own
+                // recursive Paint() call is what actually paints its inline child (through ITS OWN
+                // nested stacking loop), so deferring that whole call to this stacking context's inline
+                // pass is what makes the child paint after this context's float pass, matching Appendix
+                // E, without needing to hoist the descendant out of its normal DOM position/ancestor at
+                // all (unlike the out-of-flow float/absolute/fixed hoisting FlattenStackingContext
+                // already does - that mechanism moves a box's paint call across ancestor boundaries
+                // entirely, which isn't needed or wanted here since "#eyes-a" itself already belongs to
+                // this stacking context's own direct children).
                 foreach (var p in layerBoxes)
                 {
-                    if (p.Box.Position != CssConstants.Absolute && p.Box is { IsFixed: false, IsFloated: false })
+                    if (!ActsAsInline(p.Box) && p.Box.Position != CssConstants.Absolute && p.Box is { IsFixed: false, IsFloated: false })
                         await PaintStackingParticipant(g, p);
                 }
 
                 foreach (var p in layerBoxes)
                 {
                     if (p.Box.IsFloated)
+                        await PaintStackingParticipant(g, p);
+                }
+
+                foreach (var p in layerBoxes)
+                {
+                    if (ActsAsInline(p.Box) && p.Box.Position != CssConstants.Absolute && p.Box is { IsFixed: false, IsFloated: false })
                         await PaintStackingParticipant(g, p);
                 }
 
@@ -2226,6 +2259,18 @@ namespace PeachPDF.Html.Core.Dom
 
             _hasPainted = true;
         }
+
+        /// <summary>
+        /// Whether <paramref name="box"/> belongs in the "inline" paint pass of the block/float/inline
+        /// ordering in <see cref="PaintImpCore(RGraphics)"/>: either it's genuinely inline-level itself, or it's a
+        /// plain block-level box whose entire content is inline (an "invisible" wrapper carrying only
+        /// inline content, own box aside - e.g. Acid2's own "#eyes-a", a div around nothing but its
+        /// resolved inline &lt;object&gt; image). <c>Boxes.Count > 0</c> guards against misclassifying a
+        /// genuinely empty block box as inline (<see cref="System.Linq.Enumerable.All{T}"/> on an empty
+        /// sequence is vacuously true).
+        /// </summary>
+        private static bool ActsAsInline(CssBox box) =>
+            box.IsInline || (box.Boxes.Count > 0 && box.Boxes.All(b => b.IsInline));
 
         /// <summary>
         /// Paints one stacking-context participant discovered by <see cref="DomUtils.FlattenStackingContext"/>.

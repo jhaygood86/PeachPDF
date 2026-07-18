@@ -166,6 +166,63 @@ namespace PeachPDF.Tests.Integration
                 "expected .smile div's bottom offset to shift it below its static flow position");
         }
 
+        [Fact]
+        public async Task Forehead_BackgroundImage_ActuallyLoads()
+        {
+            // Regression for a Round 3 bug: DataUriUtils.TryDecodeDataUri never percent-decoded a
+            // base64 payload before calling Convert.FromBase64String, so ".forehead"'s tiling
+            // background (written with its "/" characters percent-escaped as "%2F", per the real
+            // fixture) silently failed to decode - only the "background: red" color painted, with no
+            // image on top of it at all.
+            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var forehead = FindByClass(root, "forehead")!;
+
+            Assert.NotNull(forehead.BackgroundImages);
+            var layer = Assert.Single(forehead.BackgroundImages!);
+            var urlImage = Assert.IsType<PeachPDF.Html.Core.Entities.CssImage.Url>(layer);
+            Assert.NotNull(urlImage.Image);
+        }
+
+        [Fact]
+        public async Task Eyes_ObjectFallbackChain_ResolvesToRealImage_NotErrorText()
+        {
+            // Same Round 3 data-URI bug as above, but for the "eyes" nested <object> fallback chain -
+            // its innermost object's real PNG (with 8-bit alpha) is also written with percent-escaped
+            // base64. Before the fix, it silently failed to decode, so the whole chain fell back all
+            // the way to rendering the literal fallback text "ERROR" instead of the resolved image.
+            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var eyesA = FindById(root, "eyes-a")!;
+
+            var hasImageWord = false;
+            void CheckForImage(CssBox box)
+            {
+                if (box.Words.Any(w => w.IsImage)) hasImageWord = true;
+                foreach (var child in box.Boxes) CheckForImage(child);
+            }
+            CheckForImage(eyesA);
+
+            Assert.True(hasImageWord, "expected #eyes-a's object fallback chain to resolve to a real image");
+            Assert.DoesNotContain(eyesA.Words, w => !w.IsImage);
+        }
+
+        [Fact]
+        public async Task SecondLineBlockquote_MarginAndOriginInsideBorderedPicture_BothApplyCorrectly()
+        {
+            // Regression for a Round 3 bug: position:absolute never added the box's own margin, and
+            // anchored off the containing block's border-box edge instead of its padding-box edge.
+            // "[class~=one].first.one" has "top:0; margin: 36px 0 0 60px;" inside ".picture" (which has
+            // a 1em border) - dropping the margin alone landed it at .picture's own border-box top-left
+            // corner instead of 36px/60px inside its content (padding-box) edge.
+            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var blockquote = FindByClass(root, "first")!;
+            var picture = FindByClass(root, "picture")!;
+
+            var expectedY = picture.ClientTop + blockquote.ActualMarginTop;
+            var expectedX = picture.ClientLeft + blockquote.ActualMarginLeft;
+            Assert.InRange(blockquote.Location.Y, expectedY - 0.5, expectedY + 0.5);
+            Assert.InRange(blockquote.Location.X, expectedX - 0.5, expectedX + 0.5);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static bool PageHasContent(PdfPage page)

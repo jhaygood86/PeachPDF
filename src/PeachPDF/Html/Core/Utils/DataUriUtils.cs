@@ -32,8 +32,14 @@ namespace PeachPDF.Html.Core.Utils
 
             try
             {
+                // Per the data: URL spec, the body is percent-decoded first and THEN (if the ;base64
+                // flag is present) base64-decoded - percent-decoding is not conditional on the encoding
+                // flag. A base64 payload containing reserved characters (/, +, =) is commonly written
+                // with them percent-escaped (%2F, %2B, %3D) - e.g. the real Acid2 test's embedded PNGs -
+                // and Convert.FromBase64String throws on a literal "%" in its input, so skipping this
+                // step here silently failed to decode every such image.
                 bytes = isBase64
-                    ? Convert.FromBase64String(data)
+                    ? Convert.FromBase64String(Uri.UnescapeDataString(data))
                     : System.Text.Encoding.UTF8.GetBytes(Uri.UnescapeDataString(data));
             }
             catch (FormatException)

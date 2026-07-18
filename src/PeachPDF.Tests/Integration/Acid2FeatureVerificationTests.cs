@@ -2,6 +2,7 @@ using PeachPDF.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Entities;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
@@ -242,6 +243,32 @@ namespace PeachPDF.Tests.Integration
             Assert.InRange(box.ActualBottom, expectedBottom - 0.5, expectedBottom + 0.5);
         }
 
+        [Fact]
+        public async Task PositionAbsolute_WithMarginAndBorderedContainingBlock_AppliesBothCorrectly()
+        {
+            // Regression for a real bug: the position:absolute branch never added the box's own
+            // ActualMarginLeft/Top (unlike the static/relative branch just above it in the same method,
+            // which already does), and anchored off the containing block's border-box edge
+            // (Location.X/Y) instead of its padding-box edge (ClientLeft/ClientTop) per CSS2.1 §10.3.7.
+            // Mirrors Acid2's real shape almost exactly: ".picture" has a 1em border and is the
+            // containing block for "[class~=one].first.one { position:absolute; top:0;
+            // margin:36px 0 0 60px; }" - dropping the margin alone landed that box on top of the very
+            // next sibling instead of 36px/60px further in.
+            var html = Wrap(
+                "<div id='cb' style='position:relative; border:16px solid black; width:100px; height:100px;'>"
+                + "<div id='t' style='position:absolute; top:0; left:0; margin:36px 0 0 60px; width:10px; height:10px;'></div></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var cb = FindById(root, "cb")!;
+            var box = FindById(root, "t")!;
+
+            // Expected: containing block's PADDING edge (border-box + 16px border) + the box's own
+            // margin (60px left, 36px top).
+            var expectedX = cb.Location.X + 16 + 60;
+            var expectedY = cb.Location.Y + 16 + 36;
+            Assert.InRange(box.Location.X, expectedX - 0.5, expectedX + 0.5);
+            Assert.InRange(box.Location.Y, expectedY - 0.5, expectedY + 0.5);
+        }
+
         // ─── attribute selectors exactly as Acid2 combines them ────────────────────
         // "[class~=one].first.one" and "[class~=one][class~=first] [class=second\ two][class=\"second two\"]"
         // and the intentionally-invalid "[class=second two]" (unquoted space) which must NOT match.
@@ -320,6 +347,74 @@ namespace PeachPDF.Tests.Integration
                 "Expected the z-index:2 positioned box to paint after (on top of) the fixed-positioned box.");
         }
 
+        [Fact]
+        public async Task NormalFlowBlockFloatAndInline_PaintInAppendixEOrder()
+        {
+            // Regression for a real bug: the paint-order stacking loop lumped ALL non-positioned,
+            // non-floated content (block-level AND inline-level) into a single pass painted in DOM
+            // order, with floats painted in a separate pass immediately after. Per CSS2.1 Appendix E,
+            // within one stacking context the required order is block descendants, then non-positioned
+            // floats, then inline-level descendants (text/inline replaced content) - floats must be
+            // sandwiched between blocks and inlines, not simply "after everything normal" (here the
+            // block is declared LAST, after the inline element, to prove it's not just "first declared
+            // paints first"). "#inlineWrapper" mirrors Acid2's own "#eyes-a": a plain block <div> whose
+            // ENTIRE content is a single inline-level child (an <img>, matching Acid2's resolved
+            // <object>/image - not display:inline-block on a plain element, which isn't a distinct
+            // layout mode this engine implements) - it must be treated as belonging to the inline pass
+            // itself (see CssBox.ActsAsInline), since its own recursive Paint() call is what actually
+            // paints that child.
+            //
+            // The three participants are wrapped in "#container", which establishes its own stacking
+            // context (position:relative + z-index:0) - this is required for the fix to actually apply:
+            // a non-positioned float is hoisted (DomUtils.NeedsStackingHoist) to the NEAREST ancestor
+            // that establishes a stacking context, painting as part of THAT ancestor's own float pass -
+            // if the immediate container here (or Acid2's real ".eyes", which is itself only
+            // position:absolute with no z-index, so is NOT a stacking context) doesn't establish one,
+            // the float instead hoists past it entirely and paints relative to a much more distant
+            // ancestor's content, breaking this local block/float/inline ordering regardless of this
+            // fix. Making that hoisting "float-aware" enough to preserve correct LOCAL relative order
+            // against non-hoisted siblings even when the immediate container isn't a stacking context is
+            // a real, separate, deeper gap - noted in CLAUDE.md rather than attempted here, since it
+            // touches float-hoisting/clip-ancestor logic a prior round already had to harden against a
+            // double-paint regression (see StackingContextPaintRegressionTests.cs).
+            const string png1x1 =
+                "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mP4/58BAAT/Af9jgNErAAAAAElFTkSuQmCC";
+            var html = Wrap($@"
+                <div id='container' style='position:relative; z-index:0;'>
+                    <div id='inlineWrapper'><img id='inlineEl' src='{png1x1}' style='display:inline; background:rgb(10,20,30); width:20px; height:20px;' /></div>
+                    <div id='floatEl' style='float:left; background:rgb(40,50,60); width:20px; height:20px;'></div>
+                    <div id='blockEl' style='background:rgb(70,80,90); width:20px; height:20px;'></div>
+                </div>");
+
+            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var container = new HtmlContainerInt(adapter);
+            await container.SetHtml(html, null);
+
+            var size = new XSize(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+
+            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
+            using (var measureGraphics = new GraphicsAdapter(adapter, measure, 1.0))
+                await container.PerformLayout(measureGraphics);
+
+            var recorder = new TestRecordingGraphics();
+            await container.PerformPaint(recorder);
+
+            var drawRectCalls = recorder.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
+            var blockIndex = drawRectCalls.FindIndex(c => c.Color == RColor.FromArgb(70, 80, 90));
+            var floatIndex = drawRectCalls.FindIndex(c => c.Color == RColor.FromArgb(40, 50, 60));
+            var inlineIndex = drawRectCalls.FindIndex(c => c.Color == RColor.FromArgb(10, 20, 30));
+
+            Assert.True(blockIndex >= 0, "Expected the block box to be drawn.");
+            Assert.True(floatIndex >= 0, "Expected the float box to be drawn.");
+            Assert.True(inlineIndex >= 0,
+                "Expected the inline image's background to be drawn. All recorded rect colors: "
+                + string.Join(", ", drawRectCalls.Select(c => c.Color)));
+            Assert.True(blockIndex < floatIndex, "Expected the block to paint before (under) the float.");
+            Assert.True(floatIndex < inlineIndex, "Expected the float to paint before (under) the inline box.");
+        }
+
         // ─── :link / :hover non-interactive behavior against a real anchor ─────────
         // Acid2's ".intro :link { color: blue }" / ".intro :visited { color: purple }".
 
@@ -358,6 +453,30 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal("rgb(255, 0, 0)", box.BackgroundColor);
             Assert.NotNull(box.BackgroundImages);
             Assert.Single(box.BackgroundImages!);
+        }
+
+        [Fact]
+        public async Task BackgroundShorthand_PercentEncodedDataUri_ActuallyLoads()
+        {
+            // Regression for a real bug: DataUriUtils.TryDecodeDataUri's base64 branch never
+            // percent-decoded the URI body before calling Convert.FromBase64String, so a base64 payload
+            // with percent-escaped reserved characters (the exact shape Acid2's real ".forehead"
+            // background uses - "/" written as "%2F") silently failed to decode and the image was
+            // dropped entirely (only the background-color painted). "Single()" alone (as in
+            // BackgroundShorthand_ColorAndDataUriImage_BothApply above) isn't enough to catch this - the
+            // CssImage.Url entry is still created either way, only its resolved Image stays null - so
+            // this test asserts the image actually decoded, not just that a layer entry exists.
+            const string percentEncodedPng1x1Yellow =
+                "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mP4%2F58BAAT%2FAf9jgNErAAAAAElFTkSuQmCC";
+            var html = Wrap("<div id='t' style='width:128px; height:128px; "
+                + "background: red url(" + percentEncodedPng1x1Yellow + ");'></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var box = FindById(root, "t")!;
+
+            Assert.NotNull(box.BackgroundImages);
+            var layer = Assert.Single(box.BackgroundImages!);
+            var urlImage = Assert.IsType<CssImage.Url>(layer);
+            Assert.NotNull(urlImage.Image);
         }
 
         // ─── universal selector `*` combined with a combinator, incl. the "star html" chain ──
