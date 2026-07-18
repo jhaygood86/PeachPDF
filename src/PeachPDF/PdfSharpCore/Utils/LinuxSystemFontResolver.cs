@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -175,9 +176,7 @@ namespace PeachPDF.PdfSharpCore.Utils
             }
             catch (Exception ex)
             {
-#if DEBUG
-                Console.Error.WriteLine(ex.ToString());
-#endif
+                Debug.WriteLine(ex.ToString());
                 return null;
             }
         }
@@ -194,9 +193,7 @@ namespace PeachPDF.PdfSharpCore.Utils
             }
             catch (Exception ex)
             {
-#if DEBUG
-                Console.Error.WriteLine(ex.ToString());
-#endif
+                Debug.WriteLine(ex.ToString());
                 return ResolveFallback().Where(IsSupportedFontFile).ToArray();
             }
         }
@@ -254,10 +251,8 @@ namespace PeachPDF.PdfSharpCore.Utils
             }
             catch (Exception ex)
             {
-#if DEBUG
-                Console.Error.WriteLine(ex.Message);
-                Console.Error.WriteLine(ex.StackTrace);
-#endif
+                Debug.WriteLine(ex.Message);
+                Debug.WriteLine(ex.StackTrace);
             }
 
             dirs.Add("/usr/share/fonts");

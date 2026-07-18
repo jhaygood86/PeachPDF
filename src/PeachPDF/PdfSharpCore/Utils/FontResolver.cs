@@ -293,9 +293,7 @@ namespace PeachPDF.PdfSharpCore.Utils
                 }
                 catch (System.Exception e)
                 {
-#if DEBUG
-                    System.Console.Error.WriteLine(e);
-#endif
+                    Debug.WriteLine(e);
                 }
             }
 
@@ -311,9 +309,7 @@ namespace PeachPDF.PdfSharpCore.Utils
                 }
                 catch (System.Exception e)
                 {
-#if DEBUG
-                    System.Console.Error.WriteLine(e);
-#endif
+                    Debug.WriteLine(e);
                 }
 
             return (fontPaths.ToFrozenDictionary(), families.ToFrozenDictionary());
