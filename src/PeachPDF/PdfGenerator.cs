@@ -41,16 +41,21 @@ namespace PeachPDF
     /// </summary>
     /// <remarks>
     /// <para>
-    /// A <see cref="PdfGenerator"/> instance is <b>not thread-safe</b>. Every font/brush/pen cache,
-    /// font resolver, and network loader it uses is owned exclusively by that instance, so calling
-    /// its methods concurrently from multiple threads on the <i>same</i> instance (or reusing one
-    /// instance across overlapping renders) is not supported and can corrupt its internal state.
+    /// A <see cref="PdfGenerator"/> instance is <b>not thread-safe</b>. Its brush/pen caches, font
+    /// resolver, and network loader are owned exclusively by that instance, so calling its methods
+    /// concurrently from multiple threads on the <i>same</i> instance (or reusing one instance across
+    /// overlapping renders) is not supported and can corrupt its internal state. This includes every
+    /// custom font registered on it — via <c>@font-face</c> or <see cref="AddFontFromStream"/> — whose
+    /// resolved glyph/metrics data lives in caches private to that instance, so two instances that
+    /// register <i>different</i> bytes under the <i>same</i> font family name never collide.
     /// </para>
     /// <para>
     /// Using a <b>separate <see cref="PdfGenerator"/> instance per thread</b> — e.g. one per
     /// incoming web request, or one per work item in a parallel batch — is safe and is the intended
-    /// way to generate PDFs concurrently. Any state PeachPDF shares across instances (such as
-    /// system font discovery) is synchronized internally for exactly this usage pattern.
+    /// way to generate PDFs concurrently. Pure system-font data (fonts already installed on the
+    /// machine, discovered once at process startup) is deliberately the one exception: it's
+    /// immutable and safely shared read-only across every instance, so resolving e.g. "Arial Bold"
+    /// isn't repeated per instance.
     /// </para>
     /// </remarks>
     public class PdfGenerator

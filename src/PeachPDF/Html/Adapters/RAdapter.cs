@@ -196,7 +196,10 @@ namespace PeachPDF.Html.Adapters
         /// already-absolute, which fails gracefully (font simply doesn't load) instead of throwing when
         /// it isn't.
         /// </param>
-        public async Task AddFontFamilyFromUrl(string fontFamilyName, string url, string? format, RUri? baseUri = null)
+        /// <param name="weightOverride">the <c>@font-face</c> rule's own <c>font-weight</c> descriptor, resolved to a concrete numeric weight - authoritative over the file's own sniffed weight when present</param>
+        /// <param name="isItalicOverride">the <c>@font-face</c> rule's own <c>font-style</c> descriptor, resolved to italic-or-not - authoritative over the file's own sniffed style when present</param>
+        /// <param name="stretchOverride">the <c>@font-face</c> rule's own <c>font-stretch</c> descriptor, resolved to a concrete numeric stretch - authoritative over the file's own sniffed stretch when present</param>
+        public async Task<bool> AddFontFamilyFromUrl(string fontFamilyName, string url, string? format, RUri? baseUri = null, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null)
         {
             RUri resolvedUri;
 
@@ -206,25 +209,27 @@ namespace PeachPDF.Html.Adapters
             }
             catch (UriFormatException)
             {
-                return;
+                return false;
             }
 
             if (!resolvedUri.IsAbsoluteUri)
             {
-                return;
+                return false;
             }
 
             var resourceStream = await GetResourceStream(resolvedUri);
 
             if (resourceStream?.ResourceStream is not null)
             {
-                await AddFontFromStream(fontFamilyName, resourceStream.ResourceStream, format);
+                return await AddFontFromStream(fontFamilyName, resourceStream.ResourceStream, format, weightOverride, isItalicOverride, stretchOverride);
             }
+
+            return false;
         }
 
-        public async Task<bool> AddLocalFontFamily(string fontFamilyName, string localFontFaceName)
+        public async Task<bool> AddLocalFontFamily(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null)
         {
-            return await AddLocalFont(fontFamilyName, localFontFaceName);
+            return await AddLocalFont(fontFamilyName, localFontFaceName, weightOverride, isItalicOverride, stretchOverride);
         }
 
         /// <summary>
@@ -245,10 +250,13 @@ namespace PeachPDF.Html.Adapters
         /// <param name="family">the font family name</param>
         /// <param name="size">font size</param>
         /// <param name="style">font style</param>
+        /// <param name="weight">the real CSS Fonts numeric weight (1-1000), when the caller has one - lets the resolver perform nearest-weight matching instead of only an exact Regular/Bold pick</param>
+        /// <param name="stretch">the real CSS Fonts numeric stretch (1-9, 5 = normal), when the caller has one</param>
+        /// <param name="obliqueSkewSinus">the sine of a declared <c>oblique &lt;angle&gt;</c>, when the caller has one - drives the faux-italic shear amount instead of the renderer's fixed default</param>
         /// <returns>font instance</returns>
-        public RFont? GetFont(string family, double size, RFontStyle style)
+        public RFont? GetFont(string family, double size, RFontStyle style, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null)
         {
-            return _fontsHandler.GetCachedFont(family, size, style);
+            return _fontsHandler.GetCachedFont(family, size, style, weight, stretch, obliqueSkewSinus);
         }
 
         /// <summary>
@@ -257,10 +265,13 @@ namespace PeachPDF.Html.Adapters
         /// <param name="family">the font family name</param>
         /// <param name="size">font size</param>
         /// <param name="style">font style</param>
+        /// <param name="weight">the real CSS Fonts numeric weight (1-1000)</param>
+        /// <param name="stretch">the real CSS Fonts numeric stretch (1-9, 5 = normal)</param>
+        /// <param name="obliqueSkewSinus">the sine of a declared <c>oblique &lt;angle&gt;</c>, when any</param>
         /// <returns>font instance</returns>
-        internal RFont CreateFont(string family, double size, RFontStyle style)
+        internal RFont CreateFont(string family, double size, RFontStyle style, int weight, int stretch = 5, double? obliqueSkewSinus = null)
         {
-            return CreateFontInt(family, size, style);
+            return CreateFontInt(family, size, style, weight, stretch, obliqueSkewSinus);
         }
 
         /// <summary>
@@ -270,10 +281,13 @@ namespace PeachPDF.Html.Adapters
         /// <param name="family">the font family instance</param>
         /// <param name="size">font size</param>
         /// <param name="style">font style</param>
+        /// <param name="weight">the real CSS Fonts numeric weight (1-1000)</param>
+        /// <param name="stretch">the real CSS Fonts numeric stretch (1-9, 5 = normal)</param>
+        /// <param name="obliqueSkewSinus">the sine of a declared <c>oblique &lt;angle&gt;</c>, when any</param>
         /// <returns>font instance</returns>
-        internal RFont CreateFont(RFontFamily family, double size, RFontStyle style)
+        internal RFont CreateFont(RFontFamily family, double size, RFontStyle style, int weight, int stretch = 5, double? obliqueSkewSinus = null)
         {
-            return CreateFontInt(family, size, style);
+            return CreateFontInt(family, size, style, weight, stretch, obliqueSkewSinus);
         }
 
         public abstract string GetCssMediaType(IEnumerable<string> mediaTypesAvailable);
@@ -352,8 +366,11 @@ namespace PeachPDF.Html.Adapters
         /// <param name="family">the font family name</param>
         /// <param name="size">font size</param>
         /// <param name="style">font style</param>
+        /// <param name="weight">the real CSS Fonts numeric weight (1-1000)</param>
+        /// <param name="stretch">the real CSS Fonts numeric stretch (1-9, 5 = normal)</param>
+        /// <param name="obliqueSkewSinus">the sine of a declared <c>oblique &lt;angle&gt;</c>, when any</param>
         /// <returns>font instance</returns>
-        protected abstract RFont CreateFontInt(string family, double size, RFontStyle style);
+        protected abstract RFont CreateFontInt(string family, double size, RFontStyle style, int weight = 400, int stretch = 5, double? obliqueSkewSinus = null);
 
         /// <summary>
         /// Get font instance by given font family instance, size and style.<br/>
@@ -362,12 +379,16 @@ namespace PeachPDF.Html.Adapters
         /// <param name="family">the font family instance</param>
         /// <param name="size">font size</param>
         /// <param name="style">font style</param>
+        /// <param name="weight">the real CSS Fonts numeric weight (1-1000)</param>
+        /// <param name="stretch">the real CSS Fonts numeric stretch (1-9, 5 = normal)</param>
+        /// <param name="obliqueSkewSinus">the sine of a declared <c>oblique &lt;angle&gt;</c>, when any</param>
         /// <returns>font instance</returns>
-        protected abstract RFont CreateFontInt(RFontFamily family, double size, RFontStyle style);
+        protected abstract RFont CreateFontInt(RFontFamily family, double size, RFontStyle style, int weight = 400, int stretch = 5, double? obliqueSkewSinus = null);
 
-        protected abstract Task AddFontFromStream(string fontFamilyName, Stream stream, string? format);
+        /// <returns>true if the format was recognized and a load was actually attempted, false if the declared format is one this adapter can't handle (so a caller trying a multi-source <c>@font-face src</c> fallback list knows to move on to the next candidate)</returns>
+        protected abstract Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null);
 
-        protected abstract Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName);
+        protected abstract Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null);
 
         #endregion
     }

@@ -51,7 +51,12 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             Elements.SetName(Keys.Subtype, "/Type0");
             Elements.SetName(Keys.Encoding, vertical ? "/Identity-V" : "/Identity-H");
 
-            OpenTypeDescriptor ttDescriptor = (OpenTypeDescriptor)FontDescriptorCache.GetOrCreateDescriptorFor(font);
+            // Reuse the descriptor XFont itself already resolved (via CreateDescriptorAndInitializeFontMetrics),
+            // rather than independently re-deriving it from FontDescriptorCache's global, static,
+            // typeface-key-keyed cache here - that direct call used to bypass XFont's own instance-vs-
+            // global routing entirely, silently reintroducing the exact cross-PdfGenerator-instance font
+            // collision that routing fixes, one layer further down (the actual embedded font data).
+            OpenTypeDescriptor ttDescriptor = font.Descriptor;
             FontDescriptor = new PdfFontDescriptor(document, ttDescriptor);
             _fontOptions = font.PdfOptions;
             Debug.Assert(_fontOptions != null);

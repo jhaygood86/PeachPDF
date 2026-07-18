@@ -229,7 +229,7 @@ namespace PeachPDF.Html.Core
             "color",
             "direction",
             "empty-cells",
-            "font-family", "font-size", "font-style", "font-variant", "font-weight",
+            "font-family", "font-size", "font-stretch", "font-style", "font-variant", "font-weight",
             "hyphens",
             "line-height",
             "list-style-image", "list-style-position", "list-style-type",

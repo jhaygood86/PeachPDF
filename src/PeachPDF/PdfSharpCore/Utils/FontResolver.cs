@@ -3,6 +3,7 @@
 
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Fonts;
+using PeachPDF.PdfSharpCore.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Internal;
 using System;
 using System.Collections.Frozen;
@@ -24,6 +25,55 @@ namespace PeachPDF.PdfSharpCore.Utils
 
         private readonly Dictionary<string, byte[]> _CustomFonts = [];
         private readonly Dictionary<string, FontFamilyModel> InstalledFonts;
+
+        /// <summary>
+        /// Family names (lowercased, matching <see cref="InstalledFonts"/>'s own key convention)
+        /// registered via <see cref="AddFont(Stream, string)"/> on THIS instance - i.e. not just
+        /// inherited read-only from the shared static <see cref="_systemFamilies"/> snapshot. Used by
+        /// <see cref="XGlyphTypeface.GetOrCreateFrom"/> to decide whether a request for this family must
+        /// be routed through this instance's own <see cref="InstanceGlyphTypefacesByKey"/>/
+        /// <see cref="InstanceFontResolverInfosByTypefaceKey"/> caches instead of the global,
+        /// process-wide ones - two different <see cref="FontResolver"/> instances (i.e. two different
+        /// <c>PdfGenerator</c>s) can register DIFFERENT bytes under the SAME custom family name (e.g. two
+        /// requests each with their own <c>@font-face</c> for the same CSS family), and must never share
+        /// a cache slot for it.
+        /// </summary>
+        private readonly HashSet<string> _customFamilyNames = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// This instance's own typeface-key-keyed glyph-typeface cache, used only for custom
+        /// (<see cref="_customFamilyNames"/>) families - see <see cref="XGlyphTypeface.GetOrCreateFrom"/>.
+        /// A plain instance field, not a static/global root, so it's garbage-collected along with this
+        /// <see cref="FontResolver"/> (and the <c>PdfSharpAdapter</c>/<c>PdfGenerator</c> that owns it) -
+        /// it cannot outlive them, and needs no explicit disposal.
+        /// </summary>
+        internal Dictionary<string, XGlyphTypeface> InstanceGlyphTypefacesByKey { get; } = new();
+
+        /// <summary>
+        /// This instance's own typeface-key-keyed resolver-info cache - the per-instance counterpart to
+        /// <see cref="FontFactory"/>'s global <c>FontResolverInfosByName</c>, used only for custom
+        /// families. See <see cref="InstanceGlyphTypefacesByKey"/>.
+        /// </summary>
+        internal Dictionary<string, FontResolverInfo> InstanceFontResolverInfosByTypefaceKey { get; } = new();
+
+        /// <summary>
+        /// This instance's own typeface-key-keyed <see cref="FontDescriptor"/> cache - the per-instance
+        /// counterpart to the global, static <c>FontDescriptorCache</c> (which is ALSO keyed purely by
+        /// the typeface key string, with no notion of which resolver instance produced the underlying
+        /// glyph data - see <see cref="XGlyphTypeface.OwningInstanceResolver"/>). Used only for custom
+        /// families; without this, a descriptor built from one instance's custom font bytes would leak
+        /// into another instance's request for the same family+style, exactly like the collision the
+        /// glyph-typeface/resolver-info split above fixes, just one layer further down (font metrics/
+        /// embedding data instead of glyph outlines).
+        /// </summary>
+        internal Dictionary<string, FontDescriptor> InstanceFontDescriptorsByKey { get; } = new();
+
+        /// <summary>
+        /// Whether <paramref name="familyName"/> was registered via <see cref="AddFont(Stream, string)"/>
+        /// on this specific instance (as opposed to being resolvable purely from the shared, immutable,
+        /// safe-to-share-globally system-font snapshot).
+        /// </summary>
+        internal bool IsCustomFamily(string familyName) => _customFamilyNames.Contains(familyName);
 
         public static string[] SupportedFonts { get; }
 
@@ -156,6 +206,19 @@ namespace PeachPDF.PdfSharpCore.Utils
 
         public void AddFont(Stream stream, string fontFamilyName)
         {
+            AddFont(stream, fontFamilyName, weightOverride: null, isItalicOverride: null, stretchOverride: null);
+        }
+
+        /// <summary>
+        /// Registers a font under <paramref name="fontFamilyName"/>, optionally overriding the face's own
+        /// sniffed weight/style with the values an <c>@font-face</c> rule declared for it (its
+        /// <c>font-weight</c>/<c>font-style</c> descriptors are authoritative for how that specific
+        /// resource participates in matching, independent of what the file's own internal tables say -
+        /// see <c>DomParser.CascadeApplyStyleFonts</c>). Null means "use the value sniffed from the file
+        /// itself" (the previous, only, behavior).
+        /// </summary>
+        public void AddFont(Stream stream, string fontFamilyName, int? weightOverride, bool? isItalicOverride, int? stretchOverride = null)
+        {
             var memoryStream = new MemoryStream();
             stream.CopyTo(memoryStream);
 
@@ -164,6 +227,27 @@ namespace PeachPDF.PdfSharpCore.Utils
 
             var fontFileInfo = FontFileInfo.Load(memoryStream);
             var key = fontFamilyName.ToLower();
+            _customFamilyNames.Add(key);
+
+            var weight = weightOverride ?? fontFileInfo.FontDescription.Weight;
+            var isItalic = isItalicOverride ?? fontFileInfo.FontDescription.Style is XFontStyle.Italic or XFontStyle.BoldItalic;
+            var stretch = stretchOverride ?? fontFileInfo.FontDescription.Stretch;
+            var faceKey = (weight, isItalic, stretch);
+
+            // The STORED description's own Weight/Style/Stretch must reflect the override too, not just
+            // the dictionary key it's filed under - FontResolver.ResolveTypeface's synthesis decision
+            // (and any other future consumer) reads these fields directly off the returned face, not the
+            // key.
+            var effectiveStyle = (isItalic, weight >= 700) switch
+            {
+                (true, true) => XFontStyle.BoldItalic,
+                (true, false) => XFontStyle.Italic,
+                (false, true) => XFontStyle.Bold,
+                (false, false) => XFontStyle.Regular
+            };
+            var faceDescription = weightOverride is null && isItalicOverride is null && stretchOverride is null
+                ? fontFileInfo.FontDescription
+                : fontFileInfo.FontDescription with { Weight = weight, Style = effectiveStyle, Stretch = stretch };
 
             if (InstalledFonts.TryGetValue(key, out var family))
             {
@@ -172,16 +256,17 @@ namespace PeachPDF.PdfSharpCore.Utils
                 // before mutating so we never write into state shared with other FontResolver
                 // instances/threads.
                 var clonedFamily = new FontFamilyModel { Name = family.Name };
-                foreach (var fontFile in family.FontFiles)
+                foreach (var face in family.Faces)
                 {
-                    clonedFamily.FontFiles[fontFile.Key] = fontFile.Value;
+                    clonedFamily.Faces[face.Key] = face.Value;
                 }
-                clonedFamily.FontFiles[fontFileInfo.GuessFontStyle()] = fontFileInfo.FontDescription;
+                clonedFamily.Faces[faceKey] = faceDescription;
                 InstalledFonts[key] = clonedFamily;
             }
             else
             {
-                var fontFamilyModel = DeserializeFontFamily(key, [fontFileInfo]);
+                var fontFamilyModel = new FontFamilyModel { Name = key };
+                fontFamilyModel.Faces[faceKey] = faceDescription;
                 InstalledFonts.Add(key, fontFamilyModel);
             }
 
@@ -208,9 +293,7 @@ namespace PeachPDF.PdfSharpCore.Utils
                 }
                 catch (System.Exception e)
                 {
-#if DEBUG
-                    System.Console.Error.WriteLine(e);
-#endif
+                    Debug.WriteLine(e);
                 }
             }
 
@@ -226,31 +309,23 @@ namespace PeachPDF.PdfSharpCore.Utils
                 }
                 catch (System.Exception e)
                 {
-#if DEBUG
-                    System.Console.Error.WriteLine(e);
-#endif
+                    Debug.WriteLine(e);
                 }
 
             return (fontPaths.ToFrozenDictionary(), families.ToFrozenDictionary());
         }
 
 
-        [SuppressMessage("ReSharper", "PossibleMultipleEnumeration")]
         private static FontFamilyModel DeserializeFontFamily(string fontFamilyName, IEnumerable<FontFileInfo> fontList)
         {
             var font = new FontFamilyModel { Name = fontFamilyName };
 
-            // there is only one font
-            if (fontList.Count() == 1)
-                font.FontFiles.Add(XFontStyle.Regular, fontList.First().FontDescription);
-            else
+            foreach (var info in fontList)
             {
-                foreach (var info in fontList)
-                {
-                    var style = info.GuessFontStyle();
-                    if (!font.FontFiles.ContainsKey(style))
-                        font.FontFiles.Add(style, info.FontDescription);
-                }
+                var isItalic = info.FontDescription.Style is XFontStyle.Italic or XFontStyle.BoldItalic;
+                var key = (info.FontDescription.Weight, isItalic, info.FontDescription.Stretch);
+                if (!font.Faces.ContainsKey(key))
+                    font.Faces.Add(key, info.FontDescription);
             }
 
             return font;
@@ -278,46 +353,135 @@ namespace PeachPDF.PdfSharpCore.Utils
 
         public bool NullIfFontNotFound { get; set; } = false;
 
-        public virtual FontResolverInfo ResolveTypeface(string familyName, bool isBold, bool isItalic)
+        public virtual FontResolverInfo ResolveTypeface(string familyName, bool isBold, bool isItalic) =>
+            ResolveTypeface(familyName, isBold ? 700 : 400, isItalic);
+
+        public virtual FontResolverInfo ResolveTypeface(string familyName, int weight, bool isItalic) =>
+            ResolveTypeface(familyName, weight, isItalic, TtfFontDescription.DefaultStretch);
+
+        public virtual FontResolverInfo ResolveTypeface(string familyName, int weight, bool isItalic, int stretch)
         {
             if (InstalledFonts.Count == 0)
                 throw new System.IO.FileNotFoundException("No Fonts installed on this device!");
 
             if (InstalledFonts.TryGetValue(familyName.ToLower(), out var family))
             {
-                switch (isBold)
+                if (TryFindNearestFace(family, weight, isItalic, stretch, out var face))
                 {
-                    case true when isItalic && family.FontFiles.TryGetValue(XFontStyle.BoldItalic, out var boldItalicFile):
-                        return new FontResolverInfo(boldItalicFile.FontNameInvariantCulture);
-                    case true:
-                        {
-                            if (family.FontFiles.TryGetValue(XFontStyle.Bold, out var boldFile))
-                                return new FontResolverInfo(boldFile.FontNameInvariantCulture);
-                            break;
-                        }
-                    default:
-                        {
-                            if (isItalic)
-                            {
-                                if (family.FontFiles.TryGetValue(XFontStyle.Italic, out var italicFile))
-                                    return new FontResolverInfo(italicFile.FontNameInvariantCulture);
-                            }
+                    // The chosen face may be a compromise (nearest-weight/slant match, not exact) -
+                    // decide whether the gap is large enough that faux-bold/italic synthesis should
+                    // kick in, so e.g. "font-weight: bold" against a Regular-only family doesn't render
+                    // with zero visual distinction. Threshold mirrors the common UA convention that
+                    // weights >=600 read as "bold" and <600 don't; a request in the bold range that
+                    // only found a lighter-than-600 face needs synthesis, but a request that found ANY
+                    // face already at/above 600 (e.g. asked for 600, only 700 registered) does not.
+                    var resolvedIsItalic = face.Style is XFontStyle.Italic or XFontStyle.BoldItalic;
+                    var mustSimulateBold = weight >= 600 && face.Weight < 600;
+                    var mustSimulateItalic = isItalic && !resolvedIsItalic;
 
-                            break;
-                        }
+                    return new FontResolverInfo(face.FontNameInvariantCulture, mustSimulateBold, mustSimulateItalic);
                 }
 
-                if (family.FontFiles.TryGetValue(XFontStyle.Regular, out var regularFile))
-                    return new FontResolverInfo(regularFile.FontNameInvariantCulture);
-
-                return new FontResolverInfo(family.FontFiles.First().Value.FontNameInvariantCulture);
+                // Family is registered but somehow has zero faces at all (shouldn't happen in practice -
+                // every code path that creates a FontFamilyModel adds at least one) - fall through to the
+                // same "give the caller SOMETHING rather than nothing" behavior as an unknown family.
             }
 
             if (NullIfFontNotFound)
                 return null;
 
-            var description = InstalledFonts.First().Value.FontFiles.First().Value;
+            var description = InstalledFonts.First().Value.Faces.First().Value;
             return new FontResolverInfo(description.FontNameInvariantCulture);
+        }
+
+        /// <summary>
+        /// CSS Fonts Level 4 §5.2 face matching, narrowing in this order: italic/slant first, then
+        /// stretch, then weight. An exact (weight, italic, stretch) match short-circuits all of this.
+        /// Falls back to the nearest weight among ALL faces (any slant/stretch) only if the family has
+        /// no faces at all matching the requested italic-ness - a family with at least one registered
+        /// face always yields a result here.
+        /// </summary>
+        private static bool TryFindNearestFace(FontFamilyModel family, int weight, bool isItalic, int stretch, out TtfFontDescription face)
+        {
+            if (family.Faces.TryGetValue((weight, isItalic, stretch), out face))
+                return true;
+
+            var sameSlant = family.Faces.Where(kv => kv.Key.Italic == isItalic).ToList();
+            var candidates = sameSlant.Count > 0 ? sameSlant : family.Faces.ToList();
+
+            if (candidates.Count == 0)
+            {
+                face = default;
+                return false;
+            }
+
+            var availableStretches = candidates.Select(kv => kv.Key.Stretch).Distinct().ToList();
+            var chosenStretch = PickNearestStretch(availableStretches, stretch);
+            var stretchCandidates = candidates.Where(kv => kv.Key.Stretch == chosenStretch).ToList();
+
+            var availableWeights = stretchCandidates.Select(kv => kv.Key.Weight).Distinct().ToList();
+            var chosenWeight = PickNearestWeight(availableWeights, weight);
+
+            face = stretchCandidates.First(kv => kv.Key.Weight == chosenWeight).Value;
+            return true;
+        }
+
+        /// <summary>
+        /// CSS Fonts Level 4 §5.2's nearest-stretch search order: a target at or narrower than normal (5)
+        /// searches narrower first (down to 1), then wider; a target wider than normal searches wider
+        /// first (up to 9), then narrower. <paramref name="availableStretches"/> must be non-empty.
+        /// </summary>
+        private static int PickNearestStretch(List<int> availableStretches, int target)
+        {
+            if (availableStretches.Contains(target))
+                return target;
+
+            IEnumerable<int> Search()
+            {
+                if (target <= TtfFontDescription.DefaultStretch)
+                {
+                    return availableStretches.Where(s => s < target).OrderByDescending(s => s)
+                        .Concat(availableStretches.Where(s => s > target).OrderBy(s => s));
+                }
+
+                return availableStretches.Where(s => s > target).OrderBy(s => s)
+                    .Concat(availableStretches.Where(s => s < target).OrderByDescending(s => s));
+            }
+
+            return Search().First();
+        }
+
+        /// <summary>
+        /// CSS Fonts Level 4 §5.2's nearest-weight search order (the standard browser algorithm, not a
+        /// novel design here): a target in [400,500] searches upward to 500 first, then below the
+        /// target, then above 500; a target below 400 searches downward first, then upward; a target
+        /// above 500 searches upward first, then downward. <paramref name="availableWeights"/> must be
+        /// non-empty and is assumed to NOT already contain an exact match for <paramref name="target"/>
+        /// (the caller checks that separately, since an exact match also has to match the requested
+        /// italic-ness, which this purely-numeric helper doesn't know about).
+        /// </summary>
+        private static int PickNearestWeight(List<int> availableWeights, int target)
+        {
+            IEnumerable<int> Search()
+            {
+                if (target is >= 400 and <= 500)
+                {
+                    return availableWeights.Where(w => w >= target && w <= 500).OrderBy(w => w)
+                        .Concat(availableWeights.Where(w => w < target).OrderByDescending(w => w))
+                        .Concat(availableWeights.Where(w => w > 500).OrderBy(w => w));
+                }
+
+                if (target < 400)
+                {
+                    return availableWeights.Where(w => w < target).OrderByDescending(w => w)
+                        .Concat(availableWeights.Where(w => w > target).OrderBy(w => w));
+                }
+
+                return availableWeights.Where(w => w > target).OrderBy(w => w)
+                    .Concat(availableWeights.Where(w => w < target).OrderByDescending(w => w));
+            }
+
+            return Search().First();
         }
     }
 }

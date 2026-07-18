@@ -50,13 +50,13 @@ namespace PeachPDF.Tests.TestSupport
 
         protected override RImage ImageFromStreamInt(Stream memoryStream) => throw new NotSupportedException("TestGraphicsAdapter does not support image loading");
 
-        protected override RFont CreateFontInt(string family, double size, RFontStyle style) => new TestFont(size);
+        protected override RFont CreateFontInt(string family, double size, RFontStyle style, int weight = 400, int stretch = 5, double? obliqueSkewSinus = null) => new TestFont(size);
 
-        protected override RFont CreateFontInt(RFontFamily family, double size, RFontStyle style) => new TestFont(size);
+        protected override RFont CreateFontInt(RFontFamily family, double size, RFontStyle style, int weight = 400, int stretch = 5, double? obliqueSkewSinus = null) => new TestFont(size);
 
-        protected override Task AddFontFromStream(string fontFamilyName, Stream stream, string? format) => Task.CompletedTask;
+        protected override Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null) => Task.FromResult(false);
 
-        protected override Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName) => Task.FromResult(false);
+        protected override Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null) => Task.FromResult(false);
     }
 
     /// <summary>A solid-color brush that remembers the color it was created with.</summary>

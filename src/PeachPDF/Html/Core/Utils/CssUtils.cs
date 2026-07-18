@@ -147,6 +147,7 @@ namespace PeachPDF.Html.Core.Utils
                 "font-style" => cssBox.FontStyle,
                 "font-variant" => cssBox.FontVariant,
                 "font-weight" => cssBox.FontWeight,
+                "font-stretch" => cssBox.FontStretch,
                 "list-style-position" => cssBox.ListStylePosition,
                 "list-style-image" => null,
                 "list-style-type" => cssBox.ListStyleType,
@@ -193,7 +194,7 @@ namespace PeachPDF.Html.Core.Utils
             "counter-increment", "counter-reset", "counter-set",
             "direction", "display",
             "empty-cells", "float",
-            "font-family", "font-size", "font-style", "font-variant", "font-weight",
+            "font-family", "font-size", "font-stretch", "font-style", "font-variant", "font-weight",
             "height",
             "left", "letter-spacing", "line-height",
             "list-style-image", "list-style-position", "list-style-type",
@@ -648,6 +649,9 @@ namespace PeachPDF.Html.Core.Utils
                     break;
                 case "font-weight":
                     cssBox.FontWeight = value;
+                    break;
+                case "font-stretch":
+                    cssBox.FontStretch = value;
                     break;
                 case "list-style":
                     SetListStyle(valueParser, cssBox, value);

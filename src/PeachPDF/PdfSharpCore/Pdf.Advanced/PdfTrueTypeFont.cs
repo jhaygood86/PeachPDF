@@ -53,8 +53,10 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             Elements.SetName(Keys.Type, "/Font");
             Elements.SetName(Keys.Subtype, "/TrueType");
 
-            // TrueType with WinAnsiEncoding only.
-            OpenTypeDescriptor ttDescriptor = (OpenTypeDescriptor)FontDescriptorCache.GetOrCreateDescriptorFor(font);
+            // TrueType with WinAnsiEncoding only. Reuse the descriptor XFont itself already resolved
+            // (see PdfType0Font's identical fix) instead of independently re-deriving it from
+            // FontDescriptorCache's global, static, typeface-key-keyed cache here.
+            OpenTypeDescriptor ttDescriptor = font.Descriptor;
             FontDescriptor = new PdfFontDescriptor(document, ttDescriptor);
             _fontOptions = font.PdfOptions;
             Debug.Assert(_fontOptions != null);

@@ -48,7 +48,11 @@ namespace PeachPDF.PdfSharpCore.Drawing
         {
             XSize size = new XSize();
 
-            OpenTypeDescriptor descriptor = FontDescriptorCache.GetOrCreateDescriptorFor(font) as OpenTypeDescriptor;
+            // Reuse the descriptor XFont itself already resolved (see PdfType0Font's identical fix)
+            // instead of independently re-deriving it from FontDescriptorCache's global, static,
+            // typeface-key-keyed cache here, which would silently reintroduce the exact cross-
+            // PdfGenerator-instance font collision the instance-vs-global cache split fixes.
+            OpenTypeDescriptor descriptor = font.Descriptor;
             if (descriptor != null)
             {
                 // Height is the sum of ascender and descender.

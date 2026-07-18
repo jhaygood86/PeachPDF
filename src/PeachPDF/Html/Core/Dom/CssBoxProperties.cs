@@ -104,6 +104,7 @@ namespace PeachPDF.Html.Core.Dom
         private RColor _actualColumnRuleColor = RColor.Empty;
         private RColor _actualBackgroundColor = RColor.Empty;
         private RFont? _actualFont;
+        private int? _actualNumericWeight;
         private string _display = "inline";
 
         #endregion
@@ -549,6 +550,8 @@ namespace PeachPDF.Html.Core.Dom
         public string FontVariant { get; set; } = "normal";
 
         public string FontWeight { get; set; } = "normal";
+
+        public string FontStretch { get; set; } = "normal";
 
         public string Overflow { get; set; } = "visible";
 
@@ -1177,7 +1180,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 fsize = FontSizeResolver.Resolve(FontSize, parentSize, remSize);
 
-                _actualFont = GetCachedFont(FontFamily, fsize, st) ?? GetCachedFont(CssConstants.DefaultFont, fsize, st);
+                _actualFont = GetCachedFont(FontFamily, fsize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus) ?? GetCachedFont(CssConstants.DefaultFont, fsize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus);
 
                 if (_actualFont is null)
                 {
@@ -1189,28 +1192,75 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// This box's own <see cref="FontWeight"/>, resolved to a concrete CSS Fonts numeric weight
+        /// (1-1000) via <see cref="FontWeightResolver"/> - <c>bolder</c>/<c>lighter</c> are stepped
+        /// relative to the parent's own resolved weight (pulled recursively here, same top-down-cascade
+        /// dependency <see cref="ActualFont"/> already relies on for <c>smaller</c>/<c>larger</c>
+        /// font-size), not treated as a fixed "always bold"/"always normal". Cached like
+        /// <see cref="ActualFont"/> - both are only ever read after the cascade has finished assigning
+        /// every box's own properties, so there's no need to invalidate this when <see cref="FontWeight"/>
+        /// is set.
+        /// </summary>
+        internal int ActualNumericWeight
+        {
+            get
+            {
+                if (_actualNumericWeight is { } cached) return cached;
+
+                var parentWeight = GetParent() is { } parent ? parent.ActualNumericWeight : 400;
+                var resolved = FontWeightResolver.Resolve(FontWeight, parentWeight);
+                _actualNumericWeight = resolved;
+                return resolved;
+            }
+        }
+
+        private int? _actualStretch;
+
+        /// <summary>
+        /// This box's own <see cref="FontStretch"/> keyword, resolved to a concrete CSS Fonts numeric
+        /// stretch (1-9, matching OS/2 <c>usWidthClass</c>) via <see cref="FontStretchResolver"/>. Unlike
+        /// <see cref="ActualNumericWeight"/>, <c>font-stretch</c> has no parent-relative keywords
+        /// (<c>bolder</c>/<c>lighter</c>-equivalent), so this doesn't need to walk up the box tree.
+        /// </summary>
+        internal int ActualStretch
+        {
+            get
+            {
+                if (_actualStretch is { } cached) return cached;
+
+                var resolved = FontStretchResolver.Resolve(FontStretch);
+                _actualStretch = resolved;
+                return resolved;
+            }
+        }
+
+        /// <summary>
+        /// This box's own <see cref="FontStyle"/>, resolved to a faux-italic skew factor (the sine of the
+        /// declared angle) when it's the CSS Fonts Level 4 <c>oblique &lt;angle&gt;</c> form - null for
+        /// <c>italic</c>, bare <c>oblique</c>, or <c>normal</c>, in which case the renderer falls back to
+        /// its own fixed default skew. See <see cref="FontObliqueAngleResolver"/>.
+        /// </summary>
+        internal double? ActualObliqueSkewSinus => FontObliqueAngleResolver.ResolveSkewSinus(FontStyle);
+
+        /// <summary>
         /// Computes the <see cref="RFontStyle"/> flags (italic/bold) for this box's own
-        /// <see cref="FontStyle"/>/<see cref="FontWeight"/> — shared between <see cref="ActualFont"/> and
-        /// any derived font (e.g. a synthesized small-caps run) that needs the same style bits at a
+        /// <see cref="FontStyle"/>/<see cref="ActualNumericWeight"/> — shared between <see cref="ActualFont"/>
+        /// and any derived font (e.g. a synthesized small-caps run) that needs the same style bits at a
         /// different size, so the two never drift apart.
         /// </summary>
         private RFontStyle GetActualFontStyleFlags()
         {
             var st = RFontStyle.Regular;
 
-            if (FontStyle is CssConstants.Italic or CssConstants.Oblique)
+            // FontStyle may be the bare "oblique" keyword or CSS Fonts Level 4's "oblique <angle>" form
+            // (e.g. "oblique 10deg") - both are italic-equivalent for RFontStyle purposes, so match by
+            // prefix rather than exact equality.
+            if (FontStyle is CssConstants.Italic || FontStyle.StartsWith(CssConstants.Oblique, StringComparison.Ordinal))
             {
                 st |= RFontStyle.Italic;
             }
 
-            if (int.TryParse(FontWeight, out var fontWeightValue))
-            {
-                if (fontWeightValue >= 700)
-                {
-                    st |= RFontStyle.Bold;
-                }
-            }
-            else if (FontWeight is CssConstants.Bold or CssConstants.Bolder)
+            if (ActualNumericWeight >= 700)
             {
                 st |= RFontStyle.Bold;
             }
@@ -1241,13 +1291,13 @@ namespace PeachPDF.Html.Core.Dom
                 if (_smallCapsFont != null) return _smallCapsFont;
 
                 var font = ActualFont;
-                _smallCapsFont = GetCachedFont(FontFamily!, font.Size * SmallCapsFontScale, GetActualFontStyleFlags())
+                _smallCapsFont = GetCachedFont(FontFamily!, font.Size * SmallCapsFontScale, GetActualFontStyleFlags(), ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus)
                                  ?? font;
                 return _smallCapsFont;
             }
         }
 
-        protected abstract RFont? GetCachedFont(string fontFamily, double fsize, RFontStyle st);
+        protected abstract RFont? GetCachedFont(string fontFamily, double fsize, RFontStyle st, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null);
 
         /// <summary>
         /// Gets the line height
@@ -1480,6 +1530,7 @@ namespace PeachPDF.Html.Core.Dom
             FontStyle = p.FontStyle;
             FontVariant = p.FontVariant;
             FontWeight = p.FontWeight;
+            FontStretch = p.FontStretch;
             ListStyleImage = p.ListStyleImage;
             ListStylePosition = p.ListStylePosition;
             ListStyleType = p.ListStyleType;
