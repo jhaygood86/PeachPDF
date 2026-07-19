@@ -409,3 +409,6 @@ FodyWeavers.xsd
 
 # Auto-generated API reference (built by pages.yml via DefaultDocumentation; not source)
 /docs/api/
+
+# Jekyll layouts are source, despite the global *.html ignore above
+!/docs/_layouts/*.html

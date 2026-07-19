@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="PeachPDF logo">
+  <defs>
+    <radialGradient id="peach-body" cx="35%" cy="28%" r="85%">
+      <stop offset="0%" stop-color="#ffc487"/>
+      <stop offset="45%" stop-color="#ff9c66"/>
+      <stop offset="100%" stop-color="#f4566a"/>
+    </radialGradient>
+    <linearGradient id="peach-leaf" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7bc47f"/>
+      <stop offset="100%" stop-color="#3e7a4c"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#peach-body)" d="M16 8.5 C14.8 6.9 12.9 6 10.9 6 C5.9 6 3 10.2 3 15.1 C3 22.3 8.8 29 16 29 C23.2 29 29 22.3 29 15.1 C29 10.2 26.1 6 21.1 6 C19.1 6 17.2 6.9 16 8.5 Z"/>
+  <path fill="none" stroke="#000000" stroke-opacity="0.2" stroke-width="1.6" stroke-linecap="round" d="M16 9.5 C14.6 13.5 13.9 19.5 14.6 26"/>
+  <path fill="none" stroke="#8a5a3b" stroke-width="2" stroke-linecap="round" d="M16 8.2 C16 6.6 16.6 5.2 17.8 4.2"/>
+  <path fill="url(#peach-leaf)" d="M17.5 6.5 C18.5 3.5 21.5 1.8 24.8 2.2 C24.9 5.6 22.6 8.4 19.3 8.9 C18.2 9 17.3 8.3 17.5 6.5 Z"/>
+</svg>

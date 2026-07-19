@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="{{ site.lang | default: 'en' }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% if page.url == "/" or page.title == nil %}
+  <title>{{ site.title }} — Pure .NET HTML to PDF</title>
+  {% else %}
+  <title>{{ page.title }} — {{ site.title }}</title>
+  {% endif %}
+  <meta name="description" content="{{ site.description }}">
+  <meta property="og:site_name" content="{{ site.title }}">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="{% if page.url == '/' or page.title == nil %}{{ site.title }}{% else %}{{ page.title }} — {{ site.title }}{% endif %}">
+  <meta property="og:description" content="{{ site.description }}">
+  <meta property="og:url" content="{{ page.url | absolute_url }}">
+  <link rel="icon" type="image/svg+xml" href="{{ '/assets/img/peach.svg' | relative_url }}">
+  <link rel="stylesheet" href="{{ '/assets/css/style.css' | relative_url }}">
+</head>
+<body{% if page.url == "/" %} class="home"{% endif %}>
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="brand" href="{{ '/' | relative_url }}">
+        <img class="brand-logo" src="{{ '/assets/img/peach.svg' | relative_url }}" width="26" height="26" alt="">
+        <span class="wordmark"><span class="wordmark-peach">Peach</span>PDF</span>
+      </a>
+      <nav class="site-nav" aria-label="Site">
+        {%- for item in site.data.nav -%}
+          {%- assign active = false -%}
+          {%- if page.url == item.url -%}{%- assign active = true -%}{%- endif -%}
+          {%- if item.url == '/api/' and page.url contains '/api/' -%}{%- assign active = true -%}{%- endif -%}
+          <a href="{{ item.url | relative_url }}"{% if active %} class="active" aria-current="page"{% endif %}>{{ item.title }}</a>
+        {%- endfor -%}
+        <a class="nav-github" href="https://github.com/jhaygood86/PeachPDF" rel="noopener">GitHub</a>
+      </nav>
+    </div>
+  </header>
+  <main class="content">
+{{ content }}
+  </main>
+  <footer class="site-footer">
+    <div class="site-footer-inner">
+      <span>PeachPDF — pure .NET HTML to PDF rendering. No headless browsers, no native dependencies.</span>
+      <span class="footer-links">
+        <a href="https://github.com/jhaygood86/PeachPDF" rel="noopener">GitHub</a>
+        <a href="https://www.nuget.org/packages/PeachPDF" rel="noopener">NuGet</a>
+      </span>
+    </div>
+  </footer>
+</body>
+</html>
