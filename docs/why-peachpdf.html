@@ -27,6 +27,14 @@ title: Why PeachPDF?
       <h3>Graphics without a graphics API</h3>
       <p>Charts, logos, seals, and diagrams go in as inline or standalone <code>&lt;svg&gt;</code> and come out as true vector PDF content — crisp at any zoom, never rasterized, no drawing code required.</p>
     </div>
+    <div class="card">
+      <h3>Bring your own templating</h3>
+      <p>PeachPDF takes an HTML string, so however you already produce HTML works: Razor, Scriban, Handlebars, or plain string interpolation. No vendor template language, no proprietary document format.</p>
+    </div>
+    <div class="card">
+      <h3>Accessibility from your markup</h3>
+      <p>The semantic HTML you already write — headings, lists, tables, <code>alt</code> text — becomes an optionally tagged, accessible PDF with a real structure tree. Tune the tagging per element with a CSS property, not a separate accessibility API.</p>
+    </div>
   </div>
   <p class="landing-lede">See exactly what's supported in the <a href="{{ '/html-css-support.html' | relative_url }}">HTML &amp; CSS compatibility matrix</a> and the <a href="{{ '/supported-svg-features.html' | relative_url }}">SVG feature list</a>.</p>
 </section>
@@ -62,6 +70,7 @@ title: Why PeachPDF?
         <th>License &amp; cost</th>
         <th>HTML &amp; CSS input</th>
         <th>How it renders</th>
+        <th>Accessible (tagged) PDF</th>
         <th>Native / external dependencies</th>
         <th>Containers &amp; serverless</th>
         <th>Status</th>
@@ -73,6 +82,7 @@ title: Why PeachPDF?
         <td>Free — BSD-3-Clause</td>
         <td>✅ HTML, CSS, and SVG</td>
         <td>Own layout engine, fully in-process</td>
+        <td>✅ Optional tagged output with a structure tree; tag mapping customizable per element via CSS (<code>-peachpdf-pdf-tag-type</code>, including <code>none</code> for decorative content)</td>
         <td>None — pure managed .NET</td>
         <td>Excellent — no browser, no native binaries, works in trimmed and AOT deployments</td>
         <td>Actively developed</td>
@@ -82,6 +92,7 @@ title: Why PeachPDF?
         <td>Commercial — paid per developer</td>
         <td>✅ Chromium-grade</td>
         <td>Embedded Chromium renderer</td>
+        <td>⚠️ PDF/A and PDF/UA export options; no per-element tag control</td>
         <td>Ships Chromium native binaries with the package</td>
         <td>Works, but images grow by hundreds of MB</td>
         <td>Actively developed</td>
@@ -91,6 +102,7 @@ title: Why PeachPDF?
         <td>Free — MIT</td>
         <td>✅ Chrome-grade</td>
         <td>Drives a headless Chrome in a separate process</td>
+        <td>⚠️ Chrome can emit tagged PDFs; no tag customization</td>
         <td>Downloads a full Chromium build (hundreds of MB)</td>
         <td>Hard — browser install, sandbox flags, and extra memory in every image</td>
         <td>Actively developed</td>
@@ -100,6 +112,7 @@ title: Why PeachPDF?
         <td>Free — MIT</td>
         <td>⚠️ 2012-era WebKit; no flexbox or modern CSS</td>
         <td>Wraps the native <code>libwkhtmltox</code> library</td>
+        <td>❌ Untagged output</td>
         <td>Per-platform native library you deploy yourself</td>
         <td>Fragile — native loading issues and long-standing thread-safety problems</td>
         <td>Dormant — no releases in years</td>
@@ -109,6 +122,7 @@ title: Why PeachPDF?
         <td>Free — LGPL</td>
         <td>⚠️ 2012-era WebKit; no flexbox or modern CSS</td>
         <td>External command-line process</td>
+        <td>❌ Untagged output</td>
         <td>Native binary installed on the host</td>
         <td>Possible, but you're baking an archived tool into new images</td>
         <td>Archived — deprecated by its maintainers</td>
@@ -118,6 +132,7 @@ title: Why PeachPDF?
         <td>Commercial — paid per server</td>
         <td>✅ Excellent, best-in-class paged-media CSS</td>
         <td>External native process</td>
+        <td>✅ Strong tagged / PDF-UA support with CSS tag customization</td>
         <td>Native binary installed on the host</td>
         <td>Works, but every container counts as a licensed server</td>
         <td>Actively developed</td>
@@ -127,6 +142,7 @@ title: Why PeachPDF?
         <td>Free under $1M annual revenue, paid above</td>
         <td>❌ None — code-first fluent C# API</td>
         <td>Own engine drawing through SkiaSharp</td>
+        <td>⚠️ PDF/A and PDF/UA conformance in recent versions, from code-first layouts</td>
         <td>SkiaSharp native binaries</td>
         <td>Good, but every layout is C# code your developers maintain</td>
         <td>Actively developed</td>
@@ -136,6 +152,7 @@ title: Why PeachPDF?
         <td>Free — MIT</td>
         <td>❌ None — drawing and document object model</td>
         <td>Direct PDF drawing; you position content</td>
+        <td>⚠️ Tagged / PDF-UA output via <code>UAManager</code> in recent versions; structure marked up in code</td>
         <td>None</td>
         <td>Good, but all layout is manual</td>
         <td>Actively developed</td>
@@ -145,6 +162,7 @@ title: Why PeachPDF?
         <td>Commercial — paid per developer</td>
         <td>⚠️ HTML conversion with partial CSS fidelity</td>
         <td>Own converter inside a large general-purpose PDF suite</td>
+        <td>✅ Tagged PDF via a programmatic tagging API</td>
         <td>Large closed-source library</td>
         <td>Works</td>
         <td>Actively developed</td>
