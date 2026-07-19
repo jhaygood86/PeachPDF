@@ -269,6 +269,39 @@ namespace PeachPDF.Tests.Integration
             Assert.InRange(box.Location.Y, expectedY - 0.5, expectedY + 0.5);
         }
 
+        // ─── shrink-to-fit width for position:absolute boxes with no explicit width ──
+        // Acid2's ".eyes { position:absolute; ... }" (no width/height set) must size to its widest
+        // child, not the sum of every sibling's own unrelated border/padding.
+
+        [Fact]
+        public async Task PositionAbsoluteAutoWidth_ShrinksToWidestChild_NotSumOfSiblingBorders()
+        {
+            // Regression for CssBox.GetMinMaxSumWords: its paddingSum accumulator was never reset
+            // between siblings the way its maxSum counterpart already was (see the block-level
+            // "oldSum"/reset-then-restore-via-max pattern), so a later sibling's own border/padding kept
+            // summing into the same running total instead of only the widest single line's own padding
+            // counting. Three siblings under an absolutely-positioned, auto-width parent: #text (real
+            // content, ~short), #border1 (80px combined border, no content), #border2 (60px combined
+            // border, no content) - the correct shrink-to-fit width is #border1's own ~80px (the widest
+            // single line), not #border1 + #border2's borders summed together (~140px).
+            var html = Wrap(
+                "<div id='container' style='position:relative; width:400px;'>"
+                + "<div id='target' style='position:absolute;'>"
+                + "<div id='text'>Hi</div>"
+                + "<div id='border1' style='border-left:40px solid black; border-right:40px solid black;'></div>"
+                + "<div id='border2' style='border-left:30px solid black; border-right:30px solid black;'></div>"
+                + "</div></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var target = FindById(root, "target")!;
+
+            var targetWidth = target.ActualRight - target.Location.X;
+
+            // #border1 alone is 80px (its own border) - the buggy summed-across-siblings result would
+            // be at least 80+60=140px (plus whatever #text's own small contribution added on top).
+            // Allow a little headroom above 80 for #text's own (much smaller) content contribution.
+            Assert.InRange(targetWidth, 79, 100);
+        }
+
         // ─── attribute selectors exactly as Acid2 combines them ────────────────────
         // "[class~=one].first.one" and "[class~=one][class~=first] [class=second\ two][class=\"second two\"]"
         // and the intentionally-invalid "[class=second two]" (unquoted space) which must NOT match.

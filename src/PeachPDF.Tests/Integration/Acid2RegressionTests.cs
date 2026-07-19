@@ -237,6 +237,30 @@ namespace PeachPDF.Tests.Integration
             Assert.InRange(blockquote.Location.X, expectedX - 0.5, expectedX + 0.5);
         }
 
+        [Fact]
+        public async Task Eyes_ShrinkToFitWidth_MatchesWidestChild_NotSummedAcrossSiblings()
+        {
+            // Regression for a real bug found via a direct comparison against Acid2's own reference
+            // rendering (http://acid2.acidtests.org/reference.png) - the first time this project's
+            // verification went beyond comparing a fresh render only against a *previous round's own*
+            // screenshot. ".eyes" (position:absolute, no explicit width) should shrink-to-fit around its
+            // widest child - "#eyes-a" (containing the resolved eye-icon image) - but CssBox.
+            // GetMinMaxSumWords's paddingSum accumulator was never reset between siblings the way its
+            // maxSum counterpart already was, so "#eyes-b"'s and "#eyes-c"'s own unrelated borders (they
+            // contribute no text/image content of their own) summed into the same shared total instead
+            // of only the widest line's own padding counting - inflating ".eyes" well past its actual
+            // content and rendering its red background as a wide, obviously-wrong band instead of a
+            // tight accent around the eye icons.
+            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var eyes = FindByClass(root, "eyes")!;
+            var eyesA = FindById(root, "eyes-a")!;
+
+            var eyesWidth = eyes.ActualRight - eyes.Location.X;
+            var eyesAWidth = eyesA.ActualRight - eyesA.Location.X;
+
+            Assert.InRange(eyesWidth, eyesAWidth - 1, eyesAWidth + 1);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static bool PageHasContent(PdfPage page)

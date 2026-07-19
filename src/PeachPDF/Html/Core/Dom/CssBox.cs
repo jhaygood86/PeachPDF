@@ -1723,15 +1723,27 @@ namespace PeachPDF.Html.Core.Dom
         private static void GetMinMaxSumWords(CssBox box, ref double min, ref double maxSum, ref double paddingSum, ref double marginSum)
         {
             double? oldSum = null;
+            // paddingSum must be scoped per "line" the same way maxSum is (see the oldSum save/restore
+            // below) - it represents the border/padding belonging to the WIDEST line found so far, not a
+            // running total across every sibling's own unrelated line. Without oldPaddingSum, a block
+            // box's own border/padding (and every descendant's, recursively) permanently accumulated
+            // into paddingSum and was never reset between siblings - e.g. Acid2's "#eyes-a" (contributing
+            // real intrinsic word/image width) followed by sibling "#eyes-b"/"#eyes-c" (contributing 0
+            // words but their own borders) summed all three siblings' unrelated border/padding into one
+            // box's shrink-to-fit width instead of using only the widest line's own padding, inflating
+            // position:absolute ".eyes"'s auto width well past its actual content.
+            double? oldPaddingSum = null;
 
             // not inline (block) boxes start a new line so we need to reset the max sum
             if (box.Display != CssConstants.Inline && box.Display != CssConstants.TableCell && box.WhiteSpace != CssConstants.NoWrap)
             {
                 oldSum = maxSum;
                 maxSum = marginSum;
+                oldPaddingSum = paddingSum;
+                paddingSum = 0;
             }
 
-            // add the padding 
+            // add the padding
             paddingSum += box.ActualBorderLeftWidth + box.ActualBorderRightWidth + box.ActualPaddingRight + box.ActualPaddingLeft;
 
 
@@ -1768,10 +1780,11 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
-            // max sum is max of all the lines in the box
+            // max sum (and its matching padding contribution) is the max of all the lines in the box
             if (oldSum.HasValue)
             {
                 maxSum = Math.Max(maxSum, oldSum.Value);
+                paddingSum = Math.Max(paddingSum, oldPaddingSum!.Value);
             }
         }
 
