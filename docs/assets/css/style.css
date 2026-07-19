@@ -329,8 +329,8 @@ table + .landing-lede,
 /* Let a wide table use more than the content column on large screens,
    centered on the page; the table's own overflow-x still handles the rest. */
 .table-breakout {
-  width: max(100%, min(100vw - 3rem, 78rem));
-  margin-inline: calc((100% - max(100%, min(100vw - 3rem, 78rem))) / 2);
+  width: max(100%, min(100vw - 3rem, 92rem));
+  margin-inline: calc((100% - max(100%, min(100vw - 3rem, 92rem))) / 2);
 }
 
 .card {
