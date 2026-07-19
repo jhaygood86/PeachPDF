@@ -971,10 +971,19 @@ namespace PeachPDF.Html.Core.Dom
                 coordinates.CurrentX += rightSpacing;
             }
 
-            // handle height setting
+            // handle height setting: the flowed content came out shorter than the box's own
+            // ActualHeight (e.g. an inline-block button whose vertical padding exceeds its one
+            // small-font text line), so extend MaxBottom to cover the box's full height from
+            // where it started. This must be startY-anchored: the old
+            // `MaxBottom = ActualHeight - (MaxBottom - startY)` form assigned the deficit as an
+            // ABSOLUTE document Y (a tiny value near the page top), dragging MaxBottom above
+            // startY - when such a box was a block's last/only inline content, the block's
+            // resulting ActualBottom landed above its own top (negative height), and paint-time
+            // visibility culling then dropped the block's whole subtree (buttons styled like the
+            // showcase's themeable-card "Learn More" were never painted at all).
             if (coordinates.MaxBottom - startY < box.ActualHeight)
             {
-                coordinates.MaxBottom = box.ActualHeight - (coordinates.MaxBottom - startY);
+                coordinates.MaxBottom = startY + box.ActualHeight;
             }
 
             // handle width setting
