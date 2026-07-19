@@ -390,7 +390,17 @@ namespace PeachPDF.Html.Core
         {
             return selector switch
             {
-                AllSelector => true,
+                // The universal selector must match any REAL element, never PeachPDF's own synthetic
+                // root wrapper box (DomParser.GenerateCssTree's "root" - a container above the actual
+                // parsed <html> element, not itself part of the document; see its own doc comment).
+                // Without the IsRoot exclusion, a descendant-combinator walk that reaches past <html>
+                // (e.g. evaluating "* html X" right-to-left: X, then html, then "*" above html) finds
+                // this synthetic wrapper as html's ParentBox and matches it unconditionally - making
+                // "* html X" (the classic quirks-mode-only hack, which must NEVER match in a
+                // standards-mode-only engine like this one, since real browsers have no element above
+                // <html> for "*" to match) incorrectly match. Acid2's own "* html .parser" rule
+                // exercises exactly this.
+                AllSelector => box is { IsRoot: false },
                 ListSelector listSelector => DoesSelectorMatch(listSelector, box),
                 TypeSelector typeSelector => DoesSelectorMatch(typeSelector, box),
                 ComplexSelector complexSelector => DoesSelectorMatch(complexSelector, box),

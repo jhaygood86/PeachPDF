@@ -19,6 +19,12 @@ namespace PeachPDF.Html.Core.Handlers
         /// once into a <see cref="RGraphics.CreateTile"/> tile and then positioned/repeated exactly like a
         /// url() image); URL images are drawn directly via <see cref="BackgroundImageDrawHandler"/>.
         /// The <paramref name="isFirst"/> flag gates URL painting (URL images only appear on the first rectangle).
+        /// <paramref name="attachmentList"/> is the (possibly comma-list, per-layer) resolved
+        /// background-attachment value; for a layer resolving to <c>fixed</c>, <paramref name="viewportRect"/>
+        /// (the page/viewport rect, in the same paint-time coordinate space as <paramref name="originRect"/>)
+        /// is used as the background positioning area instead of <paramref name="originRect"/> (CSS
+        /// Backgrounds 3 §3.9) - this is the only difference <c>fixed</c> makes; <paramref name="clipRect"/>
+        /// is unaffected, so the image is still only ever visible within the element's own box.
         /// </summary>
         public static void Paint(
             RGraphics g,
@@ -31,9 +37,14 @@ namespace PeachPDF.Html.Core.Handlers
             string positionList,
             string sizeList,
             string repeatList,
+            string attachmentList,
+            RRect viewportRect,
             CssBoxProperties box,
             Action<RBrush> drawBrush)
         {
+            var attachmentValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(attachmentList), layerIndex);
+            var positioningRect = attachmentValue == CssConstants.Fixed ? viewportRect : originRect;
+
             switch (image)
             {
                 case CssImage.Url urlImage when isFirst && urlImage.Image != null:
@@ -42,23 +53,23 @@ namespace PeachPDF.Html.Core.Handlers
                     var positionValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(positionList), layerIndex);
                     var repeatValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(repeatList), layerIndex);
                     BackgroundImageDrawHandler.DrawBackgroundImage(
-                        g, urlImage.Image, sizeValue, positionValue, repeatValue, originRect, clipRect, roundedClipPath, box);
+                        g, urlImage.Image, sizeValue, positionValue, repeatValue, positioningRect, clipRect, roundedClipPath, box);
                     break;
                 }
                 case CssImage.Url urlImage when isFirst && urlImage.SvgDocument != null:
-                    PaintSvgLayer(g, urlImage.SvgDocument, layerIndex, originRect, clipRect, roundedClipPath,
+                    PaintSvgLayer(g, urlImage.SvgDocument, layerIndex, positioningRect, clipRect, roundedClipPath,
                         positionList, sizeList, repeatList, box);
                     break;
                 case CssImage.LinearGradient lg:
-                    PaintGradientLayer(g, originRect, clipRect, roundedClipPath, layerIndex, sizeList, positionList, repeatList, box,
+                    PaintGradientLayer(g, positioningRect, clipRect, roundedClipPath, layerIndex, sizeList, positionList, repeatList, box,
                         (brushGraphics, rect) => GetLinearGradientBrush(brushGraphics, lg.Gradient, rect), drawBrush);
                     break;
                 case CssImage.RadialGradient rg:
-                    PaintGradientLayer(g, originRect, clipRect, roundedClipPath, layerIndex, sizeList, positionList, repeatList, box,
+                    PaintGradientLayer(g, positioningRect, clipRect, roundedClipPath, layerIndex, sizeList, positionList, repeatList, box,
                         (brushGraphics, rect) => GetRadialGradientBrush(brushGraphics, rg.Gradient, rect), drawBrush);
                     break;
                 case CssImage.ConicGradient cg:
-                    PaintGradientLayer(g, originRect, clipRect, roundedClipPath, layerIndex, sizeList, positionList, repeatList, box,
+                    PaintGradientLayer(g, positioningRect, clipRect, roundedClipPath, layerIndex, sizeList, positionList, repeatList, box,
                         (brushGraphics, rect) => GetConicGradientBrush(brushGraphics, cg.Gradient, rect), drawBrush);
                     break;
             }

@@ -70,17 +70,22 @@ namespace PeachPDF.Tests.Html.Core.Utils
 
             var parent = DomUtils.FindParent(root, "div", span);
 
-            Assert.Equal("body", parent.HtmlTag!.Name);
+            Assert.Equal("body", parent!.HtmlTag!.Name);
         }
 
         [Fact]
-        public async Task FindParent_NullBox_ReturnsRoot()
+        public async Task FindParent_NullBox_ReturnsNull()
         {
+            // A null `box` means the walk-up reached the top of the tree without ever finding a
+            // matching ancestor - i.e. no open element with this tag name exists at all (e.g. a stray
+            // closing tag with no matching open element). This must be distinguishable from "found a
+            // match whose parent happens to be null" so the caller (HtmlParser.CloseElement) can treat
+            // it as a no-op instead of incorrectly jumping to the document root.
             var root = await Render("<div></div>");
 
             var parent = DomUtils.FindParent(root, "div", null);
 
-            Assert.Same(root, parent);
+            Assert.Null(parent);
         }
 
         [Fact]

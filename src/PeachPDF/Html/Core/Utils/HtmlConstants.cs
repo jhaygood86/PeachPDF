@@ -68,7 +68,7 @@ namespace PeachPDF.Html.Core.Utils
         //        public const string META = "META";
         //        public const string NOFRAMES = "NOFRAMES";
         public const string NoScript = "noscript";
-        //        public const string OBJECT = "OBJECT";
+        public const string Object = "object";
         //        public const string OL = "OL";
         //        public const string OPTGROUP = "OPTGROUP";
         //        public const string OPTION = "OPTION";

@@ -284,6 +284,11 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task AtPage_NamedPage_SelectorApplied_GeneratesExpectedPageCount()
         {
+            // All content shares one named page ("chapter") throughout - no page-name change occurs
+            // (that mechanism is covered separately by AtPage_NamedPage_CommaSeparatedSelector_
+            // AppliesToEveryListedChapter below), so reaching 3+ pages here relies purely on ordinary
+            // content overflow, verifying the "@page chapter" selector/margin-box content keeps
+            // applying across every page the single named-page run spans, not just the first.
             var html = """
                 <!DOCTYPE html>
                 <html>
@@ -295,9 +300,8 @@ namespace PeachPDF.Tests.Integration
                 </head>
                 <body>
                 """ +
-                string.Concat(Enumerable.Range(1, 3).Select(i =>
-                    $"<h1 style=\"page: chapter\">Chapter {i}</h1>" +
-                    string.Concat(Enumerable.Range(1, 15).Select(j => $"<p>Paragraph {j}</p>")))) +
+                $"<h1 style=\"page: chapter\">Chapter</h1>" +
+                string.Concat(Enumerable.Range(1, 60).Select(j => $"<p>Paragraph {j}</p>")) +
                 """
                 </body>
                 </html>
@@ -316,7 +320,9 @@ namespace PeachPDF.Tests.Integration
             // boxes across many chapter names via a comma-separated selector list
             // ("@page chapter1, chapter2, ..., chapter8 { ... }"). See PdfGeneratorSelectPageRuleTests
             // and PageRuleTests for the precise regression coverage of the two bugs this exercises
-            // end-to-end (named-page Y registration, and comma-list selector parsing).
+            // end-to-end (named-page Y registration, and comma-list selector parsing). No explicit
+            // break-before (see AtPage_NamedPage_SelectorApplied_GeneratesExpectedPageCount above) -
+            // each chapter's distinct `page` value change forces its own break per CSS2.1 §13.2.
             var html = """
                 <!DOCTYPE html>
                 <html>

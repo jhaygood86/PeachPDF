@@ -141,6 +141,15 @@ namespace PeachPDF.Html.Core
 
         internal IReadOnlyList<NamedPageElement> NamedPageElements => _namedPageElements;
 
+        /// <summary>
+        /// The most recently registered explicit <c>page</c> name in document/flow order (or
+        /// <see cref="string.Empty"/> if none has been registered yet at this point in layout) - the
+        /// "currently active" named page a box with no <c>page</c> value of its own would carry
+        /// forward, per CSS2.1 §13.2. Used by <see cref="Dom.CssBox.PerformLayoutImp"/> to detect a
+        /// forced page break when an element's own explicit <c>page</c> value differs from it.
+        /// </summary>
+        internal string ActivePageName => _namedPageElements.Count > 0 ? _namedPageElements[^1].Name : string.Empty;
+
         internal NamedPageElement RegisterNamedPageElement(string name, double y)
         {
             var element = new NamedPageElement(name, y);
@@ -472,6 +481,18 @@ namespace PeachPDF.Html.Core
         }
 
         /// <summary>
+        /// The page/viewport rect, in the same per-page paint-time coordinate space every box's
+        /// painted <c>Rectangles</c> use (i.e. independent of <see cref="ScrollOffset"/>, exactly like
+        /// a <c>position: fixed</c> box's own offset override) - the same rect <see cref="PerformPaint"/>
+        /// pushes as the top-level page clip, also used as the background positioning area for a
+        /// <c>background-attachment: fixed</c> layer (CSS Backgrounds 3 §3.9).
+        /// </summary>
+        internal RRect PageBoxRect => MaxSize.Height > 0
+            ? new RRect(Location.X, Location.Y, Math.Min(MaxSize.Width, PageSize.Width),
+                Math.Min(MaxSize.Height, PageSize.Height))
+            : new RRect(MarginLeft, MarginTop, PageSize.Width + MarginRight, PageSize.Height);
+
+        /// <summary>
         /// Render the html using the given device.
         /// </summary>
         /// <param name="g">the device to use to render</param>
@@ -479,10 +500,7 @@ namespace PeachPDF.Html.Core
         {
             ArgumentNullException.ThrowIfNull(g);
 
-            g.PushClip(MaxSize.Height > 0
-                ? new RRect(Location.X, Location.Y, Math.Min(MaxSize.Width, PageSize.Width),
-                    Math.Min(MaxSize.Height, PageSize.Height))
-                : new RRect(MarginLeft, MarginTop, PageSize.Width + MarginRight, PageSize.Height));
+            g.PushClip(PageBoxRect);
 
             if (Root is not null)
             {

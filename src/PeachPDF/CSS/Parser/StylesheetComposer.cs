@@ -65,6 +65,13 @@ namespace PeachPDF.CSS
                     MoveToRuleEnd(ref token);
                     return null;
 
+                // A bare top-level ';' is an empty statement (CSS2.1 core grammar) - a no-op, not the
+                // start of a malformed rule. Falling through to CreateStyle here would feed it into
+                // SelectorConstructor, which has no recovery for an unexpected Semicolon and silently
+                // merges it into (and invalidates) the *next* rule's selector instead.
+                case TokenType.Semicolon:
+                    return null;
+
                 default:
                     return CreateStyle(token);
             }

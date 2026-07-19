@@ -60,18 +60,25 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         /// <summary>
-        /// Recursively searches for the parent with the specified HTML Tag name
+        /// Walks up from <paramref name="box"/> (inclusive) looking for the nearest ancestor with the
+        /// given HTML tag name, and returns that ancestor's parent - i.e. "where parsing should
+        /// resume after closing this tag". Returns <c>null</c>, rather than <paramref name="root"/>,
+        /// when no matching ancestor exists at all: a closing tag with no corresponding open element
+        /// (e.g. a stray <c>&lt;/p&gt;</c> for a <c>&lt;p&gt;</c> already auto-closed by a nested
+        /// <c>&lt;table&gt;</c>, per CSS2.1/HTML4's "table closes p" rule) is a parse error that must be
+        /// ignored - see <see cref="Parse.HtmlParser.CloseElement"/>, whose caller falls back to leaving
+        /// the current box unchanged rather than corrupting the tree by jumping to <paramref name="root"/>.
         /// </summary>
         /// <param name="root"></param>
         /// <param name="tagName"></param>
         /// <param name="box"></param>
-        public static CssBox FindParent(CssBox root, string tagName, CssBox? box)
+        public static CssBox? FindParent(CssBox root, string tagName, CssBox? box)
         {
             while (true)
             {
                 if (box is null)
                 {
-                    return root;
+                    return null;
                 }
 
                 if (box.HtmlTag != null && box.HtmlTag.Name.Equals(tagName, StringComparison.CurrentCultureIgnoreCase))
@@ -488,7 +495,15 @@ namespace PeachPDF.Html.Core.Utils
             var left = coordinates.CurrentX;
             CssBox? lastIntersectingFloat = null;
 
-            do
+            // Bounded by a flat iteration count: the number of distinct floats in a real document is
+            // always finite, and this loop's only job is to walk past each one once. Without this cap,
+            // a Y-row where a float's own "ActualRight + its margin" doesn't advance "left" strictly
+            // past the previously found float (e.g. a wider float re-found immediately after moving just
+            // past a narrower/nested one at nearly the same position) can spin - this loop's termination
+            // previously relied entirely on eventually running out of intersecting floats to find, with
+            // no fallback if that assumption doesn't hold.
+            var iterations = 0;
+            while (iterations++ < 10000)
             {
                 CssFloatCoordinates floatCoordinates = new()
                 {
@@ -510,8 +525,7 @@ namespace PeachPDF.Html.Core.Utils
 
                 left = intersectingFloat.ActualRight + intersectingFloat.ActualMarginRight;
                 lastIntersectingFloat = intersectingFloat;
-
-            } while (true);
+            }
 
             return lastIntersectingFloat;
         }
@@ -521,7 +535,9 @@ namespace PeachPDF.Html.Core.Utils
             var left = coordinates.CurrentX;
             CssBox? lastIntersectingFloat = null;
 
-            do
+            // See the matching bound in GetLastLeftIntersectingFloatBox above for why this is needed.
+            var iterations = 0;
+            while (iterations++ < 10000)
             {
                 CssFloatCoordinates floatCoordinates = new()
                 {
@@ -543,8 +559,7 @@ namespace PeachPDF.Html.Core.Utils
 
                 left = intersectingFloat.ActualRight + intersectingFloat.ActualMarginRight;
                 lastIntersectingFloat = intersectingFloat;
-
-            } while (true);
+            }
 
             return lastIntersectingFloat;
         }
@@ -599,18 +614,23 @@ namespace PeachPDF.Html.Core.Utils
                 }
             }
 
-            // Only the nearest enclosing stacking context is responsible for finding and ordering every
-            // out-of-flow / stacking-context-establishing descendant reachable through plain wrapper
-            // boxes, at any depth - a non-stacking-context box contributes nothing further here; any such
-            // descendants of its own are claimed by whichever ancestor above it actually is one. This is
-            // what fixes two bugs in the old, position/z-index-only version of this method: (1) a box
-            // that itself establishes a stacking context (e.g. position:relative;z-index, or now also
-            // opacity<1/transform) was never yielded by its own parent at all, so it and its whole
-            // subtree never painted; (2) an out-of-flow stacking-context descendant nested a few plain
-            // wrapper boxes deep was discovered "naturally" via the ordinary parent-to-child Paint()
-            // cascade before its true ancestor stacking context ever reached its own z-index layer, so it
-            // visually painted as if z-index had no effect.
-            if (!IsStackingContextBox(box)) yield break;
+            // The nearest enclosing "local ordering scope" (see IsLocalOrderingScope) is responsible for
+            // finding and ordering every out-of-flow / stacking-context-establishing descendant reachable
+            // through plain wrapper boxes AND plain floats, at any depth - a box that is neither claims
+            // nothing further here; any such descendants of its own are claimed by whichever ancestor
+            // above it actually qualifies. This is what fixes three bugs in earlier versions of this
+            // method: (1) a box that itself establishes a stacking context (e.g. position:relative;
+            // z-index, or now also opacity<1/transform) was never yielded by its own parent at all, so it
+            // and its whole subtree never painted; (2) an out-of-flow stacking-context descendant nested a
+            // few plain wrapper boxes deep was discovered "naturally" via the ordinary parent-to-child
+            // Paint() cascade before its true ancestor stacking context ever reached its own z-index
+            // layer, so it visually painted as if z-index had no effect; (3) a box that is positioned
+            // (absolute/relative/fixed/sticky) but establishes no NEW stacking context of its own
+            // (z-index:auto) never searched its own subtree either, so its own floated/positioned-without-
+            // z-index children (Appendix E's "non-positioned floats" and "positioned descendants with
+            // stack level 0") escaped all the way to the nearest TRUE stacking context ancestor instead of
+            // being ordered locally against their true DOM siblings - see IsLocalOrderingScope.
+            if (!IsLocalOrderingScope(box)) yield break;
             if (!(box.HtmlContainer?.HasStackingHoistCandidates ?? true)) yield break;
 
             foreach (var participant in SearchForHoistableDescendants(box, []))
@@ -629,33 +649,77 @@ namespace PeachPDF.Html.Core.Utils
         // rather than duplicating it.
         internal static bool NeedsStackingHoist(CssBox box) => box.IsOutOfFlow || IsStackingContextBox(box);
 
-        // Tunnels through plain wrapper boxes AND non-stacking-context out-of-flow boxes alike (a float,
-        // or e.g. position:absolute with z-index:auto, doesn't block descendants further down from
-        // needing to reach this same level) looking for content that needs to compete at `box`'s own
-        // stacking-context level. Recursion stops at (but includes) each stacking-context-establishing
-        // box found - its own subtree is its own business, resolved independently once its own Paint()
-        // call later invokes FlattenStackingContext on itself. `ancestorPath` accumulates every DOM
-        // ancestor walked through along the way (both plain pass-through wrappers and hoisted-but-non-
-        // stacking-context boxes like a plain position:absolute) - each yielded participant snapshots
-        // it as its ClipAncestors, so the caller can re-apply those ancestors' own overflow clipping
-        // (which it never picks up naturally, having been hoisted past their own Paint() calls). Mutating
-        // one shared list via add-before-recurse/remove-after is safe here: the whole sequence is drained
-        // eagerly and synchronously by FlattenStackingContext's caller before anything else touches it.
+        // A box claims local Appendix-E ordering responsibility for its own PLAIN FLOAT descendants
+        // (rather than deferring them to a more distant ancestor) if it is the root, a genuine stacking
+        // context, OR merely positioned (absolute/relative/fixed/sticky) regardless of z-index - matching
+        // Appendix E step 6's "positioned descendants with stack level 0 [...] painted via the same
+        // [7-step] procedure" model, under which every positioned box (not only ones with an explicit
+        // z-index) is its own atomic recursive unit for steps 3/4/5 (block/float/inline). This does NOT
+        // extend to genuine stacking-context descendants nested inside a merely-positioned (z-index:auto)
+        // box - those must keep escaping all the way to the true nearest stacking context, exactly like
+        // through a plain non-positioned wrapper, because z-index competition only happens at a REAL
+        // stacking context's own level (see the claimFloatsHere parameter on
+        // SearchForHoistableDescendants, which encodes this float-vs-stacking-context distinction - a
+        // merely-positioned box is a local ordering boundary for floats only, not for z-index).
+        //
+        // Without the float half of this, a positioned-but-z-index:auto box's own float child (Acid2's
+        // own ".eyes" - position:absolute, no z-index - containing float "#eyes-b" alongside block
+        // "#eyes-c" and inline "#eyes-a") was hoisted all the way to the true root's own stacking pass
+        // instead of being ordered locally against its true DOM siblings, painting relative to the root's
+        // entire subtree instead of interleaved correctly within ".eyes" itself.
+        private static bool IsLocalOrderingScope(CssBox box) =>
+            box.IsRoot || IsStackingContextBox(box) ||
+            box.Position is CssConstants.Absolute or CssConstants.Relative or CssConstants.Fixed or CssConstants.Sticky;
+
+        // Tunnels through plain wrapper boxes looking for content that needs to compete at `box`'s own
+        // local ordering scope. Two categories of content are hoisted here, with different stopping
+        // rules:
+        //
+        // - A genuine stacking context (IsStackingContextBox) always keeps escaping through anything
+        //   that ISN'T ITSELF a stacking context - including a merely-positioned (z-index:auto) box -
+        //   because z-index only has meaning relative to the nearest REAL stacking context. Recursion
+        //   stops at (but includes) each stacking context found; its own subtree is its own business,
+        //   resolved independently once its own Paint() call later invokes FlattenStackingContext on
+        //   itself.
+        // - A plain FLOAT only escapes as far as the nearest box that IsLocalOrderingScope (root, a
+        //   genuine stacking context, or merely positioned) - once the walk has passed through such a
+        //   box, `claimFloatsHere` flips to false for everything beneath it, since that box will find
+        //   and locally order its own floats itself (via its own later FlattenStackingContext call,
+        //   whose initial bail check now also accepts merely-positioned boxes - see IsLocalOrderingScope)
+        //   rather than this outer search claiming them too, which would both double-paint them and
+        //   order them relative to the wrong (too-distant) box's siblings.
+        //
+        // `ancestorPath` accumulates every DOM ancestor walked through along the way (both plain
+        // pass-through wrappers and hoisted-but-not-yet-fully-resolved boxes like a merely-positioned
+        // box) - each yielded participant snapshots it as its ClipAncestors, so the caller can re-apply
+        // those ancestors' own overflow clipping (which it never picks up naturally, having been hoisted
+        // past their own Paint() calls). Mutating one shared list via add-before-recurse/remove-after is
+        // safe here: the whole sequence is drained eagerly and synchronously by FlattenStackingContext's
+        // caller before anything else touches it.
         private static IEnumerable<StackingParticipant> SearchForHoistableDescendants(
-            CssBox box, List<CssBox> ancestorPath)
+            CssBox box, List<CssBox> ancestorPath, bool claimFloatsHere = true)
         {
             foreach (var childBox in box.Boxes)
             {
                 if (childBox.IsMarkerPseudoElement) continue;
 
-                if (NeedsStackingHoist(childBox))
+                var isStackingContext = IsStackingContextBox(childBox);
+                var isLocalOrderingScope = !isStackingContext && IsLocalOrderingScope(childBox);
+                var isPlainFloatToClaim = claimFloatsHere && !isStackingContext && !isLocalOrderingScope && childBox.IsOutOfFlow;
+
+                if (isStackingContext || isLocalOrderingScope || isPlainFloatToClaim)
                 {
                     yield return new StackingParticipant(childBox, ancestorPath.ToArray());
-                    if (IsStackingContextBox(childBox)) continue;
+                    if (isStackingContext) continue;
                 }
 
+                // Once the walk passes through a merely-positioned (non-stacking-context) box, any
+                // further floats beneath it belong to THAT box's own local claim, not this search's -
+                // only genuine stacking contexts still need to keep escaping past it.
+                var claimBeyond = isLocalOrderingScope ? false : claimFloatsHere;
+
                 ancestorPath.Add(childBox);
-                foreach (var descendant in SearchForHoistableDescendants(childBox, ancestorPath))
+                foreach (var descendant in SearchForHoistableDescendants(childBox, ancestorPath, claimBeyond))
                 {
                     yield return descendant;
                 }

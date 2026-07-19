@@ -149,6 +149,102 @@ namespace PeachPDF.Tests.Integration
                 $"Relocated box should sit at MarginTop ({marginTop}) within its page, but offset is {offsetWithinPage}");
         }
 
+        // CSS2.1 §13.2: a page break is forced whenever a box's own explicit `page` value differs
+        // from the named page currently active in the document flow - independent of
+        // break-before/break-after. Real Prince/browser-print authoring relies on this so a chapter
+        // heading alone (not every following paragraph) starts a fresh page.
+        [Fact]
+        public async Task PageNameChange_ForcesBreak()
+        {
+            var html = @"<!DOCTYPE html>
+<html>
+<head>
+<style>
+@page { size: A4; margin: 20mm; }
+</style>
+</head>
+<body>
+<div class='first' style='page: alpha;'>First</div>
+<div class='second' style='page: beta;'>Second</div>
+</body>
+</html>";
+
+            var (rootBox, container) = await BuildCssBoxTree(html);
+            var pageHeight = container.PageSize.Height;
+
+            var first = FindBoxByClass(rootBox, "first");
+            var second = FindBoxByClass(rootBox, "second");
+            Assert.NotNull(first);
+            Assert.NotNull(second);
+
+            Assert.True(second.Location.Y >= pageHeight,
+                $"Box with a differing `page` value should be pushed to the next page (y >= {pageHeight}) but starts at y={second.Location.Y}");
+        }
+
+        [Fact]
+        public async Task SamePageName_DoesNotForceBreak()
+        {
+            var html = @"<!DOCTYPE html>
+<html>
+<head>
+<style>
+@page { size: A4; margin: 20mm; }
+</style>
+</head>
+<body>
+<div class='first' style='page: alpha;'>First</div>
+<div class='second' style='page: alpha;'>Second</div>
+</body>
+</html>";
+
+            var (rootBox, container) = await BuildCssBoxTree(html);
+            var pageHeight = container.PageSize.Height;
+
+            var second = FindBoxByClass(rootBox, "second");
+            Assert.NotNull(second);
+
+            Assert.True(second.Location.Y < pageHeight,
+                $"Two boxes sharing the same `page` value must not force a break between them, but second box starts at y={second.Location.Y} (page height {pageHeight})");
+        }
+
+        [Fact]
+        public async Task UnsetPageName_CarriesForwardWithoutForcingBreak()
+        {
+            // A chapter heading with an explicit `page` value starts a fresh page, but its ordinary
+            // "page: auto" (unset) following siblings must not each force their own additional break -
+            // they simply carry the active named page forward, per CSS2.1 §13.2.
+            var html = @"<!DOCTYPE html>
+<html>
+<head>
+<style>
+@page { size: A4; margin: 20mm; }
+</style>
+</head>
+<body>
+<div class='heading' style='page: alpha;'>Chapter</div>
+<div class='body1'>Paragraph 1</div>
+<div class='body2'>Paragraph 2</div>
+</body>
+</html>";
+
+            var (rootBox, container) = await BuildCssBoxTree(html);
+            var pageHeight = container.PageSize.Height;
+
+            var heading = FindBoxByClass(rootBox, "heading");
+            var body1 = FindBoxByClass(rootBox, "body1");
+            var body2 = FindBoxByClass(rootBox, "body2");
+            Assert.NotNull(heading);
+            Assert.NotNull(body1);
+            Assert.NotNull(body2);
+
+            var headingPage = Math.Floor(heading.Location.Y / pageHeight);
+            var body1Page = Math.Floor(body1.Location.Y / pageHeight);
+            var body2Page = Math.Floor(body2.Location.Y / pageHeight);
+
+            Assert.Equal(headingPage, body1Page);
+            Assert.Equal(headingPage, body2Page);
+        }
+
         #region Helpers
 
         private async Task<(CssBox root, HtmlContainerInt container)> BuildCssBoxTree(string html)

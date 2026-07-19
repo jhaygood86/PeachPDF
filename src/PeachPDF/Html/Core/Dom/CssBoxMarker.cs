@@ -207,7 +207,8 @@ namespace PeachPDF.Html.Core.Dom
                 // height box, matching today's list-style-image rendering; an author content:url(...)
                 // override (owned) matches ::before/::after's own top-left content-image alignment.
                 positionList: _ownsContentImage ? "0% 0%" : "center",
-                sizeList: CssConstants.Auto, repeatList: "no-repeat", box: this,
+                sizeList: CssConstants.Auto, repeatList: "no-repeat",
+                attachmentList: CssConstants.Scroll, viewportRect: rect, box: this,
                 drawBrush: brush =>
                 {
                     g.DrawRectangle(brush, rect.X, rect.Y, rect.Width, rect.Height);

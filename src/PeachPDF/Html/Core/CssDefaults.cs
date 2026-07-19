@@ -115,10 +115,8 @@ namespace PeachPDF.Html.Core
             *[DIR="rtl"]    { direction: rtl; unicode-bidi: embed }
 
             @media print {
-              h1            { page-break-before: always }
               h1, h2, h3,
               h4, h5, h6    { page-break-after: avoid }
-              ul, ol, dl    { page-break-before: avoid }
             }
 
             /* Not in the specification but necessary */

@@ -522,7 +522,23 @@ namespace PeachPDF.Html.Core.Dom
             box.ActualBottom = boxHeight is not null
                 ? box.Location.Y + height
                 : Math.Max(box.ActualBottom, box.Location.Y + height);
-            box.IsHeightCalculated = boxHeight is not null;
+
+            // IsHeightCalculated drives whether a DESCENDANT's percentage height/min-height/max-height
+            // resolves against this box, per CSS 2.1 §10.5: only true when this box's own height is
+            // "specified explicitly" (a definite, non-auto length, or a percentage against a containing
+            // block that is itself height-calculated), or this box is the root/initial containing block
+            // (whose used height is the page height regardless of its `height` computed value). It must
+            // NOT simply mirror "GetBoxHeight returned a usable number" - GetBoxHeight also returns a
+            // real number for plain content-driven `height: auto` boxes (e.g. via ActualBoxSizingHeight/
+            // Words height), and treating THAT as "calculated" incorrectly makes every percentage-height
+            // descendant of an auto-height block resolve against that content-driven height instead of
+            // being treated as auto (CSS2.1 Acid2 test's `.nose { height: 60% }` inside auto-height
+            // `.picture` is exactly this trap - it must resolve to `auto`, not to a huge value derived
+            // from `.picture`'s own content height).
+            var isRootWithPageHeight = box == box.ContainingBlock && box.HtmlContainer is not null;
+            var isDefiniteHeight = CssValueParser.IsValidLength(box.Height) &&
+                (box.ContainingBlock.IsHeightCalculated || !box.Height.EndsWith('%'));
+            box.IsHeightCalculated = isRootWithPageHeight || isDefiniteHeight;
 
             // Apply max-height constraint. Unlike min-height/explicit-height above (which only ever
             // grow ActualBottom), max-height must be able to shrink the box below its content's
@@ -1269,10 +1285,15 @@ namespace PeachPDF.Html.Core.Dom
             if (lineBox.Rectangles.TryGetValue(box, out var r))
                 lineBox.Rectangles[box] = new RRect(r.X, r.Y + delta, r.Width, r.Height);
 
+            // An image word's own Rectangle (not lineBox.Rectangles/box.Location) is exactly what
+            // CssBoxImage/CssBoxObject.PaintImpCore reads to position the drawn image
+            // ("var r = _imageWord.Rectangle; ...; g.DrawImage(_imageWord.Image, r)") - so it must move
+            // with everything else here. Previously excluded, which made `vertical-align: top/bottom/
+            // middle` a complete no-op for inline replaced elements (e.g. an <object>/<img>): the word
+            // kept its original flow-assigned Top forever, regardless of the declared alignment.
             foreach (var word in lineBox.WordsOf(box))
             {
-                if (!word.IsImage)
-                    word.Top += delta;
+                word.Top += delta;
             }
         }
 
