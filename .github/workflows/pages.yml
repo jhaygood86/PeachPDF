@@ -28,12 +28,41 @@ jobs:
             8.0.x
             10.0.x
 
+      - name: Read package version into site data
+        run: |
+          VERSION=$(grep -oP '(?<=<PackageVersion>)[^<]+' src/PeachPDF/PeachPDF.csproj)
+          printf 'current: "%s"\n' "$VERSION" > docs/_data/version.yml
+          echo "Version: $VERSION"
+
       - name: Generate API reference
         run: dotnet build src/PeachPDF/PeachPDF.csproj --configuration Release -p:TargetFramework=net10.0 -p:DisableDefaultDocumentation=false
 
       - name: Fix API reference cross-links
         shell: pwsh
         run: ./.github/scripts/Fix-ApiDocLinks.ps1 -ApiDocsPath ./docs/api
+
+      - name: Install fonts
+        run: sudo apt-get update && sudo apt-get install -y fontconfig fonts-liberation fonts-dejavu-core
+
+      - name: Generate feature showcases
+        run: |
+          dotnet run --project src/PeachPDF.TestHarness/PeachPDF.TestHarness.csproj \
+            --configuration Release --framework net10.0 \
+            -- "$GITHUB_WORKSPACE/docs/showcase"
+          mv docs/showcase/showcases.json docs/_data/showcases.json
+
+      - name: Render showcase thumbnails
+        run: |
+          pip install pypdfium2 pillow
+          python3 - <<'EOF'
+          import glob
+          import pypdfium2 as pdfium
+          pdfs = sorted(glob.glob('docs/showcase/*.pdf'))
+          for path in pdfs:
+              pdf = pdfium.PdfDocument(path)
+              pdf[0].render(scale=1.5).to_pil().save(path[:-4] + '.png')
+          print(f'Rendered {len(pdfs)} thumbnails')
+          EOF
 
       - uses: actions/configure-pages@v5
 

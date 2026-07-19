@@ -17,6 +17,8 @@ using PeachPDF.Network;
 - [Fetching HTML over HTTP](#fetching-html-over-http)
 - [Sharing a parsed CSS context across renders](#sharing-a-parsed-css-context-across-renders)
 - [Saving a PDF to a file](#saving-a-pdf-to-a-file)
+- [Fonts](#fonts)
+- [Enabling tagged PDF (PDF/UA) output](#enabling-tagged-pdf-pdfua-output)
 - [ASP.NET Core controller endpoint](#aspnet-core-controller-endpoint)
 - [ASP.NET Core Minimal API endpoint](#aspnet-core-minimal-api-endpoint)
 - [Azure Functions (isolated worker) HTTP handler](#azure-functions-isolated-worker-http-handler)
@@ -171,6 +173,93 @@ var document = await generator.GeneratePdf(html, pdfConfig);
 using var fileStream = File.Create("output.pdf");
 document.Save(fileStream);
 ```
+
+## Fonts
+
+For the full compatibility details of the font-related CSS properties themselves (`font-family`, `font-weight`, `font-style`, `font-stretch`, `@font-face`), see [Color & Typography](html-css-support.md#color--typography) and [CSS At-Rules](html-css-support.md#css-at-rules) in HTML & CSS Support.
+
+### Default Font
+
+By default, PeachPDF uses Segoe UI on Windows. Segoe UI isn't installed by default on other platforms, so PeachPDF picks a different platform-appropriate default there instead (see the generic-family table below — the same "verify installed, else fall back" logic applies). You can remap the default font (or any other family) to another one using
+
+```csharp
+PdfGenerator generator = new();
+generator.AddFontFamilyMapping("Segoe UI","sans-serif"); // or any other system installed font
+```
+
+### Generic families and `system-ui`
+
+`serif`, `sans-serif`, `monospace`, `cursive`, `fantasy`, and `system-ui` all resolve to a real installed font, matching actual Chromium behavior per platform rather than one invented cross-platform table:
+
+| Generic | Windows | macOS | Android | Linux |
+|---|---|---|---|---|
+| `serif` | Times New Roman | Times | Noto Serif | *(delegated to fontconfig's own `serif` alias)* |
+| `sans-serif` | Arial | Helvetica | Roboto | *(delegated to fontconfig's own `sans-serif` alias)* |
+| `monospace` | Consolas | Menlo | Droid Sans Mono | *(delegated to fontconfig's own `monospace` alias)* |
+| `cursive` | Comic Sans MS | Apple Chancery | Dancing Script | *(delegated to fontconfig's own `cursive` alias)* |
+| `fantasy` | Impact | Papyrus | Dancing Script | *(delegated to fontconfig's own `fantasy` alias)* |
+| `system-ui` | Segoe UI | *(platform default font)* | *(platform default font)* | *(platform default font)* |
+
+On Linux, PeachPDF delegates directly to the system's own `fontconfig` library (`libfontconfig.so.1`) at startup — the managed equivalent of running `fc-match <generic>` — so the resolved family always matches whatever that distro's own font configuration actually maps each generic to, rather than a name that might not be installed. `system-ui` on Windows is an exact match for Chromium's own `system-ui` → Segoe UI resolution; on macOS/Linux/Android it's a pragmatic approximation using the platform's default font rather than true native system-UI-font detection (e.g. macOS's actual system-ui is the private San Francisco font, not something cleanly resolvable via plain TTF/OTF file discovery).
+
+Every mapping above — including a custom one set via `AddFontFamilyMapping` — is verified against the fonts actually installed on the running machine before use; if the target isn't present, PeachPDF falls back to the platform's default font instead of silently substituting whatever arbitrary font happened to be discovered first.
+
+### Font weight, style, and stretch matching
+
+Requesting a `font-weight`/`font-style`/`font-stretch` PeachPDF can't find an exact registered face for doesn't just fall back to Regular:
+
+- **Numeric weight** (`font-weight: 1`–`1000`) is matched to the *nearest* registered face for the family per CSS Fonts Level 4 §5.2 (the same algorithm real browsers use), not just an exact match or a coarse bold/not-bold split. `bolder`/`lighter` step relative to the parent element's own resolved weight, following the CSS2.1 §15.6 worked table.
+- **`font-stretch`** (the 9 CSS Fonts Level 3 keywords) is matched the same way when a family has multiple registered faces at different stretch values.
+- When no real face is close enough to the request, PeachPDF **synthesizes** a faux-bold (fill+stroke render mode) or faux-italic/oblique (glyph shear) rather than rendering with zero visual distinction. `oblique <angle>` (e.g. `oblique 10deg`) drives the exact synthesized shear amount when declared; otherwise a fixed default angle is used.
+- An `@font-face` rule's own declared `font-weight`/`font-style`/`font-stretch` descriptors are authoritative for how that specific registered resource participates in this matching, independent of what the font file's own internal tables say — this is what makes multi-variant web-font families (separate `@font-face` rules per weight) resolve correctly.
+
+See [Color & Typography](html-css-support.md#color--typography) in HTML & CSS Support for per-property compatibility notes, including the [per-run font selection model](html-css-support.md#font-selection-is-per-run-not-per-character).
+
+### Adding custom fonts
+
+The recommended way to install custom fonts is to install them into your operating system. PeachPDF picks up TrueType/OpenType fonts from the operating system's own installed fonts:
+
+- **Windows**: `%SystemRoot%\Fonts` and `%LOCALAPPDATA%\Microsoft\Windows\Fonts`
+- **macOS**: `/System/Library/Fonts`, `/Library/Fonts`, and `~/Library/Fonts`
+- **Linux**: primarily the system's own `fontconfig` (`libfontconfig.so.1`) — the same mechanism the generic-family table above uses — which knows about every font directory that distro's `fonts.conf` configures, however unusual. If `libfontconfig.so.1` isn't available at all, PeachPDF falls back to scanning `/usr/share/fonts`, `/usr/local/share/fonts`, and `$HOME/.fonts` directly (parsing `/etc/fonts/fonts.conf` for any additional configured directories first)
+- **Android**: `/system/fonts`, `/product/fonts`, and `/data/fonts`
+- **iOS**: none — iOS sandboxes apps away from system font files entirely, and CoreText only exposes fonts as opaque handles with no API to extract raw file bytes. iOS apps must embed their own fonts and register them via `AddFontFromStream` below
+
+You can also add a font at runtime by loading the font into a Stream, and then using the AddFontFromStream API:
+
+```csharp
+PdfGenerator generator = new();
+await generator.AddFontFromStream(fontStream); // Supports TrueType (TTF), CFF, WOFF, and WOFF2 formats
+```
+
+Web fonts loaded via `@font-face` (`url()`, with a comma-separated fallback list, and `local()`) are also supported — see [`@font-face` in CSS At-Rules](html-css-support.md#css-at-rules) for the full descriptor support notes.
+
+### Supported font formats
+
+We support TrueType, CFF, WOFF, and WOFF2 font formats.
+
+## Enabling tagged PDF (PDF/UA) output
+
+PeachPDF can optionally produce a *tagged* PDF — one with a logical structure tree (`/StructTreeRoot`) exposing the document's headings, paragraphs, lists, tables, links, and images to assistive technology (e.g. screen readers). Tagging is **off by default**; enable it with:
+
+```csharp
+var config = new PdfGenerateConfig
+{
+    EnableTaggedPdf = true
+};
+```
+
+When enabled:
+
+- The document's language (`/Lang`) is set automatically from `<html lang="...">` (falling back to `PdfGenerateConfig.DefaultLanguage` if the document declares none).
+- Every element's HTML tag is mapped to a PDF standard structure type (`/H1`, `/P`, `/Table`, etc.).
+- `<img>` (and other elements with an `alt` attribute) carry their alt text into the structure element's `/Alt` entry.
+- `<a href="...">` links get a `/Link` structure element, and the underlying PDF Link annotation is cross-referenced with it in both directions — a reader can navigate from either side.
+- List items (`<li>`) are split into sibling `/Lbl` (the marker) and `/LBody` (the rest of the item's content) structure elements under `/LI`, per the tagged-PDF list convention.
+
+When `EnableTaggedPdf` is left at its default (`false`), none of this runs — output is byte-for-byte the same as if tagging didn't exist in the codebase at all.
+
+The HTML-tag → structure-type mapping is CSS-driven and author-overridable via the `-peachpdf-pdf-tag-type` custom property — see [Tagged PDF (PDF/UA) Support](html-css-support.md#tagged-pdf-pdfua-support) in HTML & CSS Support for the property's accepted values, the full default mapping table, and known limitations.
 
 ## ASP.NET Core controller endpoint
 

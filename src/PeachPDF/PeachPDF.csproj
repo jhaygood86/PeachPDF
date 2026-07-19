@@ -4,6 +4,7 @@
 		<PackageId>PeachPDF</PackageId>
 		<PackageVersion>0.9.2</PackageVersion>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<PackageIcon>peach.png</PackageIcon>
 		<IncludeSymbols>true</IncludeSymbols>
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
 		<WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
@@ -47,6 +48,7 @@
 	</ItemGroup>
 	<ItemGroup>
 		<None Include="..\..\README.md" Pack="true" PackagePath="\" />
+		<None Include="..\..\docs\assets\img\peach.png" Pack="true" PackagePath="\" />
 	</ItemGroup>
 	<Target Name="GeneratePeachPdfProductInfo" BeforeTargets="BeforeBuild">
 		<WriteLinesToFile File="$(IntermediateOutputPath)PeachPdfProductInfo.g.cs" Lines="namespace PeachPDF { internal static class PeachPdfProductInfo { public const string Generator = &quot;PeachPDF $(PackageVersion)&quot;%3B } }" Overwrite="true" />

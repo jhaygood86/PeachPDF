@@ -52,7 +52,7 @@ When you add or change a user-facing feature, update the relevant doc page in th
 - [docs/html-css-support.md](docs/html-css-support.md) — HTML/CSS compatibility matrix
 - [docs/supported-svg-features.md](docs/supported-svg-features.md) — SVG compatibility matrix
 - [docs/usage-examples.md](docs/usage-examples.md) — API usage examples
-- [README.md](README.md) / [docs/index.md](docs/index.md) — cross-link new features from these where relevant
+- [README.md](README.md) / [docs/getting-started.md](docs/getting-started.md) — cross-link new features from these where relevant
 
 If a change gives PeachPDF a new visible rendering capability, add or update a showcase in `src/PeachPDF.TestHarness/Program.cs` in the same change. Several real rendering-correctness bugs (paint-order issues, broken masks, no-op gradient spread methods) were only caught by visually exercising a showcase, not by automated tests alone.
 
