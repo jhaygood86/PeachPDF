@@ -918,6 +918,35 @@ namespace PeachPDF.Html.Core.Dom
             _tableBox.ActualRight = maxRight + GetHorizontalSpacing() + _tableBox.ActualBorderRightWidth;
             _tableBox.ActualBottom = Math.Max(maxBottom, startY) + GetVerticalSpacing() + _tableBox.ActualBorderBottomWidth;
 
+            // Post-check: the pre-check above decides from EstimateRowHeight, a one-line-of-text
+            // heuristic that can grossly undershoot a row whose cells hold tall block content
+            // (e.g. a styled card div) - only real layout reveals the true height. When the
+            // estimate misses, the laid-out table ends up straddling a page boundary with no
+            // per-row break recorded (a single-row table is never row-split - the per-row check
+            // requires i > 0) and would paint sliced across two pages. Now that actual bounds
+            // are known, apply the same whole-table move (with the same css-break §3.1
+            // keep-with-next pull of e.g. a preceding h2) the pre-check would have made had the
+            // estimate been accurate. A table taller than one page is left in place - moving it
+            // whole can't satisfy anything, it would just recreate the straddle on the next page.
+            if (pageHeight < double.MaxValue - 1
+                && _tableBox.HtmlContainer != null
+                && !_shouldRepeatHeaders
+                && !_shouldRepeatFooters
+                && _bodyRows.Count > 0
+                && (_tableBox.PageBreakBottoms is null || _tableBox.PageBreakBottoms.Count == 0))
+            {
+                var tableTop = _tableBox.Location.Y;
+                var tablePage = (int)((tableTop - marginTop) / pageHeight);
+                var nextPageStart = (tablePage + 1) * pageHeight + marginTop;
+
+                if (_tableBox.ActualBottom > nextPageStart
+                    && _tableBox.ActualBottom - tableTop <= pageHeight)
+                {
+                    _tableBox.OffsetTopWithKeepWithNextRun(nextPageStart - tableTop,
+                        tableTop - (tablePage * pageHeight + marginTop));
+                }
+            }
+
 #if DEBUG
             System.Console.WriteLine($"CssLayoutEngineTable.LayoutCells: END - _tableBox.Boxes.Count={_tableBox.Boxes.Count}");
             for (int i = 0; i < _tableBox.Boxes.Count; i++)

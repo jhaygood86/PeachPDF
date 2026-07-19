@@ -66,6 +66,39 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(0, headingPage);
         }
 
+        // The showcase "Themeable Card Component" shape: h2 (UA avoid default) → intro paragraph
+        // with break-after: avoid → a display:none <style> element → single-row table. The chain
+        // walk must skip the display:none sibling and pull BOTH the heading and the intro along
+        // when the table pre-check moves the table to the next page.
+        [Fact]
+        public async Task TableMovedToNextPage_ChainSkipsDisplayNoneSibling_PullsHeadingAndIntroAlong()
+        {
+            var html = BuildFillerDocument(@"
+<h2 class='heading'>Section heading</h2>
+<p class='intro' style='margin: 0; break-after: avoid'>Intro paragraph kept with the content below.</p>
+<style>.card { color: #222 }</style>
+<table class='keep'><tr><td><div style='height: 120px'>swatch</div></td></tr></table>");
+
+            var (rootBox, container) = await BuildCssBoxTree(html);
+            var pageHeight = container.PageSize.Height;
+
+            var heading = FindBoxByClass(rootBox, "heading");
+            var intro = FindBoxByClass(rootBox, "intro");
+            var table = FindBoxByClass(rootBox, "keep");
+            Assert.NotNull(heading);
+            Assert.NotNull(intro);
+            Assert.NotNull(table);
+
+            var tablePage = Math.Floor(table.Location.Y / pageHeight);
+            Assert.True(tablePage >= 1, $"Test setup expects the table to be moved to page 2+, but it is at y={table.Location.Y} (page {tablePage})");
+            Assert.Equal(tablePage, Math.Floor(heading.Location.Y / pageHeight));
+            Assert.Equal(tablePage, Math.Floor(intro.Location.Y / pageHeight));
+            Assert.True(heading.ActualBottom <= intro.Location.Y + 1.0,
+                $"Heading (bottom={heading.ActualBottom}) must sit above the intro (top={intro.Location.Y}) after both moved");
+            Assert.True(intro.ActualBottom <= table.Location.Y + 1.0,
+                $"Intro (bottom={intro.ActualBottom}) must sit above the table (top={table.Location.Y}) after both moved");
+        }
+
         // A div pushed by break-inside: avoid must pull its avoid-chained heading the same way.
         [Fact]
         public async Task BreakInsideAvoidBox_PullsAvoidChainedHeadingAlong()
