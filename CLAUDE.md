@@ -7,6 +7,7 @@ Pure .NET HTML → PDF rendering library. No external process dependency (no Pup
 Read these before making non-trivial changes in their area — they are the source of truth, not this file:
 
 - [docs/index.html](docs/index.html) — doc site marketing-style landing page (hero, feature cards, guide cards)
+- [docs/showcase.html](docs/showcase.html) — feature showcase gallery; cards (thumbnail + PDF + HTML-source links) are driven by `site.data.showcases`, which pages.yml generates at site build time by running the TestHarness (`docs/showcase/` and `docs/_data/showcases.json` are gitignored build output, never source)
 - [docs/getting-started.md](docs/getting-started.md) — install, quick start, thread safety / guide index
 - [docs/architecture.md](docs/architecture.md) — how HTML becomes a PDF: parser, DOM, CSS, layout, painting, PDF renderer
 - [docs/html-css-support.md](docs/html-css-support.md) — full HTML/CSS compatibility matrix (elements, properties, selectors, at-rules, gaps, extensions, PDF metadata extraction, tagged PDF)
@@ -19,7 +20,7 @@ Read these before making non-trivial changes in their area — they are the sour
 
 When you add or change user-facing features, update the relevant doc page (and its `README.md`/`docs/getting-started.md` cross-links) in the same change, rather than as a follow-up — this repo's convention (established by the SVG 1.0 coverage work) is docs land with the feature.
 
-If a new or changed feature gives PeachPDF a new visible capability, add a new showcase or update an existing one in `src/PeachPDF.TestHarness/Program.cs` in the same change — this is also how several rendering-correctness bugs (paint-order, broken masks, no-op gradient spread methods) were actually caught, since automated tests alone missed them (see Testing conventions below).
+If a new or changed feature gives PeachPDF a new visible capability, add a new showcase or update an existing one in `src/PeachPDF.TestHarness/Program.cs` in the same change — this is also how several rendering-correctness bugs (paint-order, broken masks, no-op gradient spread methods) were actually caught, since automated tests alone missed them (see Testing conventions below). Every showcase must go through the `SaveShowcaseAsync(slug, category, title, description, html, config)` helper in Program.cs — that call is what registers it in `showcases.json`, which the docs site's build (pages.yml) uses to render the card for it on peachpdf.net/showcase.html; a showcase saved by hand-rolled `File.Write*` calls would silently never appear on the site.
 
 ## Project layout
 

@@ -1,0 +1,39 @@
+---
+layout: default
+title: Showcase
+---
+<h1>Feature Showcase</h1>
+<p>Every document below is rendered by PeachPDF itself when this site is built, so the
+output always reflects the current release. Each card pairs the exact HTML given to
+<code>PdfGenerator.GeneratePdf</code> with the PDF that came out — open both and compare.
+The previews show the first page of each PDF, rendered on Linux with Liberation fonts
+(the same font substitution any Linux server without Microsoft fonts would use).</p>
+
+{% if site.data.showcases %}
+{% assign categories = site.data.showcases | map: "category" | uniq %}
+{% for cat in categories %}
+<h2>{{ cat }}</h2>
+<div class="card-grid showcase-grid">
+  {% assign items = site.data.showcases | where: "category", cat %}
+  {% for s in items %}
+  <div class="card showcase-card">
+    <a class="showcase-thumb-link" href="{{ '/showcase/' | append: s.pdf | relative_url }}">
+      <img class="showcase-thumb" src="{{ '/showcase/' | append: s.slug | append: '.png' | relative_url }}" alt="First page of the {{ s.title }} showcase PDF" loading="lazy">
+    </a>
+    <h3>{{ s.title }}</h3>
+    <p>{{ s.description }}</p>
+    <p class="showcase-links">
+      <a href="{{ '/showcase/' | append: s.pdf | relative_url }}">View PDF</a>
+      <a href="{{ '/showcase/' | append: s.html | relative_url }}">HTML source</a>
+    </p>
+  </div>
+  {% endfor %}
+</div>
+{% endfor %}
+{% else %}
+<p>The showcase gallery is generated during the production site build and isn't part of
+the repository. To produce it locally, run
+<code>dotnet run --project src/PeachPDF.TestHarness --framework net10.0 -- docs/showcase</code>
+from the repository root, then move <code>docs/showcase/showcases.json</code> to
+<code>docs/_data/showcases.json</code> and rebuild the site.</p>
+{% endif %}

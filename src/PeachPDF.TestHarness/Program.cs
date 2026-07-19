@@ -2,6 +2,7 @@ using PeachPDF;
 using PeachPDF.PdfSharpCore;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 
 PdfGenerateConfig pdfConfig = new()
 {
@@ -11,7 +12,27 @@ PdfGenerateConfig pdfConfig = new()
 };
 
 PdfGenerator generator = new();
-var stream = new MemoryStream();
+
+// Optional first argument: directory to write showcase output into (used by the
+// docs-site build to publish /showcase). Defaults to the current directory,
+// matching the historical local workflow.
+var outputDir = args.Length > 0 ? Path.GetFullPath(args[0]) : Directory.GetCurrentDirectory();
+Directory.CreateDirectory(outputDir);
+
+List<ShowcaseEntry> showcaseManifest = [];
+
+// Every showcase goes through here so the manifest (showcases.json) that drives
+// the website's /showcase page always matches the files actually written.
+async Task SaveShowcaseAsync(string slug, string category, string cardTitle, string cardDescription, string sourceHtml, PdfGenerateConfig renderConfig)
+{
+    var showcaseDocument = await generator.GeneratePdf(sourceHtml, renderConfig);
+    using var pdfStream = new MemoryStream();
+    showcaseDocument.Save(pdfStream);
+    File.WriteAllBytes(Path.Combine(outputDir, $"{slug}.pdf"), pdfStream.ToArray());
+    File.WriteAllText(Path.Combine(outputDir, $"{slug}.html"), sourceHtml);
+    showcaseManifest.Add(new ShowcaseEntry(slug, category, cardTitle, cardDescription, $"{slug}.pdf", $"{slug}.html"));
+    Console.WriteLine($"Saved {slug}.pdf + {slug}.html");
+}
 
 static string Swatch(string desc, string css) =>
     "<td>" +
@@ -193,16 +214,9 @@ var html = "<!DOCTYPE html><html><head>" + Css + "</head><body>" +
 
     "</body></html>";
 
-var document = await generator.GeneratePdf(html, pdfConfig);
-document.Save(stream);
-
-File.Delete("test_gradients.pdf");
-File.WriteAllBytes("test_gradients.pdf", stream.ToArray());
-Console.WriteLine("Saved test_gradients.pdf");
-
-File.Delete("test_gradients.html");
-File.WriteAllText("test_gradients.html", html);
-Console.WriteLine("Saved test_gradients.html");
+await SaveShowcaseAsync("gradients", "Backgrounds & Borders", "CSS Gradients",
+    "linear-gradient, radial-gradient, and conic-gradient: directions, angles, multi-stop and hard-stop color lists, and CSS Color Level 4 interpolation spaces.",
+    html, pdfConfig);
 
 // --- Border-radius showcase ---
 
@@ -276,17 +290,9 @@ var radiusHtml = "<!DOCTYPE html><html><head>" + RadiusCss + "</head><body>" +
 
     "</body></html>";
 
-var radiusStream = new MemoryStream();
-var radiusDocument = await generator.GeneratePdf(radiusHtml, pdfConfig);
-radiusDocument.Save(radiusStream);
-
-File.Delete("test_border_radius.pdf");
-File.WriteAllBytes("test_border_radius.pdf", radiusStream.ToArray());
-Console.WriteLine("Saved test_border_radius.pdf");
-
-File.Delete("test_border_radius.html");
-File.WriteAllText("test_border_radius.html", radiusHtml);
-Console.WriteLine("Saved test_border_radius.html");
+await SaveShowcaseAsync("border_radius", "Backgrounds & Borders", "Border Radius",
+    "border-radius from simple uniform rounding to per-corner and elliptical radii, on filled and bordered boxes.",
+    radiusHtml, pdfConfig);
 
 // --- background-origin + background-clip showcase ---
 
@@ -418,17 +424,9 @@ var originHtml = "<!DOCTYPE html><html><head>" + OriginCss + "</head><body>" +
 
     "</body></html>";
 
-var originStream = new MemoryStream();
-var originDocument = await generator.GeneratePdf(originHtml, pdfConfig);
-originDocument.Save(originStream);
-
-File.Delete("test_background_origin_clip.pdf");
-File.WriteAllBytes("test_background_origin_clip.pdf", originStream.ToArray());
-Console.WriteLine("Saved test_background_origin_clip.pdf");
-
-File.Delete("test_background_origin_clip.html");
-File.WriteAllText("test_background_origin_clip.html", originHtml);
-Console.WriteLine("Saved test_background_origin_clip.html");
+await SaveShowcaseAsync("background_origin_clip", "Backgrounds & Borders", "Background Origin & Clip",
+    "background-origin and background-clip controlling where a background paints relative to the border, padding, and content boxes.",
+    originHtml, pdfConfig);
 
 // --- background-position + background-size showcase ---
 
@@ -548,17 +546,9 @@ var positionHtml = "<!DOCTYPE html><html><head>" + PositionCss + "</head><body>"
 
     "</body></html>";
 
-var positionStream = new MemoryStream();
-var positionDocument = await generator.GeneratePdf(positionHtml, pdfConfig);
-positionDocument.Save(positionStream);
-
-File.Delete("test_background_position_size.pdf");
-File.WriteAllBytes("test_background_position_size.pdf", positionStream.ToArray());
-Console.WriteLine("Saved test_background_position_size.pdf");
-
-File.Delete("test_background_position_size.html");
-File.WriteAllText("test_background_position_size.html", positionHtml);
-Console.WriteLine("Saved test_background_position_size.html");
+await SaveShowcaseAsync("background_position_size", "Backgrounds & Borders", "Background Position & Size",
+    "background-position and background-size combinations: keywords, lengths, percentages, cover, and contain.",
+    positionHtml, pdfConfig);
 
 // --- list-style-image showcase ---
 
@@ -659,17 +649,9 @@ var listHtml = "<!DOCTYPE html><html><head>" + ListCss + "</head><body>" +
 
     "</body></html>";
 
-var listStream = new MemoryStream();
-var listDocument = await generator.GeneratePdf(listHtml, pdfConfig);
-listDocument.Save(listStream);
-
-File.Delete("test_list_style_image.pdf");
-File.WriteAllBytes("test_list_style_image.pdf", listStream.ToArray());
-Console.WriteLine("Saved test_list_style_image.pdf");
-
-File.Delete("test_list_style_image.html");
-File.WriteAllText("test_list_style_image.html", listHtml);
-Console.WriteLine("Saved test_list_style_image.html");
+await SaveShowcaseAsync("list_style_image", "Lists & Generated Content", "List Style Image",
+    "Custom list bullets supplied through list-style-image.",
+    listHtml, pdfConfig);
 
 // --- ::marker styling showcase ---
 
@@ -750,17 +732,9 @@ var markerHtml = "<!DOCTYPE html><html><head>" + ListCss + "</head><body>" +
 
     "</body></html>";
 
-var markerStream = new MemoryStream();
-var markerDocument = await generator.GeneratePdf(markerHtml, pdfConfig);
-markerDocument.Save(markerStream);
-
-File.Delete("test_marker_styling.pdf");
-File.WriteAllBytes("test_marker_styling.pdf", markerStream.ToArray());
-Console.WriteLine("Saved test_marker_styling.pdf");
-
-File.Delete("test_marker_styling.html");
-File.WriteAllText("test_marker_styling.html", markerHtml);
-Console.WriteLine("Saved test_marker_styling.html");
+await SaveShowcaseAsync("marker_styling", "Lists & Generated Content", "::marker Styling",
+    "Styling list markers with the ::marker pseudo-element, including real per-item numbering via the list-item counter.",
+    markerHtml, pdfConfig);
 
 // --- content image showcase ---
 
@@ -903,17 +877,9 @@ var contentHtml = "<!DOCTYPE html><html><head>" + ContentCss + "</head><body>" +
 
     "</body></html>";
 
-var contentStream = new MemoryStream();
-var contentDocument = await generator.GeneratePdf(contentHtml, pdfConfig);
-contentDocument.Save(contentStream);
-
-File.Delete("test_content_image.pdf");
-File.WriteAllBytes("test_content_image.pdf", contentStream.ToArray());
-Console.WriteLine("Saved test_content_image.pdf");
-
-File.Delete("test_content_image.html");
-File.WriteAllText("test_content_image.html", contentHtml);
-Console.WriteLine("Saved test_content_image.html");
+await SaveShowcaseAsync("content_image", "Lists & Generated Content", "Generated Content Images",
+    "Images inserted through the CSS content property on generated content.",
+    contentHtml, pdfConfig);
 
 // ─── CSS Paged Media showcase ───────────────────────────────────────────────
 
@@ -980,17 +946,9 @@ var pagedMediaHtml = """
     </html>
     """;
 
-var pagedMediaStream = new MemoryStream();
-var pagedMediaDocument = await generator.GeneratePdf(pagedMediaHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
-pagedMediaDocument.Save(pagedMediaStream);
-
-File.Delete("test_paged_media.pdf");
-File.WriteAllBytes("test_paged_media.pdf", pagedMediaStream.ToArray());
-Console.WriteLine("Saved test_paged_media.pdf");
-
-File.Delete("test_paged_media.html");
-File.WriteAllText("test_paged_media.html", pagedMediaHtml);
-Console.WriteLine("Saved test_paged_media.html");
+await SaveShowcaseAsync("paged_media", "Paged Media", "Paged Media",
+    "@page rules with margin boxes, running headers and footers, and page counters.",
+    pagedMediaHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // ─── CSS Paged Media showcase — named strings (string-set / string()) ──────
 
@@ -1039,17 +997,9 @@ var namedStringsHtml = """
     </html>
     """;
 
-var namedStringsStream = new MemoryStream();
-var namedStringsDocument = await generator.GeneratePdf(namedStringsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
-namedStringsDocument.Save(namedStringsStream);
-
-File.Delete("test_paged_media_named_strings.pdf");
-File.WriteAllBytes("test_paged_media_named_strings.pdf", namedStringsStream.ToArray());
-Console.WriteLine("Saved test_paged_media_named_strings.pdf");
-
-File.Delete("test_paged_media_named_strings.html");
-File.WriteAllText("test_paged_media_named_strings.html", namedStringsHtml);
-Console.WriteLine("Saved test_paged_media_named_strings.html");
+await SaveShowcaseAsync("paged_media_named_strings", "Paged Media", "Named Strings",
+    "Running headers populated from document content with string-set and string().",
+    namedStringsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // ── Per-page margin variation showcase ─────────────────────────────────────
 var perPageMarginsHtml = """
@@ -1083,13 +1033,9 @@ var perPageMarginsHtml = """
     </html>
     """;
 
-var perPageMarginsStream = new MemoryStream();
-var perPageMarginsDoc = await generator.GeneratePdf(perPageMarginsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
-perPageMarginsDoc.Save(perPageMarginsStream);
-
-File.Delete("test_paged_media_per_page_margins.pdf");
-File.WriteAllBytes("test_paged_media_per_page_margins.pdf", perPageMarginsStream.ToArray());
-Console.WriteLine("Saved test_paged_media_per_page_margins.pdf");
+await SaveShowcaseAsync("paged_media_per_page_margins", "Paged Media", "Per-page Margins",
+    "Page margins that vary from page to page using @page selectors.",
+    perPageMarginsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // ── Named pages showcase ────────────────────────────────────────────────────
 var namedPagesHtml = """
@@ -1123,13 +1069,9 @@ var namedPagesHtml = """
     </html>
     """;
 
-var namedPagesStream = new MemoryStream();
-var namedPagesDoc = await generator.GeneratePdf(namedPagesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
-namedPagesDoc.Save(namedPagesStream);
-
-File.Delete("test_paged_media_named_pages.pdf");
-File.WriteAllBytes("test_paged_media_named_pages.pdf", namedPagesStream.ToArray());
-Console.WriteLine("Saved test_paged_media_named_pages.pdf");
+await SaveShowcaseAsync("paged_media_named_pages", "Paged Media", "Named Pages",
+    "Routing content to differently-styled pages with named @page rules and the page property.",
+    namedPagesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // ── Margin box explicit sizing showcase ────────────────────────────────────
 var marginBoxSizingHtml = """
@@ -1162,13 +1104,9 @@ var marginBoxSizingHtml = """
     </html>
     """;
 
-var marginBoxSizingStream = new MemoryStream();
-var marginBoxSizingDoc = await generator.GeneratePdf(marginBoxSizingHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
-marginBoxSizingDoc.Save(marginBoxSizingStream);
-
-File.Delete("test_paged_media_margin_box_sizing.pdf");
-File.WriteAllBytes("test_paged_media_margin_box_sizing.pdf", marginBoxSizingStream.ToArray());
-Console.WriteLine("Saved test_paged_media_margin_box_sizing.pdf");
+await SaveShowcaseAsync("paged_media_margin_box_sizing", "Paged Media", "Margin Box Sizing",
+    "Explicit width and height sizing of @page margin boxes.",
+    marginBoxSizingHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // ─── CSS Flexbox showcase ──────────────────────────────────────────────────
 
@@ -1347,17 +1285,9 @@ var flexHtml = "<!DOCTYPE html><html><head>" + FlexCss + "</head><body>" +
 
     "</body></html>";
 
-var flexStream = new MemoryStream();
-var flexDocument = await generator.GeneratePdf(flexHtml, pdfConfig);
-flexDocument.Save(flexStream);
-
-File.Delete("test_flexbox.pdf");
-File.WriteAllBytes("test_flexbox.pdf", flexStream.ToArray());
-Console.WriteLine("Saved test_flexbox.pdf");
-
-File.Delete("test_flexbox.html");
-File.WriteAllText("test_flexbox.html", flexHtml);
-Console.WriteLine("Saved test_flexbox.html");
+await SaveShowcaseAsync("flexbox", "Layout", "Flexbox",
+    "Flexbox layout: direction, wrapping, justification, alignment, gaps, and flexible item sizing.",
+    flexHtml, pdfConfig);
 
 // ─── CSS Custom Properties (var()) showcase ─────────────────────────────────
 
@@ -1473,17 +1403,9 @@ var varHtml = "<!DOCTYPE html><html><head>" + VarCss + "</head><body>" +
 
     "</body></html>";
 
-var varStream = new MemoryStream();
-var varDocument = await generator.GeneratePdf(varHtml, pdfConfig);
-varDocument.Save(varStream);
-
-File.Delete("test_custom_properties.pdf");
-File.WriteAllBytes("test_custom_properties.pdf", varStream.ToArray());
-Console.WriteLine("Saved test_custom_properties.pdf");
-
-File.Delete("test_custom_properties.html");
-File.WriteAllText("test_custom_properties.html", varHtml);
-Console.WriteLine("Saved test_custom_properties.html");
+await SaveShowcaseAsync("custom_properties", "CSS Values & Functions", "Custom Properties",
+    "CSS custom properties resolved through var(), including fallbacks and cascading overrides.",
+    varHtml, pdfConfig);
 
 // --- CSS transform / transform-origin showcase ---
 
@@ -1570,17 +1492,9 @@ var transformHtml = "<!DOCTYPE html><html><head>" + TransformCss + "</head><body
 
     "</body></html>";
 
-var transformStream = new MemoryStream();
-var transformDocument = await generator.GeneratePdf(transformHtml, pdfConfig);
-transformDocument.Save(transformStream);
-
-File.Delete("test_transform.pdf");
-File.WriteAllBytes("test_transform.pdf", transformStream.ToArray());
-Console.WriteLine("Saved test_transform.pdf");
-
-File.Delete("test_transform.html");
-File.WriteAllText("test_transform.html", transformHtml);
-Console.WriteLine("Saved test_transform.html");
+await SaveShowcaseAsync("transform", "Graphics & Effects", "Transforms",
+    "CSS transforms - translate, rotate, scale, skew - with transform-origin control.",
+    transformHtml, pdfConfig);
 
 // --- CSS calc() / min() / max() / clamp() showcase ---
 
@@ -1673,17 +1587,9 @@ var calcHtml = "<!DOCTYPE html><html><head>" + CalcCss + "</head><body>" +
 
     "</body></html>";
 
-var calcStream = new MemoryStream();
-var calcDocument = await generator.GeneratePdf(calcHtml, pdfConfig);
-calcDocument.Save(calcStream);
-
-File.Delete("test_calc.pdf");
-File.WriteAllBytes("test_calc.pdf", calcStream.ToArray());
-Console.WriteLine("Saved test_calc.pdf");
-
-File.Delete("test_calc.html");
-File.WriteAllText("test_calc.html", calcHtml);
-Console.WriteLine("Saved test_calc.html");
+await SaveShowcaseAsync("calc", "CSS Values & Functions", "calc() & Math Functions",
+    "calc(), min(), max(), and clamp() expressions resolving against real box dimensions.",
+    calcHtml, pdfConfig);
 
 // ─── SVG showcase ────────────────────────────────────────────────────────────
 
@@ -2207,17 +2113,9 @@ var svgHtml = "<!DOCTYPE html><html><head>" + SvgShowcaseCss + "</head><body>" +
 
     "</body></html>";
 
-var svgStream = new MemoryStream();
-var svgDocument = await generator.GeneratePdf(svgHtml, pdfConfig);
-svgDocument.Save(svgStream);
-
-File.Delete("test_svg.pdf");
-File.WriteAllBytes("test_svg.pdf", svgStream.ToArray());
-Console.WriteLine("Saved test_svg.pdf");
-
-File.Delete("test_svg.html");
-File.WriteAllText("test_svg.html", svgHtml);
-Console.WriteLine("Saved test_svg.html");
+await SaveShowcaseAsync("svg", "Graphics & Effects", "SVG",
+    "Inline and embedded SVG rendered as true vector PDF content: shapes, paths, gradients, patterns, masks, and text.",
+    svgHtml, pdfConfig);
 
 // --- opacity showcase ---
 
@@ -2325,17 +2223,9 @@ var opacityHtml = "<!DOCTYPE html><html><head>" + OpacityCss + "</head><body>" +
 
     "</body></html>";
 
-var opacityStream = new MemoryStream();
-var opacityDocument = await generator.GeneratePdf(opacityHtml, pdfConfig);
-opacityDocument.Save(opacityStream);
-
-File.Delete("test_opacity.pdf");
-File.WriteAllBytes("test_opacity.pdf", opacityStream.ToArray());
-Console.WriteLine("Saved test_opacity.pdf");
-
-File.Delete("test_opacity.html");
-File.WriteAllText("test_opacity.html", opacityHtml);
-Console.WriteLine("Saved test_opacity.html");
+await SaveShowcaseAsync("opacity", "Graphics & Effects", "Opacity",
+    "Element opacity composited as real group transparency over text, images, and nested content.",
+    opacityHtml, pdfConfig);
 
 // --- stacking context showcase ---
 //
@@ -2410,17 +2300,9 @@ var stackingHtml = "<!DOCTYPE html><html><head>" + StackingCss + "</head><body>"
 
     "</body></html>";
 
-var stackingStream = new MemoryStream();
-var stackingDocument = await generator.GeneratePdf(stackingHtml, pdfConfig);
-stackingDocument.Save(stackingStream);
-
-File.Delete("test_stacking_context.pdf");
-File.WriteAllBytes("test_stacking_context.pdf", stackingStream.ToArray());
-Console.WriteLine("Saved test_stacking_context.pdf");
-
-File.Delete("test_stacking_context.html");
-File.WriteAllText("test_stacking_context.html", stackingHtml);
-Console.WriteLine("Saved test_stacking_context.html");
+await SaveShowcaseAsync("stacking_context", "Graphics & Effects", "Stacking Contexts",
+    "z-index and stacking contexts: paint order across positioned, floated, and transformed boxes.",
+    stackingHtml, pdfConfig);
 
 // --- text-transform showcase ---
 
@@ -2512,16 +2394,9 @@ var textTransformHtml = "<!DOCTYPE html><html><head>" + TextTransformCss + "</he
 
     "</body></html>";
 
-var textTransformStream = new MemoryStream();
-var textTransformDocument = await generator.GeneratePdf(textTransformHtml, pdfConfig);
-textTransformDocument.Save(textTransformStream);
-
-File.Delete("test_text_transform.pdf");
-File.WriteAllBytes("test_text_transform.pdf", textTransformStream.ToArray());
-Console.WriteLine("Saved test_text_transform.pdf");
-
-File.Delete("test_text_transform.html");
-File.WriteAllText("test_text_transform.html", textTransformHtml);
+await SaveShowcaseAsync("text_transform", "Typography & Text", "text-transform",
+    "text-transform variants - uppercase, lowercase, capitalize - applied at render time.",
+    textTransformHtml, pdfConfig);
 
 // --- CSS Multi-column Layout showcase ---
 
@@ -2577,16 +2452,9 @@ var multicolHtml = "<!DOCTYPE html><html><head>" + MulticolCss + "</head><body>"
 
     "</body></html>";
 
-var multicolStream = new MemoryStream();
-var multicolDocument = await generator.GeneratePdf(multicolHtml, pdfConfig);
-multicolDocument.Save(multicolStream);
-
-File.Delete("test_multicol.pdf");
-File.WriteAllBytes("test_multicol.pdf", multicolStream.ToArray());
-Console.WriteLine("Saved test_multicol.pdf");
-
-File.Delete("test_multicol.html");
-File.WriteAllText("test_multicol.html", multicolHtml);
+await SaveShowcaseAsync("multicol", "Layout", "Multi-column Layout",
+    "CSS multi-column layout: column counts, widths, gaps, and column rules.",
+    multicolHtml, pdfConfig);
 
 // --- hyphens: auto multi-language showcase ---
 // Document language is a whole-container setting (<html lang>, see CssBox/HtmlContainerInt), so
@@ -2626,19 +2494,11 @@ foreach (var (tag, title, words) in hyphenationShowcases)
         $"<div class=\"col\">{wordsHtml}</div>" +
         "</body></html>";
 
-    var hyphenationDocument = await generator.GeneratePdf(hyphenationHtml, pdfConfig);
-    var hyphenationStream = new MemoryStream();
-    hyphenationDocument.Save(hyphenationStream);
-
     var fileTag = tag.ToLowerInvariant().Replace("-", "_");
-    File.Delete($"test_hyphenation_{fileTag}.pdf");
-    File.WriteAllBytes($"test_hyphenation_{fileTag}.pdf", hyphenationStream.ToArray());
-    Console.WriteLine($"Saved test_hyphenation_{fileTag}.pdf");
-
-    File.Delete($"test_hyphenation_{fileTag}.html");
-    File.WriteAllText($"test_hyphenation_{fileTag}.html", hyphenationHtml);
+    await SaveShowcaseAsync($"hyphenation_{fileTag}", "Typography & Text", $"Hyphenation \u2014 {title}",
+        "Automatic hyphenation (hyphens: auto) splitting long words at real, language-appropriate break points in a narrow justified column.",
+        hyphenationHtml, pdfConfig);
 }
-Console.WriteLine("Saved test_text_transform.html");
 
 // --- Tagged PDF (PDF/UA) showcase ---
 // Tags are invisible in a normal page render, so this showcase's value is manual inspection of
@@ -2700,17 +2560,9 @@ var taggedPdfHtml = "<!DOCTYPE html><html lang=\"en-US\"><head>" + TaggedPdfCss 
     "</body></html>";
 
 var taggedPdfConfig = new PdfGenerateConfig { PageSize = PageSize.A4, EnableTaggedPdf = true };
-var taggedPdfStream = new MemoryStream();
-var taggedPdfDocument = await generator.GeneratePdf(taggedPdfHtml, taggedPdfConfig);
-taggedPdfDocument.Save(taggedPdfStream);
-
-File.Delete("test_tagged_pdf.pdf");
-File.WriteAllBytes("test_tagged_pdf.pdf", taggedPdfStream.ToArray());
-Console.WriteLine("Saved test_tagged_pdf.pdf");
-
-File.Delete("test_tagged_pdf.html");
-File.WriteAllText("test_tagged_pdf.html", taggedPdfHtml);
-Console.WriteLine("Saved test_tagged_pdf.html");
+await SaveShowcaseAsync("tagged_pdf", "Standards & Accessibility", "Tagged PDF (PDF/UA)",
+    "Accessible, tagged PDF output: a logical structure tree with headings, lists, tables, alt text, links, and tag-type overrides.",
+    taggedPdfHtml, taggedPdfConfig);
 
 // --- border-style showcase ---
 
@@ -2752,17 +2604,9 @@ var borderStyleHtml = "<!DOCTYPE html><html><head>" + BorderStyleCss + "</head><
 
     "</body></html>";
 
-var borderStyleStream = new MemoryStream();
-var borderStyleDocument = await generator.GeneratePdf(borderStyleHtml, pdfConfig);
-borderStyleDocument.Save(borderStyleStream);
-
-File.Delete("test_border_style.pdf");
-File.WriteAllBytes("test_border_style.pdf", borderStyleStream.ToArray());
-Console.WriteLine("Saved test_border_style.pdf");
-
-File.Delete("test_border_style.html");
-File.WriteAllText("test_border_style.html", borderStyleHtml);
-Console.WriteLine("Saved test_border_style.html");
+await SaveShowcaseAsync("border_style", "Backgrounds & Borders", "Border Styles",
+    "The full set of CSS border styles, from solid and dashed to groove, ridge, inset, and outset.",
+    borderStyleHtml, pdfConfig);
 
 // --- vertical-align showcase ---
 
@@ -2813,17 +2657,9 @@ var verticalAlignHtml = "<!DOCTYPE html><html><head>" + VerticalAlignCss + "</he
 
     "</body></html>";
 
-var verticalAlignStream = new MemoryStream();
-var verticalAlignDocument = await generator.GeneratePdf(verticalAlignHtml, pdfConfig);
-verticalAlignDocument.Save(verticalAlignStream);
-
-File.Delete("test_vertical_align.pdf");
-File.WriteAllBytes("test_vertical_align.pdf", verticalAlignStream.ToArray());
-Console.WriteLine("Saved test_vertical_align.pdf");
-
-File.Delete("test_vertical_align.html");
-File.WriteAllText("test_vertical_align.html", verticalAlignHtml);
-Console.WriteLine("Saved test_vertical_align.html");
+await SaveShowcaseAsync("vertical_align", "Typography & Text", "Vertical Align",
+    "vertical-align behaviors for inline content, from baseline and middle to explicit offsets.",
+    verticalAlignHtml, pdfConfig);
 
 // --- letter-spacing / word-spacing showcase ---
 
@@ -2861,17 +2697,9 @@ var spacingHtml = "<!DOCTYPE html><html><head>" + SpacingCss + "</head><body>" +
 
     "</body></html>";
 
-var spacingStream = new MemoryStream();
-var spacingDocument = await generator.GeneratePdf(spacingHtml, pdfConfig);
-spacingDocument.Save(spacingStream);
-
-File.Delete("test_letter_word_spacing.pdf");
-File.WriteAllBytes("test_letter_word_spacing.pdf", spacingStream.ToArray());
-Console.WriteLine("Saved test_letter_word_spacing.pdf");
-
-File.Delete("test_letter_word_spacing.html");
-File.WriteAllText("test_letter_word_spacing.html", spacingHtml);
-Console.WriteLine("Saved test_letter_word_spacing.html");
+await SaveShowcaseAsync("letter_word_spacing", "Typography & Text", "Letter & Word Spacing",
+    "letter-spacing and word-spacing adjustments across text runs.",
+    spacingHtml, pdfConfig);
 
 // --- ::first-letter showcase ---
 
@@ -2902,17 +2730,9 @@ var firstLetterHtml = "<!DOCTYPE html><html><head>" + FirstLetterCss + "</head><
 
     "</body></html>";
 
-var firstLetterStream = new MemoryStream();
-var firstLetterDocument = await generator.GeneratePdf(firstLetterHtml, pdfConfig);
-firstLetterDocument.Save(firstLetterStream);
-
-File.Delete("test_first_letter.pdf");
-File.WriteAllBytes("test_first_letter.pdf", firstLetterStream.ToArray());
-Console.WriteLine("Saved test_first_letter.pdf");
-
-File.Delete("test_first_letter.html");
-File.WriteAllText("test_first_letter.html", firstLetterHtml);
-Console.WriteLine("Saved test_first_letter.html");
+await SaveShowcaseAsync("first_letter", "Typography & Text", "::first-letter",
+    "The ::first-letter pseudo-element: drop-cap style initial letter formatting.",
+    firstLetterHtml, pdfConfig);
 
 // --- ::first-line showcase ---
 
@@ -2952,17 +2772,9 @@ var firstLineHtml = "<!DOCTYPE html><html><head>" + FirstLineCss + "</head><body
 
     "</body></html>";
 
-var firstLineStream = new MemoryStream();
-var firstLineDocument = await generator.GeneratePdf(firstLineHtml, pdfConfig);
-firstLineDocument.Save(firstLineStream);
-
-File.Delete("test_first_line.pdf");
-File.WriteAllBytes("test_first_line.pdf", firstLineStream.ToArray());
-Console.WriteLine("Saved test_first_line.pdf");
-
-File.Delete("test_first_line.html");
-File.WriteAllText("test_first_line.html", firstLineHtml);
-Console.WriteLine("Saved test_first_line.html");
+await SaveShowcaseAsync("first_line", "Typography & Text", "::first-line",
+    "The ::first-line pseudo-element styling the first rendered line of a paragraph.",
+    firstLineHtml, pdfConfig);
 
 // --- CSS1 canvas background showcase ---
 
@@ -2978,17 +2790,9 @@ var canvasBackgroundHtml = "<!DOCTYPE html><html><head><style>" +
     "nowhere near a full page tall.</p>" +
     "</body></html>";
 
-var canvasBackgroundStream = new MemoryStream();
-var canvasBackgroundDocument = await generator.GeneratePdf(canvasBackgroundHtml, pdfConfig);
-canvasBackgroundDocument.Save(canvasBackgroundStream);
-
-File.Delete("test_canvas_background.pdf");
-File.WriteAllBytes("test_canvas_background.pdf", canvasBackgroundStream.ToArray());
-Console.WriteLine("Saved test_canvas_background.pdf");
-
-File.Delete("test_canvas_background.html");
-File.WriteAllText("test_canvas_background.html", canvasBackgroundHtml);
-Console.WriteLine("Saved test_canvas_background.html");
+await SaveShowcaseAsync("canvas_background", "Backgrounds & Borders", "Canvas Background",
+    "CSS1 canvas background propagation: body and html backgrounds covering the full page.",
+    canvasBackgroundHtml, pdfConfig);
 
 // ─── Font resolution showcase (CSS font-resolution compliance pass) ───────
 // Uses only real, already-installed system font files (no bundled binary assets) so this
@@ -3091,28 +2895,24 @@ var fontShowcaseHtml = "<!DOCTYPE html><html><head><style>" +
     fontShowcase +
     "</body></html>";
 
-var fontShowcaseStream = new MemoryStream();
-var fontShowcaseDocument = await generator.GeneratePdf(fontShowcaseHtml, pdfConfig);
-fontShowcaseDocument.Save(fontShowcaseStream);
-
-File.Delete("test_font_resolution_showcase.pdf");
-File.WriteAllBytes("test_font_resolution_showcase.pdf", fontShowcaseStream.ToArray());
-Console.WriteLine("Saved test_font_resolution_showcase.pdf");
-
-File.Delete("test_font_resolution_showcase.html");
-File.WriteAllText("test_font_resolution_showcase.html", fontShowcaseHtml);
-Console.WriteLine("Saved test_font_resolution_showcase.html");
+await SaveShowcaseAsync("font_resolution_showcase", "Typography & Text", "Font Resolution",
+    "CSS font selection compliance: family matching, weight and style resolution, and fallback behavior.",
+    fontShowcaseHtml, pdfConfig);
 
 // --- Acid2 showcase ---
 // The real, unmodified Acid2 test (http://acid2.acidtests.org/) - PeachPDF's non-interactive/static
 // subset compliance target. See CLAUDE.md and docs/html-css-support.md for what "compliance" means
 // for a static PDF renderer (no :hover/:active, no scripting).
-var acid2Html = File.ReadAllText("acid2.html");
+var acid2Html = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "acid2.html"));
 
-var acid2Stream = new MemoryStream();
-var acid2Document = await generator.GeneratePdf(acid2Html, pdfConfig);
-acid2Document.Save(acid2Stream);
+await SaveShowcaseAsync("acid2", "Standards & Accessibility", "Acid2",
+    "The unmodified Acid2 test rendered by PeachPDF - the classic CSS compliance smiley.",
+    acid2Html, pdfConfig);
+// The manifest that drives the website's /showcase page (see docs/showcase.html and
+// .github/workflows/pages.yml). Field names are camelCased for Liquid (site.data.showcases).
+var manifestJson = JsonSerializer.Serialize(showcaseManifest,
+    new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+File.WriteAllText(Path.Combine(outputDir, "showcases.json"), manifestJson);
+Console.WriteLine($"Saved showcases.json ({showcaseManifest.Count} showcases)");
 
-File.Delete("test_acid2.pdf");
-File.WriteAllBytes("test_acid2.pdf", acid2Stream.ToArray());
-Console.WriteLine("Saved test_acid2.pdf");
+record ShowcaseEntry(string Slug, string Category, string Title, string Description, string Pdf, string Html);
