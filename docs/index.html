@@ -10,6 +10,9 @@ layout: default
     <a class="btn btn-ghost" href="https://github.com/jhaygood86/PeachPDF" rel="noopener">View on GitHub</a>
   </div>
   <code class="install-pill">dotnet add package PeachPDF</code>
+  {% if site.data.version %}
+  <p class="version-line">Current version: <a href="https://github.com/jhaygood86/PeachPDF/releases/tag/v{{ site.data.version.current }}" rel="noopener">v{{ site.data.version.current }} — release notes</a></p>
+  {% endif %}
 </section>
 
 <section class="landing-section">

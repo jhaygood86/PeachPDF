@@ -28,6 +28,12 @@ jobs:
             8.0.x
             10.0.x
 
+      - name: Read package version into site data
+        run: |
+          VERSION=$(grep -oP '(?<=<PackageVersion>)[^<]+' src/PeachPDF/PeachPDF.csproj)
+          printf 'current: "%s"\n' "$VERSION" > docs/_data/version.yml
+          echo "Version: $VERSION"
+
       - name: Generate API reference
         run: dotnet build src/PeachPDF/PeachPDF.csproj --configuration Release -p:TargetFramework=net10.0 -p:DisableDefaultDocumentation=false
 

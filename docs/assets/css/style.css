@@ -280,6 +280,20 @@ h4 {
   color: var(--muted);
 }
 
+.version-line {
+  margin: 1rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.version-line a {
+  color: var(--green-leaf);
+}
+
+.version-line a:hover {
+  color: var(--text);
+}
+
 .landing-section {
   padding: 2.5rem 0 0.5rem;
 }
