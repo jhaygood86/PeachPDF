@@ -12,6 +12,9 @@ Read these before making non-trivial changes in their area — they are the sour
 - [docs/html-css-support.md](docs/html-css-support.md) — full HTML/CSS compatibility matrix (elements, properties, selectors, at-rules, gaps, extensions, PDF metadata extraction, tagged PDF)
 - [docs/supported-svg-features.md](docs/supported-svg-features.md) — full SVG compatibility matrix (inline `<svg>` and standalone), rendered as real vector PDF content
 - [docs/usage-examples.md](docs/usage-examples.md) — copy-pasteable API usage (local HTML, MHTML, HTTP fetch, thread safety, fonts, enabling tagged PDF, ASP.NET Core/Azure Functions)
+- [docs/support.md](docs/support.md) — free (GitHub issues) and paid (Peach State Technologies) support options
+- [docs/sponsorship.md](docs/sponsorship.md) — GitHub Sponsors info; sponsors get paid support under the same terms as customers
+- [docs/license.md](docs/license.md) — BSD 3-Clause license text, third-party component licenses, license FAQ
 - [README.md](README.md) — package overview, install, quick start, fonts
 
 When you add or change user-facing features, update the relevant doc page (and its `README.md`/`docs/getting-started.md` cross-links) in the same change, rather than as a follow-up — this repo's convention (established by the SVG 1.0 coverage work) is docs land with the feature.
