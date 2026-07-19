@@ -423,3 +423,4 @@ FodyWeavers.xsd
 !/docs/_layouts/*.html
 !/docs/index.html
 !/docs/showcase.html
+!/docs/why-peachpdf.html
