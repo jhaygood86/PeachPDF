@@ -801,6 +801,108 @@ namespace PeachPDF.Html.Core.Utils
                    box.Display is CssConstants.TableCaption;
         }
 
+        /// <summary>
+        /// Collects the disjoint, sorted Y-ranges of the document that contain "real" printable
+        /// content - per CSS Paged Media Level 3 §3.2's definition of a content-empty page ("a page
+        /// box whose page area contains no printable content other than backgrounds and/or borders"),
+        /// used by <see cref="HtmlContainerInt.GetPaginationSlots"/> to avoid materializing PDF pages
+        /// that would only ever show a huge, purely-decorative margin gap (e.g. Acid2's own "100em"
+        /// margins on "#top"/".picture", intentionally meant to be scrolled off-screen in a real,
+        /// single-viewport browser - a mechanic a paginated PDF has no equivalent for otherwise).
+        /// </summary>
+        /// <param name="root">the root box of the laid-out document</param>
+        /// <returns>a sorted, non-overlapping list of (top, bottom) ranges, in the same raw
+        /// <see cref="CssBoxProperties.Location"/>/<see cref="CssBoxProperties.ActualBottom"/>
+        /// coordinate space layout already uses</returns>
+        public static List<(double Top, double Bottom)> CollectPrintableContentRanges(CssBox root)
+        {
+            var ranges = new List<(double Top, double Bottom)>();
+            CollectPrintableContentRangesInto(root, ranges);
+            ranges.Sort((a, b) => a.Top.CompareTo(b.Top));
+
+            var merged = new List<(double Top, double Bottom)>();
+            foreach (var range in ranges)
+            {
+                if (merged.Count > 0 && range.Top <= merged[^1].Bottom)
+                {
+                    if (range.Bottom > merged[^1].Bottom)
+                        merged[^1] = (merged[^1].Top, range.Bottom);
+                }
+                else
+                {
+                    merged.Add(range);
+                }
+            }
+
+            return merged;
+        }
+
+        private static void CollectPrintableContentRangesInto(CssBox box, List<(double Top, double Bottom)> ranges)
+        {
+            // Fixed-position content ignores the page's scroll offset and repeats identically on
+            // every generated page (see CssBox.Paint/PaintImpCore's "IsFixed" branches) - if it were
+            // allowed to count as "real" content here, every page-slot (including the huge margin
+            // gaps this method exists to detect) would look non-empty, defeating the whole mechanism.
+            // Mirrors the same exclusion CssBox.PerformLayoutImp already applies when growing
+            // HtmlContainer.ActualSize.
+            if (box.IsFixed || box.Display == CssConstants.None) return;
+
+            if (HasOwnPrintableContent(box))
+            {
+                // A box's own Location/ActualBottom only reflect its true page-relative geometry for
+                // block-level boxes - an inline (e.g. plain text run) box's real per-line position
+                // lives entirely in its own Rectangles (one rect per line it spans, exactly what
+                // CssBox.PaintImpCore itself paints from), while Location/ActualBottom stay at
+                // whatever default/local value layout happened to leave them at. Falling back to
+                // Location/ActualBottom for a box with real Rectangles would (and did, before this
+                // fix) report the same bogus, line-local range for every paragraph in a document,
+                // merging genuinely separate pages' worth of real text into one indistinguishable
+                // range and silently discarding real content pages.
+                if (box.Rectangles.Count > 0)
+                {
+                    foreach (var rect in box.Rectangles.Values)
+                    {
+                        ranges.Add((rect.Top, rect.Bottom));
+                    }
+                }
+                else
+                {
+                    ranges.Add((box.Bounds.Top, box.Bounds.Bottom));
+                }
+            }
+
+            foreach (var childBox in box.Boxes)
+            {
+                CollectPrintableContentRangesInto(childBox, ranges);
+            }
+        }
+
+        private static bool HasOwnPrintableContent(CssBox box)
+        {
+            // Generated content (::before/::after/::marker/::first-letter) always counts, per CSS
+            // Paged Media Level 3 §3.2's own carve-out - this is what keeps Acid2's own
+            // ".nose div div:before"/":after" (border-only, empty "content: ''") counted as real.
+            if (box.IsPseudoElement) return true;
+
+            if (box.Words.Count > 0) return true;
+
+            if (box is CssBoxImage or CssBoxObject) return true;
+
+            // Excludes whichever box PdfGenerator.ResolveCanvasBackground chose to paint as the
+            // whole-page canvas fill (SuppressOwnBackgroundPaint) - without this exclusion, e.g.
+            // "html { background: white }" would count as "content" across its own entire
+            // auto-height span (which, for a root element, is the whole document), defeating the
+            // gap-detection this method exists for entirely.
+            if (!box.SuppressOwnBackgroundPaint && box.HasOwnBackground) return true;
+
+            if (RenderUtils.IsColorVisible(box.ActualBorderTopColor) && box.ActualBorderTopWidth > 0) return true;
+            if (RenderUtils.IsColorVisible(box.ActualBorderBottomColor) && box.ActualBorderBottomWidth > 0) return true;
+            if (RenderUtils.IsColorVisible(box.ActualBorderLeftColor) && box.ActualBorderLeftWidth > 0) return true;
+            if (RenderUtils.IsColorVisible(box.ActualBorderRightColor) && box.ActualBorderRightWidth > 0) return true;
+
+            return false;
+        }
+
         private static CssBox? GetNextIntersectingFloatBox(CssBox box, CssFloatCoordinates coordinates, string floatProp)
         {
             if (IsFloatIntersecting(coordinates, floatProp, box))

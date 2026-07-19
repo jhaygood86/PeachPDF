@@ -493,6 +493,50 @@ namespace PeachPDF.Html.Core
             : new RRect(MarginLeft, MarginTop, PageSize.Width + MarginRight, PageSize.Height);
 
         /// <summary>
+        /// The page-relative Y ("<c>pageY</c>" in <c>PdfGenerator.AddPdfPages</c>'s own terms - i.e.
+        /// <c>-scrollOffset + MarginTop</c>) of every page-slot that should actually be materialized
+        /// as a real PDF page, per CSS Paged Media Level 3 §3.2: "User agents SHOULD avoid generating
+        /// a large number of content-empty pages". A slot is skipped when no box's own laid-out
+        /// range (see <see cref="DomUtils.CollectPrintableContentRanges"/>) overlaps it - this is what
+        /// lets a document with huge, purely-decorative margins (e.g. Acid2's own "100em" margins on
+        /// "#top"/".picture", meant to be scrolled off-screen in a real, single-viewport browser) skip
+        /// straight past those gaps instead of paginating through several blank pages to reach the
+        /// real content on the far side. Non-destructive: no content is discarded or repositioned,
+        /// only which page-slots get a <c>PdfPage</c> materialized for them changes.
+        /// </summary>
+        internal IReadOnlyList<double> GetPaginationSlots()
+        {
+            var slots = new List<double>();
+
+            if (ActualSize.Height <= 0 || Root is null)
+                return slots;
+
+            var printableRanges = DomUtils.CollectPrintableContentRanges(Root);
+            var pageHeight = PageSize.Height;
+            var rangeIndex = 0;
+
+            for (var pageTop = 0.0; pageTop < ActualSize.Height; pageTop += pageHeight)
+            {
+                var pageBottom = pageTop + pageHeight;
+
+                while (rangeIndex < printableRanges.Count && printableRanges[rangeIndex].Bottom < pageTop)
+                    rangeIndex++;
+
+                if (rangeIndex < printableRanges.Count && printableRanges[rangeIndex].Top < pageBottom)
+                    slots.Add(pageTop);
+            }
+
+            // Never emit a 0-page PDF for a document that genuinely laid out some non-zero height -
+            // if literally nothing qualified as "printable" (e.g. every box is a whole-page canvas
+            // background, or the printable-content heuristic is simply too conservative for some
+            // edge case), fall back to the first slot rather than producing nothing at all.
+            if (slots.Count == 0)
+                slots.Add(0.0);
+
+            return slots;
+        }
+
+        /// <summary>
         /// Render the html using the given device.
         /// </summary>
         /// <param name="g">the device to use to render</param>

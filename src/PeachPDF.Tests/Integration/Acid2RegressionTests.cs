@@ -10,6 +10,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Tests.Integration
@@ -65,9 +67,62 @@ namespace PeachPDF.Tests.Integration
             var generator = new PdfGenerator();
             var document = await generator.GeneratePdf(html, PageSize.A4, margin: 0);
 
-            Assert.True(document.PageCount <= 6,
+            Assert.True(document.PageCount <= 3,
                 $"expected a small handful of pages (the fixture's own huge, intentionally-off-screen " +
-                $"100em margins account for some unavoidable blank space), got {document.PageCount}");
+                $"100em margins account for some unavoidable blank space, though HtmlContainerInt." +
+                $"GetPaginationSlots now skips wholly content-empty pages per CSS Paged Media Level 3 " +
+                $"§3.2), got {document.PageCount}");
+        }
+
+        [Fact]
+        public async Task FullFixture_MatchesPrinceXmlPageCount()
+        {
+            // Prince XML (a reference-quality commercial CSS->PDF renderer this project has compared
+            // against before - see the "Dictionary Parity with Prince XML" work) renders this exact
+            // fixture in exactly 2 pages: ".intro" on its own page, and "#top"/".picture"'s real face
+            // content on a second page, with the huge intentional "100em" margin gaps before/after
+            // (see the class doc comment) never materializing as their own content-empty pages at all
+            // (HtmlContainerInt.GetPaginationSlots, per CSS Paged Media Level 3 §3.2). If this
+            // regresses, either that skip mechanism broke or the real face/intro content grew enough
+            // to spill onto an extra page.
+            var html = File.ReadAllText(FixturePath);
+            var generator = new PdfGenerator();
+            var document = await generator.GeneratePdf(html, PageSize.A4, margin: 0);
+
+            Assert.Equal(2, document.PageCount);
+        }
+
+        [Fact]
+        public async Task FixedBars_RepeatOntoPage2_KnownResidualNotCoveredByIntro()
+        {
+            // Documents a known, accepted residual rather than a silent gap (see Round 9's plan): the
+            // fixture's own ".intro { z-index: 2 }" is only meant to cover ".picture p"/".picture p + p"
+            // (two position:fixed bars) on the page it itself lands on (page 1) - it's normal-flow, so
+            // it can't repeat onto page 2 the way position:fixed content correctly does (matching real
+            // CSS Paged Media running-header semantics; see FixedPositionPaginationIntegrationTests).
+            // Since the real fixture's ".intro" and "#top"/".picture" now (post content-empty-page-skip)
+            // land on two DIFFERENT pages, the fixed bars still bleed onto page 2, uncovered - down from
+            // bleeding onto 3 of 4 pages before this round, but not eliminated. Detected generically (no
+            // hardcoded pixel geometry): a solid-fill rect command that is byte-identical between page 1
+            // and page 2 can only be explained by position:fixed content, which alone ignores scroll
+            // offset and repeats at the exact same coordinates on every page (CssBox.cs's "IsFixed"
+            // branches) - regular in-flow content's coordinates always differ page to page.
+            var html = File.ReadAllText(FixturePath);
+            var generator = new PdfGenerator();
+            var config = new PdfGenerateConfig { PageSize = PageSize.A4, CompressContentStreams = false };
+            config.SetMargins(0);
+            var document = await generator.GeneratePdf(html, config);
+
+            Assert.Equal(2, document.PageCount);
+
+            var page1Rects = GetSolidFillRects(document.Pages[0]);
+            var page2Rects = GetSolidFillRects(document.Pages[1]);
+
+            Assert.NotEmpty(page1Rects);
+            Assert.NotEmpty(page2Rects);
+            Assert.True(page1Rects.Intersect(page2Rects).Any(),
+                "expected at least one solid-fill rect (the fixed bars) to be byte-identical between " +
+                "page 1 and page 2, confirming the documented residual is still present");
         }
 
         [Fact]
@@ -610,6 +665,35 @@ namespace PeachPDF.Tests.Integration
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
+
+        private static readonly Regex SolidFillRectPattern = new(@"[\d.]+ [\d.]+ [\d.]+ rg[\s\S]{0,60}?([\d.]+ [\d.]+ [\d.]+ [\d.]+) re\s*\nf", RegexOptions.Compiled);
+
+        /// <summary>
+        /// Extracts every "color set, then re...f" solid-fill rect command from a page's own
+        /// (uncompressed) content stream(s) - the color+rect combination (not just the bare rect) so
+        /// two coincidentally-same-sized-but-differently-colored rects across pages aren't conflated.
+        /// </summary>
+        private static HashSet<string> GetSolidFillRects(PdfPage page)
+        {
+            var results = new HashSet<string>();
+            var content = page.Contents;
+            if (content == null) return results;
+
+            foreach (var item in content.Elements)
+            {
+                if (item is not PdfReference { Value: PdfDictionary dict }) continue;
+                var stream = dict.Stream;
+                if (stream?.Value is not { Length: > 0 } bytes) continue;
+
+                var text = Encoding.Latin1.GetString(bytes);
+                foreach (Match match in SolidFillRectPattern.Matches(text))
+                {
+                    results.Add(match.Value);
+                }
+            }
+
+            return results;
+        }
 
         private static bool PageHasContent(PdfPage page)
         {

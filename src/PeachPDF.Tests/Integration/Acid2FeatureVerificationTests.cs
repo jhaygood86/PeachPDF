@@ -1008,6 +1008,14 @@ namespace PeachPDF.Tests.Integration
         // The fixture's own comment: "hides scrollbars on viewport, see 11.1.1:3" - in a paginated PDF
         // there's no scrollbar, so this must not have the unintended side effect of clipping away
         // content on any page beyond the first.
+        //
+        // Also now doubles as a check that HtmlContainerInt.GetPaginationSlots (the Round 9
+        // content-empty-page-skipping mechanism added for the real Acid2 fixture's own huge "100em"
+        // margins - see Acid2RegressionTests.FullFixture_MatchesPrinceXmlPageCount) doesn't misfire
+        // against a plain multi-section document that merely also sets "overflow:hidden" on "html":
+        // each ".section" below embeds its own real text ("section 0", "section 1", ...), not just a
+        // background, so none of the four pages are "content-empty" per CSS Paged Media Level 3 §3.2
+        // and all four must still be generated.
 
         [Fact]
         public async Task OverflowHiddenOnRootHtml_DoesNotClipLaterPages()
