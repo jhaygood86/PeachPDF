@@ -20,4 +20,4 @@ Paid support is provided by **Peach State Technologies**. Email [justin@peachsta
 
 ## Sponsorship as an alternative
 
-Prefer to support the project without a formal contract? [Sponsoring PeachPDF on GitHub](sponsorship.md) is an alternative to a formal support plan — sponsors who donate can get paid support under the same terms as customers who purchase one.
+Prefer to support the project without a formal contract? [Sponsoring PeachPDF on GitHub](sponsorship.md) is an alternative to a formal support plan — sponsors who donate can get paid support under the same terms as customers who purchase one, with every $25 donated counting as one month of support for the sponsor. See [Sponsorship](sponsorship.md) for the details.
