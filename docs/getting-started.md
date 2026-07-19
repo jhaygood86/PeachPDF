@@ -1,29 +1,8 @@
-# PeachPDF
+# Getting Started
 
 PeachPDF is a pure .NET HTML → PDF rendering library. It doesn't shell out to Puppeteer, wkhtmltopdf, or any other external process — everything from HTML parsing to PDF output runs in-process, so it works in virtually any environment where .NET runs (containers, serverless, trimmed/AOT deployments) and benefits automatically from future .NET performance improvements.
 
 Targets .NET 8 and .NET 10.
-
-## Features
-
-- Native vector SVG rendering (inline `<svg>`, standalone `<img src="x.svg">`/`data:image/svg+xml`, and as a `background-image`/`list-style-image` source) — never rasterized
-- CSS custom properties (`--foo`) and `var()`, including fallbacks and inheritance
-- CSS math functions: `calc()`, `min()`, `max()`, `clamp()`
-- 2D and 3D CSS transforms, Flexbox layout (CSS Flexbox Level 1), and CSS Multi-column Layout
-- All five CSS-wide keywords: `inherit`, `initial`, `unset`, `revert`, `revert-layer`
-- Gradients with CSS Color Level 4 interpolation
-- CSS Paged Media: `@page` rules, named pages, margin boxes, and running headers/footers
-- Automatic PDF metadata extraction from HTML `<title>` and `<meta>` elements
-- Web fonts (`@font-face`), custom fonts loaded from a stream, and system font discovery
-- Optional Tagged PDF (PDF/UA) output — logical structure tree, automatic document language, CSS-driven tag mapping via `-peachpdf-pdf-tag-type` (see [Tagged PDF (PDF/UA) Support](html-css-support.md#tagged-pdf-pdfua-support))
-
-## Guides
-
-- **[Architecture](architecture.md)** — how PeachPDF converts HTML to PDF: the HTML parser, DOM model, CSS parser, layout engine, painting layer, and PDF renderer.
-- **[HTML & CSS Support](html-css-support.md)** — the full compatibility matrix of supported HTML elements, CSS properties, selectors, and at-rules, including notes on gaps and PeachPDF-specific extensions.
-- **[Supported SVG Features](supported-svg-features.md)** — the full compatibility matrix for inline and standalone SVG, rendered as real vector PDF content rather than rasterized bitmaps.
-- **[Usage Examples](usage-examples.md)** — copy-pasteable examples: local HTML strings, MHTML files, HTTP fetching, shared CSS contexts, saving to disk, and returning PDFs from ASP.NET Core (controllers and Minimal APIs) and Azure Functions.
-- **[API Reference](api/index.md)** — generated reference for every public type and member, always in sync with the latest source.
 
 ## Quick Start
 
@@ -147,3 +126,11 @@ Web fonts loaded via `@font-face` (`url()`, with a comma-separated fallback list
 ### Supported font formats
 
 We support TrueType, CFF, WOFF, and WOFF2 font formats.
+
+## Guides
+
+- **[Architecture](architecture.md)** — how PeachPDF converts HTML to PDF: the HTML parser, DOM model, CSS parser, layout engine, painting layer, and PDF renderer.
+- **[HTML & CSS Support](html-css-support.md)** — the full compatibility matrix of supported HTML elements, CSS properties, selectors, and at-rules, including notes on gaps and PeachPDF-specific extensions.
+- **[Supported SVG Features](supported-svg-features.md)** — the full compatibility matrix for inline and standalone SVG, rendered as real vector PDF content rather than rasterized bitmaps.
+- **[Usage Examples](usage-examples.md)** — copy-pasteable examples: local HTML strings, MHTML files, HTTP fetching, shared CSS contexts, saving to disk, and returning PDFs from ASP.NET Core (controllers and Minimal APIs) and Azure Functions.
+- **[API Reference](api/index.md)** — generated reference for every public type and member, always in sync with the latest source.

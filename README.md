@@ -128,11 +128,11 @@ generator.AddFontFamilyMapping("Segoe UI","sans-serif"); // or any other system 
 
 ### Generic families and `system-ui`
 
-`serif`, `sans-serif`, `monospace`, `cursive`, `fantasy`, and `system-ui` resolve to a real installed font, matching actual Chromium behavior per platform (Times New Roman/Arial/Consolas/Comic Sans MS/Impact on Windows, Times/Helvetica/Menlo/Apple Chancery/Papyrus on macOS, Noto Serif/Roboto/Droid Sans Mono/Dancing Script on Android, and delegated to the system's own `fontconfig` on Linux) rather than one invented cross-platform table — see [Fonts](https://peachpdf.net/index.html#fonts) for the full breakdown. Every mapping, including custom ones set via `AddFontFamilyMapping`, is verified against what's actually installed before use.
+`serif`, `sans-serif`, `monospace`, `cursive`, `fantasy`, and `system-ui` resolve to a real installed font, matching actual Chromium behavior per platform (Times New Roman/Arial/Consolas/Comic Sans MS/Impact on Windows, Times/Helvetica/Menlo/Apple Chancery/Papyrus on macOS, Noto Serif/Roboto/Droid Sans Mono/Dancing Script on Android, and delegated to the system's own `fontconfig` on Linux) rather than one invented cross-platform table — see [Fonts](https://peachpdf.net/getting-started.html#fonts) for the full breakdown. Every mapping, including custom ones set via `AddFontFamilyMapping`, is verified against what's actually installed before use.
 
 ### Font weight, style, and stretch matching
 
-A requested `font-weight`/`font-style`/`font-stretch` PeachPDF can't find an exact face for is matched to the *nearest* registered face (CSS Fonts Level 4 §5.2 — the same algorithm real browsers use), not just Regular. When nothing close enough exists, PeachPDF synthesizes a faux-bold (fill+stroke) or faux-italic/oblique (glyph shear, following an explicit `oblique <angle>` when declared) instead of rendering with zero visual distinction. See [Fonts](https://peachpdf.net/index.html#fonts) for details.
+A requested `font-weight`/`font-style`/`font-stretch` PeachPDF can't find an exact face for is matched to the *nearest* registered face (CSS Fonts Level 4 §5.2 — the same algorithm real browsers use), not just Regular. When nothing close enough exists, PeachPDF synthesizes a faux-bold (fill+stroke) or faux-italic/oblique (glyph shear, following an explicit `oblique <angle>` when declared) instead of rendering with zero visual distinction. See [Fonts](https://peachpdf.net/getting-started.html#fonts) for details.
 
 ### Adding custom fonts
 
