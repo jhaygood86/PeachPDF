@@ -1395,8 +1395,10 @@ namespace PeachPDF.Html.Core.Parse
 
                 if (childBox.Text != null)
                 {
-                    // is the box has text
-                    var keepBox = !string.IsNullOrWhiteSpace(childBox.Text);
+                    // is the box has text - a non-breaking space (U+00A0) is significant CSS content,
+                    // never meaningless inter-tag whitespace, even though .NET's IsNullOrWhiteSpace
+                    // treats it the same as an ordinary collapsible space.
+                    var keepBox = !HtmlUtils.IsNullOrCollapsibleWhitespace(childBox.Text);
 
                     // A ::before/::after box's presence is governed entirely by whether its selector
                     // matched (CssData.DoesSelectorMatch synthesizes it as a match side effect) and by

@@ -495,7 +495,15 @@ namespace PeachPDF.Html.Core.Utils
             var left = coordinates.CurrentX;
             CssBox? lastIntersectingFloat = null;
 
-            do
+            // Bounded by a flat iteration count: the number of distinct floats in a real document is
+            // always finite, and this loop's only job is to walk past each one once. Without this cap,
+            // a Y-row where a float's own "ActualRight + its margin" doesn't advance "left" strictly
+            // past the previously found float (e.g. a wider float re-found immediately after moving just
+            // past a narrower/nested one at nearly the same position) can spin - this loop's termination
+            // previously relied entirely on eventually running out of intersecting floats to find, with
+            // no fallback if that assumption doesn't hold.
+            var iterations = 0;
+            while (iterations++ < 10000)
             {
                 CssFloatCoordinates floatCoordinates = new()
                 {
@@ -517,8 +525,7 @@ namespace PeachPDF.Html.Core.Utils
 
                 left = intersectingFloat.ActualRight + intersectingFloat.ActualMarginRight;
                 lastIntersectingFloat = intersectingFloat;
-
-            } while (true);
+            }
 
             return lastIntersectingFloat;
         }
@@ -528,7 +535,9 @@ namespace PeachPDF.Html.Core.Utils
             var left = coordinates.CurrentX;
             CssBox? lastIntersectingFloat = null;
 
-            do
+            // See the matching bound in GetLastLeftIntersectingFloatBox above for why this is needed.
+            var iterations = 0;
+            while (iterations++ < 10000)
             {
                 CssFloatCoordinates floatCoordinates = new()
                 {
@@ -550,8 +559,7 @@ namespace PeachPDF.Html.Core.Utils
 
                 left = intersectingFloat.ActualRight + intersectingFloat.ActualMarginRight;
                 lastIntersectingFloat = intersectingFloat;
-
-            } while (true);
+            }
 
             return lastIntersectingFloat;
         }

@@ -774,7 +774,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (startIdx < text.Length)
                 {
                     var endIdx = startIdx;
-                    while (endIdx < text.Length && char.IsWhiteSpace(text[endIdx]) && text[endIdx] != '\n')
+                    while (endIdx < text.Length && HtmlUtils.IsCollapsibleWhitespace(text[endIdx]) && text[endIdx] != '\n')
                         endIdx++;
 
                     if (endIdx > startIdx)
@@ -797,7 +797,7 @@ namespace PeachPDF.Html.Core.Dom
                         var honorSoftHyphen = Hyphens != CssConstants.None;
 
                         endIdx = startIdx;
-                        while (endIdx < text.Length && !char.IsWhiteSpace(text[endIdx]) && text[endIdx] != '-'
+                        while (endIdx < text.Length && !HtmlUtils.IsCollapsibleWhitespace(text[endIdx]) && text[endIdx] != '-'
                                && WordBreak != CssConstants.BreakAll && !CommonUtils.IsAsianCharacter(text[endIdx]))
                             endIdx++;
 
@@ -806,8 +806,8 @@ namespace PeachPDF.Html.Core.Dom
 
                         if (endIdx > startIdx)
                         {
-                            var hasSpaceBefore = !preserveSpaces && (startIdx > 0 && Words.Count == 0 && char.IsWhiteSpace(text[startIdx - 1]));
-                            var hasSpaceAfter = !preserveSpaces && (endIdx < text.Length && char.IsWhiteSpace(text[endIdx]));
+                            var hasSpaceBefore = !preserveSpaces && (startIdx > 0 && Words.Count == 0 && HtmlUtils.IsCollapsibleWhitespace(text[startIdx - 1]));
+                            var hasSpaceAfter = !preserveSpaces && (endIdx < text.Length && HtmlUtils.IsCollapsibleWhitespace(text[endIdx]));
                             var rawWord = text.Substring(startIdx, endIdx - startIdx);
                             // TextTransform is applied character-by-character and is always
                             // length-preserving (see ApplyTextTransform), so the same start/end indices
@@ -1792,24 +1792,102 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Set by an ancestor's lookahead in <see cref="MarginTopCollapse"/> when this box is a
+        /// non-anchor member of a shared chain of adjoining first-in-flow-child margins: always 0,
+        /// because the anchor member (the outermost box in the chain, wherever the chain's resolution
+        /// began) already received the group's FULL collapsed value as its own return value, and this
+        /// box's position is computed relative to its immediate parent's already-correctly-positioned
+        /// ClientTop - adding the group value again here would double (or triple, ...) count it. See the
+        /// lookahead loop below for why this box must not resolve its own top margin independently.
+        /// </summary>
+        private double? _groupTopMarginOverride;
+
+        /// <summary>
         /// Gets the result of collapsing the vertical margins of the two boxes
         /// </summary>
         /// <param name="prevSibling">the previous box under the same parent</param>
         /// <returns>Resulting top margin</returns>
         protected double MarginTopCollapse(CssBox? prevSibling)
         {
+            // Per CSS2.1 8.3.1, floats (and absolutely/fixed-positioned boxes, which never reach this
+            // call site - see the Position guard at the call site in CssLayoutEngine) never collapse
+            // margins with anything; their own top margin is used as-is and their vertical placement is
+            // then fully determined by CssLayoutEngine.FloatBox/ClearBox.
+            if (IsFloated)
+            {
+                CollapsedMarginTop = ActualMarginTop;
+                return ActualMarginTop;
+            }
+
+            // An ancestor's own MarginTopCollapse call already looked ahead into this box (as part of a
+            // shared chain of adjoining first-in-flow-child margins) and resolved the group's true,
+            // fully-collapsed value - use it directly rather than resolving independently. This box's own
+            // isolated view (e.g. via the escape formula below) could only ever "see" as far as its
+            // immediate parent, which is exactly what caused a real bug: a 3+-level chain where the
+            // outermost box's position was itself fixed by sibling-margin-collapse before a deeper
+            // descendant's larger margin was known, silently adding on top instead of properly collapsing
+            // into one shared value.
+            if (_groupTopMarginOverride is { } overrideValue)
+            {
+                _groupTopMarginOverride = null;
+                CollapsedMarginTop = overrideValue;
+                return overrideValue;
+            }
+
             double value;
             if (prevSibling != null)
             {
-                value = CollapseMargins(prevSibling.ActualMarginBottom, ActualMarginTop);
-                CollapsedMarginTop = value;
-            }
-            else if (_parentBox != null && ActualPaddingTop < 0.1 && ActualPaddingBottom < 0.1 && _parentBox.ActualPaddingTop < 0.1 && _parentBox.ActualPaddingBottom < 0.1)
-            {
-                value = Math.Max(0, ActualMarginTop - Math.Max(_parentBox.ActualMarginTop, _parentBox.CollapsedMarginTop));
+                // A self-collapsing previous sibling (and any run of self-collapsing siblings
+                // immediately before it) contributes no height of its own, so its own top+bottom
+                // margins first collapse into one value, and that combined value keeps adjoining
+                // further back rather than acting as a break in the chain (CSS2.1 8.3.1, self-collapsing
+                // empty boxes). Walk back to find the nearest NON-self-collapsing predecessor - that one
+                // (not prevSibling itself, when prevSibling is self-collapsing) is the real position
+                // anchor, because a self-collapsing box's own Location only reflected a partial view of
+                // the group's margin at the time IT was positioned (this box may be the one that finally
+                // reveals the group's true, larger collapsed value). Bounded defensively (real documents
+                // never have this many consecutive self-collapsing siblings) so any unexpected sibling-
+                // chain quirk degrades to "stop walking back" instead of spinning forever.
+                var combinedMargin = prevSibling.IsMarginCollapseThrough()
+                    ? CollapseMargins(prevSibling.ActualMarginTop, prevSibling.ActualMarginBottom)
+                    : prevSibling.ActualMarginBottom;
+                CssBox? anchor = prevSibling.IsMarginCollapseThrough() ? null : prevSibling;
+                var walker = prevSibling;
+                var walkBackSteps = 0;
+                while (walker.IsMarginCollapseThrough() && walkBackSteps++ < 1000)
+                {
+                    var earlierSibling = DomUtils.GetPreviousSibling(walker, false);
+                    if (earlierSibling == null || earlierSibling == walker) break;
+                    combinedMargin = CollapseMargins(combinedMargin, earlierSibling.GetEffectiveBottomMargin());
+                    walker = earlierSibling;
+                    if (!walker.IsMarginCollapseThrough()) anchor = walker;
+                }
+
+                var ownContribution = IsMarginCollapseThrough()
+                    ? CollapseMargins(ActualMarginTop, ActualMarginBottom)
+                    : ActualMarginTop;
+                var groupValue = CollapseMargins(combinedMargin, ownContribution);
+
+                // Every preceding sibling back to the start of the parent's children is self-collapsing
+                // (no real anchor found) - approximate the anchor as the parent's own content-top, same
+                // as if this box were the parent's first child (a rare compound edge case).
+                var anchorY = anchor != null
+                    ? anchor.ActualBottom + anchor.ActualBorderBottomWidth
+                    : ContainingBlock.ClientTop;
+
+                // The call site unconditionally adds prevSibling.ActualBottom + its bottom border on top
+                // of whatever this method returns - back that out so the final sum lands at the true,
+                // fully-resolved anchorY + groupValue regardless of how partial prevSibling's own
+                // (already-finalized, possibly stale) position turned out to be.
+                value = anchorY + groupValue - prevSibling.ActualBottom - prevSibling.ActualBorderBottomWidth;
             }
             else
             {
+                // If escaping into the parent were possible here (no top border/padding on the parent,
+                // no clearance on this box), the parent's OWN MarginTopCollapse call already folded this
+                // box into its lookahead below and returned via the override above - so reaching this
+                // branch means either there's no parent, or the parent/this box is blocked; either way,
+                // this box's own top margin is genuinely isolated from anything above it.
                 value = ActualMarginTop;
             }
 
@@ -1819,7 +1897,94 @@ namespace PeachPDF.Html.Core.Dom
                 value = GetEmHeight() * 1.1f;
             }
 
+            // Lookahead: does this box have a first-in-flow child whose own top margin is ALSO adjoining
+            // (no border/padding/overflow of this box's own blocking it, no clearance on the child) -
+            // and, transitively, that child's first-in-flow child, and so on? CSS2.1 8.3.1 requires the
+            // WHOLE such chain to resolve to one single collapsed value; resolving it top-down without
+            // this lookahead would let each level "lock in" a value before a deeper level's possibly
+            // larger margin is even known. Walk the chain now (all the CSS-value-derived properties
+            // involved - ActualMarginTop, border/padding widths - are independent of Y-position layout,
+            // so reading them before these descendants are positioned is safe) and fold every member's
+            // own top margin into the running value - THIS box (the anchor, wherever the chain's
+            // resolution began) ends up with the group's full collapsed value as its own return value
+            // below. Every deeper chain member instead gets a 0 override: since nothing separates them
+            // from their own immediate parent (that parent is either the anchor itself or another 0
+            // member), their position is already exactly right as soon as it's computed relative to that
+            // parent's own (already-correct) ClientTop - giving them the full group value AGAIN here
+            // would double/triple/... count it at each level.
+            var chainMembers = new List<CssBox>();
+            var current = this;
+            // Capped defensively (real documents never nest this deep) so a malformed/cyclic box tree
+            // degrades to "stop extending the group" instead of hanging or overflowing the stack.
+            while (chainMembers.Count < 1000 && current.Overflow == CssConstants.Visible &&
+                   current.ActualBorderTopWidth < 0.1 && current.ActualPaddingTop < 0.1)
+            {
+                var firstInFlowChild = current.Boxes.FirstOrDefault(b => !b.IsOutOfFlow && b.Display != CssConstants.None);
+                if (firstInFlowChild == null || firstInFlowChild.Clear != CssConstants.None || firstInFlowChild == current) break;
+
+                value = CollapseMargins(value, firstInFlowChild.ActualMarginTop);
+                chainMembers.Add(firstInFlowChild);
+                current = firstInFlowChild;
+            }
+
+            foreach (var member in chainMembers)
+            {
+                member._groupTopMarginOverride = 0;
+            }
+
+            // Recorded unconditionally (not just on the sibling-collapse path) so a multi-level chain of
+            // first-in-flow-children reads this box's true effective top margin rather than a stale/zero
+            // default.
+            CollapsedMarginTop = value;
+
             return value;
+        }
+
+        /// <summary>
+        /// This box's bottom-margin contribution when it precedes another box: its own bottom margin,
+        /// unless it is a self-collapsing empty box (<see cref="IsMarginCollapseThrough"/>), in which
+        /// case its own top and bottom margins first collapse into one pass-through value (CSS2.1 8.3.1).
+        /// </summary>
+        private double GetEffectiveBottomMargin()
+        {
+            return IsMarginCollapseThrough() ? CollapseMargins(ActualMarginTop, ActualMarginBottom) : ActualMarginBottom;
+        }
+
+        /// <summary>
+        /// Whether this box's own top and bottom margins are adjoining to each other (CSS2.1 8.3.1): the
+        /// box has no top/bottom border or padding, resolves to zero/auto height and min-height, doesn't
+        /// establish a new block formatting context, is in-flow, and either has no in-flow children or
+        /// all of its in-flow children are themselves margin-collapse-through. Such a box contributes no
+        /// height of its own and its margins pass through to whatever adjoins it.
+        /// </summary>
+        private bool IsMarginCollapseThrough(int depth = 0)
+        {
+            // Capped defensively (real documents never nest this deep) so a malformed/cyclic box tree
+            // degrades to "not self-collapsing" instead of a stack overflow.
+            if (depth > 500) return false;
+            if (Display == CssConstants.None) return false;
+            if (IsOutOfFlow) return false;
+            // A percentage height against an indefinite (not-yet-height-calculated) containing block
+            // resolves to auto (CSS2.1 §10.5, the same rule ApplyHeight already applies) - Acid2's own
+            // ".empty { margin: 6.25em; height: 10%; }" is written to exercise exactly this: its own
+            // comment notes "computes to auto which makes it empty per 8.3.1:7 (own margins)".
+            var heightIsAuto = Height == CssConstants.Auto ||
+                (Height.EndsWith('%') && !ContainingBlock.IsHeightCalculated);
+            if (!heightIsAuto) return false;
+            if (Overflow != CssConstants.Visible) return false;
+            if (!(ActualPaddingTop < 0.1) || !(ActualPaddingBottom < 0.1)) return false;
+            if (!(ActualBorderTopWidth < 0.1) || !(ActualBorderBottomWidth < 0.1)) return false;
+            // A box with real text content (e.g. an anonymous text-node box) is not empty even when it
+            // has zero nested CssBox children - it still has real line-box height from its own words.
+            if (Words.Count > 0) return false;
+
+            var minHeightZero = MinHeight == CssConstants.Auto ||
+                (CssValueParser.IsValidLength(MinHeight) &&
+                 CssValueParser.ParseLength(MinHeight, ContainingBlock.Size.Height, this) <= 0);
+            if (!minHeightZero) return false;
+
+            var inFlowChildren = Boxes.Where(b => !b.IsOutOfFlow && b.Display != CssConstants.None && b != this).ToList();
+            return inFlowChildren.Count == 0 || inFlowChildren.All(b => b.IsMarginCollapseThrough(depth + 1));
         }
 
         /// <summary>
@@ -1902,19 +2067,38 @@ namespace PeachPDF.Html.Core.Dom
             // Per CSS 2.1 §8.3.1, a box's own bottom margin can only collapse with (i.e. be folded
             // into) its last in-flow child's bottom margin when there is nothing of this box's own
             // separating the two - non-zero bottom padding or a bottom border on THIS box blocks it,
-            // just like it blocks parent/child collapsing on the top side. Without this check, any
-            // auto-height, border-having box that happens to be its own parent's last child (e.g. the
-            // Acid2 fixture's `.picture { border: 1em solid transparent; margin-bottom: 100em }`) had
-            // its own large bottom margin folded into its own border-box height instead of remaining
-            // external spacing after it - inflating the box to feet-tall proportions.
+            // just like it blocks parent/child collapsing on the top side, and so does this box
+            // establishing a new block formatting context (e.g. via `overflow`).
+            //
+            // The "is this box its own parent's last child" condition below is NOT an unrelated/
+            // incidental restriction - it is load-bearing. When this box folds its own bottom margin
+            // into its own ActualBottom, that inflated ActualBottom is what a FOLLOWING SIBLING's own
+            // MarginTopCollapse call adds on top of (via the ordinary adjoining-sibling-margin path,
+            // which separately reads this box's raw ActualMarginBottom too) - if this box has a
+            // following sibling, the same margin value gets counted twice: once baked into
+            // ActualBottom here, and again via the sibling's own CollapseMargins(prevSibling.
+            // ActualMarginBottom, ...) call. Removing this gate (an earlier attempt at this fix did
+            // exactly that) reproduces precisely that double-count - confirmed via a real regression
+            // where a heading's own 60pt bottom margin was added once into the heading's own height and
+            // a second time into the following paragraph's top offset, an easy 60pt to trace back to
+            // the heading's own declared margin. Only when this box has NO following sibling (is the
+            // last child) is folding the margin into ActualBottom safe: nothing else will ever
+            // separately collapse against this box's own ActualMarginBottom, so propagating the fold via
+            // ActualBottom (which return value the box's PARENT then treats as this box's true bottom
+            // edge, letting a further collapse continue outward through as many blocked-only-by-
+            // border/padding ancestors as apply) is the only place left for it to go.
             if (ParentBox == null || ParentBox.Boxes.IndexOf(this) != ParentBox.Boxes.Count - 1 ||
                 !(_parentBox!.ActualMarginBottom < 0.1) ||
-                !(ActualPaddingBottom < 0.1) || !(ActualBorderBottomWidth < 0.1))
+                !(ActualPaddingBottom < 0.1) || !(ActualBorderBottomWidth < 0.1) ||
+                Overflow != CssConstants.Visible)
                 return Math.Max(ActualBottom,
                     lastNonFloatingBox.ActualBottom + margin + ActualPaddingBottom + ActualBorderBottomWidth);
 
-            var lastChildBottomMargin = lastNonFloatingBox.ActualMarginBottom;
-            margin = Height == "auto" ? Math.Max(ActualMarginBottom, lastChildBottomMargin) : lastChildBottomMargin;
+            // CollapseMargins (not a bare Math.Max) is required here too - when both this box's own
+            // bottom margin and the last child's are negative, the correct collapsed result is the more
+            // negative of the two, not the larger (less negative) one.
+            var lastChildBottomMargin = lastNonFloatingBox.GetEffectiveBottomMargin();
+            margin = Height == "auto" ? CollapseMargins(ActualMarginBottom, lastChildBottomMargin) : lastChildBottomMargin;
             return Math.Max(ActualBottom, lastNonFloatingBox.ActualBottom + margin + ActualPaddingBottom + ActualBorderBottomWidth);
         }
 

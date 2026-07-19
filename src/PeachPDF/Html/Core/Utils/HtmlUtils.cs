@@ -57,7 +57,12 @@ namespace PeachPDF.Html.Core.Utils
         {
             var decodeOnlyBuilder = new Dictionary<string, char>(StringComparer.InvariantCultureIgnoreCase);
 
-            decodeOnlyBuilder["nbsp"] = ' ';
+            // "nbsp" below decodes to the real U+00A0 non-breaking space, not a plain ASCII space -
+            // callers that need to tell it apart from ordinary collapsible whitespace (line-wrapping,
+            // whitespace collapsing) must use IsCollapsibleWhitespace/IsNullOrCollapsibleWhitespace
+            // below rather than char.IsWhiteSpace, which is also true for U+00A0.
+
+            decodeOnlyBuilder["nbsp"] = ' ';
             decodeOnlyBuilder["rdquo"] = '"';
             decodeOnlyBuilder["lsquo"] = '\'';
             decodeOnlyBuilder["apos"] = '\'';
@@ -318,6 +323,33 @@ namespace PeachPDF.Html.Core.Utils
         public static bool IsSingleTag(string tagName)
         {
             return _list.Contains(tagName);
+        }
+
+        /// <summary>
+        /// Is the given character CSS-collapsible/breakable whitespace. Unlike <see cref="char.IsWhiteSpace(char)"/>,
+        /// this excludes U+00A0 (non-breaking space) - per CSS, nbsp is significant, non-collapsible content and
+        /// never a line-break opportunity, even though Unicode classifies it as whitespace for general text
+        /// processing purposes.
+        /// </summary>
+        public static bool IsCollapsibleWhitespace(char c)
+        {
+            return char.IsWhiteSpace(c) && c != ' ';
+        }
+
+        /// <summary>
+        /// Is the given string null, empty, or made up entirely of CSS-collapsible whitespace (see
+        /// <see cref="IsCollapsibleWhitespace"/>). A string containing only non-breaking spaces returns false.
+        /// </summary>
+        public static bool IsNullOrCollapsibleWhitespace(string? str)
+        {
+            if (string.IsNullOrEmpty(str)) return true;
+
+            foreach (var c in str)
+            {
+                if (!IsCollapsibleWhitespace(c)) return false;
+            }
+
+            return true;
         }
 
         /// <summary>

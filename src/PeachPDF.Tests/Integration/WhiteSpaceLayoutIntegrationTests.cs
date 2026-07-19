@@ -72,6 +72,52 @@ namespace PeachPDF.Tests.Integration
             Assert.True(p.LineBoxes.Count > 1);
         }
 
+        // ─── &nbsp; (U+00A0) is significant, non-collapsible, non-breaking content - unlike ordinary
+        // whitespace, which stays collapsible/breakable (CSS2.1 §16.4.1) ───────────
+
+        [Fact]
+        public async Task Nbsp_OnlyContent_ProducesNonZeroHeight_MatchingRealText()
+        {
+            var (nbspRoot, _) = await BuildAndLayout(Wrap("<div id='b'>&nbsp;</div>"));
+            var (textRoot, _) = await BuildAndLayout(Wrap("<div id='b'>A</div>"));
+            var nbspBox = FindById(nbspRoot, "b")!;
+            var textBox = FindById(textRoot, "b")!;
+
+            var nbspHeight = nbspBox.ActualBottom - nbspBox.Location.Y;
+            var textHeight = textBox.ActualBottom - textBox.Location.Y;
+
+            Assert.True(nbspHeight > 0, $"Expected non-zero height for nbsp-only content, got {nbspHeight}");
+            Assert.InRange(nbspHeight, textHeight - 1, textHeight + 1);
+        }
+
+        [Fact]
+        public async Task OrdinaryWhitespaceOnlyContent_StillProducesZeroHeight_NoRegression()
+        {
+            var (root, _) = await BuildAndLayout(Wrap("<div id='b'>   </div>"));
+            var box = FindById(root, "b")!;
+
+            Assert.InRange(box.ActualBottom - box.Location.Y, 0, 0.5);
+        }
+
+        [Fact]
+        public async Task Nbsp_BetweenTokens_PreventsLineWrap_ContrastOrdinarySpace()
+        {
+            // Narrow enough that an ordinary space between "10" and "km" wraps to two lines, but a
+            // non-breaking space between them must never be treated as a break opportunity.
+            // "10 km" as one unbreakable unit is ~30px wide (measured separately) - 35px comfortably
+            // fits it on one line without any wrap. 15px is narrower than that but still wider than "10"
+            // alone (~12px), so the breakable version must wrap after "10".
+            var (nbspRoot, _) = await BuildAndLayout(Wrap("<p id='p' style='width:35px'>10&nbsp;km</p>"));
+            var pNbsp = FindById(nbspRoot, "p")!;
+
+            var (spaceRoot, _) = await BuildAndLayout(Wrap("<p id='p' style='width:15px'>10 km</p>"));
+            var pSpace = FindById(spaceRoot, "p")!;
+
+            Assert.Single(pNbsp.LineBoxes);
+            Assert.True(pSpace.LineBoxes.Count > 1,
+                "expected ordinary space to still allow wrapping, for contrast with nbsp");
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>

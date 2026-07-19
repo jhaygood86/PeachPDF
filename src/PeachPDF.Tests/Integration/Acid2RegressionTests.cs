@@ -167,6 +167,20 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task Forehead_HasNonZeroHeight_NotCollapsedByNbspOrMarginCollapseBugs()
+        {
+            // Regression for Round 4: ".forehead"'s inner content is 30 consecutive &nbsp; characters
+            // (Acid2's actual technique) - a bug in ParseToWords (nbsp treated as ordinary collapsible
+            // whitespace) combined with an over-broad guard in MarginBottomCollapse previously collapsed
+            // this box to (near) zero height, hiding its tiling background entirely behind solid red.
+            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var forehead = FindByClass(root, "forehead")!;
+
+            var height = forehead.ActualBottom - forehead.Location.Y;
+            Assert.True(height > 5, $"expected .forehead to have real, non-collapsed height, got {height}");
+        }
+
+        [Fact]
         public async Task Forehead_BackgroundImage_ActuallyLoads()
         {
             // Regression for a Round 3 bug: DataUriUtils.TryDecodeDataUri never percent-decoded a

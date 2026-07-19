@@ -799,6 +799,305 @@ namespace PeachPDF.Tests.Integration
             }
         }
 
+        // ─── &nbsp; (U+00A0) text that is NOT its parent's sole child must still survive
+        // DomParser.CorrectTextBoxes (not just get rescued by the unrelated "only child" condition) ──
+
+        [Fact]
+        public async Task NbspOnlyTextNode_NotSoleChild_SurvivesCorrectTextBoxesAndRenders()
+        {
+            var html = Wrap("<div id='b'><span id='s'></span>&nbsp;</div>");
+            var (root, _) = await BuildAndLayout(html);
+            var div = FindById(root, "b")!;
+
+            Assert.Equal(2, div.Boxes.Count);
+            Assert.NotEmpty(div.Boxes[1].Words);
+        }
+
+        // ─── CSS2.1 §8.3.1 margin collapsing - full scenario coverage ──────────────
+
+        // Scenario 1: adjoining sibling margins - CollapseMargins itself was already correct, but only
+        // the mixed-sign case had test coverage.
+
+        [Fact]
+        public async Task AdjoiningSiblingMargins_BothPositive_CollapseToTheLarger()
+        {
+            var html = Wrap(
+                "<div id='a' style='height:20px; margin-bottom:30px;'></div>"
+                + "<div id='b' style='height:10px; margin-top:10px;'></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            Assert.InRange(b.Location.Y - a.ActualBottom, 29.5, 30.5);
+        }
+
+        [Fact]
+        public async Task AdjoiningSiblingMargins_BothNegative_CollapseToTheMoreNegative()
+        {
+            var html = Wrap(
+                "<div id='a' style='height:40px; margin-bottom:-5px;'></div>"
+                + "<div id='b' style='height:10px; margin-top:-15px;'></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            Assert.InRange(b.Location.Y - a.ActualBottom, -15.5, -14.5);
+        }
+
+        // Scenario 2: parent/first-child top collapse - the escape must be gated on the PARENT's own
+        // top border/padding and the CHILD's own clearance, never the child's own padding.
+
+        [Fact]
+        public async Task ParentFirstChildTopCollapse_ChildOwnPaddingIsIrrelevant_EscapeStillHappens()
+        {
+            var html = Wrap(
+                "<div id='parent'>"
+                + "<div id='child' style='padding:5px; height:10px; margin-top:30px;'></div></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var parent = FindById(root, "parent")!;
+            var child = FindById(root, "child")!;
+
+            // The child's own padding must not block its top margin from escaping into the (borderless,
+            // paddingless) parent - the escaped margin means parent and child coincide (nothing
+            // separates their border-box top edges), so compare against a sibling BEFORE #parent rather
+            // than #parent itself, which would trivially show 0 either way.
+            Assert.InRange(child.Location.Y - parent.Location.Y, -0.5, 0.5);
+        }
+
+        [Fact]
+        public async Task ParentFirstChildTopCollapse_ChildOwnPaddingIsIrrelevant_EscapeReachesOutsideParent()
+        {
+            var html = Wrap(
+                "<div id='before' style='height:5px;'></div>"
+                + "<div id='parent'>"
+                + "<div id='child' style='padding:5px; height:10px; margin-top:30px;'></div></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var before = FindById(root, "before")!;
+            var parent = FindById(root, "parent")!;
+
+            // #parent's OWN top position must reflect the full 30px escaped from #child, despite
+            // #child's own padding (irrelevant to the escape condition).
+            Assert.InRange(parent.Location.Y - before.ActualBottom, 29.5, 30.5);
+        }
+
+        [Fact]
+        public async Task ParentFirstChildTopCollapse_ParentTopBorder_BlocksEscape()
+        {
+            var html = Wrap(
+                "<div id='parent' style='border-top:4px solid black;'>"
+                + "<div id='child' style='height:10px; margin-top:30px;'></div></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var parent = FindById(root, "parent")!;
+            var child = FindById(root, "child")!;
+
+            // A top border on the parent blocks escape - child must sit 30px below the parent's content
+            // (post-border) edge instead of coinciding with the parent's own border-box top edge.
+            Assert.InRange(child.Location.Y - (parent.Location.Y + 4), 29.5, 30.5);
+        }
+
+        [Fact]
+        public async Task ParentFirstChildTopCollapse_ChildClearance_BlocksEscape()
+        {
+            var html = Wrap(
+                "<div id='floated' style='float:left; width:10px; height:60px;'></div>"
+                + "<div id='parent'>"
+                + "<div id='child' style='clear:both; height:10px; margin-top:30px;'></div></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var parent = FindById(root, "parent")!;
+            var child = FindById(root, "child")!;
+
+            // "clear:both" on the child blocks its own top-margin escape into the parent - the child's
+            // margin must remain its own, isolated 30px gap below wherever clearance placed the parent.
+            Assert.InRange(child.Location.Y - parent.Location.Y, 29.5, 30.5);
+        }
+
+        [Fact]
+        public async Task ParentFirstChildTopCollapse_MultiLevelChainAnchoredBySiblingCollapse_ResolvesAsOneGroup()
+        {
+            // Regression for a real bug found while implementing the fix: a chain of empty, borderless,
+            // paddingless first-in-flow-children (grandparent > parent > child) whose OUTERMOST member
+            // is itself positioned via sibling-margin-collapse (not a hard border/padding block) must
+            // still resolve as ONE shared adjoining-margin group with the deepest child's margin - not
+            // add the sibling's margin and the child's margin together. Per CSS2.1 §8.3.1 all of
+            // before's bottom margin (15px), grandparent/parent's own (zero) top margins, and child's
+            // top margin (40px) are one group; the group's value is the max of all of them (40), not
+            // 15+40=55 (which a naive top-down, no-lookahead implementation would produce, since
+            // grandparent's own position gets fixed against "before" before child's larger margin is
+            // even known).
+            var html = Wrap(
+                "<div id='before' style='height:20px; margin-bottom:15px;'></div>"
+                + "<div id='grandparent'><div id='parent'>"
+                + "<div id='child' style='height:10px; margin-top:40px;'></div></div></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var before = FindById(root, "before")!;
+            var child = FindById(root, "child")!;
+
+            Assert.InRange(child.Location.Y - before.ActualBottom, 39.5, 40.5);
+        }
+
+        // Scenario 3: parent/last-child bottom collapse - re-verified after removing the parent-
+        // relationship gate and fixing Math.Max -> CollapseMargins for negative margins.
+
+        [Fact]
+        public async Task ParentLastChildBottomCollapse_IsItsOwnParentsLastChild_Folds()
+        {
+            var html = Wrap(
+                "<div id='outer'>"
+                + "<div id='parent'><div id='content' style='height:20px; margin-bottom:50px;'></div></div>"
+                + "</div>");
+            var (root, _) = await BuildAndLayout(html);
+            var parent = FindById(root, "parent")!;
+
+            // #parent IS #outer's last (only) child - its own bottom-margin fold may happen, since
+            // nothing else will ever separately collapse against #parent's own ActualMarginBottom.
+            // Folded height = #content's own 20px + the 50px margin.
+            Assert.InRange(parent.ActualBottom - parent.Location.Y, 69.5, 70.5);
+        }
+
+        [Fact]
+        public async Task ParentLastChildBottomCollapse_NotItsOwnParentsLastChild_DoesNotFold()
+        {
+            // Regression for a real bug found while implementing this round: an earlier attempt
+            // removed this "is last child" gate entirely, reasoning it only mattered for border/padding
+            // - but a box that has a FOLLOWING SIBLING must NOT fold its own bottom margin into its own
+            // ActualBottom, because the sibling's own MarginTopCollapse call ALSO independently
+            // collapses against this box's raw ActualMarginBottom (the ordinary adjoining-sibling-
+            // margin mechanism) - folding it into ActualBottom too double-counts it. This exact shape
+            // (a heading with margin-bottom, followed by a sibling paragraph) reproduced with a
+            // concrete, traceable 60pt double-count in a real regression test.
+            var html = Wrap(
+                "<div id='outer'>"
+                + "<div id='parent'><div id='content' style='height:20px; margin-bottom:50px;'></div></div>"
+                + "<div id='sibling' style='height:5px;'></div></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var parent = FindById(root, "parent")!;
+
+            // No fold: #parent's own height is just its content's 20px, the 50px margin stays external
+            // (and separately collapses with #sibling via the ordinary sibling mechanism).
+            Assert.InRange(parent.ActualBottom - parent.Location.Y, 19.5, 20.5);
+        }
+
+        [Fact]
+        public async Task ParentLastChildBottomCollapse_NegativeMargins_CollapseToMoreNegative_NotMathMax()
+        {
+            var html = Wrap(
+                "<div id='outer'>"
+                + "<div id='parent' style='margin-bottom:-5px;'>"
+                + "<div id='content' style='height:20px; margin-bottom:-10px;'></div></div>"
+                + "</div>");
+            var (root, _) = await BuildAndLayout(html);
+            var parent = FindById(root, "parent")!;
+
+            // #parent IS its parent's only/last child, so the fold applies. Both this box's own bottom
+            // margin (-5) and its last child's (-10) are negative - the correct collapse is the more
+            // negative value (-10, via CollapseMargins), not Math.Max(-5, -10) = -5. Folded height =
+            // content's own 20px + the -10 folded margin = 10 (a buggy Math.Max(-5,-10)=-5 would
+            // instead give 20-5=15).
+            Assert.InRange(parent.ActualBottom - parent.Location.Y, 9.5, 10.5);
+        }
+
+        // Scenario 4: self-collapsing empty boxes (zero height, no border/padding, no in-flow content) -
+        // previously entirely unimplemented; their own top+bottom margins must collapse into one
+        // pass-through value rather than acting as a full-height break in the adjoining-margin chain.
+
+        [Fact]
+        public async Task SelfCollapsingEmptyBox_TopAndBottomMarginsCollapseIntoOne_NotSummed()
+        {
+            var html = Wrap(
+                "<div id='a' style='height:20px;'></div>"
+                + "<div id='empty' style='margin-top:10px; margin-bottom:30px;'></div>"
+                + "<div id='b' style='height:10px;'></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            // #empty is self-collapsing (auto height, no content, no border/padding): its own top (10)
+            // and bottom (30) margins collapse into ONE value (max(10,30)=30) which then ALSO collapses
+            // with #a's bottom margin (0) and #b's top margin (0) - so the total gap between #a and #b
+            // must be 30px, not 10+30=40 (summed as if #empty had real height) and not 10 (only its top
+            // margin counted).
+            Assert.InRange(b.Location.Y - a.ActualBottom, 29.5, 30.5);
+        }
+
+        [Fact]
+        public async Task TwoConsecutiveSelfCollapsingEmptyBoxes_AllMarginsCollapseIntoOne()
+        {
+            var html = Wrap(
+                "<div id='a' style='height:20px;'></div>"
+                + "<div id='empty1' style='margin-top:5px; margin-bottom:15px;'></div>"
+                + "<div id='empty2' style='margin-top:25px; margin-bottom:8px;'></div>"
+                + "<div id='b' style='height:10px;'></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            // All 4 margins (5, 15, 25, 8) plus #a's/#b's zero margins are one adjoining group - the
+            // gap must be their max (25px), not any partial or summed combination.
+            Assert.InRange(b.Location.Y - a.ActualBottom, 24.5, 25.5);
+        }
+
+        // Scenario 5: floats never collapse margins with anything.
+
+        [Fact]
+        public async Task FloatedBox_DoesNotCollapseTopMarginWithPrecedingSibling()
+        {
+            var html = Wrap(
+                "<div id='before' style='height:20px; margin-bottom:50px;'></div>"
+                + "<div id='floated' style='float:left; margin-top:5px; width:10px; height:10px;'></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var before = FindById(root, "before")!;
+            var floated = FindById(root, "floated")!;
+
+            // If the float wrongly collapsed with #before's 50px bottom margin, it would sit far below
+            // #before.ActualBottom. It must instead sit at #before.ActualBottom plus only its OWN 5px
+            // top margin - its own margin is never itself part of any collapsing group.
+            Assert.InRange(floated.Location.Y - before.ActualBottom, 4.5, 5.5);
+        }
+
+        // Scenario 6: `overflow` establishing a new block formatting context blocks parent/child
+        // collapsing on both edges.
+
+        [Fact]
+        public async Task OverflowHidden_BlocksParentFirstChildTopCollapse()
+        {
+            var html = Wrap(
+                "<div id='parent' style='overflow:hidden;'>"
+                + "<div id='child' style='height:10px; margin-top:30px;'></div></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var parent = FindById(root, "parent")!;
+            var child = FindById(root, "child")!;
+
+            // No escape: the child's 30px margin stays inside the parent's own content box.
+            Assert.InRange(child.Location.Y - parent.Location.Y, 29.5, 30.5);
+        }
+
+        [Fact]
+        public async Task OverflowVisible_AllowsParentFirstChildTopCollapse_ForContrast()
+        {
+            var html = Wrap(
+                "<div id='parent' style='overflow:visible;'>"
+                + "<div id='child' style='height:10px; margin-top:30px;'></div></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var parent = FindById(root, "parent")!;
+            var child = FindById(root, "child")!;
+
+            Assert.InRange(child.Location.Y - parent.Location.Y, -0.5, 0.5);
+        }
+
+        [Fact]
+        public async Task OverflowHidden_BlocksOwnBottomMarginFold()
+        {
+            var html = Wrap(
+                "<div id='outer'>"
+                + "<div id='parent' style='overflow:hidden;'>"
+                + "<div id='content' style='height:20px; margin-bottom:50px;'></div></div></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var parent = FindById(root, "parent")!;
+
+            // No fold: parent's own height is just its content's 20px, the 50px margin stays external.
+            Assert.InRange(parent.ActualBottom - parent.Location.Y, 19.5, 20.5);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>
