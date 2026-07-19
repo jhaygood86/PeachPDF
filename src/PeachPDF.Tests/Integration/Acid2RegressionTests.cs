@@ -95,18 +95,25 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task FixedBars_RepeatOntoPage2_KnownResidualNotCoveredByIntro()
         {
-            // Documents a known, accepted residual rather than a silent gap (see Round 9's plan): the
-            // fixture's own ".intro { z-index: 2 }" is only meant to cover ".picture p"/".picture p + p"
-            // (two position:fixed bars) on the page it itself lands on (page 1) - it's normal-flow, so
-            // it can't repeat onto page 2 the way position:fixed content correctly does (matching real
-            // CSS Paged Media running-header semantics; see FixedPositionPaginationIntegrationTests).
-            // Since the real fixture's ".intro" and "#top"/".picture" now (post content-empty-page-skip)
-            // land on two DIFFERENT pages, the fixed bars still bleed onto page 2, uncovered - down from
-            // bleeding onto 3 of 4 pages before this round, but not eliminated. Detected generically (no
-            // hardcoded pixel geometry): a solid-fill rect command that is byte-identical between page 1
-            // and page 2 can only be explained by position:fixed content, which alone ignores scroll
-            // offset and repeats at the exact same coordinates on every page (CssBox.cs's "IsFixed"
-            // branches) - regular in-flow content's coordinates always differ page to page.
+            // Documents a known, accepted residual rather than a silent gap: the fixture's own
+            // ".intro { z-index: 2 }" is only meant to cover ".picture p"/".picture p + p" (two
+            // position:fixed bars) on the page it itself lands on (page 1) - it's normal-flow, so it
+            // can't repeat onto page 2 the way position:fixed content correctly does (matching real CSS
+            // Paged Media running-header semantics; see FixedPositionPaginationIntegrationTests). Since
+            // the real fixture's ".intro" and "#top"/".picture" land on two DIFFERENT pages, the fixed
+            // bars still bleed onto page 2, technically uncovered - this part is inherent to a
+            // non-scrolling paginated renderer (there's no single viewport for ".intro" to visually sit
+            // in front of both landing spots at once) and isn't something a pagination fix can close.
+            // What margin truncation at unforced breaks (CssBox.PerformLayoutImp's Static/Relative
+            // branch) DID fix is a separate, larger problem this test doesn't cover: before that fix,
+            // "#top"/".picture" landed ~350-450pt into page 2 (nowhere near these bars) because their
+            // preceding 100em margins paginated through as literal blank space instead of being
+            // discarded at the page break - see FixedBars_AndFaceContent_LandOnSamePageNearItsTop below
+            // for that. Detected generically here (no hardcoded pixel geometry): a solid-fill rect
+            // command that is byte-identical between page 1 and page 2 can only be explained by
+            // position:fixed content, which alone ignores scroll offset and repeats at the exact same
+            // coordinates on every page (CssBox.cs's "IsFixed" branches) - regular in-flow content's
+            // coordinates always differ page to page.
             var html = File.ReadAllText(FixturePath);
             var generator = new PdfGenerator();
             var config = new PdfGenerateConfig { PageSize = PageSize.A4, CompressContentStreams = false };
@@ -123,6 +130,29 @@ namespace PeachPDF.Tests.Integration
             Assert.True(page1Rects.Intersect(page2Rects).Any(),
                 "expected at least one solid-fill rect (the fixed bars) to be byte-identical between " +
                 "page 1 and page 2, confirming the documented residual is still present");
+        }
+
+        [Fact]
+        public async Task FixedBars_AndFaceContent_LandOnSamePageNearItsTop()
+        {
+            // CSS Fragmentation Level 3 §5.2: "When an unforced break occurs before or after a
+            // block-level box, any margins adjoining the break are truncated to zero." Prince XML (which
+            // this was verified against directly - see its own published Acid2 PDF sample) applies this:
+            // "#top"'s 100em margin-top doesn't paginate through as blank pages, it's discarded at the
+            // break, so "#top"/".picture" land flush near the top of whichever page they end up on -
+            // right where the two position:fixed bars (".picture p"/".picture p.bad", always ~9-12em
+            // from the top of every page, see the test above) already are, instead of ~350-450pt further
+            // down the same page as before this fix.
+            var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var top = FindById(root, "top")!;
+            var pageHeight = container.PageSize.Height;
+            var marginTop = container.MarginTop;
+
+            var offsetWithinPage = top.Location.Y % pageHeight;
+
+            Assert.True(offsetWithinPage <= marginTop + 20,
+                $"#top should land within ~20pt of the top of its page (offset={offsetWithinPage}, " +
+                $"marginTop={marginTop}), not deep into a mostly-blank page");
         }
 
         [Fact]

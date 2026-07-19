@@ -1066,7 +1066,8 @@ namespace PeachPDF.Html.Core.Dom
             var previousSiblingForBreak = DomUtils.GetPreviousSibling(this, false);
             var hasExplicitPageName = !string.IsNullOrEmpty(PageName) && PageName != CssConstants.Auto;
             var pageNameChanged = hasExplicitPageName && PageName != HtmlContainer!.ActivePageName;
-            if (IsForcedBreakValue(BreakBefore) || IsForcedBreakValue(previousSiblingForBreak?.BreakAfter) || pageNameChanged)
+            var isForcedBreak = IsForcedBreakValue(BreakBefore) || IsForcedBreakValue(previousSiblingForBreak?.BreakAfter) || pageNameChanged;
+            if (isForcedBreak)
             {
                 if (previousSiblingForBreak is not null)
                 {
@@ -1110,7 +1111,45 @@ namespace PeachPDF.Html.Core.Dom
                         // cancel out exactly when anchor == prevSibling (the common case), and a
                         // self-collapsing prevSibling always has zero border by definition
                         // (IsMarginCollapseThrough requires it), so the residual term vanishes there too.
-                        var top = (prevSibling == null ? ContainingBlock.ClientTop : ParentBox == null ? Location.Y : 0) + MarginTopCollapse(prevSibling) + (prevSibling?.ActualBottom ?? 0);
+                        var baseTop = (prevSibling == null ? ContainingBlock.ClientTop : ParentBox == null ? Location.Y : 0) + (prevSibling?.ActualBottom ?? 0);
+                        var top = baseTop + MarginTopCollapse(prevSibling);
+
+                        // CSS Fragmentation Level 3 §5.2: "When an unforced break occurs before or
+                        // after a block-level box, any margins adjoining the break are truncated to
+                        // zero." A margin big enough to push this box across one or more page
+                        // boundaries by itself (as opposed to actual content straddling a boundary,
+                        // which BreakInside/orphans-widows handles separately, later in this method) is
+                        // exactly that case - real UAs (and Prince, which this mirrors) discard the
+                        // whole margin and start the box flush at the very next page boundary rather
+                        // than paginating through a wall of blank pages. Acid2's own
+                        // "#top { margin-top: 100em }" is the canonical example: that margin alone
+                        // spans several page heights with no real content in it at all. A negative
+                        // collapsed margin can never trigger this (it only pulls top backward, never
+                        // forward across a new boundary), and an ordinary margin that stays within the
+                        // same page as prevSibling's bottom is completely unaffected. Per the same spec
+                        // section, a margin AFTER a *forced* break is explicitly preserved, not
+                        // truncated (only the margin BEFORE a forced break is - already handled above by
+                        // bumping previousSiblingForBreak.ActualBottom to the next page's top) - so this
+                        // only applies when this box's own placement isn't already forced-break-governed.
+                        if (prevSibling is not null && !isForcedBreak)
+                        {
+                            var pageHeight = HtmlContainer!.PageSize.Height;
+                            if (pageHeight > 0)
+                            {
+                                // Same grid GetPaginationSlots()/the forced-break logic above use: raw
+                                // multiples of PageSize.Height from document Y=0, un-offset by MarginTop
+                                // (MarginTop is only added back once, below, to land at the same
+                                // "flush at the top of the next page" spot the forced-break bump above
+                                // produces - matching BreakInside_Avoid_PositionsAtTopOfNextPage's
+                                // already-established convention).
+                                var prevSlot = Math.Floor(baseTop / pageHeight);
+                                var naturalSlot = Math.Floor(top / pageHeight);
+                                if (naturalSlot > prevSlot)
+                                {
+                                    top = (prevSlot + 1) * pageHeight + HtmlContainer.MarginTop;
+                                }
+                            }
+                        }
 
                         Location = new RPoint(left + ActualMarginLeft, top);
                         ActualBottom = top;
