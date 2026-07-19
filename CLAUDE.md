@@ -7,6 +7,7 @@ Pure .NET HTML → PDF rendering library. No external process dependency (no Pup
 Read these before making non-trivial changes in their area — they are the source of truth, not this file:
 
 - [docs/index.html](docs/index.html) — doc site marketing-style landing page (hero, feature cards, guide cards)
+- [docs/why-peachpdf.html](docs/why-peachpdf.html) — "Why PeachPDF?" marketing page: HTML/CSS-as-the-API pitch, free/open-source pitch, comparison table vs other .NET PDF libraries (IronPDF, PuppeteerSharp, DinkToPdf, wkhtmltopdf, Prince, QuestPDF, PDFsharp/MigraDoc, Aspose)
 - [docs/showcase.html](docs/showcase.html) — feature showcase gallery; cards (thumbnail + PDF + HTML-source links) are driven by `site.data.showcases`, which pages.yml generates at site build time by running the TestHarness (`docs/showcase/` and `docs/_data/showcases.json` are gitignored build output, never source)
 - [docs/getting-started.md](docs/getting-started.md) — install, quick start, thread safety / guide index
 - [docs/architecture.md](docs/architecture.md) — how HTML becomes a PDF: parser, DOM, CSS, layout, painting, PDF renderer
