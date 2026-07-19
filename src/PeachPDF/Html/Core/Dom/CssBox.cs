@@ -1150,8 +1150,18 @@ namespace PeachPDF.Html.Core.Dom
 
                     if (Position is CssConstants.Fixed)
                     {
-                        var left = CssValueParser.ParseLength(Left, HtmlContainer!.ScrollOffset.X, this);
-                        var top = CssValueParser.ParseLength(Top, HtmlContainer!.ScrollOffset.Y, this);
+                        // Like every other positioning scheme (see the Absolute branch above, fixed for
+                        // the same omission), the box's own margin still applies on top of the left/top
+                        // offset - previously dropped entirely here. Acid2's own
+                        // ".picture p + table + p { margin-top: 3em; }" (which legitimately matches the
+                        // fixture's second, HTML4-DTD-auto-closed <p> - see Acid2RegressionTests) relies
+                        // on this to shift that fixed-position paragraph down from underneath the first
+                        // one's own fixed black bar. Percentages resolve against the page/viewport size
+                        // (CSS2.1 §10.1: the initial containing block), not ScrollOffset (a scroll
+                        // position, not a size) - not exercised by this fixture (uses em, not %) but
+                        // wrong regardless.
+                        var left = ActualMarginLeft + CssValueParser.ParseLength(Left, HtmlContainer!.PageSize.Width, this);
+                        var top = ActualMarginTop + CssValueParser.ParseLength(Top, HtmlContainer!.PageSize.Height, this);
                         Location = new RPoint(left, top);
                     }
                 }
@@ -1774,7 +1784,28 @@ namespace PeachPDF.Html.Core.Dom
                     marginSum += childBox.ActualMarginLeft + childBox.ActualMarginRight;
 
                     //maxSum += childBox.ActualMarginLeft + childBox.ActualMarginRight;
+                    var maxSumBeforeChild = maxSum;
                     GetMinMaxSumWords(childBox, ref min, ref maxSum, ref paddingSum, ref marginSum);
+
+                    // This walk otherwise never consults a box's own explicit CSS `width` at all - only
+                    // literal word/text content. That's usually fine (explicit width constrains layout
+                    // AFTER content is measured, not the content's own intrinsic size) but breaks down
+                    // for a child whose only real sizing signal IS an explicit width with no word
+                    // content to measure (e.g. a solid-color box, or - Acid2's own case - an anonymous
+                    // table-cell (CSS2.1 17.2.1) wrapping a nested "display:table"/"display:list-item"
+                    // "<li>" that has "width:1em" but no text): the recursive content sum alone finds
+                    // nothing, so the anonymous cell sized itself to 0 instead of its child's real 1em,
+                    // clipping/overlapping the nested content. A plain absolute length (not a percentage
+                    // - resolving that here would read this box's own not-yet-final ActualWidth,
+                    // circular in exactly the way GetBoxWidth's shrink-to-fit callers already guard
+                    // against) is folded in as an explicit floor for this line's running total, the same
+                    // way a word's own width already contributes via "maxSum +=" above.
+                    if (CssValueParser.IsValidLength(childBox.Width) && !childBox.Width.EndsWith('%'))
+                    {
+                        var explicitContentWidth = CssValueParser.ParseLength(childBox.Width, 0, childBox);
+                        maxSum = Math.Max(maxSum, maxSumBeforeChild + explicitContentWidth);
+                        min = Math.Max(min, explicitContentWidth);
+                    }
 
                     marginSum -= childBox.ActualMarginLeft + childBox.ActualMarginRight;
                 }

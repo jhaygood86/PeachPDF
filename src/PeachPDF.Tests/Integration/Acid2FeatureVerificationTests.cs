@@ -269,6 +269,26 @@ namespace PeachPDF.Tests.Integration
             Assert.InRange(box.Location.Y, expectedY - 0.5, expectedY + 0.5);
         }
 
+        [Fact]
+        public async Task PositionFixed_WithMargin_AppliesMarginOnTopOfOffset()
+        {
+            // Regression for a real bug: the position:fixed branch never added the box's own
+            // ActualMarginLeft/Top at all, unlike every other positioning scheme (static/relative
+            // above it in the same method, and position:absolute - fixed for the identical omission
+            // in an earlier round). Acid2's own ".picture p + table + p { margin-top: 3em; }" matches
+            // the fixture's second, HTML4-DTD-auto-closed <p> (see Acid2RegressionTests) and relies on
+            // this 3em margin to shift that fixed-position paragraph down from underneath the first
+            // paragraph's own fixed black bar - without it, both fixed paragraphs land exactly on top
+            // of each other.
+            var html = Wrap(
+                "<div id='t' style='position:fixed; top:10px; left:20px; margin:5px 0 0 8px; width:10px; height:10px;'></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var box = FindById(root, "t")!;
+
+            Assert.InRange(box.Location.X, 20 + 8 - 0.5, 20 + 8 + 0.5);
+            Assert.InRange(box.Location.Y, 10 + 5 - 0.5, 10 + 5 + 0.5);
+        }
+
         // ─── shrink-to-fit width for position:absolute boxes with no explicit width ──
         // Acid2's ".eyes { position:absolute; ... }" (no width/height set) must size to its widest
         // child, not the sum of every sibling's own unrelated border/padding.
@@ -531,20 +551,27 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task StarHtmlChain_MatchesRealHtmlElement_UnlikeQuirksModeHack()
+        public async Task StarHtmlHack_NeverMatches_NoQuirksModeInThisEngine()
         {
             // "* html .parser": universal selector, descendant-combined with a real "html" type
-            // selector, descendant-combined with ".parser" - since there is a genuine "*" ancestor of
-            // the real <html> root's descendant chain to satisfy (any element between the matched
-            // ".parser" box and the document, ultimately including <body> as an ancestor of "html" is
-            // not required - "*" just needs SOME ancestor, and <html> itself has no such ancestor, so
-            // this specifically verifies matching still succeeds via <body>/<div> ancestors of the
-            // inner element, not via <html> itself lacking a parent).
-            var html = Wrap("<div id='wrap'><div class='parser' id='t'></div></div>"
+            // selector, descendant-combined with ".parser". Read right-to-left, this requires an
+            // element matching "*" that is itself an ANCESTOR OF "html" - in a real browser, no such
+            // element exists (the real <html> element has no element ancestor of its own, only the
+            // Document node, which "*" never matches), which is exactly why this selector is the
+            // classic "quirks-mode-only" hack: it only ever matched in browsers that inserted an extra
+            // implicit wrapper above <html> in quirks mode. A standards-mode-only engine like this one
+            // must never match it. (This test previously asserted the opposite - a direct
+            // manifestation of a real bug: DomParser.GenerateCssTree wraps the parsed document in its
+            // own internal synthetic root box above the real <html> element, and CssData's universal
+            // selector previously matched that synthetic box unconditionally, walking straight into
+            // "* html .parser" matching via this implementation artifact rather than any real DOM
+            // ancestor. Fixed by excluding the synthetic root from "*" matching - see
+            // CssData.DoesSelectorMatch's AllSelector case.)
+            var html = Wrap("<div id='wrap'><div class='parser' id='t' style='color: rgb(1, 2, 3);'></div></div>"
                 + "<style>* html .parser { color: rgb(10, 11, 12); }</style>");
             var (root, _) = await BuildAndLayout(html);
             var box = FindById(root, "t")!;
-            Assert.Equal("rgb(10, 11, 12)", box.Color);
+            Assert.Equal("rgb(1, 2, 3)", box.Color);
         }
 
         // ─── repeated class within one compound selector (".two.error.two") ────────

@@ -343,6 +343,123 @@ namespace PeachPDF.Tests.Integration
             Assert.Contains(participants, p => p.Box == eyesB);
         }
 
+        [Fact]
+        public async Task Parser_BackgroundStaysYellow_StarHtmlHackNeverMatches()
+        {
+            // Regression for CssData.DoesSelectorMatch's AllSelector case matching PeachPDF's own
+            // synthetic root wrapper box (see DomParser.GenerateCssTree) - which made the fixture's
+            // "* html .parser { background: gray; ... }" (the classic quirks-mode-only hack, which must
+            // NEVER match in a standards-mode engine) incorrectly match and override ".parser"'s real
+            // "background: yellow" from earlier in the same stylesheet.
+            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var parser = FindByClass(root, "parser")!;
+
+            Assert.Equal("rgb(255, 255, 0)", parser.BackgroundColor);
+        }
+
+        [Fact]
+        public async Task FixedPositionMargin_ShiftsSecondParagraphBelowFirstsBlackBar()
+        {
+            // Regression for CssBox.PerformLayoutImp's position:fixed branch dropping the box's own
+            // margin entirely (unlike every other positioning scheme). Per the HTML4 DTD, "<p><table>
+            // ...</table></p><p class='bad'>..." auto-closes the first <p> the moment <table> opens,
+            // producing two SIBLING <p> elements - the second ("p.bad") is matched by both ".picture p"
+            // (margin:0; top:9em - shared with the first paragraph) AND, being genuinely preceded by a
+            // <table> sibling, ".picture p + table + p { margin-top: 3em; }" too. Both paragraphs share
+            // the exact same "top:9em" offset, so the ONLY thing that should separate them vertically is
+            // that 3em margin-top on the second one - asserting against the box's own resolved
+            // ActualMarginTop (rather than a hardcoded pixel/point value) keeps this test independent of
+            // this environment's em-to-point conversion specifics.
+            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var picture = FindByClass(root, "picture")!;
+
+            var paragraphs = new List<CssBox>();
+            void Collect(CssBox b)
+            {
+                if (b.HtmlTag?.Name.Equals("p", StringComparison.OrdinalIgnoreCase) == true) paragraphs.Add(b);
+                foreach (var c in b.Boxes) Collect(c);
+            }
+            Collect(picture);
+
+            Assert.Equal(2, paragraphs.Count);
+            var first = paragraphs[0];
+            var second = paragraphs[1];
+
+            Assert.Equal("bad", second.HtmlTag?.TryGetAttribute("class", ""));
+            Assert.True(second.ActualMarginTop > 0, "the second paragraph's own margin-top should be a real, positive value (3em)");
+            Assert.InRange(second.Location.Y - first.Location.Y, second.ActualMarginTop - 0.5, second.ActualMarginTop + 0.5);
+        }
+
+        [Fact]
+        public async Task AnonymousTableCells_WrappingNestedTableAndListItem_SizeToTheirChildsExplicitWidth()
+        {
+            // Regression for CssBox.GetMinMaxSumWords never consulting a box's own explicit CSS
+            // `width` when computing intrinsic content width - only literal word/text content. This
+            // is usually fine (explicit width constrains layout after content is measured) but breaks
+            // down for "ul li.second-part { display: table; width: 1em; }" and "ul li.fourth-part {
+            // /* display: list-item (default) */ width: 1em; }": each needs an anonymous table-cell
+            // wrapper (CSS2.1 17.2.1, since neither is itself display:table-cell and their real parent
+            // is an anonymous table-row), and since neither <li> has any literal text content, the
+            // anonymous cell's own intrinsic-width computation found nothing to measure and sized
+            // itself to 0 - overlapping/clipping its own child instead of matching "li.first-part"/
+            // "li.third-part"'s own real 1em-wide cells for an evenly-spaced row.
+            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var firstPart = FindByClass(root, "first-part")!;
+            var secondPart = FindByClass(root, "second-part")!;
+            var thirdPart = FindByClass(root, "third-part")!;
+            var fourthPart = FindByClass(root, "fourth-part")!;
+
+            var secondCell = secondPart.ParentBox!;
+            var fourthCell = fourthPart.ParentBox!;
+
+            Assert.NotSame(secondPart, secondCell);
+            Assert.NotSame(fourthPart, fourthCell);
+
+            var expectedWidth = firstPart.ActualRight - firstPart.Location.X;
+            Assert.InRange(secondCell.ActualRight - secondCell.Location.X, expectedWidth - 0.5, expectedWidth + 0.5);
+            Assert.InRange(fourthCell.ActualRight - fourthCell.Location.X, expectedWidth - 0.5, expectedWidth + 0.5);
+
+            // No overflow: the nested table/list-item must never extend past its own anonymous cell.
+            Assert.True(secondPart.ActualRight <= secondCell.ActualRight + 0.5);
+            Assert.True(fourthPart.ActualRight <= fourthCell.ActualRight + 0.5);
+
+            var thirdCellWidth = thirdPart.ActualRight - thirdPart.Location.X;
+            Assert.InRange(thirdCellWidth, expectedWidth - 0.5, expectedWidth + 0.5);
+        }
+
+        [Fact]
+        public async Task Smile_NegativeClearance_NotPushedBelowNaturalFlowPositionByRealFloats()
+        {
+            // Verification-gap closer (no bug expected): CssLayoutEngine.ClearBox's negative-clearance
+            // floor (clearance = Math.Max(containingBox.ClientTop, box.Location.Y), so a box already
+            // below the relevant floats' bottoms can never be pushed further) is already verified
+            // correct by code trace and an isolated analog test
+            // (ClearBoth_NegativeClearance_DoesNotPushBelowNaturalFlowPosition), but nothing previously
+            // pinned it against the REAL fixture's actual float configuration - ".nose" and "#eyes-b"
+            // (both floats, real ActualBottom measured well above ".smile"'s natural static-flow
+            // position, thanks to ".empty"'s own margin collapsing through it per 8.3.1:7) plus
+            // ".smile { clear: both }" itself. A regression here (e.g. clearance wrongly ADDING to an
+            // already-past-the-floats position instead of flooring at it) would push ".smile" down by
+            // roughly its own margin-top on top of the floats' bottoms - asserting a tight upper bound
+            // well below that catches it without hardcoding today's exact pixel value.
+            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var nose = FindByClass(root, "nose")!;
+            var eyesB = FindById(root, "eyes-b")!;
+            var smile = FindByClass(root, "smile")!;
+
+            // The CSS requirement itself: clear:both means .smile's top must not be above either float's
+            // bottom edge.
+            Assert.True(smile.Location.Y >= nose.ActualBottom - 0.5);
+            Assert.True(smile.Location.Y >= eyesB.ActualBottom - 0.5);
+
+            // Negative clearance is a no-op, not an addition: .smile's natural flow position is already
+            // well past both floats, so clearance must not push it any further down by adding its own
+            // margin-top (or anything else) on top of the floats' bottoms a second time.
+            var wronglyPushedY = Math.Max(nose.ActualBottom, eyesB.ActualBottom) + smile.ActualMarginTop;
+            Assert.True(smile.Location.Y < wronglyPushedY - 1,
+                $"expected .smile's real Y ({smile.Location.Y}) to be well below the wrongly-pushed value ({wronglyPushedY}) that double-counting clearance would produce");
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static bool PageHasContent(PdfPage page)
