@@ -1026,6 +1026,12 @@ namespace PeachPDF.Html.Core.Dom
         }
 
 
+        /// <summary>
+        /// Re-entrancy guard for the keep-with-next first-line retry in <see cref="PerformLayoutImp"/> -
+        /// prevents the retried layout pass from scheduling yet another retry.
+        /// </summary>
+        private bool _keepWithNextRetried;
+
         #region Private Methods
 
         /// <summary>
@@ -1239,6 +1245,63 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
+            // css-break keep-with-next at the word-flow fragmentation site: word flow relocates any
+            // line that would straddle a page boundary to the next page (CssRect.BreakPage, called
+            // from CssLayoutEngine.FlowBox). When that happens to this block's FIRST line, the break
+            // effectively falls right before this box's content - so preceding siblings chained to it
+            // by break-after/break-before: avoid (css-break §3.1, e.g. the UA default
+            // `h1-h6 { page-break-after: avoid }`) must not be left behind on the old page. Move the
+            // chained run to the top of the page the line landed on, then re-run this box's own layout:
+            // its position re-derives from the moved run's new bottom and its lines re-flow without a
+            // boundary in the middle (PerformLayoutImp double-execution is already an established
+            // pattern - see HtmlContainerInt.PerformLayout's own double layout). Guarded to one retry.
+            if (!_keepWithNextRetried
+                && Position is CssConstants.Static or CssConstants.Relative && !IsFloated
+                && LineBoxes.Count > 0 && LineBoxes[0].Words.Count > 0
+                && HtmlContainer!.PageSize.Height > 0)
+            {
+                var pageHeight = HtmlContainer.PageSize.Height;
+                var marginTop = HtmlContainer.MarginTop;
+                var firstWordTop = LineBoxes[0].Words.Min(w => w.Top);
+                var ownPage = (int)((Location.Y - marginTop) / pageHeight);
+                var firstLinePage = (int)((firstWordTop - marginTop) / pageHeight);
+
+                if (firstLinePage > ownPage)
+                {
+                    var keepWithNextRun = DomUtils.GetPrecedingKeepWithNextRun(this);
+                    if (keepWithNextRun.Count > 0)
+                    {
+                        var runTop = keepWithNextRun[0].Location.Y;
+                        var extraAbove = Location.Y - runTop;
+                        var runStartsOnSamePage = (int)((runTop - marginTop) / pageHeight) == ownPage;
+                        var pageStart = firstLinePage * pageHeight + marginTop;
+
+                        if (extraAbove > 0 && runStartsOnSamePage
+                            && extraAbove + ActualBottom - firstWordTop <= pageHeight)
+                        {
+                            var runDelta = pageStart - runTop;
+
+                            foreach (var member in keepWithNextRun)
+                            {
+                                member.OffsetTop(runDelta);
+                            }
+
+                            _keepWithNextRetried = true;
+                            try
+                            {
+                                await PerformLayoutImp(g);
+                            }
+                            finally
+                            {
+                                _keepWithNextRetried = false;
+                            }
+
+                            return;
+                        }
+                    }
+                }
+            }
+
             if (BreakInside is CssConstants.Avoid)
             {
                 var pageHeight = HtmlContainer!.PageSize.Height;
@@ -1255,7 +1318,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (bottomRelativeToCurrentPage > pageHeight)
                 {
                     var offset = pageHeight - topRelativeToCurrentPage + HtmlContainer.MarginTop;
-                    OffsetTop(offset);
+                    OffsetTopWithKeepWithNextRun(offset, topRelativeToCurrentPage);
                 }
             }
 
@@ -1291,7 +1354,7 @@ namespace PeachPDF.Html.Core.Dom
                         if (linesBefore > 0 && linesAfter > 0 && (linesBefore < orphans || linesAfter < widows))
                         {
                             var offset = boundaryY - Location.Y + HtmlContainer.MarginTop;
-                            OffsetTop(offset);
+                            OffsetTopWithKeepWithNextRun(offset, ownTopRelativeToPage);
                         }
                     }
                 }
@@ -2187,6 +2250,47 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             Location = Location with { Y = Location.Y + amount };
+        }
+
+        /// <summary>
+        /// Moves this box to the next page (like a plain <see cref="OffsetTop"/> by <paramref name="offset"/>),
+        /// additionally pulling along the run of preceding siblings chained to it by
+        /// break-after/break-before: avoid (css-break §3.1 keep-with-next, e.g. the UA default
+        /// <c>h1-h6 { page-break-after: avoid }</c>) so a heading is not stranded at the bottom of the
+        /// page its content just left. The run only comes along when it starts on the same page as this
+        /// box and the combined run + box still fits on a single page; an unsatisfiable avoid is relaxed
+        /// per spec and this box moves alone, exactly as before.
+        /// </summary>
+        /// <param name="offset">the offset that moves this box's top to the next page's content top</param>
+        /// <param name="topRelativeToCurrentPage">this box's top, reduced to page-relative coordinates by the caller</param>
+        internal void OffsetTopWithKeepWithNextRun(double offset, double topRelativeToCurrentPage)
+        {
+            var pageHeight = HtmlContainer!.PageSize.Height;
+            var keepWithNextRun = DomUtils.GetPrecedingKeepWithNextRun(this);
+
+            if (keepWithNextRun.Count > 0)
+            {
+                var runTop = keepWithNextRun[0].Location.Y;
+                var extraAbove = Location.Y - runTop;
+
+                if (extraAbove > 0 && extraAbove < topRelativeToCurrentPage
+                    && extraAbove + ActualBottom - Location.Y <= pageHeight)
+                {
+                    // Shift the run and this box by one common offset, chosen so the run's top lands at
+                    // the next page's content top - relative spacing inside the group is preserved.
+                    var groupOffset = offset + extraAbove;
+
+                    foreach (var member in keepWithNextRun)
+                    {
+                        member.OffsetTop(groupOffset);
+                    }
+
+                    OffsetTop(groupOffset);
+                    return;
+                }
+            }
+
+            OffsetTop(offset);
         }
 
         /// <summary>

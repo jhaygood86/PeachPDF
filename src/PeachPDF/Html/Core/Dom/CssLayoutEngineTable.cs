@@ -787,6 +787,33 @@ namespace PeachPDF.Html.Core.Dom
                     && estimatedBodyHeight <= availableHeight)
                 {
                     var pageBreakOffset = CalculatePageBreakOffset(currentY, pageHeight, marginTop, marginBottom, currentPageNumber);
+
+                    // css-break §3.1 keep-with-next: break-after: avoid on the preceding sibling(s)
+                    // (e.g. the UA default `h1-h6 { page-break-after: avoid }` under @media print)
+                    // forbids the break this whole-table move introduces between them and the table.
+                    // Pull the avoid-chained run to the next page with the table when everything still
+                    // fits on one page; an unsatisfiable avoid is relaxed per spec and the table moves
+                    // alone, exactly as before.
+                    var keepWithNextRun = DomUtils.GetPrecedingKeepWithNextRun(_tableBox);
+                    if (keepWithNextRun.Count > 0)
+                    {
+                        var runTop = keepWithNextRun[0].Location.Y;
+                        var extraAbove = currentY - runTop;
+                        var runStartsOnSamePage = (int)((runTop - marginTop) / pageHeight) == currentPageNumber;
+
+                        if (extraAbove > 0 && runStartsOnSamePage && extraAbove + estimatedBodyHeight <= availableHeight)
+                        {
+                            // One common offset lands the run's top at the next page's content top and
+                            // keeps the run→table spacing intact.
+                            pageBreakOffset += extraAbove;
+
+                            foreach (var member in keepWithNextRun)
+                            {
+                                member.OffsetTop(pageBreakOffset);
+                            }
+                        }
+                    }
+
                     _tableBox.Location = _tableBox.Location with { Y = _tableBox.Location.Y + pageBreakOffset };
                     startY = Math.Max(_tableBox.ClientTop + GetVerticalSpacing(), 0);
                     currentY = startY;

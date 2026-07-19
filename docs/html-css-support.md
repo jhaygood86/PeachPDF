@@ -417,11 +417,13 @@ These properties control how content breaks across PDF pages. Both the legacy `p
 
 | Property | MDN Reference | Notes |
 |----------|--------------|-------|
-| `break-before` / `page-break-before` | [break-before](https://developer.mozilla.org/en-US/docs/Web/CSS/break-before) | `auto`, `always`, `page`, `avoid` |
-| `break-after` / `page-break-after` | [break-after](https://developer.mozilla.org/en-US/docs/Web/CSS/break-after) | `auto`, `always`, `page`, `avoid` |
+| `break-before` / `page-break-before` | [break-before](https://developer.mozilla.org/en-US/docs/Web/CSS/break-before) | `auto`, `always`, `page`, `avoid` — see the keep-with-next note below the table for how `avoid` behaves |
+| `break-after` / `page-break-after` | [break-after](https://developer.mozilla.org/en-US/docs/Web/CSS/break-after) | `auto`, `always`, `page`, `avoid` — see the keep-with-next note below the table for how `avoid` behaves |
 | `break-inside` / `page-break-inside` | [break-inside](https://developer.mozilla.org/en-US/docs/Web/CSS/break-inside) | `auto`, `avoid` |
 | `orphans` | [orphans](https://developer.mozilla.org/en-US/docs/Web/CSS/orphans) | Enforced in plain (non-multi-column) block flow: if fewer than `orphans` lines of a paragraph-like box would precede a page boundary, the whole box is pushed to the next page — a coarser-than-spec approximation (a spec-conformant UA pulls only the minimum lines needed across the break; PeachPDF moves the entire box, since it has no per-line fragmentation) that's skipped when the box itself is taller than one page (pushing it whole can't help there). Has no effect inside [Multi-column Layout](#multi-column-layout) — its atomic whole-child-only fragmentation already structurally prevents an orphaned/widowed line, since a child is never split across a column in the first place |
 | `widows` | [widows](https://developer.mozilla.org/en-US/docs/Web/CSS/widows) | Same mechanism and caveats as `orphans`, for the trailing side of a page break |
+
+**Keep-with-next (`break-after: avoid` / `break-before: avoid`).** Per CSS Fragmentation §3.1, an `avoid` on either side of a sibling break point forbids an unforced break between the two boxes. PeachPDF honors this wherever it relocates content to the next page: when a box is moved wholesale (a table whose body would cross a page boundary, a `break-inside: avoid` box, an `orphans`/`widows` push) or when ordinary word flow pushes a block's *first line* to the next page, the maximal run of preceding siblings chained to it by `avoid` values moves along with it, so a heading is never stranded at the bottom of the page its content just left. The UA default stylesheet applies `h1-h6 { page-break-after: avoid }` (under `@media print`, which PeachPDF always uses), so headings get this behavior out of the box. Chains are transitive (e.g. `h2` + `h3` + paragraph move as a group), a forced break value on either side of a pair takes precedence over `avoid` per §5.2, and an unsatisfiable `avoid` (the run plus its content can't fit on one page) is relaxed per §5.3 — the content moves alone, exactly as it would without the `avoid`.
 
 ### Tables
 

@@ -113,6 +113,42 @@ namespace PeachPDF.Html.Core.Utils
             return sib;
         }
 
+        /// <summary>
+        /// Collects the maximal run of preceding in-flow siblings chained to <paramref name="box"/> by
+        /// break avoidance (css-break §3.1, class A break points): for each consecutive pair, the earlier
+        /// sibling's break-after is <c>avoid</c> or the later sibling's break-before is <c>avoid</c>.
+        /// Returned in top-to-bottom document order; empty when no avoid chain exists. Callers use this
+        /// to pull e.g. an <c>h2 { break-after: avoid }</c> heading (the UA default for h1-h6 under
+        /// @media print) along whenever they move <paramref name="box"/> to the next page.
+        /// </summary>
+        public static List<CssBox> GetPrecedingKeepWithNextRun(CssBox box)
+        {
+            var run = new List<CssBox>();
+            var current = box;
+
+            while (true)
+            {
+                var prev = GetPreviousSibling(current, false);
+
+                if (prev is null)
+                    break;
+
+                // css-break §5.2: a forced break value on either side of the pair takes precedence
+                // over a break-avoidance value on the other - such a pair is never kept together.
+                if (prev.BreakAfter is CssConstants.Page or CssConstants.Always
+                    || current.BreakBefore is CssConstants.Page or CssConstants.Always)
+                    break;
+
+                if (prev.BreakAfter is not CssConstants.Avoid && current.BreakBefore is not CssConstants.Avoid)
+                    break;
+
+                run.Insert(0, prev);
+                current = prev;
+            }
+
+            return run;
+        }
+
         public static IEnumerable<CssBox> GetFollowingSiblings(CssBox box, Predicate<CssBox> matcher, bool isConsecutive)
         {
             if (box.ParentBox == null) yield break;

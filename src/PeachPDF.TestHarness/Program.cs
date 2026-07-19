@@ -70,7 +70,7 @@ const string Css = """
     @page { size: a4; margin: 15mm }
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
-    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
     p.intro { margin: 0 0 0.7em; color: #555 }
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; vertical-align: top; width: 25% }
@@ -225,7 +225,7 @@ const string RadiusCss = """
     @page { size: a4; margin: 15mm }
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
-    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
     p.intro { margin: 0 0 0.7em; color: #555 }
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; vertical-align: top; width: 25% }
@@ -301,7 +301,7 @@ const string OriginCss = """
     @page { size: a4; margin: 15mm }
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
-    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
     p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; vertical-align: top; width: 25% }
@@ -435,7 +435,7 @@ const string PositionCss = """
     @page { size: a4; margin: 15mm }
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
-    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
     p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; vertical-align: top; width: 25% }
@@ -573,7 +573,7 @@ const string ListCss = """
     @page { size: a4; margin: 15mm }
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
-    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
     p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; vertical-align: top; width: 25% }
@@ -803,7 +803,7 @@ const string ContentCss = """
     @page { size: a4; margin: 15mm }
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
-    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
     p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; vertical-align: top; width: 25% }
@@ -905,7 +905,7 @@ var pagedMediaHtml = """
     }
     body { font: 10pt Arial, sans-serif; margin: 0; }
     h1 { font-size: 28pt; text-align: center; margin: 60pt 0 20pt; }
-    h2 { font-size: 16pt; margin: 24pt 0 8pt; border-bottom: 1px solid #999; padding-bottom: 4pt; }
+    h2 { font-size: 16pt; margin: 24pt 0 8pt; border-bottom: 1px solid #999; padding-bottom: 4pt; break-after: avoid }
     p  { margin: 0 0 8pt; line-height: 1.5; }
     .cover-subtitle { font-size: 14pt; text-align: center; color: #555; margin-bottom: 60pt; }
     .page-break { page-break-after: always; }
@@ -966,7 +966,7 @@ var namedStringsHtml = """
     }
     body { font: 10pt Arial, sans-serif; margin: 0; }
     h1 { font-size: 20pt; margin: 0 0 12pt; string-set: chapter content(); }
-    h2 { font-size: 13pt; margin: 18pt 0 6pt; string-set: section content(); }
+    h2 { font-size: 13pt; margin: 18pt 0 6pt; string-set: section content(); break-after: avoid }
     p  { margin: 0 0 8pt; line-height: 1.5; }
     .page-break { page-break-after: always; }
     </style>
@@ -1133,7 +1133,7 @@ const string FlexCss = """
     @page { size: a4; margin: 15mm }
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
-    h2 { font-size: 9pt; margin: 0.7em 0 0.2em; padding-bottom: 2px; border-bottom: 1px solid #ccc; color: #333 }
+    h2 { font-size: 9pt; margin: 0.7em 0 0.2em; padding-bottom: 2px; border-bottom: 1px solid #ccc; color: #333; break-after: avoid }
     </style>
     """;
 
@@ -1304,7 +1304,7 @@ const string VarCss = """
     @page { size: a4; margin: 15mm }
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
-    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
     p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; vertical-align: top; width: 25% }
@@ -1421,7 +1421,7 @@ const string TransformCss = """
     @page { size: a4; margin: 15mm }
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
-    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
     p.intro { margin: 0 0 0.7em; color: #555 }
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; padding-bottom: 150px; vertical-align: top; width: 25%; text-align: center }
@@ -1510,7 +1510,7 @@ const string CalcCss = """
     @page { size: a4; margin: 15mm }
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
-    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
     p.intro { margin: 0 0 0.7em; color: #555 }
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; vertical-align: top; width: 25%; text-align: center }
@@ -1614,7 +1614,7 @@ const string SvgShowcaseCss = """
     @page { size: a4; margin: 15mm }
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
-    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
     p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; vertical-align: top; width: 25%; text-align: center }
@@ -2131,7 +2131,7 @@ const string OpacityCss = """
     @page { size: a4; margin: 15mm }
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
-    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
     p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; vertical-align: top; width: 25% }
@@ -2248,7 +2248,7 @@ const string StackingCss = """
     @page { size: a4; margin: 15mm }
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
-    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
     p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; vertical-align: top; width: 33% }
@@ -2325,7 +2325,7 @@ const string TextTransformCss = """
     @page { size: a4; margin: 15mm }
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
-    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
     p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; vertical-align: top; width: 25% }
@@ -2415,7 +2415,7 @@ const string MulticolCss = """
     @page { size: a4; margin: 15mm }
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
-    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
     p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
     .mc p { margin: 0 0 0.4em; text-align: justify }
     .frame { border: 1px solid #bbb; padding: 6px; margin-bottom: 8px; background: #fafafa }
@@ -2512,7 +2512,7 @@ const string TaggedPdfCss = """
     @page { size: a4; margin: 15mm }
     body { font: 10pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 16pt }
-    h2 { font-size: 11pt; margin-top: 1.2em }
+    h2 { font-size: 11pt; margin-top: 1.2em; break-after: avoid }
     table { border-collapse: collapse; width: 100% }
     td, th { border: 0.5pt solid #999; padding: 4px; text-align: left }
     .pull-quote { border-left: 3px solid #999; padding-left: 8px; color: #555; margin: 0.6em 0 }
@@ -2571,7 +2571,7 @@ const string BorderStyleCss = """
     @page { size: a4; margin: 15mm }
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
-    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; vertical-align: top; width: 25% }
     .bsbox { height: 48px; background: #eee; margin-bottom: 3px }
@@ -2625,7 +2625,7 @@ const string VerticalAlignCss = """
     @page { size: a4; margin: 15mm }
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
-    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; vertical-align: top; width: 25% }
     .vabox { border: 1px solid #999; margin-bottom: 3px; white-space: nowrap }
@@ -2668,7 +2668,7 @@ const string SpacingCss = """
     @page { size: a4; margin: 15mm }
     body { font: 12pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
-    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
     .row { margin-bottom: 0.6em }
     .label { font-size: 7pt; font-weight: bold; color: #444; margin-bottom: 1px }
     </style>
@@ -2708,7 +2708,7 @@ const string FirstLetterCss = """
     @page { size: a4; margin: 15mm }
     body { font: 11pt Georgia, serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em; font-family: Arial, sans-serif }
-    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; font-family: Arial, sans-serif }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; font-family: Arial, sans-serif; break-after: avoid }
     p { margin: 0 0 0.8em }
     .dropcap::first-letter { font-size: 300%; float: left; color: crimson; font-weight: bold; line-height: 0.8; padding-right: 4px }
     .colored::first-letter { color: rgb(0,102,204); font-size: 150% }
@@ -2741,7 +2741,7 @@ const string FirstLineCss = """
     @page { size: a4; margin: 15mm }
     body { font: 11pt Georgia, serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em; font-family: Arial, sans-serif }
-    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; font-family: Arial, sans-serif }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; font-family: Arial, sans-serif; break-after: avoid }
     p { margin: 0 0 0.8em; width: 350px }
     .lede::first-line { font-weight: bold; color: darkslateblue; font-variant: small-caps }
     .bigfont::first-line { font-size: 200% }
