@@ -419,6 +419,75 @@ namespace PeachPDF.Tests.Html.Core.Utils
             Assert.Contains(wrapperFlattened, p => p.Box == plainChild);
         }
 
+        // ─── CollectPrintableContentRanges (Round 9: CSS Paged Media Level 3 §3.2's
+        // content-empty-page-skipping mechanism) ────────────────────────────────────
+
+        [Fact]
+        public async Task CollectPrintableContentRanges_RealContentSeparatedByPureMarginGap_ProducesTwoDisjointRanges()
+        {
+            // A large, purely-decorative gap (no background/border/text of its own - mirroring
+            // Acid2's own "100em" margins) between two real, painted boxes must not itself become
+            // part of either range, nor merge them into one.
+            var root = await Render(
+                "<div id='a' style='height:20px; background:rgb(0,0,0);'></div>" +
+                "<div id='gap' style='height:900px;'></div>" +
+                "<div id='b' style='height:20px; background:rgb(0,0,0);'></div>");
+            var a = DomUtils.GetBoxById(root, "a")!;
+            var b = DomUtils.GetBoxById(root, "b")!;
+
+            var ranges = DomUtils.CollectPrintableContentRanges(root);
+
+            Assert.Contains(ranges, r => Math.Abs(r.Top - a.Location.Y) < 0.5 && Math.Abs(r.Bottom - a.ActualBottom) < 0.5);
+            Assert.Contains(ranges, r => Math.Abs(r.Top - b.Location.Y) < 0.5 && Math.Abs(r.Bottom - b.ActualBottom) < 0.5);
+            Assert.DoesNotContain(ranges, r => r.Top <= a.ActualBottom + 5 && r.Bottom >= b.Location.Y - 5);
+        }
+
+        [Fact]
+        public async Task CollectPrintableContentRanges_PureMarginOnlyDocument_ProducesNoRanges()
+        {
+            // A box with real laid-out height but no background/border/text/generated content at all
+            // (the shape of Acid2's own "100em" margin gaps) must not contribute any range.
+            var root = await Render("<div id='gap' style='height:900px;'></div>");
+
+            var ranges = DomUtils.CollectPrintableContentRanges(root);
+
+            Assert.Empty(ranges);
+        }
+
+        [Fact]
+        public async Task CollectPrintableContentRanges_GeneratedPseudoElementContent_Counts()
+        {
+            // Per CSS Paged Media Level 3 §3.2's own carve-out, generated content always counts, even
+            // with an empty "content: ''" (Acid2's own ".nose div div:before"/":after" shape) and no
+            // background/border of its own beyond the pseudo box's border.
+            var root = await Render(
+                "<div id='b'></div><style>#b:before{content:''; display:block; width:10px; height:10px; " +
+                "border:1px solid rgb(1,2,3);}</style>");
+            var b = DomUtils.GetBoxById(root, "b")!;
+            var before = b.Boxes.Single(x => x.IsBeforePseudoElement);
+
+            var ranges = DomUtils.CollectPrintableContentRanges(root);
+
+            Assert.Contains(ranges, r => Math.Abs(r.Top - before.Location.Y) < 0.5 && Math.Abs(r.Bottom - before.ActualBottom) < 0.5);
+        }
+
+        [Fact]
+        public async Task CollectPrintableContentRanges_FixedPositionContent_IsExcluded()
+        {
+            // position:fixed content repeats identically on every generated page regardless of scroll
+            // offset (see CssBox.Paint/PaintImpCore's "IsFixed" branches) - if it counted as "real"
+            // content here, every page-slot (including genuinely empty margin gaps) would look
+            // non-empty, defeating the whole content-empty-page-skip mechanism. Mirrors the same
+            // exclusion CssBox.PerformLayoutImp already applies when growing HtmlContainer.ActualSize.
+            var root = await Render(
+                "<div id='fixedBox' style='position:fixed; top:0; left:0; width:50px; height:50px; " +
+                "background:rgb(0,0,0);'></div>");
+
+            var ranges = DomUtils.CollectPrintableContentRanges(root);
+
+            Assert.Empty(ranges);
+        }
+
         // --- Helper ---
 
         private static async Task<CssBox> Render(string bodyHtml)

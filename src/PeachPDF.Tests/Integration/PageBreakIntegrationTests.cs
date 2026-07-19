@@ -245,6 +245,163 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(headingPage, body2Page);
         }
 
+        // CSS Fragmentation Level 3 §5.2: "When an unforced break occurs before or after a
+        // block-level box, any margins adjoining the break are truncated to zero." A margin that
+        // stays within the same page as its previous sibling's bottom never triggers this - must
+        // behave exactly as before.
+        [Fact]
+        public async Task Margin_NotCrossingPageBoundary_IsNotTruncated()
+        {
+            var html = @"<!DOCTYPE html>
+<html>
+<head>
+<style>
+@page { size: A4; margin: 20mm; }
+body { margin: 0; }
+.filler { height: 100px; margin: 0; padding: 0; border: 0; }
+.second { margin-top: 50px; }
+</style>
+</head>
+<body>
+<div class='filler'></div>
+<div class='second'>Second</div>
+</body>
+</html>";
+
+            var (rootBox, container) = await BuildCssBoxTree(html);
+
+            var filler = FindBoxByClass(rootBox, "filler");
+            var second = FindBoxByClass(rootBox, "second");
+            Assert.NotNull(filler);
+            Assert.NotNull(second);
+
+            // second's margin-top (50) doesn't cross a page boundary from filler's bottom, so second
+            // should land at exactly filler.ActualBottom + 50, completely unaffected by truncation.
+            Assert.Equal(filler.ActualBottom + 50, second.Location.Y, 0.5);
+        }
+
+        // A margin just barely large enough to cross a single page boundary must be discarded
+        // entirely - the box lands flush at the top of the very next page (offset = MarginTop),
+        // not "partially through" the margin.
+        [Fact]
+        public async Task Margin_CrossingOnePageBoundary_TruncatesToZero_LandsAtTopOfNextPage()
+        {
+            var html = @"<!DOCTYPE html>
+<html>
+<head>
+<style>
+@page { size: A4; margin: 20mm; }
+body { margin: 0; }
+.filler { height: 800px; margin: 0; padding: 0; border: 0; }
+.second { margin-top: 50px; }
+</style>
+</head>
+<body>
+<div class='filler'></div>
+<div class='second'>Second</div>
+</body>
+</html>";
+
+            var (rootBox, container) = await BuildCssBoxTree(html);
+            var pageHeight = container.PageSize.Height;
+            var marginTop = container.MarginTop;
+
+            var filler = FindBoxByClass(rootBox, "filler");
+            var second = FindBoxByClass(rootBox, "second");
+            Assert.NotNull(filler);
+            Assert.NotNull(second);
+
+            // filler's own bottom (marginTop + 780) plus the 50px margin would land at
+            // marginTop + 830, past the first page boundary at pageHeight - confirm the untruncated
+            // math really would have crossed, so this test is exercising the intended case.
+            Assert.True(filler.ActualBottom + 50 > pageHeight,
+                $"test setup should cross a page boundary: filler.ActualBottom={filler.ActualBottom}, pageHeight={pageHeight}, marginTop={marginTop}");
+
+            Assert.True(second.Location.Y >= pageHeight,
+                $"second should land on page 2 (y >= {pageHeight}) but starts at y={second.Location.Y}");
+
+            var offsetWithinPage = second.Location.Y % pageHeight;
+            Assert.True(Math.Abs(offsetWithinPage - marginTop) < 1.0,
+                $"Truncated margin should leave second flush at MarginTop ({marginTop}) within page 2, but offset is {offsetWithinPage}");
+        }
+
+        // Acid2's own actual scenario: a margin so large it would span several page heights with
+        // no real content in it at all (e.g. "margin-top: 100em"). Truncation must still land the
+        // box on the very NEXT page after its previous sibling - not skip further pages just
+        // because the untruncated margin would have reached further.
+        [Fact]
+        public async Task HugeMultiPageMargin_TruncatesToZero_LandsOnVeryNextPage()
+        {
+            var html = @"<!DOCTYPE html>
+<html>
+<head>
+<style>
+@page { size: A4; margin: 20mm; }
+body { margin: 0; }
+.filler { height: 50px; margin: 0; padding: 0; border: 0; }
+.second { margin-top: 3000px; }
+</style>
+</head>
+<body>
+<div class='filler'></div>
+<div class='second'>Second</div>
+</body>
+</html>";
+
+            var (rootBox, container) = await BuildCssBoxTree(html);
+            var pageHeight = container.PageSize.Height;
+            var marginTop = container.MarginTop;
+
+            var second = FindBoxByClass(rootBox, "second");
+            Assert.NotNull(second);
+
+            // filler (height 50px) ends well within page index 0 - the very next page is page
+            // index 1, not some later page the untruncated 3000px margin would have reached on its
+            // own (which would be several pages further down).
+            var actualPage = Math.Floor((second.Location.Y - marginTop) / pageHeight);
+            Assert.Equal(1, actualPage);
+
+            var offsetWithinPage = second.Location.Y % pageHeight;
+            Assert.True(Math.Abs(offsetWithinPage - marginTop) < 1.0,
+                $"Truncated margin should leave second flush at MarginTop ({marginTop}), but offset is {offsetWithinPage}");
+        }
+
+        // A forced break (page-break-before: always) already relocates the previous sibling's
+        // bottom to the next page's top - per CSS Fragmentation §5.2, the margin AFTER a forced
+        // break is preserved (not truncated), unlike the unforced case above. This confirms the two
+        // mechanisms don't double-adjust: the box's own (small, non-crossing) margin-top is added
+        // normally on top of the forced-break relocation, not truncated a second time.
+        [Fact]
+        public async Task ForcedBreak_MarginAfterBreak_IsPreservedNotTruncated()
+        {
+            var html = @"<!DOCTYPE html>
+<html>
+<head>
+<style>
+@page { size: A4; margin: 20mm; }
+body { margin: 0; }
+.filler { height: 100px; margin: 0; padding: 0; border: 0; }
+.second { page-break-before: always; margin-top: 50px; }
+</style>
+</head>
+<body>
+<div class='filler'></div>
+<div class='second'>Second</div>
+</body>
+</html>";
+
+            var (rootBox, container) = await BuildCssBoxTree(html);
+            var pageHeight = container.PageSize.Height;
+            var marginTop = container.MarginTop;
+
+            var second = FindBoxByClass(rootBox, "second");
+            Assert.NotNull(second);
+
+            // Forced break puts the (bumped) previous sibling bottom at exactly pageHeight + marginTop;
+            // second's own 50px margin-top should be added normally on top of that, not truncated away.
+            Assert.Equal(pageHeight + marginTop + 50, second.Location.Y, 0.5);
+        }
+
         #region Helpers
 
         private async Task<(CssBox root, HtmlContainerInt container)> BuildCssBoxTree(string html)

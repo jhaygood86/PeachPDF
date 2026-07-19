@@ -44,6 +44,11 @@ namespace PeachPDF.Html.Core.Dom
                 return;
             }
 
+            // Replaced content takes this shortcut instead of the base implementation, but this box
+            // can still have its OWN CSS background (painted around/behind the replaced image content)
+            // - see EnsureAuxiliaryImagesLoadedAsync's doc comment for the real bug this fixes.
+            await EnsureAuxiliaryImagesLoadedAsync();
+
             MeasureWordSpacing(g);
             _wordsSizeMeasured = true;
 

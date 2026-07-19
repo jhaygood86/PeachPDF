@@ -78,6 +78,18 @@ namespace PeachPDF.Html.Core.Handlers
                 g.PushClip(lClipRect);
             }
 
+            // A repeating tile is drawn many times edge-to-edge (or, for two intentionally-offset
+            // layers meant to interlock into one solid color - Acid2's own checkerboard trick - drawn
+            // over another tiled layer) - any interpolation/smoothing at all leaves a soft seam between
+            // adjacent copies, or between the two layers, that never resolves crisp/solid regardless of
+            // rasterization DPI. Force nearest-neighbor for the duration of a repeating draw, restoring
+            // afterward since the same RImage may be reused elsewhere (a plain <img>, or a differently-
+            // configured background layer) where smoothing is still wanted. See RImage.Interpolate's
+            // own doc comment.
+            var wasInterpolate = image.Interpolate;
+            if (backgroundRepeat != "no-repeat")
+                image.Interpolate = false;
+
             switch (backgroundRepeat)
             {
                 case "no-repeat":
@@ -93,6 +105,8 @@ namespace PeachPDF.Html.Core.Handlers
                     DrawRepeat(g, image, positioningRect, srcRect, destRect);
                     break;
             }
+
+            image.Interpolate = wasInterpolate;
 
             g.PopClip();
         }

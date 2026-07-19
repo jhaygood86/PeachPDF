@@ -260,13 +260,22 @@ namespace PeachPDF
             // paint pass suppressed (see SuppressOwnBackgroundPaint), so it isn't painted twice.
             var canvasBackgroundBox = ResolveCanvasBackground(container.HtmlContainerInt.Root);
 
-            // while there is un-rendered HTML, create another PDF page and render with proper offset for the next page
-            double scrollOffset = 0;
+            // Create a PDF page for each page-slot that would actually show something, per CSS Paged
+            // Media Level 3 §3.2 ("User agents SHOULD avoid generating a large number of
+            // content-empty pages") - e.g. Acid2's own "100em" margins on "#top"/".picture" are
+            // intentionally huge, meant to be scrolled off-screen in a real, single-viewport browser;
+            // without this, a paginated PDF would dutifully generate several genuinely blank pages to
+            // walk through that margin before reaching the real content on the far side. Must run
+            // after canvasBackgroundBox above, since GetPaginationSlots relies on
+            // CssBox.SuppressOwnBackgroundPaint (set by ResolveCanvasBackground) to avoid treating the
+            // whole-page canvas fill itself as "real content" spanning the entire document.
+            var pageSlots = container.HtmlContainerInt.GetPaginationSlots();
             int pageNumber = 0;
-            var totalPages = (int)Math.Ceiling(container.ActualSize.Height / container.PageSize.Height);
-            while (scrollOffset > -container.ActualSize.Height)
+            var totalPages = pageSlots.Count;
+            foreach (var slotTop in pageSlots)
             {
                 pageNumber++;
+                var scrollOffset = -slotTop;
 
                 // Content's own coordinate system starts at container.MarginTop, not 0 (see
                 // container.Location = new XPoint(MarginLeft, MarginTop) in SetContent), so a page's
@@ -352,8 +361,6 @@ namespace PeachPDF
                         _pdfSharpAdapter,
                         applicablePageStyle);
                 }
-
-                scrollOffset -= container.PageSize.Height;
             }
 
             // Finalizes /ParentTree page-keyed entries before HandleLinks (which, when tagging is

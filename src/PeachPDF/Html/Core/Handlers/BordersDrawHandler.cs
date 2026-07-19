@@ -112,9 +112,21 @@ namespace PeachPDF.Html.Core.Handlers
             else
             {
                 // non rounded border
-                if (style is CssConstants.Inset or CssConstants.Outset)
+                if (style is CssConstants.Inset or CssConstants.Outset or CssConstants.Solid)
                 {
-                    // inset/outset border needs special rectangle
+                    // Solid (like inset/outset) needs the mitered trapezoid, not a thick straight line
+                    // spanning the box's full width/height: CSS2.1 8.5.3 draws each border edge as a
+                    // trapezoid whose non-parallel sides cut diagonally into the corner at 45°, meeting
+                    // exactly where the adjacent edge's own diagonal cut meets it. A simple thick line
+                    // has no such cut - it just overlaps/overwrites whichever adjacent-edge line painted
+                    // before it (DrawBoxBorders' fixed Top/Left/Bottom/Right paint order), which is
+                    // visually indistinguishable from mitering ONLY when every border shares the same
+                    // width and color (the common case) - it silently breaks the classic CSS
+                    // zero-content-width "border triangle" technique (mismatched adjacent border colors
+                    // on a box with no content) into flat overlapping rectangles instead of a triangle.
+                    // Acid2's own ".nose div div:before"/":after" (the nose's diamond, "border-style:
+                    // none solid solid"/"solid solid none" with red/yellow/black/yellow colors) is
+                    // exactly this technique.
                     SetInOutsetRectanglePoints(border, box, rect, isLineStart, isLineEnd);
                     g.DrawPolygon(g.GetSolidBrush(color), _borderPts);
                 }
@@ -124,7 +136,9 @@ namespace PeachPDF.Html.Core.Handlers
                 }
                 else
                 {
-                    // solid/dotted/dashed border draw as simple line
+                    // dotted/dashed border draw as simple line - representing dash/dot patterns as a
+                    // mitered trapezoid fill is far more involved than this repo's scope needs, and
+                    // (unlike solid) real UAs commonly render dotted/dashed corners as simple joins too.
                     var pen = GetPen(g, style, color, GetWidth(border, box));
 
                     switch (border)

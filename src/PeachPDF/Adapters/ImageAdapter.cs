@@ -51,6 +51,12 @@ namespace PeachPDF.Adapters
             get { return _image.PixelHeight; }
         }
 
+        public override bool Interpolate
+        {
+            get { return _image.Interpolate; }
+            set { _image.Interpolate = value; }
+        }
+
         public override void Dispose()
         {
             _image.Dispose();

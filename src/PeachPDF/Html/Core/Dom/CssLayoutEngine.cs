@@ -424,7 +424,16 @@ namespace PeachPDF.Html.Core.Dom
                 width = box.Words.Sum(x => x.FullWidth);
             }
 
-            if (box.Width != CssConstants.Auto && !string.IsNullOrEmpty(box.Width))
+            // Per CSS2.1 10.3.3, `width` has no effect on a non-replaced inline-level box - a
+            // replaced one (an image, or a resolved <object>) is already measured above via the
+            // Words.Count>0 branch, so it's excluded from this guard the same way. Acid2's own
+            // "#eyes-a object[type] { width: 7.5em; }" (the middle <object type="text/html"> in a
+            // fallback chain, non-replaced, display:inline) is deliberately meant to have this width
+            // ignored - without this guard, GetLargestChildWidth's recursive descendant walk (used
+            // for position:absolute shrink-to-fit, e.g. ".eyes") wrongly folded 7.5em into the
+            // ancestor's width, inflating it well past its real content.
+            if (box.Width != CssConstants.Auto && !string.IsNullOrEmpty(box.Width)
+                && !(box.Display == CssConstants.Inline && box.Words.Count == 0))
             {
                 width = CssValueParser.ParseLength(box.Width, box.ContainingBlock.Size.Width, box);
             }
@@ -502,6 +511,23 @@ namespace PeachPDF.Html.Core.Dom
         {
             foreach (var childBox in box.Boxes)
             {
+                // A table-cell/row/row-group's height is entirely owned by CssLayoutEngineTable's own
+                // row-stretch algorithm (CSS2.1 17.5.3: every cell in a row stretches to the row's
+                // tallest cell, which can be taller than the cell's own explicit `height` - that
+                // property is only one candidate feeding INTO the row's height, not necessarily the
+                // final used value). CssLayoutEngineTable.LayoutBodyRow already ran ApplyHeight for
+                // this cell's own subtree once, via its cell.PerformLayout(g) call, BEFORE stretching
+                // cell.ActualBottom up to match the row - re-running the generic ApplyHeight here
+                // (reached because the table box itself flows through this same PerformLayoutImp height
+                // pass afterward) would recompute the cell's height from its own explicit `height`
+                // alone, discarding that stretch - exactly what made ".third-part" (Acid2's own
+                // "gets stretched to fit row" test case) end up 4.5pt short of its row.
+                if (childBox.Display is CssConstants.TableCell or CssConstants.TableRow
+                    or CssConstants.TableRowGroup or CssConstants.TableHeaderGroup or CssConstants.TableFooterGroup)
+                {
+                    continue;
+                }
+
                 ApplyHeight(childBox);
                 ApplyParentHeight(childBox);
             }

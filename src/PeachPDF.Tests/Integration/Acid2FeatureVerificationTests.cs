@@ -322,6 +322,111 @@ namespace PeachPDF.Tests.Integration
             Assert.InRange(targetWidth, 79, 100);
         }
 
+        [Fact]
+        public async Task PositionAbsoluteAutoWidth_MultipleExplicitWidthSiblings_TakesWidestNotSum()
+        {
+            // Regression for CssBox.GetMinMaxSumWords's explicit-width floor (added to fix an
+            // anonymous table-cell sizing to 0 around a widthless-content child): the floor combined
+            // a block-level child's explicit width via "maxSumBeforeChild + explicitContentWidth"
+            // unconditionally - correct only when that child is the SOLE contributor so far
+            // (maxSumBeforeChild == 0), but wrong for multiple separate block-level siblings each with
+            // their own explicit width, which must compete for "widest single line wins" (Math.Max),
+            // not accumulate. Acid2's own ".eyes" has exactly this shape - "#eyes-b"/"#eyes-c" both
+            // "width:10em" as direct siblings - and summed to width 308 instead of the correct ~128
+            // (the widest single line, from "#eyes-a"'s own image content), reopening the exact
+            // red-bleed bug a previous round had already fixed.
+            var html = Wrap(
+                "<div id='container' style='position:relative; width:400px;'>"
+                + "<div id='target' style='position:absolute;'>"
+                + "<div id='wide1' style='width:100px; height:10px;'></div>"
+                + "<div id='wide2' style='width:90px; height:10px;'></div>"
+                + "</div></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var target = FindById(root, "target")!;
+
+            var targetWidth = target.ActualRight - target.Location.X;
+
+            // The widest single sibling (100px) should win - the buggy summed-across-siblings result
+            // would be at least 100+90=190px.
+            Assert.InRange(targetWidth, 99, 105);
+        }
+
+        [Fact]
+        public async Task PositionAbsoluteAutoWidth_NonReplacedInlineChildsExplicitWidth_HasNoEffect()
+        {
+            // Regression for CssBox.GetMinMaxSumWords's explicit-width floor: per CSS2.1 10.3.3,
+            // `width` has no effect on a non-replaced inline-level box. Acid2's own
+            // "#eyes-a object[type] { width: 7.5em; }" is exactly this shape - a non-replaced
+            // <object> that falls back to display:inline with no word content of its own - and its
+            // width must not be folded into an ancestor's shrink-to-fit computation. Mirrors that
+            // structure with a plain span (non-replaced, no text) carrying an explicit width nested
+            // inside a shrink-to-fit absolute box with no other real content.
+            var html = Wrap(
+                "<div id='container' style='position:relative; width:400px;'>"
+                + "<div id='target' style='position:absolute;'>"
+                + "<span id='inlineWide' style='display:inline; width:200px;'></span>"
+                + "</div></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var target = FindById(root, "target")!;
+
+            var targetWidth = target.ActualRight - target.Location.X;
+
+            // The inline child's own "width:200px" must be ignored - target should shrink to ~0
+            // (no real content), not inflate to 200px.
+            Assert.InRange(targetWidth, 0, 20);
+        }
+
+        // ─── a replaced element's own CSS background must still load ───────────────
+        // Acid2's own "#eyes-a object object object" - a resolved, replaced <object> with its own
+        // "background: url(...) fixed" checkerboard tile.
+
+        [Fact]
+        public async Task ReplacedImageElement_OwnCssBackgroundImage_StillLoads()
+        {
+            // Regression for CssBoxImage.MeasureWordsSize (mirrors the CssBoxObject case Acid2 itself
+            // exercises - see Acid2RegressionTests.Eyes_ResolvedObjectsOwnCssBackground_Loads): it
+            // overrides the base CssBox.MeasureWordsSize and returns early once it knows it's a
+            // replaced element, without ever calling the base logic that loads this box's own
+            // `background-image` layers (CssBox.EnsureAuxiliaryImagesLoadedAsync) - so a plain <img>
+            // with its own CSS background never loaded that background image at all.
+            const string png1x1 =
+                "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mP4/58BAAT/Af9jgNErAAAAAElFTkSuQmCC";
+            var html = Wrap($"<img id='t' src='{png1x1}' style='background: url({png1x1});' />");
+            var (root, _) = await BuildAndLayout(html);
+            var target = FindById(root, "t")!;
+
+            var backgroundImage = Assert.Single(target.BackgroundImages!);
+            var urlImage = Assert.IsType<CssImage.Url>(backgroundImage);
+            Assert.NotNull(urlImage.Image);
+        }
+
+        [Fact]
+        public async Task ThreeCompoundDescendantSelector_PseudoElement_OnlyMatchesInnermostElement_NotMiddleAncestor()
+        {
+            // Regression for CssData.DoesSelectorMatch(ComplexSelector, box): re-verifying an already-
+            // created pseudo-element box against its own selector failed to advance the ancestor-walk
+            // cursor past the pseudo box's owner before testing the next compound, letting that owner
+            // satisfy both the pseudo box's own identity check AND the selector's next ancestor
+            // requirement - effectively "borrowing" one ancestor level it wasn't entitled to. For
+            // ".a div div:before" over "<div class='a'><div><div></div></div></div>", this made the
+            // rule wrongly also match the MIDDLE div's own ::before (one level too high), not just the
+            // innermost div's - mirroring exactly the Acid2 ".nose div div:before" bug (see
+            // Acid2RegressionTests.NoseDiv_MiddleLevel_DoesNotReceiveBogusPseudoElementBox).
+            var html = Wrap("<div id='a' class='a'><div id='middle'><div id='inner'></div></div></div>"
+                + "<style>.a div div:before { content: 'X'; }</style>");
+            var (root, _) = await BuildAndLayout(html);
+            var outer = FindById(root, "a")!;
+            var middle = FindById(root, "middle")!;
+            var inner = FindById(root, "inner")!;
+
+            Assert.False(outer.Boxes.Any(b => b.IsBeforePseudoElement),
+                "the outermost div (.a itself) must not match its own descendant selector");
+            Assert.False(middle.Boxes.Any(b => b.IsBeforePseudoElement),
+                "the middle div must not receive a bogus ::before - only a div with TWO div ancestors matches \".a div div:before\"");
+            Assert.True(inner.Boxes.Any(b => b.IsBeforePseudoElement),
+                "the innermost div (two div ancestors deep) is the only element \".a div div:before\" should match");
+        }
+
         // ─── attribute selectors exactly as Acid2 combines them ────────────────────
         // "[class~=one].first.one" and "[class~=one][class~=first] [class=second\ two][class=\"second two\"]"
         // and the intentionally-invalid "[class=second two]" (unquoted space) which must NOT match.
@@ -688,7 +793,8 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Contains(g.Log.OfType<TestRecordingGraphics.DrawRectCall>(),
                 r => r.Color == RColor.FromArgb(37, 38, 39));
-            Assert.NotEmpty(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            // Solid borders paint as a mitered quad (BordersDrawHandler), not DrawLine.
+            Assert.NotEmpty(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>());
         }
 
         [Fact]
@@ -711,7 +817,8 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Contains(g.Log.OfType<TestRecordingGraphics.DrawRectCall>(),
                 r => r.Color == RColor.FromArgb(43, 44, 45));
-            Assert.NotEmpty(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            // Solid borders paint as a mitered quad (BordersDrawHandler), not DrawLine.
+            Assert.NotEmpty(g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>());
         }
 
         // ─── font shorthand's slash-separated <font-size>/<line-height> syntax ─────
@@ -806,6 +913,67 @@ namespace PeachPDF.Tests.Integration
                 "expected list-style:none to leave the marker box with no rendered content");
         }
 
+        // ─── repeating background tiles paint crisp, not smoothed ──────────────────
+        // Acid2's own "#eyes-b"/"#eyes-a object object object" checkerboard-interlock trick (two
+        // tiny, 1px-offset background tiles meant to interlock into one solid color) depends on this.
+
+        [Fact]
+        public async Task RepeatingBackgroundTile_DisablesInterpolationDuringDraw_RestoresAfter()
+        {
+            // Regression for image smoothing defeating the checkerboard-interlock trick: with
+            // interpolation left on, a PDF viewer smooths/blurs each tiny tile when rasterizing at any
+            // DPI above its native pixel size, and two independently-blurred layers never cancel out to
+            // solid the way crisp, hard-edged pixel tiles do.
+            var (root, _) = await BuildAndLayout(Wrap("<div id='t'></div>"));
+            var box = FindById(root, "t")!;
+
+            var image = new TrackingImage();
+            var g = new TestRecordingGraphics();
+            var rect = new RRect(0, 0, 100, 100);
+
+            PeachPDF.Html.Core.Handlers.BackgroundImageDrawHandler.DrawBackgroundImage(
+                g, image, "auto", "0% 0%", "repeat", rect, rect, null, box);
+
+            Assert.Contains(false, image.InterpolateHistory);
+            Assert.True(image.Interpolate,
+                "Interpolate must be restored to its original value after a repeating draw completes, since the same RImage may be reused elsewhere");
+        }
+
+        private sealed class TrackingImage : PeachPDF.Html.Adapters.RImage
+        {
+            public override double Width => 2;
+            public override double Height => 2;
+            private bool _interpolate = true;
+            public System.Collections.Generic.List<bool> InterpolateHistory { get; } = [];
+            public override bool Interpolate
+            {
+                get => _interpolate;
+                set { _interpolate = value; InterpolateHistory.Add(value); }
+            }
+            public override void Dispose() { }
+        }
+
+        // ─── table-cell height stretches to the row's tallest cell ─────────────────
+
+        [Fact]
+        public async Task TableCell_ExplicitHeightShorterThanRow_StretchesToRowHeight()
+        {
+            // Regression for CssLayoutEngine.ApplyParentHeight: the generic post-layout height pass
+            // re-applied a table-cell's own explicit `height` on top of CssLayoutEngineTable's
+            // already-correct row-stretch (CSS2.1 17.5.3), discarding it - see
+            // Acid2RegressionTests.ThirdPartCell_HeightStretchesToRowHeight_NotClampedToOwnExplicitHeight
+            // for the real Acid2 fixture case ("li.third-part") this mirrors.
+            var html = Wrap("<table><tr>"
+                + "<td id='tall' style='height:40px;'></td>"
+                + "<td id='short' style='height:5px;'></td>"
+                + "</tr></table>");
+            var (root, _) = await BuildAndLayout(html);
+            var tall = FindById(root, "tall")!;
+            var shortCell = FindById(root, "short")!;
+
+            Assert.InRange(shortCell.ActualBottom, tall.ActualBottom - 0.5, tall.ActualBottom + 0.5);
+        }
+
         // ─── border-spacing: 0 removes real inter-cell geometry gaps ───────────────
 
         [Fact]
@@ -840,6 +1008,14 @@ namespace PeachPDF.Tests.Integration
         // The fixture's own comment: "hides scrollbars on viewport, see 11.1.1:3" - in a paginated PDF
         // there's no scrollbar, so this must not have the unintended side effect of clipping away
         // content on any page beyond the first.
+        //
+        // Also now doubles as a check that HtmlContainerInt.GetPaginationSlots (the Round 9
+        // content-empty-page-skipping mechanism added for the real Acid2 fixture's own huge "100em"
+        // margins - see Acid2RegressionTests.FullFixture_MatchesPrinceXmlPageCount) doesn't misfire
+        // against a plain multi-section document that merely also sets "overflow:hidden" on "html":
+        // each ".section" below embeds its own real text ("section 0", "section 1", ...), not just a
+        // background, so none of the four pages are "content-empty" per CSS Paged Media Level 3 §3.2
+        // and all four must still be generated.
 
         [Fact]
         public async Task OverflowHiddenOnRootHtml_DoesNotClipLaterPages()
@@ -1099,6 +1275,31 @@ namespace PeachPDF.Tests.Integration
             Assert.InRange(b.Location.Y - a.ActualBottom, 24.5, 25.5);
         }
 
+        // Scenario 4b: a bordered box's following sibling starts exactly at its border-box bottom -
+        // border-bottom must not be counted twice.
+
+        [Fact]
+        public async Task BorderedBox_FollowingSibling_StartsAtBorderBoxBottom_NotDoubleCountingBorderBottom()
+        {
+            // Regression for CssBox.PerformLayoutImp's static/relative positioning formula: it added
+            // prevSibling.ActualBottom AND prevSibling.ActualBorderBottomWidth on top of that - but
+            // ActualBottom (CssBoxProperties' own getter, and every path that sets it - ApplyHeight,
+            // MarginBottomCollapse) already IS the outer border-box edge, inclusive of border-bottom.
+            // Adding the border width again pushed every sibling of a bordered box an extra
+            // border-bottom-width too far down. Caught via Acid2's own ".nose div div:before"/":after"
+            // diamond (a zero-content-height box relying on an exact 1em border-bottom) - ":after" was
+            // landing a full 1em below where ":before" actually ended, leaving the diamond's red
+            // "trap" background visible through the gap instead of the two triangles meeting flush.
+            var html = Wrap(
+                "<div id='a' style='border-bottom:5px solid black;'>content</div>"
+                + "<div id='b' style='height:10px;'></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            Assert.InRange(b.Location.Y - a.ActualBottom, -0.5, 0.5);
+        }
+
         // Scenario 5: floats never collapse margins with anything.
 
         [Fact]
@@ -1111,10 +1312,17 @@ namespace PeachPDF.Tests.Integration
             var before = FindById(root, "before")!;
             var floated = FindById(root, "floated")!;
 
-            // If the float wrongly collapsed with #before's 50px bottom margin, it would sit far below
-            // #before.ActualBottom. It must instead sit at #before.ActualBottom plus only its OWN 5px
-            // top margin - its own margin is never itself part of any collapsing group.
-            Assert.InRange(floated.Location.Y - before.ActualBottom, 4.5, 5.5);
+            // "Never collapse" means the two margins are never MERGED into a single value (taking
+            // whichever is larger/more-negative, per CSS2.1 8.3.1's adjoining-margins rule) - it does
+            // NOT mean #before's margin-bottom is ignored entirely. #before's 50px margin-bottom still
+            // occupies real physical space the float must be positioned after; the float's own 5px
+            // top margin then adds on top of that (summed, not collapsed): 50 + 5 = 55px total gap.
+            // A prior version of this test asserted the float sits only 5px below #before.ActualBottom
+            // (i.e. #before's margin dropped entirely) - that was itself the bug, caught via Acid2's
+            // own ".forehead" (margin-bottom: 4em) / ".nose" (float:left, margin-top: -2em) pair, whose
+            // gap was wrongly computed as -2em alone instead of the correct 4em + (-2em) = +2em, pulling
+            // ".nose" a full margin-bottom too far up into ".eyes" and hiding the nose diamond entirely.
+            Assert.InRange(floated.Location.Y - before.ActualBottom, 54.5, 55.5);
         }
 
         // Scenario 6: `overflow` establishing a new block formatting context blocks parent/child
