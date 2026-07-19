@@ -52,6 +52,12 @@ jobs:
     - name: Build
       run: dotnet build src/PeachPDF.Tests/PeachPDF.Tests.csproj --no-restore --configuration Release
 
+    # The TestHarness is the showcase generator for the docs site (pages.yml); nothing
+    # else builds it in CI, so compile it here to catch breaks before release day.
+    - name: Build TestHarness (showcase generator)
+      if: runner.os == 'Linux'
+      run: dotnet build src/PeachPDF.TestHarness/PeachPDF.TestHarness.csproj --configuration Release
+
     - name: Install Playwright browsers
       run: |
         $playwrightScript = Get-ChildItem -Path src/PeachPDF.Tests/bin/Release -Filter playwright.ps1 -Recurse | Select-Object -First 1 -ExpandProperty FullName

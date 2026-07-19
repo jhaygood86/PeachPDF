@@ -40,4 +40,5 @@ A `PdfGenerator` instance is not thread-safe. Use a **separate instance per thre
 - **[HTML & CSS Support](html-css-support.md)** — the full compatibility matrix of supported HTML elements, CSS properties, selectors, and at-rules, including notes on gaps and PeachPDF-specific extensions.
 - **[Supported SVG Features](supported-svg-features.md)** — the full compatibility matrix for inline and standalone SVG, rendered as real vector PDF content rather than rasterized bitmaps.
 - **[Usage Examples](usage-examples.md)** — copy-pasteable examples: local HTML strings, MHTML files, HTTP fetching, shared CSS contexts, saving to disk, fonts, tagged PDF (PDF/UA) output, and returning PDFs from ASP.NET Core (controllers and Minimal APIs) and Azure Functions.
+- **[Feature Showcase](showcase.html)** — real PDFs rendered by the current release at site build time, each paired with the exact HTML source it was generated from.
 - **[API Reference](api/index.md)** — generated reference for every public type and member, always in sync with the latest source.

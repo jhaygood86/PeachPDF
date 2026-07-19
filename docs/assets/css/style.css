@@ -632,3 +632,42 @@ td:first-child code {
     font-size: 0.78rem;
   }
 }
+
+/* Showcase gallery (showcase.html) */
+.showcase-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.showcase-thumb-link {
+  display: block;
+  margin: -0.35rem 0 0.9rem;
+}
+
+.showcase-thumb {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.showcase-thumb-link:hover .showcase-thumb {
+  border-color: var(--green);
+}
+
+.showcase-card p {
+  margin-bottom: 0.75rem;
+}
+
+.showcase-card .showcase-links {
+  display: flex;
+  gap: 1.25rem;
+  margin-top: auto;
+  margin-bottom: 0;
+}
+
+.showcase-links a {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
