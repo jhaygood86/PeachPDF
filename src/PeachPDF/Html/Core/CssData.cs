@@ -482,6 +482,19 @@ namespace PeachPDF.Html.Core
             _ => false
         };
 
+        /// <summary>
+        /// Does <paramref name="selector"/> (a single reversed-chain item's compound, as seen by
+        /// <see cref="DoesSelectorMatch(ComplexSelector, CssBox?)"/>) end in a pseudo-element - i.e.
+        /// is it the same structural shape that makes <see cref="DoesSelectorMatch(CompoundSelector, CssBox?)"/>
+        /// take its <c>box.IsPseudoElement</c> branch when tested against an existing pseudo box?
+        /// </summary>
+        private static bool EndsWithPseudoElement(ISelector selector) => selector switch
+        {
+            CompoundSelector compound => compound.LastOrDefault() is PseudoElementSelector,
+            PseudoElementSelector => true,
+            _ => false
+        };
+
         private static bool DoesSelectorMatch(CompoundSelector compoundSelector, CssBox? box)
         {
             if (box is null)
@@ -952,6 +965,25 @@ namespace PeachPDF.Html.Core
                 if (isLowestItem)
                 {
                     if (!DoesSelectorMatch(selector.Selector, currentRef)) return false;
+
+                    // currentRef may itself already be a pseudo-element box (e.g. re-verifying an
+                    // existing ::before against its owning selector on a later cascade pass) - when
+                    // the lowest compound matched it via DoesSelectorMatch(CompoundSelector, box)'s
+                    // box.IsPseudoElement branch, the match was really about currentRef's OWNER
+                    // (referenceBox = currentRef.ParentBox), not currentRef's own position in the
+                    // tree. Advance to that owner before walking remaining ancestor compounds -
+                    // otherwise the owner gets reused as if it were ALSO a distinct ancestor level
+                    // for the next compound, letting a pseudo-element compound "borrow" one extra
+                    // ancestor level it was never entitled to (e.g. ".nose div div:before" would
+                    // wrongly match ".nose"'s own child <div>'s ::before, since that child's owner
+                    // (".nose") would satisfy both "div" AND, one level further up, get reused... -
+                    // this is exactly the bug that made a bogus ::before appear on `.nose > div`
+                    // instead of only on `.nose > div > div` in the Acid2 fixture).
+                    if (currentRef is not null && currentRef.IsPseudoElement && EndsWithPseudoElement(selector.Selector))
+                    {
+                        currentRef = currentRef.ParentBox;
+                    }
+
                     isLowestItem = false;
                     continue;
                 }
@@ -968,7 +1000,9 @@ namespace PeachPDF.Html.Core
                     case " " or null:
                         currentRef = currentRef.ParentBox;
                         while (currentRef is not null && !DoesSelectorMatch(selector.Selector, currentRef))
+                        {
                             currentRef = currentRef.ParentBox;
+                        }
                         if (currentRef is null) return false;
                         break;
 

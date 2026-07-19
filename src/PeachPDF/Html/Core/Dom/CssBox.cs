@@ -1099,7 +1099,18 @@ namespace PeachPDF.Html.Core.Dom
                         var prevSibling = DomUtils.GetPreviousSibling(this, false);
 
                         var left = ContainingBlock.ClientLeft;
-                        var top = (prevSibling == null ? ContainingBlock.ClientTop : ParentBox == null ? Location.Y : 0) + MarginTopCollapse(prevSibling) + (prevSibling != null ? prevSibling.ActualBottom + prevSibling.ActualBorderBottomWidth : 0);
+                        // prevSibling.ActualBottom is already the outer border-box edge (CssBoxProperties.
+                        // ActualBottom = Location.Y + content height + padding + border, per its own
+                        // getter/ApplyHeight/MarginBottomCollapse - all three fold border-bottom in
+                        // exactly once) - adding prevSibling.ActualBorderBottomWidth again here double-
+                        // counted it, pushing every box that follows a bordered sibling an extra
+                        // border-bottom-width too far down. MarginTopCollapse's own internal bookkeeping
+                        // (anchor.ActualBottom + anchor.ActualBorderBottomWidth, then subtracting
+                        // prevSibling's own equivalent) is unaffected by this fix: those two terms already
+                        // cancel out exactly when anchor == prevSibling (the common case), and a
+                        // self-collapsing prevSibling always has zero border by definition
+                        // (IsMarginCollapseThrough requires it), so the residual term vanishes there too.
+                        var top = (prevSibling == null ? ContainingBlock.ClientTop : ParentBox == null ? Location.Y : 0) + MarginTopCollapse(prevSibling) + (prevSibling?.ActualBottom ?? 0);
 
                         Location = new RPoint(left + ActualMarginLeft, top);
                         ActualBottom = top;
@@ -1382,6 +1393,30 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Loads this box's own `background-image`/`list-style-image` layers (NOT `ContentImage` -
+        /// CSS generated-content images stay in the base <see cref="MeasureWordsSize"/> flow, since
+        /// they also need the phantom-image-word logic right after). Extracted so a replaced element
+        /// (<see cref="CssBoxImage"/>, <see cref="CssBoxObject"/> once resolved) can still load its OWN
+        /// CSS background - those two override <see cref="MeasureWordsSize"/> and short-circuit before
+        /// ever reaching the base implementation once they know they're replaced content, which
+        /// silently skipped this box's own `background-image` entirely (its `Image` stayed null
+        /// forever, so `CssImagePainter.Paint`'s `urlImage.Image != null` guard always failed at paint
+        /// time). Acid2's own "#eyes-a object object object" - a resolved, replaced &lt;object&gt; with
+        /// its own `background: url(...) fixed 1px 0` checkerboard tile - is exactly this: the tile
+        /// silently never painted at all, leaving ".eyes"'s own red background fully exposed instead of
+        /// interlocking into solid yellow with "#eyes-b"'s matching tile.
+        /// </summary>
+        internal async ValueTask EnsureAuxiliaryImagesLoadedAsync()
+        {
+            if (BackgroundImages is { Count: > 0 })
+                foreach (var image in BackgroundImages)
+                    await image.EnsureLoadedAsync(HtmlContainer!);
+
+            if (ListStyleImage != null)
+                await ListStyleImage.EnsureLoadedAsync(HtmlContainer!);
+        }
+
+        /// <summary>
         /// Assigns words its width and height
         /// </summary>
         /// <param name="g"></param>
@@ -1389,12 +1424,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             if (_wordsSizeMeasured) return;
 
-            if (BackgroundImages is { Count: > 0 })
-                foreach (var image in BackgroundImages)
-                    await image.EnsureLoadedAsync(HtmlContainer!);
-
-            if (ListStyleImage != null)
-                await ListStyleImage.EnsureLoadedAsync(HtmlContainer!);
+            await EnsureAuxiliaryImagesLoadedAsync();
 
             if (ContentImage != null)
             {
@@ -1798,12 +1828,39 @@ namespace PeachPDF.Html.Core.Dom
                     // clipping/overlapping the nested content. A plain absolute length (not a percentage
                     // - resolving that here would read this box's own not-yet-final ActualWidth,
                     // circular in exactly the way GetBoxWidth's shrink-to-fit callers already guard
-                    // against) is folded in as an explicit floor for this line's running total, the same
-                    // way a word's own width already contributes via "maxSum +=" above.
-                    if (CssValueParser.IsValidLength(childBox.Width) && !childBox.Width.EndsWith('%'))
+                    // against) is folded in as an explicit floor for this line's running total.
+                    //
+                    // Excludes a non-replaced inline box (Display:Inline with no Words of its own - a
+                    // replaced inline element, e.g. an image or resolved <object>, is already measured
+                    // via the Words.Count>0 branch elsewhere in this function and never reaches this
+                    // check in a way that would be wrongly excluded here): per CSS2.1 10.3.3, `width`
+                    // has NO EFFECT on a non-replaced inline-level box. Acid2's own
+                    // "#eyes-a object[type] { width: 7.5em; }" is exactly this - the middle <object
+                    // type="text/html"> in the fallback chain, which falls back to display:inline and
+                    // is deliberately meant to have this width ignored (Round 6 verified this is a
+                    // real no-op at layout time via CssBox.PerformLayoutImp's IsBlock gate).
+                    //
+                    // A child that starts its OWN new "line" (same condition as the block-reset check
+                    // at the top of this function) must have its explicit width combined via Math.Max,
+                    // NOT added to maxSumBeforeChild - maxSumBeforeChild already reflects whatever an
+                    // EARLIER, unrelated block-level sibling contributed (each such sibling resets to
+                    // its own line via the oldSum mechanism and is meant to compete for "widest line
+                    // wins", not accumulate). The very first version of this fix always added
+                    // maxSumBeforeChild + explicitContentWidth unconditionally, which was fine for a
+                    // lone child (maxSumBeforeChild was 0) but wrongly summed multiple separate
+                    // block-level siblings' explicit widths together - Acid2's own ".eyes" with three
+                    // block-level children ("#eyes-a" ~128 intrinsic, "#eyes-b"/"#eyes-c" each
+                    // explicit 10em/90pt) summed to 308 (128+90+90) instead of correctly taking the
+                    // widest single line (~128).
+                    if (CssValueParser.IsValidLength(childBox.Width) && !childBox.Width.EndsWith('%')
+                        && !(childBox.Display == CssConstants.Inline && childBox.Words.Count == 0))
                     {
                         var explicitContentWidth = CssValueParser.ParseLength(childBox.Width, 0, childBox);
-                        maxSum = Math.Max(maxSum, maxSumBeforeChild + explicitContentWidth);
+                        var childStartsNewLine = childBox.Display != CssConstants.Inline
+                            && childBox.Display != CssConstants.TableCell && childBox.WhiteSpace != CssConstants.NoWrap;
+                        maxSum = childStartsNewLine
+                            ? Math.Max(maxSum, explicitContentWidth)
+                            : Math.Max(maxSum, maxSumBeforeChild + explicitContentWidth);
                         min = Math.Max(min, explicitContentWidth);
                     }
 
@@ -1854,13 +1911,22 @@ namespace PeachPDF.Html.Core.Dom
         protected double MarginTopCollapse(CssBox? prevSibling)
         {
             // Per CSS2.1 8.3.1, floats (and absolutely/fixed-positioned boxes, which never reach this
-            // call site - see the Position guard at the call site in CssLayoutEngine) never collapse
-            // margins with anything; their own top margin is used as-is and their vertical placement is
-            // then fully determined by CssLayoutEngine.FloatBox/ClearBox.
+            // call site - see the Position guard at the call site in CssLayoutEngine) never COLLAPSE
+            // their own margin with anything (they're out-of-flow, so their margin never "adjoins"
+            // another box's) - but the preceding sibling's own trailing margin still occupies real
+            // physical space the float must be positioned after; only the MERGING (taking whichever
+            // margin is larger/more-negative instead of summing both) is skipped, not the sibling's
+            // margin itself. Acid2's own ".forehead" (margin-bottom: 4em) immediately followed by
+            // ".nose" (float:left, margin: -2em ...) is exactly this: the correct gap between them is
+            // forehead's 4em margin-bottom PLUS nose's own -2em margin-top (summed, net +2em), not
+            // just nose's raw -2em with forehead's entire margin-bottom silently dropped - which
+            // previously pulled ".nose" a full margin-bottom's worth too far up, overlapping ".eyes"
+            // far more than the fixture intends and hiding the nose diamond behind it entirely.
             if (IsFloated)
             {
-                CollapsedMarginTop = ActualMarginTop;
-                return ActualMarginTop;
+                var floatValue = ActualMarginTop + (prevSibling?.GetEffectiveBottomMargin() ?? 0);
+                CollapsedMarginTop = floatValue;
+                return floatValue;
             }
 
             // An ancestor's own MarginTopCollapse call already looked ahead into this box (as part of a

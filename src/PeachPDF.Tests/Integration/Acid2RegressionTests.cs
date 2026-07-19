@@ -152,6 +152,82 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task Nose_DoesNotOverlapEyesRow_FloatRespectsForeheadsTrailingMargin()
+        {
+            // Regression for CssBox.MarginTopCollapse's IsFloated branch: it previously returned ONLY
+            // the float's own top margin, silently discarding the preceding in-flow sibling's own
+            // trailing margin entirely (conflating "floats never COLLAPSE/merge margins" with "floats
+            // ignore the preceding margin"). ".forehead" (margin-bottom: 4em) immediately precedes
+            // ".nose" (float:left, margin: -2em ...) - the correct gap is forehead's 4em margin-bottom
+            // PLUS nose's own -2em margin-top (summed, net +2em), not just the raw -2em with forehead's
+            // margin dropped, which pulled ".nose" a full margin-bottom too far up into ".eyes" (whose
+            // own opaque background then hid the nose diamond entirely instead of the two elements
+            // merely touching at ".eyes"'s bottom edge, as the fixture intends).
+            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var forehead = FindByClass(root, "forehead")!;
+            var eyes = FindByClass(root, "eyes")!;
+            var nose = FindByClass(root, "nose")!;
+
+            Assert.True(nose.Location.Y > forehead.ActualBottom,
+                $"nose (Location.Y={nose.Location.Y}) should sit below forehead's own border-box bottom (ActualBottom={forehead.ActualBottom}), not pulled up past it");
+
+            // Nose should sit at or just below eyes' bottom edge - not deeply overlapping it.
+            Assert.True(nose.Location.Y >= eyes.ActualBottom - 0.5,
+                $"nose (Location.Y={nose.Location.Y}) should not overlap eyes' row (ActualBottom={eyes.ActualBottom}) by more than a rounding epsilon");
+        }
+
+        [Fact]
+        public async Task NoseDivDiv_BeforeAndAfterPseudoElements_MeetFlushWithNoGap()
+        {
+            // Regression for CssBox.PerformLayoutImp's static/relative positioning formula
+            // double-counting a preceding sibling's own border-bottom-width (see
+            // Acid2FeatureVerificationTests.BorderedBox_FollowingSibling_StartsAtBorderBoxBottom_
+            // NotDoubleCountingBorderBottom for the isolated mechanism). ".nose div div:before" (a
+            // black-bottom-border triangle) and ".nose div :after" (a black-top-border triangle) are
+            // meant to meet flush, together forming the nose's black diamond outline with no gap - a
+            // gap the exact size of ":before"'s own 1em border-bottom left ".nose div div"'s own red
+            // "trap" background (meant to always stay hidden) visible as a red band through the middle.
+            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var nose = FindByClass(root, "nose")!;
+            var noseDivDiv = nose.Boxes.First(b => b.HtmlTag != null).Boxes.First(b => b.HtmlTag != null);
+
+            var before = noseDivDiv.Boxes.Single(b => b.IsBeforePseudoElement);
+            var after = noseDivDiv.Boxes.Single(b => b.IsAfterPseudoElement);
+
+            Assert.InRange(after.Location.Y - before.ActualBottom, -0.5, 0.5);
+        }
+
+        [Fact]
+        public async Task NoseDiv_MiddleLevel_DoesNotReceiveBogusPseudoElementBox()
+        {
+            // Regression for a Round 8 bug in CssData.DoesSelectorMatch(ComplexSelector, box): when
+            // re-verifying an EXISTING pseudo-element box (created under ".nose div div", the
+            // innermost div) against its own selector, the ancestor-chain walk failed to advance past
+            // the pseudo box's owner before testing the next compound - letting that same owner
+            // (nose>div>div) satisfy BOTH the pseudo box's own non-pseudo identity check AND the
+            // selector's middle "div" ancestor requirement, effectively letting the chain "borrow" one
+            // ancestor level it wasn't entitled to. This made ".nose div div:before"/".nose div :after"
+            // (wrongly) also match nose>div (the MIDDLE div, one level too high), producing a bogus
+            // pseudo-element sibling that pushed the real nose>div>div down by exactly its own height.
+            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var nose = FindByClass(root, "nose")!;
+            var noseDiv = nose.Boxes.First(b => b.HtmlTag != null);
+            var noseDivDiv = noseDiv.Boxes.First(b => b.HtmlTag != null);
+
+            Assert.False(noseDiv.Boxes.Any(b => b.IsBeforePseudoElement || b.IsAfterPseudoElement),
+                "the middle-level div (.nose > div) should not receive its own generated pseudo-element box - only the innermost div (.nose > div > div) is targeted by \".nose div div:before\"/\".nose div :after\"");
+
+            // nose>div>div is the only real child in normal flow, so it should start exactly at its
+            // containing block's content-top - not shifted down by a phantom preceding sibling.
+            Assert.InRange(noseDivDiv.Location.Y, noseDiv.ClientTop - 0.5, noseDiv.ClientTop + 0.5);
+
+            // And its bottom must stay within .nose's own (max-height:3em-capped) bottom - not overflow
+            // past the visible border, as it did when the phantom sibling pushed it down.
+            Assert.True(noseDivDiv.ActualBottom <= nose.ActualBottom + 0.5,
+                $"nose>div>div (ActualBottom={noseDivDiv.ActualBottom}) should not overflow past .nose's own bottom (ActualBottom={nose.ActualBottom})");
+        }
+
+        [Fact]
         public async Task SmileDiv_BottomOffset_ShiftsPositionAwayFromStaticFlow()
         {
             // Regression for the "bottom" offset property being entirely unimplemented: ".smile div {
@@ -221,6 +297,38 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task Eyes_ResolvedObjectsOwnCssBackground_Loads()
+        {
+            // Regression: CssBoxObject.MeasureWordsSize (and CssBoxImage.MeasureWordsSize) override the
+            // base CssBox.MeasureWordsSize and short-circuit as soon as they know they're replaced
+            // content, WITHOUT ever calling the base logic that loads this box's own `background-image`
+            // layers (CssBox.EnsureAuxiliaryImagesLoadedAsync) - so a replaced element's own CSS
+            // background silently never loaded its image at all. "#eyes-a object object object" is
+            // exactly this: a resolved, replaced <object> (the eye-icon PNG) that ALSO has its own
+            // "background: url(...) fixed 1px 0" checkerboard tile - before this fix, that tile's
+            // BackgroundImages[0].Image stayed permanently null, so CssImagePainter.Paint's
+            // "urlImage.Image != null" guard always failed and the tile never painted at all, leaving
+            // ".eyes"'s own red background fully exposed across almost the entire eye-icon region
+            // instead of interlocking into solid yellow with "#eyes-b"'s matching tile.
+            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var eyesA = FindById(root, "eyes-a")!;
+
+            CssBox? resolvedObjectWithBackground = null;
+            void FindResolvedObjectWithBackground(CssBox box)
+            {
+                if (box.HtmlTag?.Name == "object" && box.Words.Any(w => w.IsImage) && box.BackgroundImages is { Count: > 0 })
+                    resolvedObjectWithBackground = box;
+                foreach (var child in box.Boxes) FindResolvedObjectWithBackground(child);
+            }
+            FindResolvedObjectWithBackground(eyesA);
+
+            Assert.NotNull(resolvedObjectWithBackground);
+            var backgroundImage = Assert.Single(resolvedObjectWithBackground!.BackgroundImages!);
+            var urlImage = Assert.IsType<PeachPDF.Html.Core.Entities.CssImage.Url>(backgroundImage);
+            Assert.NotNull(urlImage.Image);
+        }
+
+        [Fact]
         public async Task SecondLineBlockquote_MarginAndOriginInsideBorderedPicture_BothApplyCorrectly()
         {
             // Regression for a Round 3 bug: position:absolute never added the box's own margin, and
@@ -260,6 +368,28 @@ namespace PeachPDF.Tests.Integration
             var eyesAWidth = eyesA.ActualRight - eyesA.Location.X;
 
             Assert.InRange(eyesWidth, eyesAWidth - 1, eyesAWidth + 1);
+        }
+
+        [Fact]
+        public async Task Eyes_ShrinkToFitWidth_MatchesEyeIconIntrinsicWidth_NotEyesBAndEyesCSummed()
+        {
+            // Regression for a real bug: "eyesWidth ≈ eyesAWidth" alone (the test above) is
+            // tautologically true regardless of whether ".eyes" is correctly ~128 or wrongly inflated
+            // - "#eyes-a" always fills whatever width ".eyes" resolves to, per normal block flow, so
+            // that assertion alone never actually catches a shrink-to-fit regression. This pins an
+            // absolute upper bound: ".eyes" must not approach "#eyes-b"'s width (10em=90pt) plus
+            // "#eyes-c"'s width (10em=90pt) summed together (~180pt+), which is exactly what
+            // GetMinMaxSumWords's explicit-width floor produced when it wrongly ADDED multiple
+            // separate block-level siblings' explicit widths instead of taking their max (see
+            // PositionAbsoluteAutoWidth_MultipleExplicitWidthSiblings_TakesWidestNotSum in
+            // Acid2FeatureVerificationTests.cs for the isolated mechanism test).
+            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var eyes = FindByClass(root, "eyes")!;
+
+            var eyesWidth = eyes.ActualRight - eyes.Location.X;
+
+            Assert.True(eyesWidth < 170,
+                $"expected .eyes's shrink-to-fit width to stay well under #eyes-b + #eyes-c's summed widths (~180pt+), got {eyesWidth}");
         }
 
         [Fact]
@@ -425,6 +555,25 @@ namespace PeachPDF.Tests.Integration
 
             var thirdCellWidth = thirdPart.ActualRight - thirdPart.Location.X;
             Assert.InRange(thirdCellWidth, expectedWidth - 0.5, expectedWidth + 0.5);
+        }
+
+        [Fact]
+        public async Task ThirdPartCell_HeightStretchesToRowHeight_NotClampedToOwnExplicitHeight()
+        {
+            // Regression for CssLayoutEngine.ApplyParentHeight: the generic post-layout height pass
+            // (run once for every box in a table's subtree, via the <ul> table box's own
+            // PerformLayoutImp reaching ApplyHeight/ApplyParentHeight after CssLayoutEngineTable.
+            // PerformLayout returns) re-applied a table-cell's OWN explicit `height` on top of
+            // CssLayoutEngineTable's already-correct row-stretch (CSS2.1 17.5.3: every cell in a row
+            // stretches to the row's tallest cell), discarding the stretch. "ul li.third-part {
+            // display: table-cell; height: 0.5em; /* gets stretched to fit row */ }" - per the
+            // fixture's own comment - is exactly this: its declared 0.5em is shorter than
+            // "li.first-part"'s 1em, so it must still end up exactly as tall as the row.
+            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var firstPart = FindByClass(root, "first-part")!;
+            var thirdPart = FindByClass(root, "third-part")!;
+
+            Assert.InRange(thirdPart.ActualBottom, firstPart.ActualBottom - 0.5, firstPart.ActualBottom + 0.5);
         }
 
         [Fact]

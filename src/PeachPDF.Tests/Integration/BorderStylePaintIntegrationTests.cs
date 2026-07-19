@@ -149,14 +149,27 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             await div.Paint(g);
 
-            var lines = g.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToList();
-            // Two sides painted (left, right), each as a single line - top/bottom (none) draw nothing.
-            Assert.Equal(2, lines.Count);
-            Assert.All(lines, l => Assert.Equal(RColor.FromArgb(51, 51, 51), l.Color));
+            // Solid borders paint as a mitered quad (BordersDrawHandler.SetInOutsetRectanglePoints),
+            // not a single line - see BordersDrawHandler's own doc comment on why (the classic CSS
+            // "border triangle" technique, which Acid2's own nose diamond relies on, needs a real
+            // diagonal miter at each corner, not a thick straight line that just overlaps whichever
+            // adjacent border painted before it).
+            var polys = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>().ToList();
+            // Two sides painted (left, right), each as a mitered quad - top/bottom (none) draw nothing.
+            Assert.Equal(2, polys.Count);
+            Assert.All(polys, p => Assert.Equal(RColor.FromArgb(51, 51, 51), p.Color));
 
-            // A vertical (left/right) side line has equal Y and differing X; horizontal has equal X.
-            Assert.All(lines, l => Assert.True(System.Math.Abs(l.X1 - l.X2) < 0.01,
-                "expected only vertical (left/right) border lines, none horizontal"));
+            // A vertical (left/right) side quad spans more in Y than X; a horizontal one would be the
+            // reverse.
+            Assert.All(polys, p =>
+            {
+                var minX = p.Points.Min(pt => pt.X);
+                var maxX = p.Points.Max(pt => pt.X);
+                var minY = p.Points.Min(pt => pt.Y);
+                var maxY = p.Points.Max(pt => pt.Y);
+                Assert.True(maxY - minY > maxX - minX,
+                    "expected only vertical (left/right) border quads, none horizontal");
+            });
         }
 
         // ─── border-color/border-width 4-value and 2-value expansion resolve per-side ──

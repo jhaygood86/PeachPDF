@@ -120,6 +120,12 @@ namespace PeachPDF.Html.Core.Dom
         {
             if (!_wordsSizeMeasured)
             {
+                // This replaced element (the <img> itself) takes a shortcut instead of the base
+                // implementation below, but can still have its OWN CSS background (painted around/
+                // behind the replaced image content) - see EnsureAuxiliaryImagesLoadedAsync's doc
+                // comment for the bug this fixes (a sibling of this one, for CssBoxObject).
+                await EnsureAuxiliaryImagesLoadedAsync();
+
                 if (_imageLoadHandler == null)
                 {
                     _imageLoadHandler = new ImageLoadHandler(HtmlContainer!);

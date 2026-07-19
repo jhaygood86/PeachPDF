@@ -703,6 +703,23 @@ namespace PeachPDF.Tests.Html.Core.Dom
                     HorizontalLines.Add(y1);
             }
 
+            /// <summary>
+            /// Solid borders paint as a mitered quad (BordersDrawHandler.SetInOutsetRectanglePoints),
+            /// not a DrawLine call - a wide-and-thin quad (wider in X than in Y) is a horizontal border
+            /// stripe; record its vertical center the same way DrawLine's y1/y2 would, so callers don't
+            /// need to know which draw method a given border style happens to use.
+            /// </summary>
+            public override void DrawPolygon(PeachPDF.Html.Adapters.RBrush brush, PeachPDF.Html.Adapters.Entities.RPoint[] points)
+            {
+                if (points.Length == 0) return;
+                var minY = points.Min(p => p.Y);
+                var maxY = points.Max(p => p.Y);
+                var minX = points.Min(p => p.X);
+                var maxX = points.Max(p => p.X);
+                if (maxX - minX > maxY - minY)
+                    HorizontalLines.Add((minY + maxY) / 2);
+            }
+
             public override void PushClip(PeachPDF.Html.Adapters.Entities.RRect rect)
             {
                 _clipStack.Push(rect);
@@ -732,7 +749,6 @@ namespace PeachPDF.Tests.Html.Core.Dom
             public override void DrawImage(PeachPDF.Html.Adapters.RImage image, PeachPDF.Html.Adapters.Entities.RRect destRect) { }
             public override void DrawPath(PeachPDF.Html.Adapters.RPen pen, PeachPDF.Html.Adapters.RGraphicsPath path) { }
             public override void DrawPath(PeachPDF.Html.Adapters.RBrush brush, PeachPDF.Html.Adapters.RGraphicsPath path) { }
-            public override void DrawPolygon(PeachPDF.Html.Adapters.RBrush brush, PeachPDF.Html.Adapters.Entities.RPoint[] points) { }
             public override PeachPDF.Html.Adapters.RGraphicsPath GetGraphicsPath() => new RecordingGraphicsPath();
             public override (PeachPDF.Html.Adapters.RGraphics Graphics, PeachPDF.Html.Adapters.RImage Image)? CreateTile(double width, double height) => null;
             public override void DrawImageMasked(PeachPDF.Html.Adapters.RImage image, PeachPDF.Html.Adapters.RImage maskImage, PeachPDF.Html.Adapters.Entities.RRect destRect) { }
