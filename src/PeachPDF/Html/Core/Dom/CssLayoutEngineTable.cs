@@ -168,10 +168,23 @@ namespace PeachPDF.Html.Core.Dom
             // While table width is larger than it should, and width is reducible
             EnforceMinimumSize();
 
-            _tableBox.Location = _tableBox.Location with
+            // CssBox.PerformLayoutImp's Static/Relative branch already positioned this box at
+            // ClientLeft + ActualMarginLeft before dispatching here (ActualMarginLeft calls
+            // GetActualMarginLeft with boxWidth: null). For a fixed (non-auto) margin-left that
+            // call already returns the final pixel value, so re-adding it below would double-count
+            // it - Acid2's own teeth row ("ul { margin: -1em 7em 0; }") landed 63pt too far right
+            // because of exactly this. Only 'margin-left: auto' (table centering, e.g.
+            // 'margin: 0 auto') genuinely needs a second pass here: GetActualMarginLeft
+            // intentionally returns 0 for an auto-margin table when boxWidth is null (the table's
+            // own shrink-to-fit width isn't known yet during the earlier pass), deferring the real
+            // centering offset - now that GetWidthSum() is known - to this point.
+            if (_tableBox.MarginLeft is CssConstants.Auto)
             {
-                X = _tableBox.Location.X + CssLayoutEngine.GetActualMarginLeft(_tableBox, GetWidthSum())
-            };
+                _tableBox.Location = _tableBox.Location with
+                {
+                    X = _tableBox.Location.X + CssLayoutEngine.GetActualMarginLeft(_tableBox, GetWidthSum())
+                };
+            }
 
             // Ensure there's no padding
             _tableBox.PaddingLeft = _tableBox.PaddingTop = _tableBox.PaddingRight = _tableBox.PaddingBottom = "0";

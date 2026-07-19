@@ -628,6 +628,53 @@ Assert.NotNull(tbody);
             Assert.Equal(1, footerProxies);
         }
 
+        [Fact]
+        public async Task TableLayout_FixedMarginLeft_IsNotDoubleCounted()
+        {
+            // Regression test: CssBox.PerformLayoutImp's Static/Relative branch already positions a
+            // display:table box at ClientLeft + ActualMarginLeft before dispatching into
+            // CssLayoutEngineTable.Layout, which used to unconditionally add
+            // GetActualMarginLeft(_tableBox, GetWidthSum()) again - for a fixed (non-auto)
+            // margin-left that second call returns the same non-zero value (GetWidthSum() only
+            // matters for the auto-margin centering case), so the table ended up shifted an extra
+            // margin-left's worth to the right. Caught on Acid2's own teeth row
+            // ("ul { display: table; margin: -1em 7em 0; }"), which rendered detached to the right
+            // of the chin instead of flush against it.
+            var html = "<html><body><div id='wrap'>" +
+                       "<table id='t' style='margin-left: 50px; margin-top: 0;'><tr><td>A</td></tr></table>" +
+                       "</div></body></html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var wrap = FindById(rootBox, "wrap")!;
+            var table = FindTableBox(rootBox)!;
+
+            Assert.Equal(wrap.ClientLeft + 50, table.Location.X, precision: 3);
+        }
+
+        [Fact]
+        public async Task TableLayout_AutoMargins_CentersTable()
+        {
+            // Regression test for the deferred-centering branch left behind by the fix above:
+            // GetActualMarginLeft(_tableBox) returns 0 during the earlier Static/Relative pass
+            // (boxWidth: null, table width not known yet), so this box's margin-left:auto centering
+            // offset is entirely computed by CssLayoutEngineTable.Layout's own re-application, once
+            // GetWidthSum() is known - that path needs its own coverage, distinct from the
+            // fixed-margin case above.
+            var html = "<html><body><div id='wrap' style='width: 400px;'>" +
+                       "<table id='t' style='width: 100px; margin: 0 auto;'><tr><td>A</td></tr></table>" +
+                       "</div></body></html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var wrap = FindById(rootBox, "wrap")!;
+            var table = FindTableBox(rootBox)!;
+
+            var wrapWidth = wrap.ClientRight - wrap.ClientLeft;
+            var tableWidth = table.ActualRight - table.Location.X;
+            var expectedX = wrap.ClientLeft + (wrapWidth - tableWidth) / 2;
+
+            Assert.Equal(expectedX, table.Location.X, precision: 3);
+        }
+
         #endregion
 
    #region Helper Methods
@@ -668,6 +715,22 @@ using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
   }
 
       return null;
+        }
+
+        private static CssBox? FindById(CssBox box, string id)
+        {
+            var val = box.HtmlTag?.TryGetAttribute("id", "");
+            if (val != null && val.Equals(id, System.StringComparison.OrdinalIgnoreCase))
+                return box;
+
+            foreach (var child in box.Boxes)
+            {
+                var result = FindById(child, id);
+                if (result != null)
+                    return result;
+            }
+
+            return null;
         }
 
         #endregion
