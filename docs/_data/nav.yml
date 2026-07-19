@@ -1,0 +1,12 @@
+- title: Getting Started
+  url: /getting-started.html
+- title: Architecture
+  url: /architecture.html
+- title: HTML & CSS
+  url: /html-css-support.html
+- title: SVG
+  url: /supported-svg-features.html
+- title: Examples
+  url: /usage-examples.html
+- title: API Reference
+  url: /api/

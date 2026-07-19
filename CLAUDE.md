@@ -6,14 +6,15 @@ Pure .NET HTML → PDF rendering library. No external process dependency (no Pup
 
 Read these before making non-trivial changes in their area — they are the source of truth, not this file:
 
-- [docs/index.md](docs/index.md) — doc site landing page / guide index
+- [docs/index.html](docs/index.html) — doc site marketing-style landing page (hero, feature cards, guide cards)
+- [docs/getting-started.md](docs/getting-started.md) — install, quick start, thread safety / guide index
 - [docs/architecture.md](docs/architecture.md) — how HTML becomes a PDF: parser, DOM, CSS, layout, painting, PDF renderer
-- [docs/html-css-support.md](docs/html-css-support.md) — full HTML/CSS compatibility matrix (elements, properties, selectors, at-rules, gaps, extensions)
+- [docs/html-css-support.md](docs/html-css-support.md) — full HTML/CSS compatibility matrix (elements, properties, selectors, at-rules, gaps, extensions, PDF metadata extraction, tagged PDF)
 - [docs/supported-svg-features.md](docs/supported-svg-features.md) — full SVG compatibility matrix (inline `<svg>` and standalone), rendered as real vector PDF content
-- [docs/usage-examples.md](docs/usage-examples.md) — copy-pasteable API usage (local HTML, MHTML, HTTP fetch, thread safety, ASP.NET Core/Azure Functions)
+- [docs/usage-examples.md](docs/usage-examples.md) — copy-pasteable API usage (local HTML, MHTML, HTTP fetch, thread safety, fonts, enabling tagged PDF, ASP.NET Core/Azure Functions)
 - [README.md](README.md) — package overview, install, quick start, fonts
 
-When you add or change user-facing features, update the relevant doc page (and its `README.md`/`docs/index.md` cross-links) in the same change, rather than as a follow-up — this repo's convention (established by the SVG 1.0 coverage work) is docs land with the feature.
+When you add or change user-facing features, update the relevant doc page (and its `README.md`/`docs/getting-started.md` cross-links) in the same change, rather than as a follow-up — this repo's convention (established by the SVG 1.0 coverage work) is docs land with the feature.
 
 If a new or changed feature gives PeachPDF a new visible capability, add a new showcase or update an existing one in `src/PeachPDF.TestHarness/Program.cs` in the same change — this is also how several rendering-correctness bugs (paint-order, broken masks, no-op gradient spread methods) were actually caught, since automated tests alone missed them (see Testing conventions below).
 

@@ -1,0 +1,98 @@
+---
+layout: default
+---
+<section class="hero">
+  <img class="hero-logo" src="{{ '/assets/img/peach.svg' | relative_url }}" alt="" width="96" height="96">
+  <h1 class="hero-title">HTML to PDF.<br><span class="hero-grad">Pure .NET.</span></h1>
+  <p class="hero-sub">PeachPDF renders HTML, CSS, and SVG straight to vector PDF — entirely in-process. No headless browsers. No native dependencies. Anywhere .NET runs.</p>
+  <div class="hero-ctas">
+    <a class="btn btn-primary" href="{{ '/getting-started.html' | relative_url }}">Get started</a>
+    <a class="btn btn-ghost" href="https://github.com/jhaygood86/PeachPDF" rel="noopener">View on GitHub</a>
+  </div>
+  <code class="install-pill">dotnet add package PeachPDF</code>
+  {% if site.data.version %}
+  <p class="version-line">Current version: <a href="https://github.com/jhaygood86/PeachPDF/releases/tag/v{{ site.data.version.current }}" rel="noopener">v{{ site.data.version.current }} — release notes</a></p>
+  {% endif %}
+</section>
+
+<section class="landing-section">
+  <h2 class="landing-h2">Why PeachPDF</h2>
+  <div class="card-grid">
+    <div class="card">
+      <h3>Pure .NET, in-process</h3>
+      <p>No Puppeteer, wkhtmltopdf, or Ghostscript to install, babysit, or patch. HTML parsing, CSS cascade, layout, and PDF writing all run inside your process — containers, serverless, trimmed and AOT deployments included.</p>
+    </div>
+    <div class="card">
+      <h3>Native vector SVG</h3>
+      <p>Inline <code>&lt;svg&gt;</code>, standalone files, data URIs, and CSS <code>background-image</code> sources render as real vector PDF content — crisp at any zoom, never rasterized.</p>
+    </div>
+    <div class="card">
+      <h3>Modern CSS layout</h3>
+      <p>Flexbox, multi-column layout, 2D and 3D transforms, custom properties with <code>var()</code>, <code>calc()</code>/<code>min()</code>/<code>max()</code>/<code>clamp()</code>, and gradients with CSS Color Level 4 interpolation.</p>
+    </div>
+    <div class="card">
+      <h3>Print-grade paged media</h3>
+      <p><code>@page</code> rules, named pages, margin boxes, and running headers and footers — the CSS Paged Media toolkit for real documents, not screenshots of web pages.</p>
+    </div>
+    <div class="card">
+      <h3>Accessible, tagged output</h3>
+      <p>Optional Tagged PDF (PDF/UA) output with a logical structure tree, automatic document language, and CSS-driven tag mapping. Metadata flows in automatically from <code>&lt;title&gt;</code> and <code>&lt;meta&gt;</code>.</p>
+    </div>
+    <div class="card">
+      <h3>Real font handling</h3>
+      <p>Web fonts via <code>@font-face</code>, fonts loaded from a stream, system font discovery on every platform, and browser-grade weight/style/stretch matching with faux-bold and faux-italic synthesis.</p>
+    </div>
+  </div>
+</section>
+
+<section class="landing-section landing-code">
+  <h2 class="landing-h2">A few lines to a finished PDF</h2>
+  <p class="landing-lede">One package, one generator, one call. Render any HTML string to a vector PDF document and save it wherever a stream goes.</p>
+  <div class="highlight-shell">
+<div class="language-csharp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nc">PdfGenerateConfig</span> <span class="n">pdfConfig</span> <span class="p">=</span> <span class="k">new</span><span class="p">(){</span>
+  <span class="n">PageSize</span> <span class="p">=</span> <span class="nc">PageSize</span><span class="p">.</span><span class="n">Letter</span><span class="p">,</span>
+  <span class="n">PageOrientation</span> <span class="p">=</span> <span class="nc">PageOrientation</span><span class="p">.</span><span class="n">Portrait</span>
+<span class="p">};</span>
+
+<span class="nc">PdfGenerator</span> <span class="n">generator</span> <span class="p">=</span> <span class="k">new</span><span class="p">();</span>
+
+<span class="k">var</span> <span class="n">document</span> <span class="p">=</span> <span class="k">await</span> <span class="n">generator</span><span class="p">.</span><span class="nf">GeneratePdf</span><span class="p">(</span><span class="n">html</span><span class="p">,</span> <span class="n">pdfConfig</span><span class="p">);</span>
+<span class="n">document</span><span class="p">.</span><span class="nf">Save</span><span class="p">(</span><span class="n">stream</span><span class="p">);</span></code></pre></div></div>
+  </div>
+</section>
+
+<section class="landing-section">
+  <h2 class="landing-h2">Dig into the docs</h2>
+  <div class="card-grid guide-grid">
+    <a class="card card-link" href="{{ '/getting-started.html' | relative_url }}">
+      <h3>Getting Started</h3>
+      <p>Install the package, render your first PDF, and get the thread-safety model right from the start.</p>
+    </a>
+    <a class="card card-link" href="{{ '/architecture.html' | relative_url }}">
+      <h3>Architecture</h3>
+      <p>How HTML becomes a PDF: the parser, DOM, CSS cascade, layout engine, painting layer, and PDF renderer.</p>
+    </a>
+    <a class="card card-link" href="{{ '/html-css-support.html' | relative_url }}">
+      <h3>HTML &amp; CSS Support</h3>
+      <p>The full compatibility matrix of elements, properties, selectors, and at-rules — including gaps and extensions.</p>
+    </a>
+    <a class="card card-link" href="{{ '/supported-svg-features.html' | relative_url }}">
+      <h3>SVG Features</h3>
+      <p>Everything supported in inline and standalone SVG, rendered as real vector PDF content.</p>
+    </a>
+    <a class="card card-link" href="{{ '/usage-examples.html' | relative_url }}">
+      <h3>Usage Examples</h3>
+      <p>Copy-pasteable recipes: MHTML, HTTP fetching, fonts, tagged PDF output, ASP.NET Core, and Azure Functions.</p>
+    </a>
+    <a class="card card-link" href="{{ '/api/' | relative_url }}">
+      <h3>API Reference</h3>
+      <p>Generated reference for every public type and member, always in sync with the latest source.</p>
+    </a>
+  </div>
+</section>
+
+<section class="landing-cta">
+  <h2>Ready to render?</h2>
+  <code class="install-pill">dotnet add package PeachPDF</code>
+  <p>Free and open source. Available on <a href="https://www.nuget.org/packages/PeachPDF" rel="noopener">NuGet</a>, developed on <a href="https://github.com/jhaygood86/PeachPDF" rel="noopener">GitHub</a>.</p>
+</section>

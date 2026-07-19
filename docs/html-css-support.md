@@ -23,6 +23,39 @@ PeachPDF renders a subset of the HTML and CSS specifications. This page document
 | `meta` | [meta](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/meta) | `name="author"`, `name="subject"`, `name="keywords"`, `name="date"`, and `name="generator"` are extracted and written to the PDF info dictionary; all other meta names are ignored |
 | `title` | [title](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/title) | Text content is written to the PDF document title in the info dictionary |
 
+#### PDF metadata extraction
+
+PeachPDF automatically extracts standard HTML metadata elements and writes them to the PDF info dictionary. No additional configuration is required — just include the elements in your HTML `<head>`.
+
+| HTML source | PDF info field |
+|---|---|
+| `<title>` inner text | Title |
+| `<meta name="author" content="...">` | Author |
+| `<meta name="subject" content="...">` | Subject |
+| `<meta name="keywords" content="...">` | Keywords |
+| `<meta name="date" content="...">` | Creation date (parsed via `DateTime.TryParse`) |
+| `<meta name="generator" content="...">` | Creator |
+
+The **Producer** and **Creator** fields both default to `PeachPDF {version}` when no `<meta name="generator">` is present. The Producer field always identifies PeachPDF as the PDF converter regardless of any generator meta tag.
+
+Example:
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Quarterly Report</title>
+  <meta name="author" content="Finance Team">
+  <meta name="subject" content="Q1 2025 Results">
+  <meta name="keywords" content="finance, quarterly, report">
+  <meta name="date" content="2025-04-01">
+</head>
+<body>
+  <!-- document content -->
+</body>
+</html>
+```
+
 ### Sections
 
 | Element | MDN Reference | Notes |
@@ -235,7 +268,7 @@ Per CSS2.1 §14.2, the root element's background doesn't just paint its own box 
 |----------|--------------|-------|
 | `color` | [color](https://developer.mozilla.org/en-US/docs/Web/CSS/color) | Full support including named colors, hex, `rgb()`, `rgba()` |
 | `font` | [font](https://developer.mozilla.org/en-US/docs/Web/CSS/font) | Shorthand supported; all components are parsed |
-| `font-family` | [font-family](https://developer.mozilla.org/en-US/docs/Web/CSS/font-family) | Full support. Generic families (`serif`, `sans-serif`, `monospace`, `cursive`, `fantasy`) and `system-ui` resolve to a real installed substitute matching actual Chromium behavior per platform (hardcoded specific families on Windows/macOS/Android, delegated to the OS's own fontconfig on Linux) — see [Fonts](index.md#fonts) for the full per-platform table. Every mapping is verified against the system's actually-installed fonts before use, falling back to the platform default font otherwise, so a requested substitute that isn't present never silently resolves to an arbitrary, unrelated font |
+| `font-family` | [font-family](https://developer.mozilla.org/en-US/docs/Web/CSS/font-family) | Full support. Generic families (`serif`, `sans-serif`, `monospace`, `cursive`, `fantasy`) and `system-ui` resolve to a real installed substitute matching actual Chromium behavior per platform (hardcoded specific families on Windows/macOS/Android, delegated to the OS's own fontconfig on Linux) — see [Fonts](usage-examples.md#fonts) for the full per-platform table. Every mapping is verified against the system's actually-installed fonts before use, falling back to the platform default font otherwise, so a requested substitute that isn't present never silently resolves to an arbitrary, unrelated font |
 | `font-size` | [font-size](https://developer.mozilla.org/en-US/docs/Web/CSS/font-size) | Full support including absolute sizes (`medium`, `large`, etc.), relative sizes (`smaller`, `larger`), lengths, and percentages |
 | `font-stretch` | [font-stretch](https://developer.mozilla.org/en-US/docs/Web/CSS/font-stretch) | The 9 CSS Fonts Level 3 keywords (`ultra-condensed` … `normal` … `ultra-expanded`); inherited and cascaded, and consulted for real face selection when a family has multiple registered faces at different stretch values (e.g. two `@font-face` rules with different `font-stretch` descriptors) — nearest-stretch matching per CSS Fonts Level 4 §5.2. Percentage/range values (the variable-font syntax) are not supported |
 | `font-style` | [font-style](https://developer.mozilla.org/en-US/docs/Web/CSS/font-style) | `normal`, `italic`, `oblique`, and CSS Fonts Level 4's `oblique <angle>` (e.g. `oblique 10deg`) — when no real oblique/italic face is available and the renderer has to synthesize one, an explicitly declared angle drives the exact synthesized shear amount instead of a fixed default |
@@ -413,7 +446,7 @@ These properties control how content breaks across PDF pages. Both the legacy `p
 
 | At-rule | Notes |
 |---------|-------|
-| `@font-face` | `src` supports `url()` (remote/data-URI, with a comma-separated fallback list — each candidate is tried in order until one loads) and `local()`. The rule's own `font-weight`/`font-style`/`font-stretch` descriptors are authoritative for how that specific resource participates in matching, independent of what the font file's own internal tables say — this is what makes real multi-variant families (e.g. separate rules for weight 400 and 700) work reliably. `unicode-range` is parsed but not honored: all sources apply to the full character range regardless of a declared subset. See [Fonts](index.md#fonts) |
+| `@font-face` | `src` supports `url()` (remote/data-URI, with a comma-separated fallback list — each candidate is tried in order until one loads) and `local()`. The rule's own `font-weight`/`font-style`/`font-stretch` descriptors are authoritative for how that specific resource participates in matching, independent of what the font file's own internal tables say — this is what makes real multi-variant families (e.g. separate rules for weight 400 and 700) work reliably. `unicode-range` is parsed but not honored: all sources apply to the full character range regardless of a declared subset. See [Fonts](usage-examples.md#fonts) |
 | `@page` | Full support; see [CSS Paged Media](#css-paged-media) below |
 | `@media` | Partial support; `print` and `all` media types apply, `screen` is ignored; see [CSS Media Queries](#css-media-queries) below |
 | `@keyframes` | Not supported |
@@ -858,24 +891,7 @@ Note: `background-position` and `background-size` are not listed in the table ab
 
 PeachPDF can optionally produce a *tagged* PDF — one with a logical structure tree (`/StructTreeRoot`) exposing the document's headings, paragraphs, lists, tables, links, and images to assistive technology (e.g. screen readers), per ISO 32000-1's tagged-PDF conventions and in the direction of PDF/UA conformance.
 
-Tagging is **off by default**. Enable it with:
-
-```csharp
-var config = new PdfGenerateConfig
-{
-    EnableTaggedPdf = true
-};
-```
-
-When enabled:
-
-- The document's language (`/Lang`) is set automatically from `<html lang="...">` (falling back to `PdfGenerateConfig.DefaultLanguage` if the document declares none).
-- Every element's HTML tag is mapped to a PDF standard structure type (`/H1`, `/P`, `/Table`, etc.) using the default mapping table below.
-- `<img>` (and other elements with an `alt` attribute) carry their alt text into the structure element's `/Alt` entry.
-- `<a href="...">` links get a `/Link` structure element, and the underlying PDF Link annotation is cross-referenced with it in both directions (`/OBJR` from the structure element to the annotation, `/StructParent` from the annotation back to the structure element) — a reader can navigate from either side.
-- List items (`<li>`) are split into sibling `/Lbl` (the marker) and `/LBody` (the rest of the item's content) structure elements under `/LI`, per the tagged-PDF list convention.
-
-When `EnableTaggedPdf` is left at its default (`false`), none of this runs — output is byte-for-byte the same as if tagging didn't exist in the codebase at all.
+Tagging is **off by default** and enabled with a single `PdfGenerateConfig` flag — see [Enabling tagged PDF (PDF/UA) output](usage-examples.md#enabling-tagged-pdf-pdfua-output) in Usage Examples for the configuration snippet and everything that turning it on does (automatic `/Lang` from `<html lang>`, `alt`-attribute `/Alt` entries, `/Link` structure elements cross-referenced with their annotations, and `/Lbl`/`/LBody` list-item splitting). When `EnableTaggedPdf` is left at its default (`false`), none of this runs — output is byte-for-byte the same as if tagging didn't exist in the codebase at all.
 
 ### `-peachpdf-pdf-tag-type` (tagged PDF structure type)
 
