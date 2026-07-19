@@ -515,7 +515,7 @@ namespace PeachPDF.Html.Core.Utils
 
                     break;
                 case "min-width":
-                    if (IsValidLengthProperty(value) || value == "0")
+                    if (IsValidLengthProperty(value))
                     {
                         cssBox.MinWidth = value;
                     }
@@ -590,7 +590,12 @@ namespace PeachPDF.Html.Core.Utils
                     cssBox.Position = value;
                     break;
                 case "line-height":
-                    if (IsValidLengthProperty(value))
+                    // line-height's real grammar (Converters.LineHeightConverter: length | percentage |
+                    // <number> | normal) is wider than IsValidLengthProperty's (length | percentage |
+                    // auto) - a bare unitless multiplier like "1.4" is valid CSS here but is not a
+                    // <length>, so it must not be rejected the way it correctly would be for e.g. "width".
+                    if (IsValidLengthProperty(value) || value == CssConstants.Normal ||
+                        double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _))
                     {
                         cssBox.LineHeight = value;
                     }

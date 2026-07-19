@@ -1393,6 +1393,24 @@ namespace PeachPDF.Html.Core.Parse
                     markerBox.ResolveDefaultContent();
                 }
 
+                // Per CSS2.1 §12.1/CSS Content Level 3, "normal" computes to "none" for ::before/::after
+                // specifically - no box is generated at all, not merely an empty one. Without this, a
+                // ::before/::after matched only by a rule that never sets `content` (e.g. PeachPDF's own
+                // default UA stylesheet's blanket ":before, :after { white-space: pre-line }" in
+                // CssDefaults.cs, which matches every element) leaves a real, empty, Display:inline
+                // CssBox on every element in every document - defeating any "this box has no real
+                // content" check elsewhere that inspects Boxes (e.g. CssBox.ActsAsInline's guard against
+                // misclassifying a genuinely empty block box as an inline-only wrapper, which broke
+                // Acid2's own "#eyes-c" - a plain empty block meant to paint bottom-most per Appendix E -
+                // into painting in the wrong stacking pass entirely).
+                if ((childBox.IsBeforePseudoElement || childBox.IsAfterPseudoElement)
+                    && childBox.Content is CssConstants.None or CssConstants.Normal
+                    && childBox.ContentImage is null)
+                {
+                    box.Boxes.RemoveAt(i);
+                    continue;
+                }
+
                 if (childBox.Text != null)
                 {
                     // is the box has text - a non-breaking space (U+00A0) is significant CSS content,

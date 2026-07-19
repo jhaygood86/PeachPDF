@@ -2,6 +2,7 @@ using PeachPDF;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
@@ -259,6 +260,87 @@ namespace PeachPDF.Tests.Integration
             var eyesAWidth = eyesA.ActualRight - eyesA.Location.X;
 
             Assert.InRange(eyesWidth, eyesAWidth - 1, eyesAWidth + 1);
+        }
+
+        [Fact]
+        public async Task HeightZero_WithOverflowingLineContent_ContributesZeroToFlow()
+        {
+            // Regression for CssValueParser.IsValidLength rejecting a bare unitless "0" - CssUtils.
+            // SetPropertyValue's "height" case gated assignment behind IsValidLengthProperty, so
+            // "height: 0" was silently never applied to CssBox.Height at all (it stayed "auto"),
+            // letting the box's line-height-driven content height (24px here, from the tall inline
+            // image plus line-height:2em) push the next sibling down instead of contributing zero
+            // height to the flow as declared.
+            var html = "<html><body>" +
+                "<div id='target' style='height:0; line-height:2em;'>" +
+                "<img src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAABnRSTlMAAAAAAABupgeRAAAABmJLR0QA/wD/AP+gvaeTAAAAEUlEQVR42mP4/58BCv7/ZwAAHfAD/abwPj4AAAAASUVORK5CYII=' style='width:24px;height:24px;vertical-align:bottom;'>" +
+                "</div>" +
+                "<div id='next'>NEXT</div>" +
+                "</body></html>";
+            var (root, _) = await BuildAndLayout(html);
+            var target = FindById(root, "target")!;
+            var next = FindById(root, "next")!;
+
+            Assert.Equal("0", target.Height);
+            Assert.InRange(target.ActualBottom - target.Location.Y, -0.01, 0.01);
+            Assert.InRange(next.Location.Y, target.Location.Y - 0.5, target.Location.Y + 0.5);
+        }
+
+        [Fact]
+        public async Task EyesA_HeightZero_DoesNotPushEyesBAndEyesCDown()
+        {
+            // Same underlying IsValidLength bug as HeightZero_WithOverflowingLineContent_
+            // ContributesZeroToFlow, exercised through the real fixture: "#eyes-a { height: 0 }" must
+            // not push "#eyes-b"/"#eyes-c" 24px (its line-height-driven content height) further down
+            // than "#eyes-a"'s own top - they must start at the same Y, letting the eye-icon row and
+            // the checkerboard/red row occupy the same vertical space the real Acid2 rendering needs.
+            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var eyesA = FindById(root, "eyes-a")!;
+            var eyesB = FindById(root, "eyes-b")!;
+            var eyesC = FindById(root, "eyes-c")!;
+
+            Assert.Equal("0", eyesA.Height);
+            Assert.InRange(eyesB.Location.Y, eyesA.Location.Y - 0.5, eyesA.Location.Y + 0.5);
+            Assert.InRange(eyesC.Location.Y, eyesA.Location.Y - 0.5, eyesA.Location.Y + 0.5);
+        }
+
+        [Fact]
+        public async Task EyesC_PlainEmptyBlock_HasNoPhantomBeforeAfterBoxes()
+        {
+            // Regression: PeachPDF's own default UA stylesheet has a blanket ":before, :after {
+            // white-space: pre-line }" rule (CssDefaults.cs) that matches every element without ever
+            // setting `content` - per CSS2.1 this must compute to content:none (no box generated at
+            // all), but DomParser.CorrectTextBoxes used to leave a real, empty, Display:inline
+            // ::before/::after CssBox on every element regardless, defeating CssBox.ActsAsInline's
+            // "Boxes.Count > 0" guard against misclassifying a genuinely empty block box as an
+            // inline-only wrapper - which broke "#eyes-c" (a plain empty block meant to paint
+            // bottom-most per Appendix E) into painting in the wrong stacking pass.
+            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var eyesC = FindById(root, "eyes-c")!;
+
+            Assert.Empty(eyesC.Boxes);
+        }
+
+        [Fact]
+        public async Task Eyes_FloatChild_OrdersLocally_NotHoistedPastNonStackingContextAncestor()
+        {
+            // Regression for DomUtils.FlattenStackingContext/SearchForHoistableDescendants: ".eyes"
+            // is position:absolute with no z-index, so it does NOT establish its own CSS stacking
+            // context - but it's still "positioned", so per Appendix E step 6 it must be its own
+            // atomic local-ordering scope for its own float/positioned-without-z-index descendants
+            // (like "#eyes-b"), not defer them all the way to the document root. Before this fix,
+            // FlattenStackingContext(".eyes") returned only its plain in-flow children ("#eyes-a"/
+            // "#eyes-c") - "#eyes-b" (a float) was entirely absent, hoisted instead to the root's own
+            // participant list, painting relative to the root's whole subtree instead of interleaved
+            // correctly within ".eyes" itself (see CssBox.PaintImpCore's block/float/inline stacking
+            // loop, which relies on FlattenStackingContext to supply all three locally).
+            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var eyes = FindByClass(root, "eyes")!;
+            var eyesB = FindById(root, "eyes-b")!;
+
+            var participants = DomUtils.FlattenStackingContext(eyes).ToList();
+
+            Assert.Contains(participants, p => p.Box == eyesB);
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────

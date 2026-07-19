@@ -103,22 +103,21 @@ namespace PeachPDF.Html.Core.Parse
         /// <returns>true - valid, false - invalid</returns>
         public static bool IsValidLength(string value)
         {
-            if (value.Length <= 1) return false;
+            if (string.IsNullOrEmpty(value)) return false;
 
             if (IsCalcFunction(value)) return true;
 
-            var number = string.Empty;
-
-            if (value.EndsWith('%'))
-            {
-                number = value[..^1];
-            }
-            else if (value.Length > 2)
-            {
-                number = value[..^2];
-            }
-
-            return double.TryParse(number, out _);
+            // Defer to the same CSS-OM length/percentage grammar already used at cascade time
+            // (ValueExtensions.ToDistance, which every *Property converter - HeightProperty,
+            // WidthProperty, etc. - is ultimately built on) instead of maintaining a second,
+            // independent length-syntax check here (this repo's "don't write two parsers for the same
+            // grammar" convention). The prior hand-rolled version (chop the last 1-2 characters off the
+            // string and try double.TryParse on what's left, with a manual length-1 cutoff) rejected a
+            // bare unitless "0" outright, so e.g. "height: 0" (a real Acid2 declaration on "#eyes-a")
+            // silently never got assigned to CssBox.Height at all, leaving it at its "auto" default
+            // instead of the declared zero - the CSS-OM layer already handled this case correctly via
+            // ValueExtensions.ToLength's explicit `TokenType.Number when Value == 0f` branch.
+            return GetCssTokens(value).ToDistance() != null;
         }
 
         /// <summary>

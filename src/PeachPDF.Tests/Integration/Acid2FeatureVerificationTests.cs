@@ -398,17 +398,20 @@ namespace PeachPDF.Tests.Integration
             // paints that child.
             //
             // The three participants are wrapped in "#container", which establishes its own stacking
-            // context (position:relative + z-index:0) - this is required for the fix to actually apply:
-            // a non-positioned float is hoisted (DomUtils.NeedsStackingHoist) to the NEAREST ancestor
-            // that establishes a stacking context, painting as part of THAT ancestor's own float pass -
-            // if the immediate container here (or Acid2's real ".eyes", which is itself only
-            // position:absolute with no z-index, so is NOT a stacking context) doesn't establish one,
-            // the float instead hoists past it entirely and paints relative to a much more distant
-            // ancestor's content, breaking this local block/float/inline ordering regardless of this
-            // fix. Making that hoisting "float-aware" enough to preserve correct LOCAL relative order
-            // against non-hoisted siblings even when the immediate container isn't a stacking context is
-            // a real, separate, deeper gap - noted in CLAUDE.md rather than attempted here, since it
-            // touches float-hoisting/clip-ancestor logic a prior round already had to harden against a
+            // context (position:relative + z-index:0). A non-positioned float is hoisted
+            // (DomUtils.NeedsStackingHoist) to the nearest ancestor that "claims local ordering" for it
+            // (DomUtils.IsLocalOrderingScope) - originally that meant only a genuine stacking-context
+            // ancestor like "#container" here, so a float whose immediate container was MERELY
+            // positioned (no z-index, like Acid2's real ".eyes") still hoisted all the way past it to a
+            // much more distant ancestor, breaking local block/float/inline ordering. That narrower case
+            // is now also fixed (see DomUtils.SearchForHoistableDescendants's claimFloatsHere parameter
+            // and Acid2RegressionTests.Eyes_FloatChild_OrdersLocally_NotHoistedPastNonStackingContextAncestor)
+            // - a merely-positioned (position:absolute/relative/fixed/sticky, z-index:auto) immediate
+            // container now claims its own float locally too, not just a full stacking context. The
+            // remaining, narrower gap (noted in CLAUDE.md): a float whose immediate container is a
+            // *plain, non-positioned* wrapper (no `position` at all) still hoists past it to the nearest
+            // true stacking-context ancestor instead of preserving local order - fixing that would touch
+            // the same float/clip-ancestor hoisting logic a prior round already had to harden against a
             // double-paint regression (see StackingContextPaintRegressionTests.cs).
             const string png1x1 =
                 "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mP4/58BAAT/Af9jgNErAAAAAElFTkSuQmCC";
