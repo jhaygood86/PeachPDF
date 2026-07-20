@@ -25,6 +25,8 @@ User-facing documentation (`docs/**` and `README.md`) must be **free-standing**:
 
 When you open a pull request that fixes a tracked GitHub issue, reference that issue in the PR **description** with a closing keyword (`Fixes #123` / `Closes #123`, one per issue the PR resolves) so GitHub links and auto-closes it on merge. The PR description is exactly where issue references belong — it is engineering/review context, not reader-facing documentation, so this is the complement to the docs rule above, not an exception to it.
 
+Keep commit messages and PR descriptions free of Claude/AI attribution: do **not** add `Co-Authored-By: Claude …` or `Claude-Session:`/session-URL trailers, do not include a "Generated with Claude Code" footer or a `claude.ai/code/session_…` link in a PR body, and do not otherwise mention Claude or the assistant in a commit message or PR description. Author them as ordinary project history.
+
 If a new or changed feature gives PeachPDF a new visible capability, add a new showcase or update an existing one in `src/PeachPDF.TestHarness/Program.cs` in the same change — this is also how several rendering-correctness bugs (paint-order, broken masks, no-op gradient spread methods) were actually caught, since automated tests alone missed them (see Testing conventions below). Every showcase must go through the `SaveShowcaseAsync(slug, category, title, description, html, config)` helper in Program.cs — that call is what registers it in `showcases.json`, which the docs site's build (pages.yml) uses to render the card for it on peachpdf.net/showcase.html; a showcase saved by hand-rolled `File.Write*` calls would silently never appear on the site.
 
 ## Project layout
