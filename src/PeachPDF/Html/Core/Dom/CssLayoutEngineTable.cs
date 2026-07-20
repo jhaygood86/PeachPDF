@@ -739,6 +739,7 @@ namespace PeachPDF.Html.Core.Dom
                         continue;
 
                     var (newMaxRight, newMaxBottom) = await LayoutBodyRow(g, row, startX, footerRowsLayoutY, -1, new Dictionary<int, List<CssBox>>(), maxRight, footerRowsLayoutY);
+                    maxRight = newMaxRight;
                     footerRowsLayoutY = newMaxBottom + GetVerticalSpacing();
 
                     // See the identical fix in the header-rows loop above for why this is needed.
@@ -747,7 +748,17 @@ namespace PeachPDF.Html.Core.Dom
                     row.ActualBottom = newMaxBottom;
                 }
 
+                // Unlike Location/ActualBottom above, ActualRight is a computed property derived
+                // from Size.Width, which is never otherwise set on the footer row-group box itself
+                // (only its row/cell children get real sizes) - leaving it out here left every
+                // CssProxyBox created from _footerBox (see CreateFooterProxy) with a zero-width
+                // Bounds, which CssBox.Paint's visibility-culling check (the Rectangles.Count==0/
+                // Bounds-intersect-clip branch, active whenever the document has no float/absolute/
+                // fixed content anywhere) then silently treated as never visible - the footer never
+                // painted on any page. Mirrors the identical `_headerBox.ActualRight = maxRight`
+                // assignment above. See GitHub issue #124.
                 _footerBox.Location = new RPoint(startX, 0);
+                _footerBox.ActualRight = maxRight;
                 _footerBox.ActualBottom = footerRowsLayoutY - GetVerticalSpacing();
                 _footerHeight = _footerBox.ActualBottom - _footerBox.Location.Y;
             }
