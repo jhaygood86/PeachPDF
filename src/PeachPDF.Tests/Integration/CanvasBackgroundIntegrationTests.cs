@@ -102,7 +102,7 @@ namespace PeachPDF.Tests.Integration
             // Regression guard: SuppressOwnBackgroundPaint must never leak onto an unrelated element -
             // a <div> with its own background continues to paint at its own (non-full-page) rect.
             var pdfText = await GetPdfText(
-                "<!DOCTYPE html><html><head><style>body { margin: 0 } div { width: 100px; height: 50px; background-color: rgb(0,255,255); }</style></head>" +
+                "<!DOCTYPE html><html><head><style>body { margin: 0 } div { width: 100pt; height: 50pt; background-color: rgb(0,255,255); }</style></head>" +
                 "<body><div></div></body></html>");
 
             // The div's own background must still be painted, at its own small rect - not a full page.

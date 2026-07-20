@@ -17,6 +17,8 @@ Peach PDF is a pure .NET HTML -> PDF rendering library. This library does not de
 
 See [HTML & CSS Support](https://peachpdf.net/html-css-support.html) for the full compatibility matrix, and [Supported SVG Features](https://peachpdf.net/supported-svg-features.html) for the full SVG compatibility matrix.
 
+> **Breaking change — spec-correct CSS pixels:** `px` lengths now resolve at the CSS-specified physical ratio (`1px = 1/96in = 0.75pt`) everywhere — layout, borders, images, and `@page` geometry — matching browser print output. Earlier versions treated `1px` as `1pt` for non-font lengths, rendering px-sized content 33% larger than its true CSS size; px-derived lengths shrink by ×0.75 when upgrading. Absolute units (`pt`/`mm`/`cm`/`in`/`pc`) and px font sizes (which already used the correct ratio) are unaffected. See [Length units](https://peachpdf.net/html-css-support.html#length-units).
+
 ## PeachPDF Requirements
 
 - .NET 8 or .NET 10

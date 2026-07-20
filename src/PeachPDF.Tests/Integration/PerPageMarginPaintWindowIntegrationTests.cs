@@ -106,13 +106,13 @@ namespace PeachPDF.Tests.Integration
         private const string TwoPageCoverHtml = """
             <!DOCTYPE html><html><head><style>
             body { margin: 0; }
-            /* Height is 1px shy of the 662px content band: a box ending exactly AT the slot
+            /* Height is 1pt shy of the 662pt content band: a box ending exactly AT the slot
                boundary makes the forced break target the slot after the boundary slot, leaving
                a blank page - the same reason the print_catalog showcase's full-bleed cover is
                1pt shy of its band. */
-            .cover { width: 612px; height: 661px; page-break-after: always; }
+            .cover { width: 612pt; height: 661pt; page-break-after: always; }
             .cover p { margin: 0; }
-            .cover p.edge { margin-left: 570px; }
+            .cover p.edge { margin-left: 570pt; }
             </style></head><body>
             <div class='cover'>
             <p>CoverMarker</p>

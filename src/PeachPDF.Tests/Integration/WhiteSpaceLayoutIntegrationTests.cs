@@ -104,13 +104,13 @@ namespace PeachPDF.Tests.Integration
         {
             // Narrow enough that an ordinary space between "10" and "km" wraps to two lines, but a
             // non-breaking space between them must never be treated as a break opportunity.
-            // "10 km" as one unbreakable unit is ~30px wide (measured separately) - 35px comfortably
-            // fits it on one line without any wrap. 15px is narrower than that but still wider than "10"
-            // alone (~12px), so the breakable version must wrap after "10".
-            var (nbspRoot, _) = await BuildAndLayout(Wrap("<p id='p' style='width:35px'>10&nbsp;km</p>"));
+            // "10 km" as one unbreakable unit is ~30pt wide (measured separately) - 35pt comfortably
+            // fits it on one line without any wrap. 15pt is narrower than that but still wider than "10"
+            // alone (~12pt), so the breakable version must wrap after "10".
+            var (nbspRoot, _) = await BuildAndLayout(Wrap("<p id='p' style='width:35pt'>10&nbsp;km</p>"));
             var pNbsp = FindById(nbspRoot, "p")!;
 
-            var (spaceRoot, _) = await BuildAndLayout(Wrap("<p id='p' style='width:15px'>10 km</p>"));
+            var (spaceRoot, _) = await BuildAndLayout(Wrap("<p id='p' style='width:15pt'>10 km</p>"));
             var pSpace = FindById(spaceRoot, "p")!;
 
             Assert.Single(pNbsp.LineBoxes);

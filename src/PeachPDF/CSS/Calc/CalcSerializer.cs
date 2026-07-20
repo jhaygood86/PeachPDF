@@ -29,9 +29,12 @@ namespace PeachPDF.CSS
                 return new Angle((float)degrees, Angle.Unit.Deg).ToString(null, CultureInfo.InvariantCulture);
             }
 
-            if (TryFoldPixels(node, out var pixels))
+            if (TryFoldPixels(node, out var points))
             {
-                return new Length((float)pixels, Length.Unit.Px).ToString(null, CultureInfo.InvariantCulture);
+                // TryFoldPixels folds through Length.ToPixels, whose result is layout POINTS —
+                // convert back to CSS px for the canonical "<N>px" text (calc(12px + 4px) → "16px"),
+                // so re-parsing the folded text applies the spec px ratio exactly once, not twice.
+                return new Length((float)(points / Length.PointsPerPx), Length.Unit.Px).ToString(null, CultureInfo.InvariantCulture);
             }
 
             return SerializeExpression(node);

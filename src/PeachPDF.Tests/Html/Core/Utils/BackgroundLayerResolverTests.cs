@@ -75,7 +75,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var box = await FindDivBox();
 
-            var result = BackgroundLayerResolver.ResolveSize("100px 50px", 500, 500, 40, 20, 2.0, box);
+            var result = BackgroundLayerResolver.ResolveSize("100pt 50pt", 500, 500, 40, 20, 2.0, box);
 
             Assert.Equal((100.0, 50.0), result);
         }
@@ -133,7 +133,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var box = await FindDivBox();
 
             var (x, y) = BackgroundLayerResolver.ResolvePosition(
-                "right 20px bottom 10px", 200, 100, 50, 20, box);
+                "right 20pt bottom 10pt", 200, 100, 50, 20, box);
 
             Assert.Equal(130, x, 3); // (200 - 50) - 20
             Assert.Equal(70, y, 3);  // (100 - 20) - 10
@@ -145,7 +145,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var box = await FindDivBox();
 
             var (x, y) = BackgroundLayerResolver.ResolvePosition(
-                "right 20px bottom", 200, 100, 50, 20, box);
+                "right 20pt bottom", 200, 100, 50, 20, box);
 
             Assert.Equal(130, x, 3); // (200 - 50) - 20
             Assert.Equal(80, y, 3);  // 100 - 20, no offset
@@ -156,9 +156,9 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var box = await FindDivBox();
 
-            // "bottom 10px" (2 tokens): the bare length is NOT an offset on "bottom" - per the
-            // simple 2-value grammar this is Y=bottom(keyword), X=10px(bare, horizontal).
-            var (x, y) = BackgroundLayerResolver.ResolvePosition("bottom 10px", 200, 100, 50, 20, box);
+            // "bottom 10pt" (2 tokens): the bare length is NOT an offset on "bottom" - per the
+            // simple 2-value grammar this is Y=bottom(keyword), X=10pt(bare, horizontal).
+            var (x, y) = BackgroundLayerResolver.ResolvePosition("bottom 10pt", 200, 100, 50, 20, box);
 
             Assert.Equal(10, x, 3);
             Assert.Equal(80, y, 3); // 100 - 20
@@ -169,9 +169,9 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var box = await FindDivBox();
 
-            var (x, y) = BackgroundLayerResolver.ResolvePosition("calc(50% - 10px) center", 200, 100, 50, 20, box);
+            var (x, y) = BackgroundLayerResolver.ResolvePosition("calc(50% - 10pt) center", 200, 100, 50, 20, box);
 
-            Assert.Equal(65, x, 3); // 50% of (200-50)=75, minus 10px = 65
+            Assert.Equal(65, x, 3); // 50% of (200-50)=75, minus 10pt = 65
             Assert.Equal(40, y, 3); // (100 - 20) / 2
         }
 
@@ -180,9 +180,9 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var box = await FindDivBox();
 
-            var result = BackgroundLayerResolver.ResolveSize("calc(50% + 10px) auto", 200, 200, 40, 20, 2.0, box);
+            var result = BackgroundLayerResolver.ResolveSize("calc(50% + 10pt) auto", 200, 200, 40, 20, 2.0, box);
 
-            Assert.Equal(110, result.Width, 3);  // 50% of 200 = 100, plus 10px = 110
+            Assert.Equal(110, result.Width, 3);  // 50% of 200 = 100, plus 10pt = 110
             Assert.Equal(55, result.Height, 3);  // proportional via ratio: 110 / 2.0
         }
 

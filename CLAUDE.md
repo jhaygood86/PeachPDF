@@ -94,6 +94,7 @@ Report findings the same way `/code-review` does; fix what's actually wrong, and
 
 - Named CSS colors are normalized to `rgb(r, g, b)` form at parse time (`color: blue` → `CssBox.Color == "rgb(0, 0, 255)"`), except `initial` which resolves to the literal string `"black"`.
 - `em` font-sizes are eagerly converted to points at cascade time in the `CssBoxProperties.FontSize` setter (relative to the parent's actual font size in pt), not kept symbolic — assert against the converted `pt` value, not the original `em` string.
+- The internal layout unit is 1 PDF point, and CSS `px` resolves spec-correctly at **1px = 1/96in = 0.75pt** everywhere (`Length.PointsPerPx`, the only place the ratio lives — issue #150 removed the old "1px = 1pt except fonts" dual convention). A `width: 96px` box lays out 72 units wide; image/SVG intrinsic pixels are ×0.75 too. When writing layout tests where the unit isn't the point of the test, prefer `pt` in fixtures so expected values read literally.
 
 ## Architecture conventions
 

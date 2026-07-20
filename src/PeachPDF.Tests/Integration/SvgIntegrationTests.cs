@@ -329,10 +329,11 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task InlineSvg_PreserveAspectRatioNone_StretchesIndependently()
         {
-            // A 200x100 viewBox stretched via preserveAspectRatio="none" into a 100x100 square viewport
-            // must scale x and y independently (0.5 and 1.0), unlike the default meet mode which would
-            // pick one uniform scale (0.5) for both axes - so the y-scale component of the pushed "cm"
-            // matrix must show 1, not 0.5.
+            // A 200x100 viewBox stretched via preserveAspectRatio="none" into a square viewport - the
+            // 100x100 CSS-px attribute size resolves to a 75x75pt viewport at the spec-correct 96dpi
+            // intrinsic sizing (1px = 0.75pt) - must scale x and y independently (75/200 = 0.375 and
+            // 75/100 = 0.75), unlike the default meet mode which would pick one uniform scale (0.375)
+            // for both axes - so the y-scale component of the pushed "cm" matrix must show 0.75, not 0.375.
             var html = """
                 <!DOCTYPE html><html><body>
                 <svg viewBox="0 0 200 100" width="100" height="100" preserveAspectRatio="none">
@@ -348,7 +349,7 @@ namespace PeachPDF.Tests.Integration
             // the transform stack, and IEEE 754 float multiplication propagates the sign of that
             // negative factor through a zero product - a harmless, pre-existing formatting quirk
             // unrelated to this feature, not a bug in the SVG transform math itself.
-            Assert.Contains("0.5 -0 -0 1 ", pdfText);
+            Assert.Contains("0.375 -0 -0 0.75 ", pdfText);
         }
 
         [Fact]

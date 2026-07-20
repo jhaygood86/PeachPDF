@@ -253,6 +253,14 @@ namespace PeachPDF.Html.Core
         public IReadOnlyList<PageRule> PageRules { get; internal set; } = [];
 
         /// <summary>
+        /// The relative-unit resolution context for per-page <c>@page</c> margins, captured by
+        /// <c>DomParser.CascadeApplyPageStyles</c> on every parse pass (see
+        /// <see cref="Entities.PageLengthContext"/> for why capture-at-parse). Null until a document
+        /// is parsed; consumers fall back to absolute-only resolution then.
+        /// </summary>
+        internal Entities.PageLengthContext? PageLengthContext { get; set; }
+
+        /// <summary>
         /// the top margin between the page start and the text
         /// </summary>
         public double MarginTop
@@ -360,10 +368,11 @@ namespace PeachPDF.Html.Core
             DocumentLanguage = null;
             ClearNamedStrings();
             ClearNamedPageElements();
-            // New content means new @page rules: drop cached slot geometry and the vertical-override
-            // scan so nothing consults the previous document's bands before the next layout pass
-            // (which resets again defensively).
+            // New content means new @page rules: drop cached slot geometry, the vertical-override
+            // scan, and the captured relative-unit context so nothing consults the previous
+            // document's bands before the next layout pass (which resets again defensively).
             PageGeometry.Reset();
+            PageLengthContext = null;
         }
 
         /// <summary>

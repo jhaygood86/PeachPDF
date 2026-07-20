@@ -25,11 +25,11 @@ namespace PeachPDF.Tests.Integration
 
         private static string ImageBoxHtml(string css) =>
             $"<!DOCTYPE html><html><head><style>body {{ margin: 0; }}</style></head><body>" +
-            $"<div style=\"width: 200px; height: 100px; background-image: url('{SvgDataUri(SvgMarkup)}'); {css}\"></div>" +
+            $"<div style=\"width: 200pt; height: 100pt; background-image: url('{SvgDataUri(SvgMarkup)}'); {css}\"></div>" +
             "</body></html>";
 
         private static string BoxHtml(string css) =>
-            $"<!DOCTYPE html><html><head><style>body {{ margin: 0; }} div {{ width: 200px; height: 100px; {css} }}</style></head><body><div></div></body></html>";
+            $"<!DOCTYPE html><html><head><style>body {{ margin: 0; }} div {{ width: 200pt; height: 100pt; {css} }}</style></head><body><div></div></body></html>";
 
         private static async Task<string> GetPdfText(string html)
         {
@@ -45,7 +45,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task SvgUrlBackground_RendersAsVectorTileNotRasterImage()
         {
-            var pdfText = await GetPdfText(ImageBoxHtml("background-repeat: no-repeat; background-size: 40px 40px;"));
+            var pdfText = await GetPdfText(ImageBoxHtml("background-repeat: no-repeat; background-size: 40pt 40pt;"));
 
             // Rendered via the same CreateTile Form XObject path already used for gradients, sized
             // to the resolved background-size - not a rasterized /Image XObject.
@@ -58,7 +58,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task SvgUrlBackground_SizeExplicit_TileSizedToResolvedLayerSize()
         {
-            var pdfText = await GetPdfText(ImageBoxHtml("background-repeat: no-repeat; background-size: 50px 30px;"));
+            var pdfText = await GetPdfText(ImageBoxHtml("background-repeat: no-repeat; background-size: 50pt 30pt;"));
 
             Assert.Contains("/BBox [0 0 50 30]", pdfText);
         }
@@ -67,10 +67,12 @@ namespace PeachPDF.Tests.Integration
         public async Task SvgUrlBackground_SizeAuto_UsesIntrinsicViewBoxSize()
         {
             // No explicit background-size: the SVG's own viewBox (0 0 20 20) supplies the intrinsic
-            // 20x20 size, exactly like an <img> with no width/height would use its natural size.
+            // 20x20 CSS-px size, exactly like an <img> with no width/height would use its natural
+            // size - which resolves to 15x15pt in layout units at the spec-correct 96dpi intrinsic
+            // sizing (1px = 0.75pt).
             var pdfText = await GetPdfText(ImageBoxHtml("background-repeat: no-repeat;"));
 
-            Assert.Contains("/BBox [0 0 20 20]", pdfText);
+            Assert.Contains("/BBox [0 0 15 15]", pdfText);
         }
 
         [Theory]
@@ -78,7 +80,7 @@ namespace PeachPDF.Tests.Integration
         [InlineData("contain", 100, 100)]
         public async Task SvgUrlBackground_CoverContain_UsesIntrinsicRatio(string sizeKeyword, int expectedWidth, int expectedHeight)
         {
-            // The SVG has a 1:1 intrinsic ratio (viewBox 0 0 20 20). Against the 200x100 box: cover
+            // The SVG has a 1:1 intrinsic ratio (viewBox 0 0 20 20). Against the 200x100pt box: cover
             // scales up to 200x200 (overflowing vertically to fully cover both axes); contain scales
             // down to 100x100 (fitting entirely within the box without cropping).
             var pdfText = await GetPdfText(ImageBoxHtml($"background-repeat: no-repeat; background-size: {sizeKeyword};"));
@@ -89,7 +91,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task SvgUrlBackground_Repeat_TilesAtResolvedSize()
         {
-            var pdfText = await GetPdfText(ImageBoxHtml("background-size: 40px 40px; background-repeat: repeat;"));
+            var pdfText = await GetPdfText(ImageBoxHtml("background-size: 40pt 40pt; background-repeat: repeat;"));
 
             // The tile is rendered once at exactly the resolved 40x40 size (like a gradient tile),
             // so placement is an unscaled translate, not a scale+translate like a differently-sized
@@ -105,7 +107,7 @@ namespace PeachPDF.Tests.Integration
         {
             var pdfText = await GetPdfText(BoxHtml(
                 $"background-image: url('{SvgDataUri(SvgMarkup)}'), linear-gradient(to right, red, blue); " +
-                "background-repeat: no-repeat, no-repeat; background-size: 40px 40px, auto;"));
+                "background-repeat: no-repeat, no-repeat; background-size: 40pt 40pt, auto;"));
 
             Assert.Contains("/BBox [0 0 40 40]", pdfText);
             Assert.Contains("/ShadingType", pdfText);

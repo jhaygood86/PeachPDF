@@ -53,7 +53,8 @@ namespace PeachPDF.Html.Core.Handlers
                     var positionValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(positionList), layerIndex);
                     var repeatValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(repeatList), layerIndex);
                     BackgroundImageDrawHandler.DrawBackgroundImage(
-                        g, urlImage.Image, sizeValue, positionValue, repeatValue, positioningRect, clipRect, roundedClipPath, box);
+                        g, urlImage.Image, sizeValue, positionValue, repeatValue, positioningRect, clipRect, roundedClipPath, box,
+                        intrinsicSizeInCssPixels: true);
                     break;
                 }
                 case CssImage.Url urlImage when isFirst && urlImage.SvgDocument != null:
@@ -129,7 +130,8 @@ namespace PeachPDF.Html.Core.Handlers
             var positionValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(positionList), layerIndex);
             var repeatValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(repeatList), layerIndex);
             BackgroundImageDrawHandler.DrawBackgroundImage(
-                g, t.Image, CssConstants.Auto, positionValue, repeatValue, originRect, clipRect, roundedClipPath, box);
+                g, t.Image, CssConstants.Auto, positionValue, repeatValue, originRect, clipRect, roundedClipPath, box,
+                intrinsicSizeInCssPixels: false);
         }
 
         /// <summary>
@@ -147,6 +149,11 @@ namespace PeachPDF.Html.Core.Handlers
             CssBoxProperties box)
         {
             var (intrinsicWidth, intrinsicHeight) = SvgIntrinsicSize.Resolve(svgDocument);
+            // SVG user units are CSS pixels (1px = 1/96in); convert to layout points so the tile
+            // is sized in the same units as originRect - matching MeasureIntrinsicSize's handling
+            // of the same document for <img src="x.svg">.
+            intrinsicWidth *= Length.PointsPerPx;
+            intrinsicHeight *= Length.PointsPerPx;
             double? intrinsicRatio = intrinsicWidth is > 0 && intrinsicHeight is > 0
                 ? intrinsicWidth.Value / intrinsicHeight.Value
                 : null;
@@ -172,7 +179,8 @@ namespace PeachPDF.Html.Core.Handlers
             var positionValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(positionList), layerIndex);
             var repeatValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(repeatList), layerIndex);
             BackgroundImageDrawHandler.DrawBackgroundImage(
-                g, t.Image, CssConstants.Auto, positionValue, repeatValue, originRect, clipRect, roundedClipPath, box);
+                g, t.Image, CssConstants.Auto, positionValue, repeatValue, originRect, clipRect, roundedClipPath, box,
+                intrinsicSizeInCssPixels: false);
         }
 
         private static RBrush GetLinearGradientBrush(RGraphics g, ParsedLinearGradient gradient, RRect originRect)

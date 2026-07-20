@@ -23,9 +23,9 @@ namespace PeachPDF.Tests.Html.Core
             // around y=900 (page-slot 4, since 900/200=4.5) - slots 1-3 have nothing painted in them
             // at all and must not be materialized.
             var container = await BuildAndLayout(
-                "<div id='a' style='height:20px; background:rgb(0,0,0);'></div>" +
-                "<div id='gap' style='height:880px;'></div>" +
-                "<div id='b' style='height:20px; background:rgb(0,0,0);'></div>",
+                "<div id='a' style='height:20pt; background:rgb(0,0,0);'></div>" +
+                "<div id='gap' style='height:880pt;'></div>" +
+                "<div id='b' style='height:20pt; background:rgb(0,0,0);'></div>",
                 pageHeight: 200);
 
             var slotTops = container.GetPaginationSlots().Select(s => s.SlotTop).ToList();
@@ -46,7 +46,7 @@ namespace PeachPDF.Tests.Html.Core
             // real, page-break-driven sections), reproduced here as a direct unit test of the
             // mechanism rather than only through the full PdfGenerator pipeline.
             var container = await BuildAndLayout(
-                "<div style='height:900px; background:rgb(9,9,9);'>section content spanning pages</div>",
+                "<div style='height:900pt; background:rgb(9,9,9);'>section content spanning pages</div>",
                 pageHeight: 200);
 
             var slots = container.GetPaginationSlots();

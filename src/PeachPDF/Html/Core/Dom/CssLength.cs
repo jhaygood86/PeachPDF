@@ -159,22 +159,6 @@ namespace PeachPDF.Html.Core.Dom
                 $"{Convert.ToSingle(Number * emSize).ToString("0.0", NumberFormatInfo.InvariantInfo)}pt");
         }
 
-        /// <summary>
-        /// If length is in Ems, returns its value in pixels
-        /// </summary>
-        /// <param name="pixelFactor">Pixel size factor to multiply</param>
-        /// <returns>Pixels size of this em</returns>
-        /// <exception cref="InvalidOperationException">If length has an error or isn't in ems</exception>
-        public CssLength ConvertEmToPixels(double pixelFactor)
-        {
-            if (HasError)
-                throw new InvalidOperationException("Invalid length");
-            if (Unit != CssUnit.Ems)
-                throw new InvalidOperationException("Length is not in ems");
-
-            return new CssLength(
-                $"{Convert.ToSingle(Number * pixelFactor).ToString("0.0", NumberFormatInfo.InvariantInfo)}px");
-        }
 
         /// <summary>
         /// Returns the length formatted ready for CSS interpreting.

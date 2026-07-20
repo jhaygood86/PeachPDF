@@ -23,7 +23,7 @@ namespace PeachPDF.Tests.Integration
         {
             var html = BuildFillerDocument(@"
 <h2 class='heading'>Section heading</h2>
-<table class='keep'><tr><td><div style='height: 120px'>swatch</div></td></tr></table>");
+<table class='keep'><tr><td><div style='height: 120pt'>swatch</div></td></tr></table>");
 
             var (rootBox, container) = await BuildCssBoxTree(html);
             var pageHeight = container.PageSize.Height;
@@ -49,7 +49,7 @@ namespace PeachPDF.Tests.Integration
         {
             var html = BuildFillerDocument(@"
 <h2 class='heading' style='break-after: auto; page-break-after: auto'>Section heading</h2>
-<table class='keep'><tr><td><div style='height: 120px'>swatch</div></td></tr></table>");
+<table class='keep'><tr><td><div style='height: 120pt'>swatch</div></td></tr></table>");
 
             var (rootBox, container) = await BuildCssBoxTree(html);
             var pageHeight = container.PageSize.Height;
@@ -77,7 +77,7 @@ namespace PeachPDF.Tests.Integration
 <h2 class='heading'>Section heading</h2>
 <p class='intro' style='margin: 0; break-after: avoid'>Intro paragraph kept with the content below.</p>
 <style>.card { color: #222 }</style>
-<table class='keep'><tr><td><div style='height: 120px'>swatch</div></td></tr></table>");
+<table class='keep'><tr><td><div style='height: 120pt'>swatch</div></td></tr></table>");
 
             var (rootBox, container) = await BuildCssBoxTree(html);
             var pageHeight = container.PageSize.Height;
@@ -106,7 +106,7 @@ namespace PeachPDF.Tests.Integration
             var html = BuildFillerDocument(@"
 <h2 class='heading'>Section heading</h2>
 <div class='keep' style='break-inside: avoid; page-break-inside: avoid'>
-<div style='height: 150px'>Keep together</div>
+<div style='height: 150pt'>Keep together</div>
 </div>");
 
             var (rootBox, container) = await BuildCssBoxTree(html);
@@ -162,7 +162,7 @@ namespace PeachPDF.Tests.Integration
 <h2 class='outer'>Chapter heading</h2>
 <h3 class='inner'>Section heading</h3>
 <div class='keep' style='break-inside: avoid; page-break-inside: avoid'>
-<div style='height: 150px'>Keep together</div>
+<div style='height: 150pt'>Keep together</div>
 </div>");
 
             var (rootBox, container) = await BuildCssBoxTree(html);
@@ -193,12 +193,13 @@ namespace PeachPDF.Tests.Integration
 <head>
 <style>
 @page { size: A4; margin: 20mm; }
-h2 { margin: 6px 0; }
-.para { font-size: 9px; line-height: 12px; margin: 0; orphans: 2; widows: 2; }
+body { margin: 8pt; }
+h2 { margin: 6pt 0; }
+.para { font-size: 9px; line-height: 12pt; margin: 0; orphans: 2; widows: 2; }
 </style>
 </head>
 <body>
-<div class='filler' style='height: 740px'>filler</div>
+<div class='filler' style='height: 740pt'>filler</div>
 <h2 class='heading'>Section heading</h2>
 <p class='para'>one<br>two<br>three<br>four<br>five<br>six</p>
 </body>
@@ -228,7 +229,7 @@ h2 { margin: 6px 0; }
             var html = BuildFillerDocument(@"
 <h2 class='heading' style='break-after: page; page-break-after: always'>Chapter heading</h2>
 <div class='keep' style='break-inside: avoid; page-break-inside: avoid; break-before: avoid'>
-<div style='height: 900px'>tall keep-together content</div>
+<div style='height: 900pt'>tall keep-together content</div>
 </div>");
 
             var (rootBox, container) = await BuildCssBoxTree(html);
@@ -257,7 +258,7 @@ h2 { margin: 6px 0; }
             var html = BuildFillerDocument(@"
 <h2 class='heading'>Section heading</h2>
 <div class='keep' style='break-inside: avoid; page-break-inside: avoid'>
-<div style='height: 900px'>taller than the space a heading would leave</div>
+<div style='height: 900pt'>taller than the space a heading would leave</div>
 </div>");
 
             var (rootBox, container) = await BuildCssBoxTree(html);
@@ -302,7 +303,7 @@ h2 { margin: 6px 0; }
             var html = BuildFillerDocument(@"
 <div class='lead' style='break-after: auto'>Lead-in paragraph</div>
 <div class='keep' style='break-inside: avoid; page-break-inside: avoid; break-before: avoid'>
-<div style='height: 150px'>Keep together</div>
+<div style='height: 150pt'>Keep together</div>
 </div>");
 
             var (rootBox, container) = await BuildCssBoxTree(html);
@@ -322,7 +323,10 @@ h2 { margin: 6px 0; }
 
         // A fixed-height filler pins the section under test near the bottom of page 1
         // deterministically (page height 842, margins 20 -> content spans y=20..822), so the
-        // following keep-together content is forced to relocate to page 2.
+        // following keep-together content is forced to relocate to page 2. Fixture lengths are
+        // authored in pt (1pt = 1 layout unit), and the body margin is pinned to 8pt (what the UA
+        // default `body { margin: 8px }` resolved to when these scenarios were calibrated, before
+        // px became 0.75pt), so the boundary-sensitive geometry stays exact.
         private static string BuildFillerDocument(string section)
         {
             return @"<!DOCTYPE html>
@@ -330,11 +334,12 @@ h2 { margin: 6px 0; }
 <head>
 <style>
 @page { size: A4; margin: 20mm; }
-h2, h3 { margin: 6px 0; }
+body { margin: 8pt; }
+h2, h3 { margin: 6pt 0; }
 </style>
 </head>
 <body>
-<div class='filler' style='height: 700px'>filler</div>
+<div class='filler' style='height: 700pt'>filler</div>
 " + section + @"
 </body>
 </html>";

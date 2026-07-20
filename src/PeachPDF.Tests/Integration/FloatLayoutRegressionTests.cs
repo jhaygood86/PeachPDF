@@ -25,8 +25,8 @@ namespace PeachPDF.Tests.Integration
         public async Task Float_PushesFollowingSiblingTextToTheRight()
         {
             var html = Wrap(@"
-                <div style='width:300px;'>
-                    <div style='float:left; width:100px; height:50px;'></div>
+                <div style='width:300pt;'>
+                    <div style='float:left; width:100pt; height:50pt;'></div>
                     <p id='text' style='margin:0;'>Hello world</p>
                 </div>");
 
@@ -36,7 +36,7 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotNull(firstWord);
             Assert.True(firstWord!.Rectangle.Left >= 90,
-                $"first word should be pushed right past the 100px float, was at {firstWord.Rectangle.Left}");
+                $"first word should be pushed right past the 100pt float, was at {firstWord.Rectangle.Left}");
         }
 
         [Fact]

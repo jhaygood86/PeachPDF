@@ -224,9 +224,10 @@ namespace PeachPDF.Html.Core.Parse
             // PixelsPerPoint reconciliation for the identical, already-established pattern/precedent).
             var pixelsPerPoint = (htmlContainer.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
 
-            // ParseLength's absolute-unit branches (pt/mm/cm/in/pc) resolve straight to raw,
-            // unscaled points - for those, multiplying by pixelsPerPoint once at the end (below) is
-            // exactly the scaling needed. But its percentage/em/rem branches resolve against
+            // ParseLength's absolute-unit branches (pt/mm/cm/in/pc, and px at the spec-correct
+            // 1px = 0.75pt via Length.PointsPerPx) resolve straight to raw, unscaled points - for
+            // those, multiplying by pixelsPerPoint once at the end (below) is exactly the scaling
+            // needed. But its percentage/em/rem branches resolve against
             // hundredPercent/emFactor/remFactor - here, htmlContainer.PageSize.Width and
             // root.GetEmHeight()/GetRemHeight(), which are THEMSELVES already in pixelsPerPoint-scaled
             // internal space - so passing them through unscaled and then multiplying the whole result
@@ -234,14 +235,25 @@ namespace PeachPDF.Html.Core.Parse
             // these three bases down to true-point space first, so ParseLength's result is uniformly
             // in true points regardless of which unit branch it took, then scaling that single result
             // by pixelsPerPoint once, keeps every unit type correct.
+            // The same true-point bases the base rule resolves relative units against, captured as
+            // this parse pass's shared snapshot so per-page rules (resolved later, at band-geometry/
+            // paint time via PageRuleResolver.ResolvePageMargins) see identical numbers - SetContent
+            // reassigns PageSize after SetHtml, so recomputing these bases later would break
+            // base-vs-per-page identity for percentage margins. Captured unconditionally (not only
+            // when a base rule exists): per-page rules can appear without one.
+            var lengthContext = new PageLengthContext(
+                root.GetEmHeight() / pixelsPerPoint,
+                root.GetRemHeight() / pixelsPerPoint,
+                htmlContainer.PageSize.Width / pixelsPerPoint);
+            htmlContainer.PageLengthContext = lengthContext;
+
             double ParseMarginLength(string value) =>
                 CssValueParser.ParseLength(
                     value,
-                    htmlContainer.PageSize.Width / pixelsPerPoint,
-                    root.GetEmHeight() / pixelsPerPoint,
-                    root.GetRemHeight() / pixelsPerPoint,
+                    lengthContext.HundredPercentPt,
+                    lengthContext.EmPt,
+                    lengthContext.RemPt,
                     null,
-                    false,
                     false) * pixelsPerPoint;
 
             foreach (var style in cssData.Stylesheets)
@@ -367,20 +379,50 @@ namespace PeachPDF.Html.Core.Parse
             if (string.IsNullOrWhiteSpace(value))
                 return null;
 
-            // Tokenization and unit classification are delegated to the CSS-OM Length struct
-            // rather than re-implemented here, so both layers agree on the length grammar —
-            // including that a unitless value is only valid when it is zero, which is exactly
-            // how the CSS-OM serializes every zero length (Length.ToString() drops the unit).
-            // Units are ASCII case-insensitive per CSS Syntax; Length.GetUnit matches lowercase.
+            // Tokenization, unit classification, AND numeric conversion are all delegated to the
+            // CSS-OM Length struct rather than re-implemented here, so both layers agree on the
+            // length grammar and on every unit's conversion — including spec-correct CSS px
+            // (1px = 1/96in = 0.75pt via Length.PointsPerPx) and that a unitless value is only
+            // valid when it is zero, which is exactly how the CSS-OM serializes every zero length
+            // (Length.ToString() drops the unit). Units are ASCII case-insensitive per CSS Syntax;
+            // Length.GetUnit matches lowercase.
             if (!Length.TryParse(value.Trim().ToLowerInvariant(), out var length) || !length.IsAbsolute)
                 return null; // relative units (em/rem/%/...) have no resolution context at this layer
 
-            // This layer emits true PDF points: CSS px is 1/96in = 0.75pt. Length.ToPixels
-            // deliberately treats engine-internal px as 1pt (see its doc comment) — that
-            // convention is for internal layout space, not physical page geometry.
-            return length.Type == Length.Unit.Px
-                ? length.Value * (72.0 / 96.0)
-                : length.ToPixels(0, 0, 0);
+            return length.ToPixels(0, 0, 0);
+        }
+
+        /// <summary>
+        /// Like <see cref="ParseLengthToPdfPoints(string)"/>, but with the captured per-pass
+        /// <see cref="PageLengthContext"/> so relative units (em/rem/ex/%) and calc() expressions
+        /// resolve too - against the exact same bases the base <c>@page</c> rule used, so a
+        /// textually identical margin resolves identically in a base rule and a per-page rule.
+        /// Returns null (caller falls back to the base margin) for units with no meaningful page
+        /// context (vw/vh/vmin/vmax/ch) rather than letting <see cref="Length.ToPixels"/> silently
+        /// zero them into surprise zero-margins, and for unparseable input.
+        /// </summary>
+        internal static double? ParseLengthToPdfPoints(string value, PageLengthContext context)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            var normalized = value.Trim().ToLowerInvariant();
+
+            if (CssValueParser.IsCalcFunction(normalized))
+            {
+                // Same shared CalcParser/CalcEvaluator path the base rule takes through ParseLength,
+                // with the same true-point bases - base and per-page calc() agree by construction.
+                return CssValueParser.ParseLength(
+                    normalized, context.HundredPercentPt, context.EmPt, context.RemPt, null, false);
+            }
+
+            if (!Length.TryParse(normalized, out var length))
+                return null;
+
+            return length.Type is Length.Unit.Ch or Length.Unit.Vw or Length.Unit.Vh
+                or Length.Unit.Vmin or Length.Unit.Vmax
+                ? null
+                : length.ToPixels(context.EmPt, context.RemPt, context.HundredPercentPt);
         }
 
         /// <summary>

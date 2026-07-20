@@ -101,7 +101,7 @@ namespace PeachPDF.Tests.Integration
             const string html = @"<!DOCTYPE html>
 <html>
 <body style='margin: 0'>
-<button class='btn' style='padding: 6px 14px'>Go</button>
+<button class='btn' style='padding: 6pt 14pt'>Go</button>
 </body>
 </html>";
 
@@ -130,7 +130,7 @@ namespace PeachPDF.Tests.Integration
             const string html = @"<!DOCTYPE html>
 <html>
 <body style='margin: 0'>
-<button class='btn' style='padding: 0 0 30px 0'>Go</button>
+<button class='btn' style='padding: 0 0 30pt 0'>Go</button>
 </body>
 </html>";
 
@@ -159,7 +159,7 @@ namespace PeachPDF.Tests.Integration
             const string html = @"<!DOCTYPE html>
 <html>
 <head><style>
-.host::before { content: 'NEW'; display: inline-block; padding: 6px 14px; }
+.host::before { content: 'NEW'; display: inline-block; padding: 6pt 14pt; }
 </style></head>
 <body style='margin: 0'>
 <div class='host'>after marker</div>

@@ -111,7 +111,7 @@ namespace PeachPDF.Tests.Integration
             // stuck with the first-line one.
             var (root, _) = await BuildAndLayout(Wrap(
                 "<style>p::first-line { font-size: 300% }</style>" +
-                "<p id='p' style='width:80px; font-size:10pt'><b id='b'>alpha beta gamma delta epsilon</b></p>"));
+                "<p id='p' style='width:80pt; font-size:10pt'><b id='b'>alpha beta gamma delta epsilon</b></p>"));
             var p = FindById(root, "p")!;
             var b = FindById(root, "b")!;
 

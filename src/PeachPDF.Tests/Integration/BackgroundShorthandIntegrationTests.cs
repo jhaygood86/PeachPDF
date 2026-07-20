@@ -9,8 +9,11 @@ namespace PeachPDF.Tests.Integration
 {
     public class BackgroundShorthandIntegrationTests
     {
+        // Box dimensions are authored in pt (not px) so the one coordinate-checking test below
+        // (BackgroundShorthand_MultipleLayers_RepeatValuesApplyPerLayer) stays literal under the
+        // spec-correct 1px = 0.75pt convention; the remaining tests only assert unit-agnostic tokens.
         private static string BoxHtml(string css) =>
-            $"<!DOCTYPE html><html><head><style>body {{ margin: 0; }} div {{ width: 200px; height: 100px; {css} }}</style></head><body><div></div></body></html>";
+            $"<!DOCTYPE html><html><head><style>body {{ margin: 0; }} div {{ width: 200pt; height: 100pt; {css} }}</style></head><body><div></div></body></html>";
 
         private static async Task<string> GetPdfText(string html)
         {
@@ -99,8 +102,8 @@ namespace PeachPDF.Tests.Integration
                 "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
             var pdfText = await GetPdfText(BoxHtml(
-                $"background: url('data:image/png;base64,{pngBase64}') left top / 20px 20px no-repeat, " +
-                $"url('data:image/png;base64,{pngBase64}') left top / 20px 20px repeat-x;"));
+                $"background: url('data:image/png;base64,{pngBase64}') left top / 20pt 20pt no-repeat, " +
+                $"url('data:image/png;base64,{pngBase64}') left top / 20pt 20pt repeat-x;"));
 
             // One layer draws once; the other tiles multiple 20pt-wide copies to the right of it.
             // div is flush at the page margin (20, 822) with no border/padding, so "left top" with a

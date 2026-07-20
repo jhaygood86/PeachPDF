@@ -17,13 +17,18 @@ namespace PeachPDF.Tests.Integration
         private const string PngBase64 =
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
+        // Box dimensions are authored in pt (not px) so the expected content-stream coordinates below
+        // stay literal: with the spec-correct 1px = 0.75pt convention a 200px/100px box would lay out
+        // at 150pt/75pt, shifting every asserted coordinate. The geometry these tests exercise
+        // (background-position/size/repeat placement) is unit-agnostic, so pt keeps the assertions
+        // readable while the layout units are identical to the pre-change px behavior.
         private static string ImageBoxHtml(string css) =>
             $"<!DOCTYPE html><html><head><style>body {{ margin: 0; }}</style></head><body>" +
-            $"<div style=\"width: 200px; height: 100px; background-image: url('data:image/png;base64,{PngBase64}'); {css}\"></div>" +
+            $"<div style=\"width: 200pt; height: 100pt; background-image: url('data:image/png;base64,{PngBase64}'); {css}\"></div>" +
             "</body></html>";
 
         private static string BoxHtml(string css) =>
-            $"<!DOCTYPE html><html><head><style>body {{ margin: 0; }} div {{ width: 200px; height: 100px; {css} }}</style></head><body><div></div></body></html>";
+            $"<!DOCTYPE html><html><head><style>body {{ margin: 0; }} div {{ width: 200pt; height: 100pt; {css} }}</style></head><body><div></div></body></html>";
 
         private static async Task<string> GetPdfText(string html)
         {
@@ -40,7 +45,7 @@ namespace PeachPDF.Tests.Integration
         public async Task BackgroundSizeAndPosition_ScalesAndPositionsAtBottomRight()
         {
             var pdfText = await GetPdfText(ImageBoxHtml(
-                "background-size: 50px 50px; background-position: right bottom; background-repeat: no-repeat;"));
+                "background-size: 50pt 50pt; background-position: right bottom; background-repeat: no-repeat;"));
 
             // The div spans x:[20,220] y:[722,822] in page points (20pt margin, 200x100 box).
             // A 50x50 tile flush to the right/bottom edge lands at (170, 722).
@@ -56,7 +61,7 @@ namespace PeachPDF.Tests.Integration
             // available space: offsetX = 0.25*150 = 37.5, offsetY = 0.75*50 = 37.5, giving a
             // translate of (20+37.5, 822-50-37.5) = (57.5, 734.5) - not the centered (95, 747).
             var pdfText = await GetPdfText(ImageBoxHtml(
-                "background-size: 50px 50px; background-position: 25% 75%; background-repeat: no-repeat;"));
+                "background-size: 50pt 50pt; background-position: 25% 75%; background-repeat: no-repeat;"));
 
             Assert.Matches(new Regex(@"q 50 0 0 50 57\.5 734\.5 cm /\w+ Do"), pdfText);
             Assert.DoesNotMatch(new Regex(@"q 50 0 0 50 95(\.\d+)? 747(\.\d+)? cm"), pdfText);
@@ -65,7 +70,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task BackgroundRepeat_TilesAtResolvedSize_NotNaturalImageSize()
         {
-            var pdfText = await GetPdfText(ImageBoxHtml("background-size: 40px 40px; background-repeat: repeat;"));
+            var pdfText = await GetPdfText(ImageBoxHtml("background-size: 40pt 40pt; background-repeat: repeat;"));
 
             // 200/40 = 5 columns exactly; each tile step is 40pt, not the image's natural 1x1 size.
             Assert.Matches(new Regex(@"q 40 0 0 40 20(\.\d+)? \d+(\.\d+)? cm /\w+ Do"), pdfText);
@@ -78,14 +83,18 @@ namespace PeachPDF.Tests.Integration
         {
             var pdfText = await GetPdfText(BoxHtml(
                 $"background-image: url('data:image/png;base64,{PngBase64}'), url('data:image/png;base64,{PngBase64}'); " +
-                "background-position: 10px 10px, center; background-repeat: no-repeat;"));
+                "background-position: 10pt 10pt, center; background-repeat: no-repeat;"));
 
-            // Each layer must use its own comma-list entry, not the same string for both -
-            // the "10px 10px" layer is flush near the top-left (translate x=30 = 20 + 10px offset).
+            // No background-size, so each tile draws at the image's intrinsic size. With the spec-correct
+            // 1px = 0.75pt convention, the 1x1 PNG's natural size is 0.75pt, so the cm scale is 0.75 (it
+            // used to be 1 back when 1px == 1pt). Each layer must use its own comma-list entry, not the
+            // same string for both - the "10pt 10pt" layer is flush near the top-left (translate x=30 =
+            // 20pt margin + 10pt offset).
             Assert.Matches(new Regex(@"cm /\w+ Do"), pdfText);
-            Assert.Contains("1 0 0 1 30 ", pdfText);
-            // The "center" layer must land at a different X than the "10px 10px" layer.
-            Assert.Contains("1 0 0 1 119.5 ", pdfText);
+            Assert.Contains("0.75 0 0 0.75 30 ", pdfText);
+            // The "center" layer must land at a different X than the "10pt 10pt" layer:
+            // 20 + (200 - 0.75)/2 = 119.625.
+            Assert.Contains("0.75 0 0 0.75 119.625 ", pdfText);
         }
 
         [Fact]

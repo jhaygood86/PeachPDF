@@ -32,7 +32,9 @@ namespace PeachPDF.Tests.Integration
             // after every glyph shown including the last, and CSS Text 3 §7.2 only exempts the
             // start/end of a *line*, not the end of a word - reserving only 3 (an old CSS1/2.1-era
             // assumption) undersized the word's own box relative to what actually gets painted.
-            var spaced = await FirstWordWidthAsync("<p id='p' style='letter-spacing:2px'>AAAA</p>");
+            // (Uses pt so the spacing value stays 1:1 with the engine's internal unit; px would
+            // resolve at 0.75x per the spec-correct 1px = 0.75pt convention.)
+            var spaced = await FirstWordWidthAsync("<p id='p' style='letter-spacing:2pt'>AAAA</p>");
             var plain = await FirstWordWidthAsync("<p id='p'>AAAA</p>");
 
             Assert.Equal(plain + 4 * 2, spaced, 1);
@@ -59,7 +61,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task LetterSpacingNegative_ReducesWidth()
         {
-            var negative = await FirstWordWidthAsync("<p id='p' style='letter-spacing:-1px'>AAAA</p>");
+            var negative = await FirstWordWidthAsync("<p id='p' style='letter-spacing:-1pt'>AAAA</p>");
             var plain = await FirstWordWidthAsync("<p id='p'>AAAA</p>");
 
             Assert.Equal(plain - 4 * 1, negative, 1);
@@ -68,10 +70,24 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task WordSpacing_IncreasesGapBetweenAdjacentWords()
         {
-            var spacedGap = await InterWordGapAsync("<p id='p' style='word-spacing:5px'>AA BB</p>");
+            var spacedGap = await InterWordGapAsync("<p id='p' style='word-spacing:5pt'>AA BB</p>");
             var plainGap = await InterWordGapAsync("<p id='p'>AA BB</p>");
 
             Assert.Equal(plainGap + 5, spacedGap, 1);
+        }
+
+        [Fact]
+        public async Task LetterSpacing_EmValue_ResolvesAgainstFontSize_InLayoutPoints()
+        {
+            // letter-spacing/word-spacing/text-indent eagerly convert an em value to layout units
+            // via CssBoxProperties.NoEms. GetEmHeight() is the font size in points, so 0.5em at a
+            // 20pt font is 10pt per gap - and the converted string must round-trip through
+            // ParseLength as points, not px (which would resolve at 0.75x and shrink each gap).
+            var spaced = await FirstWordWidthAsync(
+                "<p id='p' style='font-size:20pt; letter-spacing:0.5em'>AAAA</p>");
+            var plain = await FirstWordWidthAsync("<p id='p' style='font-size:20pt'>AAAA</p>");
+
+            Assert.Equal(plain + 4 * 10, spaced, 1);
         }
 
         // Direct regression test for the reported bug: "REMIT PAYMENT TO" style all-caps letter-spaced
@@ -94,16 +110,18 @@ namespace PeachPDF.Tests.Integration
         // character sits in the same letter-spaced run and gets its own leading/trailing edges spaced
         // too. Combined, the letter-spaced gap should equal the plain gap plus exactly one letter-spacing
         // unit, regardless of how large letter-spacing gets.
+        // Uses pt so the fed value stays 1:1 with the engine's internal unit and the assertion can stay
+        // literal; px would resolve at 0.75x per the spec-correct 1px = 0.75pt convention.
         [Theory]
         [InlineData(2)]
         [InlineData(10)]
         [InlineData(20)]
-        public async Task LetterSpacing_InterWordGap_WidensByExactlyOneLetterSpacingUnit(double letterSpacingPx)
+        public async Task LetterSpacing_InterWordGap_WidensByExactlyOneLetterSpacingUnit(double letterSpacingPt)
         {
-            var spacedGap = await InterWordGapAsync($"<p id='p' style='letter-spacing:{letterSpacingPx}px'>AA BB</p>");
+            var spacedGap = await InterWordGapAsync($"<p id='p' style='letter-spacing:{letterSpacingPt}pt'>AA BB</p>");
             var plainGap = await InterWordGapAsync("<p id='p'>AA BB</p>");
 
-            Assert.Equal(plainGap + letterSpacingPx, spacedGap, 1);
+            Assert.Equal(plainGap + letterSpacingPt, spacedGap, 1);
         }
 
         // The word-box-width fix (not the inter-word-gap fix, which only ever engages when
@@ -133,7 +151,7 @@ namespace PeachPDF.Tests.Integration
         public async Task WordSpacingAndLetterSpacing_Combined_BothContributeToGap()
         {
             var combinedGap = await InterWordGapAsync(
-                "<p id='p' style='word-spacing:5px;letter-spacing:3px'>AA BB</p>");
+                "<p id='p' style='word-spacing:5pt;letter-spacing:3pt'>AA BB</p>");
             var plainGap = await InterWordGapAsync("<p id='p'>AA BB</p>");
 
             Assert.Equal(plainGap + 5 + 3, combinedGap, 1);
@@ -142,7 +160,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task LetterSpacing_ProducesSingleDrawStringCall_CarryingResolvedSpacing()
         {
-            var (root, _) = await BuildAndLayout(Wrap("<p id='p' style='letter-spacing:2px'>AAAA</p>"));
+            var (root, _) = await BuildAndLayout(Wrap("<p id='p' style='letter-spacing:2pt'>AAAA</p>"));
             var p = FindById(root, "p")!;
 
             var g = new TestRecordingGraphics();

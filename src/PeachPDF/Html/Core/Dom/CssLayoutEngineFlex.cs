@@ -277,8 +277,8 @@ namespace PeachPDF.Html.Core.Dom
             if (hypothetical > 0)
             {
                 double cssContentSize = Math.Max(0, hypothetical - MainPaddingBorder(box));
-                if (_isRow) { savedDim = box.Width;  box.Width  = FormatPx(cssContentSize); }
-                else        { savedDim = box.Height; box.Height = FormatPx(cssContentSize); }
+                if (_isRow) { savedDim = box.Width;  box.Width  = FormatLayoutUnits(cssContentSize); }
+                else        { savedDim = box.Height; box.Height = FormatLayoutUnits(cssContentSize); }
             }
 
             box.Location = new RPoint(_flexBox.ClientLeft, _flexBox.ClientTop);
@@ -382,12 +382,12 @@ namespace PeachPDF.Html.Core.Dom
             if (_isRow)
             {
                 saved = item.Box.Width;
-                item.Box.Width = FormatPx(cssContentSize);
+                item.Box.Width = FormatLayoutUnits(cssContentSize);
             }
             else
             {
                 saved = item.Box.Height;
-                item.Box.Height = FormatPx(cssContentSize);
+                item.Box.Height = FormatLayoutUnits(cssContentSize);
             }
 
             item.Box.Location = new RPoint(_flexBox.ClientLeft, _flexBox.ClientTop);
@@ -594,8 +594,8 @@ namespace PeachPDF.Html.Core.Dom
                                     // lock the main-axis Width so GetBoxWidth can't fall back to container fill.
                                     double crossContent = Math.Max(0, targetCross - item.Box.ActualPaddingTop - item.Box.ActualPaddingBottom
                                                                                   - item.Box.ActualBorderTopWidth - item.Box.ActualBorderBottomWidth);
-                                    item.Box.Height = FormatPx(crossContent);
-                                    item.Box.Width  = FormatPx(Math.Max(0, item.FinalMainSize - MainPaddingBorder(item.Box)));
+                                    item.Box.Height = FormatLayoutUnits(crossContent);
+                                    item.Box.Width  = FormatLayoutUnits(Math.Max(0, item.FinalMainSize - MainPaddingBorder(item.Box)));
                                     item.Box.Location = new RPoint(_flexBox.ClientLeft, _flexBox.ClientTop);
                                     item.Box.ActualBottom = item.Box.Location.Y;
                                     item.Box.RectanglesReset();
@@ -610,8 +610,8 @@ namespace PeachPDF.Html.Core.Dom
                                     // Column direction: lock cross Width and preserve main-axis Height.
                                     double crossContent = Math.Max(0, targetCross - item.Box.ActualPaddingLeft - item.Box.ActualPaddingRight
                                                                                   - item.Box.ActualBorderLeftWidth - item.Box.ActualBorderRightWidth);
-                                    item.Box.Width  = FormatPx(crossContent);
-                                    item.Box.Height = FormatPx(Math.Max(0, item.FinalMainSize - MainPaddingBorder(item.Box)));
+                                    item.Box.Width  = FormatLayoutUnits(crossContent);
+                                    item.Box.Height = FormatLayoutUnits(Math.Max(0, item.FinalMainSize - MainPaddingBorder(item.Box)));
                                     item.Box.Location = new RPoint(_flexBox.ClientLeft, _flexBox.ClientTop);
                                     item.Box.ActualBottom = item.Box.Location.Y;
                                     item.Box.RectanglesReset();
@@ -810,9 +810,12 @@ namespace PeachPDF.Html.Core.Dom
             float.TryParse(val, System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : 0f;
 
-        // Format in internal layout units as "px" so ParseLength returns the value 1:1 (px factor = 1).
-        private static string FormatPx(double value) =>
-            value.ToString("F4", System.Globalization.CultureInfo.InvariantCulture) + "px";
+        // Format a resolved size back into a length string that ParseLength returns 1:1. The values
+        // here are already in internal layout units (points), so serialize as "pt" (the identity
+        // unit) - NOT "px", which now resolves at the spec-correct 0.75pt and would silently shrink
+        // every re-parsed flex size to 75% of the value computed here.
+        private static string FormatLayoutUnits(double value) =>
+            value.ToString("F4", System.Globalization.CultureInfo.InvariantCulture) + "pt";
 
         // ─── Data classes ─────────────────────────────────────────────────────────
 
