@@ -690,7 +690,11 @@ namespace PeachPDF.Html.Core.Dom
             // Step 1: Remove header/footer from document tree
             RemoveHeaderFooterFromTree();
 
-            // Step 2: Layout header rows ONCE to calculate height
+            // Step 2: Layout header rows ONCE to calculate height. Proxy creation is deferred
+            // until after the header pre-check below (Step 4) has settled the header's final
+            // position - CssProxyBox.PerformLayoutImp captures a paint-time snapshot of the
+            // header at whatever position it's laid out at, so creating the proxy here (before a
+            // possible page-break relocation) would bake in a stale, pre-relocation snapshot.
             if (_shouldRepeatHeaders && _headerBox != null)
             {
                 // Layout header rows directly using table layout logic
@@ -719,22 +723,6 @@ namespace PeachPDF.Html.Core.Dom
                 _headerBox.ActualRight = maxRight;
                 _headerBox.ActualBottom = headerRowsLayoutY - GetVerticalSpacing();
                 _headerHeight = _headerBox.ActualBottom - _headerBox.Location.Y;
-
-                // Now create proxy that references the already-laid-out header
-                // CreateHeaderProxy's CssProxyBox constructor already appends itself to
-                // _tableBox.Boxes (see the base CssBox(parentBox, tag) constructor) - an explicit
-                // second Add here duplicated the same proxy instance in the list, causing every
-                // header row to be painted (and, once tagged, MCID-tagged) twice at identical
-                // coordinates - invisible on the page (exact overlap) but wasted content-stream
-                // bytes and duplicate structure-tree entries.
-                var headerProxy = CreateHeaderProxy(currentY);
-                if (headerProxy != null)
-                {
-                    await headerProxy.PerformLayout(g);
-
-                    currentY += _headerHeight + GetVerticalSpacing();
-                    maxBottom = currentY;
-                }
             }
 
             // Step 3: Layout footer rows once to get dimensions (if needed)
@@ -789,37 +777,66 @@ namespace PeachPDF.Html.Core.Dom
                     && estimatedBodyHeight <= availableHeight)
                 {
                     var pageBreakOffset = CalculatePageBreakOffset(container, currentY, currentPageNumber);
-
-                    // css-break §3.1 keep-with-next: break-after: avoid on the preceding sibling(s)
-                    // (e.g. the UA default `h1-h6 { page-break-after: avoid }` under @media print)
-                    // forbids the break this whole-table move introduces between them and the table.
-                    // Pull the avoid-chained run to the next page with the table when everything still
-                    // fits on one page; an unsatisfiable avoid is relaxed per spec and the table moves
-                    // alone, exactly as before.
-                    var keepWithNextRun = DomUtils.GetPrecedingKeepWithNextRun(_tableBox);
-                    if (keepWithNextRun.Count > 0)
-                    {
-                        var runTop = keepWithNextRun[0].Location.Y;
-                        var extraAbove = currentY - runTop;
-                        var runStartsOnSamePage = container.PageIndexOf(runTop) == currentPageNumber;
-
-                        if (extraAbove > 0 && runStartsOnSamePage && extraAbove + estimatedBodyHeight <= availableHeight)
-                        {
-                            // One common offset lands the run's top at the next page's content top and
-                            // keeps the run→table spacing intact.
-                            pageBreakOffset += extraAbove;
-
-                            foreach (var member in keepWithNextRun)
-                            {
-                                member.OffsetTop(pageBreakOffset);
-                            }
-                        }
-                    }
+                    pageBreakOffset = PullKeepWithNextRun(container, currentY, pageBreakOffset,
+                        currentPageNumber, availableHeight, estimatedBodyHeight);
 
                     _tableBox.Location = _tableBox.Location with { Y = _tableBox.Location.Y + pageBreakOffset };
                     startY = Math.Max(_tableBox.ClientTop + GetVerticalSpacing(), 0);
                     currentY = startY;
                     currentPageNumber = container.PageIndexOf(startY);
+                }
+            }
+
+            // Pre-check: a repeating <thead> is laid out above (Step 2) before any body row is
+            // attempted - if the header itself fits on the current page but no body row does, the
+            // per-row break check below can't catch it (it requires `i > 0`, since it exists to
+            // detect breaks *between* rows) and the whole header (plus any keep-with-next heading)
+            // would strand alone on the current page while every body row starts on the next.
+            // Mirrors the headerless pre-check above - "first body row after the header" instead
+            // of "first body row after the table's own top" - but deliberately NOT gated on the
+            // whole body fitting one page: a long repeating-header table should still start fresh
+            // on the next page rather than orphan its header, and fragments normally via the
+            // per-row check from there.
+            if (_bodyRows.Count > 0
+                && pageHeight < double.MaxValue - 1
+                && container != null
+                && _shouldRepeatHeaders && _headerBox != null)
+            {
+                var firstRowHeight = EstimateRowHeight(_bodyRows[0]);
+                var availableHeight = container.PageBandHeightOf(currentPageNumber) - _footerHeight;
+                var afterHeaderY = startY + _headerHeight + GetVerticalSpacing();
+
+                if (WillCrossPageBoundary(container, afterHeaderY + firstRowHeight, availableHeight, currentPageNumber))
+                {
+                    var pageBreakOffset = CalculatePageBreakOffset(container, startY, currentPageNumber);
+                    pageBreakOffset = PullKeepWithNextRun(container, startY, pageBreakOffset,
+                        currentPageNumber, availableHeight, _headerHeight + firstRowHeight);
+
+                    _tableBox.Location = _tableBox.Location with { Y = _tableBox.Location.Y + pageBreakOffset };
+                    _headerBox.OffsetTop(pageBreakOffset);
+
+                    startY = Math.Max(_tableBox.ClientTop + GetVerticalSpacing(), 0);
+                    currentY = startY;
+                    currentPageNumber = container.PageIndexOf(startY);
+                }
+            }
+
+            // Create the header proxy that references the already-laid-out header, now that its
+            // final (possibly page-break-adjusted) position is settled. CreateHeaderProxy's
+            // CssProxyBox constructor already appends itself to _tableBox.Boxes (see the base
+            // CssBox(parentBox, tag) constructor) - an explicit second Add here duplicated the
+            // same proxy instance in the list, causing every header row to be painted (and, once
+            // tagged, MCID-tagged) twice at identical coordinates - invisible on the page (exact
+            // overlap) but wasted content-stream bytes and duplicate structure-tree entries.
+            if (_shouldRepeatHeaders && _headerBox != null)
+            {
+                var headerProxy = CreateHeaderProxy(currentY);
+                if (headerProxy != null)
+                {
+                    await headerProxy.PerformLayout(g);
+
+                    currentY += _headerHeight + GetVerticalSpacing();
+                    maxBottom = currentY;
                 }
             }
 
@@ -1484,6 +1501,44 @@ namespace PeachPDF.Html.Core.Dom
                 return 0;
 
             return container.PageTopOf(currentPageNumber + 1) - currentY;
+        }
+
+        /// <summary>
+        /// css-break §3.1 keep-with-next: break-after/break-before: avoid on the sibling(s) immediately
+        /// preceding the table (e.g. the UA default <c>h1-h6 { page-break-after: avoid }</c> under
+        /// @media print) forbids the break a whole-table relocation would otherwise introduce between
+        /// them and the table. Extends <paramref name="pageBreakOffset"/> so the run lands at the next
+        /// page's content top with the table positioned right after it, when the run starts on the same
+        /// page as <paramref name="currentY"/> and, together with <paramref name="trailingHeight"/> (the
+        /// content the table itself still needs room for - the whole body, or just the header plus its
+        /// first row, depending on the caller), it fits within <paramref name="availableHeight"/>. An
+        /// unsatisfiable avoid is relaxed per spec and the returned offset is unchanged, moving the table
+        /// alone exactly as before. Shared by both whole-table pre-checks in <see cref="LayoutCells"/>.
+        /// </summary>
+        private double PullKeepWithNextRun(HtmlContainerInt container, double currentY, double pageBreakOffset,
+            int currentPageNumber, double availableHeight, double trailingHeight)
+        {
+            var keepWithNextRun = DomUtils.GetPrecedingKeepWithNextRun(_tableBox);
+            if (keepWithNextRun.Count == 0)
+                return pageBreakOffset;
+
+            var runTop = keepWithNextRun[0].Location.Y;
+            var extraAbove = currentY - runTop;
+            var runStartsOnSamePage = container.PageIndexOf(runTop) == currentPageNumber;
+
+            if (extraAbove <= 0 || !runStartsOnSamePage || extraAbove + trailingHeight > availableHeight)
+                return pageBreakOffset;
+
+            // One common offset lands the run's top at the next page's content top and keeps the
+            // run→table spacing intact.
+            var groupOffset = pageBreakOffset + extraAbove;
+
+            foreach (var member in keepWithNextRun)
+            {
+                member.OffsetTop(groupOffset);
+            }
+
+            return groupOffset;
         }
 
         #endregion

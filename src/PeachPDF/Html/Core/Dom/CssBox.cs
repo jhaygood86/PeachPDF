@@ -1218,7 +1218,47 @@ namespace PeachPDF.Html.Core.Dom
                                 var naturalSlot = HtmlContainer.PageIndexOf(top - HtmlContainerInt.PageBoundaryEpsilon);
                                 if (naturalSlot > prevSlot)
                                 {
-                                    top = HtmlContainer.PageTopOf(prevSlot + 1);
+                                    var newTop = HtmlContainer.PageTopOf(prevSlot + 1);
+
+                                    // css-break §3.1 keep-with-next: this box is about to relocate to
+                                    // the next page's content top, which would otherwise strand a
+                                    // preceding break-after/break-before: avoid run (e.g. the UA default
+                                    // `h1-h6 { page-break-after: avoid }`) alone at the bottom of the
+                                    // page it's leaving - see CssLayoutEngineTable's identical whole-table
+                                    // pre-check (LayoutCells) and OffsetTopWithKeepWithNextRun, which this
+                                    // mirrors. Pull the run along when it starts on this same page and its
+                                    // own height still fits the destination page's band; an unsatisfiable
+                                    // avoid is relaxed per spec and this box moves alone, exactly as
+                                    // before. Unlike those two siblings' guards, this one doesn't also
+                                    // require this box's own (not-yet-laid-out) content to fit alongside
+                                    // the run: a break-inside:avoid/orphans-widows box must land whole or
+                                    // the move is pointless, but this box is free to fragment across
+                                    // further pages on its own afterward (a table re-applies its per-row
+                                    // break logic, an ordinary block just keeps flowing) - only the run
+                                    // needs a page to itself.
+                                    var keepWithNextRun = DomUtils.GetPrecedingKeepWithNextRun(this);
+                                    if (keepWithNextRun.Count > 0)
+                                    {
+                                        var runTop = keepWithNextRun[0].Location.Y;
+                                        var extraAbove = top - runTop;
+                                        var runStartsOnSamePage =
+                                            HtmlContainer.PageIndexOf(runTop - HtmlContainerInt.PageBoundaryEpsilon) == prevSlot;
+
+                                        if (extraAbove > 0 && runStartsOnSamePage
+                                            && extraAbove <= HtmlContainer.PageBandHeightOf(prevSlot + 1))
+                                        {
+                                            var groupOffset = newTop - runTop;
+
+                                            foreach (var member in keepWithNextRun)
+                                            {
+                                                member.OffsetTop(groupOffset);
+                                            }
+
+                                            newTop += extraAbove;
+                                        }
+                                    }
+
+                                    top = newTop;
                                 }
                             }
                         }
