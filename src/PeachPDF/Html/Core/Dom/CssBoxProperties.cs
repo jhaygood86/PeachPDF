@@ -1470,7 +1470,10 @@ namespace PeachPDF.Html.Core.Dom
             var len = new CssLength(length);
             if (len.Unit == CssUnit.Ems)
             {
-                length = len.ConvertEmToPixels(GetEmHeight()).ToString();
+                // GetEmHeight() is the em size in layout units (points), and the result is later
+                // re-parsed through ParseLength — so serialize as "pt" (identity), not "px" (which
+                // now resolves at the spec-correct 0.75pt and would shrink the value on re-parse).
+                length = len.ConvertEmToPoints(GetEmHeight()).ToString();
             }
             return length;
         }
