@@ -2922,7 +2922,7 @@ static int LedgerUnitPrice(int i) => 120 + i * 53 % 480;
 
 var ledgerRows = string.Join("\n", Enumerable.Range(1, 60).Select(i =>
 {
-    var (statusLabel, statusClass) = ledgerStatuses[i * 5 % ledgerStatuses.Length];
+    var (statusLabel, statusClass) = ledgerStatuses[i * 2 % ledgerStatuses.Length];
     var alt = i % 2 == 0 ? " class=\"alt\"" : "";
     var total = LedgerUnits(i) * LedgerUnitPrice(i);
     return $"<tr{alt}><td class=\"num\">INV-2026-{i:0000}</td><td>{ledgerRegions[i % ledgerRegions.Length]}</td><td>{ledgerProducts[i * 3 % ledgerProducts.Length]}</td>" +
@@ -3377,7 +3377,7 @@ var catalogHtml = $$"""
       display: flex; align-items: center; justify-content: center;
       font: bold 13pt Arial; color: var(--accent-deep);
     }
-    .order-note { font: 8.5pt Arial; color: #8c8272; margin: 0; letter-spacing: 0.4pt; }
+    .order-note { font: 8.5pt Arial; color: #8c8272; margin: 0; letter-spacing: 0.4pt; word-spacing: 1.5pt; }
 
     /* ── Colophon ── */
     .colophon {
