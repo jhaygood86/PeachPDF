@@ -106,7 +106,13 @@ namespace PeachPDF.Html.Core.Dom
             cssBox.Text = contentText.ToString();
         }
 
-        private static bool IsGradientFunctionName(string name) =>
+        /// <summary>
+        /// Shared with <see cref="MarginBoxRenderer.ResolveContentImage"/> - a margin box's own
+        /// <c>content</c> accepts the same <c>&lt;image&gt;</c> value grammar (CSS Paged Media Level 3
+        /// §7), so both places must agree on which function names count as image content rather than
+        /// re-deriving the list independently.
+        /// </summary>
+        internal static bool IsGradientFunctionName(string name) =>
             name is "linear-gradient" or "repeating-linear-gradient"
                  or "radial-gradient" or "repeating-radial-gradient"
                  or "conic-gradient" or "repeating-conic-gradient";

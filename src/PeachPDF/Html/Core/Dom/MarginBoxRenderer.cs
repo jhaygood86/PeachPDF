@@ -4,6 +4,7 @@ using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Entities;
+using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -11,6 +12,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -27,7 +29,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <c>font-size</c>/<c>font-weight</c>/<c>font-style</c> — per CSS Paged Media, margin boxes
         /// inherit these from their page context.
         /// </summary>
-        public static void Render(
+        public static async Task Render(
             XGraphics g,
             XSize pageSize,
             double marginLeft,
@@ -40,7 +42,9 @@ namespace PeachPDF.Html.Core.Dom
             double pageY,
             IReadOnlyList<NamedString> namedStrings,
             RAdapter adapter,
-            StyleDeclaration? pageStyle)
+            StyleDeclaration? pageStyle,
+            HtmlContainerInt htmlContainer,
+            Dictionary<string, CssImage?> imageCache)
         {
             foreach (var marginRule in margins)
             {
@@ -54,12 +58,19 @@ namespace PeachPDF.Html.Core.Dom
                     contentValue.Equals("normal", StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                var text = ResolveContent(contentValue, pageNumber, totalPages, pageY, pageSize.Height - marginTop - marginBottom, namedStrings);
-                if (text == null)
-                    continue;
-
                 var rect = GetMarginBoxRect(boxName, pageSize, marginLeft, marginTop, marginRight, marginBottom, margins);
                 if (rect.Width <= 0 || rect.Height <= 0)
+                    continue;
+
+                var image = await ResolveContentImage(contentValue, adapter, htmlContainer, imageCache);
+                if (image != null)
+                {
+                    PaintImage(g, image, rect, adapter, htmlContainer);
+                    continue;
+                }
+
+                var text = ResolveContent(contentValue, pageNumber, totalPages, pageY, pageSize.Height - marginTop - marginBottom, namedStrings);
+                if (text == null)
                     continue;
 
                 var font = BuildFont(marginRule.Style, pageStyle, adapter);
@@ -68,6 +79,79 @@ namespace PeachPDF.Html.Core.Dom
 
                 g.DrawString(text, font, brush, rect, format);
             }
+        }
+
+        /// <summary>
+        /// Detects and resolves an <c>&lt;image&gt;</c>-valued <c>content</c> (a bare <c>url()</c>, or
+        /// one of the gradient functions) on a margin box - per CSS Paged Media Level 3 §7, a margin
+        /// box's <c>content</c> accepts an <c>&lt;image&gt;</c> value, not just text/counter/string
+        /// content. Mirrors the same first-token image detection <see cref="CssContentEngine.ApplyContent"/>
+        /// uses for in-flow <c>content</c> (an image value makes the whole declaration an image, not
+        /// text to append to) via the shared <see cref="CssContentEngine.IsGradientFunctionName"/>.
+        /// Loaded images are cached by their raw declaration text across the whole document render,
+        /// since the same margin-box rule (and so the same image) repeats identically on every page.
+        /// </summary>
+        internal static async Task<CssImage?> ResolveContentImage(
+            string contentValue,
+            RAdapter adapter,
+            HtmlContainerInt htmlContainer,
+            Dictionary<string, CssImage?> imageCache)
+        {
+            var tokens = CssValueParser.GetCssTokens(contentValue);
+            if (tokens.Count == 0)
+                return null;
+
+            var first = tokens[0];
+            var isImageContent = first is UrlToken ||
+                (first is FunctionToken ft && CssContentEngine.IsGradientFunctionName(ft.Data));
+            if (!isImageContent)
+                return null;
+
+            if (imageCache.TryGetValue(contentValue, out var cached))
+                return cached;
+
+            var image = new CssValueParser(adapter).ParseImage(contentValue);
+            if (image != null)
+                await image.EnsureLoadedAsync(htmlContainer);
+
+            imageCache[contentValue] = image;
+            return image;
+        }
+
+        /// <summary>
+        /// Paints a margin box's image content via the same <see cref="CssImagePainter"/>/
+        /// <see cref="BackgroundImageDrawHandler"/> pipeline used for in-flow <c>content: url(...)</c>
+        /// (<see cref="CssBox.PaintContentImage"/>) - natural size, anchored at the box's top-left,
+        /// clipped to the box, no repeat, matching that established convention for authored content
+        /// images. <paramref name="g"/> paints in raw, unshrunk PDF-point space (see <see cref="BuildFont"/>'s
+        /// own doc comment), so it's wrapped in a <see cref="GraphicsAdapter"/> with the rect
+        /// pre-multiplied by <c>PixelsPerPoint</c> to cancel that adapter's own division back out.
+        /// <paramref name="htmlContainer"/>'s root box stands in for the (non-existent, for a margin
+        /// box) owning <c>CssBox</c> that <see cref="BackgroundLayerResolver"/> needs for potential
+        /// em/rem length resolution - unreachable for the fixed "left top"/"auto" values used here, but
+        /// a real, already-laid-out box is a safe, defensible fallback if that ever changes.
+        /// </summary>
+        private static void PaintImage(XGraphics g, CssImage image, XRect rect, RAdapter adapter, HtmlContainerInt htmlContainer)
+        {
+            // Root is only ever null before the document's initial layout, which has already run by
+            // the time page rendering (and so margin-box painting) begins - null here would mean
+            // there's no laid-out document at all to be generating a PDF page for.
+            if (htmlContainer.Root is not { } rootBox)
+                return;
+
+            var pixelsPerPoint = (adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+            using var graphicsAdapter = new GraphicsAdapter(adapter, g, pixelsPerPoint);
+            var paintRect = new RRect(rect.X * pixelsPerPoint, rect.Y * pixelsPerPoint, rect.Width * pixelsPerPoint, rect.Height * pixelsPerPoint);
+
+            CssImagePainter.Paint(graphicsAdapter, image, layerIndex: 0, isFirst: true,
+                originRect: paintRect, clipRect: paintRect, roundedClipPath: null,
+                positionList: "left top", sizeList: CssConstants.Auto, repeatList: "no-repeat",
+                attachmentList: CssConstants.Scroll, viewportRect: paintRect, box: rootBox,
+                drawBrush: brush =>
+                {
+                    graphicsAdapter.DrawRectangle(brush, paintRect.X, paintRect.Y, paintRect.Width, paintRect.Height);
+                    brush.Dispose();
+                });
         }
 
         private static string? ResolveContent(
@@ -385,10 +469,16 @@ namespace PeachPDF.Html.Core.Dom
             return null;
         }
 
-        private static XStringFormat BuildStringFormat(StyleDeclaration style, string boxName)
+        private static (string TextAlign, string VerticalAlign) ResolveAlignment(StyleDeclaration style, string boxName)
         {
             var textAlign = style.TextAlign?.ToLowerInvariant() ?? InferAlignment(boxName);
             var verticalAlign = style.VerticalAlign?.ToLowerInvariant() ?? "middle";
+            return (textAlign, verticalAlign);
+        }
+
+        private static XStringFormat BuildStringFormat(StyleDeclaration style, string boxName)
+        {
+            var (textAlign, verticalAlign) = ResolveAlignment(style, boxName);
 
             return (textAlign, verticalAlign) switch
             {

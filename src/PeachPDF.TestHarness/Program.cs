@@ -891,6 +891,7 @@ var pagedMediaHtml = """
     @page {
       size: A4 portrait;
       margin: 25mm 20mm 25mm 20mm;
+      @top-left-corner { content: url('{{PEACH_DATA_URI}}'); }
       @top-left   { content: "Acme Corp"; font-size: 8pt; font-family: Arial; color: #555; }
       @top-center { content: "Annual Report 2025"; font-size: 8pt; font-family: Arial; font-weight: bold; }
       @top-right  { content: "Confidential"; font-size: 8pt; font-family: Arial; color: #cc0000; }
@@ -944,10 +945,11 @@ var pagedMediaHtml = """
 
     </body>
     </html>
-    """;
+    """.Replace("{{PEACH_DATA_URI}}", peachDataUri);
 
 await SaveShowcaseAsync("paged_media", "Paged Media", "Paged Media",
-    "@page rules with margin boxes, running headers and footers, and page counters.",
+    "@page rules with margin boxes, running headers and footers, and page counters, including a " +
+    "url() logo image in a margin box (@top-left-corner).",
     pagedMediaHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // ─── CSS Paged Media showcase — named strings (string-set / string()) ──────
