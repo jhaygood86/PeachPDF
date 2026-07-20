@@ -287,7 +287,7 @@ PeachPDF resolves one font for an entire text run (a `CssBox`'s contiguous text)
 |----------|--------------|-------|
 | `direction` | [direction](https://developer.mozilla.org/en-US/docs/Web/CSS/direction) | `ltr` and `rtl` |
 | `hyphens` | [hyphens](https://developer.mozilla.org/en-US/docs/Web/CSS/hyphens) | `none`, `manual`, `auto` are parsed, cascaded, and inherited. `manual` and `auto` both honor an explicit soft hyphen (`&shy;`/U+00AD) as a line-break opportunity, rendering a literal `-` glyph only when that break is actually used. `auto` additionally performs real pattern-based automatic hyphenation (Liang's algorithm) for ~73 languages — see the note below the table for language coverage and exclusions |
-| `letter-spacing` | [letter-spacing](https://developer.mozilla.org/en-US/docs/Web/CSS/letter-spacing) | Full support, including negative values; spacing is added between each pair of adjacent characters (not trailing after the last one), realized via the PDF `Tc` character-spacing operator |
+| `letter-spacing` | [letter-spacing](https://developer.mozilla.org/en-US/docs/Web/CSS/letter-spacing) | Full support, including negative values; spacing is added after every character including the last (realized via the PDF `Tc` character-spacing operator, which applies to every glyph shown), and one letter-spacing unit is folded into the following inter-word gap so adjacent words never collapse together. Per CSS Text Level 3 §7.2, spacing is not suppressed at the start/end of a *word* — only at the start/end of a *line*, which this engine does not special-case, leaving each line's own leading/trailing edge with a sub-pixel, visually negligible extra inset |
 | `text-align` | [text-align](https://developer.mozilla.org/en-US/docs/Web/CSS/text-align) | `left`, `right`, `center`, `justify` |
 | `text-decoration` | [text-decoration](https://developer.mozilla.org/en-US/docs/Web/CSS/text-decoration) | Shorthand supported |
 | `text-decoration-color` | [text-decoration-color](https://developer.mozilla.org/en-US/docs/Web/CSS/text-decoration-color) | Full support |
@@ -370,7 +370,7 @@ An element that needs to escape a plain (non-stacking-context) ancestor to compe
 
 ### Flexbox
 
-CSS Flexbox Level 1 (`display: flex` / `inline-flex`) is supported, including multi-line wrapping, all alignment properties, and auto margins on the main axis.
+CSS Flexbox Level 1 (`display: flex` / `inline-flex`) is supported, including multi-line wrapping, all alignment properties, and auto margins on the main axis. Replaced elements (`<img>`, inline `<svg>`) work as flex items, including when mixed with block-level siblings — per CSS Flexbox §4, a run of inline-level content sharing a flex container with a block-level sibling is wrapped in an anonymous flex item, which is measured, positioned, and painted the same as any tagged item.
 
 | Property | MDN Reference | Notes |
 |----------|--------------|-------|

@@ -683,16 +683,6 @@ namespace PeachPDF.Html.Core.Dom
 
             var pageHeight = _tableBox.HtmlContainer?.PageSize.Height ?? double.MaxValue;
             var marginTop = _tableBox.HtmlContainer?.MarginTop ?? 0;
-            var marginBottom = _tableBox.HtmlContainer?.MarginBottom ?? 0;
-
-#if DEBUG
-            System.Console.WriteLine($"CssLayoutEngineTable.LayoutCells: pageHeight={pageHeight}, marginTop={marginTop}");
-            System.Console.WriteLine($"  _headerBox={(_headerBox == null ? "NULL" : $"Display={_headerBox.Display}")}");
-            System.Console.WriteLine($"  _footerBox={(_footerBox == null ? "NULL" : $"Display={_footerBox.Display}")}");
-            System.Console.WriteLine($"  _shouldRepeatHeaders={_shouldRepeatHeaders}");
-            System.Console.WriteLine($"  _shouldRepeatFooters={_shouldRepeatFooters}");
-            System.Console.WriteLine($"  _bodyRows.Count={_bodyRows.Count}");
-#endif
 
             // Reset page-break tracking so re-layout doesn't accumulate stale entries
             _tableBox.PageBreakBottoms = null;
@@ -729,10 +719,6 @@ namespace PeachPDF.Html.Core.Dom
                 _headerBox.ActualRight = maxRight;
                 _headerBox.ActualBottom = headerRowsLayoutY - GetVerticalSpacing();
                 _headerHeight = _headerBox.ActualBottom - _headerBox.Location.Y;
-
-#if DEBUG
-                System.Console.WriteLine($"  Header laid out: Height={_headerHeight}, ActualBottom={_headerBox.ActualBottom}");
-#endif
 
                 // Now create proxy that references the already-laid-out header
                 // CreateHeaderProxy's CssProxyBox constructor already appends itself to
@@ -793,13 +779,16 @@ namespace PeachPDF.Html.Core.Dom
                 && !_shouldRepeatFooters)
             {
                 var firstRowHeight = EstimateRowHeight(_bodyRows[0]);
-                var availableHeight = pageHeight - _footerHeight - marginTop - marginBottom;
+                // pageHeight (HtmlContainer.PageSize.Height) already excludes both margins
+                // (PdfGenerator.SetContent) - subtracting them again here double-counted a
+                // marginTop+marginBottom-sized band out of every page's real capacity.
+                var availableHeight = pageHeight - _footerHeight;
                 var estimatedBodyHeight = _bodyRows.Sum(EstimateRowHeight);
 
                 if (WillCrossPageBoundary(currentY, currentY + firstRowHeight, pageHeight, marginTop, availableHeight, currentPageNumber)
                     && estimatedBodyHeight <= availableHeight)
                 {
-                    var pageBreakOffset = CalculatePageBreakOffset(currentY, pageHeight, marginTop, marginBottom, currentPageNumber);
+                    var pageBreakOffset = CalculatePageBreakOffset(currentY, pageHeight, marginTop, currentPageNumber);
 
                     // css-break §3.1 keep-with-next: break-after: avoid on the preceding sibling(s)
                     // (e.g. the UA default `h1-h6 { page-break-after: avoid }` under @media print)
@@ -840,7 +829,8 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var row = _bodyRows[i];
                 var estimatedRowHeight = EstimateRowHeight(row);
-                var availableHeight = pageHeight - _footerHeight - marginTop - marginBottom;
+                // See the identical fix/comment on the pre-check's availableHeight above.
+                var availableHeight = pageHeight - _footerHeight;
 
                 // Check for page break
                 if (WillCrossPageBoundary(currentY, currentY + estimatedRowHeight, pageHeight, marginTop, availableHeight, currentPageNumber)
@@ -852,7 +842,7 @@ namespace PeachPDF.Html.Core.Dom
                     // Create footer proxy for current page
                     if (_shouldRepeatFooters && _footerHeight > 0)
                     {
-                        var footerY = CalculateFooterPositionAtPageBottom(currentY, pageHeight, marginTop, marginBottom, currentPageNumber);
+                        var footerY = CalculateFooterPositionAtPageBottom(currentY, pageHeight, marginTop, currentPageNumber);
                         var footerProxy = CreateFooterProxy(footerY);
                         if (footerProxy != null)
                         {
@@ -867,7 +857,7 @@ namespace PeachPDF.Html.Core.Dom
                     _tableBox.PageBreakBottoms[currentPageNumber] = pageBreakBottomY;
 
                     // Move to next page
-                    var pageBreakOffset = CalculatePageBreakOffset(currentY, pageHeight, marginTop, marginBottom, currentPageNumber);
+                    var pageBreakOffset = CalculatePageBreakOffset(currentY, pageHeight, marginTop, currentPageNumber);
                     currentY += pageBreakOffset;
                     currentPageNumber++;
 
@@ -966,15 +956,6 @@ namespace PeachPDF.Html.Core.Dom
                         tableTop - (tablePage * pageHeight + marginTop));
                 }
             }
-
-#if DEBUG
-            System.Console.WriteLine($"CssLayoutEngineTable.LayoutCells: END - _tableBox.Boxes.Count={_tableBox.Boxes.Count}");
-            for (int i = 0; i < _tableBox.Boxes.Count; i++)
-            {
-                var box = _tableBox.Boxes[i];
-                System.Console.WriteLine($"  TableBox child {i}: Type={box.GetType().Name}, Display={box.Display}");
-            }
-#endif
         }
 
         /// <summary>
@@ -1462,7 +1443,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Phase 3: Calculates the Y position for footer at the bottom of current page
         /// </summary>
-        private double CalculateFooterPositionAtPageBottom(double currentY, double pageHeight, double marginTop, double marginBottom, int currentPageNumber)
+        private double CalculateFooterPositionAtPageBottom(double currentY, double pageHeight, double marginTop, int currentPageNumber)
         {
             if (pageHeight >= double.MaxValue - 1)
                 return currentY;
@@ -1470,8 +1451,11 @@ namespace PeachPDF.Html.Core.Dom
             var currentPageTop = (currentPageNumber * pageHeight) + marginTop;
             var currentPageBottom = currentPageTop + pageHeight;
 
-            // Position footer at bottom of page, accounting for margins and footer height
-            return currentPageBottom - _footerHeight - marginBottom;
+            // currentPageBottom is already the margin-free content band's bottom (pageHeight
+            // itself excludes both margins - see the availableHeight fix above) - subtracting
+            // marginBottom again pulled the footer up an extra marginBottom short of the real
+            // page bottom.
+            return currentPageBottom - _footerHeight;
         }
 
         /// <summary>
@@ -1498,7 +1482,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Phase 3: Calculates offset needed to move to the next page
         /// </summary>
-        private double CalculatePageBreakOffset(double currentY, double pageHeight, double marginTop, double marginBottom, int currentPageNumber)
+        private double CalculatePageBreakOffset(double currentY, double pageHeight, double marginTop, int currentPageNumber)
         {
             if (pageHeight >= double.MaxValue - 1)
                 return 0;

@@ -144,6 +144,39 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task StraddlingBox_RevertedTailWord_ReservesLetterSpacingAfterEveryCharacter()
+        {
+            // RemeasureWordsTail (CssBox.cs) re-measures a word that turns out to wrap past line 1 using
+            // the box's own normal style, not the first-line one it was originally measured against - it
+            // must reserve N letter-spacing gaps for an N-character word (matching the PDF Tc operator's
+            // actual per-glyph behavior), not the old N-1 model, the same as ordinary (non-reverted)
+            // measurement. Compared here against a plain, non-boundary-crossing paragraph carrying the
+            // identical letter-spacing and text, which is unambiguously covered by the ordinary
+            // MeasureWordsSize path.
+            var (root, _) = await BuildAndLayout(Wrap(
+                "<style>#p::first-line { font-size: 300% }</style>" +
+                "<p id='p' style='width:80px; font-size:10pt; letter-spacing:2px'>" +
+                "<b id='b'>alpha beta gamma delta epsilon</b></p>" +
+                "<div id='ref' style='font-size:10pt; letter-spacing:2px'><b>beta</b></div>"));
+            var p = FindById(root, "p")!;
+            var b = FindById(root, "b")!;
+            var reference = FindById(root, "ref")!;
+
+            Assert.True(p.LineBoxes.Count > 1, "expected content to wrap across at least 2 lines");
+
+            var allWordsUnderB = AllDescendants(b).Prepend(b).SelectMany(x => x.Words).ToList();
+            // RemeasureWordsTail explicitly nulls out FirstLineStyle for a word it reverts (see its own
+            // "boxWord.FirstLineStyle = null;") - the direct, reliable signal that this specific word's
+            // width was recomputed by that method rather than the ordinary MeasureWordsSize path.
+            var revertedBeta = allWordsUnderB.FirstOrDefault(w => w.FirstLineStyle == null && w.Text == "beta");
+            var referenceBeta = CssBox.FirstWordOccurence(reference, reference.LineBoxes[0]);
+
+            Assert.NotNull(revertedBeta);
+            Assert.NotNull(referenceBeta);
+            Assert.Equal(referenceBeta!.Width, revertedBeta!.Width, 1);
+        }
+
+        [Fact]
         public async Task SingleLine_NoWrap_WholeContentQualifiesAsFirstLine()
         {
             var (root, _) = await BuildAndLayout(Wrap(

@@ -38,6 +38,15 @@ namespace PeachPDF.Html.Core.Dom
         public override bool IsImage => true;
 
         /// <summary>
+        /// An image is never "just spaces" - the base <see cref="CssRect.IsSpaces"/> default (true) is
+        /// meant for a genuinely-unmeasured/placeholder word, not a replaced element with real visible
+        /// content. Left at the base default, a flex/multicol item consisting only of an image (wrapped
+        /// in an anonymous box - see <see cref="CssBox.IsSpaceOrEmpty"/>'s own doc comment) would be
+        /// misdetected as an empty, droppable anonymous run.
+        /// </summary>
+        public override bool IsSpaces => false;
+
+        /// <summary>
         /// Represents this word for debugging purposes
         /// </summary>
         /// <returns></returns>

@@ -27,7 +27,14 @@ namespace PeachPDF.Tests.TestSupport
 
         public override string GetCssMediaType(IEnumerable<string> mediaTypesAvailable) => "print";
 
-        public override Task<RNetworkResponse?> GetResourceStream(RUri uri) => Task.FromResult<RNetworkResponse?>(null);
+        // Only data: URIs get a real (dummy - see ImageFromStreamInt) resource stream, so tests that
+        // need a replaced element (img/svg) to actually resolve an RImage can use one; every other
+        // scheme still resolves to null, preserving the existing "no real network access" behavior
+        // other tests rely on.
+        public override Task<RNetworkResponse?> GetResourceStream(RUri uri) =>
+            Task.FromResult(uri.Scheme == "data"
+                ? new RNetworkResponse(new MemoryStream([0]), null)
+                : null);
 
         protected override RColor GetColorInt(string colorName) => RColor.Black;
 
@@ -48,7 +55,11 @@ namespace PeachPDF.Tests.TestSupport
         protected override RBrush CreateConicGradientBrush(RPoint center, double outerRadius, RColor[] colors, double[] anglesRad) =>
             new TestBrush(colors.Length > 0 ? colors[0] : RColor.Black);
 
-        protected override RImage ImageFromStreamInt(Stream memoryStream) => throw new NotSupportedException("TestGraphicsAdapter does not support image loading");
+        // Real PNG/JPEG decoding is out of scope for this minimal stub - tests that need an actually-
+        // loaded image (e.g. asserting a replaced element gets its own intrinsic size) only need SOME
+        // deterministic, non-zero size to resolve, not faithful pixel decoding, so this ignores the
+        // stream's real bytes and returns a fixed-size TestImage instead of throwing.
+        protected override RImage ImageFromStreamInt(Stream memoryStream) => new TestImage(40, 30);
 
         protected override RFont CreateFontInt(string family, double size, RFontStyle style, int weight = 400, int stretch = 5, double? obliqueSkewSinus = null) => new TestFont(size);
 
@@ -77,6 +88,16 @@ namespace PeachPDF.Tests.TestSupport
         public override RLineCap LineCap { set { } }
         public override RLineJoin LineJoin { set { } }
         public override void SetDashPattern(double[] pattern, double offset) { }
+    }
+
+    /// <summary>A fixed-size image, independent of any real pixel decoding - see ImageFromStreamInt's
+    /// own comment for why TestGraphicsAdapter doesn't decode real image bytes.</summary>
+    internal sealed class TestImage(double width, double height) : RImage
+    {
+        public override double Width => width;
+        public override double Height => height;
+        public override bool Interpolate { get; set; }
+        public override void Dispose() { }
     }
 
     /// <summary>A deterministic fixed-metric font, independent of any real font file/rasterizer.</summary>
@@ -126,9 +147,11 @@ namespace PeachPDF.Tests.TestSupport
         public sealed record DrawPolygonCall(RColor Color, RPoint[] Points);
         public sealed record PushClipCall(RRect Rect);
         public sealed record PopClipCall;
+        public sealed record DrawImageCall(RImage Image, RRect DestRect);
 
         public List<object> Log { get; } = [];
         public List<DrawStringCall> DrawStringCalls { get; } = [];
+        public List<DrawImageCall> DrawImageCalls { get; } = [];
 
         public TestRecordingGraphics() : base(new TestGraphicsAdapter(), new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
 
@@ -202,8 +225,18 @@ namespace PeachPDF.Tests.TestSupport
                 : new DrawLineCall(RColor.Empty, 0, RDashStyle.Solid, x1, y1, x2, y2);
             Log.Add(call);
         }
-        public override void DrawImage(RImage image, RRect destRect, RRect srcRect) { }
-        public override void DrawImage(RImage image, RRect destRect) { }
+        public override void DrawImage(RImage image, RRect destRect, RRect srcRect)
+        {
+            var call = new DrawImageCall(image, destRect);
+            DrawImageCalls.Add(call);
+            Log.Add(call);
+        }
+        public override void DrawImage(RImage image, RRect destRect)
+        {
+            var call = new DrawImageCall(image, destRect);
+            DrawImageCalls.Add(call);
+            Log.Add(call);
+        }
         public override void DrawPolygon(RBrush brush, RPoint[] points)
         {
             var color = brush is TestBrush tb ? tb.Color : RColor.Empty;

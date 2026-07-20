@@ -11,6 +11,7 @@
 // "The Art of War"
 
 using PeachPDF;
+using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core.Dom;
@@ -202,6 +203,47 @@ namespace PeachPDF.Html.Core.Parse
 
         private static void CascadeApplyPageStyles(HtmlContainerInt htmlContainer, CssBox root, CssData cssData)
         {
+            // HtmlContainerInt.MarginTop/Bottom/Left/Right live in the same "internal pixel space" as
+            // every other layout coordinate (PageSize, Location, box positions) - under ShrinkToFit/
+            // ScaleToPageSize (or a non-72 PixelsPerInch), that space is the CSS-point value scaled by
+            // PixelsPerPoint, not the raw point value itself (see HtmlContainer.MarginTop's public
+            // setter: `HtmlContainerInt.MarginTop = value * PixelsPerPoint`, and PdfGenerator.SetContent,
+            // which combines these margins with PageSize entirely through that public, PixelsPerPoint-
+            // aware wrapper). CssValueParser.ParseLength's mm/cm/in/pt/pc branches resolve straight to
+            // points, deliberately unscaled (see Length.ToPixels's own doc comment) - so a raw assignment
+            // here bypassed the scaling every other margin-setting path applies, leaving a real,
+            // PixelsPerPoint-sized discrepancy between this container's own notion of its page-content
+            // band height and the actual physical per-page PDF clip (PdfGenerator.AddPdfPages, resolved
+            // independently via DomParser.ParseLengthToPdfPoints, which is correctly always in true
+            // points since it feeds an XRect directly). PixelsPerPoint is usually 1.0 (so this was
+            // invisible) but ShrinkToFit/ScaleToPageSize commonly nudge it away from 1.0 by even a
+            // fraction of a percent for perfectly ordinary content - enough for a box relocated to
+            // "the next page's content top" by layout's own (slightly wrong) accounting to land a hair
+            // inside the previous page's true physical clip window, emitting a clipped-but-present
+            // duplicate text run into that page's content stream (see MarginBoxRenderer.cs's own
+            // PixelsPerPoint reconciliation for the identical, already-established pattern/precedent).
+            var pixelsPerPoint = (htmlContainer.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+
+            // ParseLength's absolute-unit branches (pt/mm/cm/in/pc) resolve straight to raw,
+            // unscaled points - for those, multiplying by pixelsPerPoint once at the end (below) is
+            // exactly the scaling needed. But its percentage/em/rem branches resolve against
+            // hundredPercent/emFactor/remFactor - here, htmlContainer.PageSize.Width and
+            // root.GetEmHeight()/GetRemHeight(), which are THEMSELVES already in pixelsPerPoint-scaled
+            // internal space - so passing them through unscaled and then multiplying the whole result
+            // by pixelsPerPoint again would double-scale a percentage/em/rem @page margin. Dividing
+            // these three bases down to true-point space first, so ParseLength's result is uniformly
+            // in true points regardless of which unit branch it took, then scaling that single result
+            // by pixelsPerPoint once, keeps every unit type correct.
+            double ParseMarginLength(string value) =>
+                CssValueParser.ParseLength(
+                    value,
+                    htmlContainer.PageSize.Width / pixelsPerPoint,
+                    root.GetEmHeight() / pixelsPerPoint,
+                    root.GetRemHeight() / pixelsPerPoint,
+                    null,
+                    false,
+                    false) * pixelsPerPoint;
+
             foreach (var style in cssData.Stylesheets)
             {
                 foreach (var pageRuleInterface in style.PageRules)
@@ -215,26 +257,29 @@ namespace PeachPDF.Html.Core.Parse
 
                     if (pageRule.Style.MarginLeft.Length > 0)
                     {
-                        htmlContainer.MarginLeft = CssValueParser.ParseLength(pageRule.Style.MarginLeft, htmlContainer.PageSize.Width, root);
+                        htmlContainer.MarginLeft = ParseMarginLength(pageRule.Style.MarginLeft);
                     }
 
                     if (pageRule.Style.MarginTop.Length > 0)
                     {
-                        htmlContainer.MarginTop = CssValueParser.ParseLength(pageRule.Style.MarginTop, htmlContainer.PageSize.Width, root);
+                        htmlContainer.MarginTop = ParseMarginLength(pageRule.Style.MarginTop);
                     }
 
                     if (pageRule.Style.MarginBottom.Length > 0)
                     {
-                        htmlContainer.MarginBottom = CssValueParser.ParseLength(pageRule.Style.MarginBottom, htmlContainer.PageSize.Width, root);
+                        htmlContainer.MarginBottom = ParseMarginLength(pageRule.Style.MarginBottom);
                     }
 
                     if (pageRule.Style.MarginRight.Length > 0)
                     {
-                        htmlContainer.MarginRight = CssValueParser.ParseLength(pageRule.Style.MarginRight, htmlContainer.PageSize.Width, root);
+                        htmlContainer.MarginRight = ParseMarginLength(pageRule.Style.MarginRight);
                     }
 
                     if (pageRule.Style.Size.Length > 0)
                     {
+                        // CssPageSize is documented/consumed as true PDF points (PdfGenerator.AddPdfPages
+                        // assigns it straight to orgPageSize), not internal pixel space - unlike the
+                        // margins above, this one deliberately stays unscaled.
                         htmlContainer.CssPageSize = ParsePageSizeToPdfPoints(pageRule.Style.Size);
                     }
                 }
