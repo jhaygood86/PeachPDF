@@ -481,13 +481,6 @@ namespace PeachPDF.Html.Core
         }
 
         /// <summary>
-        /// The page/viewport rect, in the same per-page paint-time coordinate space every box's
-        /// painted <c>Rectangles</c> use (i.e. independent of <see cref="ScrollOffset"/>, exactly like
-        /// a <c>position: fixed</c> box's own offset override) - the same rect <see cref="PerformPaint"/>
-        /// pushes as the top-level page clip, also used as the background positioning area for a
-        /// <c>background-attachment: fixed</c> layer (CSS Backgrounds 3 §3.9).
-        /// </summary>
-        /// <summary>
         /// Per-page paint-window override set by <c>PdfGenerator.AddPdfPages</c>'s page loop (the
         /// same per-page mutation pattern as <see cref="ScrollOffset"/>) so a page whose margins
         /// are overridden by a per-page <c>@page</c> rule (e.g. <c>:first { margin: 0 }</c>) gets a
@@ -496,6 +489,13 @@ namespace PeachPDF.Html.Core
         /// </summary>
         internal RRect? PageClipOverride { get; set; }
 
+        /// <summary>
+        /// The page/viewport rect, in the same per-page paint-time coordinate space every box's
+        /// painted <c>Rectangles</c> use (i.e. independent of <see cref="ScrollOffset"/>, exactly like
+        /// a <c>position: fixed</c> box's own offset override) - the same rect <see cref="PerformPaint"/>
+        /// pushes as the top-level page clip, also used as the background positioning area for a
+        /// <c>background-attachment: fixed</c> layer (CSS Backgrounds 3 §3.9).
+        /// </summary>
         internal RRect PageBoxRect => MaxSize.Height > 0
             ? new RRect(Location.X, Location.Y, Math.Min(MaxSize.Width, PageSize.Width),
                 Math.Min(MaxSize.Height, PageSize.Height))
