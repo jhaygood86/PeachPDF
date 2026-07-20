@@ -42,7 +42,42 @@ jobs:
         run: ./.github/scripts/Fix-ApiDocLinks.ps1 -ApiDocsPath ./docs/api
 
       - name: Install fonts
-        run: sudo apt-get update && sudo apt-get install -y fontconfig fonts-liberation fonts-dejavu-core
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fontconfig fonts-liberation fonts-dejavu-core fonts-roboto fonts-cabinsketch
+          # Great Vibes (cursive): OFL-licensed TrueType from google/fonts, pinned to a commit.
+          # PeachPDF can only embed TrueType (glyf) outlines, and no chancery-style script in
+          # the Ubuntu archive ships as TTF - so this one is fetched directly.
+          sudo mkdir -p /usr/local/share/fonts/truetype/greatvibes
+          sudo curl -fsSL -o /usr/local/share/fonts/truetype/greatvibes/GreatVibes-Regular.ttf \
+            "https://raw.githubusercontent.com/google/fonts/389b770410cc0b7c21c85673bfa2077420fe7f65/ofl/greatvibes/GreatVibes-Regular.ttf"
+
+      - name: Configure fontconfig generic families
+        run: |
+          sudo tee /etc/fonts/local.conf > /dev/null <<'EOF'
+          <?xml version="1.0"?>
+          <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+          <fontconfig>
+            <alias binding="strong"><family>cursive</family><prefer><family>Great Vibes</family></prefer></alias>
+            <alias binding="strong"><family>fantasy</family><prefer><family>Cabin Sketch</family></prefer></alias>
+          </fontconfig>
+          EOF
+          sudo fc-cache -f
+          echo "cursive    -> $(fc-match cursive)"
+          echo "fantasy    -> $(fc-match fantasy)"
+          echo "serif      -> $(fc-match serif)"
+          echo "sans-serif -> $(fc-match sans-serif)"
+          echo "monospace  -> $(fc-match monospace)"
+          # Fail the build if the generic-family aliases didn't take - the showcase's
+          # cursive/fantasy rows would silently regress to a plain sans fallback otherwise.
+          fc-match cursive | grep -q "Great Vibes"
+          fc-match fantasy | grep -q "Cabin Sketch"
+          # Likewise for the non-RIBBI Roboto faces the font showcase's WeightDemo and
+          # StretchDemo families are built from - if fonts-roboto ever stops shipping them,
+          # the six-weight demo would silently degrade instead of failing here.
+          fc-list | grep -q "Roboto Thin"
+          fc-list | grep -q "Roboto Black"
+          fc-list | grep -q "Roboto Condensed"
 
       - name: Generate feature showcases
         run: |

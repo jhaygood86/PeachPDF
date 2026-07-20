@@ -2795,91 +2795,65 @@ await SaveShowcaseAsync("canvas_background", "Backgrounds & Borders", "Canvas Ba
     canvasBackgroundHtml, pdfConfig);
 
 // ─── Font resolution showcase (CSS font-resolution compliance pass) ───────
-// Uses only real, already-installed system font files (no bundled binary assets) so this
-// showcase runs on whatever machine generates it - sections that need a specific font file
-// this machine doesn't have (e.g. the font-stretch demo needs a real Arial Narrow install)
-// are skipped with a console message rather than faked.
-
-static string? FindFontFile(params string[] candidateFileNames)
-{
-    string fontsDir;
-    try
-    {
-        fontsDir = Environment.GetFolderPath(Environment.SpecialFolder.Fonts);
-    }
-    catch (PlatformNotSupportedException)
-    {
-        return null;
-    }
-
-    if (string.IsNullOrEmpty(fontsDir)) return null;
-
-    foreach (var name in candidateFileNames)
-    {
-        var path = Path.Combine(fontsDir, name);
-        if (File.Exists(path)) return path;
-    }
-    return null;
-}
+// Uses only real, already-installed system fonts, referenced via @font-face src: local()
+// fallback chains (matched by full font name) - each chain lists the docs build machine's
+// face (Roboto, installed by pages.yml) first, then the local-Windows equivalent (Segoe UI /
+// Arial). A rule whose local() candidates all miss simply doesn't register, so every section
+// renders on both platforms from whichever real faces exist, with no bundled binary assets.
 
 var fontShowcase = new StringBuilder();
 
-// Nearest-weight matching (CSS Fonts Level 4 §5.2): "Arial" ships only Regular (400) and
-// Bold (700) - every other requested weight below must be matched to one of those two.
+// Nearest-weight matching (CSS Fonts Level 4 §5.2): "WeightDemo" is assembled from real
+// multi-weight faces (Roboto's six weights on the docs build machine, Segoe UI's five on
+// Windows) - requested weights with no exact face show the nearest-weight search.
+fontShowcase.Append("<style>" +
+    "@font-face { font-family: 'WeightDemo'; font-weight: 100; src: local('Roboto Thin'); }" +
+    "@font-face { font-family: 'WeightDemo'; font-weight: 300; src: local('Roboto Light'), local('Segoe UI Light'); }" +
+    "@font-face { font-family: 'WeightDemo'; font-weight: 400; src: local('Roboto'), local('Segoe UI'), local('Arial'); }" +
+    "@font-face { font-family: 'WeightDemo'; font-weight: 500; src: local('Roboto Medium'); }" +
+    "@font-face { font-family: 'WeightDemo'; font-weight: 600; src: local('Segoe UI Semibold'); }" +
+    "@font-face { font-family: 'WeightDemo'; font-weight: 700; src: local('Roboto Bold'), local('Segoe UI Bold'), local('Arial Bold'); }" +
+    "@font-face { font-family: 'WeightDemo'; font-weight: 900; src: local('Roboto Black'), local('Segoe UI Black'); }" +
+    "</style>");
 fontShowcase.Append("<h2>Nearest-weight matching (CSS Fonts Level 4 &sect;5.2)</h2>");
-fontShowcase.Append("<p class=\"note\">\"Arial\" ships only Regular (400) and Bold (700) faces - every other numeric weight below is matched to the nearest real one (100/300/500 &rarr; Regular, 600/900 &rarr; Bold).</p>");
-foreach (var weight in new[] { 100, 300, 400, 500, 600, 700, 900 })
+fontShowcase.Append("<p class=\"note\">\"WeightDemo\" is built via <code>@font-face src: local()</code> from whichever real installed faces this machine provides (Roboto's six weights on the docs build machine, Segoe UI's five on Windows). Requested weights with no exact face are matched to the nearest real one per the &sect;5.2 search order.</p>");
+foreach (var weight in new[] { 100, 200, 300, 400, 500, 600, 700, 800, 900 })
 {
-    fontShowcase.Append($"<p style=\"font-family: Arial; font-weight: {weight}\">font-weight: {weight} &mdash; The quick brown fox jumps over the lazy dog</p>");
+    fontShowcase.Append($"<p style=\"font-family: WeightDemo; font-weight: {weight}\">font-weight: {weight} &mdash; The quick brown fox jumps over the lazy dog</p>");
 }
 
-var synthDemoFontPath = FindFontFile("arial.ttf", "Arial.ttf");
-var narrowFontPath = FindFontFile("arialn.ttf", "ArialNarrow.ttf", "Arial Narrow.ttf", "ArialNarrow-Regular.ttf");
+fontShowcase.Append("<h2>Faux-bold / faux-italic synthesis</h2>");
+fontShowcase.Append("<p class=\"note\">\"SynthDemo\" is registered via @font-face from a single Regular-only face - bold/italic requests have no real matching face to use, so the renderer synthesizes them (fill+stroke render mode for bold, glyph shear for italic).</p>");
+fontShowcase.Append("<style>@font-face { font-family: 'SynthDemo'; src: local('Roboto'), local('Segoe UI'), local('Arial'); }</style>");
+fontShowcase.Append("<p style=\"font-family: SynthDemo\">Regular (the one real registered face)</p>");
+fontShowcase.Append("<p style=\"font-family: SynthDemo; font-weight: bold\">Bold (synthesized: fill+stroke)</p>");
+fontShowcase.Append("<p style=\"font-family: SynthDemo; font-style: italic\">Italic (synthesized: fixed default shear)</p>");
+fontShowcase.Append("<p style=\"font-family: SynthDemo; font-weight: bold; font-style: italic\">Bold Italic (both synthesized)</p>");
 
-if (synthDemoFontPath is not null)
+fontShowcase.Append("<h2>CSS Fonts Level 4 <code>oblique &lt;angle&gt;</code></h2>");
+fontShowcase.Append("<p class=\"note\">Each line requests a different explicit oblique angle against the same Regular-only face - the synthesized shear follows the declared angle exactly, not a fixed default.</p>");
+foreach (var angle in new[] { 0, 8, 14, 20, 30 })
 {
-    var synthB64 = Convert.ToBase64String(File.ReadAllBytes(synthDemoFontPath));
-
-    fontShowcase.Append("<h2>Faux-bold / faux-italic synthesis</h2>");
-    fontShowcase.Append("<p class=\"note\">\"SynthDemo\" is registered via @font-face from a single Regular-only face - bold/italic requests have no real matching face to use, so the renderer synthesizes them (fill+stroke render mode for bold, glyph shear for italic).</p>");
-    fontShowcase.Append($"<style>@font-face {{ font-family: 'SynthDemo'; src: url('data:font/truetype;base64,{synthB64}'); }}</style>");
-    fontShowcase.Append("<p style=\"font-family: SynthDemo\">Regular (the one real registered face)</p>");
-    fontShowcase.Append("<p style=\"font-family: SynthDemo; font-weight: bold\">Bold (synthesized: fill+stroke)</p>");
-    fontShowcase.Append("<p style=\"font-family: SynthDemo; font-style: italic\">Italic (synthesized: fixed default shear)</p>");
-    fontShowcase.Append("<p style=\"font-family: SynthDemo; font-weight: bold; font-style: italic\">Bold Italic (both synthesized)</p>");
-
-    fontShowcase.Append("<h2>CSS Fonts Level 4 <code>oblique &lt;angle&gt;</code></h2>");
-    fontShowcase.Append("<p class=\"note\">Each line requests a different explicit oblique angle against the same Regular-only face - the synthesized shear follows the declared angle exactly, not a fixed default.</p>");
-    foreach (var angle in new[] { 0, 8, 14, 20, 30 })
-    {
-        fontShowcase.Append($"<p style=\"font-family: SynthDemo; font-style: oblique {angle}deg\">oblique {angle}deg</p>");
-    }
-}
-else
-{
-    Console.WriteLine("Font showcase: skipping faux-synthesis/oblique-angle sections (no installed Arial.ttf found to embed).");
+    fontShowcase.Append($"<p style=\"font-family: SynthDemo; font-style: oblique {angle}deg\">oblique {angle}deg</p>");
 }
 
-if (synthDemoFontPath is not null && narrowFontPath is not null)
-{
-    var normalB64 = Convert.ToBase64String(File.ReadAllBytes(synthDemoFontPath));
-    var condensedB64 = Convert.ToBase64String(File.ReadAllBytes(narrowFontPath));
-
-    fontShowcase.Append("<h2>font-stretch face selection</h2>");
-    fontShowcase.Append("<p class=\"note\">\"StretchDemo\" registers two real, differently-shaped faces under one family via two @font-face rules with declared <code>font-stretch</code> descriptors - selecting condensed picks the genuinely narrower face (a real Arial Narrow), not just a coincidentally-matching one.</p>");
-    fontShowcase.Append("<style>@font-face { font-family: 'StretchDemo'; font-stretch: normal; src: url('data:font/truetype;base64," + normalB64 + "'); } " +
-        "@font-face { font-family: 'StretchDemo'; font-stretch: condensed; src: url('data:font/truetype;base64," + condensedB64 + "'); }</style>");
-    fontShowcase.Append("<p style=\"font-family: StretchDemo; font-stretch: normal\">font-stretch: normal</p>");
-    fontShowcase.Append("<p style=\"font-family: StretchDemo; font-stretch: condensed\">font-stretch: condensed</p>");
-}
-else
-{
-    Console.WriteLine("Font showcase: skipping font-stretch section (no installed Arial Narrow found on this machine).");
-}
+// Arial Narrow ships with Office, not base Windows - on a machine with neither condensed
+// face installed, the condensed rule below silently doesn't register and both lines render
+// identically. The docs build machine always has Roboto Condensed (installed by pages.yml).
+fontShowcase.Append("<h2>font-stretch face selection</h2>");
+fontShowcase.Append("<p class=\"note\">\"StretchDemo\" registers two real, differently-shaped faces under one family via two @font-face rules with declared <code>font-stretch</code> descriptors - selecting condensed picks the genuinely narrower face (Roboto Condensed on the docs build machine, Arial Narrow on Windows), not just a coincidentally-matching one.</p>");
+fontShowcase.Append("<style>@font-face { font-family: 'StretchDemo'; font-stretch: normal; src: local('Roboto'), local('Arial'); } " +
+    "@font-face { font-family: 'StretchDemo'; font-stretch: condensed; src: local('Roboto Condensed'), local('Arial Narrow'); }</style>");
+fontShowcase.Append("<p style=\"font-family: StretchDemo; font-stretch: normal\">font-stretch: normal</p>");
+fontShowcase.Append("<p style=\"font-family: StretchDemo; font-stretch: condensed\">font-stretch: condensed</p>");
 
 // Generic families + system-ui: whichever real installed substitute each resolves to on
-// the OS actually generating this showcase (see GenericFontFamilyResolver / CssConstants.DefaultFont).
-fontShowcase.Append("<h2>Generic families (platform-matched, Chromium-verified)</h2>");
+// the OS actually generating this showcase - fontconfig aliases on the docs build machine
+// (cursive -> Great Vibes, fantasy -> Cabin Sketch, set up by pages.yml), the
+// Chromium-matched platform table on Windows/macOS/Android (see GenericFontFamilyResolver /
+// CssConstants.DefaultFont).
+fontShowcase.Append("<h2>Generic families (platform-matched)</h2>");
+fontShowcase.Append("<p class=\"note\">Each generic family resolves to a real installed font: via fontconfig on the docs build machine, via the Chromium-matched platform table elsewhere.</p>");
 foreach (var generic in new[] { "serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui" })
 {
     fontShowcase.Append($"<p style=\"font-family: {generic}\">{generic}: The quick brown fox jumps over the lazy dog</p>");
@@ -2896,7 +2870,7 @@ var fontShowcaseHtml = "<!DOCTYPE html><html><head><style>" +
     "</body></html>";
 
 await SaveShowcaseAsync("font_resolution_showcase", "Typography & Text", "Font Resolution",
-    "CSS font selection compliance: family matching, weight and style resolution, and fallback behavior.",
+    "CSS font selection compliance: nearest-weight matching across a six-weight family, faux-bold/italic synthesis, oblique angles, font-stretch face selection, and generic family resolution.",
     fontShowcaseHtml, pdfConfig);
 
 // --- Acid2 showcase ---
