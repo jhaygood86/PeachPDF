@@ -259,6 +259,11 @@ namespace PeachPDF.Tests.CSS.PropertyTests
         [InlineData("2.54cm", 72.0)]
         [InlineData("25.4mm", 72.0)]
         [InlineData("96px",  72.0)]
+        [InlineData("0",     0.0)]  // unitless zero — the CSS-OM serializes every zero length this way (#125)
+        [InlineData("0mm",   0.0)]
+        [InlineData("0.5in", 36.0)]
+        [InlineData("6pc",   72.0)]
+        [InlineData("72PT",  72.0)] // units are ASCII case-insensitive per CSS Syntax
         public void ParseLengthToPdfPoints_ConvertsUnitsCorrectly(string input, double expectedPt)
         {
             var result = PeachPDF.Html.Core.Parse.DomParser.ParseLengthToPdfPoints(input);
@@ -271,6 +276,43 @@ namespace PeachPDF.Tests.CSS.PropertyTests
         {
             var result = PeachPDF.Html.Core.Parse.DomParser.ParseLengthToPdfPoints("not-a-length");
             Assert.Null(result);
+        }
+
+        [Fact]
+        public void ParseLengthToPdfPoints_UnitlessNonZero_ReturnsNull()
+        {
+            // CSS Values & Units §5.1: only zero may omit its unit — and the CSS-OM's
+            // Length.ToString() only ever serializes zero unitless, so "5" can't occur
+            // in CSS-OM-sourced input anyway.
+            var result = PeachPDF.Html.Core.Parse.DomParser.ParseLengthToPdfPoints("5");
+            Assert.Null(result);
+        }
+
+        [Theory]
+        [InlineData("2em")]
+        [InlineData("50%")]
+        public void ParseLengthToPdfPoints_RelativeUnits_ReturnNull(string input)
+        {
+            // Relative units have no resolution context at the page-geometry layer.
+            var result = PeachPDF.Html.Core.Parse.DomParser.ParseLengthToPdfPoints(input);
+            Assert.Null(result);
+        }
+
+        [Theory]
+        [InlineData("margin: 0")]
+        [InlineData("margin: 0mm")]
+        public void AtPage_FirstPseudoSelector_ZeroMargin_RoundTripsToZeroPoints(string declaration)
+        {
+            // #125: the CSS-OM serializes every zero length unitless, so the page-margin
+            // resolver receives the string "0" and must resolve it to 0pt, not "unset".
+            var sheet = ParseStyleSheet($"@page :first {{ {declaration}; }}");
+            var rule = sheet.Rules.OfType<PageRule>().FirstOrDefault();
+            Assert.NotNull(rule);
+            Assert.Equal("0", rule.Style.MarginTop);
+
+            var pt = PeachPDF.Html.Core.Parse.DomParser.ParseLengthToPdfPoints(rule.Style.MarginTop);
+            Assert.NotNull(pt);
+            Assert.Equal(0.0, pt!.Value);
         }
     }
 }

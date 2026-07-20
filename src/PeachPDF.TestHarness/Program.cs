@@ -3161,16 +3161,20 @@ await SaveShowcaseAsync("invoice", "Real-World Documents", "Modern Invoice",
     invoiceHtml, new PdfGenerateConfig { PageSize = PageSize.Letter });
 
 // ─── Real-World Documents: ten-page print catalog ───
-// A US Letter catalog designed as a book: gradient cover plate (page 1), eight item pages,
-// and a colophon (page 10). Running furniture mirrors between left- and right-hand pages
-// via :left/:right page selectors - the string-set item name at the top outside corner,
-// the SVG logo as a real margin-box image at top-center (box width pinned to the image so
-// it truly centers; margin-box images ignore box alignment, see
+// A US Letter catalog designed as a book: full-bleed gradient cover (page 1), eight item
+// pages, and a colophon (page 10). Running furniture mirrors between left- and right-hand
+// pages via :left/:right page selectors - the string-set item name at the top outside
+// corner, the SVG logo as a real margin-box image at top-center (box width pinned to the
+// image so it truly centers; margin-box images ignore box alignment, see
 // https://github.com/jhaygood86/PeachPDF/issues/140), and folios in the inside (gutter)
-// bottom corners. The cover is a plate filling the content box (per-page margin overrides
-// to 0 are ignored, #125), followed by a forced break so the first item's flex brand band
-// can't straddle into the sliver left below the plate. The colophon's named page is the
-// last page only, because named-page styles leak onto subsequent auto pages (#126).
+// bottom corners. The cover bleeds to the top/left/right paper edges via
+// "@page :first { margin: 0 }" (#125 fixed); layout/pagination stay on the base-margin
+// grid, so the cover's paintable height is capped at the base content band and the sheet
+// keeps a deliberate white base band at the bottom (= base top + bottom margins) - see
+// the .cover comment below for the math. A forced break follows so the first item's flex
+// brand band can't straddle into the sliver left below the plate. The colophon's named
+// page is the last page only, because named-page styles leak onto subsequent auto pages
+// (#126).
 
 const string catalogLogoSvg = "<svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\">\n" +
     "<defs><linearGradient id=\"ml\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\">\n" +
@@ -3290,6 +3294,7 @@ var catalogHtml = $$"""
       @bottom-right { content: counter(page); font: 9pt Georgia, serif; color: #8a5a3b; }
     }
     @page :first {
+      margin: 0;
       @top-left { content: none; }
       @top-center { content: none; }
       @top-right { content: none; }
@@ -3302,12 +3307,19 @@ var catalogHtml = $$"""
     }
     body { font: 10pt Georgia, serif; color: #2b2620; margin: 0; }
 
-    /* ── Cover (a plate filling the page's content box; per-page margin
-          overrides and @page backgrounds aren't supported, so true full-bleed
-          isn't possible — see the GitHub issues filed alongside this showcase) ── */
+    /* ── Cover: genuine full-bleed plate via @page :first { margin: 0 } (#125).
+          Layout still uses the base 7.1in × 9.2in content band at (0.7in, 0.95in),
+          and the margin-0 page paints that band starting at the physical top-left
+          corner, so: width 8.5in overflows the band to reach the physical right
+          edge (the widened page clip no longer cuts it); height is 1pt shy of the
+          9.2in band so the plate never crosses the pagination boundary (which
+          would double-paint on page 2). The bottom 1.8in of the sheet (= base
+          top + bottom margins) cannot be painted by in-flow content - pagination
+          stays on the base grid - so the white base band below the plate is the
+          deliberate design consequence, not a rendering artifact. ── */
     .cover {
-      height: calc(11in - 0.95in - 0.85in - 2.4pt - 2mm);
-      border: 1.2pt solid rgba(240, 201, 117, 0.55);
+      width: 8.5in;
+      height: calc(11in - 0.95in - 0.85in - 1pt);
       background:
         radial-gradient(circle at 30% 20%, rgba(240, 201, 117, 0.35), transparent 55%),
         radial-gradient(circle at 80% 85%, rgba(201, 123, 74, 0.4), transparent 60%),
@@ -3419,7 +3431,7 @@ var catalogHtml = $$"""
     """;
 
 await SaveShowcaseAsync("print_catalog", "Real-World Documents", "Print Catalog",
-    "A ten-page furniture catalog designed as a book: gradient cover plate, per-item SVG art, string-set running headers, a margin-box image logo, and mirrored gutter folios via :left/:right page selectors.",
+    "A ten-page furniture catalog designed as a book: full-bleed gradient cover via @page :first { margin: 0 }, per-item SVG art, string-set running headers, a margin-box image logo, and mirrored gutter folios via :left/:right page selectors.",
     catalogHtml, new PdfGenerateConfig { PageSize = PageSize.Letter });
 
 // The manifest that drives the website's /showcase page (see docs/showcase.html and

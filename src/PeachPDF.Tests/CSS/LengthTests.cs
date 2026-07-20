@@ -106,11 +106,28 @@ namespace PeachPDF.Tests.CSS
         [Fact]
         public void TryParse_NonZeroValueWithUnrecognizedUnit_ReturnsFalse()
         {
-            // A non-numeric string like "abc" parses as value 0 with no recognized unit, which
-            // TryParse treats as the valid unitless zero (matching CSS's "0" needing no unit) rather
-            // than a parse failure. A non-zero magnitude with an unrecognized unit suffix is what
-            // actually fails.
             var success = Length.TryParse("10bogus", out _);
+
+            Assert.False(success);
+        }
+
+        [Theory]
+        [InlineData("not-a-length")]
+        [InlineData("abc")]
+        public void TryParse_NonNumericInput_ReturnsFalse(string input)
+        {
+            // StylesheetUnit reports a tokenize failure as a null unit string with value 0 — the
+            // unitless-zero acceptance must not mistake that for a genuinely parsed bare "0".
+            var success = Length.TryParse(input, out _);
+
+            Assert.False(success);
+        }
+
+        [Fact]
+        public void TryParse_UnitlessNonZero_ReturnsFalse()
+        {
+            // CSS Values & Units §5.1: only zero may omit its unit.
+            var success = Length.TryParse("5", out _);
 
             Assert.False(success);
         }

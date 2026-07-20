@@ -474,6 +474,96 @@ namespace PeachPDF.Tests.Integration
             Assert.Null(style);
         }
 
+        // ─── ResolvePageMargins: zero-margin overrides (#125) ───────────────────
+        // Regression for #125: the CSS-OM serializes every zero length unitless ("0"), and the
+        // old hand-rolled length parser returned null for a missing unit, so ResolvePageMargins'
+        // per-side `?? base` fallback silently treated `margin: 0` as "unset" — making full-bleed
+        // pages impossible. Base margins below use 10mm ≈ 28.35pt.
+
+        private const double TenMm = 10 * 72.0 / 25.4;
+
+        [Fact]
+        public void ResolvePageMargins_FirstPageZeroMargin_OverridesNonZeroBase()
+        {
+            var rules = ParsePageRules("""
+                @page { margin: 10mm; }
+                @page :first { margin: 0; }
+                """);
+
+            var page1Rule = PdfGenerator.SelectPageRule(rules, pageNumber: 1, [], pageY: 0, pageHeight: 800);
+            var page1 = PdfGenerator.ResolvePageMargins(page1Rule, TenMm, TenMm, TenMm, TenMm);
+            Assert.Equal((0d, 0d, 0d, 0d), page1);
+
+            var page2Rule = PdfGenerator.SelectPageRule(rules, pageNumber: 2, [], pageY: 800, pageHeight: 800);
+            var page2 = PdfGenerator.ResolvePageMargins(page2Rule, TenMm, TenMm, TenMm, TenMm);
+            Assert.Equal((TenMm, TenMm, TenMm, TenMm), page2);
+        }
+
+        [Fact]
+        public void ResolvePageMargins_NamedPageZeroMargin_Applies()
+        {
+            var rules = ParsePageRules("""
+                @page { margin: 10mm; }
+                @page cover { margin: 0; }
+                """);
+            var elements = new List<NamedPageElement> { new("cover", 0) };
+
+            var rule = PdfGenerator.SelectPageRule(rules, pageNumber: 1, elements, pageY: 0, pageHeight: 800);
+
+            Assert.Equal((0d, 0d, 0d, 0d), PdfGenerator.ResolvePageMargins(rule, TenMm, TenMm, TenMm, TenMm));
+        }
+
+        [Fact]
+        public void ResolvePageMargins_LeftRightZeroMargin_AppliesByParity()
+        {
+            var rules = ParsePageRules("""
+                @page { margin: 10mm; }
+                @page :left { margin: 0; }
+                """);
+
+            var leftPageRule = PdfGenerator.SelectPageRule(rules, pageNumber: 2, [], pageY: 800, pageHeight: 800);
+            Assert.Equal((0d, 0d, 0d, 0d), PdfGenerator.ResolvePageMargins(leftPageRule, TenMm, TenMm, TenMm, TenMm));
+
+            var rightPageRule = PdfGenerator.SelectPageRule(rules, pageNumber: 1, [], pageY: 0, pageHeight: 800);
+            Assert.Equal((TenMm, TenMm, TenMm, TenMm), PdfGenerator.ResolvePageMargins(rightPageRule, TenMm, TenMm, TenMm, TenMm));
+        }
+
+        [Fact]
+        public void ResolvePageMargins_PartialZeroOverride_FallsBackPerSide()
+        {
+            var rules = ParsePageRules("""
+                @page { margin: 10mm; }
+                @page :first { margin-top: 0; }
+                """);
+
+            var rule = PdfGenerator.SelectPageRule(rules, pageNumber: 1, [], pageY: 0, pageHeight: 800);
+            var (l, t, r, b) = PdfGenerator.ResolvePageMargins(rule, TenMm, TenMm, TenMm, TenMm);
+
+            Assert.Equal(TenMm, l);
+            Assert.Equal(0d, t);
+            Assert.Equal(TenMm, r);
+            Assert.Equal(TenMm, b);
+        }
+
+        [Fact]
+        public void ResolvePageMargins_BaseRuleZeroMargin_Applies()
+        {
+            // The base rule's own margin: 0 already worked via a separate path (CascadeApplyPageStyles
+            // sets the container's base margins before ResolvePageMargins runs); this documents that
+            // both paths now agree when the base rule is the selected winner.
+            var rules = ParsePageRules("@page { margin: 0; }");
+
+            var rule = PdfGenerator.SelectPageRule(rules, pageNumber: 1, [], pageY: 0, pageHeight: 800);
+
+            Assert.Equal((0d, 0d, 0d, 0d), PdfGenerator.ResolvePageMargins(rule, 0, 0, 0, 0));
+        }
+
+        [Fact]
+        public void ResolvePageMargins_NullRule_ReturnsBaseMargins()
+        {
+            Assert.Equal((1d, 2d, 3d, 4d), PdfGenerator.ResolvePageMargins(null, 1, 2, 3, 4));
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static List<PageRule> ParsePageRules(string css) =>

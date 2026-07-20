@@ -356,6 +356,21 @@ namespace PeachPDF
                 // start at the top of their own fragmentainer, not straddle the previous one
                 // (CSS Fragmentation Level 3 §4; CSS2.1 §13.2's page box model).
                 container.HtmlContainerInt.ScrollOffset = new RPoint(0, scrollOffset);
+
+                // Same-units (internal pixel space) generalization of PageBoxRect's default paint
+                // window: x/y adapt to this page's margin override via the delta translate above;
+                // the width pins the window's right edge to the physical paper edge (identical to
+                // PageBoxRect's PageSize.Width + MarginRight whenever mL equals the base left
+                // margin, so non-overridden pages are unchanged). The height deliberately stays
+                // the layout band height — it is what keeps neighboring pagination slots' content
+                // from leaking onto this page, so a margin override can never reclaim the vertical
+                // band (layout/pagination always run on the base-margin grid).
+                container.HtmlContainerInt.PageClipOverride = new RRect(
+                    container.HtmlContainerInt.MarginLeft,
+                    container.HtmlContainerInt.MarginTop,
+                    (page.Width - mL) * _pdfSharpAdapter.PixelsPerPoint,
+                    container.HtmlContainerInt.PageSize.Height);
+
                 await container.PerformPaint(g);
 
                 // Restore to pre-content state so margin boxes render in absolute page coordinates
@@ -703,7 +718,7 @@ namespace PeachPDF
             return result;
         }
 
-        private static (double L, double T, double R, double B) ResolvePageMargins(
+        internal static (double L, double T, double R, double B) ResolvePageMargins(
             PageRule? rule, double baseL, double baseT, double baseR, double baseB)
         {
             if (rule == null) return (baseL, baseT, baseR, baseB);
