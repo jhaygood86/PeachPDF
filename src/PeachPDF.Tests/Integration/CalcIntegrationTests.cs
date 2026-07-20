@@ -18,8 +18,8 @@ namespace PeachPDF.Tests.Integration
         {
             var html = """
                 <!DOCTYPE html><html><body>
-                <div id="parent" style="width: 400px">
-                  <div id="child" style="width: calc(100% - 50px)"></div>
+                <div id="parent" style="width: 400pt">
+                  <div id="child" style="width: calc(100% - 50pt)"></div>
                 </div>
                 </body></html>
                 """;
@@ -36,8 +36,8 @@ namespace PeachPDF.Tests.Integration
         {
             var html = """
                 <!DOCTYPE html><html><body>
-                <div id="parent" style="width: 400px">
-                  <div id="child" style="margin-left: calc(50% - 10px)"></div>
+                <div id="parent" style="width: 400pt">
+                  <div id="child" style="margin-left: calc(50% - 10pt)"></div>
                 </div>
                 </body></html>
                 """;
@@ -54,7 +54,7 @@ namespace PeachPDF.Tests.Integration
         {
             var html = """
                 <!DOCTYPE html><html><body>
-                <div id="el" style="width: 200px; height: 100px; border-top-left-radius: calc(10px + 10px) 5px"></div>
+                <div id="el" style="width: 200pt; height: 100pt; border-top-left-radius: calc(10pt + 10pt) 5pt"></div>
                 </body></html>
                 """;
 
@@ -118,7 +118,7 @@ namespace PeachPDF.Tests.Integration
         {
             var html = """
                 <!DOCTYPE html><html><body>
-                <div id="el" style="width: 100px; height: 50px; transform: translateX(calc(50% + 10px))"></div>
+                <div id="el" style="width: 100pt; height: 50pt; transform: translateX(calc(50% + 10pt))"></div>
                 </body></html>
                 """;
 
@@ -176,7 +176,7 @@ namespace PeachPDF.Tests.Integration
         {
             var html = """
                 <!DOCTYPE html><html><body>
-                <table id="el" style="border-spacing: calc(5px + 5px) 20px"><tr><td>x</td></tr></table>
+                <table id="el" style="border-spacing: calc(5pt + 5pt) 20pt"><tr><td>x</td></tr></table>
                 </body></html>
                 """;
 
@@ -207,7 +207,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Width_Min_PicksSmaller()
         {
-            var root = await BuildBoxTree(WidthHtml("min(150px, 100px)"));
+            var root = await BuildBoxTree(WidthHtml("min(150pt, 100pt)"));
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
@@ -217,7 +217,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Width_Max_PicksLarger()
         {
-            var root = await BuildBoxTree(WidthHtml("max(150px, 100px)"));
+            var root = await BuildBoxTree(WidthHtml("max(150pt, 100pt)"));
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
@@ -227,7 +227,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Width_Clamp_ClampsToRange()
         {
-            var root = await BuildBoxTree(WidthHtml("clamp(50px, 300px, 150px)"));
+            var root = await BuildBoxTree(WidthHtml("clamp(50pt, 300pt, 150pt)"));
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
@@ -237,7 +237,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Width_Clamp_ValueBelowMin_ClampsUpToMin()
         {
-            var root = await BuildBoxTree(WidthHtml("clamp(50px, 10px, 150px)"));
+            var root = await BuildBoxTree(WidthHtml("clamp(50pt, 10pt, 150pt)"));
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
@@ -247,7 +247,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Width_Clamp_MinGreaterThanMax_ReturnsMax()
         {
-            var root = await BuildBoxTree(WidthHtml("clamp(100px, 50px, 20px)"));
+            var root = await BuildBoxTree(WidthHtml("clamp(100pt, 50pt, 20pt)"));
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
@@ -257,7 +257,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Width_NestedCalcAndParens_ResolvesCorrectly()
         {
-            var root = await BuildBoxTree(WidthHtml("calc(calc(10px + 10px) * 2)"));
+            var root = await BuildBoxTree(WidthHtml("calc(calc(10pt + 10pt) * 2)"));
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
@@ -269,8 +269,8 @@ namespace PeachPDF.Tests.Integration
         {
             var html = """
                 <!DOCTYPE html><html><body>
-                <div id="parent" style="width: 400px">
-                  <div id="child" style="--gap: 20px; width: calc(100% - var(--gap))"></div>
+                <div id="parent" style="width: 400pt">
+                  <div id="child" style="--gap: 20pt; width: calc(100% - var(--gap))"></div>
                 </div>
                 </body></html>
                 """;
@@ -308,7 +308,7 @@ namespace PeachPDF.Tests.Integration
         {
             // PeachPDF doesn't clamp a negative used width to zero for a plain negative length either
             // (verified separately) - calc() is consistent with that existing behavior, not a special case.
-            var root = await BuildBoxTree(WidthHtml("calc(50px - 100px)"));
+            var root = await BuildBoxTree(WidthHtml("calc(50pt - 100pt)"));
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
