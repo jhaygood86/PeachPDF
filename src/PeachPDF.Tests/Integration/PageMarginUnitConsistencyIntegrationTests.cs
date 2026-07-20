@@ -152,6 +152,53 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(SheetH - 120, container.PageBandHeightOf(0), 3);
         }
 
+        [Fact]
+        public async Task BaseRule_ViewportOrChUnitMargin_LeavesConfiguredMarginUntouched()
+        {
+            // Issue #154: a BASE @page margin in a unit with no page context (vw/vh/vmin/vmax/ch) is
+            // an invalid declaration — per CSS Syntax error handling it must be dropped, leaving the
+            // previously-configured (PdfGenerateConfig/UA-default) margin in place, not silently
+            // resolved to zero. This is the base-rule analog of
+            // FirstPageViewportUnitMargin_FallsBackToBaseMargin's per-page assertion.
+            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var container = new HtmlContainerInt(adapter)
+            {
+                PageSize = new RSize(SheetW, SheetH),
+                MarginTop = 40,
+                MarginLeft = 30,
+            };
+
+            await container.SetHtml("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin-top: 10vw; margin-left: 3ch; }
+                </style></head><body><p>content</p></body></html>
+                """, null);
+
+            Assert.Equal(40.0, container.MarginTop, 3);
+            Assert.Equal(30.0, container.MarginLeft, 3);
+        }
+
+        [Fact]
+        public async Task BaseRule_AbsoluteMargin_StillOverridesConfiguredMargin()
+        {
+            // Regression guard for the #154 fix: a resolvable base margin still overrides the
+            // configured value (the null-aware routing must not drop valid declarations).
+            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var container = new HtmlContainerInt(adapter)
+            {
+                PageSize = new RSize(SheetW, SheetH),
+                MarginTop = 40,
+            };
+
+            await container.SetHtml("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin-top: 72pt; }
+                </style></head><body><p>content</p></body></html>
+                """, null);
+
+            Assert.Equal(72.0, container.MarginTop, 3);
+        }
+
         /// <summary>
         /// Parse-only harness: PageSize carries the raw sheet BEFORE SetHtml so parse-time relative
         /// units (%/em against the captured PageLengthContext) resolve against a real width — same
