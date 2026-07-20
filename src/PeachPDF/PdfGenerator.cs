@@ -260,6 +260,12 @@ namespace PeachPDF
             // paint pass suppressed (see SuppressOwnBackgroundPaint), so it isn't painted twice.
             var canvasBackgroundBox = ResolveCanvasBackground(container.HtmlContainerInt.Root);
 
+            // Margin-box `content: url(...)` images (see MarginBoxRenderer.ResolveContentImage) are
+            // cached by declaration text across the whole document, since the same margin rule - and
+            // so the same image - repeats identically on every page; without this a multi-hundred-page
+            // document would re-decode (or re-fetch, for a network image) the same logo once per page.
+            var marginBoxImageCache = new Dictionary<string, CssImage?>();
+
             // Create a PDF page for each page-slot that would actually show something, per CSS Paged
             // Media Level 3 §3.2 ("User agents SHOULD avoid generating a large number of
             // content-empty pages") - e.g. Acid2's own "100em" margins on "#top"/".picture" are
@@ -357,7 +363,7 @@ namespace PeachPDF
 
                 if (applicableMargins.Count > 0)
                 {
-                    MarginBoxRenderer.Render(
+                    await MarginBoxRenderer.Render(
                         g,
                         orgPageSize,
                         mL,
@@ -370,9 +376,14 @@ namespace PeachPDF
                         pageY,
                         container.NamedStrings,
                         _pdfSharpAdapter,
-                        applicablePageStyle);
+                        applicablePageStyle,
+                        container.HtmlContainerInt,
+                        marginBoxImageCache);
                 }
             }
+
+            foreach (var cachedImage in marginBoxImageCache.Values)
+                cachedImage?.Dispose();
 
             // Finalizes /ParentTree page-keyed entries before HandleLinks (which, when tagging is
             // enabled, appends further annotation-keyed entries to the same tree - see

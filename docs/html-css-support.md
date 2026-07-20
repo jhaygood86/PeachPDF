@@ -710,6 +710,8 @@ Margin boxes are sub-rules of `@page` that place text inside the page margins (o
 | `counter(pages)` | `content: counter(pages)` | Total page count |
 | `string(name)` | `content: string(chapter)` | Named string captured via `string-set`; see below |
 | Mixed | `content: "Page " counter(page) " of " counter(pages)` | Concatenated |
+| `url(...)` | `content: url("logo.svg")` | An image (raster or SVG, incl. `data:` URIs) — useful for a logo in a running header. Rendered at natural size, anchored to the box's top-left, clipped to the box. Not combinable with text/counter/string content in the same declaration |
+| Gradient function | `content: linear-gradient(to right, red, blue)` | `linear-gradient()`/`radial-gradient()`/`conic-gradient()` (and their `repeating-` forms), filling the box |
 | `none` | `content: none` | Suppresses the box (useful in `:first` to hide the header on the cover page) |
 
 **Supported style properties in margin boxes:**
