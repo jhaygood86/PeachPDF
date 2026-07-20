@@ -655,9 +655,16 @@ The `@page` at-rule targets PDF pages. A rule without a selector applies to all 
 
 **Cascade order:** the base rule is the fallback; a matching named-page rule overrides it; pseudo-selector rules override named-page rules. When both `:first` and `:right` match page 1, the last matching rule in the stylesheet wins.
 
-**Per-page margin variation:** when a pseudo-selector or named-page rule sets `margin-top`, `margin-left`, etc., those values override the base margins for that page at render time. Zero is a valid override — `@page :first { margin: 0 }` gives an edge-to-edge (full-bleed) cover page. The content layout is computed once using the base margins, so changing left/right margins shifts the content position but does not reflow text to a different width; a margin-narrowing page gains paintable area out to the top/left/right paper edges (a full-bleed cover element can overflow its layout width, e.g. `width: 8.5in`, to reach the physical right edge), but each page's paintable *height* remains the base content-band height — content cannot extend into where the base top + bottom margins were, since pagination stays on the base-margin grid.
+**Per-page margin variation:** when a pseudo-selector or named-page rule sets `margin-top`, `margin-left`, etc., those values override the base margins for that page. **Top and bottom overrides are layout-affecting**, per CSS Paged Media 3's page-box model: each page's own margins define its content band, so pages with different top/bottom margins get genuinely different content-band heights and content paginates against those variable bands. Zero is a valid override — `@page :first { margin: 0 }` gives a first page whose content band is the entire physical sheet, enabling a true four-edge full-bleed cover (size the cover element to the full sheet, e.g. `width: 8.5in; height: 11in`; it may overflow the base layout width to reach the physical right edge). An element ending exactly on a page boundary with a forced break after it continues on the very next page — no blank page is manufactured for an exact-fit cover (css-break-3's forced-break-at-boundary rule).
 
-**Known limitation — named-page selection under `ShrinkToFit`:** the page-position value used to decide which named `@page` rule (and margin boxes) apply to a given page mixes the internal layout coordinate space with point-space margins, so when `ShrinkToFit` actually shrinks content (its scale factor exceeds 1) the attribution drifts slightly per page. Page *content* painting is unaffected; only which named-page rule/margin boxes are picked can be off for an element that changes its `page` name within a few points of a page boundary in a shrunken document.
+Known boundaries of per-page margins:
+
+- **Left/right overrides shift, but don't reflow.** Content width is laid out once against the base margins; a page with different left/right margins paints its content shifted (and gains/loses paintable width at the paper edges) but text does not re-wrap to a different measure on that page.
+- **Percentage heights resolve against the base band.** The initial containing block's height is the base content band, even on a page whose own band is taller — size full-bleed elements with absolute units, not `height: 100%`.
+- **Named-page bands begin at the forced break.** An element whose `page` name differs from the active one always forces a page break, so a named page's own margins take effect exactly from that fresh page onward (and propagate until another name takes over).
+- `position: fixed` elements and `background-attachment: fixed` layers keep positioning against the base page box on margin-overridden pages (they ride the page's content shift rather than re-resolving against that page's own margins).
+- When content-empty pages are skipped (see pagination), `:first`/`:left`/`:right` resolve against the underlying page sequence, not the renumbered output pages.
+
 
 ### `size` property
 
@@ -673,7 +680,7 @@ The `@page` at-rule targets PDF pages. A rule without a selector applies to all 
 | Keyword + orientation | `A4 landscape` | Named size with explicit orientation |
 | Explicit lengths | `210mm 297mm`, `595pt 842pt` | Any two CSS length values; units: `pt`, `px`, `in`, `cm`, `mm`, `pc` |
 
-When `@page { size: ... }` is present it overrides the `PageSize` or `ManualPageWidth`/`ManualPageHeight` configured via `PdfGenerateConfig`.
+When `@page { size: ... }` is present it overrides the `PageSize` or `ManualPageWidth`/`ManualPageHeight` configured via `PdfGenerateConfig`. `size` is honored on the base `@page` rule only — a `size` declared inside a pseudo-selector or named-page rule is ignored (every sheet in one document has the same physical dimensions; only margins vary per page).
 
 ### Margin boxes
 
@@ -730,7 +737,7 @@ Margin boxes are sub-rules of `@page` that place text inside the page margins (o
 
 ### Named pages
 
-The CSS `page` property on an element activates a named `@page` rule starting on the page containing that element — and, matching the CSS spec's propagation behavior, stays active on every subsequent page in the normal flow until a later element activates a different named page. This lets different parts of a document use different page styles (e.g., wider margins for an appendix, or a different running header per chapter, continuing correctly across a chapter's own multi-page span).
+The CSS `page` property on an element activates a named `@page` rule starting on the page containing that element — and, matching the CSS spec's propagation behavior, stays active on every subsequent page in the normal flow until a later element activates a different named page. This lets different parts of a document use different page styles (e.g., wider margins for an appendix, or a different running header per chapter, continuing correctly across a chapter's own multi-page span). Per css-page-3 §7.2, an element whose `page` name differs from the one currently in effect **forces a page break** before it, so a named page's styles (including layout-affecting top/bottom margins) always begin on a fresh page.
 
 ```css
 @page chapter {
