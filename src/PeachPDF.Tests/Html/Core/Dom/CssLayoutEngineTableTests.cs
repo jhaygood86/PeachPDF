@@ -512,6 +512,39 @@ Assert.NotNull(tbody);
      }
 
         [Fact]
+        public async Task TableLayout_ColElementPixelWidth_ResolvesSpecCorrect()
+        {
+            // A <col> px width feeds the fixed-layout column-width array through the shared
+            // spec-correct conversion (1px = 0.75pt), so a 200px column is 150pt wide - the same
+            // as every other px length in the engine, not the old 1px = 1pt.
+            var html = @"
+<!DOCTYPE html>
+<html><head><style>
+    table { border-collapse: collapse; }
+    td { padding: 0; border: 0; }
+</style></head>
+<body>
+    <table>
+        <colgroup><col style=""width:200px""><col></colgroup>
+        <tbody><tr><td>A</td><td>B</td></tr></tbody>
+    </table>
+</body></html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var table = FindTableBox(rootBox);
+            Assert.NotNull(table);
+
+            var tbody = table!.Boxes.FirstOrDefault(b => b.Display == CssConstants.TableRowGroup)
+                        ?? table.Boxes.FirstOrDefault(b => b.Boxes.Any(c => c.Display == CssConstants.TableRow));
+            Assert.NotNull(tbody);
+            var firstCell = tbody!.Boxes[0].Boxes[0];
+            var firstCellWidth = firstCell.ActualRight - firstCell.Location.X;
+
+            // 200px -> 150pt (0.75x), not 200.
+            Assert.Equal(150.0, firstCellWidth, 1);
+        }
+
+        [Fact]
         public async Task TableLayout_TbodyBox_GetsRealBoundsSpanningItsRows()
         {
             // Regression test: AssignBoxKinds flattens a <tbody>'s <tr> children directly into the
