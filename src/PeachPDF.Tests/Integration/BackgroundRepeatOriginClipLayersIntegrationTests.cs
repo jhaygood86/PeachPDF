@@ -14,13 +14,17 @@ namespace PeachPDF.Tests.Integration
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
         // Box with visible border and padding so border/padding/content-box regions all differ,
-        // matching the fixture in BackgroundOriginClipIntegrationTests.cs.
+        // matching the fixture in BackgroundOriginClipIntegrationTests.cs. Dimensions are authored in
+        // pt (not px) so the expected content-stream coordinates below stay literal: with the
+        // spec-correct 1px = 0.75pt convention a px-authored box would lay out at 0.75x its numbers,
+        // shifting every asserted origin/clip coordinate. The geometry these tests exercise is
+        // unit-agnostic, so pt keeps the layout units identical to the pre-change px behavior.
         private static string BoxHtml(string css) =>
-            $"<!DOCTYPE html><html><head><style>body {{ margin: 0; }} div {{ width: 120px; height: 80px; border: 10px solid black; padding: 10px; {css} }}</style></head><body><div></div></body></html>";
+            $"<!DOCTYPE html><html><head><style>body {{ margin: 0; }} div {{ width: 120pt; height: 80pt; border: 10pt solid black; padding: 10pt; {css} }}</style></head><body><div></div></body></html>";
 
         private static string ImageBoxHtml(string css) =>
             $"<!DOCTYPE html><html><head><style>body {{ margin: 0; }}</style></head><body>" +
-            $"<div style=\"width: 120px; height: 80px; border: 10px solid black; padding: 10px; background-image: url('data:image/png;base64,{PngBase64}'), url('data:image/png;base64,{PngBase64}'); {css}\"></div></body></html>";
+            $"<div style=\"width: 120pt; height: 80pt; border: 10pt solid black; padding: 10pt; background-image: url('data:image/png;base64,{PngBase64}'), url('data:image/png;base64,{PngBase64}'); {css}\"></div></body></html>";
 
         private static async Task<string> GetPdfText(string html)
         {
@@ -37,7 +41,7 @@ namespace PeachPDF.Tests.Integration
         public async Task MultipleLayers_BackgroundRepeat_CyclesPerLayer()
         {
             var pdfText = await GetPdfText(ImageBoxHtml(
-                "background-size: 20px 20px; background-position: left top; background-repeat: no-repeat, repeat-x;"));
+                "background-size: 20pt 20pt; background-position: left top; background-repeat: no-repeat, repeat-x;"));
 
             // The "no-repeat" layer draws exactly once at (30, 792) (padding-box top-left); the
             // "repeat-x" layer tiles multiple 20pt-wide copies starting from the same X.

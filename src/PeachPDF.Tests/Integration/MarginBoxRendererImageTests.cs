@@ -72,8 +72,12 @@ namespace PeachPDF.Tests.Integration
             // page or clipped away to (0,0).
             var pdfText = await GetPdfText($"@top-left {{ content: url(\"data:image/png;base64,{PngBase64}\"); }}");
 
-            var match = Regex.Match(pdfText, @"1 0 0 1 (\d+\.\d+) (\d+\.\d+) cm /\w+ Do");
-            Assert.True(match.Success, "Expected an untransformed image `cm ... Do` placement in the content stream.");
+            // The image is drawn at its intrinsic size via `W 0 0 H x y cm /Img Do`. With the
+            // spec-correct 1px = 0.75pt convention, the 1x1 PNG's natural size is 0.75pt, so the
+            // scale is 0.75 (it used to be 1 back when 1px == 1pt). We still require an axis-aligned,
+            // unrotated/unskewed placement (the "0 0" cross terms) and check the translation below.
+            var match = Regex.Match(pdfText, @"[\d.]+ 0 0 [\d.]+ (\d+\.\d+) (\d+\.\d+) cm /\w+ Do");
+            Assert.True(match.Success, "Expected an axis-aligned image `cm ... Do` placement in the content stream.");
 
             var x = double.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
             var y = double.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
