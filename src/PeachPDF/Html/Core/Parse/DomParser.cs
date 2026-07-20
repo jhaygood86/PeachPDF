@@ -247,14 +247,18 @@ namespace PeachPDF.Html.Core.Parse
                 htmlContainer.PageSize.Width / pixelsPerPoint);
             htmlContainer.PageLengthContext = lengthContext;
 
-            double ParseMarginLength(string value) =>
-                CssValueParser.ParseLength(
-                    value,
-                    lengthContext.HundredPercentPt,
-                    lengthContext.EmPt,
-                    lengthContext.RemPt,
-                    null,
-                    false) * pixelsPerPoint;
+            // Resolve through the same null-aware overload the per-page path uses (see
+            // PageRuleResolver.ResolvePageMargins), so a base-rule margin in a unit with no page
+            // context (vw/vh/vmin/vmax/ch) or an otherwise-unparseable value yields null and the
+            // assignment below is skipped - leaving the PdfGenerateConfig-configured/UA-default
+            // margin in place, per CSS Syntax error handling (an invalid declaration is dropped,
+            // not silently resolved to zero). All previously-supported units (absolute, em/rem/ex/%,
+            // calc()) still resolve identically. The once-only PixelsPerPoint scaling is preserved.
+            double? ParseMarginLength(string value)
+            {
+                var pt = ParseLengthToPdfPoints(value, lengthContext);
+                return pt.HasValue ? pt.Value * pixelsPerPoint : null;
+            }
 
             foreach (var style in cssData.Stylesheets)
             {
@@ -267,24 +271,24 @@ namespace PeachPDF.Html.Core.Parse
                     if (pageRule.Selector != null)
                         continue;
 
-                    if (pageRule.Style.MarginLeft.Length > 0)
+                    if (pageRule.Style.MarginLeft.Length > 0 && ParseMarginLength(pageRule.Style.MarginLeft) is { } left)
                     {
-                        htmlContainer.MarginLeft = ParseMarginLength(pageRule.Style.MarginLeft);
+                        htmlContainer.MarginLeft = left;
                     }
 
-                    if (pageRule.Style.MarginTop.Length > 0)
+                    if (pageRule.Style.MarginTop.Length > 0 && ParseMarginLength(pageRule.Style.MarginTop) is { } top)
                     {
-                        htmlContainer.MarginTop = ParseMarginLength(pageRule.Style.MarginTop);
+                        htmlContainer.MarginTop = top;
                     }
 
-                    if (pageRule.Style.MarginBottom.Length > 0)
+                    if (pageRule.Style.MarginBottom.Length > 0 && ParseMarginLength(pageRule.Style.MarginBottom) is { } bottom)
                     {
-                        htmlContainer.MarginBottom = ParseMarginLength(pageRule.Style.MarginBottom);
+                        htmlContainer.MarginBottom = bottom;
                     }
 
-                    if (pageRule.Style.MarginRight.Length > 0)
+                    if (pageRule.Style.MarginRight.Length > 0 && ParseMarginLength(pageRule.Style.MarginRight) is { } right)
                     {
-                        htmlContainer.MarginRight = ParseMarginLength(pageRule.Style.MarginRight);
+                        htmlContainer.MarginRight = right;
                     }
 
                     if (pageRule.Style.Size.Length > 0)
@@ -292,7 +296,7 @@ namespace PeachPDF.Html.Core.Parse
                         // CssPageSize is documented/consumed as true PDF points (PdfGenerator.AddPdfPages
                         // assigns it straight to orgPageSize), not internal pixel space - unlike the
                         // margins above, this one deliberately stays unscaled.
-                        htmlContainer.CssPageSize = ParsePageSizeToPdfPoints(pageRule.Style.Size);
+                        htmlContainer.CssPageSize = ParsePageSizeToPdfPoints(pageRule.Style.Size, lengthContext);
                     }
                 }
             }
@@ -315,7 +319,7 @@ namespace PeachPDF.Html.Core.Parse
             { "tabloid", new XSize(792,      1224)   },
         }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
-        private static XSize? ParsePageSizeToPdfPoints(string sizeValue)
+        private static XSize? ParsePageSizeToPdfPoints(string sizeValue, PageLengthContext context)
         {
             var parts = sizeValue.Trim().Split(Array.Empty<char>(), StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length == 0)
@@ -358,7 +362,7 @@ namespace PeachPDF.Html.Core.Parse
             double? width = null, height = null;
             foreach (var part in parts)
             {
-                var pt = ParseLengthToPdfPoints(part);
+                var pt = ParseSizeDimensionToPdfPoints(part, context);
                 // "size: 0" now parses as a length (the shared grammar accepts unitless zero),
                 // but a degenerate zero page dimension stays rejected as it always was.
                 if (pt is > 0)
@@ -372,6 +376,31 @@ namespace PeachPDF.Html.Core.Parse
                 return new XSize(width.Value, height ?? width.Value);
 
             return null;
+        }
+
+        /// <summary>
+        /// Resolves a single <c>@page { size: ... }</c> dimension to true PDF points. Per
+        /// <see href="https://www.w3.org/TR/css-page-3/#page-size-prop">css-page-3 §7.1</see> the
+        /// grammar is <c>&lt;length&gt;{1,2}</c>: absolute units resolve context-free, and the
+        /// font-relative <c>em</c>/<c>ex</c>/<c>rem</c> resolve against the root element's font -
+        /// the same basis <c>@page</c> margins use (the page context's font in the common case where
+        /// no <c>@page { font-size }</c> is set). Percentages are not a <c>&lt;length&gt;</c> for
+        /// <c>size</c> (sheet geometry is document-global, not relative to any box), and viewport/
+        /// <c>ch</c> units have no page-sheet basis - both return null so the declaration is ignored
+        /// and the configured page size is kept.
+        /// </summary>
+        private static double? ParseSizeDimensionToPdfPoints(string value, PageLengthContext context)
+        {
+            var absolute = ParseLengthToPdfPoints(value);
+            if (absolute.HasValue)
+                return absolute;
+
+            if (!Length.TryParse(value.Trim().ToLowerInvariant(), out var length))
+                return null;
+
+            return length.Type is Length.Unit.Em or Length.Unit.Ex or Length.Unit.Rem
+                ? length.ToPixels(context.EmPt, context.RemPt, context.HundredPercentPt)
+                : null;
         }
 
         internal static double? ParseLengthToPdfPoints(string value)

@@ -59,7 +59,8 @@ namespace PeachPDF.Html.Core.Dom
                     contentValue.Equals("normal", StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                var rect = GetMarginBoxRect(boxName, pageSize, marginLeft, marginTop, marginRight, marginBottom, margins);
+                var rect = GetMarginBoxRect(boxName, pageSize, marginLeft, marginTop, marginRight, marginBottom, margins,
+                    pageStyle, htmlContainer.PageLengthContext?.RemPt ?? CssConstants.FontSize);
                 if (rect.Width <= 0 || rect.Height <= 0)
                     continue;
 
@@ -260,8 +261,16 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Returns the rectangle (in PDF points) for a named margin box.
         /// Uses explicit width/height from each box's CSS rule if present; falls back to equal thirds.
+        /// Relative <c>width</c>/<c>height</c>/<c>min-*</c>/<c>max-*</c> values resolve per
+        /// <see href="https://www.w3.org/TR/css-page-3/#margin-dimension">css-page-3 §8</see>:
+        /// <c>%</c> against the margin-area dimension the box sits in (the content-box width for
+        /// top/bottom rows, the content-box height for left/right columns), <c>em</c>/<c>ex</c>
+        /// against the box's own computed font size, and <c>rem</c> against the root
+        /// (<paramref name="remPt"/>). Units with no page context (<c>vw</c>/<c>vh</c>/<c>vmin</c>/
+        /// <c>vmax</c>/<c>ch</c>) resolve to null and the box sizes as <c>auto</c>.
         /// </summary>
-        private static XRect GetMarginBoxRect(string name, XSize page, double mL, double mT, double mR, double mB, IReadOnlyList<MarginStyleRule> margins)
+        internal static XRect GetMarginBoxRect(string name, XSize page, double mL, double mT, double mR, double mB,
+            IReadOnlyList<MarginStyleRule> margins, StyleDeclaration? pageStyle, double remPt)
         {
             var contentLeft   = mL;
             var contentRight  = page.Width - mR;
@@ -269,6 +278,25 @@ namespace PeachPDF.Html.Core.Dom
             var contentTop    = mT;
             var contentBottom = page.Height - mB;
             var contentHeight = contentBottom - contentTop;
+
+            // Resolve a margin-box dimension against its own font (em/ex), the root (rem), and the
+            // margin-area extent it sits in (%): contentWidth for width-family props on top/bottom
+            // rows, contentHeight for height-family props on left/right columns. Unresolvable units
+            // (vw/vh/vmin/vmax/ch) come back null → the box sizes as auto.
+            double? ResolveDim(MarginStyleRule? r, string? value, double hundredPercentPt)
+            {
+                if (r is null || string.IsNullOrWhiteSpace(value))
+                    return null;
+                var emPt = ResolveFontSizePt(r.Style, pageStyle);
+                return DomParser.ParseLengthToPdfPoints(value, new PageLengthContext(emPt, remPt, hundredPercentPt));
+            }
+
+            double? PW(MarginStyleRule? r)    => ResolveDim(r, r?.Style.Width,     contentWidth);
+            double? PMinW(MarginStyleRule? r) => ResolveDim(r, r?.Style.MinWidth,  contentWidth);
+            double? PMaxW(MarginStyleRule? r) => ResolveDim(r, r?.Style.MaxWidth,  contentWidth);
+            double? PH(MarginStyleRule? r)    => ResolveDim(r, r?.Style.Height,    contentHeight);
+            double? PMinH(MarginStyleRule? r) => ResolveDim(r, r?.Style.MinHeight, contentHeight);
+            double? PMaxH(MarginStyleRule? r) => ResolveDim(r, r?.Style.MaxHeight, contentHeight);
 
             var tlR = FindMargin(margins, "top-left");
             var tcR = FindMargin(margins, "top-center");
@@ -336,13 +364,6 @@ namespace PeachPDF.Html.Core.Dom
             margins.FirstOrDefault(m =>
                 (m.Selector?.Text?.Trim().ToLowerInvariant() ?? "") == name);
 
-        private static double? PW(MarginStyleRule? r)  => r == null ? null : DomParser.ParseLengthToPdfPoints(r.Style.Width);
-        private static double? PMinW(MarginStyleRule? r) => r == null ? null : DomParser.ParseLengthToPdfPoints(r.Style.MinWidth);
-        private static double? PMaxW(MarginStyleRule? r) => r == null ? null : DomParser.ParseLengthToPdfPoints(r.Style.MaxWidth);
-        private static double? PH(MarginStyleRule? r)  => r == null ? null : DomParser.ParseLengthToPdfPoints(r.Style.Height);
-        private static double? PMinH(MarginStyleRule? r) => r == null ? null : DomParser.ParseLengthToPdfPoints(r.Style.MinHeight);
-        private static double? PMaxH(MarginStyleRule? r) => r == null ? null : DomParser.ParseLengthToPdfPoints(r.Style.MaxHeight);
-
         /// <summary>
         /// Distributes <paramref name="available"/> space among three boxes (a, b, c).
         /// Explicit sizes are honoured and clamped to min/max; remaining space is split equally
@@ -385,17 +406,28 @@ namespace PeachPDF.Html.Core.Dom
             return (a, b, c);
         }
 
-        internal static XFont BuildFont(StyleDeclaration style, StyleDeclaration? pageStyle, RAdapter adapter)
+        /// <summary>
+        /// Resolves a margin box's computed font size in points, falling back to the page context's
+        /// own <c>font-size</c> then the CSS initial. Margin boxes have no real inheritance chain, so
+        /// a keyword or absolute length is resolved directly; this is the <c>em</c>/<c>ex</c> basis
+        /// for a margin box's own <c>width</c>/<c>height</c> per css-page-3 §8.
+        /// </summary>
+        internal static double ResolveFontSizePt(StyleDeclaration style, StyleDeclaration? pageStyle)
         {
-            var familyList = FirstNonEmpty(style.FontFamily, pageStyle?.FontFamily) ?? CssConstants.DefaultFont;
             var sizeStr = FirstNonEmpty(style.FontSize, pageStyle?.FontSize);
-            var weightStr = FirstNonEmpty(style.FontWeight, pageStyle?.FontWeight);
-            var styleStr = FirstNonEmpty(style.FontStyle, pageStyle?.FontStyle);
-
-            var sizePt = string.IsNullOrEmpty(sizeStr)
+            return string.IsNullOrEmpty(sizeStr)
                 ? CssConstants.FontSize
                 : DomParser.ParseLengthToPdfPoints(sizeStr)
                   ?? FontSizeResolver.Resolve(sizeStr, CssConstants.FontSize, CssConstants.FontSize);
+        }
+
+        internal static XFont BuildFont(StyleDeclaration style, StyleDeclaration? pageStyle, RAdapter adapter)
+        {
+            var familyList = FirstNonEmpty(style.FontFamily, pageStyle?.FontFamily) ?? CssConstants.DefaultFont;
+            var weightStr = FirstNonEmpty(style.FontWeight, pageStyle?.FontWeight);
+            var styleStr = FirstNonEmpty(style.FontStyle, pageStyle?.FontStyle);
+
+            var sizePt = ResolveFontSizePt(style, pageStyle);
 
             var fontStyle = RFontStyle.Regular;
             // Margin boxes have no real inheritance chain (see FontSizeResolver's own doc comment), so
