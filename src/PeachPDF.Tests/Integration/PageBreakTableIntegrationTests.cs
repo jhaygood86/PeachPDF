@@ -136,7 +136,130 @@ namespace PeachPDF.Tests.Integration
             Assert.Null(ex);
         }
 
+        // The pre-check decides from EstimateRowHeight - a one-line-of-text heuristic that is
+        // blind to tall block content inside a cell (the Custom Properties showcase's themeable
+        // card, ~120pt of styled divs, was estimated as ~one line). When the estimate concludes
+        // "fits" but real layout straddles the boundary, the post-check in LayoutCells must move
+        // the fully laid-out table to the next page - a single-row table is never row-split, so
+        // without the move its content paints sliced across two pages.
+        [Fact]
+        public async Task SingleRowTable_TallCellContentMissedByEstimate_IsMovedToNextPageAfterLayout()
+        {
+            // Table top at ~500: any plausible one-line estimate (tens of points, real or
+            // fallback font metrics) stays far from the 842pt boundary, so the pre-check
+            // declines - only the actual 400px cell content reveals the crossing.
+            var html = BuildTallContentHtml(spacerHeight: 500, contentHeight: 400);
+            var (table, pageHeight) = await GetTableAndPageHeight(html);
+
+            Assert.NotNull(table);
+            Assert.True(table!.Location.Y >= PageHeight,
+                $"Table with tall cell content should be moved to page 2 (Y ≥ {PageHeight}) but Y={table.Location.Y:F1}");
+            Assert.True(Math.Abs(table.Location.Y - PageHeight) < 1.0,
+                $"Moved table should start flush at the next page top ({PageHeight}) but Y={table.Location.Y:F1}");
+            Assert.True(table.ActualBottom - table.Location.Y <= pageHeight,
+                "Moved table must fit within a single page");
+        }
+
+        [Fact]
+        public async Task SingleRowTable_TallerThanOnePage_IsLeftInPlace()
+        {
+            // An unsatisfiable move: the row is taller than a whole page, so relocating the
+            // table can't avoid a straddle - the post-check must leave it where it is.
+            var html = BuildTallContentHtml(spacerHeight: 500, contentHeight: 900);
+            var (table, _) = await GetTableAndPageHeight(html);
+
+            Assert.NotNull(table);
+            Assert.True(table!.Location.Y < PageHeight,
+                $"Table taller than a page should stay on page 1 (Y < {PageHeight}) but Y={table.Location.Y:F1}");
+        }
+
+        // The post-check's whole-table move introduces a break between the table and whatever
+        // precedes it, so it must honor css-break §3.1 keep-with-next exactly like the
+        // pre-check: an avoid-chained heading (the UA default h1-h6 { page-break-after: avoid }
+        // under print media) comes along instead of being stranded at the old page's bottom.
+        [Fact]
+        public async Task SingleRowTable_MovedByPostCheck_PullsAvoidChainedHeadingAlong()
+        {
+            const string html = """
+                <!DOCTYPE html><html><head><style>
+                body { margin: 0; }
+                h2 { margin: 6px 0; }
+                table { border-collapse: collapse; width: 100%; }
+                td { padding: 3px; }
+                </style></head><body>
+                <div style='height: 500px'></div>
+                <h2 class='heading'>Section heading</h2>
+                <table><tr><td><div style='height: 400px'>tall content</div></td></tr></table>
+                </body></html>
+                """;
+
+            var adapter = new PdfSharpAdapter();
+            var container = new HtmlContainerInt(adapter);
+            await container.SetHtml(html, null);
+
+            var size = new XSize(595, PageHeight);
+            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+
+            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
+            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            await container.PerformLayout(graphics);
+
+            Assert.NotNull(container.Root);
+            var table = FindFirst(container.Root!, b => b.Display == "table");
+            var heading = FindFirst(container.Root!, b => b.HtmlTag?.Name == "h2");
+            Assert.NotNull(table);
+            Assert.NotNull(heading);
+
+            Assert.True(table!.Location.Y >= PageHeight,
+                $"Test setup expects the table to be moved to page 2 (Y ≥ {PageHeight}) but Y={table.Location.Y:F1}");
+            Assert.Equal(Math.Floor(table.Location.Y / PageHeight), Math.Floor(heading!.Location.Y / PageHeight));
+            Assert.True(heading.ActualBottom <= table.Location.Y + 1.0,
+                $"Heading (bottom={heading.ActualBottom:F1}) must sit above the moved table (top={table.Location.Y:F1})");
+        }
+
+        // A fixed-position box renders at the same page-box position on every page
+        // (CSS2.1 §13.3.1) - flow pagination must never relocate it, even when its laid-out
+        // bounds straddle a page boundary. Same for absolute positioning (§9.6: placed by its
+        // offsets, not by flow). The post-layout whole-table move must leave both alone.
+        [Theory]
+        [InlineData("fixed")]
+        [InlineData("absolute")]
+        public async Task OutOfFlowTable_StraddlingPageBoundary_IsNotMoved(string position)
+        {
+            var html = $$"""
+                <!DOCTYPE html><html><head><style>
+                body { margin: 0; }
+                table { border-collapse: collapse; width: 50%; position: {{position}}; top: 700px; }
+                td { padding: 3px; }
+                </style></head><body>
+                <div style='height: 30px'>flow content</div>
+                <table><tr><td><div style='height: 400px'>tall content</div></td></tr></table>
+                </body></html>
+                """;
+
+            var (table, _) = await GetTableAndPageHeight(html);
+
+            Assert.NotNull(table);
+            Assert.True(table!.Location.Y < PageHeight,
+                $"A position: {position} table must not be relocated by page-break handling (Y={table.Location.Y:F1})");
+        }
+
         // --- Helpers ---
+
+        private static string BuildTallContentHtml(double spacerHeight, double contentHeight)
+        {
+            return $$"""
+                <!DOCTYPE html><html><head><style>
+                body { margin: 0; }
+                table { border-collapse: collapse; width: 100%; }
+                td { padding: 3px; }
+                </style></head><body>
+                <div style='height: {{spacerHeight}}px'></div>
+                <table><tr><td><div style='height: {{contentHeight}}px'>tall content</div></td></tr></table>
+                </body></html>
+                """;
+        }
 
         private static string BuildHtml(double spacerHeight, int rowCount)
         {
