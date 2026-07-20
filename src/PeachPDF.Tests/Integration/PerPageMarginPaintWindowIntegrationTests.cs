@@ -11,11 +11,12 @@ namespace PeachPDF.Tests.Integration
     /// <c>@page</c> rule overrides margins (e.g. <c>:first { margin: 0 }</c>), <c>PdfGenerator</c>'s
     /// page loop sets <see cref="HtmlContainerInt.PageClipOverride"/> so <see cref="HtmlContainerInt.PerformPaint"/>
     /// pushes a window matching that page's own margins instead of the base-margin
-    /// <see cref="HtmlContainerInt.PageBoxRect"/> — widened horizontally out to the physical paper
-    /// edge, but with its height still capped at the layout content-band height, because pagination
-    /// stays on the base-margin grid and a taller window would repaint the next pagination slot's
-    /// content on this page. Per this repo's painting-test convention, these assert the actual
-    /// recorded call sequence (<see cref="TestRecordingGraphics"/>), not content-stream substrings.
+    /// <see cref="HtmlContainerInt.PageBoxRect"/>. The window's height must always equal the slot's
+    /// own content-band height (the base band here, since these fixtures carry no vertical @page
+    /// overrides; a slot's own variable band once they do — see PerPageGeometryLayoutIntegrationTests):
+    /// a window taller than the band would repaint the neighboring pagination slot's content on this
+    /// page. Per this repo's painting-test convention, these assert the actual recorded call sequence
+    /// (<see cref="TestRecordingGraphics"/>), not content-stream substrings.
     /// </summary>
     public class PerPageMarginPaintWindowIntegrationTests
     {
@@ -58,9 +59,9 @@ namespace PeachPDF.Tests.Integration
         public async Task FullBleedFirstPage_WidenedClip_DoesNotExposeSecondPageContent()
         {
             // The cover fills page 1's content band ([70, 731] on the slot grid); the forced break
-            // lands PageTwoMarker flush at slot 1's top (732). The full-bleed window's height must
-            // still cap at the band height so page 2's content never leaks onto page 1 — that cap
-            // is the reason a margin override can widen but never heighten the paint window.
+            // lands PageTwoMarker flush at slot 1's top (732). The paint window's height must match
+            // the slot's own band (here the base band — this harness paginated on it) so page 2's
+            // content never leaks onto page 1, whatever width the override reclaims.
             var container = await BuildLayoutAsync(TwoPageCoverHtml);
             var fullBleedWindow = new RRect(MarginLeftPx, MarginTopPx, SheetWidth, BandHeight);
 
