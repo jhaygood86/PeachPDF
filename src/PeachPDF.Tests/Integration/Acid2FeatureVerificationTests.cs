@@ -171,6 +171,145 @@ namespace PeachPDF.Tests.Integration
             Assert.InRange(cleared.Location.Y - before.ActualBottom, -0.5, 0.5);
         }
 
+        [Fact]
+        public async Task ClearBoth_ClearsToFloatBottomMarginEdge_NotBorderEdge()
+        {
+            // CSS2.1 §9.5.2: clearance places the cleared box's top border edge even with the float's
+            // bottom OUTER edge - the margin edge. A float with a negative bottom margin (Acid2's
+            // ".nose { margin: -2em 2em -1em }") therefore gets cleared to a line ABOVE its visible
+            // border-box bottom, letting the cleared content overlap the float's last margin's worth.
+            var html = Wrap(@"
+                <div id='floated' style='float:left; width:30px; height:100px; margin-bottom:-20px;'></div>
+                <div id='cleared' style='clear:both; height:10px;'></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var floated = FindById(root, "floated")!;
+            var cleared = FindById(root, "cleared")!;
+
+            var floatMarginEdge = floated.ActualBottom - 20;
+            Assert.InRange(cleared.Location.Y, floatMarginEdge - 0.5, floatMarginEdge + 0.5);
+        }
+
+        [Fact]
+        public async Task ClearBoth_RelativeFloat_ClearsToStaticBottom_NotVisualOffsetBottom()
+        {
+            // CSS2.1 §9.4.3: a relative offset never affects the layout of other content - including
+            // clearance geometry. A float that is also position:relative is cleared at its STATIC
+            // bottom margin edge; only its painted position shifts.
+            var html = Wrap(@"
+                <div id='floated' style='float:left; width:30px; height:50px; position:relative; top:30px;'></div>
+                <div id='cleared' style='clear:both; height:10px;'></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var floated = FindById(root, "floated")!;
+            var cleared = FindById(root, "cleared")!;
+
+            // The float itself paints 30px lower...
+            Assert.InRange(floated.RelativeOffsetY, 29.5, 30.5);
+            // ...but the cleared box lands at the float's static bottom, 30px above its visual bottom.
+            Assert.InRange(cleared.Location.Y, floated.ActualBottom - 30.5, floated.ActualBottom - 29.5);
+        }
+
+        [Fact]
+        public async Task ClearLeft_NestedRightFloat_IsIgnoredByDirectionFilter()
+        {
+            // CssLayoutEngine.GetClearance's direction filter must test the CLEARING box's own `clear`
+            // value (the clearPropValue parameter) - a previous revision tested the searched
+            // container's `clear` (always "none"), so a clear:left box was wrongly pushed past
+            // right-floated descendants of its previous siblings too.
+            var html = Wrap(@"
+                <div id='container'><div id='rightFloat' style='float:right; width:30px; height:80px;'></div></div>
+                <div id='cleared' style='clear:left; height:10px;'></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var rightFloat = FindById(root, "rightFloat")!;
+            var cleared = FindById(root, "cleared")!;
+
+            // clear:left ignores right floats entirely: "cleared" stays at its natural flow position
+            // right after the (zero-height, float-only) container, well above the right float's bottom.
+            Assert.InRange(cleared.Location.Y, container.ActualBottom - 0.5, container.ActualBottom + 0.5);
+            Assert.True(cleared.Location.Y < rightFloat.ActualBottom - 1,
+                $"clear:left must not clear past a right float (cleared.Y={cleared.Location.Y}, right float bottom={rightFloat.ActualBottom})");
+        }
+
+        [Fact]
+        public async Task SelfCollapsingBox_OwnPosition_UsesOnlyItsTopMargin_NotItsBottomMargin()
+        {
+            // CSS2.1 §8.3.1: a collapsed-through box's own top border edge sits where it would "if
+            // the element had a non-zero bottom border" - i.e. its own bottom margin positions only
+            // what FOLLOWS it, never the box itself. Here the empty box sits 10px (its own
+            // margin-top) below "a", while "b" ends up a full 100px below (the whole collapsed set
+            // {10, 100} passing through).
+            var html = Wrap(@"
+                <div id='a' style='height:20px;'></div>
+                <div id='e' style='margin-top:10px; margin-bottom:100px;'></div>
+                <div id='b' style='height:10px;'></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var e = FindById(root, "e")!;
+            var b = FindById(root, "b")!;
+
+            Assert.InRange(e.Location.Y, a.ActualBottom + 9.5, a.ActualBottom + 10.5);
+            Assert.InRange(b.Location.Y, a.ActualBottom + 99.5, a.ActualBottom + 100.5);
+        }
+
+        [Fact]
+        public async Task Float_AfterSelfCollapsingSibling_SumsThePassThroughMargin()
+        {
+            // A float's own margin never COLLAPSES with anything (CSS2.1 §8.3.1 - it's out of flow),
+            // but the preceding sibling's trailing margin still occupies real space the float is
+            // positioned after. When that sibling is self-collapsing, its contribution is its whole
+            // pass-through set (GetEffectiveBottomMargin): {30, -12} -> 18, then the float's own 5px
+            // margin-top is SUMMED (not collapsed) on top.
+            var html = Wrap(@"
+                <div id='a' style='height:20px;'></div>
+                <div id='e' style='margin-top:30px; margin-bottom:-12px;'></div>
+                <div id='f' style='float:left; width:20px; height:20px; margin-top:5px;'></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var e = FindById(root, "e")!;
+            var f = FindById(root, "f")!;
+
+            Assert.InRange(f.Location.Y, e.ActualBottom + 22.5, e.ActualBottom + 23.5);
+        }
+
+        [Fact]
+        public async Task Hr_WithZeroMargin_StillGetsMinimumSeparation()
+        {
+            // Pins the long-standing <hr> quirk in MarginTopCollapse: when the collapsed top margin
+            // resolves to (near) zero, an <hr> is given ~1.1em of separation anyway, so back-to-back
+            // rules never fuse visually.
+            var html = Wrap(@"
+                <div id='a' style='height:20px;'></div>
+                <hr id='h' style='margin:0;' />");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var h = FindById(root, "h")!;
+
+            Assert.True(h.Location.Y >= a.ActualBottom + 5,
+                $"expected the hr quirk to keep at least a font-derived gap, got Y={h.Location.Y} vs a.bottom={a.ActualBottom}");
+        }
+
+        [Fact]
+        public async Task MarginCollapse_ThroughEmptyBlock_CollapsesWholeAdjoiningSetAtOnce()
+        {
+            // CSS2.1 §8.3.1: a set of adjoining margins collapses to max(positive margins) +
+            // min(negative margins) over the WHOLE set. Here the set adjoining between "a" and "b" is
+            // {a's 40, e's 50 top, e's child's 0 top and -48 bottom (both pass through the
+            // self-collapsing chain), e's 50 bottom, b's 45} = 50 - 48 = 2. Two older behaviors each
+            // get this wrong: dropping the -48 (the self-collapsing box's DESCENDANT margins never
+            // joined the group) yields 50, and pairwise reduction (collapse(50, -48) = 2 first, then
+            // collapse(2, 45) = 45) yields 45 - the 50 must keep dominating the 45 even after the -48
+            // is folded in. This is the exact shape of Acid2's ".forehead / .empty / .smile" run,
+            // where the wrong hypothetical position kept ".smile"'s clear:both from ever triggering.
+            var html = Wrap(@"
+                <div id='a' style='height:20px; margin-bottom:40px;'></div>
+                <div id='e' style='margin:50px 0;'><div style='margin-bottom:-48px;'></div></div>
+                <div id='b' style='margin-top:45px; height:10px;'></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            Assert.InRange(b.Location.Y, a.ActualBottom + 1.5, a.ActualBottom + 2.5);
+        }
+
         // ─── negative margins outside the float case ────────────────────────────────
         // Acid2's ".empty div { margin: 0 2em -6em 4em }" (negative bottom margin bleeding into
         // next-sibling spacing) and ".smile div div span em strong { margin-bottom: -1em }" (should
@@ -226,6 +365,52 @@ namespace PeachPDF.Tests.Integration
 
             // Static-flow position is Y=8 (default body margin); "bottom:10px" must move it to Y=-2.
             Assert.InRange(box.Location.Y, -2.5, -1.5);
+        }
+
+        [Fact]
+        public async Task PositionRelative_Offset_DoesNotAffectParentHeightOrFollowingSibling()
+        {
+            // CSS2.1 §9.4.3: a relative offset is purely visual - "the effect of relative positioning
+            // on the box's parent's or following siblings' layout is nil". The offset box (and its
+            // descendants) move, but the parent's content-driven height and every following sibling
+            // must lay out against the STATIC position. Acid2's ".smile div { position: relative;
+            // bottom: -1em }" is the fixture case: the mouth bar paints 1em lower, but ".chin" (which
+            // follows ".smile") must not move down with it.
+            var html = Wrap(
+                "<div id='parent'>"
+                + "<div id='shifted' style='position:relative; bottom:-30px; height:40px;'></div>"
+                + "</div>"
+                + "<div id='after' style='height:10px;'></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var parent = FindById(root, "parent")!;
+            var shifted = FindById(root, "shifted")!;
+            var after = FindById(root, "after")!;
+
+            // The offset itself is applied visually: the child sits 30px below the parent's top...
+            Assert.InRange(shifted.Location.Y - parent.Location.Y, 29.5, 30.5);
+
+            // ...but the parent is still exactly 40px tall (the child's static extent)...
+            Assert.InRange(parent.ActualBottom - parent.Location.Y, 39.5, 40.5);
+
+            // ...and the following sibling starts at the parent's un-inflated bottom.
+            Assert.InRange(after.Location.Y, parent.ActualBottom - 0.5, parent.ActualBottom + 0.5);
+        }
+
+        [Fact]
+        public async Task PositionRelative_OffsetOnBoxItself_DoesNotShiftFollowingSibling()
+        {
+            // Same §9.4.3 rule as above, but with the offset box and the following sibling as direct
+            // siblings: "after" must lay out against "shifted"'s static bottom (Y=8+40=48-ish), not
+            // its visually offset bottom 25px lower.
+            var html = Wrap(@"
+                <div id='shifted' style='position:relative; top:25px; height:40px;'></div>
+                <div id='after' style='height:10px;'></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var shifted = FindById(root, "shifted")!;
+            var after = FindById(root, "after")!;
+
+            Assert.InRange(shifted.RelativeOffsetY, 24.5, 25.5);
+            Assert.InRange(after.Location.Y, shifted.ActualBottom - 25.5, shifted.ActualBottom - 24.5);
         }
 
         [Fact]
