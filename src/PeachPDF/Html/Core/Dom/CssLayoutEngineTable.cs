@@ -928,12 +928,19 @@ namespace PeachPDF.Html.Core.Dom
             // keep-with-next pull of e.g. a preceding h2) the pre-check would have made had the
             // estimate been accurate. A table taller than one page is left in place - moving it
             // whole can't satisfy anything, it would just recreate the straddle on the next page.
+            // Restricted to in-flow tables, mirroring the word-flow keep-with-next guard in
+            // CssBox.PerformLayoutImp: a fixed-position box renders at the same page-box
+            // position on every page (CSS2.1 §13.3.1) and an absolutely-positioned one is
+            // placed by its offsets, not by flow pagination (§9.6) - relocating either by a
+            // page height would move it off its intended position on every page.
             if (pageHeight < double.MaxValue - 1
                 && _tableBox.HtmlContainer != null
                 && !_shouldRepeatHeaders
                 && !_shouldRepeatFooters
                 && _bodyRows.Count > 0
-                && (_tableBox.PageBreakBottoms is null || _tableBox.PageBreakBottoms.Count == 0))
+                && _tableBox.Position is CssConstants.Static or CssConstants.Relative
+                && !_tableBox.IsFloated
+                && _tableBox.PageBreakBottoms is not { Count: > 0 })
             {
                 var tableTop = _tableBox.Location.Y;
                 var tablePage = (int)((tableTop - marginTop) / pageHeight);

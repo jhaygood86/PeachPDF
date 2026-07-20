@@ -211,6 +211,8 @@ namespace PeachPDF.Html.Core.Dom
             //float newtop = baseline - (Height - OwnerBox.FontDescent - 3); //OLD
             double newtop = baseline; // -GetBaseLineHeight(b, g); //OLD
 
+            var wordTop = newtop;
+
             if (b.ParentBox != null &&
                 b.ParentBox.Rectangles.ContainsKey(this) &&
                 r.Height < b.ParentBox.Rectangles[this].Height)
@@ -221,11 +223,20 @@ namespace PeachPDF.Html.Core.Dom
                 Rectangles[b] = newr;
                 b.OffsetRectangle(this, gap);
             }
+            else
+            {
+                // The rect is NOT being repositioned here, so re-anchoring the words flush to
+                // the baseline would collapse the box's own word-to-rect gap - which is exactly
+                // its border+padding-top content inset (CSS2.1 §8.1) for a box holding its
+                // words directly (e.g. a padded inline-block ::before/::after pseudo-element).
+                // Preserve it; unpadded boxes have gap == 0 and are unaffected.
+                wordTop = newtop + gap;
+            }
 
             foreach (var word in ws)
             {
                 if (!word.IsImage)
-                    word.Top = newtop;
+                    word.Top = wordTop;
             }
         }
 

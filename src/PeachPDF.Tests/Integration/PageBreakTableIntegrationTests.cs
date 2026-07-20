@@ -180,7 +180,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task SingleRowTable_MovedByPostCheck_PullsAvoidChainedHeadingAlong()
         {
-            var html = $$"""
+            const string html = """
                 <!DOCTYPE html><html><head><style>
                 body { margin: 0; }
                 h2 { margin: 6px 0; }
@@ -216,6 +216,33 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(Math.Floor(table.Location.Y / PageHeight), Math.Floor(heading!.Location.Y / PageHeight));
             Assert.True(heading.ActualBottom <= table.Location.Y + 1.0,
                 $"Heading (bottom={heading.ActualBottom:F1}) must sit above the moved table (top={table.Location.Y:F1})");
+        }
+
+        // A fixed-position box renders at the same page-box position on every page
+        // (CSS2.1 §13.3.1) - flow pagination must never relocate it, even when its laid-out
+        // bounds straddle a page boundary. Same for absolute positioning (§9.6: placed by its
+        // offsets, not by flow). The post-layout whole-table move must leave both alone.
+        [Theory]
+        [InlineData("fixed")]
+        [InlineData("absolute")]
+        public async Task OutOfFlowTable_StraddlingPageBoundary_IsNotMoved(string position)
+        {
+            var html = $$"""
+                <!DOCTYPE html><html><head><style>
+                body { margin: 0; }
+                table { border-collapse: collapse; width: 50%; position: {{position}}; top: 700px; }
+                td { padding: 3px; }
+                </style></head><body>
+                <div style='height: 30px'>flow content</div>
+                <table><tr><td><div style='height: 400px'>tall content</div></td></tr></table>
+                </body></html>
+                """;
+
+            var (table, _) = await GetTableAndPageHeight(html);
+
+            Assert.NotNull(table);
+            Assert.True(table!.Location.Y < PageHeight,
+                $"A position: {position} table must not be relocated by page-break handling (Y={table.Location.Y:F1})");
         }
 
         // --- Helpers ---

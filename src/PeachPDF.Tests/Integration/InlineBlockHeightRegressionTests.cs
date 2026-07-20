@@ -149,6 +149,69 @@ namespace PeachPDF.Tests.Integration
                 $"With no padding-top the rect top ({rect.Top}) must coincide with the word band top ({word.Top})");
         }
 
+        // A ::before/::after pseudo-element carries its generated text directly on its own box
+        // (no anonymous child), which flows through FlowBox's direct-words branch - the
+        // CSS2.1 §8.1 content inset must apply there exactly as it does for a real element
+        // like <button> (docs bless display: inline-block on pseudo-elements).
+        [Fact]
+        public async Task PaddedInlineBlockPseudoElement_WordsSitInsidePaddingBox()
+        {
+            const string html = @"<!DOCTYPE html>
+<html>
+<head><style>
+.host::before { content: 'NEW'; display: inline-block; padding: 6px 14px; }
+</style></head>
+<body style='margin: 0'>
+<div class='host'>after marker</div>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+
+            var host = FindBoxByClass(rootBox, "host");
+            Assert.NotNull(host);
+            var pseudo = FindFirst(host!, b => b.Display == "inline-block");
+            Assert.NotNull(pseudo);
+
+            var rect = Assert.Single(pseudo!.Rectangles).Value;
+            var word = FindFirstWord(pseudo);
+            Assert.NotNull(word);
+
+            Assert.True(word!.Top >= rect.Top + 6 - 0.1,
+                $"Pseudo-element label (top={word.Top}) must sit at least padding-top (6) below the box top ({rect.Top})");
+        }
+
+        // The §8.1 inset shift runs after word flow already page-broke each word - a padded
+        // line that legitimately fit above a page boundary must be re-checked after the shift,
+        // or its glyphs paint sliced across two pages (css-break §4: a monolithic line lands
+        // fully within one fragmentainer).
+        [Fact]
+        public async Task InsetShiftNearPageBoundary_WordsDoNotStraddleThePage()
+        {
+            // The filler parks the line so the un-inset words fit above the 842px boundary but
+            // the 100px padding-top shift pushes them across it.
+            const string html = @"<!DOCTYPE html>
+<html>
+<body style='margin: 0'>
+<div style='height: 760px'>filler</div>
+<div><button style='padding: 100px 14px'>Go</button></div>
+</body>
+</html>";
+
+            var (rootBox, container) = await BuildCssBoxTree(html);
+            var pageHeight = container.PageSize.Height;
+
+            var button = FindFirst(rootBox, b => b.HtmlTag?.Name == "button");
+            Assert.NotNull(button);
+            var word = FindFirstWord(button!);
+            Assert.NotNull(word);
+
+            var topPage = Math.Floor(word!.Top / pageHeight);
+            var bottomPage = Math.Floor((word.Bottom - 0.01) / pageHeight);
+            Assert.True(topPage == bottomPage,
+                $"Inset-shifted word must not straddle a page boundary (top={word.Top:F1}, bottom={word.Bottom:F1}, pageHeight={pageHeight})");
+        }
+
         #region Helpers
 
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildCssBoxTree(string html)
@@ -168,6 +231,17 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotNull(container.Root);
             return (container.Root!, container);
+        }
+
+        private static CssBox? FindFirst(CssBox box, Func<CssBox, bool> predicate)
+        {
+            if (predicate(box)) return box;
+            foreach (var child in box.Boxes)
+            {
+                var found = FindFirst(child, predicate);
+                if (found != null) return found;
+            }
+            return null;
         }
 
         private static CssRect? FindFirstWord(CssBox box)
