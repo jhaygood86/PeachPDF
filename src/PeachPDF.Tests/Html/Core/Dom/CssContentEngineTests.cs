@@ -186,6 +186,92 @@ namespace PeachPDF.Tests.Html.Core.Dom
         }
 
         [Fact]
+        public void ApplyContent_WithCounterNoStyle_UsesDecimal()
+        {
+            var box = CreateBox();
+            box.Content = "counter(item)";
+            box.CounterReset = "item 7";
+
+            CssContentEngine.ApplyContent(box);
+
+            Assert.Equal("7", box.Text);
+        }
+
+        [Fact]
+        public void ApplyContent_WithCounterDecimalLeadingZero_PadsToTwoDigits()
+        {
+            // Issue #128: counter(x, decimal-leading-zero) used to emit nothing at all.
+            var box = CreateBox();
+            box.Content = "counter(item, decimal-leading-zero)";
+            box.CounterReset = "item 1";
+
+            CssContentEngine.ApplyContent(box);
+
+            Assert.Equal("01", box.Text);
+        }
+
+        [Fact]
+        public void ApplyContent_WithCounterDecimalLeadingZero_DoesNotOverPad()
+        {
+            var box = CreateBox();
+            box.Content = "counter(item, decimal-leading-zero)";
+            box.CounterReset = "item 12";
+
+            CssContentEngine.ApplyContent(box);
+
+            Assert.Equal("12", box.Text);
+        }
+
+        [Fact]
+        public void ApplyContent_WithCounterAlphabeticStyle_FormatsWithStyle()
+        {
+            var box = CreateBox();
+            box.Content = "counter(item, upper-roman)";
+            box.CounterReset = "item 4";
+
+            CssContentEngine.ApplyContent(box);
+
+            Assert.Equal("IV", box.Text);
+        }
+
+        [Fact]
+        public void ApplyContent_WithCounterUnknownStyle_FallsBackToDecimal()
+        {
+            // CSS Counter Styles Level 3 §2: unknown style must render as decimal, not empty.
+            var box = CreateBox();
+            box.Content = "counter(item, bogus-style)";
+            box.CounterReset = "item 5";
+
+            CssContentEngine.ApplyContent(box);
+
+            Assert.Equal("5", box.Text);
+        }
+
+        [Fact]
+        public void ApplyContent_WithMalformedCounterNoName_EmitsNothing()
+        {
+            // Defensive: counter() with no name argument contributes no text (rather than throwing).
+            var box = CreateBox();
+            box.Content = "\"x\" counter() \"y\"";
+
+            CssContentEngine.ApplyContent(box);
+
+            Assert.Equal("xy", box.Text);
+        }
+
+        [Fact]
+        public void ApplyContent_WithCounterAndStyleAndLiteral_Concatenates()
+        {
+            var box = CreateBox();
+            box.Content = "counter(item, decimal-leading-zero) \" Item\"";
+            box.CounterReset = "item 3";
+
+            CssContentEngine.ApplyContent(box);
+
+            Assert.Equal("03 Item", box.Text);
+        }
+
+        [Fact]
         public void ApplyContent_WithAttrFunction_RetrievesAttribute()
         {
             var box = CreateBox();

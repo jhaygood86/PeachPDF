@@ -46,18 +46,7 @@ namespace PeachPDF.Html.Core.Dom
                         break;
                     case FunctionToken { Data: CssConstants.Counter } functionToken:
                         {
-                            var arguments = functionToken.ArgumentTokens.ToArray();
-
-                            var counterName = (KeywordToken)arguments[0];
-                            var counter = CssCounterEngine.GetCounter(cssBox, counterName.Data);
-
-                            var counterValue = counter?.Value ?? 1;
-
-                            if (arguments.Length is 1)
-                            {
-                                contentText.Append(counterValue);
-                            }
-
+                            AppendCounter(contentText, cssBox, functionToken);
                             break;
                         }
                     case FunctionToken { Data: "content" } contentFunctionToken:
@@ -116,6 +105,34 @@ namespace PeachPDF.Html.Core.Dom
             name is "linear-gradient" or "repeating-linear-gradient"
                  or "radial-gradient" or "repeating-radial-gradient"
                  or "conic-gradient" or "repeating-conic-gradient";
+
+        /// <summary>
+        /// Appends the value of a <c>counter(&lt;name&gt; [, &lt;style&gt;])</c> function to
+        /// <paramref name="sb"/>, resolved against <paramref name="counterBox"/>. The optional second
+        /// argument selects a counter style (<c>decimal</c>, <c>decimal-leading-zero</c>,
+        /// <c>lower-roman</c>, ...); when omitted it defaults to <c>decimal</c>, and an unknown style
+        /// falls back to <c>decimal</c> per CSS Counter Styles Level 3 §2 (both handled by
+        /// <see cref="CssCounterEngine.FormatCounterValue"/>).
+        /// </summary>
+        private static void AppendCounter(StringBuilder sb, CssBox counterBox, FunctionToken functionToken)
+        {
+            var arguments = functionToken.ArgumentTokens
+                .Where(t => t.Type != TokenType.Comma && t.Type != TokenType.Whitespace)
+                .ToArray();
+
+            if (arguments.Length == 0 || arguments[0] is not KeywordToken counterName)
+            {
+                return;
+            }
+
+            var counterValue = CssCounterEngine.GetCounter(counterBox, counterName.Data)?.Value ?? 1;
+
+            var style = arguments.Length > 1 && arguments[1] is KeywordToken styleToken
+                ? styleToken.Data
+                : CssConstants.Decimal;
+
+            sb.Append(CssCounterEngine.FormatCounterValue(counterValue, style));
+        }
 
         private static string? ExtractStringValue(CssBox cssBox, FunctionToken stringFunctionToken)
         {
@@ -280,15 +297,7 @@ namespace PeachPDF.Html.Core.Dom
                         break;
                     case FunctionToken { Data: CssConstants.Counter } functionToken:
                         {
-                            var arguments = functionToken.ArgumentTokens.ToArray();
-                            var counterName = (KeywordToken)arguments[0];
-                            var counter = CssCounterEngine.GetCounter(pseudoElement, counterName.Data);
-                            var counterValue = counter?.Value ?? 1;
-
-                            if (arguments.Length is 1)
-                            {
-                                contentText.Append(counterValue);
-                            }
+                            AppendCounter(contentText, pseudoElement, functionToken);
                             break;
                         }
                     case FunctionToken { Data: "attr" } attrFunctionToken:

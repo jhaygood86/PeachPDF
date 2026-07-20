@@ -107,6 +107,31 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task ContentFunction_ExtractsBeforeContentContainingStyledCounter()
+        {
+            // The extracted ::before content itself contains a styled counter - exercises the
+            // counter(name, <style>) path inside content()'s pseudo-element extraction (issue #128).
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+      li::before { content: counter(list-item, decimal-leading-zero); }
+      li::after { content: content(before); }
+    </style>
+</head>
+<body>
+    <ol><li>first</li><li>second</li></ol>
+</body>
+</html>";
+
+            var (liBox, _) = await BuildAndFindBox(html, "li");
+            var afterLi = liBox.Boxes.First(b => b.IsAfterPseudoElement);
+
+            Assert.Equal("01", afterLi.Text);
+        }
+
+        [Fact]
         public async Task ContentFunction_WithFirstLetterMode_ExtractsFirstLetter()
         {
             var html = @"

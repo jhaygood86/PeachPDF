@@ -136,6 +136,48 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal("3.", markerC.Text);
         }
 
+        [Fact]
+        public async Task BeforeContent_CounterDecimalLeadingZero_RendersZeroPaddedNumbers()
+        {
+            // Exact repro from issue #128: content: counter(x, decimal-leading-zero) used to emit
+            // nothing at all (silent no-op). Expected "01 first" / "02 second".
+            var root = await BuildAndLayout(Wrap(
+                "<style>li::before { content: counter(list-item, decimal-leading-zero) }</style>" +
+                "<ol><li id='a'>first</li><li id='b'>second</li></ol>"));
+
+            var beforeA = FindById(root, "a")!.Boxes.Single(b => b.IsBeforePseudoElement);
+            var beforeB = FindById(root, "b")!.Boxes.Single(b => b.IsBeforePseudoElement);
+
+            Assert.Equal("01", beforeA.Text);
+            Assert.Equal("02", beforeB.Text);
+        }
+
+        [Fact]
+        public async Task BeforeContent_CounterUnknownStyle_FallsBackToDecimal()
+        {
+            // CSS Counter Styles Level 3 §2: unknown style renders as decimal, not empty.
+            var root = await BuildAndLayout(Wrap(
+                "<style>li::before { content: counter(list-item, bogus-style) }</style>" +
+                "<ol><li id='a'>first</li></ol>"));
+
+            var beforeA = FindById(root, "a")!.Boxes.Single(b => b.IsBeforePseudoElement);
+
+            Assert.Equal("1", beforeA.Text);
+        }
+
+        [Fact]
+        public async Task Marker_DecimalLeadingZeroListStyle_ZeroPadsSingleDigits()
+        {
+            var root = await BuildAndLayout(Wrap(
+                "<ol style='list-style-type: decimal-leading-zero'><li id='a'>a</li><li id='b'>b</li></ol>"));
+
+            var a = (CssBoxMarker)FindById(root, "a")!.Boxes.Single(b => b.IsMarkerPseudoElement);
+            var b = (CssBoxMarker)FindById(root, "b")!.Boxes.Single(b => b.IsMarkerPseudoElement);
+
+            Assert.Equal("01.", a.Text);
+            Assert.Equal("02.", b.Text);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>
