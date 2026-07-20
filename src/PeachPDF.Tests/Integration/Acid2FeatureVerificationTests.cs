@@ -27,12 +27,12 @@ namespace PeachPDF.Tests.Integration
         {
             // Absolute units throughout (no em/mm) so the expected value doesn't depend on font-size
             // resolution/unit conversion - only the min-vs-max precedence itself is under test.
-            var html = Wrap("<div id='b' style='height:8px; min-height:20px; max-height:5px;'></div>");
+            var html = Wrap("<div id='b' style='height:8pt; min-height:20pt; max-height:5pt;'></div>");
             var (root, _) = await BuildAndLayout(html);
             var box = FindById(root, "b")!;
 
-            // min-height (20px) and max-height (5px) conflict; min-height must win per §10.7, so the
-            // box's actual height must be 20px, not clamped down to 5px.
+            // min-height (20pt) and max-height (5pt) conflict; min-height must win per §10.7, so the
+            // box's actual height must be 20pt, not clamped down to 5pt.
             Assert.InRange(box.ActualBottom - box.Location.Y, 19.5, 20.5);
         }
 
@@ -40,7 +40,7 @@ namespace PeachPDF.Tests.Integration
         public async Task MaxHeightAppliesWhenNotConflictingWithMinHeight()
         {
             // Sanity check for the same mechanism without a conflict: max-height alone must still clamp.
-            var html = Wrap("<div id='b' style='height:100px; max-height:20px;'></div>");
+            var html = Wrap("<div id='b' style='height:100pt; max-height:20pt;'></div>");
             var (root, _) = await BuildAndLayout(html);
             var box = FindById(root, "b")!;
 
@@ -105,15 +105,15 @@ namespace PeachPDF.Tests.Integration
         {
             var html = Wrap(
                 "<div id='outer'>" +
-                "  <div id='b' style='border-bottom:10px solid black; margin-bottom:200px;'>" +
-                "    <div id='content' style='height:20px;'></div>" +
+                "  <div id='b' style='border-bottom:10pt solid black; margin-bottom:200pt;'>" +
+                "    <div id='content' style='height:20pt;'></div>" +
                 "  </div>" +
                 "</div>");
             var (root, _) = await BuildAndLayout(html);
             var box = FindById(root, "b")!;
 
-            // #b's border-box height must be its own content (20px) plus its own bottom border (10px)
-            // only - the 200px margin-bottom is external spacing after #b, not part of #b's own height.
+            // #b's border-box height must be its own content (20pt) plus its own bottom border (10pt)
+            // only - the 200pt margin-bottom is external spacing after #b, not part of #b's own height.
             Assert.InRange(box.ActualBottom - box.Location.Y, 29.5, 30.5);
         }
 
@@ -179,8 +179,8 @@ namespace PeachPDF.Tests.Integration
             // ".nose { margin: -2em 2em -1em }") therefore gets cleared to a line ABOVE its visible
             // border-box bottom, letting the cleared content overlap the float's last margin's worth.
             var html = Wrap(@"
-                <div id='floated' style='float:left; width:30px; height:100px; margin-bottom:-20px;'></div>
-                <div id='cleared' style='clear:both; height:10px;'></div>");
+                <div id='floated' style='float:left; width:30pt; height:100pt; margin-bottom:-20pt;'></div>
+                <div id='cleared' style='clear:both; height:10pt;'></div>");
             var (root, _) = await BuildAndLayout(html);
             var floated = FindById(root, "floated")!;
             var cleared = FindById(root, "cleared")!;
@@ -196,15 +196,15 @@ namespace PeachPDF.Tests.Integration
             // clearance geometry. A float that is also position:relative is cleared at its STATIC
             // bottom margin edge; only its painted position shifts.
             var html = Wrap(@"
-                <div id='floated' style='float:left; width:30px; height:50px; position:relative; top:30px;'></div>
-                <div id='cleared' style='clear:both; height:10px;'></div>");
+                <div id='floated' style='float:left; width:30pt; height:50pt; position:relative; top:30pt;'></div>
+                <div id='cleared' style='clear:both; height:10pt;'></div>");
             var (root, _) = await BuildAndLayout(html);
             var floated = FindById(root, "floated")!;
             var cleared = FindById(root, "cleared")!;
 
-            // The float itself paints 30px lower...
+            // The float itself paints 30pt lower...
             Assert.InRange(floated.RelativeOffsetY, 29.5, 30.5);
-            // ...but the cleared box lands at the float's static bottom, 30px above its visual bottom.
+            // ...but the cleared box lands at the float's static bottom, 30pt above its visual bottom.
             Assert.InRange(cleared.Location.Y, floated.ActualBottom - 30.5, floated.ActualBottom - 29.5);
         }
 
@@ -235,13 +235,13 @@ namespace PeachPDF.Tests.Integration
         {
             // CSS2.1 §8.3.1: a collapsed-through box's own top border edge sits where it would "if
             // the element had a non-zero bottom border" - i.e. its own bottom margin positions only
-            // what FOLLOWS it, never the box itself. Here the empty box sits 10px (its own
-            // margin-top) below "a", while "b" ends up a full 100px below (the whole collapsed set
+            // what FOLLOWS it, never the box itself. Here the empty box sits 10pt (its own
+            // margin-top) below "a", while "b" ends up a full 100pt below (the whole collapsed set
             // {10, 100} passing through).
             var html = Wrap(@"
-                <div id='a' style='height:20px;'></div>
-                <div id='e' style='margin-top:10px; margin-bottom:100px;'></div>
-                <div id='b' style='height:10px;'></div>");
+                <div id='a' style='height:20pt;'></div>
+                <div id='e' style='margin-top:10pt; margin-bottom:100pt;'></div>
+                <div id='b' style='height:10pt;'></div>");
             var (root, _) = await BuildAndLayout(html);
             var a = FindById(root, "a")!;
             var e = FindById(root, "e")!;
@@ -257,12 +257,12 @@ namespace PeachPDF.Tests.Integration
             // A float's own margin never COLLAPSES with anything (CSS2.1 §8.3.1 - it's out of flow),
             // but the preceding sibling's trailing margin still occupies real space the float is
             // positioned after. When that sibling is self-collapsing, its contribution is its whole
-            // pass-through set (GetEffectiveBottomMargin): {30, -12} -> 18, then the float's own 5px
+            // pass-through set (GetEffectiveBottomMargin): {30, -12} -> 18, then the float's own 5pt
             // margin-top is SUMMED (not collapsed) on top.
             var html = Wrap(@"
-                <div id='a' style='height:20px;'></div>
-                <div id='e' style='margin-top:30px; margin-bottom:-12px;'></div>
-                <div id='f' style='float:left; width:20px; height:20px; margin-top:5px;'></div>");
+                <div id='a' style='height:20pt;'></div>
+                <div id='e' style='margin-top:30pt; margin-bottom:-12pt;'></div>
+                <div id='f' style='float:left; width:20pt; height:20pt; margin-top:5pt;'></div>");
             var (root, _) = await BuildAndLayout(html);
             var e = FindById(root, "e")!;
             var f = FindById(root, "f")!;
@@ -320,14 +320,14 @@ namespace PeachPDF.Tests.Integration
         public async Task NegativeBottomMargin_NonFloatBlock_BleedsIntoNextSiblingSpacing()
         {
             var html = Wrap(@"
-                <div id='a' style='height:20px; margin-bottom:-6px;'></div>
-                <div id='b' style='height:10px;'></div>");
+                <div id='a' style='height:20pt; margin-bottom:-6pt;'></div>
+                <div id='b' style='height:10pt;'></div>");
             var (root, _) = await BuildAndLayout(html);
             var a = FindById(root, "a")!;
             var b = FindById(root, "b")!;
 
-            // Without the negative margin, "b" would start right at a's own bottom edge. The -6px
-            // bottom margin must pull it 6px above that.
+            // Without the negative margin, "b" would start right at a's own bottom edge. The -6pt
+            // bottom margin must pull it 6pt above that.
             Assert.InRange(b.Location.Y, a.ActualBottom - 6.5, a.ActualBottom - 5.5);
         }
 
@@ -340,13 +340,13 @@ namespace PeachPDF.Tests.Integration
             // the same rule already covered for MarginBottomCollapse in the Round 1 work, but not
             // previously tested with a negative margin value specifically.
             var html = Wrap(
-                "<div id='parent' style='border-top:1px solid black; border-bottom:1px solid black;'>"
-                + "<div id='child' style='height:20px; margin-bottom:-10px;'></div></div>");
+                "<div id='parent' style='border-top:1pt solid black; border-bottom:1pt solid black;'>"
+                + "<div id='child' style='height:20pt; margin-bottom:-10pt;'></div></div>");
             var (root, _) = await BuildAndLayout(html);
             var parent = FindById(root, "parent")!;
 
-            // Parent's content height must be exactly the child's 20px (plus its own 1px+1px borders =
-            // 22px total) - the child's negative margin must not shrink it.
+            // Parent's content height must be exactly the child's 20pt (plus its own 1pt+1pt borders =
+            // 22pt total) - the child's negative margin must not shrink it.
             Assert.InRange(parent.ActualBottom - parent.Location.Y, 21.5, 22.5);
         }
 
@@ -378,18 +378,18 @@ namespace PeachPDF.Tests.Integration
             // follows ".smile") must not move down with it.
             var html = Wrap(
                 "<div id='parent'>"
-                + "<div id='shifted' style='position:relative; bottom:-30px; height:40px;'></div>"
+                + "<div id='shifted' style='position:relative; bottom:-30pt; height:40pt;'></div>"
                 + "</div>"
-                + "<div id='after' style='height:10px;'></div>");
+                + "<div id='after' style='height:10pt;'></div>");
             var (root, _) = await BuildAndLayout(html);
             var parent = FindById(root, "parent")!;
             var shifted = FindById(root, "shifted")!;
             var after = FindById(root, "after")!;
 
-            // The offset itself is applied visually: the child sits 30px below the parent's top...
+            // The offset itself is applied visually: the child sits 30pt below the parent's top...
             Assert.InRange(shifted.Location.Y - parent.Location.Y, 29.5, 30.5);
 
-            // ...but the parent is still exactly 40px tall (the child's static extent)...
+            // ...but the parent is still exactly 40pt tall (the child's static extent)...
             Assert.InRange(parent.ActualBottom - parent.Location.Y, 39.5, 40.5);
 
             // ...and the following sibling starts at the parent's un-inflated bottom.
@@ -400,11 +400,11 @@ namespace PeachPDF.Tests.Integration
         public async Task PositionRelative_OffsetOnBoxItself_DoesNotShiftFollowingSibling()
         {
             // Same §9.4.3 rule as above, but with the offset box and the following sibling as direct
-            // siblings: "after" must lay out against "shifted"'s static bottom (Y=8+40=48-ish), not
-            // its visually offset bottom 25px lower.
+            // siblings: "after" must lay out against "shifted"'s static bottom (Y=6+40=46-ish, with
+            // the UA default body margin now 6 units), not its visually offset bottom 25pt lower.
             var html = Wrap(@"
-                <div id='shifted' style='position:relative; top:25px; height:40px;'></div>
-                <div id='after' style='height:10px;'></div>");
+                <div id='shifted' style='position:relative; top:25pt; height:40pt;'></div>
+                <div id='after' style='height:10pt;'></div>");
             var (root, _) = await BuildAndLayout(html);
             var shifted = FindById(root, "shifted")!;
             var after = FindById(root, "after")!;
@@ -417,13 +417,13 @@ namespace PeachPDF.Tests.Integration
         public async Task PositionAbsolute_BottomOffset_PositionsRelativeToContainingBlockBottomEdge()
         {
             var html = Wrap(
-                "<div id='cb' style='position:relative; width:100px; height:100px;'>"
-                + "<div id='t' style='position:absolute; bottom:10px; width:10px; height:10px;'></div></div>");
+                "<div id='cb' style='position:relative; width:100pt; height:100pt;'>"
+                + "<div id='t' style='position:absolute; bottom:10pt; width:10pt; height:10pt;'></div></div>");
             var (root, _) = await BuildAndLayout(html);
             var cb = FindById(root, "t")!.ParentBox!;
             var box = FindById(root, "t")!;
 
-            // Box's bottom edge must sit 10px above the containing block's own bottom (padding) edge.
+            // Box's bottom edge must sit 10pt above the containing block's own bottom (padding) edge.
             var expectedBottom = cb.ActualBottom - 10;
             Assert.InRange(box.ActualBottom, expectedBottom - 0.5, expectedBottom + 0.5);
         }
@@ -440,14 +440,14 @@ namespace PeachPDF.Tests.Integration
             // margin:36px 0 0 60px; }" - dropping the margin alone landed that box on top of the very
             // next sibling instead of 36px/60px further in.
             var html = Wrap(
-                "<div id='cb' style='position:relative; border:16px solid black; width:100px; height:100px;'>"
-                + "<div id='t' style='position:absolute; top:0; left:0; margin:36px 0 0 60px; width:10px; height:10px;'></div></div>");
+                "<div id='cb' style='position:relative; border:16pt solid black; width:100pt; height:100pt;'>"
+                + "<div id='t' style='position:absolute; top:0; left:0; margin:36pt 0 0 60pt; width:10pt; height:10pt;'></div></div>");
             var (root, _) = await BuildAndLayout(html);
             var cb = FindById(root, "cb")!;
             var box = FindById(root, "t")!;
 
-            // Expected: containing block's PADDING edge (border-box + 16px border) + the box's own
-            // margin (60px left, 36px top).
+            // Expected: containing block's PADDING edge (border-box + 16pt border) + the box's own
+            // margin (60pt left, 36pt top).
             var expectedX = cb.Location.X + 16 + 60;
             var expectedY = cb.Location.Y + 16 + 36;
             Assert.InRange(box.Location.X, expectedX - 0.5, expectedX + 0.5);
@@ -466,7 +466,7 @@ namespace PeachPDF.Tests.Integration
             // paragraph's own fixed black bar - without it, both fixed paragraphs land exactly on top
             // of each other.
             var html = Wrap(
-                "<div id='t' style='position:fixed; top:10px; left:20px; margin:5px 0 0 8px; width:10px; height:10px;'></div>");
+                "<div id='t' style='position:fixed; top:10pt; left:20pt; margin:5pt 0 0 8pt; width:10pt; height:10pt;'></div>");
             var (root, _) = await BuildAndLayout(html);
             var box = FindById(root, "t")!;
 
@@ -486,23 +486,23 @@ namespace PeachPDF.Tests.Integration
             // "oldSum"/reset-then-restore-via-max pattern), so a later sibling's own border/padding kept
             // summing into the same running total instead of only the widest single line's own padding
             // counting. Three siblings under an absolutely-positioned, auto-width parent: #text (real
-            // content, ~short), #border1 (80px combined border, no content), #border2 (60px combined
-            // border, no content) - the correct shrink-to-fit width is #border1's own ~80px (the widest
-            // single line), not #border1 + #border2's borders summed together (~140px).
+            // content, ~short), #border1 (80pt combined border, no content), #border2 (60pt combined
+            // border, no content) - the correct shrink-to-fit width is #border1's own ~80pt (the widest
+            // single line), not #border1 + #border2's borders summed together (~140pt).
             var html = Wrap(
-                "<div id='container' style='position:relative; width:400px;'>"
+                "<div id='container' style='position:relative; width:400pt;'>"
                 + "<div id='target' style='position:absolute;'>"
                 + "<div id='text'>Hi</div>"
-                + "<div id='border1' style='border-left:40px solid black; border-right:40px solid black;'></div>"
-                + "<div id='border2' style='border-left:30px solid black; border-right:30px solid black;'></div>"
+                + "<div id='border1' style='border-left:40pt solid black; border-right:40pt solid black;'></div>"
+                + "<div id='border2' style='border-left:30pt solid black; border-right:30pt solid black;'></div>"
                 + "</div></div>");
             var (root, _) = await BuildAndLayout(html);
             var target = FindById(root, "target")!;
 
             var targetWidth = target.ActualRight - target.Location.X;
 
-            // #border1 alone is 80px (its own border) - the buggy summed-across-siblings result would
-            // be at least 80+60=140px (plus whatever #text's own small contribution added on top).
+            // #border1 alone is 80pt (its own border) - the buggy summed-across-siblings result would
+            // be at least 80+60=140pt (plus whatever #text's own small contribution added on top).
             // Allow a little headroom above 80 for #text's own (much smaller) content contribution.
             Assert.InRange(targetWidth, 79, 100);
         }
@@ -521,18 +521,18 @@ namespace PeachPDF.Tests.Integration
             // (the widest single line, from "#eyes-a"'s own image content), reopening the exact
             // red-bleed bug a previous round had already fixed.
             var html = Wrap(
-                "<div id='container' style='position:relative; width:400px;'>"
+                "<div id='container' style='position:relative; width:400pt;'>"
                 + "<div id='target' style='position:absolute;'>"
-                + "<div id='wide1' style='width:100px; height:10px;'></div>"
-                + "<div id='wide2' style='width:90px; height:10px;'></div>"
+                + "<div id='wide1' style='width:100pt; height:10pt;'></div>"
+                + "<div id='wide2' style='width:90pt; height:10pt;'></div>"
                 + "</div></div>");
             var (root, _) = await BuildAndLayout(html);
             var target = FindById(root, "target")!;
 
             var targetWidth = target.ActualRight - target.Location.X;
 
-            // The widest single sibling (100px) should win - the buggy summed-across-siblings result
-            // would be at least 100+90=190px.
+            // The widest single sibling (100pt) should win - the buggy summed-across-siblings result
+            // would be at least 100+90=190pt.
             Assert.InRange(targetWidth, 99, 105);
         }
 
@@ -1064,13 +1064,13 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task MarginAuto_CentersFixedWidthBlock_OrdinaryBlockLayout()
         {
-            var html = Wrap("<div id='container' style='width:100px;'>"
-                + "<div id='t' style='width:20px; height:20px; margin: 0 auto;'></div></div>");
+            var html = Wrap("<div id='container' style='width:100pt;'>"
+                + "<div id='t' style='width:20pt; height:20pt; margin: 0 auto;'></div></div>");
             var (root, _) = await BuildAndLayout(html);
             var container = FindById(root, "container")!;
             var box = FindById(root, "t")!;
 
-            // (100 - 20) / 2 = 40px on each side - genuine centering, not "auto resolves to 0".
+            // (100 - 20) / 2 = 40pt on each side - genuine centering, not "auto resolves to 0".
             Assert.InRange(box.Location.X - container.Location.X, 39.5, 40.5);
         }
 
@@ -1246,8 +1246,8 @@ namespace PeachPDF.Tests.Integration
         public async Task AdjoiningSiblingMargins_BothPositive_CollapseToTheLarger()
         {
             var html = Wrap(
-                "<div id='a' style='height:20px; margin-bottom:30px;'></div>"
-                + "<div id='b' style='height:10px; margin-top:10px;'></div>");
+                "<div id='a' style='height:20pt; margin-bottom:30pt;'></div>"
+                + "<div id='b' style='height:10pt; margin-top:10pt;'></div>");
             var (root, _) = await BuildAndLayout(html);
             var a = FindById(root, "a")!;
             var b = FindById(root, "b")!;
@@ -1259,8 +1259,8 @@ namespace PeachPDF.Tests.Integration
         public async Task AdjoiningSiblingMargins_BothNegative_CollapseToTheMoreNegative()
         {
             var html = Wrap(
-                "<div id='a' style='height:40px; margin-bottom:-5px;'></div>"
-                + "<div id='b' style='height:10px; margin-top:-15px;'></div>");
+                "<div id='a' style='height:40pt; margin-bottom:-5pt;'></div>"
+                + "<div id='b' style='height:10pt; margin-top:-15pt;'></div>");
             var (root, _) = await BuildAndLayout(html);
             var a = FindById(root, "a")!;
             var b = FindById(root, "b")!;
@@ -1292,14 +1292,14 @@ namespace PeachPDF.Tests.Integration
         public async Task ParentFirstChildTopCollapse_ChildOwnPaddingIsIrrelevant_EscapeReachesOutsideParent()
         {
             var html = Wrap(
-                "<div id='before' style='height:5px;'></div>"
+                "<div id='before' style='height:5pt;'></div>"
                 + "<div id='parent'>"
-                + "<div id='child' style='padding:5px; height:10px; margin-top:30px;'></div></div>");
+                + "<div id='child' style='padding:5pt; height:10pt; margin-top:30pt;'></div></div>");
             var (root, _) = await BuildAndLayout(html);
             var before = FindById(root, "before")!;
             var parent = FindById(root, "parent")!;
 
-            // #parent's OWN top position must reflect the full 30px escaped from #child, despite
+            // #parent's OWN top position must reflect the full 30pt escaped from #child, despite
             // #child's own padding (irrelevant to the escape condition).
             Assert.InRange(parent.Location.Y - before.ActualBottom, 29.5, 30.5);
         }
@@ -1308,13 +1308,13 @@ namespace PeachPDF.Tests.Integration
         public async Task ParentFirstChildTopCollapse_ParentTopBorder_BlocksEscape()
         {
             var html = Wrap(
-                "<div id='parent' style='border-top:4px solid black;'>"
-                + "<div id='child' style='height:10px; margin-top:30px;'></div></div>");
+                "<div id='parent' style='border-top:4pt solid black;'>"
+                + "<div id='child' style='height:10pt; margin-top:30pt;'></div></div>");
             var (root, _) = await BuildAndLayout(html);
             var parent = FindById(root, "parent")!;
             var child = FindById(root, "child")!;
 
-            // A top border on the parent blocks escape - child must sit 30px below the parent's content
+            // A top border on the parent blocks escape - child must sit 30pt below the parent's content
             // (post-border) edge instead of coinciding with the parent's own border-box top edge.
             Assert.InRange(child.Location.Y - (parent.Location.Y + 4), 29.5, 30.5);
         }
@@ -1323,15 +1323,15 @@ namespace PeachPDF.Tests.Integration
         public async Task ParentFirstChildTopCollapse_ChildClearance_BlocksEscape()
         {
             var html = Wrap(
-                "<div id='floated' style='float:left; width:10px; height:60px;'></div>"
+                "<div id='floated' style='float:left; width:10pt; height:60pt;'></div>"
                 + "<div id='parent'>"
-                + "<div id='child' style='clear:both; height:10px; margin-top:30px;'></div></div>");
+                + "<div id='child' style='clear:both; height:10pt; margin-top:30pt;'></div></div>");
             var (root, _) = await BuildAndLayout(html);
             var parent = FindById(root, "parent")!;
             var child = FindById(root, "child")!;
 
             // "clear:both" on the child blocks its own top-margin escape into the parent - the child's
-            // margin must remain its own, isolated 30px gap below wherever clearance placed the parent.
+            // margin must remain its own, isolated 30pt gap below wherever clearance placed the parent.
             Assert.InRange(child.Location.Y - parent.Location.Y, 29.5, 30.5);
         }
 
@@ -1343,15 +1343,15 @@ namespace PeachPDF.Tests.Integration
             // is itself positioned via sibling-margin-collapse (not a hard border/padding block) must
             // still resolve as ONE shared adjoining-margin group with the deepest child's margin - not
             // add the sibling's margin and the child's margin together. Per CSS2.1 §8.3.1 all of
-            // before's bottom margin (15px), grandparent/parent's own (zero) top margins, and child's
-            // top margin (40px) are one group; the group's value is the max of all of them (40), not
+            // before's bottom margin (15pt), grandparent/parent's own (zero) top margins, and child's
+            // top margin (40pt) are one group; the group's value is the max of all of them (40), not
             // 15+40=55 (which a naive top-down, no-lookahead implementation would produce, since
             // grandparent's own position gets fixed against "before" before child's larger margin is
             // even known).
             var html = Wrap(
-                "<div id='before' style='height:20px; margin-bottom:15px;'></div>"
+                "<div id='before' style='height:20pt; margin-bottom:15pt;'></div>"
                 + "<div id='grandparent'><div id='parent'>"
-                + "<div id='child' style='height:10px; margin-top:40px;'></div></div></div>");
+                + "<div id='child' style='height:10pt; margin-top:40pt;'></div></div></div>");
             var (root, _) = await BuildAndLayout(html);
             var before = FindById(root, "before")!;
             var child = FindById(root, "child")!;
@@ -1367,14 +1367,14 @@ namespace PeachPDF.Tests.Integration
         {
             var html = Wrap(
                 "<div id='outer'>"
-                + "<div id='parent'><div id='content' style='height:20px; margin-bottom:50px;'></div></div>"
+                + "<div id='parent'><div id='content' style='height:20pt; margin-bottom:50pt;'></div></div>"
                 + "</div>");
             var (root, _) = await BuildAndLayout(html);
             var parent = FindById(root, "parent")!;
 
             // #parent IS #outer's last (only) child - its own bottom-margin fold may happen, since
             // nothing else will ever separately collapse against #parent's own ActualMarginBottom.
-            // Folded height = #content's own 20px + the 50px margin.
+            // Folded height = #content's own 20pt + the 50pt margin.
             Assert.InRange(parent.ActualBottom - parent.Location.Y, 69.5, 70.5);
         }
 
@@ -1391,12 +1391,12 @@ namespace PeachPDF.Tests.Integration
             // concrete, traceable 60pt double-count in a real regression test.
             var html = Wrap(
                 "<div id='outer'>"
-                + "<div id='parent'><div id='content' style='height:20px; margin-bottom:50px;'></div></div>"
-                + "<div id='sibling' style='height:5px;'></div></div>");
+                + "<div id='parent'><div id='content' style='height:20pt; margin-bottom:50pt;'></div></div>"
+                + "<div id='sibling' style='height:5pt;'></div></div>");
             var (root, _) = await BuildAndLayout(html);
             var parent = FindById(root, "parent")!;
 
-            // No fold: #parent's own height is just its content's 20px, the 50px margin stays external
+            // No fold: #parent's own height is just its content's 20pt, the 50pt margin stays external
             // (and separately collapses with #sibling via the ordinary sibling mechanism).
             Assert.InRange(parent.ActualBottom - parent.Location.Y, 19.5, 20.5);
         }
@@ -1406,8 +1406,8 @@ namespace PeachPDF.Tests.Integration
         {
             var html = Wrap(
                 "<div id='outer'>"
-                + "<div id='parent' style='margin-bottom:-5px;'>"
-                + "<div id='content' style='height:20px; margin-bottom:-10px;'></div></div>"
+                + "<div id='parent' style='margin-bottom:-5pt;'>"
+                + "<div id='content' style='height:20pt; margin-bottom:-10pt;'></div></div>"
                 + "</div>");
             var (root, _) = await BuildAndLayout(html);
             var parent = FindById(root, "parent")!;
@@ -1415,7 +1415,7 @@ namespace PeachPDF.Tests.Integration
             // #parent IS its parent's only/last child, so the fold applies. Both this box's own bottom
             // margin (-5) and its last child's (-10) are negative - the correct collapse is the more
             // negative value (-10, via CollapseMargins), not Math.Max(-5, -10) = -5. Folded height =
-            // content's own 20px + the -10 folded margin = 10 (a buggy Math.Max(-5,-10)=-5 would
+            // content's own 20pt + the -10 folded margin = 10 (a buggy Math.Max(-5,-10)=-5 would
             // instead give 20-5=15).
             Assert.InRange(parent.ActualBottom - parent.Location.Y, 9.5, 10.5);
         }
@@ -1428,9 +1428,9 @@ namespace PeachPDF.Tests.Integration
         public async Task SelfCollapsingEmptyBox_TopAndBottomMarginsCollapseIntoOne_NotSummed()
         {
             var html = Wrap(
-                "<div id='a' style='height:20px;'></div>"
-                + "<div id='empty' style='margin-top:10px; margin-bottom:30px;'></div>"
-                + "<div id='b' style='height:10px;'></div>");
+                "<div id='a' style='height:20pt;'></div>"
+                + "<div id='empty' style='margin-top:10pt; margin-bottom:30pt;'></div>"
+                + "<div id='b' style='height:10pt;'></div>");
             var (root, _) = await BuildAndLayout(html);
             var a = FindById(root, "a")!;
             var b = FindById(root, "b")!;
@@ -1438,7 +1438,7 @@ namespace PeachPDF.Tests.Integration
             // #empty is self-collapsing (auto height, no content, no border/padding): its own top (10)
             // and bottom (30) margins collapse into ONE value (max(10,30)=30) which then ALSO collapses
             // with #a's bottom margin (0) and #b's top margin (0) - so the total gap between #a and #b
-            // must be 30px, not 10+30=40 (summed as if #empty had real height) and not 10 (only its top
+            // must be 30pt, not 10+30=40 (summed as if #empty had real height) and not 10 (only its top
             // margin counted).
             Assert.InRange(b.Location.Y - a.ActualBottom, 29.5, 30.5);
         }
@@ -1447,16 +1447,16 @@ namespace PeachPDF.Tests.Integration
         public async Task TwoConsecutiveSelfCollapsingEmptyBoxes_AllMarginsCollapseIntoOne()
         {
             var html = Wrap(
-                "<div id='a' style='height:20px;'></div>"
-                + "<div id='empty1' style='margin-top:5px; margin-bottom:15px;'></div>"
-                + "<div id='empty2' style='margin-top:25px; margin-bottom:8px;'></div>"
-                + "<div id='b' style='height:10px;'></div>");
+                "<div id='a' style='height:20pt;'></div>"
+                + "<div id='empty1' style='margin-top:5pt; margin-bottom:15pt;'></div>"
+                + "<div id='empty2' style='margin-top:25pt; margin-bottom:8pt;'></div>"
+                + "<div id='b' style='height:10pt;'></div>");
             var (root, _) = await BuildAndLayout(html);
             var a = FindById(root, "a")!;
             var b = FindById(root, "b")!;
 
             // All 4 margins (5, 15, 25, 8) plus #a's/#b's zero margins are one adjoining group - the
-            // gap must be their max (25px), not any partial or summed combination.
+            // gap must be their max (25pt), not any partial or summed combination.
             Assert.InRange(b.Location.Y - a.ActualBottom, 24.5, 25.5);
         }
 
@@ -1491,18 +1491,18 @@ namespace PeachPDF.Tests.Integration
         public async Task FloatedBox_DoesNotCollapseTopMarginWithPrecedingSibling()
         {
             var html = Wrap(
-                "<div id='before' style='height:20px; margin-bottom:50px;'></div>"
-                + "<div id='floated' style='float:left; margin-top:5px; width:10px; height:10px;'></div>");
+                "<div id='before' style='height:20pt; margin-bottom:50pt;'></div>"
+                + "<div id='floated' style='float:left; margin-top:5pt; width:10pt; height:10pt;'></div>");
             var (root, _) = await BuildAndLayout(html);
             var before = FindById(root, "before")!;
             var floated = FindById(root, "floated")!;
 
             // "Never collapse" means the two margins are never MERGED into a single value (taking
             // whichever is larger/more-negative, per CSS2.1 8.3.1's adjoining-margins rule) - it does
-            // NOT mean #before's margin-bottom is ignored entirely. #before's 50px margin-bottom still
-            // occupies real physical space the float must be positioned after; the float's own 5px
-            // top margin then adds on top of that (summed, not collapsed): 50 + 5 = 55px total gap.
-            // A prior version of this test asserted the float sits only 5px below #before.ActualBottom
+            // NOT mean #before's margin-bottom is ignored entirely. #before's 50pt margin-bottom still
+            // occupies real physical space the float must be positioned after; the float's own 5pt
+            // top margin then adds on top of that (summed, not collapsed): 50 + 5 = 55pt total gap.
+            // A prior version of this test asserted the float sits only 5pt below #before.ActualBottom
             // (i.e. #before's margin dropped entirely) - that was itself the bug, caught via Acid2's
             // own ".forehead" (margin-bottom: 4em) / ".nose" (float:left, margin-top: -2em) pair, whose
             // gap was wrongly computed as -2em alone instead of the correct 4em + (-2em) = +2em, pulling
@@ -1518,12 +1518,12 @@ namespace PeachPDF.Tests.Integration
         {
             var html = Wrap(
                 "<div id='parent' style='overflow:hidden;'>"
-                + "<div id='child' style='height:10px; margin-top:30px;'></div></div>");
+                + "<div id='child' style='height:10pt; margin-top:30pt;'></div></div>");
             var (root, _) = await BuildAndLayout(html);
             var parent = FindById(root, "parent")!;
             var child = FindById(root, "child")!;
 
-            // No escape: the child's 30px margin stays inside the parent's own content box.
+            // No escape: the child's 30pt margin stays inside the parent's own content box.
             Assert.InRange(child.Location.Y - parent.Location.Y, 29.5, 30.5);
         }
 
@@ -1546,11 +1546,11 @@ namespace PeachPDF.Tests.Integration
             var html = Wrap(
                 "<div id='outer'>"
                 + "<div id='parent' style='overflow:hidden;'>"
-                + "<div id='content' style='height:20px; margin-bottom:50px;'></div></div></div>");
+                + "<div id='content' style='height:20pt; margin-bottom:50pt;'></div></div></div>");
             var (root, _) = await BuildAndLayout(html);
             var parent = FindById(root, "parent")!;
 
-            // No fold: parent's own height is just its content's 20px, the 50px margin stays external.
+            // No fold: parent's own height is just its content's 20pt, the 50pt margin stays external.
             Assert.InRange(parent.ActualBottom - parent.Location.Y, 19.5, 20.5);
         }
 
