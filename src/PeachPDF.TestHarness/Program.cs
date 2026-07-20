@@ -1,5 +1,6 @@
 using PeachPDF;
 using PeachPDF.PdfSharpCore;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
@@ -2904,6 +2905,523 @@ var acid2Html = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "acid2.h
 await SaveShowcaseAsync("acid2", "Standards & Accessibility", "Acid2",
     "The unmodified Acid2 test rendered by PeachPDF - the classic CSS compliance smiley.",
     acid2Html, pdfConfig);
+
+// ─── Real-World Documents: Quarterly Sales Ledger (repeating table headers) ───
+// A 60-row <table> spanning three US Letter pages - the <thead> repeats automatically on
+// every page the table spans. The grand total is deliberately a styled final <tbody> row,
+// not a <tfoot>: a repeating <tfoot> currently renders none of its content
+// (https://github.com/jhaygood86/PeachPDF/issues/124). Row data is deterministic
+// (index-based formulas, no Random) so the rendered PDF is stable across builds.
+
+string[] ledgerRegions = ["Southeast", "Northeast", "Midwest", "Southwest", "West Coast", "Mid-Atlantic"];
+string[] ledgerProducts = ["Meridian Core", "Meridian Analytics", "Atlas Connect", "Pulse Monitor", "Vertex API"];
+(string Label, string CssClass)[] ledgerStatuses = [("Paid", "paid"), ("Pending", "pending"), ("Paid", "paid"), ("Paid", "paid"), ("Overdue", "overdue")];
+
+static int LedgerUnits(int i) => 4 + i * 7 % 38;
+static int LedgerUnitPrice(int i) => 120 + i * 53 % 480;
+
+var ledgerRows = string.Join("\n", Enumerable.Range(1, 60).Select(i =>
+{
+    var (statusLabel, statusClass) = ledgerStatuses[i * 2 % ledgerStatuses.Length];
+    var alt = i % 2 == 0 ? " class=\"alt\"" : "";
+    var total = LedgerUnits(i) * LedgerUnitPrice(i);
+    return $"<tr{alt}><td class=\"num\">INV-2026-{i:0000}</td><td>{ledgerRegions[i % ledgerRegions.Length]}</td><td>{ledgerProducts[i * 3 % ledgerProducts.Length]}</td>" +
+           $"<td class=\"r\">{LedgerUnits(i)}</td><td class=\"r\">${LedgerUnitPrice(i)}.00</td><td class=\"r\">${total.ToString("N0", CultureInfo.InvariantCulture)}.00</td>" +
+           $"<td><span class=\"badge {statusClass}\">{statusLabel}</span></td></tr>";
+}));
+
+var ledgerGrandTotal = Enumerable.Range(1, 60).Sum(i => LedgerUnits(i) * LedgerUnitPrice(i));
+
+var ledgerHtml = $$"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    @page {
+      size: letter portrait;
+      margin: 0.85in 0.6in 0.8in 0.6in;
+      @top-left { content: "Peachtree Analytics, Inc."; font: bold 8pt Arial; color: #0b4f6c; }
+      @top-right { content: "FY2026 Sales Ledger"; font: 8pt Arial; color: #777; }
+      @bottom-center { content: "Page " counter(page) " of " counter(pages); font: 8pt Arial; color: #777; }
+    }
+    body { font: 9pt Arial, sans-serif; color: #1c2733; margin: 0; }
+    h1 { font-size: 19pt; margin: 0 0 2pt; color: #0b4f6c; }
+    .sub { color: #667; margin: 0 0 14pt; font-size: 9.5pt; }
+    table { border-collapse: collapse; width: 100%; }
+    thead th {
+      background: linear-gradient(180deg, #11698e, #0b4f6c);
+      color: #fff; font-size: 8pt; text-transform: uppercase; letter-spacing: 0.8pt; word-spacing: 2pt;
+      padding: 7pt 8pt; text-align: left; border-bottom: 2.5pt solid #073b52;
+    }
+    thead th.r { text-align: right; }
+    tbody td { padding: 5.5pt 8pt; border-bottom: 0.75pt solid #dde4ea; }
+    tbody tr.alt td { background: #f2f6f9; }
+    td.num { font-family: monospace; color: #345; }
+    td.r { text-align: right; }
+    .badge { font-size: 7pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5pt;
+      padding: 2pt 6pt; border-radius: 8pt; }
+    .badge.paid { background: #d9f2e4; color: #14683c; }
+    .badge.pending { background: #fdf0d3; color: #8a6410; }
+    .badge.overdue { background: #fbdfdb; color: #a02318; }
+    tr.grand td {
+      background: #0b4f6c; color: #fff; font-weight: bold; padding: 7pt 8pt;
+      border-bottom: none;
+    }
+    </style>
+    </head>
+    <body>
+    <h1>Quarterly Sales Ledger</h1>
+    <p class="sub">60 invoices &mdash; the table header repeats automatically on every page the table spans.</p>
+    <table>
+    <thead>
+    <tr><th>Invoice</th><th>Region</th><th>Product</th><th class="r">Units</th><th class="r">Unit Price</th><th class="r">Total</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+    {{ledgerRows}}
+    <tr class="grand"><td colspan="5">Grand total &mdash; 60 invoices</td><td class="r">${{ledgerGrandTotal.ToString("N0", CultureInfo.InvariantCulture)}}.00</td><td></td></tr>
+    </tbody>
+    </table>
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("table_header_repeat", "Real-World Documents", "Repeating Table Headers",
+    "A 60-row sales ledger spanning three pages - the table header repeats automatically on every page, framed by @page margin-box running headers and page counters.",
+    ledgerHtml, new PdfGenerateConfig { PageSize = PageSize.Letter });
+
+// ─── Real-World Documents: modern invoice ───
+// A one-page, full-bleed (base-rule @page margin: 0) US Letter invoice in a dark green
+// palette exercising the modern-CSS feature set: custom properties, calc()/clamp(),
+// oklch-interpolated + radial + repeating gradients, gradient-border cards, CSS-counter
+// line numbers, a generated-content gradient bullet, a rotated transform stamp, an inline
+// SVG logo, and a full-height column-flex body whose footer anchors via margin-top: auto.
+// Workarounds baked in (each tracks a filed issue): line numbers use "0" counter(line)
+// because decimal-leading-zero renders nothing (#128); word-spacing accompanies every
+// letter-spacing because tracked-out text otherwise loses its word gaps (#129); body
+// height is calc(11in - 1mm) because an exact 11in flex body overflows to a blank page;
+// card depth is faked with gradient borders because box-shadow is a silent no-op (#132).
+
+var invoiceHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    :root {
+      --ink: #13342a;
+      --ink-2: #1e5540;
+      --muted: #5e6e66;
+      --accent: #1d6a52;
+      --accent-2: #d9b64a;
+      --panel: #f2f6f2;
+      --radius: 10pt;
+    }
+    @page { size: letter portrait; margin: 0; }
+    body {
+      font: 10pt Arial, sans-serif; color: var(--ink); margin: 0;
+      height: calc(11in - 1mm); display: flex; flex-direction: column;
+    }
+    .band {
+      background:
+        radial-gradient(circle at 85% -40%, rgba(217, 182, 74, 0.5), transparent 60%),
+        linear-gradient(115deg in oklch, #0f2a21, #1e5540 55%, #5d9673);
+      color: #fff; padding: 11mm 14mm 8mm;
+    }
+    .band-row { display: flex; justify-content: space-between; align-items: flex-start; }
+    .brand { display: flex; align-items: center; gap: 9pt; }
+    .brand h1 { font-size: 17pt; margin: 0; letter-spacing: 2.5pt; word-spacing: 6pt; text-transform: uppercase; }
+    .brand p { margin: 1pt 0 0; font-size: 8pt; color: rgba(255,255,255,0.75); letter-spacing: 1pt; word-spacing: 3pt; }
+    .doc-meta { text-align: right; }
+    .doc-meta .kind {
+      font-size: clamp(20pt, 18pt + 24%, 28pt); font-weight: bold; letter-spacing: 5pt; margin: 0;
+      color: var(--accent-2);
+    }
+    .doc-meta p { margin: 2pt 0 0; font-size: 9pt; color: rgba(255,255,255,0.85); }
+    .rule {
+      height: 3.5pt; background: repeating-linear-gradient(90deg,
+        var(--accent-2) 0 14pt, var(--accent) 14pt 28pt);
+    }
+    main { padding: 8mm 14mm 0; }
+    .parties { display: flex; gap: 6mm; margin-bottom: 6mm; }
+    .party {
+      flex: 1 1 0; background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      border-radius: var(--radius); padding: 1.6pt;
+    }
+    .party-inner { background: var(--panel); border-radius: calc(var(--radius) - 1.6pt); padding: 8pt 10pt; }
+    .party h3 {
+      margin: 0 0 4pt; font-size: 7.5pt; text-transform: uppercase; letter-spacing: 1.5pt; word-spacing: 3.5pt; color: var(--accent);
+    }
+    .party p { margin: 0; line-height: 1.45; font-size: 9pt; }
+    table.items { border-collapse: collapse; width: 100%; counter-reset: line; }
+    table.items thead th {
+      font-size: 7.5pt; text-transform: uppercase; letter-spacing: 1.2pt; word-spacing: 3pt; color: var(--muted);
+      border-bottom: 1.5pt solid var(--ink); padding: 0 6pt 5pt; text-align: left;
+    }
+    table.items thead th.r, table.items td.r { text-align: right; }
+    table.items tbody td { padding: 5.5pt 6pt; border-bottom: 0.75pt solid #e3e0db; vertical-align: top; }
+    table.items tbody td.n::before {
+      counter-increment: line; content: "0" counter(line);
+      font-weight: bold; color: var(--accent); font-size: 8pt;
+    }
+    .item-name { font-weight: bold; }
+    .item-desc { color: var(--muted); font-size: 8pt; margin-top: 1.5pt; }
+    .totals { display: flex; justify-content: flex-end; margin-top: 4mm; }
+    .totals-box { width: 62mm; }
+    .trow { display: flex; justify-content: space-between; padding: 3.5pt 6pt; font-size: 9.5pt; }
+    .trow.muted { color: var(--muted); }
+    .trow.grand {
+      margin-top: 4pt; background: linear-gradient(115deg, var(--ink), var(--ink-2));
+      color: #fff; border-radius: 6pt; padding: 7pt 10pt; font-size: 12pt; font-weight: bold;
+    }
+    .stamp {
+      position: absolute; top: 172mm; left: 102mm; z-index: 3; transform: rotate(-11deg);
+      border: 2.5pt solid #14683c; color: #14683c; border-radius: 6pt;
+      font: bold 15pt Arial; letter-spacing: 4pt; padding: 4pt 12pt; opacity: 0.45;
+      text-transform: uppercase;
+    }
+    footer { margin-top: auto; padding: 5mm 14mm 6mm; background: var(--panel); }
+    footer .cols { display: flex; gap: 8mm; }
+    footer h4 { margin: 0 0 3pt; font-size: 7.5pt; text-transform: uppercase; letter-spacing: 1.5pt; word-spacing: 3.5pt; color: var(--accent); }
+    footer p { margin: 0; font-size: 8pt; color: var(--muted); line-height: 1.5; }
+    .thanks { margin-top: 4mm; font-size: 8.5pt; color: var(--ink); }
+    .thanks::before {
+      content: linear-gradient(135deg, var(--accent), var(--accent-2));
+      display: inline-block; width: 7pt; height: 7pt; margin-right: 5pt; border-radius: 2pt;
+    }
+    </style>
+    </head>
+    <body>
+    <div class="band">
+      <div class="band-row">
+        <div class="brand">
+          <svg width="46" height="46" viewBox="0 0 46 46" xmlns="http://www.w3.org/2000/svg">
+    <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#d9b64a"/><stop offset="1" stop-color="#4fa77f"/></linearGradient></defs>
+    <circle cx="23" cy="23" r="21" fill="none" stroke="url(#lg)" stroke-width="4"/>
+    <path d="M13 29 L23 12 L33 29 Z" fill="url(#lg)"/>
+    </svg>
+          <div><h1>Solstice Studio</h1><p>DESIGN &amp; ENGINEERING</p></div>
+        </div>
+        <div class="doc-meta">
+          <p class="kind">Invoice</p>
+          <p>No. SS-2026-0117</p>
+          <p>Issued July 12, 2026 &middot; Due August 11, 2026</p>
+        </div>
+      </div>
+    </div>
+    <div class="rule"></div>
+    <main>
+      <div class="parties">
+        <div class="party"><div class="party-inner">
+          <h3>Billed To</h3>
+          <p><b>Halcyon Robotics, Inc.</b><br/>1200 Congress Ave, Suite 300<br/>Austin, TX 78701<br/>EIN 74-2201457</p>
+        </div></div>
+        <div class="party"><div class="party-inner">
+          <h3>From</h3>
+          <p><b>Solstice Studio LLC</b><br/>384 Peachtree St NE, Suite 900<br/>Atlanta, GA 30308<br/>EIN 88-4113550</p>
+        </div></div>
+        <div class="party"><div class="party-inner">
+          <h3>Project</h3>
+          <p><b>Beacon telemetry dashboard</b><br/>Statement of work #4<br/>PO HR-2026-088<br/>Period: May &ndash; June 2026</p>
+        </div></div>
+      </div>
+      <div class="stamp">Paid</div>
+      <table class="items">
+        <thead><tr><th></th><th>Description</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Amount</th></tr></thead>
+        <tbody>
+          <tr><td class="n"></td><td><div class="item-name">Discovery &amp; UX research</div><div class="item-desc">Stakeholder interviews, telemetry audit, journey mapping</div></td><td class="r">3 days</td><td class="r">$1,150.00</td><td class="r">$3,450.00</td></tr>
+          <tr><td class="n"></td><td><div class="item-name">Design system &amp; component library</div><div class="item-desc">Tokens, dark mode, 42 documented components</div></td><td class="r">6 days</td><td class="r">$1,150.00</td><td class="r">$6,900.00</td></tr>
+          <tr><td class="n"></td><td><div class="item-name">Real-time dashboard implementation</div><div class="item-desc">Streaming charts, alerting views, fleet map</div></td><td class="r">9 days</td><td class="r">$1,280.00</td><td class="r">$11,520.00</td></tr>
+          <tr><td class="n"></td><td><div class="item-name">Accessibility &amp; performance pass</div><div class="item-desc">WCAG 2.2 AA audit, remediation, load-time budget</div></td><td class="r">2 days</td><td class="r">$1,150.00</td><td class="r">$2,300.00</td></tr>
+          <tr><td class="n"></td><td><div class="item-name">On-site handover workshop</div><div class="item-desc">Austin, 14 people, incl. travel</div></td><td class="r">1 day</td><td class="r">$1,650.00</td><td class="r">$1,650.00</td></tr>
+        </tbody>
+      </table>
+      <div class="totals">
+        <div class="totals-box">
+          <div class="trow muted"><span>Subtotal</span><span>$25,820.00</span></div>
+          <div class="trow muted"><span>Early-payment discount (2%)</span><span>&minus;$516.40</span></div>
+          <div class="trow muted"><span>Sales tax (services, exempt)</span><span>$0.00</span></div>
+          <div class="trow grand"><span>Total Due</span><span>$25,303.60</span></div>
+        </div>
+      </div>
+    </main>
+    <footer>
+      <div class="cols">
+        <div><h4>Payment</h4><p>Truist Bank, Atlanta<br/>Routing 061000104 &middot; Acct 1000223344<br/>Ref. SS-2026-0117</p></div>
+        <div><h4>Terms</h4><p>Payment due within 30 days.<br/>Late balances accrue 1.5% per month.<br/>Checks payable to Solstice Studio LLC.</p></div>
+        <div><h4>Contact</h4><p>billing@solstice.studio<br/>+1 (404) 555-0117<br/>solstice.studio</p></div>
+      </div>
+      <p class="thanks">Thank you for building with us &mdash; we would love to work on statement of work #5.</p>
+    </footer>
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("invoice", "Real-World Documents", "Modern Invoice",
+    "A one-page, full-bleed invoice in a dark green palette: custom properties, oklch gradient interpolation, gradient-border cards, CSS counters, a transform stamp, and an inline SVG logo.",
+    invoiceHtml, new PdfGenerateConfig { PageSize = PageSize.Letter });
+
+// ─── Real-World Documents: ten-page print catalog ───
+// A US Letter catalog designed as a book: gradient cover plate (page 1), eight item pages,
+// and a colophon (page 10). Running furniture mirrors between left- and right-hand pages
+// via :left/:right page selectors - the string-set item name at the top outside corner,
+// the SVG logo as a real margin-box image at top-center (box width pinned to the image so
+// it truly centers; margin-box images ignore box alignment, see
+// https://github.com/jhaygood86/PeachPDF/issues/140), and folios in the inside (gutter)
+// bottom corners. The cover is a plate filling the content box (per-page margin overrides
+// to 0 are ignored, #125), followed by a forced break so the first item's flex brand band
+// can't straddle into the sliver left below the plate. The colophon's named page is the
+// last page only, because named-page styles leak onto subsequent auto pages (#126).
+
+const string catalogLogoSvg = "<svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\">\n" +
+    "<defs><linearGradient id=\"ml\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\">\n" +
+    "<stop offset=\"0\" stop-color=\"#d9a441\"/><stop offset=\"1\" stop-color=\"#c97b4a\"/></linearGradient></defs>\n" +
+    "<path d=\"M12 2 L20 20 L15 20 L12 13 L9 20 L4 20 Z\" fill=\"url(#ml)\"/>\n" +
+    "<circle cx=\"12\" cy=\"5.5\" r=\"2.1\" fill=\"none\" stroke=\"url(#ml)\" stroke-width=\"1.4\"/>\n" +
+    "</svg>";
+
+const string coverLogoSvg = "<svg width=\"120\" height=\"120\" viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\">\n" +
+    "<path d=\"M12 2 L20 20 L15 20 L12 13 L9 20 L4 20 Z\" fill=\"#f0c975\"/>\n" +
+    "<circle cx=\"12\" cy=\"5.5\" r=\"2.1\" fill=\"none\" stroke=\"#d9834f\" stroke-width=\"1.4\"/>\n" +
+    "</svg>";
+
+var catalogLogoDataUri = "data:image/svg+xml;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(catalogLogoSvg));
+
+// Stylized geometric product art. Shapes to avoid (see the filed issues): a stroked
+// <rect rx> loses its bottom edge and a stroked <ellipse> loses its stroke entirely
+// (#134), so the shelf frame has square corners and the mirror ring is a <circle>; and
+// the art panel wrapper must not combine border-radius with border/padding, which drops
+// SVG gradient strokes (#135) - the breathing room lives in the viewBox instead.
+static string CatalogItemArt(string accent1, string accent2, string kind, int idx)
+{
+    var defs = $"<defs>\n<linearGradient id=\"g{idx}\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\">\n" +
+        $"<stop offset=\"0\" stop-color=\"{accent1}\"/><stop offset=\"1\" stop-color=\"{accent2}\"/></linearGradient>\n" +
+        $"<radialGradient id=\"h{idx}\" cx=\"0.5\" cy=\"0.35\" r=\"0.8\">\n" +
+        $"<stop offset=\"0\" stop-color=\"{accent1}\" stop-opacity=\"0.35\"/><stop offset=\"1\" stop-color=\"{accent1}\" stop-opacity=\"0\"/></radialGradient>\n" +
+        "</defs>";
+    var shape = kind switch
+    {
+        "chair" => $$"""<path d="M60 30 Q60 20 70 20 L110 20 Q120 20 120 30 L120 95 L60 95 Z" fill="url(#g{{idx}})"/><rect x="52" y="95" width="76" height="12" rx="6" fill="{{accent2}}"/><rect x="60" y="107" width="8" height="38" rx="3" fill="#3a3a3a"/><rect x="112" y="107" width="8" height="38" rx="3" fill="#3a3a3a"/>""",
+        "table" => $$"""<ellipse cx="90" cy="55" rx="62" ry="16" fill="url(#g{{idx}})"/><rect x="85" y="66" width="10" height="60" fill="{{accent2}}"/><path d="M60 145 L90 120 L120 145 Z" fill="#3a3a3a"/>""",
+        "lamp" => $$"""<path d="M65 25 L115 25 L100 70 L80 70 Z" fill="url(#g{{idx}})"/><rect x="87" y="70" width="6" height="55" fill="#3a3a3a"/><ellipse cx="90" cy="130" rx="28" ry="8" fill="{{accent2}}"/><circle cx="90" cy="86" r="9" fill="{{accent1}}" opacity="0.5"/>""",
+        "shelf" => $$"""<rect x="45" y="20" width="90" height="120" fill="none" stroke="url(#g{{idx}})" stroke-width="8"/><rect x="53" y="58" width="74" height="6" fill="{{accent2}}"/><rect x="53" y="96" width="74" height="6" fill="{{accent2}}"/><rect x="60" y="34" width="14" height="20" fill="{{accent1}}"/><rect x="94" y="72" width="20" height="20" fill="{{accent1}}" opacity="0.7"/>""",
+        "desk" => $$"""<rect x="40" y="55" width="100" height="10" rx="4" fill="url(#g{{idx}})"/><rect x="48" y="65" width="8" height="60" fill="#3a3a3a"/><rect x="124" y="65" width="8" height="60" fill="#3a3a3a"/><rect x="96" y="65" width="36" height="26" rx="3" fill="{{accent2}}"/><circle cx="103" cy="78" r="2.6" fill="#fff"/>""",
+        "sofa" => $$"""<rect x="40" y="60" width="100" height="42" rx="10" fill="url(#g{{idx}})"/><rect x="32" y="52" width="18" height="52" rx="8" fill="{{accent2}}"/><rect x="130" y="52" width="18" height="52" rx="8" fill="{{accent2}}"/><rect x="46" y="102" width="10" height="18" rx="4" fill="#3a3a3a"/><rect x="124" y="102" width="10" height="18" rx="4" fill="#3a3a3a"/>""",
+        "stool" => $$"""<path d="M58 40 Q90 26 122 40 L116 52 Q90 42 64 52 Z" fill="url(#g{{idx}})"/><path d="M68 52 L60 130" stroke="#3a3a3a" stroke-width="7" stroke-linecap="round"/><path d="M112 52 L120 130" stroke="#3a3a3a" stroke-width="7" stroke-linecap="round"/><path d="M90 50 L90 130" stroke="{{accent2}}" stroke-width="7" stroke-linecap="round"/>""",
+        "mirror" => $$"""<circle cx="90" cy="72" r="50" fill="url(#h{{idx}})" stroke="url(#g{{idx}})" stroke-width="8"/><path d="M66 52 Q80 34 102 40" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.7"/><path d="M74 132 L106 132 L98 148 L82 148 Z" fill="{{accent2}}"/>""",
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown catalog art kind"),
+    };
+    return $"<svg width=\"216\" height=\"186\" viewBox=\"-18 -18 216 186\" xmlns=\"http://www.w3.org/2000/svg\">" +
+        $"{defs}<rect x=\"-18\" y=\"-18\" width=\"216\" height=\"186\" fill=\"url(#h{idx})\"/>{shape}</svg>";
+}
+
+(string Name, string Kind, string Tagline, string Price, string Accent, string AccentDeep, string Material, string Dimensions, string Weight, string Finish)[] catalogItems =
+[
+    ("Blue Ridge Lounge Chair", "chair", "A low-slung chair for long evenings", "1,240", "#c97b4a", "#8a5a3b", "Steam-bent white oak, wool boucl&eacute;", "27 &times; 29 &times; 32 in", "31 lb", "Natural oil"),
+    ("Savannah Dining Table", "table", "Six seats, one continuous grain", "2,890", "#7d8c6f", "#55614b", "Solid ash, brass levelers", "87 &times; 37 &times; 29 in", "137 lb", "Matte lacquer"),
+    ("Firefly Pendant Lamp", "lamp", "Warm light, folded like paper", "480", "#d9a441", "#a8762a", "Spun aluminum, oak stem", "&Oslash; 18 &times; 15 in", "4.6 lb", "Powder coat"),
+    ("Piedmont Bookshelf", "shelf", "Open storage that breathes", "1,680", "#5f7a8c", "#3e5260", "Birch ply, steel frame", "35 &times; 13 &times; 75 in", "84 lb", "Soap finish"),
+    ("Oconee Writing Desk", "desk", "A quiet place to think", "1,450", "#8c6f7d", "#5f4a55", "Walnut, leather inlay", "51 &times; 26 &times; 30 in", "64 lb", "Hard wax oil"),
+    ("Sweetwater Two-Seat Sofa", "sofa", "Deep seats, honest stitching", "3,420", "#a8582f", "#753d20", "Kiln-dried beech, linen", "66 &times; 35 &times; 31 in", "106 lb", "Removable covers"),
+    ("Tybee Counter Stool", "stool", "Three legs, perfect balance", "390", "#6f8c85", "#4a615c", "Turned oak, cork seat", "&Oslash; 14 &times; 26 in", "11 lb", "Natural oil"),
+    ("Magnolia Wall Mirror", "mirror", "Morning light, doubled", "720", "#b08d57", "#7d6238", "Brass ring, float glass", "&Oslash; 31 &times; 1.5 in", "20 lb", "Brushed brass"),
+];
+
+var catalogSections = string.Join("\n", catalogItems.Select((item, index) =>
+{
+    var n = index + 1;
+    var art = CatalogItemArt(item.Accent, item.AccentDeep, item.Kind, n);
+    var nameWords = item.Name.Split(' ');
+    var family = string.Join(' ', nameWords[..Math.Max(1, nameWords.Length - 2)]);
+    return $$"""
+        <section class="item" style="--accent: {{item.Accent}}; --accent-deep: {{item.AccentDeep}};">
+          <div class="brand-band"><span class="wordmark">AURORA &amp; PINE</span><span class="rule"></span><span class="season-tag">F/W 2026</span></div>
+          <p class="item-no">No. {{n:00}} <span>/ 08</span></p>
+          <h2>{{item.Name}}</h2>
+          <p class="tagline">{{item.Tagline}}</p>
+          <div class="item-body">
+            <div class="art-panel">{{art}}</div>
+            <div class="item-info">
+              <p class="desc">Each {{family}} piece is bench-made in our Savannah workshop from Georgia
+              longleaf pine and certified Appalachian hardwoods, assembled without visible fasteners and finished
+              by hand. Designed to be repaired rather than replaced, it carries a 25-year structural guarantee.</p>
+              <table class="specs">
+                <tr><th>Material</th><td>{{item.Material}}</td></tr>
+                <tr><th>Dimensions</th><td>{{item.Dimensions}}</td></tr>
+                <tr><th>Weight</th><td>{{item.Weight}}</td></tr>
+                <tr><th>Finish</th><td>{{item.Finish}}</td></tr>
+              </table>
+              <ul class="features">
+                <li>Bench-made in Savannah, Georgia</li>
+                <li>FSC-certified timber only</li>
+                <li>Ships flat, assembles without tools</li>
+              </ul>
+            </div>
+          </div>
+          <div class="price-row">
+            <div class="price-ring"><div class="price-inner">${{item.Price}}</div></div>
+            <p class="order-note">Order code AP-{{100 + n * 7}} &middot; lead time 6 weeks &middot; aurorapine.com/no{{n:00}}</p>
+          </div>
+        </section>
+        """;
+}));
+
+var catalogHtml = $$"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    @page {
+      size: letter portrait;
+      margin: 0.95in 0.7in 0.85in 0.7in;
+    }
+    /* Book-style running furniture, mirrored between left- and right-hand pages:
+       the product name sits at the top on the matching (outside) side, aligned to
+       that edge; the company logo (a real image in a margin box) sits at top-center
+       with the box width pinned to the image so it truly centers; the folio sits in
+       the inside (gutter) bottom corner */
+    @page :right {
+      @top-right { content: string(item-name); font: italic 8.5pt Georgia, serif; color: #666; }
+      @top-center { content: url("{{catalogLogoDataUri}}"); width: 20px; }
+      @bottom-left { content: counter(page); font: 9pt Georgia, serif; color: #8a5a3b; }
+    }
+    @page :left {
+      @top-left { content: string(item-name); font: italic 8.5pt Georgia, serif; color: #666; }
+      @top-center { content: url("{{catalogLogoDataUri}}"); width: 20px; }
+      @bottom-right { content: counter(page); font: 9pt Georgia, serif; color: #8a5a3b; }
+    }
+    @page :first {
+      @top-left { content: none; }
+      @top-center { content: none; }
+      @top-right { content: none; }
+      @bottom-left { content: none; }
+    }
+    @page colophon {
+      @top-left { content: none; }
+      @top-center { content: none; }
+      @top-right { content: none; }
+    }
+    body { font: 10pt Georgia, serif; color: #2b2620; margin: 0; }
+
+    /* ── Cover (a plate filling the page's content box; per-page margin
+          overrides and @page backgrounds aren't supported, so true full-bleed
+          isn't possible — see the GitHub issues filed alongside this showcase) ── */
+    .cover {
+      height: calc(11in - 0.95in - 0.85in - 2.4pt - 2mm);
+      border: 1.2pt solid rgba(240, 201, 117, 0.55);
+      background:
+        radial-gradient(circle at 30% 20%, rgba(240, 201, 117, 0.35), transparent 55%),
+        radial-gradient(circle at 80% 85%, rgba(201, 123, 74, 0.4), transparent 60%),
+        linear-gradient(160deg in oklch, #221a12, #3d2c1c 55%, #59402a);
+      color: #f4e9d8; text-align: center;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8mm;
+      /* the forced break needs the v0.9.3 fix for the spurious blank page after a
+         tall broken block; without it, part of the next section's flex brand band
+         can straddle into the sliver left below the plate */
+      page-break-after: always;
+    }
+    .cover h1 { font-size: 34pt; margin: 0; letter-spacing: 8pt; word-spacing: 12pt; text-transform: uppercase; font-weight: normal; }
+    .cover .amp { color: #f0c975; }
+    .cover .strap { font: 9.5pt Arial; letter-spacing: 4pt; word-spacing: 8pt; text-transform: uppercase; color: rgba(244,233,216,0.7); margin: 0; }
+    .cover .season {
+      font: bold 10pt Arial; letter-spacing: 2pt; word-spacing: 5pt; text-transform: uppercase; color: #221a12;
+      background: linear-gradient(100deg, #f0c975, #d9834f); border-radius: 20pt; padding: 6pt 18pt;
+    }
+    .cover .edition { font-style: italic; color: rgba(244,233,216,0.65); margin: 0; }
+    .cover .cover-mark { text-align: center; }
+
+    /* ── Per-page brand band: in-flow wordmark strip at the top of each item
+          page's content (the graphical logo itself is a margin-box image above) ── */
+    .brand-band { display: flex; align-items: center; gap: 6pt; margin-bottom: 7mm; }
+    .brand-band .wordmark {
+      font: bold 8.5pt Georgia, serif; letter-spacing: 2.5pt; word-spacing: 5pt; color: #8a5a3b;
+    }
+    .brand-band .rule {
+      flex: 1 1 0; height: 1.5pt;
+      background: repeating-linear-gradient(90deg, #d9a441 0 8pt, transparent 8pt 13pt);
+    }
+    .brand-band .season-tag { font: italic 8pt Georgia, serif; color: #a0937f; }
+
+    /* ── Item pages ── */
+    .item { page-break-after: always; }
+    .item h2 { font-size: 24pt; font-weight: normal; margin: 0 0 2pt; color: var(--accent-deep); string-set: item-name content(); }
+    .item-no { font: bold 8pt Arial; letter-spacing: 2.5pt; word-spacing: 4pt; color: var(--accent); margin: 0 0 6pt; text-transform: uppercase; }
+    .item-no span { color: #b5a894; }
+    .tagline { font-style: italic; color: #6d6154; margin: 0 0 8mm; font-size: 11.5pt; }
+    .item-body { display: flex; gap: 8mm; align-items: flex-start; }
+    /* NOTE: no padding/border here — combined with border-radius they trigger a
+       renderer bug that drops SVG gradient strokes (see the filed issue); the
+       breathing room lives in the SVG viewBox instead */
+    .art-panel {
+      flex: 0 0 auto; border-radius: 10pt;
+      background: linear-gradient(165deg, #faf6ef, #efe6d8);
+    }
+    .item-info { flex: 1 1 0; }
+    .desc { margin: 0 0 6mm; line-height: 1.65; }
+    table.specs { border-collapse: collapse; width: 100%; margin-bottom: 6mm; font-size: 9pt; }
+    table.specs th {
+      text-align: left; font: bold 7.5pt Arial; text-transform: uppercase; letter-spacing: 1.2pt;
+      color: var(--accent-deep); padding: 4pt 8pt 4pt 0; border-bottom: 0.75pt solid #e0d4c2; width: 30mm;
+    }
+    table.specs td { padding: 4pt 0; border-bottom: 0.75pt solid #e0d4c2; }
+    ul.features { margin: 0; padding: 0 0 0 14pt; }
+    ul.features li { margin-bottom: 3pt; }
+    ul.features li::marker { content: "\25C6  "; color: var(--accent); }
+    .price-row { display: flex; align-items: center; gap: 7mm; margin-top: 9mm; }
+    .price-ring {
+      width: 34mm; height: 34mm; border-radius: 50%;
+      background: conic-gradient(var(--accent), var(--accent-deep), var(--accent));
+      display: flex; align-items: center; justify-content: center;
+    }
+    .price-inner {
+      width: 28mm; height: 28mm; border-radius: 50%; background: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font: bold 13pt Arial; color: var(--accent-deep);
+    }
+    .order-note { font: 8.5pt Arial; color: #8c8272; margin: 0; letter-spacing: 0.4pt; word-spacing: 1.5pt; }
+
+    /* ── Colophon ── */
+    .colophon {
+      page: colophon; text-align: center; padding-top: 60mm;
+    }
+    .colophon .mark { margin-bottom: 8mm; }
+    .colophon h2 { font-size: 13pt; font-weight: normal; letter-spacing: 5pt; word-spacing: 9pt; text-transform: uppercase; margin: 0 0 10mm; color: #59402a; }
+    .colophon p { font-size: 8.5pt; color: #6d6154; line-height: 1.9; margin: 0 auto 6mm; width: 110mm; }
+    .colophon .fine { font-size: 7.5pt; color: #a0937f; }
+    </style>
+    </head>
+    <body>
+
+    <div class="cover">
+      <div class="cover-mark">{{coverLogoSvg}}</div>
+      <h1>Aurora <span class="amp">&amp;</span> Pine</h1>
+      <p class="strap">Handcrafted Furniture &middot; Savannah, Georgia</p>
+      <p class="season">Fall / Winter 2026 Collection</p>
+      <p class="edition">Catalog No. 14 &mdash; eight pieces, made to last a lifetime</p>
+    </div>
+
+    {{catalogSections}}
+
+    <div class="colophon">
+      <div class="mark">{{catalogLogoSvg}}</div>
+      <h2>Aurora &amp; Pine</h2>
+      <p>All pieces designed and bench-made at our workshop at 212 East Broad Street,
+      Savannah, Georgia. Timber sourced from certified Georgia and Appalachian forests.
+      Textiles woven in the Carolinas; brass fittings cast in Macon.</p>
+      <p>&copy; 2026 Aurora &amp; Pine Co. All rights reserved. No part of this catalog may be
+      reproduced without written permission. Prices in U.S. dollars, valid through
+      February 28, 2027; applicable sales tax added at order.</p>
+      <p class="fine">Catalog No. 14 &middot; Printed October 2026 on 100% recycled stock &middot;
+      Proudly set in Georgia (the typeface) in Georgia (the state) &middot; aurorapine.com</p>
+    </div>
+
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("print_catalog", "Real-World Documents", "Print Catalog",
+    "A ten-page furniture catalog designed as a book: gradient cover plate, per-item SVG art, string-set running headers, a margin-box image logo, and mirrored gutter folios via :left/:right page selectors.",
+    catalogHtml, new PdfGenerateConfig { PageSize = PageSize.Letter });
+
 // The manifest that drives the website's /showcase page (see docs/showcase.html and
 // .github/workflows/pages.yml). Field names are camelCased for Liquid (site.data.showcases).
 var manifestJson = JsonSerializer.Serialize(showcaseManifest,
