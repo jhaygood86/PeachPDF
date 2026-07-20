@@ -64,6 +64,91 @@ namespace PeachPDF.Tests.Integration
                 $"Block height must stay positive (top={wrapper.Location.Y}, bottom={wrapper.ActualBottom})");
         }
 
+        // CSS2.1 §10.8.1: the vertical padding/border of a non-replaced `display: inline` box
+        // must NOT influence line box height - it paints (overflowing the line) without taking
+        // vertical space. The FlowBox height correction is therefore restricted to atomic
+        // inline-level boxes; a plain span's 200px of vertical padding must not grow its block.
+        [Fact]
+        public async Task PaddedPlainInline_DoesNotGrowBlockHeight()
+        {
+            const string html = @"<!DOCTYPE html>
+<html>
+<body style='margin: 0'>
+<div style='height: 300px'>filler</div>
+<div class='wrapper'><span style='padding: 100px 0'>text</span></div>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+
+            var wrapper = FindBoxByClass(rootBox, "wrapper");
+            Assert.NotNull(wrapper);
+
+            var height = wrapper!.ActualBottom - wrapper.Location.Y;
+            Assert.True(height > 0,
+                $"Block height must stay positive (top={wrapper.Location.Y}, bottom={wrapper.ActualBottom})");
+            Assert.True(height < 200,
+                $"Plain inline vertical padding must not grow the block (CSS2.1 §10.8.1) - got height {height}");
+        }
+
+        // CSS2.1 §8.1: an atomic inline-level box's content is laid out inside its padding box,
+        // so the label of a padded button must start border+padding-top BELOW the box's top
+        // edge (and end padding-bottom above its bottom edge) - not hug the top border with the
+        // background expanding upward around it.
+        [Fact]
+        public async Task PaddedInlineBlock_WordsSitInsidePaddingBox()
+        {
+            const string html = @"<!DOCTYPE html>
+<html>
+<body style='margin: 0'>
+<button class='btn' style='padding: 6px 14px'>Go</button>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+
+            var button = FindBoxByClass(rootBox, "btn");
+            Assert.NotNull(button);
+
+            var rect = Assert.Single(button!.Rectangles).Value;
+            var word = FindFirstWord(button);
+            Assert.NotNull(word);
+
+            Assert.True(word!.Top >= rect.Top + 6 - 0.1,
+                $"Button label (top={word.Top}) must sit at least padding-top (6) below the box top ({rect.Top})");
+            Assert.True(word.Bottom <= rect.Bottom - 6 + 0.1,
+                $"Button label (bottom={word.Bottom}) must end at least padding-bottom (6) above the box bottom ({rect.Bottom})");
+        }
+
+        // CssLineBox.UpdateRectangle historically expanded the rect's bottom edge by
+        // padding-TOP instead of padding-bottom - invisible with symmetric padding, wrong for
+        // asymmetric. With only padding-bottom set, the rect must extend below the words by
+        // that amount while the top edge stays at the word band.
+        [Fact]
+        public async Task AsymmetricPaddingBottom_ExpandsRectBottomByPaddingBottom()
+        {
+            const string html = @"<!DOCTYPE html>
+<html>
+<body style='margin: 0'>
+<button class='btn' style='padding: 0 0 30px 0'>Go</button>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+
+            var button = FindBoxByClass(rootBox, "btn");
+            Assert.NotNull(button);
+
+            var rect = Assert.Single(button!.Rectangles).Value;
+            var word = FindFirstWord(button);
+            Assert.NotNull(word);
+
+            Assert.True(rect.Bottom >= word!.Bottom + 30 - 0.1,
+                $"Box rect bottom ({rect.Bottom}) must extend padding-bottom (30) below the words (bottom={word.Bottom})");
+            Assert.True(Math.Abs(rect.Top - word.Top) < 0.1,
+                $"With no padding-top the rect top ({rect.Top}) must coincide with the word band top ({word.Top})");
+        }
+
         #region Helpers
 
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildCssBoxTree(string html)
@@ -83,6 +168,21 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotNull(container.Root);
             return (container.Root!, container);
+        }
+
+        private static CssRect? FindFirstWord(CssBox box)
+        {
+            if (box.Words.Count > 0)
+                return box.Words[0];
+
+            foreach (var child in box.Boxes)
+            {
+                var word = FindFirstWord(child);
+                if (word != null)
+                    return word;
+            }
+
+            return null;
         }
 
         private static CssBox? FindBoxByClass(CssBox root, string className)

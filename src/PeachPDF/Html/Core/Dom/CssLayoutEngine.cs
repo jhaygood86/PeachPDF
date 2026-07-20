@@ -966,6 +966,32 @@ namespace PeachPDF.Html.Core.Dom
                 else
                 {
                     await FlowBox(g, blockBox, b, limitRight, lineSpacing, lineStartX, coordinates);
+
+                    // CSS2.1 §8.1 box model: an atomic inline-level box's content is laid out
+                    // inside its padding box, so its flowed words must sit border+padding-top
+                    // BELOW the box's top edge - FlowBox placed them at the line's CurrentY (the
+                    // box's top). Without this inset, CssLineBox.UpdateRectangle's padding
+                    // expansion pushes the box's background/border rect UP above the text
+                    // instead (a button's label hugged its top border). Shift the flowed words
+                    // down into the content box and grow the flow bottom to cover the full
+                    // padding box. Plain `display: inline` boxes are excluded per §10.8.1 -
+                    // their vertical padding paints without taking vertical space, which the
+                    // existing rect expansion alone already models correctly.
+                    if (b.Display is CssConstants.InlineBlock)
+                    {
+                        var topInset = b.ActualBorderTopWidth + b.ActualPaddingTop;
+                        var bottomInset = b.ActualBorderBottomWidth + b.ActualPaddingBottom;
+
+                        if (topInset > 0 || bottomInset > 0)
+                        {
+                            var maxWordBottom = OffsetFlowedWords(b, topInset);
+
+                            if (maxWordBottom > double.MinValue)
+                            {
+                                coordinates.MaxBottom = Math.Max(coordinates.MaxBottom, maxWordBottom + bottomInset);
+                            }
+                        }
+                    }
                 }
 
                 coordinates.CurrentX += rightSpacing;
@@ -981,7 +1007,16 @@ namespace PeachPDF.Html.Core.Dom
             // resulting ActualBottom landed above its own top (negative height), and paint-time
             // visibility culling then dropped the block's whole subtree (buttons styled like the
             // showcase's themeable-card "Learn More" were never painted at all).
-            if (coordinates.MaxBottom - startY < box.ActualHeight)
+            //
+            // Restricted to non-plain-inline boxes: per CSS2.1 §10.8.1, the vertical padding/
+            // border of a non-replaced `display: inline` box does not influence line box height
+            // at all (it paints, overflowing the line, without taking vertical space) - only an
+            // atomic inline-level box (inline-block/inline-table) contributes its full box
+            // height to the line it sits on, which is what ActualHeight approximates here (a
+            // plain inline's ActualHeight is just its own padding+border, since it never gets a
+            // Size of its own - extending the flow by that would grow the containing block in
+            // violation of §10.8.1).
+            if (box.Display is not CssConstants.Inline && coordinates.MaxBottom - startY < box.ActualHeight)
             {
                 coordinates.MaxBottom = startY + box.ActualHeight;
             }
@@ -1074,6 +1109,31 @@ namespace PeachPDF.Html.Core.Dom
         /// Recursively creates the rectangles of the blockBox, by bubbling from deep to outside the boxes
         /// in the rectangle structure
         /// </summary>
+        /// <summary>
+        /// Shifts every word already flowed inside <paramref name="box"/>'s subtree down by
+        /// <paramref name="amount"/> (an atomic inline-level box's border+padding-top content
+        /// inset - see the call site in <see cref="FlowBox"/>) and returns the lowest word
+        /// bottom after the shift, or <see cref="double.MinValue"/> when the subtree holds no
+        /// words at all.
+        /// </summary>
+        private static double OffsetFlowedWords(CssBox box, double amount)
+        {
+            var maxBottom = double.MinValue;
+
+            foreach (var word in box.Words)
+            {
+                word.Top += amount;
+                maxBottom = Math.Max(maxBottom, word.Bottom);
+            }
+
+            foreach (var child in box.Boxes)
+            {
+                maxBottom = Math.Max(maxBottom, OffsetFlowedWords(child, amount));
+            }
+
+            return maxBottom;
+        }
+
         private static void BubbleRectangles(CssBox box, CssLineBox line)
         {
             if (box.Words.Count > 0)

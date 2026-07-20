@@ -136,7 +136,7 @@ namespace PeachPDF.Html.Core.Dom
             var leftSpacing = box.ActualBorderLeftWidth + box.ActualPaddingLeft;
             var rightSpacing = box.ActualBorderRightWidth + box.ActualPaddingRight;
             var topSpacing = box.ActualBorderTopWidth + box.ActualPaddingTop;
-            var bottomSpacing = box.ActualBorderBottomWidth + box.ActualPaddingTop;
+            var bottomSpacing = box.ActualBorderBottomWidth + box.ActualPaddingBottom;
 
             if ((box.FirstHostingLineBox != null && box.FirstHostingLineBox.Equals(this)) || box.IsImage)
                 x -= leftSpacing;
