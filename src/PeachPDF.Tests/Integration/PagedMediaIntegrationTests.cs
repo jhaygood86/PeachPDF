@@ -87,6 +87,34 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(283.0, page.Height.Point, 0);
         }
 
+        [Fact]
+        public async Task AtPage_CombinedRelativeUnitFeatures_RenderWithoutError()
+        {
+            // Exercises all three relative/unsupported-unit paths together: a base margin in an
+            // unsupported unit (dropped, keeps default), a font-relative `size`, and a margin box
+            // with a relative width — confirming they compose without error.
+            const string html = """
+                <!DOCTYPE html>
+                <html>
+                <head><style>
+                @page {
+                  margin-top: 10vw;      /* unsupported unit -> dropped, default margin kept */
+                  size: 30em 40em;       /* font-relative size */
+                  @top-center { content: "Header"; width: 50%; }
+                }
+                </style></head>
+                <body><p>Hello</p></body>
+                </html>
+                """;
+
+            var doc = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
+            var page = doc.PdfDocument.Pages[0];
+
+            // Font-relative size resolved to a real (non-A4) page, proving `size` took effect.
+            Assert.True(page.Width.Point > 0 && page.Height.Point > 0);
+            Assert.NotEqual(595.0, page.Width.Point, 0);
+        }
+
         // ── page count ─────────────────────────────────────────────────────────
 
         [Fact]

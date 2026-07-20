@@ -681,7 +681,7 @@ Known boundaries of per-page margins:
 - `position: fixed` elements and `background-attachment: fixed` layers keep positioning against the base page box on margin-overridden pages (they ride the page's content shift rather than re-resolving against that page's own margins).
 - When content-empty pages are skipped (see pagination), `:first`/`:left`/`:right` resolve against the underlying page sequence, not the renumbered output pages.
 
-**Units in `@page` margins:** base and per-page rules resolve margins through the same conversion, so a textually identical margin always produces identical page geometry whether it sits in the base rule or a selector-carrying rule ([#150](https://github.com/jhaygood86/PeachPDF/issues/150)). All absolute units (including spec-correct `px` at 0.75pt — see [Length units](#length-units)), `em`/`rem`/`ex` (against the root element's font size), `%` (against the layout page width, for all four sides, per CSS's margin-percentage rule), and `calc()` expressions over those units are supported in both base and per-page rules. Viewport units (`vw`/`vh`/`vmin`/`vmax`) and `ch` are not supported in `@page` margins: a per-page margin declared with them falls back to the base margin for that side, and a base-rule margin declared with them resolves to zero.
+**Units in `@page` margins:** base and per-page rules resolve margins through the same conversion, so a textually identical margin always produces identical page geometry whether it sits in the base rule or a selector-carrying rule. All absolute units (including spec-correct `px` at 0.75pt — see [Length units](#length-units)), `em`/`rem`/`ex` (against the root element's font size), `%` (against the layout page width, for all four sides, per CSS's margin-percentage rule), and `calc()` expressions over those units are supported in both base and per-page rules. Viewport units (`vw`/`vh`/`vmin`/`vmax`) and `ch` are not supported in `@page` margins: such a declaration is invalid and is dropped ([CSS Syntax error handling](https://www.w3.org/TR/css-syntax-3/#error-handling)), leaving that side at its previously-cascaded value — the base margin for a per-page rule, or the configured (`PdfGenerateConfig`) / UA-default margin for a base rule. Base and per-page rules are fully symmetric here.
 
 ### `size` property
 
@@ -695,7 +695,7 @@ Known boundaries of per-page margins:
 | Named keyword | `A4`, `A5`, `A3`, `B4`, `B5`, `letter`, `legal`, `ledger`, `tabloid` | Sets width and height from the standard paper size |
 | Orientation only | `portrait`, `landscape` | Rotates the configured page size |
 | Keyword + orientation | `A4 landscape` | Named size with explicit orientation |
-| Explicit lengths | `210mm 297mm`, `595pt 842pt` | Any two CSS length values; absolute units only: `pt`, `px`, `in`, `cm`, `mm`, `pc` (relative units are not accepted for `size` — sheet dimensions are document-global physical geometry) |
+| Explicit lengths | `210mm 297mm`, `595pt 842pt`, `40em 60em` | Any two CSS `<length>` values ([css-page-3 §7.1](https://www.w3.org/TR/css-page-3/#page-size-prop)): absolute units (`pt`, `px`, `in`, `cm`, `mm`, `pc`) plus the font-relative `em`/`ex`/`rem`, resolved against the root element's font (the same basis `@page` margins use). Percentages are not a `<length>` for `size`, and viewport/`ch` units have no page-sheet basis — either leaves the configured page size in place |
 
 When `@page { size: ... }` is present it overrides the `PageSize` or `ManualPageWidth`/`ManualPageHeight` configured via `PdfGenerateConfig`. `size` is honored on the base `@page` rule only — a `size` declared inside a pseudo-selector or named-page rule is ignored (every sheet in one document has the same physical dimensions; only margins vary per page).
 
@@ -749,8 +749,8 @@ Margin boxes are sub-rules of `@page` that place text inside the page margins (o
 | `font-style` | `italic` or `normal` |
 | `text-align` | `left`, `center`, `right`; default is inferred from box position |
 | `vertical-align` | `top`, `middle`, `bottom`; default is `middle` |
-| `width` / `min-width` / `max-width` | Controls the width of top/bottom margin boxes; boxes with explicit widths are honoured; remaining space is distributed equally among `auto` boxes. Absolute lengths only — the spec-correct relative bases for margin-box dimensions (`%` against the margin area, `em` against the box's own font) differ from the page-margin context and are not implemented |
-| `height` / `min-height` / `max-height` | Controls the height of left/right margin boxes. Absolute lengths only, as for `width` |
+| `width` / `min-width` / `max-width` | Controls the width of top/bottom margin boxes; boxes with explicit widths are honoured; remaining space is distributed equally among `auto` boxes. Relative units resolve per [css-page-3 §8](https://www.w3.org/TR/css-page-3/#margin-dimension): `%` against the margin area the box sits in (the content-box width shared by a top/bottom row), `em`/`ex` against the box's own computed font size, `rem` against the root. Viewport units (`vw`/`vh`/`vmin`/`vmax`) and `ch` have no page context and size the box as `auto` |
+| `height` / `min-height` / `max-height` | Controls the height of left/right margin boxes; relative units resolve as for `width`, with `%` against the content-box height shared by a left/right column |
 
 ### Named pages
 
