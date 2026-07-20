@@ -38,10 +38,8 @@ namespace PeachPDF.Html.Core.Utils
             if (!(string.IsNullOrEmpty(box.WordSpacing) || box.WordSpacing == CssConstants.Normal))
             {
                 // word-spacing is a plain length in the same layout coordinate space as margin/padding/
-                // width/etc. (all of which call ParseLength without fontAdjust) - not a font-size-
-                // relative value, so it must not get the 72/96 dpi correction fontAdjust applies for
-                // genuinely font-relative lengths (see FontSizeResolver). Passing fontAdjust:true here
-                // silently shrank every declared word-spacing value to 75% of its CSS value.
+                // width/etc.; ParseLength resolves every unit (including spec-correct CSS px) through
+                // the shared Length.ToPixels conversion.
                 w += CssValueParser.ParseLength(box.WordSpacing, 0, box);
             }
 
