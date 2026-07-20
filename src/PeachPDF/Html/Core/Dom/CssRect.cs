@@ -255,8 +255,10 @@ namespace PeachPDF.Html.Core.Dom
             if (Height >= container!.PageSize.Height)
                 return false;
 
-            // Equivalent to the historical modulo formulation — see CssBox.BreakPage's comment.
-            if (container.PageIndexOf(Top) >= container.PageIndexOf(Bottom))
+            // See CssBox.BreakPage's comment - the epsilons make a line ending exactly ON a slot
+            // boundary a non-break (it fits wholly in the earlier slot).
+            if (container.PageIndexOf(Top + HtmlContainerInt.PageBoundaryEpsilon)
+                >= container.PageIndexOf(Bottom - HtmlContainerInt.PageBoundaryEpsilon))
                 return false;
 
             Top = container.NextPageTopOf(Top) + 1;

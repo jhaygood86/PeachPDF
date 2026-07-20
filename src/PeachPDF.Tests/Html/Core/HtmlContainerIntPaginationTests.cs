@@ -28,13 +28,13 @@ namespace PeachPDF.Tests.Html.Core
                 "<div id='b' style='height:20px; background:rgb(0,0,0);'></div>",
                 pageHeight: 200);
 
-            var slots = container.GetPaginationSlots();
+            var slotTops = container.GetPaginationSlots().Select(s => s.SlotTop).ToList();
 
-            Assert.Contains(0.0, slots);
-            Assert.DoesNotContain(200.0, slots);
-            Assert.DoesNotContain(400.0, slots);
-            Assert.DoesNotContain(600.0, slots);
-            Assert.Contains(800.0, slots);
+            Assert.Contains(0.0, slotTops);
+            Assert.DoesNotContain(200.0, slotTops);
+            Assert.DoesNotContain(400.0, slotTops);
+            Assert.DoesNotContain(600.0, slotTops);
+            Assert.Contains(800.0, slotTops);
         }
 
         [Fact]
@@ -51,7 +51,8 @@ namespace PeachPDF.Tests.Html.Core
 
             var slots = container.GetPaginationSlots();
 
-            Assert.Equal(new[] { 0.0, 200.0, 400.0, 600.0, 800.0 }, slots);
+            Assert.Equal(new[] { 0.0, 200.0, 400.0, 600.0, 800.0 }, slots.Select(s => s.SlotTop));
+            Assert.Equal(new[] { 0, 1, 2, 3, 4 }, slots.Select(s => s.SlotIndex));
         }
 
         [Fact]
@@ -67,7 +68,7 @@ namespace PeachPDF.Tests.Html.Core
             var slots = container.GetPaginationSlots();
 
             Assert.Single(slots);
-            Assert.Equal(0.0, slots[0]);
+            Assert.Equal((0, 0.0), slots[0]);
         }
 
         // --- Helper ---

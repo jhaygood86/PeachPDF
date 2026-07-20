@@ -40,6 +40,7 @@ namespace PeachPDF.Html.Core.Dom
             int pageNumber,
             int totalPages,
             double pageY,
+            double pageContentHeight,
             IReadOnlyList<NamedString> namedStrings,
             RAdapter adapter,
             StyleDeclaration? pageStyle,
@@ -69,7 +70,11 @@ namespace PeachPDF.Html.Core.Dom
                     continue;
                 }
 
-                var text = ResolveContent(contentValue, pageNumber, totalPages, pageY, pageSize.Height - marginTop - marginBottom, namedStrings);
+                // pageY and pageContentHeight are internal-pixel document space, the same space
+                // NamedString Ys are registered in - deriving the band from the point-space
+                // pageSize/margins here used to skew named-string page attribution whenever
+                // ShrinkToFit made PixelsPerPoint diverge from 1.0.
+                var text = ResolveContent(contentValue, pageNumber, totalPages, pageY, pageContentHeight, namedStrings);
                 if (text == null)
                     continue;
 

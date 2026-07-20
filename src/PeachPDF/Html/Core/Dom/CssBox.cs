@@ -1124,8 +1124,26 @@ namespace PeachPDF.Html.Core.Dom
                     // per-page clip and GetPaginationSlots already use) - computing this via raw modulo
                     // arithmetic against PageSize.Height alone (as this used to) silently lands a
                     // marginTop-wide band, right at the end of every raw page, one whole page short.
-                    previousSiblingForBreak.ActualBottom = HtmlContainer!.PageTopOf(
-                        HtmlContainer.PageIndexOf(previousSiblingForBreak.ActualBottom) + 1);
+                    //
+                    // The epsilon implements css-break-3 §4.4's "no empty fragmentainer for a single
+                    // forced break at a boundary": a sibling whose content ENDS flush on a slot
+                    // boundary (e.g. a full-bleed cover sized exactly to its page's band) already
+                    // satisfies the break - the target is that boundary itself, not the slot after
+                    // it (which manufactured a blank page). A zero-height sibling sitting AT the
+                    // boundary (the consecutive-forced-breaks case - it was itself relocated there
+                    // by its own preceding break) occupies the LATER slot, so the break between it
+                    // and this box still pushes past it, preserving the intentional blank page.
+                    var container = HtmlContainer!;
+                    var prevBottom = previousSiblingForBreak.ActualBottom;
+                    var target = container.PageTopOf(
+                        container.PageIndexOf(prevBottom - HtmlContainerInt.PageBoundaryEpsilon) + 1);
+                    if (previousSiblingForBreak.Location.Y >= target - HtmlContainerInt.PageBoundaryEpsilon)
+                    {
+                        target = container.PageTopOf(
+                            container.PageIndexOf(previousSiblingForBreak.Location.Y + HtmlContainerInt.PageBoundaryEpsilon) + 1);
+                    }
+
+                    previousSiblingForBreak.ActualBottom = target;
                 }
             }
 
@@ -1187,9 +1205,11 @@ namespace PeachPDF.Html.Core.Dom
                                 // Same shifted grid GetPaginationSlots()/the forced-break logic above use
                                 // (see HtmlContainer.PageIndexOf's own doc comment) - matching
                                 // BreakInside_Avoid_PositionsAtTopOfNextPage's already-established
-                                // convention.
-                                var prevSlot = HtmlContainer.PageIndexOf(baseTop);
-                                var naturalSlot = HtmlContainer.PageIndexOf(top);
+                                // convention. The epsilons attribute a value flush ON a boundary to
+                                // the earlier slot (a sibling ending exactly at a slot boundary is
+                                // wholly inside it), mirroring the forced-break flush-fit rule above.
+                                var prevSlot = HtmlContainer.PageIndexOf(baseTop - HtmlContainerInt.PageBoundaryEpsilon);
+                                var naturalSlot = HtmlContainer.PageIndexOf(top - HtmlContainerInt.PageBoundaryEpsilon);
                                 if (naturalSlot > prevSlot)
                                 {
                                     top = HtmlContainer.PageTopOf(prevSlot + 1);
@@ -2337,11 +2357,13 @@ namespace PeachPDF.Html.Core.Dom
             if (Size.Height >= container!.PageSize.Height)
                 return false;
 
-            // Equivalent to the historical modulo formulation ((y - MarginTop) % PageSize.Height for
-            // top vs bottom): given the height guard above, the box straddles a slot boundary exactly
-            // when its top and bottom land in different slots — including a bottom flush ON the
-            // boundary, which PageIndexOf already attributes to the next slot.
-            if (container.PageIndexOf(Location.Y) >= container.PageIndexOf(ActualBottom))
+            // Given the height guard above, the box straddles a slot boundary exactly when its top
+            // and bottom land in different slots. The epsilons make a flush fit a NON-break: a box
+            // ending exactly ON a boundary is wholly inside the earlier slot (css-break-3 - no
+            // spurious relocation for exact-fit content), where the historical modulo formulation
+            // relocated it by a page.
+            if (container.PageIndexOf(Location.Y + HtmlContainerInt.PageBoundaryEpsilon)
+                >= container.PageIndexOf(ActualBottom - HtmlContainerInt.PageBoundaryEpsilon))
                 return false;
 
             Location = Location with { Y = container.NextPageTopOf(Location.Y) + 1 };
@@ -2487,7 +2509,9 @@ namespace PeachPDF.Html.Core.Dom
 
             if (RegisteredNamedPageElement is not null)
             {
-                RegisteredNamedPageElement.Y += amount;
+                // Routed through the container so the per-page geometry table can invalidate every
+                // slot either the old or new position could have influenced.
+                HtmlContainer!.MoveNamedPageElement(RegisteredNamedPageElement, RegisteredNamedPageElement.Y + amount);
             }
 
             foreach (var b in Boxes)
