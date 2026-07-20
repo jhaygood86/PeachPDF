@@ -421,6 +421,61 @@ namespace PeachPDF.Tests.Html.Core.Dom
         }
 
         [Fact]
+        public async Task TableFooter_MultiPageTable_FooterTextIsPaintedOnEveryPage()
+        {
+            // End-to-end paint proof that a repeating <tfoot>'s text actually gets drawn (not just
+            // that a proxy with the right geometry exists) on both an intermediate page and the
+            // final page, per this repo's testing conventions. Complements the geometry-only check
+            // in TableFooter_MultiPageTable_FooterLayoutsCorrectly, which is what actually pins down
+            // GitHub issue #124's underlying defect (the footer row-group box's ActualRight was
+            // never set, unlike the header's, leaving every footer CssProxyBox with a degenerate
+            // zero-width Bounds).
+            var pageHeight = 200.0;
+
+            var html = @"
+<!DOCTYPE html>
+<html>
+<body>
+    <table style='width:100%;border-collapse:collapse;'>
+        <tbody>
+" + string.Join("", Enumerable.Range(1, 20).Select(i =>
+    $"<tr><td style='border:1px solid black;padding:5px;'>Row {i}</td></tr>")) + @"
+        </tbody>
+        <tfoot>
+            <tr><td style='border:1px solid black;padding:5px;font-weight:bold;'>FOOTERMARKER</td></tr>
+        </tfoot>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, container) = await BuildCssBoxTree(html, pageHeight);
+
+            var table = FindTableBox(rootBox);
+            Assert.NotNull(table);
+            Assert.NotNull(table.PageBreakBottoms);
+            Assert.NotEmpty(table.PageBreakBottoms);
+
+            var lastPageIndex = (int)(table.ActualBottom / pageHeight);
+            Assert.True(lastPageIndex >= 1, "Table should span at least 2 pages for this test to be meaningful.");
+
+            var adapter = new PeachPDF.Adapters.PdfSharpAdapter();
+
+            // Page 0 is an intermediate page - the footer should repeat here.
+            var page0Recording = new RecordingGraphics(adapter);
+            container.ScrollOffset = new PeachPDF.Html.Adapters.Entities.RPoint(0, 0);
+            await container.PerformPaint(page0Recording);
+            _output.WriteLine($"Page 0 drawn strings: [{string.Join(", ", page0Recording.DrawnStrings.Select(w => w.Text))}]");
+            Assert.Contains(page0Recording.DrawnStrings, w => w.Text.Contains("FOOTERMARKER"));
+
+            // The footer must also appear at the end of the table's content on the last page.
+            var lastPageRecording = new RecordingGraphics(adapter);
+            container.ScrollOffset = new PeachPDF.Html.Adapters.Entities.RPoint(0, -(lastPageIndex * pageHeight));
+            await container.PerformPaint(lastPageRecording);
+            _output.WriteLine($"Last page drawn strings: [{string.Join(", ", lastPageRecording.DrawnStrings.Select(w => w.Text))}]");
+            Assert.Contains(lastPageRecording.DrawnStrings, w => w.Text.Contains("FOOTERMARKER"));
+        }
+
+        [Fact]
         public async Task PageBreakBottoms_NegativeOrZeroClipHeight_GuardPreventsDegenerate()
         {
             // CssBox.PaintImp only applies the rectForBorders adjustment when pageBreakBottomVisual
@@ -698,6 +753,8 @@ namespace PeachPDF.Tests.Html.Core.Dom
             public int PopCount { get; private set; }
             /// <summary>Y-coordinates of horizontal lines drawn (where y1 ≈ y2).</summary>
             public List<double> HorizontalLines { get; } = [];
+            /// <summary>Every word string passed to DrawString during this paint pass, with the Y it was drawn at.</summary>
+            public List<(string Text, double Y)> DrawnStrings { get; } = [];
 
             public RecordingGraphics(PeachPDF.Html.Adapters.RAdapter adapter)
                 : base(adapter, new PeachPDF.Html.Adapters.Entities.RRect(0, 0, double.MaxValue, double.MaxValue)) { }
@@ -747,7 +804,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             public override void ReturnPreviousSmoothingMode(object? prevMode) { }
             public override PeachPDF.Html.Adapters.Entities.RSize MeasureString(string str, PeachPDF.Html.Adapters.RFont font) => new(0, 12);
             public override void MeasureString(string str, PeachPDF.Html.Adapters.RFont font, double maxWidth, out int charFit, out double charFitWidth) { charFit = str?.Length ?? 0; charFitWidth = 0; }
-            public override void DrawString(string str, PeachPDF.Html.Adapters.RFont font, PeachPDF.Html.Adapters.Entities.RColor color, PeachPDF.Html.Adapters.Entities.RPoint point, PeachPDF.Html.Adapters.Entities.RSize size, bool rtl, double letterSpacing = 0) { }
+            public override void DrawString(string str, PeachPDF.Html.Adapters.RFont font, PeachPDF.Html.Adapters.Entities.RColor color, PeachPDF.Html.Adapters.Entities.RPoint point, PeachPDF.Html.Adapters.Entities.RSize size, bool rtl, double letterSpacing = 0) => DrawnStrings.Add((str, point.Y));
             public override void DrawRectangle(PeachPDF.Html.Adapters.RPen pen, double x, double y, double width, double height) { }
             public override void DrawRectangle(PeachPDF.Html.Adapters.RBrush brush, double x, double y, double width, double height) { }
             public override void DrawImage(PeachPDF.Html.Adapters.RImage image, PeachPDF.Html.Adapters.Entities.RRect destRect, PeachPDF.Html.Adapters.Entities.RRect srcRect) { }

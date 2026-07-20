@@ -303,9 +303,22 @@ var pageSpan = CalculateTablePageSpan(tableBox, pageHeight, marginTop);
 
             Assert.True(tableBox.ActualBottom > pageHeight);
 
-            // Verify footer infrastructure
-            var tfootBox = FindBoxByDisplay(tableBox, CssConstants.TableFooterGroup);
-            Assert.NotNull(tfootBox);
+            // With the proxy system, tfoot is replaced by proxy boxes - same as thead.
+            var footerProxies = FindProxyBoxesByDisplay(tableBox, CssConstants.TableFooterGroup);
+            Assert.NotEmpty(footerProxies);
+            Assert.True(footerProxies.Count >= 2,
+                $"Multi-page table with footer should have at least 2 footer proxies, but has {footerProxies.Count}");
+
+            foreach (var footerProxy in footerProxies)
+            {
+                // Regression guard for GitHub issue #124: a footer proxy whose ActualRight was
+                // never set collapses to a zero-width Bounds, which paint-time visibility culling
+                // (CssBox.Paint) then silently treats as never visible - the footer content never
+                // painted on any page. A real width here is what actually lets the footer paint.
+                Assert.True(footerProxy.ActualRight > footerProxy.Location.X,
+                    $"Footer proxy at Y={footerProxy.Location.Y} has a degenerate zero-width Bounds " +
+                    $"(Location.X={footerProxy.Location.X}, ActualRight={footerProxy.ActualRight}) - it would be culled at paint time.");
+            }
 
             var pageSpan = CalculateTablePageSpan(tableBox, pageHeight, marginTop);
             Assert.True(pageSpan >= 2, $"Table with footer should span at least 2 pages");
