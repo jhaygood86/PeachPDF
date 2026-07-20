@@ -26,8 +26,10 @@ namespace PeachPDF.Html.Core
     /// slot k+1 starts where slot k's band ends. Built forward-incrementally and lazily: slot k's
     /// applicable rule needs only the page number (known a priori for <c>:first</c>/<c>:left</c>/
     /// <c>:right</c>) and the named page active at the slot's START — and because a change of page
-    /// name always forces a break to a slot top (<c>CssBox.PerformLayoutImp</c>), that name is fully
-    /// determined by content laid out before the slot, so no fixpoint relayout is ever needed. A
+    /// name always forces a break onto a fresh page (<c>CssBox.PerformLayoutImp</c>), with the
+    /// registration snapped to that page's slot top (<c>CssBox.NamedPageRegistrationY</c>) and made
+    /// BEFORE the named box's children lay out, that name is fully determined by content laid out
+    /// before the slot, so no fixpoint relayout is ever needed. A
     /// named-page registration only invalidates cached slots at/after its own Y
     /// (<see cref="InvalidateFrom"/>); boxes that consumed those entries are inside those slots and
     /// lay out at/after the registering box.

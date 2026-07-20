@@ -1096,6 +1096,12 @@ namespace PeachPDF.Html.Core.Dom
                 CssNamedStringEngine.ApplyStringSet(this);
             }
 
+            // A previous layout pass's registration was orphaned wholesale by PerformLayout's
+            // ClearNamedPageElements - drop the stale reference so this pass's registration logic
+            // (early for block containers below, tail sync/fallback at the end of this method)
+            // starts clean instead of silently "syncing" an element no longer in the registry.
+            RegisteredNamedPageElement = null;
+
             // Spec (css-break §3.1): a forced break occurs at a class A break point if
             // the earlier sibling's break-after OR the later sibling's break-before has a
             // forced break value — at least one is sufficient.
@@ -1289,6 +1295,21 @@ namespace PeachPDF.Html.Core.Dom
                         var top = ActualMarginTop + CssValueParser.ParseLength(Top, HtmlContainer!.PageSize.Height, this);
                         Location = new RPoint(left, top);
                     }
+                }
+
+                // Register the named page BEFORE any child lays out: descendants' page-break
+                // decisions consult the per-page geometry table, whose slot bands from this box's
+                // page onward depend on this name being visible (PageRuleResolver.
+                // ActiveNameAtSlotStart) - registering only after child layout (this method's tail,
+                // formerly the sole registration point) let a multi-page named element's own content
+                // paginate against the PREVIOUS name's bands. Movers that can still run after this
+                // point (BreakInside: avoid, orphans/widows, the absolute bottom-edge fallback) all
+                // route through OffsetTop, which keeps the registration in sync via
+                // MoveNamedPageElement; engines that relocate this box directly (e.g.
+                // CssLayoutEngineTable's whole-table pre-check) are re-synced by the tail check.
+                if (!string.IsNullOrEmpty(PageName) && PageName != CssConstants.Auto && HtmlContainer is not null)
+                {
+                    RegisteredNamedPageElement = HtmlContainer.RegisterNamedPageElement(PageName, NamedPageRegistrationY());
                 }
 
                 if (Display is CssConstants.Flex or CssConstants.InlineFlex)
@@ -1524,17 +1545,26 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
-            // Register named page element if page property is set. Must run here, after every branch
-            // above that can still move this box's own Location (Position: static/relative/absolute/
-            // fixed, the BreakInside: avoid OffsetTop nudge, and the absolute right-edge OffsetLeft
-            // adjustment) — registering earlier (e.g. at the top of this method) would capture
-            // Location's default (0, 0), since it isn't assigned until those branches run. A *later*
-            // reposition by an ancestor's layout engine after this box's own PerformLayoutImp has returned
-            // (e.g. CssLayoutEngineColumns re-banding a column child via OffsetTop) is handled by retaining
-            // the registered element on RegisteredNamedPageElement, which OffsetTop keeps in sync.
-            if (!string.IsNullOrEmpty(PageName) && PageName != "auto")
+            // Named-page registration tail: block containers already registered before child layout
+            // (see the early registration above the layout-engine dispatch); everything else (e.g. a
+            // box that never entered the block branch) registers here, after every branch above that
+            // can still move this box's own Location. For an already-registered box this is a re-sync
+            // for movers that bypass OffsetTop (CssLayoutEngineTable's whole-table pre-check assigns
+            // Location directly). A *later* reposition by an ancestor's layout engine after this
+            // box's own PerformLayoutImp has returned (e.g. CssLayoutEngineColumns re-banding a
+            // column child via OffsetTop) is handled by retaining the registered element on
+            // RegisteredNamedPageElement, which OffsetTop keeps in sync.
+            if (!string.IsNullOrEmpty(PageName) && PageName != CssConstants.Auto && HtmlContainer is not null)
             {
-                RegisteredNamedPageElement = HtmlContainer?.RegisterNamedPageElement(PageName, Location.Y);
+                var registrationY = NamedPageRegistrationY();
+                if (RegisteredNamedPageElement is null)
+                {
+                    RegisteredNamedPageElement = HtmlContainer.RegisterNamedPageElement(PageName, registrationY);
+                }
+                else if (Math.Abs(RegisteredNamedPageElement.Y - registrationY) > HtmlContainerInt.PageBoundaryEpsilon)
+                {
+                    HtmlContainer.MoveNamedPageElement(RegisteredNamedPageElement, registrationY);
+                }
             }
 
             // Correct the Y captured too early by ApplyStringSet (called near the top of this method,
@@ -2475,6 +2505,24 @@ namespace PeachPDF.Html.Core.Dom
                 margin = lastNonFloatingBox.GetEffectiveBottomMargin();
             }
             return Math.Max(ActualBottom, lastNonFloatingBox.StaticBottom + margin + ActualPaddingBottom + ActualBorderBottomWidth);
+        }
+
+        /// <summary>
+        /// The document Y to attribute this box's named-page registration to: the top of the
+        /// pagination slot its page starts on. After a named-page forced break the box itself sits
+        /// its preserved margin-top below the slot top (css-break-3 §5.2 - margins after a forced
+        /// break are kept), and the document's first box sits below the content origin by its own
+        /// margins - but per css-page-3 the PAGE the box starts on carries its name, so the geometry
+        /// table's slot-start attribution (<c>PageRuleResolver.ActiveNameAtSlotStart</c>) must see
+        /// the registration at the slot top itself. Outside real pagination (no page band, or the
+        /// <c>double.MaxValue</c> measurement sentinel) the raw location is used unchanged.
+        /// </summary>
+        private double NamedPageRegistrationY()
+        {
+            var container = HtmlContainer!;
+            return container.PageSize.Height > 0 && container.PageSize.Height < double.MaxValue - 1
+                ? container.PageTopOf(container.PageIndexOf(Location.Y + HtmlContainerInt.PageBoundaryEpsilon))
+                : Location.Y;
         }
 
         /// <summary>

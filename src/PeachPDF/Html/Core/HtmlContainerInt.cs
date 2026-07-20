@@ -360,6 +360,10 @@ namespace PeachPDF.Html.Core
             DocumentLanguage = null;
             ClearNamedStrings();
             ClearNamedPageElements();
+            // New content means new @page rules: drop cached slot geometry and the vertical-override
+            // scan so nothing consults the previous document's bands before the next layout pass
+            // (which resets again defensively).
+            PageGeometry.Reset();
         }
 
         /// <summary>

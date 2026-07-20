@@ -42,9 +42,11 @@ namespace PeachPDF.Html.Core.Dom
         /// <paramref name="slotTop"/> (with the boundary epsilon, so an element registered exactly at
         /// the slot top counts as this slot's name). Used by the per-page geometry computation, where
         /// a slot's band height must not depend on registrations *inside* the slot — legal because a
-        /// box whose explicit <c>page</c> differs from the active name always forces a break and so
-        /// lands exactly at a slot top (see <c>CssBox.PerformLayoutImp</c>'s named-page forced break);
-        /// a name can therefore never genuinely change mid-slot.
+        /// box whose explicit <c>page</c> differs from the active name always forces a break onto a
+        /// fresh page (see <c>CssBox.PerformLayoutImp</c>'s named-page forced break), and its
+        /// registration Y is snapped to that page's slot top (<c>CssBox.NamedPageRegistrationY</c> —
+        /// the box itself sits its preserved post-break margin below the top); a name can therefore
+        /// never genuinely change mid-slot.
         /// </summary>
         internal static string? ActiveNameAtSlotStart(
             IReadOnlyList<NamedPageElement> namedPageElements, double slotTop)
