@@ -17,6 +17,57 @@ namespace PeachPDF.Html.Core.Dom
             return box.Counters.GetValueOrDefault(counterName);
         }
 
+        /// <summary>
+        /// Formats a resolved counter value as a string using the given CSS counter style
+        /// (<c>decimal</c>, <c>decimal-leading-zero</c>, <c>lower-roman</c>, <c>upper-alpha</c>, etc.).
+        /// This is the single counter-style resolver shared by <c>content: counter()</c>
+        /// (<see cref="CssContentEngine"/>) and the list-item marker (<see cref="CssBoxMarker"/>).
+        /// Per <see href="https://www.w3.org/TR/css-counter-styles-3/">CSS Counter Styles Level 3 §2</see>,
+        /// an unknown or invalid style falls back to <c>decimal</c> rather than rendering nothing.
+        /// </summary>
+        public static string FormatCounterValue(int number, string style)
+        {
+            if (style.Equals(CssConstants.DecimalLeadingZero, StringComparison.OrdinalIgnoreCase))
+            {
+                return number.ToString("00", CultureInfo.InvariantCulture);
+            }
+
+            if (IsAlphabeticCounterStyle(style))
+            {
+                var formatted = CommonUtils.ConvertToAlphaNumber(number, style);
+
+                // Alphabetic/symbolic styles have no representation for values outside their range
+                // (e.g. 0 or negatives, for which ConvertToAlphaNumber yields the empty string) - such
+                // values fall back to decimal too, per CSS Counter Styles Level 3 §2.
+                return formatted.Length > 0 ? formatted : number.ToString(CultureInfo.InvariantCulture);
+            }
+
+            // `decimal` (explicit) and any unknown/invalid style fall back to decimal.
+            return number.ToString(CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>
+        /// Whether <paramref name="style"/> is one of the alphabetic/algorithmic counter styles that
+        /// <see cref="CommonUtils.ConvertToAlphaNumber"/> genuinely handles. Listed explicitly (rather
+        /// than relying on that method's catch-all) so a known style isn't wrongly demoted to decimal
+        /// and an unknown one isn't wrongly promoted to alpha - unknown styles must fall back to decimal.
+        /// </summary>
+        private static bool IsAlphabeticCounterStyle(string style) =>
+            style.Equals(CssConstants.LowerGreek, StringComparison.OrdinalIgnoreCase) ||
+            style.Equals(CssConstants.LowerRoman, StringComparison.OrdinalIgnoreCase) ||
+            style.Equals(CssConstants.UpperRoman, StringComparison.OrdinalIgnoreCase) ||
+            style.Equals(CssConstants.Armenian, StringComparison.OrdinalIgnoreCase) ||
+            style.Equals(CssConstants.Georgian, StringComparison.OrdinalIgnoreCase) ||
+            style.Equals(CssConstants.Hebrew, StringComparison.OrdinalIgnoreCase) ||
+            style.Equals(CssConstants.Hiragana, StringComparison.OrdinalIgnoreCase) ||
+            style.Equals(CssConstants.HiraganaIroha, StringComparison.OrdinalIgnoreCase) ||
+            style.Equals(CssConstants.Katakana, StringComparison.OrdinalIgnoreCase) ||
+            style.Equals(CssConstants.KatakanaIroha, StringComparison.OrdinalIgnoreCase) ||
+            style.Equals(CssConstants.LowerAlpha, StringComparison.OrdinalIgnoreCase) ||
+            style.Equals(CssConstants.LowerLatin, StringComparison.OrdinalIgnoreCase) ||
+            style.Equals(CssConstants.UpperAlpha, StringComparison.OrdinalIgnoreCase) ||
+            style.Equals(CssConstants.UpperLatin, StringComparison.OrdinalIgnoreCase);
+
         private static void ApplyCounterResets(CssBox box)
         {
             var counterReset = GetEffectiveCounterReset(box);

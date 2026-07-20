@@ -14,7 +14,6 @@ using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Utils;
-using System.Globalization;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Dom
@@ -89,11 +88,7 @@ namespace PeachPDF.Html.Core.Dom
 
             var index = CssCounterEngine.GetCounter(this, CssConstants.ListItem)?.Value ?? 1;
 
-            Text = listStyleType.Equals(CssConstants.Decimal, System.StringComparison.OrdinalIgnoreCase)
-                ? index.ToString(CultureInfo.InvariantCulture) + "."
-                : listStyleType.Equals(CssConstants.DecimalLeadingZero, System.StringComparison.OrdinalIgnoreCase)
-                    ? index.ToString("00", CultureInfo.InvariantCulture) + "."
-                    : CommonUtils.ConvertToAlphaNumber(index, listStyleType) + ".";
+            Text = CssCounterEngine.FormatCounterValue(index, listStyleType) + ".";
         }
 
         internal override async ValueTask MeasureWordsSize(RGraphics g)

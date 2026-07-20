@@ -3145,7 +3145,7 @@ var invoiceHtml = """
     table.items thead th.r, table.items td.r { text-align: right; }
     table.items tbody td { padding: 5.5pt 6pt; border-bottom: 0.75pt solid #e3e0db; vertical-align: top; }
     table.items tbody td.n::before {
-      counter-increment: line; content: "0" counter(line);
+      counter-increment: line; content: counter(line, decimal-leading-zero);
       font-weight: bold; color: var(--accent); font-size: 8pt;
     }
     .item-name { font-weight: bold; }
@@ -3243,7 +3243,7 @@ var invoiceHtml = """
     """;
 
 await SaveShowcaseAsync("invoice", "Real-World Documents", "Modern Invoice",
-    "A one-page, full-bleed invoice in a dark green palette: custom properties, oklch gradient interpolation, gradient-border cards, CSS counters, a transform stamp, and an inline SVG logo.",
+    "A one-page, full-bleed invoice in a dark green palette: custom properties, oklch gradient interpolation, gradient-border cards, zero-padded line numbers via counter(line, decimal-leading-zero), a transform stamp, and an inline SVG logo.",
     invoiceHtml, new PdfGenerateConfig { PageSize = PageSize.Letter });
 
 // ─── Real-World Documents: ten-page print catalog ───
