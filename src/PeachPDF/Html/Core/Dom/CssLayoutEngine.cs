@@ -617,7 +617,12 @@ namespace PeachPDF.Html.Core.Dom
                         continue;
                 }
 
-                clearance = Math.Max(clearance, siblingBox.ActualBottom);
+                // CSS 2.1 §9.5.2: clearance places the cleared box's top border edge even with the
+                // float's bottom OUTER (margin) edge, not its border edge - a float with a negative
+                // bottom margin (Acid2's ".nose { margin: -2em 2em -1em }") is cleared 1em higher
+                // than its visible bottom. StaticBottom so a float that is ALSO position:relative
+                // clears at its static position, not its visual offset (CSS 2.1 §9.4.3).
+                clearance = Math.Max(clearance, siblingBox.StaticBottom + siblingBox.ActualMarginBottom);
 
             }
 
@@ -640,14 +645,19 @@ namespace PeachPDF.Html.Core.Dom
                     continue;
                 }
 
+                // clearPropValue (the CLEARING box's own `clear` value, passed down through the
+                // recursion) - not box.Clear, which is the container being searched and is usually
+                // "none", never filtering anything.
                 switch (childBox.Float)
                 {
-                    case CssConstants.Left when box.Clear is CssConstants.Right:
-                    case CssConstants.Right when box.Clear is CssConstants.Left:
+                    case CssConstants.Left when clearPropValue is CssConstants.Right:
+                    case CssConstants.Right when clearPropValue is CssConstants.Left:
                         continue;
                 }
 
-                clearance = Math.Max(clearance, childBox.ActualBottom);
+                // Bottom outer (margin) edge at the static position, same as ClearBox above
+                // (CSS 2.1 §9.5.2 / §9.4.3).
+                clearance = Math.Max(clearance, childBox.StaticBottom + childBox.ActualMarginBottom);
             }
 
             return clearance;

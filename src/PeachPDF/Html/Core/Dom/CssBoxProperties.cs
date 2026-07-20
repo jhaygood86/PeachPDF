@@ -633,7 +633,7 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Gets or sets the bottom of the box. 
+        /// Gets or sets the bottom of the box.
         /// (When setting, alters only the Size.Height of the box)
         /// </summary>
         public double ActualBottom
@@ -641,6 +641,24 @@ namespace PeachPDF.Html.Core.Dom
             get => Location.Y + ActualBoxSizingHeight;
             set => Size = new RSize(Size.Width, value - ActualBoxSizeIncludedHeight - Location.Y);
         }
+
+        /// <summary>
+        /// The box's own relative-positioning offsets (CSS 2.1 §9.4.3), recorded when Position is
+        /// relative. A relative offset moves the box (and its descendants) visually without affecting
+        /// the layout of anything around it, so in-flow consumers - a following sibling's static
+        /// position, the parent's content-driven height/width - must back these out.
+        /// </summary>
+        internal double RelativeOffsetX { get; set; }
+
+        /// <inheritdoc cref="RelativeOffsetX"/>
+        internal double RelativeOffsetY { get; set; }
+
+        /// <summary>
+        /// The bottom edge of the box at its static (un-offset) position - what in-flow layout of
+        /// following siblings and ancestors must measure against per CSS 2.1 §9.4.3;
+        /// <see cref="ActualBottom"/> itself tracks the visually offset box.
+        /// </summary>
+        internal double StaticBottom => ActualBottom - RelativeOffsetY;
 
         /// <summary>
         /// Gets the left of the client rectangle (Where content starts rendering)

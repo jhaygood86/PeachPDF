@@ -662,36 +662,84 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task Smile_NegativeClearance_NotPushedBelowNaturalFlowPositionByRealFloats()
+        public async Task Smile_Clearance_LandsExactlyAtNoseFloatBottomMarginEdge()
         {
-            // Verification-gap closer (no bug expected): CssLayoutEngine.ClearBox's negative-clearance
-            // floor (clearance = Math.Max(containingBox.ClientTop, box.Location.Y), so a box already
-            // below the relevant floats' bottoms can never be pushed further) is already verified
-            // correct by code trace and an isolated analog test
-            // (ClearBoth_NegativeClearance_DoesNotPushBelowNaturalFlowPosition), but nothing previously
-            // pinned it against the REAL fixture's actual float configuration - ".nose" and "#eyes-b"
-            // (both floats, real ActualBottom measured well above ".smile"'s natural static-flow
-            // position, thanks to ".empty"'s own margin collapsing through it per 8.3.1:7) plus
-            // ".smile { clear: both }" itself. A regression here (e.g. clearance wrongly ADDING to an
-            // already-past-the-floats position instead of flooring at it) would push ".smile" down by
-            // roughly its own margin-top on top of the floats' bottoms - asserting a tight upper bound
-            // well below that catches it without hardcoding today's exact pixel value.
+            // The fixture's own "clearance is negative (see 8.3.1 and 9.5.1)" comment on ".smile",
+            // verified end-to-end. Three mechanisms have to compose for the mouth to touch the nose
+            // (this test's earlier revision pinned the pre-fix behavior of all three as "correct" and
+            // asserted .smile could never sit above the floats' BORDER bottoms - both premises wrong):
+            //
+            // 1. ".smile"'s hypothetical (clear:none) position collapses through ".empty" as ONE
+            //    adjoining set per CSS2.1 §8.3.1 - {.forehead's 4em, .empty's 6.25em top AND bottom,
+            //    its child's -6em, .smile's own 5em} -> 6.25em - 6em = 0.25em past ".forehead", which
+            //    is well ABOVE the ".nose" float's bottom. This needs set-based max(positives) +
+            //    min(negatives) accumulation (CssBox.MarginTopCollapse) including the margins of the
+            //    boxes ".empty" collapses through (FoldSelfCollapsingMargins) - pairwise reduction
+            //    or skipping the -6em child leaves the hypothetical position below the float, and
+            //    then clearance never triggers at all.
+            // 2. Because the hypothetical position is not past the float, clearance IS introduced
+            //    (CSS2.1 §9.5.2) and places .smile's top border edge even with the float's bottom
+            //    OUTER edge - the margin edge, ActualBottom + ActualMarginBottom, which ".nose"'s
+            //    margin-bottom: -1em puts 1em ABOVE its visible border-box bottom
+            //    (CssLayoutEngine.ClearBox).
+            // 3. ".smile div"'s { position: relative; bottom: -1em } then shifts the black mouth bar
+            //    1em back down, so the mouth's visible top lands exactly at the nose's visible
+            //    bottom - see SmileAndChin_MouthBarIsContiguousWithNoseAndChin.
             var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
             var nose = FindByClass(root, "nose")!;
             var eyesB = FindById(root, "eyes-b")!;
             var smile = FindByClass(root, "smile")!;
 
-            // The CSS requirement itself: clear:both means .smile's top must not be above either float's
-            // bottom edge.
-            Assert.True(smile.Location.Y >= nose.ActualBottom - 0.5);
-            Assert.True(smile.Location.Y >= eyesB.ActualBottom - 0.5);
+            var noseBottomMarginEdge = nose.ActualBottom + nose.ActualMarginBottom;
+            Assert.True(nose.ActualMarginBottom < 0, "fixture sanity: .nose has margin-bottom: -1em");
+            Assert.InRange(smile.Location.Y, noseBottomMarginEdge - 0.5, noseBottomMarginEdge + 0.5);
 
-            // Negative clearance is a no-op, not an addition: .smile's natural flow position is already
-            // well past both floats, so clearance must not push it any further down by adding its own
-            // margin-top (or anything else) on top of the floats' bottoms a second time.
-            var wronglyPushedY = Math.Max(nose.ActualBottom, eyesB.ActualBottom) + smile.ActualMarginTop;
+            // ".nose" (not "#eyes-b", much higher up the face) is the lowest relevant float, so its
+            // margin edge is the one that governs.
+            Assert.True(noseBottomMarginEdge >= eyesB.ActualBottom + eyesB.ActualMarginBottom - 0.5);
+
+            // Clearance is a placement, not an addition: a regression that ADDS .smile's own
+            // margin-top on top of the float's bottom edge again would land it well below this.
+            var wronglyPushedY = noseBottomMarginEdge + smile.ActualMarginTop;
             Assert.True(smile.Location.Y < wronglyPushedY - 1,
                 $"expected .smile's real Y ({smile.Location.Y}) to be well below the wrongly-pushed value ({wronglyPushedY}) that double-counting clearance would produce");
+        }
+
+        [Fact]
+        public async Task SmileAndChin_MouthBarIsContiguousWithNoseAndChin()
+        {
+            // The mouth (".smile div", the 12em x 2em black bar, painted 1em lower than its static
+            // position by its own { position: relative; bottom: -1em }) must be flush against both
+            // the nose block above it and ".chin" below it - the reference rendering has no white
+            // rows anywhere inside the face. Regression coverage for the two independent bugs that
+            // each opened a visible white band here:
+            //
+            // - Above the mouth: clearance never triggering (see
+            //   Smile_Clearance_LandsExactlyAtNoseFloatBottomMarginEdge) left ".smile" ~1.5em too
+            //   low, so the bar's visible top no longer touched ".nose"'s visible bottom.
+            // - Below the mouth: the relative offset leaking into ".smile"'s own content-driven
+            //   height (CssBox.MarginBottomCollapse reading the child's offset ActualBottom instead
+            //   of its static position, CSS2.1 §9.4.3) pushed ".chin" a full 1em below the bar's
+            //   visible bottom.
+            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var nose = FindByClass(root, "nose")!;
+            var smile = FindByClass(root, "smile")!;
+            var chin = FindByClass(root, "chin")!;
+            var mouthBar = smile.Boxes[0];
+
+            // Fixture sanity: the relative offset itself must still be applied visually.
+            Assert.Equal(CssConstants.Relative, mouthBar.Position);
+            Assert.True(mouthBar.RelativeOffsetY > 0, "bottom: -1em should shift the bar downward");
+
+            // Visible top of the mouth bar == visible bottom of the nose block.
+            Assert.InRange(mouthBar.Location.Y, nose.ActualBottom - 0.5, nose.ActualBottom + 0.5);
+
+            // Visible bottom of the mouth bar == top of the chin.
+            Assert.InRange(chin.Location.Y, mouthBar.ActualBottom - 0.5, mouthBar.ActualBottom + 0.5);
+
+            // And the parent ".smile"'s own flow height must exclude the visual offset: its bottom
+            // is the bar's STATIC bottom (1em above the bar's visible bottom), not the offset one.
+            Assert.InRange(smile.ActualBottom, mouthBar.StaticBottom - 0.5, mouthBar.StaticBottom + 0.5);
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
