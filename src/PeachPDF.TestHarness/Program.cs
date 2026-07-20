@@ -1005,6 +1005,11 @@ await SaveShowcaseAsync("paged_media_named_strings", "Paged Media", "Named Strin
     namedStringsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // ── Per-page margin variation showcase ─────────────────────────────────────
+// Per-page top/bottom margin overrides are layout-affecting (CSS Paged Media 3 page-box
+// model): each page's own margins define its content band, so the flowing text genuinely
+// breaks at different heights per page - the deep-margined first page holds visibly fewer
+// paragraphs, mirrored :left/:right pages trade extra top space for extra bottom space,
+// and the running furniture follows each page's own margins.
 var perPageMarginsHtml = """
     <!DOCTYPE html>
     <html>
@@ -1017,18 +1022,25 @@ var perPageMarginsHtml = """
         @bottom-center { content: "Page " counter(page) " of " counter(pages); font: 8pt Arial; }
     }
     @page :first {
-        margin-top: 50mm;
+        margin-top: 80mm;
+        margin-bottom: 40mm;
         @top-center { content: none; }
     }
+    @page :left  { margin-top: 45mm; margin-bottom: 15mm; }
+    @page :right { margin-top: 15mm; margin-bottom: 45mm; }
     body { font: 11pt Arial; }
-    h1 { font-size: 22pt; text-align: center; margin-top: 30mm; }
+    h1 { font-size: 22pt; text-align: center; margin: 0 0 4mm; }
+    .note { text-align: center; font-size: 10pt; color: #555; }
     </style>
     </head>
     <body>
       <h1>Per-Page Margin Variation</h1>
-      <p style="text-align:center; font-size: 10pt; color: #555;">Page 1 has 50mm top margin (no header). Pages 2+ have 20mm.</p>
+      <p class="note">Every page's own @page margins define its content band: the first page's deep
+      80mm/40mm margins fit only a few paragraphs, then :right pages (15mm top / 45mm bottom) and
+      :left pages (45mm top / 15mm bottom) alternate mirrored bands - watch where the text starts,
+      where it breaks, and how many paragraphs fit on each page.</p>
     """ +
-    string.Concat(Enumerable.Range(1, 50).Select(i =>
+    string.Concat(Enumerable.Range(1, 60).Select(i =>
         $"<p>Paragraph {i}: Lorem ipsum dolor sit amet, consectetur adipiscing elit. " +
         "Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>")) +
     """
@@ -1037,8 +1049,79 @@ var perPageMarginsHtml = """
     """;
 
 await SaveShowcaseAsync("paged_media_per_page_margins", "Paged Media", "Per-page Margins",
-    "Page margins that vary from page to page using @page selectors.",
+    "Layout-affecting per-page margins: each page's own @page margins define its content band, so text flows into visibly different-height pages (deep first page, mirrored :left/:right bands).",
     perPageMarginsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
+// ── Full-bleed page showcase ───────────────────────────────────────────────
+// The headline capability behind layout-affecting per-page margins: a `margin: 0` first
+// page whose content band is the entire physical sheet. The cover plate is sized to the
+// full A4 sheet (210mm x 297mm) and paints to all four paper edges - corner registration
+// marks prove every corner carries ink - while the forced break lands the second page back
+// on ordinary 20mm margins with its running footer.
+var fullBleedHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    @page {
+        size: A4;
+        margin: 20mm;
+        @bottom-center { content: "Page " counter(page) " of " counter(pages); font: 8pt Arial; }
+    }
+    @page :first {
+        margin: 0;
+        @bottom-center { content: none; }
+    }
+    body { font: 11pt Arial; margin: 0; }
+    /* Corner registration marks: ink in all four sheet corners proves true 4-edge bleed.
+       Drawn as no-repeat background strips (two per corner) layered over the plate
+       gradients, so every corner of the physical sheet demonstrably carries paint. */
+    .cover {
+      width: 210mm;
+      height: 297mm;
+      background-image:
+        linear-gradient(#f2c14e, #f2c14e),
+        linear-gradient(#f2c14e, #f2c14e),
+        linear-gradient(#f2c14e, #f2c14e),
+        linear-gradient(#f2c14e, #f2c14e),
+        linear-gradient(#f2c14e, #f2c14e),
+        linear-gradient(#f2c14e, #f2c14e),
+        linear-gradient(#f2c14e, #f2c14e),
+        linear-gradient(#f2c14e, #f2c14e),
+        radial-gradient(circle at 20% 15%, rgba(255, 255, 255, 0.18), transparent 45%),
+        linear-gradient(155deg in oklch, #0f2b46, #1d5c8a 55%, #2e8bc0);
+      background-position: top left, top left, top right, top right,
+        bottom left, bottom left, bottom right, bottom right, center, center;
+      background-size: 14mm 3mm, 3mm 14mm, 14mm 3mm, 3mm 14mm,
+        14mm 3mm, 3mm 14mm, 14mm 3mm, 3mm 14mm, auto, auto;
+      background-repeat: no-repeat;
+      color: #f2f7fb; text-align: center;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10mm;
+      page-break-after: always;
+    }
+    .cover h1 { font-size: 30pt; letter-spacing: 6pt; word-spacing: 10pt; text-transform: uppercase; font-weight: normal; margin: 0; }
+    .cover p { margin: 0; letter-spacing: 2pt; color: rgba(242, 247, 251, 0.75); }
+    h2 { margin-top: 0; }
+    </style>
+    </head>
+    <body>
+    <div class="cover">
+      <h1>Full Bleed</h1>
+      <p>@page :first &#123; margin: 0 &#125; &mdash; the content band is the whole sheet</p>
+      <p>Corner marks touch all four paper edges</p>
+    </div>
+    <h2>Back to ordinary margins</h2>
+    <p>The cover's forced break lands this page on the base 20mm margins, with the running
+    footer restored. Per-page top and bottom margins are layout-affecting: each page's own
+    @page margins define its content band, so an edge-to-edge cover and a conventionally
+    margined document coexist in one PDF.</p>
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("full_bleed", "Paged Media", "Full-Bleed Pages",
+    "An edge-to-edge cover via @page :first { margin: 0 } - the first page's content band is the entire sheet (corner marks touch all four paper edges), followed by a normally margined page.",
+    fullBleedHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // ── Named pages showcase ────────────────────────────────────────────────────
 var namedPagesHtml = """
@@ -3161,16 +3244,19 @@ await SaveShowcaseAsync("invoice", "Real-World Documents", "Modern Invoice",
     invoiceHtml, new PdfGenerateConfig { PageSize = PageSize.Letter });
 
 // ─── Real-World Documents: ten-page print catalog ───
-// A US Letter catalog designed as a book: gradient cover plate (page 1), eight item pages,
-// and a colophon (page 10). Running furniture mirrors between left- and right-hand pages
-// via :left/:right page selectors - the string-set item name at the top outside corner,
-// the SVG logo as a real margin-box image at top-center (box width pinned to the image so
-// it truly centers; margin-box images ignore box alignment, see
+// A US Letter catalog designed as a book: full-bleed gradient cover (page 1), eight item
+// pages, and a colophon (page 10). Running furniture mirrors between left- and right-hand
+// pages via :left/:right page selectors - the string-set item name at the top outside
+// corner, the SVG logo as a real margin-box image at top-center (box width pinned to the
+// image so it truly centers; margin-box images ignore box alignment, see
 // https://github.com/jhaygood86/PeachPDF/issues/140), and folios in the inside (gutter)
-// bottom corners. The cover is a plate filling the content box (per-page margin overrides
-// to 0 are ignored, #125), followed by a forced break so the first item's flex brand band
-// can't straddle into the sliver left below the plate. The colophon's named page is the
-// last page only, because named-page styles leak onto subsequent auto pages (#126).
+// bottom corners. The cover is a true four-edge full-bleed plate via
+// "@page :first { margin: 0 }": per-page top/bottom margin overrides are layout-affecting
+// (each page gets its own content band per CSS Paged Media 3's page-box model), so page 1's
+// band is the entire 8.5in x 11in sheet and the plate fills it exactly - the forced break
+// after it lands item No. 01 at the top of the normally-margined page 2 with no blank page
+// (exact-boundary forced-break rule, css-break-3). The colophon's named page is the last
+// page only, because named-page styles leak onto subsequent auto pages (#126).
 
 const string catalogLogoSvg = "<svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\">\n" +
     "<defs><linearGradient id=\"ml\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\">\n" +
@@ -3290,6 +3376,7 @@ var catalogHtml = $$"""
       @bottom-right { content: counter(page); font: 9pt Georgia, serif; color: #8a5a3b; }
     }
     @page :first {
+      margin: 0;
       @top-left { content: none; }
       @top-center { content: none; }
       @top-right { content: none; }
@@ -3302,21 +3389,22 @@ var catalogHtml = $$"""
     }
     body { font: 10pt Georgia, serif; color: #2b2620; margin: 0; }
 
-    /* ── Cover (a plate filling the page's content box; per-page margin
-          overrides and @page backgrounds aren't supported, so true full-bleed
-          isn't possible — see the GitHub issues filed alongside this showcase) ── */
+    /* ── Cover: true four-edge full-bleed plate via @page :first { margin: 0 }.
+          The margin-0 first page's content band is the whole 8.5in × 11in sheet
+          (per-page top/bottom margins are layout-affecting), so the plate simply
+          sizes to the sheet: width 8.5in overflows the base layout width to the
+          physical right edge, and height 11in fills page 1's own band exactly -
+          ending flush on the pagination boundary, which the exact-boundary
+          forced-break rule treats as already-satisfied (no blank page 2). ── */
     .cover {
-      height: calc(11in - 0.95in - 0.85in - 2.4pt - 2mm);
-      border: 1.2pt solid rgba(240, 201, 117, 0.55);
+      width: 8.5in;
+      height: 11in;
       background:
         radial-gradient(circle at 30% 20%, rgba(240, 201, 117, 0.35), transparent 55%),
         radial-gradient(circle at 80% 85%, rgba(201, 123, 74, 0.4), transparent 60%),
         linear-gradient(160deg in oklch, #221a12, #3d2c1c 55%, #59402a);
       color: #f4e9d8; text-align: center;
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8mm;
-      /* the forced break needs the v0.9.3 fix for the spurious blank page after a
-         tall broken block; without it, part of the next section's flex brand band
-         can straddle into the sliver left below the plate */
       page-break-after: always;
     }
     .cover h1 { font-size: 34pt; margin: 0; letter-spacing: 8pt; word-spacing: 12pt; text-transform: uppercase; font-weight: normal; }
@@ -3419,7 +3507,7 @@ var catalogHtml = $$"""
     """;
 
 await SaveShowcaseAsync("print_catalog", "Real-World Documents", "Print Catalog",
-    "A ten-page furniture catalog designed as a book: gradient cover plate, per-item SVG art, string-set running headers, a margin-box image logo, and mirrored gutter folios via :left/:right page selectors.",
+    "A ten-page furniture catalog designed as a book: true four-edge full-bleed gradient cover via @page :first { margin: 0 }, per-item SVG art, string-set running headers, a margin-box image logo, and mirrored gutter folios via :left/:right page selectors.",
     catalogHtml, new PdfGenerateConfig { PageSize = PageSize.Letter });
 
 // The manifest that drives the website's /showcase page (see docs/showcase.html and

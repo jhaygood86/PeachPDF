@@ -93,7 +93,16 @@ namespace PeachPDF.Html.Core
 
             Adapter = adapter;
             CssParser = new CssParser(adapter, this);
+            PageGeometry = new PageGeometryTable(this);
         }
+
+        /// <summary>
+        /// The per-page band-geometry table behind CSS Paged Media's page-box model — consulted by
+        /// the grid helpers (<see cref="PageIndexOf"/>/<see cref="PageTopOf"/>/<see cref="PageBandHeightOf"/>)
+        /// whenever a per-page <c>@page</c> rule overrides top/bottom margins; otherwise those helpers
+        /// stay on the closed-form uniform arithmetic.
+        /// </summary>
+        internal PageGeometryTable PageGeometry { get; }
 
         /// <summary>
         /// 
@@ -154,7 +163,21 @@ namespace PeachPDF.Html.Core
         {
             var element = new NamedPageElement(name, y);
             _namedPageElements.Add(element);
+            // Only slots starting at/after this Y could select differently under the new name.
+            PageGeometry.InvalidateFrom(y);
             return element;
+        }
+
+        /// <summary>
+        /// Moves an already-registered named-page element to a new document Y (an ancestor reposition
+        /// via <c>CssBox.OffsetTop</c>), invalidating every geometry slot either position could have
+        /// influenced.
+        /// </summary>
+        internal void MoveNamedPageElement(NamedPageElement element, double newY)
+        {
+            var oldY = element.Y;
+            element.Y = newY;
+            PageGeometry.InvalidateFrom(Math.Min(oldY, newY));
         }
 
         internal void ClearNamedPageElements() => _namedPageElements.Clear();
@@ -337,6 +360,10 @@ namespace PeachPDF.Html.Core
             DocumentLanguage = null;
             ClearNamedStrings();
             ClearNamedPageElements();
+            // New content means new @page rules: drop cached slot geometry and the vertical-override
+            // scan so nothing consults the previous document's bands before the next layout pass
+            // (which resets again defensively).
+            PageGeometry.Reset();
         }
 
         /// <summary>
@@ -402,6 +429,14 @@ namespace PeachPDF.Html.Core
             // if width is not restricted we set it to large value to get the actual later
             Root.Size = new RSize(MaxSize.Width > 0 ? MaxSize.Width : PageSize.Width, 0);
             Root.Location = Location;
+
+            // Every layout pass starts from a clean named-page registry and geometry table:
+            // registrations append (they aren't idempotent), so without this each re-layout pass
+            // (the unrestricted-width double layout below, ShrinkToFit's re-layout) accumulated
+            // duplicates and began with a stale ActivePageName from the PREVIOUS pass's last
+            // element, which could spuriously force or suppress the first named-page break.
+            ClearNamedPageElements();
+            PageGeometry.Reset();
             await Root.PerformLayout(g);
 
             if (MaxSize.Width <= 0.1)
@@ -409,6 +444,8 @@ namespace PeachPDF.Html.Core
                 // in case the width is not restricted we need to double layout, first will find the width so second can layout by it (center alignment)
                 Root.Size = new RSize((int)Math.Ceiling(ActualSize.Width), 0);
                 ActualSize = RSize.Empty;
+                ClearNamedPageElements();
+                PageGeometry.Reset();
                 await Root.PerformLayout(g);
             }
 
@@ -481,6 +518,15 @@ namespace PeachPDF.Html.Core
         }
 
         /// <summary>
+        /// Per-page paint-window override set by <c>PdfGenerator.AddPdfPages</c>'s page loop (the
+        /// same per-page mutation pattern as <see cref="ScrollOffset"/>) so a page whose margins
+        /// are overridden by a per-page <c>@page</c> rule (e.g. <c>:first { margin: 0 }</c>) gets a
+        /// window matching its own margins instead of the base-margin <see cref="PageBoxRect"/>.
+        /// <see cref="PerformPaint"/> falls back to <see cref="PageBoxRect"/> when unset.
+        /// </summary>
+        internal RRect? PageClipOverride { get; set; }
+
+        /// <summary>
         /// The page/viewport rect, in the same per-page paint-time coordinate space every box's
         /// painted <c>Rectangles</c> use (i.e. independent of <see cref="ScrollOffset"/>, exactly like
         /// a <c>position: fixed</c> box's own offset override) - the same rect <see cref="PerformPaint"/>
@@ -505,13 +551,58 @@ namespace PeachPDF.Html.Core
         /// value - unpaginated/measurement passes use a <c>double.MaxValue</c> sentinel and must guard
         /// around this the same way existing raw-<c>PageSize.Height</c> call sites already do.
         /// </summary>
-        internal int PageIndexOf(double y) => (int)((y - MarginTop) / PageSize.Height);
+        internal int PageIndexOf(double y) => UseVariablePageGeometry
+            ? PageGeometry.PageIndexOf(y)
+            : (int)((y - MarginTop) / PageSize.Height);
 
         /// <summary>
         /// The document Y-coordinate of the content-top of pagination slot <paramref name="pageIndex"/>,
         /// per the same shifted-grid convention as <see cref="PageIndexOf"/> - the inverse operation.
         /// </summary>
-        internal double PageTopOf(int pageIndex) => pageIndex * PageSize.Height + MarginTop;
+        internal double PageTopOf(int pageIndex) => UseVariablePageGeometry
+            ? PageGeometry.GetPage(pageIndex).Top
+            : pageIndex * PageSize.Height + MarginTop;
+
+        /// <summary>
+        /// Whether the grid helpers consult the variable <see cref="PageGeometry"/> table instead of
+        /// the closed-form uniform arithmetic: only when the page band is real (not the
+        /// <c>double.MaxValue</c> measurement sentinel, not unset) AND some per-page <c>@page</c>
+        /// rule actually overrides a top/bottom margin. Keeping uniform documents on the literal
+        /// historical arithmetic eliminates any float-drift risk for the overwhelmingly common case.
+        /// </summary>
+        private bool UseVariablePageGeometry =>
+            PageSize.Height > 0 && PageSize.Height < double.MaxValue - 1 && PageGeometry.HasVerticalMarginOverrides;
+
+        /// <summary>
+        /// Tolerance for comparing a document Y-coordinate against a pagination-slot boundary — the
+        /// several arithmetic steps a relocated/fragmented box's Y goes through can land it a hair on
+        /// either side of the exact boundary value (same class of noise <c>MarginBoxRenderer</c>'s
+        /// named-string page attribution guards against, which shares this constant).
+        /// </summary>
+        internal const double PageBoundaryEpsilon = 0.5;
+
+        /// <summary>
+        /// The content-band height of pagination slot <paramref name="pageIndex"/>. On the uniform
+        /// grid every slot's band is <see cref="PageSize"/>'s <c>Height</c>; kept as a per-slot lookup
+        /// so per-page <c>@page</c> margin geometry has a single seam to vary it through. Same
+        /// sentinel caveat as <see cref="PageIndexOf"/>.
+        /// </summary>
+        internal double PageBandHeightOf(int pageIndex) => UseVariablePageGeometry
+            ? PageGeometry.GetPage(pageIndex).BandHeight
+            : PageSize.Height;
+
+        /// <summary>
+        /// The document Y-coordinate one past the bottom of pagination slot <paramref name="pageIndex"/>'s
+        /// content band — bands are contiguous, so this equals <see cref="PageTopOf"/> of the next slot.
+        /// </summary>
+        internal double PageBottomOf(int pageIndex) => PageTopOf(pageIndex) + PageBandHeightOf(pageIndex);
+
+        /// <summary>
+        /// The document Y-coordinate of the content-top of the pagination slot after the one containing
+        /// <paramref name="y"/> — the universal "start of the next page" target every page-break
+        /// relocation uses. Same sentinel caveat as <see cref="PageIndexOf"/>.
+        /// </summary>
+        internal double NextPageTopOf(double y) => PageTopOf(PageIndexOf(y) + 1);
 
         /// <summary>
         /// The page-relative Y ("<c>pageY</c>" in <c>PdfGenerator.AddPdfPages</c>'s own terms - i.e.
@@ -525,26 +616,37 @@ namespace PeachPDF.Html.Core
         /// real content on the far side. Non-destructive: no content is discarded or repositioned,
         /// only which page-slots get a <c>PdfPage</c> materialized for them changes.
         /// </summary>
-        internal IReadOnlyList<double> GetPaginationSlots()
+        internal IReadOnlyList<(int SlotIndex, double SlotTop)> GetPaginationSlots()
         {
-            var slots = new List<double>();
+            var slots = new List<(int SlotIndex, double SlotTop)>();
 
             if (ActualSize.Height <= 0 || Root is null)
                 return slots;
 
             var printableRanges = DomUtils.CollectPrintableContentRanges(Root);
-            var pageHeight = PageSize.Height;
             var rangeIndex = 0;
 
-            for (var pageTop = 0.0; pageTop < ActualSize.Height; pageTop += pageHeight)
+            // Slots are walked by grid index so per-page @page margin overrides can give each slot
+            // its own band top/height (PageTopOf/PageBottomOf consult PageGeometry when overrides
+            // exist). The emitted SlotTop stays in the historical "scrollOffset" convention
+            // (PageTopOf(k) - MarginTop): the painter offsets content so the slot's band top lands
+            // at the BASE content origin, then its per-page delta translate moves it to the page's
+            // own margins. Overlap-testing printable ranges against the true band
+            // [PageTopOf(k), PageBottomOf(k)) also fixes a historical skew where the test window
+            // omitted the MarginTop shift, crediting content in the last MarginTop-px of band k-1
+            // to slot k. The iteration cap is a defensive backstop behind PageGeometryTable's
+            // minimum-band clamp (a degenerate margin override can never make a band non-positive).
+            const int maxSlots = 100_000;
+            for (var k = 0; PageTopOf(k) - MarginTop < ActualSize.Height && k < maxSlots; k++)
             {
-                var pageBottom = pageTop + pageHeight;
+                var bandTop = PageTopOf(k);
+                var bandBottom = PageBottomOf(k);
 
-                while (rangeIndex < printableRanges.Count && printableRanges[rangeIndex].Bottom < pageTop)
+                while (rangeIndex < printableRanges.Count && printableRanges[rangeIndex].Bottom < bandTop)
                     rangeIndex++;
 
-                if (rangeIndex < printableRanges.Count && printableRanges[rangeIndex].Top < pageBottom)
-                    slots.Add(pageTop);
+                if (rangeIndex < printableRanges.Count && printableRanges[rangeIndex].Top < bandBottom)
+                    slots.Add((k, bandTop - MarginTop));
             }
 
             // Never emit a 0-page PDF for a document that genuinely laid out some non-zero height -
@@ -552,7 +654,7 @@ namespace PeachPDF.Html.Core
             // background, or the printable-content heuristic is simply too conservative for some
             // edge case), fall back to the first slot rather than producing nothing at all.
             if (slots.Count == 0)
-                slots.Add(0.0);
+                slots.Add((0, 0.0));
 
             return slots;
         }
@@ -565,7 +667,7 @@ namespace PeachPDF.Html.Core
         {
             ArgumentNullException.ThrowIfNull(g);
 
-            g.PushClip(PageBoxRect);
+            g.PushClip(PageClipOverride ?? PageBoxRect);
 
             if (Root is not null)
             {

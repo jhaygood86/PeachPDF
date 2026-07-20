@@ -31,9 +31,14 @@ namespace PeachPDF.Tests.Integration
             var registered = Assert.Single(container.NamedPageElements, e => e.Name == "chapter");
 
             // The whole point of the fix: this must reflect the box's real, post-layout position (well
-            // past the 500px filler), not the Location struct's (0,0) layout-time default.
+            // past the 500px filler), not the Location struct's (0,0) layout-time default. The
+            // registration Y is attributed to the top of the pagination slot the box's page starts on
+            // (CssBox.NamedPageRegistrationY - the box itself sits its preserved post-break margin
+            // below that), so the geometry table's slot-start name attribution sees it.
             Assert.True(registered.Y > 100, $"expected a Y well past the filler div, got {registered.Y}");
-            Assert.Equal(chapterBox.Location.Y, registered.Y, 1);
+            Assert.Equal(
+                container.PageTopOf(container.PageIndexOf(chapterBox.Location.Y + HtmlContainerInt.PageBoundaryEpsilon)),
+                registered.Y, 1);
         }
 
         [Fact]
@@ -47,32 +52,43 @@ namespace PeachPDF.Tests.Integration
             var chapterBox = FindById(root, "chapter")!;
 
             var registered = Assert.Single(container.NamedPageElements, e => e.Name == "chapter");
-            Assert.Equal(chapterBox.Location.Y, registered.Y, 1);
+            // First element of the document: its page is slot 0, so the registration lands at the
+            // content origin (slot 0's top), not at the box's own margin-shifted Y.
+            Assert.Equal(container.PageTopOf(0), registered.Y, 1);
+            Assert.Equal(0, container.PageIndexOf(chapterBox.Location.Y + HtmlContainerInt.PageBoundaryEpsilon));
         }
 
         [Fact]
         public async Task MultipleNamedPageElements_EachRegistersItsOwnDistinctY()
         {
+            // Distinct names so each heading changes the active named page and forces a break onto
+            // its own fresh page - three genuinely different pages, three distinct registration Ys.
+            // (Same-name elements on one shared page now deliberately register at the SAME Y - the
+            // top of the slot their common page starts on, per CssBox.NamedPageRegistrationY.)
             var html = Wrap("""
-                <h1 id="c1" style="page:chapter">Chapter 1</h1>
+                <h1 id="c1" style="page:chapter1">Chapter 1</h1>
                 <div style="height:900px"></div>
-                <h1 id="c2" style="page:chapter">Chapter 2</h1>
+                <h1 id="c2" style="page:chapter2">Chapter 2</h1>
                 <div style="height:900px"></div>
-                <h1 id="c3" style="page:chapter">Chapter 3</h1>
+                <h1 id="c3" style="page:chapter3">Chapter 3</h1>
                 """);
 
             var (root, container) = await BuildAndLayout(html);
             var boxes = new[] { "c1", "c2", "c3" }.Select(id => FindById(root, id)!).ToList();
 
-            var registeredYs = container.NamedPageElements.Where(e => e.Name == "chapter")
+            var registeredYs = container.NamedPageElements.Where(e => e.Name.StartsWith("chapter"))
                 .Select(e => e.Y).OrderBy(y => y).ToList();
             var actualYs = boxes.Select(b => b.Location.Y).OrderBy(y => y).ToList();
 
             Assert.Equal(3, registeredYs.Count);
             // Every registered Y must be distinct (the pre-fix bug collapsed all three to the same 0).
             Assert.Equal(3, registeredYs.Distinct().Count());
+            // Each registration is attributed to the top of the pagination slot its chapter's page
+            // starts on (see NamedPageElement_RegistersActualLocationY_NotZero above).
             for (var i = 0; i < 3; i++)
-                Assert.Equal(actualYs[i], registeredYs[i], 1);
+                Assert.Equal(
+                    container.PageTopOf(container.PageIndexOf(actualYs[i] + HtmlContainerInt.PageBoundaryEpsilon)),
+                    registeredYs[i], 1);
         }
 
         [Fact]

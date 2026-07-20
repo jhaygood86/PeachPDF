@@ -471,6 +471,10 @@ namespace PeachPDF.Html.Core.Dom
 
             if (box == box.ContainingBlock && box.HtmlContainer is not null)
             {
+                // Deliberately the BASE content band even when per-page @page margin overrides give
+                // individual pages taller/shorter bands: the initial containing block (and therefore
+                // percentage heights) resolves once for the whole document, not per page — see
+                // "Per-page margin variation" in docs/html-css-support.md.
                 height = Math.Max(height, box.HtmlContainer.PageSize.Height);
             }
 

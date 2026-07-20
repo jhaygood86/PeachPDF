@@ -1096,6 +1096,12 @@ namespace PeachPDF.Html.Core.Dom
                 CssNamedStringEngine.ApplyStringSet(this);
             }
 
+            // A previous layout pass's registration was orphaned wholesale by PerformLayout's
+            // ClearNamedPageElements - drop the stale reference so this pass's registration logic
+            // (early for block containers below, tail sync/fallback at the end of this method)
+            // starts clean instead of silently "syncing" an element no longer in the registry.
+            RegisteredNamedPageElement = null;
+
             // Spec (css-break §3.1): a forced break occurs at a class A break point if
             // the earlier sibling's break-after OR the later sibling's break-before has a
             // forced break value — at least one is sufficient.
@@ -1124,8 +1130,26 @@ namespace PeachPDF.Html.Core.Dom
                     // per-page clip and GetPaginationSlots already use) - computing this via raw modulo
                     // arithmetic against PageSize.Height alone (as this used to) silently lands a
                     // marginTop-wide band, right at the end of every raw page, one whole page short.
-                    previousSiblingForBreak.ActualBottom = HtmlContainer!.PageTopOf(
-                        HtmlContainer.PageIndexOf(previousSiblingForBreak.ActualBottom) + 1);
+                    //
+                    // The epsilon implements css-break-3 §4.4's "no empty fragmentainer for a single
+                    // forced break at a boundary": a sibling whose content ENDS flush on a slot
+                    // boundary (e.g. a full-bleed cover sized exactly to its page's band) already
+                    // satisfies the break - the target is that boundary itself, not the slot after
+                    // it (which manufactured a blank page). A zero-height sibling sitting AT the
+                    // boundary (the consecutive-forced-breaks case - it was itself relocated there
+                    // by its own preceding break) occupies the LATER slot, so the break between it
+                    // and this box still pushes past it, preserving the intentional blank page.
+                    var container = HtmlContainer!;
+                    var prevBottom = previousSiblingForBreak.ActualBottom;
+                    var target = container.PageTopOf(
+                        container.PageIndexOf(prevBottom - HtmlContainerInt.PageBoundaryEpsilon) + 1);
+                    if (previousSiblingForBreak.Location.Y >= target - HtmlContainerInt.PageBoundaryEpsilon)
+                    {
+                        target = container.PageTopOf(
+                            container.PageIndexOf(previousSiblingForBreak.Location.Y + HtmlContainerInt.PageBoundaryEpsilon) + 1);
+                    }
+
+                    previousSiblingForBreak.ActualBottom = target;
                 }
             }
 
@@ -1187,9 +1211,11 @@ namespace PeachPDF.Html.Core.Dom
                                 // Same shifted grid GetPaginationSlots()/the forced-break logic above use
                                 // (see HtmlContainer.PageIndexOf's own doc comment) - matching
                                 // BreakInside_Avoid_PositionsAtTopOfNextPage's already-established
-                                // convention.
-                                var prevSlot = HtmlContainer.PageIndexOf(baseTop);
-                                var naturalSlot = HtmlContainer.PageIndexOf(top);
+                                // convention. The epsilons attribute a value flush ON a boundary to
+                                // the earlier slot (a sibling ending exactly at a slot boundary is
+                                // wholly inside it), mirroring the forced-break flush-fit rule above.
+                                var prevSlot = HtmlContainer.PageIndexOf(baseTop - HtmlContainerInt.PageBoundaryEpsilon);
+                                var naturalSlot = HtmlContainer.PageIndexOf(top - HtmlContainerInt.PageBoundaryEpsilon);
                                 if (naturalSlot > prevSlot)
                                 {
                                     top = HtmlContainer.PageTopOf(prevSlot + 1);
@@ -1269,6 +1295,21 @@ namespace PeachPDF.Html.Core.Dom
                         var top = ActualMarginTop + CssValueParser.ParseLength(Top, HtmlContainer!.PageSize.Height, this);
                         Location = new RPoint(left, top);
                     }
+                }
+
+                // Register the named page BEFORE any child lays out: descendants' page-break
+                // decisions consult the per-page geometry table, whose slot bands from this box's
+                // page onward depend on this name being visible (PageRuleResolver.
+                // ActiveNameAtSlotStart) - registering only after child layout (this method's tail,
+                // formerly the sole registration point) let a multi-page named element's own content
+                // paginate against the PREVIOUS name's bands. Movers that can still run after this
+                // point (BreakInside: avoid, orphans/widows, the absolute bottom-edge fallback) all
+                // route through OffsetTop, which keeps the registration in sync via
+                // MoveNamedPageElement; engines that relocate this box directly (e.g.
+                // CssLayoutEngineTable's whole-table pre-check) are re-synced by the tail check.
+                if (!string.IsNullOrEmpty(PageName) && PageName != CssConstants.Auto && HtmlContainer is not null)
+                {
+                    RegisteredNamedPageElement = HtmlContainer.RegisterNamedPageElement(PageName, NamedPageRegistrationY());
                 }
 
                 if (Display is CssConstants.Flex or CssConstants.InlineFlex)
@@ -1359,7 +1400,6 @@ namespace PeachPDF.Html.Core.Dom
                 && LineBoxes.Count > 0 && LineBoxes[0].Words.Count > 0
                 && HtmlContainer!.PageSize.Height > 0)
             {
-                var pageHeight = HtmlContainer.PageSize.Height;
                 var firstWordTop = LineBoxes[0].Words.Min(w => w.Top);
                 var ownPage = HtmlContainer.PageIndexOf(Location.Y);
                 var firstLinePage = HtmlContainer.PageIndexOf(firstWordTop);
@@ -1375,7 +1415,7 @@ namespace PeachPDF.Html.Core.Dom
                         var pageStart = HtmlContainer.PageTopOf(firstLinePage);
 
                         if (extraAbove > 0 && runStartsOnSamePage
-                            && extraAbove + ActualBottom - firstWordTop <= pageHeight)
+                            && extraAbove + ActualBottom - firstWordTop <= HtmlContainer.PageBandHeightOf(firstLinePage))
                         {
                             var runDelta = pageStart - runTop;
 
@@ -1402,18 +1442,16 @@ namespace PeachPDF.Html.Core.Dom
 
             if (BreakInside is CssConstants.Avoid)
             {
-                var pageHeight = HtmlContainer!.PageSize.Height;
-
                 // Shifted-grid convention (see HtmlContainer.PageIndexOf) - topRelativeToCurrentPage is
                 // this box's distance from the start of its own page's real content band, not a raw
                 // modulo of PageSize.Height (which ignored MarginTop and, for the last MarginTop-wide
                 // sliver of every page, mis-detected which page a box's top actually belonged to).
-                var currentPageIndex = HtmlContainer.PageIndexOf(Location.Y);
+                var currentPageIndex = HtmlContainer!.PageIndexOf(Location.Y);
                 var topRelativeToCurrentPage = Location.Y - HtmlContainer.PageTopOf(currentPageIndex);
 
                 var bottomRelativeToCurrentPage = topRelativeToCurrentPage + ActualBottom - Location.Y;
 
-                if (bottomRelativeToCurrentPage > pageHeight)
+                if (bottomRelativeToCurrentPage > HtmlContainer.PageBandHeightOf(currentPageIndex))
                 {
                     var offset = HtmlContainer.PageTopOf(currentPageIndex + 1) - Location.Y;
                     OffsetTopWithKeepWithNextRun(offset, topRelativeToCurrentPage);
@@ -1435,7 +1473,8 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var owPageHeight = HtmlContainer!.PageSize.Height;
 
-                if (owPageHeight > 0 && ActualBottom - Location.Y <= owPageHeight)
+                if (owPageHeight > 0
+                    && ActualBottom - Location.Y <= HtmlContainer.PageBandHeightOf(HtmlContainer.PageIndexOf(Location.Y)))
                 {
                     // Same shifted-grid convention as the BreakInside:Avoid block above.
                     var ownPageIndex = HtmlContainer.PageIndexOf(Location.Y);
@@ -1506,17 +1545,26 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
-            // Register named page element if page property is set. Must run here, after every branch
-            // above that can still move this box's own Location (Position: static/relative/absolute/
-            // fixed, the BreakInside: avoid OffsetTop nudge, and the absolute right-edge OffsetLeft
-            // adjustment) — registering earlier (e.g. at the top of this method) would capture
-            // Location's default (0, 0), since it isn't assigned until those branches run. A *later*
-            // reposition by an ancestor's layout engine after this box's own PerformLayoutImp has returned
-            // (e.g. CssLayoutEngineColumns re-banding a column child via OffsetTop) is handled by retaining
-            // the registered element on RegisteredNamedPageElement, which OffsetTop keeps in sync.
-            if (!string.IsNullOrEmpty(PageName) && PageName != "auto")
+            // Named-page registration tail: block containers already registered before child layout
+            // (see the early registration above the layout-engine dispatch); everything else (e.g. a
+            // box that never entered the block branch) registers here, after every branch above that
+            // can still move this box's own Location. For an already-registered box this is a re-sync
+            // for movers that bypass OffsetTop (CssLayoutEngineTable's whole-table pre-check assigns
+            // Location directly). A *later* reposition by an ancestor's layout engine after this
+            // box's own PerformLayoutImp has returned (e.g. CssLayoutEngineColumns re-banding a
+            // column child via OffsetTop) is handled by retaining the registered element on
+            // RegisteredNamedPageElement, which OffsetTop keeps in sync.
+            if (!string.IsNullOrEmpty(PageName) && PageName != CssConstants.Auto && HtmlContainer is not null)
             {
-                RegisteredNamedPageElement = HtmlContainer?.RegisterNamedPageElement(PageName, Location.Y);
+                var registrationY = NamedPageRegistrationY();
+                if (RegisteredNamedPageElement is null)
+                {
+                    RegisteredNamedPageElement = HtmlContainer.RegisterNamedPageElement(PageName, registrationY);
+                }
+                else if (Math.Abs(RegisteredNamedPageElement.Y - registrationY) > HtmlContainerInt.PageBoundaryEpsilon)
+                {
+                    HtmlContainer.MoveNamedPageElement(RegisteredNamedPageElement, registrationY);
+                }
             }
 
             // Correct the Y captured too early by ApplyStringSet (called near the top of this method,
@@ -2339,16 +2387,18 @@ namespace PeachPDF.Html.Core.Dom
             if (Size.Height >= container!.PageSize.Height)
                 return false;
 
-            var remTop = (Location.Y - container.MarginTop) % container.PageSize.Height;
-            var remBottom = (ActualBottom - container.MarginTop) % container.PageSize.Height;
+            // Given the height guard above, the box straddles a slot boundary exactly when its top
+            // and bottom land in different slots. The epsilons make a flush fit a NON-break: a box
+            // ending exactly ON a boundary is wholly inside the earlier slot (css-break-3 - no
+            // spurious relocation for exact-fit content), where the historical modulo formulation
+            // relocated it by a page.
+            if (container.PageIndexOf(Location.Y + HtmlContainerInt.PageBoundaryEpsilon)
+                >= container.PageIndexOf(ActualBottom - HtmlContainerInt.PageBoundaryEpsilon))
+                return false;
 
-            if (!(remTop > remBottom)) return false;
-
-            var diff = container.PageSize.Height - remTop;
-            Location = Location with { Y = Location.Y + diff + 1 };
+            Location = Location with { Y = container.NextPageTopOf(Location.Y) + 1 };
 
             return true;
-
         }
 
         /// <summary>
@@ -2458,6 +2508,24 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// The document Y to attribute this box's named-page registration to: the top of the
+        /// pagination slot its page starts on. After a named-page forced break the box itself sits
+        /// its preserved margin-top below the slot top (css-break-3 §5.2 - margins after a forced
+        /// break are kept), and the document's first box sits below the content origin by its own
+        /// margins - but per css-page-3 the PAGE the box starts on carries its name, so the geometry
+        /// table's slot-start attribution (<c>PageRuleResolver.ActiveNameAtSlotStart</c>) must see
+        /// the registration at the slot top itself. Outside real pagination (no page band, or the
+        /// <c>double.MaxValue</c> measurement sentinel) the raw location is used unchanged.
+        /// </summary>
+        private double NamedPageRegistrationY()
+        {
+            var container = HtmlContainer!;
+            return container.PageSize.Height > 0 && container.PageSize.Height < double.MaxValue - 1
+                ? container.PageTopOf(container.PageIndexOf(Location.Y + HtmlContainerInt.PageBoundaryEpsilon))
+                : Location.Y;
+        }
+
+        /// <summary>
         /// Deeply offsets the top of the box and its contents
         /// </summary>
         /// <param name="amount"></param>
@@ -2489,7 +2557,9 @@ namespace PeachPDF.Html.Core.Dom
 
             if (RegisteredNamedPageElement is not null)
             {
-                RegisteredNamedPageElement.Y += amount;
+                // Routed through the container so the per-page geometry table can invalidate every
+                // slot either the old or new position could have influenced.
+                HtmlContainer!.MoveNamedPageElement(RegisteredNamedPageElement, RegisteredNamedPageElement.Y + amount);
             }
 
             foreach (var b in Boxes)
@@ -2513,7 +2583,9 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="topRelativeToCurrentPage">this box's top, reduced to page-relative coordinates by the caller</param>
         internal void OffsetTopWithKeepWithNextRun(double offset, double topRelativeToCurrentPage)
         {
-            var pageHeight = HtmlContainer!.PageSize.Height;
+            // "Fits on a single page" is judged against the destination page's band (the page this
+            // box's top lands on after the offset), not the page it is leaving.
+            var targetPageBand = HtmlContainer!.PageBandHeightOf(HtmlContainer.PageIndexOf(Location.Y + offset));
             var keepWithNextRun = DomUtils.GetPrecedingKeepWithNextRun(this);
 
             if (keepWithNextRun.Count > 0)
@@ -2522,7 +2594,7 @@ namespace PeachPDF.Html.Core.Dom
                 var extraAbove = Location.Y - runTop;
 
                 if (extraAbove > 0 && extraAbove < topRelativeToCurrentPage
-                    && extraAbove + ActualBottom - Location.Y <= pageHeight)
+                    && extraAbove + ActualBottom - Location.Y <= targetPageBand)
                 {
                     // Shift the run and this box by one common offset, chosen so the run's top lands at
                     // the next page's content top - relative spacing inside the group is preserved.
@@ -2732,7 +2804,12 @@ namespace PeachPDF.Html.Core.Dom
                     var pageHeight = HtmlContainer.PageSize.Height;
                     if (pageHeight > 0)
                     {
-                        var currentPageIndex = (int)(-offset.Y / pageHeight + 0.001);
+                        // -offset.Y is the current slot's top in scrollOffset space (slotTop, no
+                        // MarginTop shift), so re-add MarginTop to express it as a document-space
+                        // content-band Y before asking the shared grid which slot it is; the epsilon
+                        // absorbs the same float noise the old "+0.001" fudge did.
+                        var currentPageIndex = HtmlContainer.PageIndexOf(
+                            -offset.Y + HtmlContainer.MarginTop + HtmlContainerInt.PageBoundaryEpsilon);
                         if (PageBreakBottoms.TryGetValue(currentPageIndex, out var pageBreakBottom))
                         {
                             var pageBreakBottomVisual = pageBreakBottom + offset.Y;

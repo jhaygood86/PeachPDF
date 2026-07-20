@@ -347,7 +347,9 @@ namespace PeachPDF.Html.Core.Parse
             foreach (var part in parts)
             {
                 var pt = ParseLengthToPdfPoints(part);
-                if (pt.HasValue)
+                // "size: 0" now parses as a length (the shared grammar accepts unitless zero),
+                // but a degenerate zero page dimension stays rejected as it always was.
+                if (pt is > 0)
                 {
                     if (width == null) width = pt;
                     else if (height == null) { height = pt; break; }
@@ -365,25 +367,20 @@ namespace PeachPDF.Html.Core.Parse
             if (string.IsNullOrWhiteSpace(value))
                 return null;
 
-            // Find where the unit starts
-            var i = value.Length - 1;
-            while (i >= 0 && (char.IsLetter(value[i]) || value[i] == '%'))
-                i--;
+            // Tokenization and unit classification are delegated to the CSS-OM Length struct
+            // rather than re-implemented here, so both layers agree on the length grammar —
+            // including that a unitless value is only valid when it is zero, which is exactly
+            // how the CSS-OM serializes every zero length (Length.ToString() drops the unit).
+            // Units are ASCII case-insensitive per CSS Syntax; Length.GetUnit matches lowercase.
+            if (!Length.TryParse(value.Trim().ToLowerInvariant(), out var length) || !length.IsAbsolute)
+                return null; // relative units (em/rem/%/...) have no resolution context at this layer
 
-            var unitStr = value.Substring(i + 1).ToLowerInvariant();
-            if (!double.TryParse(value.Substring(0, i + 1), NumberStyles.Any, CultureInfo.InvariantCulture, out var number))
-                return null;
-
-            return unitStr switch
-            {
-                "pt"          => number,
-                "px"          => number * (72.0 / 96.0),
-                "in"          => number * 72.0,
-                "cm"          => number * (72.0 / 2.54),
-                "mm"          => number * (72.0 / 25.4),
-                "pc"          => number * 12.0,
-                _             => (double?)null,
-            };
+            // This layer emits true PDF points: CSS px is 1/96in = 0.75pt. Length.ToPixels
+            // deliberately treats engine-internal px as 1pt (see its doc comment) — that
+            // convention is for internal layout space, not physical page geometry.
+            return length.Type == Length.Unit.Px
+                ? length.Value * (72.0 / 96.0)
+                : length.ToPixels(0, 0, 0);
         }
 
         /// <summary>

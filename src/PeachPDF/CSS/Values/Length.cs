@@ -178,7 +178,11 @@ namespace PeachPDF.CSS
                 return true;
             }
 
-            if (value == 0f)
+            // Only a genuinely parsed bare "0" may omit its unit (CSS Values & Units §5.1) —
+            // StylesheetUnit returns an empty unit string for a plain number but null when it
+            // couldn't tokenize a number at all, and both leave value at 0, so the unit string
+            // must be checked to avoid accepting arbitrary non-length input as zero.
+            if (unitString is { Length: 0 } && value == 0f)
             {
                 result = Zero;
                 return true;

@@ -255,13 +255,14 @@ namespace PeachPDF.Html.Core.Dom
             if (Height >= container!.PageSize.Height)
                 return false;
 
-            var remTop = (Top - container.MarginTop) % container.PageSize.Height;
-            var remBottom = (Bottom - container.MarginTop) % container.PageSize.Height;
+            // See CssBox.BreakPage's comment - the epsilons make a line ending exactly ON a slot
+            // boundary a non-break (it fits wholly in the earlier slot).
+            if (container.PageIndexOf(Top + HtmlContainerInt.PageBoundaryEpsilon)
+                >= container.PageIndexOf(Bottom - HtmlContainerInt.PageBoundaryEpsilon))
+                return false;
 
-            if (!(remTop > remBottom)) return false;
-            Top += container.PageSize.Height - remTop + 1;
+            Top = container.NextPageTopOf(Top) + 1;
             return true;
-
         }
     }
 }

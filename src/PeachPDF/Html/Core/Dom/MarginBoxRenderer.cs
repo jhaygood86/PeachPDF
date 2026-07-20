@@ -40,6 +40,7 @@ namespace PeachPDF.Html.Core.Dom
             int pageNumber,
             int totalPages,
             double pageY,
+            double pageContentHeight,
             IReadOnlyList<NamedString> namedStrings,
             RAdapter adapter,
             StyleDeclaration? pageStyle,
@@ -69,7 +70,11 @@ namespace PeachPDF.Html.Core.Dom
                     continue;
                 }
 
-                var text = ResolveContent(contentValue, pageNumber, totalPages, pageY, pageSize.Height - marginTop - marginBottom, namedStrings);
+                // pageY and pageContentHeight are internal-pixel document space, the same space
+                // NamedString Ys are registered in - deriving the band from the point-space
+                // pageSize/margins here used to skew named-string page attribution whenever
+                // ShrinkToFit made PixelsPerPoint diverge from 1.0.
+                var text = ResolveContent(contentValue, pageNumber, totalPages, pageY, pageContentHeight, namedStrings);
                 if (text == null)
                     continue;
 
@@ -212,7 +217,7 @@ namespace PeachPDF.Html.Core.Dom
         // without tolerance, that noise alone can exclude the true first/last string on a page. This is
         // a boundary-precision fuzz factor only, not a layout unit - deliberately much smaller than any
         // real line height.
-        internal const double PageBoundaryEpsilon = 0.5;
+        internal const double PageBoundaryEpsilon = HtmlContainerInt.PageBoundaryEpsilon;
 
         internal static string ResolveNamedString(
             string name,
