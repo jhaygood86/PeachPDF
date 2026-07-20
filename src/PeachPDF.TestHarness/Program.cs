@@ -1009,7 +1009,9 @@ await SaveShowcaseAsync("paged_media_named_strings", "Paged Media", "Named Strin
 // model): each page's own margins define its content band, so the flowing text genuinely
 // breaks at different heights per page - the deep-margined first page holds visibly fewer
 // paragraphs, mirrored :left/:right pages trade extra top space for extra bottom space,
-// and the running furniture follows each page's own margins.
+// and the running furniture follows each page's own margins. The :first margins use
+// relative units (% of the page width, em against the root font) - per-page rules resolve
+// them against the same bases the base rule uses (#150), not just absolute lengths.
 var perPageMarginsHtml = """
     <!DOCTYPE html>
     <html>
@@ -1022,8 +1024,8 @@ var perPageMarginsHtml = """
         @bottom-center { content: "Page " counter(page) " of " counter(pages); font: 8pt Arial; }
     }
     @page :first {
-        margin-top: 80mm;
-        margin-bottom: 40mm;
+        margin-top: 38%;      /* of the page width: ~80mm on A4 */
+        margin-bottom: 10em;  /* against the root font size */
         @top-center { content: none; }
     }
     @page :left  { margin-top: 45mm; margin-bottom: 15mm; }
@@ -1036,9 +1038,10 @@ var perPageMarginsHtml = """
     <body>
       <h1>Per-Page Margin Variation</h1>
       <p class="note">Every page's own @page margins define its content band: the first page's deep
-      80mm/40mm margins fit only a few paragraphs, then :right pages (15mm top / 45mm bottom) and
-      :left pages (45mm top / 15mm bottom) alternate mirrored bands - watch where the text starts,
-      where it breaks, and how many paragraphs fit on each page.</p>
+      margins (declared in relative units - 38% of the page width on top, 10em on the bottom) fit
+      only a few paragraphs, then :right pages (15mm top / 45mm bottom) and :left pages (45mm top /
+      15mm bottom) alternate mirrored bands - watch where the text starts, where it breaks, and how
+      many paragraphs fit on each page.</p>
     """ +
     string.Concat(Enumerable.Range(1, 60).Select(i =>
         $"<p>Paragraph {i}: Lorem ipsum dolor sit amet, consectetur adipiscing elit. " +
@@ -1049,7 +1052,7 @@ var perPageMarginsHtml = """
     """;
 
 await SaveShowcaseAsync("paged_media_per_page_margins", "Paged Media", "Per-page Margins",
-    "Layout-affecting per-page margins: each page's own @page margins define its content band, so text flows into visibly different-height pages (deep first page, mirrored :left/:right bands).",
+    "Layout-affecting per-page margins: each page's own @page margins define its content band, so text flows into visibly different-height pages (deep first page, mirrored :left/:right bands) - with relative units (%, em) supported in per-page rules too.",
     perPageMarginsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // ── Full-bleed page showcase ───────────────────────────────────────────────

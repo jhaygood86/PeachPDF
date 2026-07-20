@@ -234,7 +234,7 @@ Every CSS property PeachPDF understands has a corresponding class under [src/Pea
 
 ### Value parsing
 
-`CssValueParser` ([Html/Core/Parse/CssValueParser.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Parse/CssValueParser.cs)) translates raw CSS value strings into the numeric/computed forms that `CssBoxProperties` stores in its `_actual*` fields. It handles length resolution (px, em, rem, %, vw/vh), colour parsing, and shorthand expansion.
+`CssValueParser` ([Html/Core/Parse/CssValueParser.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Parse/CssValueParser.cs)) translates raw CSS value strings into the numeric/computed forms that `CssBoxProperties` stores in its `_actual*` fields. It handles length resolution (px, em, rem, %), colour parsing, and shorthand expansion. All unit→number conversion is centralized in the CSS-OM `Length` struct's `ToPixels` ([CSS/Values/Length.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/CSS/Values/Length.cs)): the engine's internal layout unit is 1 PDF point, and every unit — including spec-correct CSS `px` at `1px = 1/96in = 0.75pt` via the single `Length.PointsPerPx` constant — resolves through that one implementation, so body layout, font sizes, `@page` geometry, and image intrinsic sizes all agree by construction.
 
 ---
 
@@ -255,7 +255,7 @@ Stylesheets are collected and merged from four sources in cascade order:
 
 ### @page rules
 
-Before style cascading begins, `CascadeApplyPageStyles` reads `@page` rules from the collected stylesheets and writes their margin values (`margin-top`, `margin-right`, `margin-bottom`, `margin-left`) onto the `HtmlContainerInt`, overriding any margins specified in the `PdfGenerateConfig`.
+Before style cascading begins, `CascadeApplyPageStyles` reads `@page` rules from the collected stylesheets and writes their margin values (`margin-top`, `margin-right`, `margin-bottom`, `margin-left`) onto the `HtmlContainerInt`, overriding any margins specified in the `PdfGenerateConfig`. It also captures a `PageLengthContext` snapshot (root em/rem size and page width, in true points) that per-page `@page` rules resolve their relative-unit margins against later, at band-geometry/paint time — the same bases the base rule used, so identical declarations produce identical geometry in base and per-page rules.
 
 ### @font-face rules
 
