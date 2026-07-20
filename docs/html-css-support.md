@@ -334,6 +334,21 @@ Regenerating the pattern set (`tools/Update-HyphenationPatterns.ps1`) re-checks 
 | `visibility` | [visibility](https://developer.mozilla.org/en-US/docs/Web/CSS/visibility) | `visible`, `hidden` |
 | `z-index` | [z-index](https://developer.mozilla.org/en-US/docs/Web/CSS/z-index) | Full support for positioned elements |
 
+#### Atomic inline-level layout is approximated, not fully atomic
+
+An `inline-block` box's text flows through the surrounding inline formatting context rather
+than being laid out as one opaque unit. Its content is correctly inset by its own
+border+padding (its label sits inside the padding box, and the line reserves the full padding
+box height), but two knock-on gaps remain:
+
+- An explicit `height` on an inline-flowed `inline-block` does not size the line — the line's
+  height comes from the flowed content plus padding/border, so
+  `<span style="display: inline-block; height: 100px">x</span>` reserves only its natural text
+  height, not 100px (CSS2.1 §10.8.1 expects the atomic box's margin box to size the line).
+- `display: inline-table` is not atomic in inline flow at all: when it participates in a
+  surrounding inline formatting context its content flows like ordinary inline text (the table
+  layout algorithm only runs when the box is laid out at block level).
+
 ### Stacking Context
 
 Paint order follows the CSS [stacking context](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Positioned_layout/Stacking_context) model. A new stacking context is established by:
@@ -641,6 +656,8 @@ The `@page` at-rule targets PDF pages. A rule without a selector applies to all 
 **Cascade order:** the base rule is the fallback; a matching named-page rule overrides it; pseudo-selector rules override named-page rules. When both `:first` and `:right` match page 1, the last matching rule in the stylesheet wins.
 
 **Per-page margin variation:** when a pseudo-selector or named-page rule sets `margin-top`, `margin-left`, etc., those values override the base margins for that page at render time. The content layout is computed once using the base margins, so changing left/right margins shifts the content position but does not reflow text to a different width.
+
+**Known limitation — named-page selection under `ShrinkToFit`:** the page-position value used to decide which named `@page` rule (and margin boxes) apply to a given page mixes the internal layout coordinate space with point-space margins, so when `ShrinkToFit` actually shrinks content (its scale factor exceeds 1) the attribution drifts slightly per page. Page *content* painting is unaffected; only which named-page rule/margin boxes are picked can be off for an element that changes its `page` name within a few points of a page boundary in a shrunken document.
 
 ### `size` property
 

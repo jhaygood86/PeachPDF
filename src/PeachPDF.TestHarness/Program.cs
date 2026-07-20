@@ -71,7 +71,7 @@ const string Css = """
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
     h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
-    p.intro { margin: 0 0 0.7em; color: #555 }
+    p.intro { margin: 0 0 0.7em; color: #555; break-after: avoid }
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; vertical-align: top; width: 25% }
     .box { height: 48px; border: 1px solid #000; margin-bottom: 3px }
@@ -226,7 +226,7 @@ const string RadiusCss = """
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
     h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
-    p.intro { margin: 0 0 0.7em; color: #555 }
+    p.intro { margin: 0 0 0.7em; color: #555; break-after: avoid }
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; vertical-align: top; width: 25% }
     .rbox { height: 60px; background: steelblue; border: 2px solid #1a6b8a; margin-bottom: 3px }
@@ -302,7 +302,7 @@ const string OriginCss = """
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
     h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
-    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt; break-after: avoid }
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; vertical-align: top; width: 25% }
     .obox { height: 60px; border: 8px solid #333; padding: 12px; margin-bottom: 3px; box-sizing: border-box }
@@ -436,7 +436,7 @@ const string PositionCss = """
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
     h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
-    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt; break-after: avoid }
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; vertical-align: top; width: 25% }
     .obox { height: 60px; border: 1px solid #333; background-color: #eee; background-repeat: no-repeat; margin-bottom: 3px; box-sizing: border-box }
@@ -574,7 +574,7 @@ const string ListCss = """
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
     h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
-    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt; break-after: avoid }
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; vertical-align: top; width: 25% }
     .desc { font-size: 7pt; font-weight: bold; color: #444; margin: 2px 0 1px }
@@ -804,7 +804,7 @@ const string ContentCss = """
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
     h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
-    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt; break-after: avoid }
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; vertical-align: top; width: 25% }
     .desc { font-size: 7pt; font-weight: bold; color: #444; margin: 2px 0 1px }
@@ -1305,7 +1305,7 @@ const string VarCss = """
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
     h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
-    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt; break-after: avoid }
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; vertical-align: top; width: 25% }
     .vbox { height: 44px; display: flex; align-items: center; justify-content: center; font: bold 9pt Arial; margin-bottom: 3px }
@@ -1422,7 +1422,7 @@ const string TransformCss = """
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
     h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
-    p.intro { margin: 0 0 0.7em; color: #555 }
+    p.intro { margin: 0 0 0.7em; color: #555; break-after: avoid }
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; padding-bottom: 150px; vertical-align: top; width: 25%; text-align: center }
     .tbox { width: 100px; height: 56px; background: steelblue; border: 2px solid #1a6b8a; margin: 75px auto 3px }
@@ -1511,7 +1511,7 @@ const string CalcCss = """
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
     h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
-    p.intro { margin: 0 0 0.7em; color: #555 }
+    p.intro { margin: 0 0 0.7em; color: #555; break-after: avoid }
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; vertical-align: top; width: 25%; text-align: center }
     .cbox { height: 40px; background: steelblue; border: 2px solid #1a6b8a; margin: 0 auto 3px }
@@ -1615,7 +1615,7 @@ const string SvgShowcaseCss = """
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
     h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
-    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt; break-after: avoid }
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; vertical-align: top; width: 25%; text-align: center }
     .sbox { height: 90px; border: 1px solid #ccc; margin-bottom: 3px; display: flex; align-items: center; justify-content: center; background: #fafafa }
@@ -2132,7 +2132,7 @@ const string OpacityCss = """
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
     h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
-    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt; break-after: avoid }
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; vertical-align: top; width: 25% }
     .stage { height: 90px; background: repeating-linear-gradient(45deg, #eee 0 8px, #fff 8px 16px); border: 1px solid #999; position: relative; overflow: hidden }
@@ -2249,7 +2249,7 @@ const string StackingCss = """
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
     h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
-    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt; break-after: avoid }
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; vertical-align: top; width: 33% }
     .stage { height: 130px; border: 1px solid #999; position: relative; }
@@ -2326,7 +2326,7 @@ const string TextTransformCss = """
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
     h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
-    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt; break-after: avoid }
     table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
     table.sw td { padding: 3px; vertical-align: top; width: 25% }
     .ttbox { font-size: 11pt; border: 1px solid #999; background: #f7f7f7; padding: 8px; margin-bottom: 3px; min-height: 1.4em }
@@ -2416,7 +2416,7 @@ const string MulticolCss = """
     body { font: 8.5pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
     h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
-    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt; break-after: avoid }
     .mc p { margin: 0 0 0.4em; text-align: justify }
     .frame { border: 1px solid #bbb; padding: 6px; margin-bottom: 8px; background: #fafafa }
     .label { font-size: 6.5pt; color: #666; margin-bottom: 3px }
@@ -2466,7 +2466,7 @@ const string HyphenationCss = """
     @page { size: a4; margin: 15mm }
     body { font: 9pt Arial, sans-serif; margin: 0 }
     h1 { font-size: 15pt; margin: 0 0 0.3em }
-    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt; break-after: avoid }
     .col { width: 90px; border: 1px solid #bbb; padding: 6px; hyphens: auto; text-align: justify; float: left; margin-right: 10px }
     </style>
     """;
