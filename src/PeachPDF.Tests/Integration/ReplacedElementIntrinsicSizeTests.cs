@@ -67,6 +67,31 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task ImageMaxWidthPx_ClampsThroughSharedConversion()
+        {
+            // max-width in px resolves through the same shared conversion as every other absolute
+            // unit: 48px = 36pt clamps the 96px (72pt) natural width down, and the 2:1 ratio scales
+            // height to 18pt.
+            var (root, _) = await BuildAndLayout(Wrap($"<img id='img' style='max-width:48px' src=\"{Svg96X48}\" />"));
+            var img = FindById(root, "img")!;
+
+            Assert.Equal(36.0, img.Words[0].Width, 1);
+            Assert.Equal(18.0, img.Words[0].Height, 1);
+        }
+
+        [Fact]
+        public async Task ImageMinHeightPt_GrowsThroughSharedConversion()
+        {
+            // min-height in an absolute unit grows the box past its natural size, rescaling width by
+            // the aspect ratio — exercising the absolute-unit min-height branch.
+            var (root, _) = await BuildAndLayout(Wrap($"<img id='img' style='min-height:72pt' src=\"{Svg96X48}\" />"));
+            var img = FindById(root, "img")!;
+
+            Assert.Equal(72.0, img.Words[0].Height, 1);
+            Assert.Equal(144.0, img.Words[0].Width, 1); // 2:1 ratio grows width with height
+        }
+
+        [Fact]
         public async Task CssWidthPxAndPt_AgreeAtTheSpecRatio()
         {
             var (rootPx, _) = await BuildAndLayout(Wrap($"<img id='img' style='width:96px' src=\"{Svg96X48}\" />"));

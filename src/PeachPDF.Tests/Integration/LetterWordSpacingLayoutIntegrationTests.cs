@@ -76,6 +76,20 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(plainGap + 5, spacedGap, 1);
         }
 
+        [Fact]
+        public async Task LetterSpacing_EmValue_ResolvesAgainstFontSize_InLayoutPoints()
+        {
+            // letter-spacing/word-spacing/text-indent eagerly convert an em value to layout units
+            // via CssBoxProperties.NoEms. GetEmHeight() is the font size in points, so 0.5em at a
+            // 20pt font is 10pt per gap - and the converted string must round-trip through
+            // ParseLength as points, not px (which would resolve at 0.75x and shrink each gap).
+            var spaced = await FirstWordWidthAsync(
+                "<p id='p' style='font-size:20pt; letter-spacing:0.5em'>AAAA</p>");
+            var plain = await FirstWordWidthAsync("<p id='p' style='font-size:20pt'>AAAA</p>");
+
+            Assert.Equal(plain + 4 * 10, spaced, 1);
+        }
+
         // Direct regression test for the reported bug: "REMIT PAYMENT TO" style all-caps letter-spaced
         // labels rendered as "REMITPAYMENTTO" once letter-spacing reached the natural space width, since
         // each word painted one letter-spacing unit wider than its reserved box and ate into the next
