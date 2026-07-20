@@ -45,7 +45,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Translate_SetsOffsetsOnly()
         {
-            var divBox = await FindDivBox("transform: translate(50px, 20px);");
+            var divBox = await FindDivBox("transform: translate(50pt, 20pt);");
             var m = divBox.ActualTransformMatrix;
 
             Assert.True(divBox.IsTransformed);
@@ -138,7 +138,7 @@ namespace PeachPDF.Tests.Integration
             // Hand-verified: with transform-origin 0 0, "translate(50,0) rotate(90deg)" means
             // rotate is applied first (fixes the origin, no visible effect there), translate applied
             // last, shifting the origin point by exactly (50, 0).
-            var divBox = await FindDivBox("transform: translate(50px, 0) rotate(90deg); transform-origin: 0 0;");
+            var divBox = await FindDivBox("transform: translate(50pt, 0) rotate(90deg); transform-origin: 0 0;");
             var m = divBox.ActualTransformMatrix;
 
             Assert.Equal(50.0, m.OffsetX, 2);
@@ -151,7 +151,7 @@ namespace PeachPDF.Tests.Integration
             // Hand-verified: with transform-origin 0 0, "rotate(90deg) translate(50,0)" means
             // translate is applied first (moves origin point to (50,0)), rotate applied last,
             // swinging that point 90deg clockwise around the original origin to (0, 50).
-            var divBox = await FindDivBox("transform: rotate(90deg) translate(50px, 0); transform-origin: 0 0;");
+            var divBox = await FindDivBox("transform: rotate(90deg) translate(50pt, 0); transform-origin: 0 0;");
             var m = divBox.ActualTransformMatrix;
 
             Assert.Equal(0.0, m.OffsetX, 2);
@@ -213,7 +213,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Translate3d_ZComponent_DroppedWithoutPerspective()
         {
-            var divBox = await FindDivBox("transform: translate3d(10px, 20px, 500px); transform-origin: 0 0;");
+            var divBox = await FindDivBox("transform: translate3d(10pt, 20pt, 500pt); transform-origin: 0 0;");
             var m = divBox.ActualTransformMatrix;
 
             Assert.Equal(10, m.OffsetX, 2);
@@ -396,7 +396,7 @@ namespace PeachPDF.Tests.Integration
         private Task<CssBox> FindDivBox(string css)
         {
             var html = $@"<!DOCTYPE html><html><head><style>
-div {{ width: 200px; height: 100px; {css} }}
+div {{ width: 200pt; height: 100pt; {css} }}
 </style></head><body><div></div></body></html>";
             return FindDivBoxFromHtml(html);
         }

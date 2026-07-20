@@ -1117,7 +1117,7 @@ namespace PeachPDF.Tests.Integration
             var rect = new RRect(0, 0, 100, 100);
 
             PeachPDF.Html.Core.Handlers.BackgroundImageDrawHandler.DrawBackgroundImage(
-                g, image, "auto", "0% 0%", "repeat", rect, rect, null, box);
+                g, image, "auto", "0% 0%", "repeat", rect, rect, null, box, intrinsicSizeInCssPixels: true);
 
             Assert.Contains(false, image.InterpolateHistory);
             Assert.True(image.Interpolate,
