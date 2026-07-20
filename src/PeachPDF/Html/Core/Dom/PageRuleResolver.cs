@@ -140,19 +140,25 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Resolves the four page margins for the winning rule, in true PDF points, falling back
         /// per-side to the base margins for sides the rule doesn't declare (or declares with a value
-        /// the page-geometry layer can't resolve, e.g. relative units).
+        /// the page-geometry layer can't resolve: viewport-relative/ch units, or any relative unit
+        /// when no <paramref name="context"/> was captured).
         /// </summary>
         internal static (double L, double T, double R, double B) ResolvePageMargins(
-            PageRule? rule, double baseL, double baseT, double baseR, double baseB)
+            PageRule? rule, double baseL, double baseT, double baseR, double baseB,
+            PageLengthContext? context = null)
         {
             if (rule == null) return (baseL, baseT, baseR, baseB);
             var s = rule.Style;
             return (
-                DomParser.ParseLengthToPdfPoints(s.MarginLeft)   ?? baseL,
-                DomParser.ParseLengthToPdfPoints(s.MarginTop)    ?? baseT,
-                DomParser.ParseLengthToPdfPoints(s.MarginRight)  ?? baseR,
-                DomParser.ParseLengthToPdfPoints(s.MarginBottom) ?? baseB
+                Resolve(s.MarginLeft)   ?? baseL,
+                Resolve(s.MarginTop)    ?? baseT,
+                Resolve(s.MarginRight)  ?? baseR,
+                Resolve(s.MarginBottom) ?? baseB
             );
+
+            double? Resolve(string value) => context is { } c
+                ? DomParser.ParseLengthToPdfPoints(value, c)
+                : DomParser.ParseLengthToPdfPoints(value);
         }
 
         /// <summary>

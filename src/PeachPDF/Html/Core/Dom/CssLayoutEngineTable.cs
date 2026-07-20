@@ -11,6 +11,7 @@
 // "The Art of War"
 
 using PeachPDF;
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Entities;
@@ -345,7 +346,9 @@ namespace PeachPDF.Html.Core.Dom
                     }
                     else if (len.Unit is CssUnit.Pixels or CssUnit.None)
                     {
-                        _columnWidths[i] = len.Number; //Get width as an absolute-pixel value
+                        // px (and unitless HTML width attributes, which map to CSS px) convert to
+                        // layout points via the shared spec-correct factor.
+                        _columnWidths[i] = len.Number * Length.PointsPerPx;
                     }
                 }
             }

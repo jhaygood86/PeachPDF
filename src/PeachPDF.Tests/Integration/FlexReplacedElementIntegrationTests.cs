@@ -70,8 +70,10 @@ namespace PeachPDF.Tests.Integration
             await root.Paint(g);
 
             var call = Assert.Single(g.DrawImageCalls);
-            Assert.Equal(80, call.DestRect.Width, 1);
-            Assert.Equal(57, call.DestRect.Height, 1);
+            // <img width>/<height> attributes are px (unitless), now laid out at spec-correct
+            // 1px = 0.75pt: 80px -> 60pt, 57px -> 42.75pt.
+            Assert.Equal(60, call.DestRect.Width, 1);
+            Assert.Equal(42.75, call.DestRect.Height, 1);
         }
 
         [Fact]

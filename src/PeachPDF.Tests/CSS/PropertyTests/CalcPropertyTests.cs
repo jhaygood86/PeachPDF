@@ -58,11 +58,12 @@ namespace PeachPDF.Tests.CSS.PropertyTests
         [Fact]
         public void Width_CalcMixedAbsoluteUnits_FoldsToPixelLength()
         {
-            // 1in = 72px, 2cm = 2*72/2.54 ~= 56.69px (this engine's native unit is points, not
-            // the browser's 96dpi CSS px)
+            // px is now spec-correct (1px = 0.75pt, i.e. 96dpi): 1in = 96px, 2cm = 2*96/2.54 ~= 75.59px,
+            // folding to ~171.59px. (Internally that's 1in = 72pt + 2cm = 56.69pt = 128.69pt, serialized
+            // back to canonical px as 128.69 / 0.75.)
             var property = ParseDeclaration("width: calc(1in + 2cm)");
             Assert.True(property.HasValue);
-            Assert.StartsWith("128.", property.Value);
+            Assert.StartsWith("171.", property.Value);
             Assert.EndsWith("px", property.Value);
         }
 

@@ -73,8 +73,10 @@ namespace PeachPDF.Tests.Integration
             await root.Paint(g);
 
             var call = Assert.Single(g.DrawImageCalls);
-            Assert.Equal(40, call.DestRect.Width, 1);
-            Assert.Equal(30, call.DestRect.Height, 1);
+            // HTML width/height attributes are px lengths (TranslateAttributes -> "40px"/"30px"),
+            // and 1px = 0.75pt, so the painted destination rect is 40*0.75 x 30*0.75 layout units.
+            Assert.Equal(30, call.DestRect.Width, 1);
+            Assert.Equal(22.5, call.DestRect.Height, 1);
         }
 
         [Fact]
@@ -313,13 +315,13 @@ namespace PeachPDF.Tests.Integration
             // fits all 6 in 3 columns is 100 (verified by hand: col0=[50,50], col1=[50,40], col2=[40,40]).
             // The improved binary-search solver must find that and keep everything on the first row.
             var html = Wrap(@"
-                <div id='mc' style='columns:3; column-gap:0; width:300px'>
-                    <div class='item' style='height:50px'></div>
-                    <div class='item' style='height:50px'></div>
-                    <div class='item' style='height:50px'></div>
-                    <div class='item' style='height:40px'></div>
-                    <div class='item' style='height:40px'></div>
-                    <div class='item' style='height:40px'></div>
+                <div id='mc' style='columns:3; column-gap:0; width:300pt'>
+                    <div class='item' style='height:50pt'></div>
+                    <div class='item' style='height:50pt'></div>
+                    <div class='item' style='height:50pt'></div>
+                    <div class='item' style='height:40pt'></div>
+                    <div class='item' style='height:40pt'></div>
+                    <div class='item' style='height:40pt'></div>
                 </div>");
             var (root, _) = await BuildAndLayout(html, pageHeight: 1000);
             var items = FindAllByClass(root, "item");
@@ -338,13 +340,13 @@ namespace PeachPDF.Tests.Integration
             // The binary-search solver must preserve the existing "whole child, never split" model -
             // every item keeps its full natural height intact regardless of which column it lands in.
             var html = Wrap(@"
-                <div id='mc' style='columns:3; column-gap:0; width:300px'>
-                    <div class='item' style='height:50px'></div>
-                    <div class='item' style='height:50px'></div>
-                    <div class='item' style='height:50px'></div>
-                    <div class='item' style='height:40px'></div>
-                    <div class='item' style='height:40px'></div>
-                    <div class='item' style='height:40px'></div>
+                <div id='mc' style='columns:3; column-gap:0; width:300pt'>
+                    <div class='item' style='height:50pt'></div>
+                    <div class='item' style='height:50pt'></div>
+                    <div class='item' style='height:50pt'></div>
+                    <div class='item' style='height:40pt'></div>
+                    <div class='item' style='height:40pt'></div>
+                    <div class='item' style='height:40pt'></div>
                 </div>");
             var (root, _) = await BuildAndLayout(html, pageHeight: 1000);
             var items = FindAllByClass(root, "item");

@@ -18,8 +18,8 @@ namespace PeachPDF.Tests.Integration
         public async Task MaxWidth_ClampsAutoWidthBlock()
         {
             var html = Wrap(@"
-                <div style='width:400px;'>
-                    <div id='item' style='max-width:100px;'>
+                <div style='width:400pt;'>
+                    <div id='item' style='max-width:100pt;'>
                         Some longer text content that would otherwise fill the whole container width.
                     </div>
                 </div>");
@@ -32,8 +32,8 @@ namespace PeachPDF.Tests.Integration
         public async Task MaxHeight_ClampsBlock_ContentOverflowsPastActualBottom()
         {
             var html = Wrap(@"
-                <div id='item' style='max-height:50px;'>
-                    <div style='height:200px;'></div>
+                <div id='item' style='max-height:50pt;'>
+                    <div style='height:200pt;'></div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var item = FindById(root, "item")!;
@@ -51,8 +51,8 @@ namespace PeachPDF.Tests.Integration
             // exact same shape max-height already correctly handles above via a separate, unconditional
             // clamp in ApplyHeight.
             var html = Wrap(@"
-                <div id='item' style='height:50px;'>
-                    <div style='height:200px;'></div>
+                <div id='item' style='height:50pt;'>
+                    <div style='height:200pt;'></div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var item = FindById(root, "item")!;
@@ -63,7 +63,7 @@ namespace PeachPDF.Tests.Integration
         public async Task MinHeight_WinsOverConflictingHeight()
         {
             // CSS 2.1 §10.7: when min-height and height conflict, min-height wins.
-            var html = Wrap(@"<div id='item' style='height:50px; min-height:150px;'></div>");
+            var html = Wrap(@"<div id='item' style='height:50pt; min-height:150pt;'></div>");
             var (root, _) = await BuildAndLayout(html);
             var item = FindById(root, "item")!;
             Assert.InRange(item.ActualBoxSizingHeight, 148, 152);
@@ -73,8 +73,8 @@ namespace PeachPDF.Tests.Integration
         public async Task MinWidth_WinsOverConflictingMaxWidth()
         {
             var html = Wrap(@"
-                <div style='width:300px;'>
-                    <div id='item' style='min-width:150px; max-width:100px;'></div>
+                <div style='width:300pt;'>
+                    <div id='item' style='min-width:150pt; max-width:100pt;'></div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var item = FindById(root, "item")!;
@@ -85,8 +85,8 @@ namespace PeachPDF.Tests.Integration
         public async Task MinHeight_WinsOverConflictingMaxHeight()
         {
             var html = Wrap(@"
-                <div id='item' style='min-height:150px; max-height:100px;'>
-                    <div style='height:10px;'></div>
+                <div id='item' style='min-height:150pt; max-height:100pt;'>
+                    <div style='height:10pt;'></div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var item = FindById(root, "item")!;
@@ -120,7 +120,7 @@ namespace PeachPDF.Tests.Integration
             // display:block img in an anonymous block and forces the img itself back to
             // inline), so width is read from the image word's rectangle, not
             // ActualBoxSizingWidth (which only general block-level width resolution populates).
-            var html = Wrap(@"<img id='img' style='width:50px; min-width:100px;' />");
+            var html = Wrap(@"<img id='img' style='width:50pt; min-width:100pt;' />");
             var (root, _) = await BuildAndLayout(html);
             var img = FindById(root, "img")!;
             Assert.InRange(img.Words[0].Width, 96, 104);
@@ -129,7 +129,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Image_MaxHeight_ClampsAboveMaximum()
         {
-            var html = Wrap(@"<img id='img' style='width:50px; height:200px; max-height:80px;' />");
+            var html = Wrap(@"<img id='img' style='width:50pt; height:200pt; max-height:80pt;' />");
             var (root, _) = await BuildAndLayout(html);
             var img = FindById(root, "img")!;
             Assert.InRange(img.ActualBoxSizingHeight, 76, 84);
@@ -138,7 +138,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Image_MinHeight_GrowsBelowMinimum()
         {
-            var html = Wrap(@"<img id='img' style='width:50px; height:20px; min-height:60px;' />");
+            var html = Wrap(@"<img id='img' style='width:50pt; height:20pt; min-height:60pt;' />");
             var (root, _) = await BuildAndLayout(html);
             var img = FindById(root, "img")!;
             Assert.InRange(img.ActualBoxSizingHeight, 56, 64);
@@ -150,8 +150,8 @@ namespace PeachPDF.Tests.Integration
         public async Task AbsolutePosition_MaxWidth_ClampsAutoWidthBox()
         {
             var html = Wrap(@"
-                <div style='position:relative; width:400px; height:100px;'>
-                    <div id='item' style='position:absolute; max-width:100px;'>
+                <div style='position:relative; width:400pt; height:100pt;'>
+                    <div id='item' style='position:absolute; max-width:100pt;'>
                         Some fairly long text content that would otherwise take up much more width.
                     </div>
                 </div>");
@@ -166,8 +166,8 @@ namespace PeachPDF.Tests.Integration
         public async Task FlexCrossAxisStretch_MaxHeight_ClampsItem()
         {
             var html = Wrap(@"
-                <div style='display:flex; height:200px; align-items:stretch;'>
-                    <div id='item' style='width:50px; max-height:80px;'></div>
+                <div style='display:flex; height:200pt; align-items:stretch;'>
+                    <div id='item' style='width:50pt; max-height:80pt;'></div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var item = FindById(root, "item")!;

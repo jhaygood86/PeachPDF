@@ -27,7 +27,10 @@ namespace PeachPDF.Tests.Integration
     /// </summary>
     public class PageBreakTableKeepWithNextIntegrationTests
     {
-        // A4 at 1:1 point scale: 595 x 842 pt, no margins (test default).
+        // A4 at 1:1 point scale: 595 x 842 pt, no margins (test default). Fixture block/margin/padding
+        // lengths are authored in pt so they map 1:1 to this layout space (CSS px is spec-correct at
+        // 1px = 0.75pt, so pt keeps the hand-derived page-boundary geometry exact); font-size stays in
+        // px, whose 0.75 resolution is unchanged and irrelevant to these boundary assertions.
         private const double PageHeight = 842.0;
 
         [Fact]
@@ -41,11 +44,11 @@ namespace PeachPDF.Tests.Integration
             const string html = """
                 <!DOCTYPE html><html><head><style>
                 body { margin: 0; }
-                h2 { margin: 0 0 140px 0; font-size: 14px; }
+                h2 { margin: 0 0 140pt 0; font-size: 14px; }
                 table { border-collapse: collapse; width: 100%; margin: 0; }
-                th, td { padding: 3px; }
+                th, td { padding: 3pt; }
                 </style></head><body>
-                <div style='height: 700px'></div>
+                <div style='height: 700pt'></div>
                 <h2 class='heading'>Transactions</h2>
                 <table>
                   <thead><tr><th>Date</th><th>Amount</th></tr></thead>
@@ -80,10 +83,10 @@ namespace PeachPDF.Tests.Integration
                 body { margin: 0; }
                 h2 { margin: 0; font-size: 12px; }
                 table { border-collapse: collapse; width: 100%; margin: 0; }
-                th, td { padding: 3px; }
-                .rbox { height: 60px; }
+                th, td { padding: 3pt; }
+                .rbox { height: 60pt; }
                 </style></head><body>
-                <div style='height: 800px'></div>
+                <div style='height: 800pt'></div>
                 <h2 class='heading'>Transactions</h2>
                 <table>
                   <thead><tr><th>Date</th><th>Amount</th></tr></thead>
@@ -110,7 +113,7 @@ namespace PeachPDF.Tests.Integration
         public async Task GapOneThenGapTwo_BothPrechecksFireForSameTable_ComposeWithoutDoubleCounting()
         {
             // Constructs a case where BOTH fixes fire, in sequence, for the same table in one
-            // layout pass. The 10px spacer + 800px heading + 40px margin gives the table a
+            // layout pass. The 10pt spacer + 800pt heading + 40pt margin gives the table a
             // natural top of 850pt, crossing the 842pt page-1 boundary on its own - Gap 1 pulls
             // the heading along, landing it exactly at the page-2 top (842) and the table just
             // 2pt short of page 2's own bottom (842 + 840 = 1682, leaving only 2pt of the
@@ -127,11 +130,11 @@ namespace PeachPDF.Tests.Integration
             const string html = """
                 <!DOCTYPE html><html><head><style>
                 body { margin: 0; }
-                h2 { margin: 0 0 40px 0; font-size: 14px; height: 800px; }
+                h2 { margin: 0 0 40pt 0; font-size: 14px; height: 800pt; }
                 table { border-collapse: collapse; width: 100%; margin: 0; }
-                th, td { padding: 3px; }
+                th, td { padding: 3pt; }
                 </style></head><body>
-                <div style='height: 10px'></div>
+                <div style='height: 10pt'></div>
                 <h2 class='heading'>Transactions</h2>
                 <table>
                   <thead><tr><th>Date</th><th>Amount</th></tr></thead>
@@ -172,10 +175,10 @@ namespace PeachPDF.Tests.Integration
                 body { margin: 0; }
                 h2 { margin: 0; font-size: 12px; }
                 table { border-collapse: collapse; width: 100%; margin: 0; }
-                th, td { padding: 3px; }
-                .rbox { height: 60px; }
+                th, td { padding: 3pt; }
+                .rbox { height: 60pt; }
                 </style></head><body>
-                <div style='height: 400px'></div>
+                <div style='height: 400pt'></div>
                 <h2 class='heading'>Transactions</h2>
                 <table>
                   <thead><tr><th>Date</th><th>Amount</th></tr></thead>
@@ -208,10 +211,10 @@ namespace PeachPDF.Tests.Integration
                 body { margin: 0; }
                 h2 { margin: 0; font-size: 12px; }
                 table { border-collapse: collapse; width: 100%; margin: 0; }
-                th, td { padding: 3px; }
-                .rbox { height: 60px; }
+                th, td { padding: 3pt; }
+                .rbox { height: 60pt; }
                 </style></head><body>
-                <div style='height: 800px'></div>
+                <div style='height: 800pt'></div>
                 <h2 class='heading'>Transactions</h2>
                 <table>
                   <thead><tr><th>Amount</th><th>Row</th></tr></thead>
@@ -230,7 +233,7 @@ namespace PeachPDF.Tests.Integration
 
             // The table body clearly spans more than one page from its new starting point.
             Assert.True(table.ActualBottom - table.Location.Y > pageHeight,
-                "A 60-row table of 60px rows must span more than a single page");
+                "A 60-row table of 60pt rows must span more than a single page");
 
             // The <thead> repeats: one header proxy per page the table's body actually spans.
             var headerProxyCount = table.Boxes.OfType<CssProxyBox>()
@@ -249,9 +252,9 @@ namespace PeachPDF.Tests.Integration
             const string html = """
                 <!DOCTYPE html><html><head><style>
                 body { margin: 0; }
-                h2 { margin: 0; font-size: 12px; height: 1000px; }
+                h2 { margin: 0; font-size: 12px; height: 1000pt; }
                 table { border-collapse: collapse; width: 100%; margin: 0; }
-                th, td { padding: 3px; }
+                th, td { padding: 3pt; }
                 </style></head><body>
                 <h2 class='heading'>Transactions</h2>
                 <table>

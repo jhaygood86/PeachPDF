@@ -258,8 +258,8 @@ namespace PeachPDF.Tests.Integration
 <style>
 @page { size: A4; margin: 20mm; }
 body { margin: 0; }
-.filler { height: 100px; margin: 0; padding: 0; border: 0; }
-.second { margin-top: 50px; }
+.filler { height: 100pt; margin: 0; padding: 0; border: 0; }
+.second { margin-top: 50pt; }
 </style>
 </head>
 <body>
@@ -292,8 +292,8 @@ body { margin: 0; }
 <style>
 @page { size: A4; margin: 20mm; }
 body { margin: 0; }
-.filler { height: 800px; margin: 0; padding: 0; border: 0; }
-.second { margin-top: 80px; }
+.filler { height: 800pt; margin: 0; padding: 0; border: 0; }
+.second { margin-top: 80pt; }
 </style>
 </head>
 <body>
@@ -317,7 +317,7 @@ body { margin: 0; }
             // alone - confirm the untruncated math really would cross that real boundary (800 + 80 =
             // 880 > pageHeight + marginTop), so this test is exercising the intended case. A margin
             // that only clears the *raw* pageHeight without also clearing + marginTop (e.g. the
-            // previous 50px here) doesn't actually cross a real page boundary and must NOT truncate -
+            // previous 50pt here) doesn't actually cross a real page boundary and must NOT truncate -
             // that was itself the bug this fix corrects.
             Assert.True(filler.ActualBottom + 80 > pageHeight + marginTop,
                 $"test setup should cross a page boundary: filler.ActualBottom={filler.ActualBottom}, pageHeight={pageHeight}, marginTop={marginTop}");
@@ -385,8 +385,8 @@ body { margin: 0; }
 <style>
 @page { size: A4; margin: 20mm; }
 body { margin: 0; }
-.filler { height: 100px; margin: 0; padding: 0; border: 0; }
-.second { page-break-before: always; margin-top: 50px; }
+.filler { height: 100pt; margin: 0; padding: 0; border: 0; }
+.second { page-break-before: always; margin-top: 50pt; }
 </style>
 </head>
 <body>
@@ -403,7 +403,7 @@ body { margin: 0; }
             Assert.NotNull(second);
 
             // Forced break puts the (bumped) previous sibling bottom at exactly pageHeight + marginTop;
-            // second's own 50px margin-top should be added normally on top of that, not truncated away.
+            // second's own 50pt margin-top should be added normally on top of that, not truncated away.
             Assert.Equal(pageHeight + marginTop + 50, second.Location.Y, 0.5);
         }
 

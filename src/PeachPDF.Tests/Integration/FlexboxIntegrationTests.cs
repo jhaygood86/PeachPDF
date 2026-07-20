@@ -71,9 +71,9 @@ namespace PeachPDF.Tests.Integration
         public async Task FlexGrow_DistributesSpaceProportionally()
         {
             var html = Wrap(@"
-                <div style='display:flex; width:300px;'>
-                    <div id='a' style='flex-grow:1; height:20px;'></div>
-                    <div id='b' style='flex-grow:2; height:20px;'></div>
+                <div style='display:flex; width:300pt;'>
+                    <div id='a' style='flex-grow:1; height:20pt;'></div>
+                    <div id='b' style='flex-grow:2; height:20pt;'></div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var a = FindById(root, "a")!;
@@ -104,8 +104,8 @@ namespace PeachPDF.Tests.Integration
         public async Task FlexBasis_OverridesNaturalSize()
         {
             var html = Wrap(@"
-                <div style='display:flex; width:300px;'>
-                    <div id='item' style='flex-basis:100px; flex-grow:0; flex-shrink:0; height:20px;'></div>
+                <div style='display:flex; width:300pt;'>
+                    <div id='item' style='flex-basis:100pt; flex-grow:0; flex-shrink:0; height:20pt;'></div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var item = FindById(root, "item")!;
@@ -118,26 +118,26 @@ namespace PeachPDF.Tests.Integration
         public async Task JustifyContent_Center_OffsetsByHalfFreeSpace()
         {
             var html = Wrap(@"
-                <div id='container' style='display:flex; width:300px; justify-content:center;'>
-                    <div id='item' style='width:100px; height:20px; flex-shrink:0;'></div>
+                <div id='container' style='display:flex; width:300pt; justify-content:center;'>
+                    <div id='item' style='width:100pt; height:20pt; flex-shrink:0;'></div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var container = FindById(root, "container")!;
             var item = FindById(root, "item")!;
-            double expectedX = container.ClientLeft + 100; // (300 - 100) / 2 = 100px offset
+            double expectedX = container.ClientLeft + 100; // (300 - 100) / 2 = 100pt offset
             Assert.InRange(item.Location.X, expectedX - 2, expectedX + 2);
         }
 
         [Fact]
         public async Task JustifyContent_Center_PaddedItems_AllThreeVisible()
         {
-            // Items have explicit width:50px + padding:4px 6px → outer = 62px each.
-            // 3 × 62 + 2 × 4 (gap) = 194px in 240px container → freeSpace = 46px, startOffset = 23px.
+            // Items have explicit width:50pt + padding:4pt 6pt → outer = 62pt each.
+            // 3 × 62 + 2 × 4 (gap) = 194pt in 240pt container → freeSpace = 46pt, startOffset = 23pt.
             var html = Wrap(@"
-                <div id='container' style='display:flex; width:240px; justify-content:center; gap:4px;'>
-                    <div id='a' style='width:50px; height:20px; padding:4px 6px; flex-shrink:0;'></div>
-                    <div id='b' style='width:50px; height:20px; padding:4px 6px; flex-shrink:0;'></div>
-                    <div id='c' style='width:50px; height:20px; padding:4px 6px; flex-shrink:0;'></div>
+                <div id='container' style='display:flex; width:240pt; justify-content:center; gap:4pt;'>
+                    <div id='a' style='width:50pt; height:20pt; padding:4pt 6pt; flex-shrink:0;'></div>
+                    <div id='b' style='width:50pt; height:20pt; padding:4pt 6pt; flex-shrink:0;'></div>
+                    <div id='c' style='width:50pt; height:20pt; padding:4pt 6pt; flex-shrink:0;'></div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var container = FindById(root, "container")!;
@@ -155,20 +155,20 @@ namespace PeachPDF.Tests.Integration
             Assert.InRange(a.ActualBoxSizingWidth, 60, 64);
             Assert.InRange(b.ActualBoxSizingWidth, 60, 64);
             Assert.InRange(c.ActualBoxSizingWidth, 60, 64);
-            // Center offset: A should start ~23px from container left
+            // Center offset: A should start ~23pt from container left
             Assert.InRange(a.Location.X - container.ClientLeft, 20, 26);
         }
 
         [Fact]
         public async Task JustifyContent_FlexEnd_PaddedItems_AllThreeVisible()
         {
-            // Items have explicit width:50px + padding:4px 6px → outer = 62px each.
-            // freeSpace = 240 - 194 = 46px, so startOffset = 46px.
+            // Items have explicit width:50pt + padding:4pt 6pt → outer = 62pt each.
+            // freeSpace = 240 - 194 = 46pt, so startOffset = 46pt.
             var html = Wrap(@"
-                <div id='container' style='display:flex; width:240px; justify-content:flex-end; gap:4px;'>
-                    <div id='a' style='width:50px; height:20px; padding:4px 6px; flex-shrink:0;'></div>
-                    <div id='b' style='width:50px; height:20px; padding:4px 6px; flex-shrink:0;'></div>
-                    <div id='c' style='width:50px; height:20px; padding:4px 6px; flex-shrink:0;'></div>
+                <div id='container' style='display:flex; width:240pt; justify-content:flex-end; gap:4pt;'>
+                    <div id='a' style='width:50pt; height:20pt; padding:4pt 6pt; flex-shrink:0;'></div>
+                    <div id='b' style='width:50pt; height:20pt; padding:4pt 6pt; flex-shrink:0;'></div>
+                    <div id='c' style='width:50pt; height:20pt; padding:4pt 6pt; flex-shrink:0;'></div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var container = FindById(root, "container")!;
@@ -188,10 +188,10 @@ namespace PeachPDF.Tests.Integration
         public async Task JustifyContent_SpaceBetween_FirstAndLastAtEdges()
         {
             var html = Wrap(@"
-                <div id='container' style='display:flex; width:300px; justify-content:space-between;'>
-                    <div class='item' style='width:60px; height:20px; flex-shrink:0;'></div>
-                    <div class='item' style='width:60px; height:20px; flex-shrink:0;'></div>
-                    <div class='item' style='width:60px; height:20px; flex-shrink:0;'></div>
+                <div id='container' style='display:flex; width:300pt; justify-content:space-between;'>
+                    <div class='item' style='width:60pt; height:20pt; flex-shrink:0;'></div>
+                    <div class='item' style='width:60pt; height:20pt; flex-shrink:0;'></div>
+                    <div class='item' style='width:60pt; height:20pt; flex-shrink:0;'></div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var container = FindById(root, "container")!;
@@ -206,8 +206,8 @@ namespace PeachPDF.Tests.Integration
         public async Task AlignItems_Center_VerticallyCenter()
         {
             var html = Wrap(@"
-                <div id='container' style='display:flex; height:100px; align-items:center;'>
-                    <div id='item' style='width:50px; height:40px;'></div>
+                <div id='container' style='display:flex; height:100pt; align-items:center;'>
+                    <div id='item' style='width:50pt; height:40pt;'></div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var container = FindById(root, "container")!;
@@ -220,8 +220,8 @@ namespace PeachPDF.Tests.Integration
         public async Task AlignItems_Stretch_FillsCrossAxis()
         {
             var html = Wrap(@"
-                <div id='container' style='display:flex; height:100px; align-items:stretch;'>
-                    <div id='item' style='width:50px;'></div>
+                <div id='container' style='display:flex; height:100pt; align-items:stretch;'>
+                    <div id='item' style='width:50pt;'></div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var item = FindById(root, "item")!;
@@ -234,8 +234,8 @@ namespace PeachPDF.Tests.Integration
         public async Task AlignSelf_OverridesAlignItems()
         {
             var html = Wrap(@"
-                <div id='container' style='display:flex; height:100px; align-items:flex-start;'>
-                    <div id='item' style='width:50px; height:20px; align-self:flex-end;'></div>
+                <div id='container' style='display:flex; height:100pt; align-items:flex-start;'>
+                    <div id='item' style='width:50pt; height:20pt; align-self:flex-end;'></div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var container = FindById(root, "container")!;
@@ -424,10 +424,10 @@ namespace PeachPDF.Tests.Integration
         {
             // Column flex with auto height must expand to hold all items (not collapse to zero).
             var html = Wrap(@"
-                <div id='container' style='display:flex; flex-direction:column; width:100px;'>
-                    <div class='item' style='height:20px;'>A</div>
-                    <div class='item' style='height:20px;'>B</div>
-                    <div class='item' style='height:20px;'>C</div>
+                <div id='container' style='display:flex; flex-direction:column; width:100pt;'>
+                    <div class='item' style='height:20pt;'>A</div>
+                    <div class='item' style='height:20pt;'>B</div>
+                    <div class='item' style='height:20pt;'>C</div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var container = FindById(root, "container")!;
@@ -438,7 +438,7 @@ namespace PeachPDF.Tests.Integration
             Assert.True(items[1].Location.Y < items[2].Location.Y, "B should be above C");
             // Container must be tall enough to contain all items
             Assert.True(container.ActualBoxSizingHeight >= 58, // 3*20=60, allow small margin error
-                $"Container should be at least 60px tall, was {container.ActualBoxSizingHeight}");
+                $"Container should be at least 60pt tall, was {container.ActualBoxSizingHeight}");
         }
 
         [Fact]
@@ -461,19 +461,19 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task AutoWidth_MinWidth_EnforcedAsHypotheticalSize()
         {
-            // Items with min-width:40px and short text should all be at least 40px wide.
+            // Items with min-width:40pt and short text should all be at least 40pt wide.
             var html = Wrap(@"
-                <div style='display:flex; width:300px;'>
-                    <div class='item' style='min-width:40px; height:20px; padding:0 5px;'>A</div>
-                    <div class='item' style='min-width:40px; height:20px; padding:0 5px;'>B</div>
-                    <div class='item' style='min-width:40px; height:20px; padding:0 5px;'>C</div>
+                <div style='display:flex; width:300pt;'>
+                    <div class='item' style='min-width:40pt; height:20pt; padding:0 5pt;'>A</div>
+                    <div class='item' style='min-width:40pt; height:20pt; padding:0 5pt;'>B</div>
+                    <div class='item' style='min-width:40pt; height:20pt; padding:0 5pt;'>C</div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var items = FindAllByClass(root, "item");
             Assert.Equal(3, items.Count);
             foreach (var item in items)
                 Assert.True(item.ActualBoxSizingWidth >= 38, // allow small rounding
-                    $"Item should be at least 40px wide, was {item.ActualBoxSizingWidth}");
+                    $"Item should be at least 40pt wide, was {item.ActualBoxSizingWidth}");
             // All items should be equal width since all have same min-width and same content
             Assert.InRange(items[0].ActualBoxSizingWidth, items[1].ActualBoxSizingWidth - 2, items[1].ActualBoxSizingWidth + 2);
             Assert.InRange(items[1].ActualBoxSizingWidth, items[2].ActualBoxSizingWidth - 2, items[2].ActualBoxSizingWidth + 2);
@@ -484,12 +484,12 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task ColumnGap_SpacesItemsApart()
         {
-            // With column-gap:20px, each adjacent pair of items should be 20px apart.
+            // With column-gap:20pt, each adjacent pair of items should be 20pt apart.
             var html = Wrap(@"
-                <div id='container' style='display:flex; width:300px; column-gap:20px;'>
-                    <div class='item' style='width:60px; height:20px; flex-shrink:0;'></div>
-                    <div class='item' style='width:60px; height:20px; flex-shrink:0;'></div>
-                    <div class='item' style='width:60px; height:20px; flex-shrink:0;'></div>
+                <div id='container' style='display:flex; width:300pt; column-gap:20pt;'>
+                    <div class='item' style='width:60pt; height:20pt; flex-shrink:0;'></div>
+                    <div class='item' style='width:60pt; height:20pt; flex-shrink:0;'></div>
+                    <div class='item' style='width:60pt; height:20pt; flex-shrink:0;'></div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var items = FindAllByClass(root, "item");
@@ -505,9 +505,9 @@ namespace PeachPDF.Tests.Integration
         {
             // gap shorthand should apply to column-gap for row flex.
             var html = Wrap(@"
-                <div id='container' style='display:flex; width:300px; gap:15px;'>
-                    <div class='item' style='width:80px; height:20px; flex-shrink:0;'></div>
-                    <div class='item' style='width:80px; height:20px; flex-shrink:0;'></div>
+                <div id='container' style='display:flex; width:300pt; gap:15pt;'>
+                    <div class='item' style='width:80pt; height:20pt; flex-shrink:0;'></div>
+                    <div class='item' style='width:80pt; height:20pt; flex-shrink:0;'></div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var items = FindAllByClass(root, "item");
@@ -521,13 +521,13 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task WrapReverse_LastItemAtTop_FirstItemAtBottom()
         {
-            // 3 items each 150px wide in a 200px container → each wraps to its own line.
+            // 3 items each 150pt wide in a 200pt container → each wraps to its own line.
             // wrap-reverse reverses line stacking: C (last DOM, last line) should be at top, A at bottom.
             var html = Wrap(@"
-                <div id='container' style='display:flex; flex-wrap:wrap-reverse; width:200px; gap:4px;'>
-                    <div id='a' style='width:150px; height:30px; flex-shrink:0;'></div>
-                    <div id='b' style='width:150px; height:30px; flex-shrink:0;'></div>
-                    <div id='c' style='width:150px; height:30px; flex-shrink:0;'></div>
+                <div id='container' style='display:flex; flex-wrap:wrap-reverse; width:200pt; gap:4pt;'>
+                    <div id='a' style='width:150pt; height:30pt; flex-shrink:0;'></div>
+                    <div id='b' style='width:150pt; height:30pt; flex-shrink:0;'></div>
+                    <div id='c' style='width:150pt; height:30pt; flex-shrink:0;'></div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var container = FindById(root, "container")!;
@@ -538,7 +538,7 @@ namespace PeachPDF.Tests.Integration
             Assert.True(b.Location.Y < a.Location.Y, $"B should be above A: B.Y={b.Location.Y}, A.Y={a.Location.Y}");
             // C should sit at the container's top edge
             Assert.InRange(c.Location.Y, container.ClientTop - 1, container.ClientTop + 1);
-            // Lines are 30px high with 4px gap → 34px between line starts
+            // Lines are 30pt high with 4pt gap → 34pt between line starts
             Assert.InRange(b.Location.Y - c.Location.Y, 32, 36);
             Assert.InRange(a.Location.Y - b.Location.Y, 32, 36);
         }
@@ -546,12 +546,12 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task WrapReverse_ContainerHeightFitsAllLines()
         {
-            // Container height must expand to include all 3 reversed lines (3×30 + 2×4 = 98px).
+            // Container height must expand to include all 3 reversed lines (3×30 + 2×4 = 98pt).
             var html = Wrap(@"
-                <div id='container' style='display:flex; flex-wrap:wrap-reverse; width:200px; gap:4px;'>
-                    <div id='a' style='width:150px; height:30px; flex-shrink:0;'></div>
-                    <div id='b' style='width:150px; height:30px; flex-shrink:0;'></div>
-                    <div id='c' style='width:150px; height:30px; flex-shrink:0;'></div>
+                <div id='container' style='display:flex; flex-wrap:wrap-reverse; width:200pt; gap:4pt;'>
+                    <div id='a' style='width:150pt; height:30pt; flex-shrink:0;'></div>
+                    <div id='b' style='width:150pt; height:30pt; flex-shrink:0;'></div>
+                    <div id='c' style='width:150pt; height:30pt; flex-shrink:0;'></div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var container = FindById(root, "container")!;
@@ -587,15 +587,16 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task WrapReverse_ShowcaseItems_AllThreeVisible()
         {
-            // Exact showcase HTML for section 6 wrap-reverse:
-            // items: width:90px; height:24px; padding:4px 6px; font:bold 7pt Arial
-            // outer = 90+12=102px; container=200px → each item on own line.
+            // Mirrors the showcase section 6 wrap-reverse HTML, with the box lengths in pt so the
+            // hand-authored expectations below stay unit-exact (1px = 0.75pt would scale them):
+            // items: width:90pt; height:24pt; padding:4pt 6pt; font:bold 7pt Arial
+            // outer = 90+12=102pt; container=200pt → each item on own line.
             // wrap-reverse: C at top (y≈containerTop), B in middle, A at bottom.
             var html = Wrap(@"
-                <div id='container' style='display:flex; flex-wrap:wrap-reverse; width:200px; gap:4px;'>
-                    <div id='a' style='background:#e74c3c;color:#fff;font:bold 7pt Arial;padding:4px 6px;min-width:28px;text-align:center;width:90px;height:24px;'>A</div>
-                    <div id='b' style='background:#3498db;color:#fff;font:bold 7pt Arial;padding:4px 6px;min-width:28px;text-align:center;width:90px;height:24px;'>B</div>
-                    <div id='c' style='background:#27ae60;color:#fff;font:bold 7pt Arial;padding:4px 6px;min-width:28px;text-align:center;width:90px;height:24px;'>C</div>
+                <div id='container' style='display:flex; flex-wrap:wrap-reverse; width:200pt; gap:4pt;'>
+                    <div id='a' style='background:#e74c3c;color:#fff;font:bold 7pt Arial;padding:4pt 6pt;min-width:28pt;text-align:center;width:90pt;height:24pt;'>A</div>
+                    <div id='b' style='background:#3498db;color:#fff;font:bold 7pt Arial;padding:4pt 6pt;min-width:28pt;text-align:center;width:90pt;height:24pt;'>B</div>
+                    <div id='c' style='background:#27ae60;color:#fff;font:bold 7pt Arial;padding:4pt 6pt;min-width:28pt;text-align:center;width:90pt;height:24pt;'>C</div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var container = FindById(root, "container")!;
@@ -610,7 +611,7 @@ namespace PeachPDF.Tests.Integration
             // C should be at container top
             Assert.InRange(c.Location.Y, container.ClientTop - 1, container.ClientTop + 1);
 
-            // Lines are 32px high (24px content + 4+4 padding) with 4px gap → 36px between line starts
+            // Lines are 32pt high (24pt content + 4+4 padding) with 4pt gap → 36pt between line starts
             Assert.InRange(b.Location.Y - c.Location.Y, 34, 38);
             Assert.InRange(a.Location.Y - b.Location.Y, 34, 38);
 
@@ -621,20 +622,21 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task ShowcaseScenario_ExplicitWidthWithFontAndText_CorrectOuterSize()
         {
-            // Mirrors the showcase FItem: font:bold 7pt Arial; padding:4px 6px; min-width:28px; width:50px; text content.
-            // Width is explicit so hypothetical = 50 + 12(padding) = 62. All 3 items (194px) fit in 240px container.
+            // Mirrors the showcase FItem (box lengths in pt to keep the hand-authored numbers
+            // unit-exact): font:bold 7pt Arial; padding:4pt 6pt; min-width:28pt; width:50pt; text content.
+            // Width is explicit so hypothetical = 50 + 12(padding) = 62. All 3 items (194pt) fit in 240pt container.
             var html = Wrap(@"
-                <div id='container' style='display:flex; width:240px; justify-content:center; gap:4px;'>
-                    <div id='a' style='background:#e74c3c;color:#fff;font:bold 7pt Arial;padding:4px 6px;min-width:28px;text-align:center;width:50px;'>A</div>
-                    <div id='b' style='background:#3498db;color:#fff;font:bold 7pt Arial;padding:4px 6px;min-width:28px;text-align:center;width:50px;'>B</div>
-                    <div id='c' style='background:#27ae60;color:#fff;font:bold 7pt Arial;padding:4px 6px;min-width:28px;text-align:center;width:50px;'>C</div>
+                <div id='container' style='display:flex; width:240pt; justify-content:center; gap:4pt;'>
+                    <div id='a' style='background:#e74c3c;color:#fff;font:bold 7pt Arial;padding:4pt 6pt;min-width:28pt;text-align:center;width:50pt;'>A</div>
+                    <div id='b' style='background:#3498db;color:#fff;font:bold 7pt Arial;padding:4pt 6pt;min-width:28pt;text-align:center;width:50pt;'>B</div>
+                    <div id='c' style='background:#27ae60;color:#fff;font:bold 7pt Arial;padding:4pt 6pt;min-width:28pt;text-align:center;width:50pt;'>C</div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var container = FindById(root, "container")!;
             var a = FindById(root, "a")!;
             var b = FindById(root, "b")!;
             var c = FindById(root, "c")!;
-            // Each item: width:50px + padding 6+6 = 62px outer
+            // Each item: width:50pt + padding 6+6 = 62pt outer
             Assert.InRange(a.ActualBoxSizingWidth, 60, 65);
             Assert.InRange(b.ActualBoxSizingWidth, 60, 65);
             Assert.InRange(c.ActualBoxSizingWidth, 60, 65);
@@ -652,14 +654,14 @@ namespace PeachPDF.Tests.Integration
         public async Task InlineFlex_Items_ArrangedHorizontally_WithCorrectSize()
         {
             // Inline items with explicit width inside an inline-flex container.
-            // The flex engine must blockify inline items so width:20px is applied,
+            // The flex engine must blockify inline items so width:20pt is applied,
             // and must arrange them in a horizontal row at the correct positions.
             var html = Wrap(@"
-                <div style='width:300px;'>
+                <div style='width:300pt;'>
                     <span id='container' style='display:inline-flex;'>
-                        <span id='r' style='width:20px; height:15px;'>R</span>
-                        <span id='g' style='width:20px; height:15px;'>G</span>
-                        <span id='b' style='width:20px; height:15px;'>B</span>
+                        <span id='r' style='width:20pt; height:15pt;'>R</span>
+                        <span id='g' style='width:20pt; height:15pt;'>G</span>
+                        <span id='b' style='width:20pt; height:15pt;'>B</span>
                     </span>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
@@ -681,13 +683,13 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task InlineFlex_Gap_AppliedBetweenItems()
         {
-            // gap:6px must separate items; without flex layout the gap is not applied.
+            // gap:6pt must separate items; without flex layout the gap is not applied.
             var html = Wrap(@"
-                <div style='width:300px;'>
-                    <span id='container' style='display:inline-flex; gap:6px;'>
-                        <span id='r' style='width:20px; height:15px;'>R</span>
-                        <span id='g' style='width:20px; height:15px;'>G</span>
-                        <span id='b' style='width:20px; height:15px;'>B</span>
+                <div style='width:300pt;'>
+                    <span id='container' style='display:inline-flex; gap:6pt;'>
+                        <span id='r' style='width:20pt; height:15pt;'>R</span>
+                        <span id='g' style='width:20pt; height:15pt;'>G</span>
+                        <span id='b' style='width:20pt; height:15pt;'>B</span>
                     </span>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
@@ -796,9 +798,9 @@ namespace PeachPDF.Tests.Integration
         public async Task MaxWidth_ClampsGrownItem_Row()
         {
             var html = Wrap(@"
-                <div style='display:flex; width:300px;'>
-                    <div id='a' style='flex-grow:1; max-width:80px; height:20px;'></div>
-                    <div id='b' style='flex-grow:1; height:20px;'></div>
+                <div style='display:flex; width:300pt;'>
+                    <div id='a' style='flex-grow:1; max-width:80pt; height:20pt;'></div>
+                    <div id='b' style='flex-grow:1; height:20pt;'></div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var a = FindById(root, "a")!;
@@ -812,9 +814,9 @@ namespace PeachPDF.Tests.Integration
         public async Task MaxHeight_ClampsGrownItem_Column()
         {
             var html = Wrap(@"
-                <div style='display:flex; flex-direction:column; height:200px;'>
-                    <div id='a' style='flex-grow:1; max-height:50px; width:50px;'></div>
-                    <div id='b' style='flex-grow:1; width:50px;'></div>
+                <div style='display:flex; flex-direction:column; height:200pt;'>
+                    <div id='a' style='flex-grow:1; max-height:50pt; width:50pt;'></div>
+                    <div id='b' style='flex-grow:1; width:50pt;'></div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var a = FindById(root, "a")!;
@@ -827,11 +829,11 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task MinWidth_OverridesShrink_EvenBeyondContainer()
         {
-            // flex-shrink would otherwise reduce the item to container width (50px);
-            // min-width:80px must win, causing the item to overflow the container.
+            // flex-shrink would otherwise reduce the item to container width (50pt);
+            // min-width:80pt must win, causing the item to overflow the container.
             var html = Wrap(@"
-                <div style='display:flex; width:50px;'>
-                    <div id='item' style='flex-basis:200px; flex-shrink:1; min-width:80px; height:20px;'></div>
+                <div style='display:flex; width:50pt;'>
+                    <div id='item' style='flex-basis:200pt; flex-shrink:1; min-width:80pt; height:20pt;'></div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var item = FindById(root, "item")!;
@@ -844,8 +846,8 @@ namespace PeachPDF.Tests.Integration
         public async Task FlexBasis_Percentage_ResolvesAgainstDefiniteContainerWidth()
         {
             var html = Wrap(@"
-                <div style='display:flex; width:300px;'>
-                    <div id='item' style='flex-basis:50%; flex-grow:0; flex-shrink:0; height:20px;'></div>
+                <div style='display:flex; width:300pt;'>
+                    <div id='item' style='flex-basis:50%; flex-grow:0; flex-shrink:0; height:20pt;'></div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var item = FindById(root, "item")!;
@@ -889,8 +891,8 @@ namespace PeachPDF.Tests.Integration
         public async Task AutoMargin_MarginLeft_PushesItemToEnd()
         {
             var html = Wrap(@"
-                <div id='container' style='display:flex; width:300px;'>
-                    <div id='item' style='width:50px; height:20px; margin-left:auto;'></div>
+                <div id='container' style='display:flex; width:300pt;'>
+                    <div id='item' style='width:50pt; height:20pt; margin-left:auto;'></div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var container = FindById(root, "container")!;
@@ -902,8 +904,8 @@ namespace PeachPDF.Tests.Integration
         public async Task AutoMargin_ShorthandLeftRight_CentersSingleItem()
         {
             var html = Wrap(@"
-                <div id='container' style='display:flex; width:300px;'>
-                    <div id='item' style='width:50px; height:20px; margin:0 auto;'></div>
+                <div id='container' style='display:flex; width:300pt;'>
+                    <div id='item' style='width:50pt; height:20pt; margin:0 auto;'></div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var container = FindById(root, "container")!;
@@ -916,9 +918,9 @@ namespace PeachPDF.Tests.Integration
         public async Task AutoMargin_OnSecondItem_PushesItApartFromFirst()
         {
             var html = Wrap(@"
-                <div id='container' style='display:flex; width:300px;'>
-                    <div id='a' style='width:50px; height:20px;'></div>
-                    <div id='b' style='width:50px; height:20px; margin-left:auto;'></div>
+                <div id='container' style='display:flex; width:300pt;'>
+                    <div id='a' style='width:50pt; height:20pt;'></div>
+                    <div id='b' style='width:50pt; height:20pt; margin-left:auto;'></div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var container = FindById(root, "container")!;
@@ -933,8 +935,8 @@ namespace PeachPDF.Tests.Integration
         {
             // Even with justify-content:center, an auto margin must absorb the free space instead.
             var html = Wrap(@"
-                <div id='container' style='display:flex; width:300px; justify-content:center;'>
-                    <div id='item' style='width:50px; height:20px; margin-left:auto;'></div>
+                <div id='container' style='display:flex; width:300pt; justify-content:center;'>
+                    <div id='item' style='width:50pt; height:20pt; margin-left:auto;'></div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var container = FindById(root, "container")!;

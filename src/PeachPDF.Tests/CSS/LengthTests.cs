@@ -137,7 +137,7 @@ namespace PeachPDF.Tests.CSS
         {
             var length = new Length(1f, Length.Unit.In);
 
-            // This engine's native unit is points (1in = 72pt), not the browser's 96dpi CSS px.
+            // ToPixel resolves to the engine's internal layout unit, points: 1in = 72pt.
             Assert.Equal(72f, length.ToPixel());
         }
 
@@ -186,8 +186,8 @@ namespace PeachPDF.Tests.CSS
         {
             var length = new Length(1f, Length.Unit.In);
 
-            // This engine's native unit is points (1in = 72pt), not the browser's 96dpi CSS px.
-            Assert.Equal(72f, length.To(Length.Unit.Px));
+            // px is spec-correct (CSS Values & Units §6.2): 1px = 1/96in, so 1in = 72pt = 96 CSS px.
+            Assert.Equal(96f, length.To(Length.Unit.Px));
         }
 
         [Fact]

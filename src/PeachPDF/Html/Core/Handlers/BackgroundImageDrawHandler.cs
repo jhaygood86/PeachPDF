@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
@@ -37,15 +38,20 @@ namespace PeachPDF.Html.Core.Handlers
         /// <param name="clipRect">the background painting area (background-clip), used when <paramref name="roundedClipPath"/> is null</param>
         /// <param name="roundedClipPath">a rounded-corner clip path to use instead of <paramref name="clipRect"/> when the box has border-radius</param>
         /// <param name="box">the box the image is painted on, needed for em/rem-relative length resolution</param>
+        /// <param name="intrinsicSizeInCssPixels">true when <paramref name="image"/> is a natural bitmap whose
+        /// Width/Height are CSS pixels (1px = 1/96in) needing conversion to layout points; false when it is a
+        /// <see cref="RGraphics.CreateTile"/>-produced tile already sized in layout units</param>
         public static void DrawBackgroundImage(
             RGraphics g, RImage image,
             string sizeValue, string positionValue, string backgroundRepeat,
             RRect positioningRect, RRect clipRect,
             RGraphicsPath? roundedClipPath,
-            CssBoxProperties box)
+            CssBoxProperties box,
+            bool intrinsicSizeInCssPixels)
         {
-            var intrinsicWidth = image.Width > 0 ? image.Width : (double?)null;
-            var intrinsicHeight = image.Height > 0 ? image.Height : (double?)null;
+            var pxFactor = intrinsicSizeInCssPixels ? Length.PointsPerPx : 1d;
+            var intrinsicWidth = image.Width > 0 ? image.Width * pxFactor : (double?)null;
+            var intrinsicHeight = image.Height > 0 ? image.Height * pxFactor : (double?)null;
             var intrinsicRatio = intrinsicWidth is not null && intrinsicHeight is not null
                 ? intrinsicWidth.Value / intrinsicHeight.Value
                 : (double?)null;

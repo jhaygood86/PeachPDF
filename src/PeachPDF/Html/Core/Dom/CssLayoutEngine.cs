@@ -12,6 +12,7 @@
 
 #nullable enable
 
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Entities;
@@ -52,16 +53,22 @@ namespace PeachPDF.Html.Core.Dom
             ArgumentNullException.ThrowIfNull(word);
             ArgumentNullException.ThrowIfNull(word.OwnerBox);
 
+            // Intrinsic sizes arrive in CSS-pixel space (a raster's device pixels / an SVG's user
+            // units, both 1px = 1/96in per spec), while word.Width/Height are layout units (points).
+            // Convert once here; every px-unit branch below applies the same shared factor.
+            intrinsicWidth *= Length.PointsPerPx;
+            intrinsicHeight *= Length.PointsPerPx;
+
             var width = new CssLength(word.OwnerBox.Width);
             var height = new CssLength(word.OwnerBox.Height);
 
-            var hasImageTagWidth = width is { Number: > 0, Unit: CssUnit.Pixels };
-            var hasImageTagHeight = height is { Number: > 0, Unit: CssUnit.Pixels };
+            var hasImageTagWidth = TryResolveAbsolute(width, out var widthUnits);
+            var hasImageTagHeight = TryResolveAbsolute(height, out var heightUnits);
             var scaleImageHeight = false;
 
             if (hasImageTagWidth)
             {
-                word.Width = width.Number;
+                word.Width = widthUnits;
             }
             else if (width is { Number: > 0, IsPercentage: true })
             {
@@ -74,16 +81,17 @@ namespace PeachPDF.Html.Core.Dom
             }
             else
             {
-                word.Width = hasImageTagHeight ? height.Number / 1.14f : 20;
+                // 20 is the legacy broken-image placeholder size, in CSS pixels like the px branches.
+                word.Width = hasImageTagHeight ? heightUnits / 1.14f : 20 * Length.PointsPerPx;
             }
 
             var maxWidth = new CssLength(word.OwnerBox.MaxWidth);
             if (maxWidth.Number > 0)
             {
                 double maxWidthVal = -1;
-                if (maxWidth.Unit == CssUnit.Pixels)
+                if (TryResolveAbsolute(maxWidth, out var maxWidthUnits))
                 {
-                    maxWidthVal = maxWidth.Number;
+                    maxWidthVal = maxWidthUnits;
                 }
                 else if (maxWidth.IsPercentage)
                 {
@@ -101,9 +109,9 @@ namespace PeachPDF.Html.Core.Dom
             if (minWidth.Number > 0)
             {
                 double minWidthVal = -1;
-                if (minWidth.Unit == CssUnit.Pixels)
+                if (TryResolveAbsolute(minWidth, out var minWidthUnits))
                 {
-                    minWidthVal = minWidth.Number;
+                    minWidthVal = minWidthUnits;
                 }
                 else if (minWidth.IsPercentage)
                 {
@@ -119,7 +127,7 @@ namespace PeachPDF.Html.Core.Dom
 
             if (hasImageTagHeight)
             {
-                word.Height = height.Number;
+                word.Height = heightUnits;
             }
             else if (intrinsicHeight is > 0)
             {
@@ -127,7 +135,8 @@ namespace PeachPDF.Html.Core.Dom
             }
             else
             {
-                word.Height = word.Width > 0 ? word.Width * 1.14f : 22.8f;
+                // 22.8 is the legacy placeholder height, in CSS pixels like the px branches.
+                word.Height = word.Width > 0 ? word.Width * 1.14f : 22.8f * Length.PointsPerPx;
             }
 
             if (intrinsicWidth is > 0 && intrinsicHeight is > 0)
@@ -154,9 +163,9 @@ namespace PeachPDF.Html.Core.Dom
             if (maxHeight.Number > 0)
             {
                 double maxHeightVal = -1;
-                if (maxHeight.Unit == CssUnit.Pixels)
+                if (TryResolveAbsolute(maxHeight, out var maxHeightUnits))
                 {
-                    maxHeightVal = maxHeight.Number;
+                    maxHeightVal = maxHeightUnits;
                 }
                 else if (maxHeight.IsPercentage && word.OwnerBox.ContainingBlock.IsHeightCalculated)
                 {
@@ -177,9 +186,9 @@ namespace PeachPDF.Html.Core.Dom
             if (minHeight.Number > 0)
             {
                 double minHeightVal = -1;
-                if (minHeight.Unit == CssUnit.Pixels)
+                if (TryResolveAbsolute(minHeight, out var minHeightUnits))
                 {
-                    minHeightVal = minHeight.Number;
+                    minHeightVal = minHeightUnits;
                 }
                 else if (minHeight.IsPercentage && word.OwnerBox.ContainingBlock.IsHeightCalculated)
                 {
@@ -197,6 +206,25 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             word.Height += word.OwnerBox.ActualBorderBottomWidth + word.OwnerBox.ActualBorderTopWidth + word.OwnerBox.ActualPaddingTop + word.OwnerBox.ActualPaddingBottom;
+        }
+
+        /// <summary>
+        /// Resolves an explicit absolute width/height/min/max on a replaced element to layout units
+        /// (points) through the shared CSS-OM <see cref="Length"/> conversion — any absolute unit,
+        /// spec-correct px (1px = 0.75pt) included, so replaced-element sizing agrees with the rest
+        /// of the engine by construction.
+        /// </summary>
+        private static bool TryResolveAbsolute(CssLength length, out double layoutUnits)
+        {
+            layoutUnits = 0;
+            if (length.HasError || length.IsPercentage || !(length.Number > 0))
+                return false;
+
+            if (!Length.TryParse(length.Length.Trim().ToLowerInvariant(), out var parsed) || !parsed.IsAbsolute)
+                return false;
+
+            layoutUnits = parsed.ToPixels(0, 0, 0);
+            return true;
         }
 
         /// <summary>

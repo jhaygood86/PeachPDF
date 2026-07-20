@@ -30,6 +30,8 @@ document.Save(stream);
 
 For more usage examples — rendering self-contained MHTML files, fetching HTML from a remote URI, sharing a parsed CSS context across renders, saving to disk, working with fonts, enabling tagged PDF (PDF/UA) output, and returning PDFs from ASP.NET Core or Azure Functions endpoints — see [Usage Examples](usage-examples.md).
 
+> **Upgrading from an earlier version?** `px` lengths now resolve at their spec-correct physical size (`1px = 1/96in = 0.75pt`, matching browser print output) instead of the previous `1px = 1pt` convention — px-sized content shrinks by ×0.75 to its true CSS size. See [Length units](html-css-support.md#length-units) for the full unit contract and migration note.
+
 ## Thread safety
 
 A `PdfGenerator` instance is not thread-safe. Use a **separate instance per thread** — e.g. one per web request or one per item in a parallel batch — which is safe and is the intended way to generate PDFs concurrently. See [Thread safety](usage-examples.md#thread-safety) in Usage Examples for the full explanation and code samples.

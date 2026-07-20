@@ -293,8 +293,51 @@ namespace PeachPDF.Tests.CSS.PropertyTests
         [InlineData("50%")]
         public void ParseLengthToPdfPoints_RelativeUnits_ReturnNull(string input)
         {
-            // Relative units have no resolution context at the page-geometry layer.
+            // The CONTEXT-LESS overload has no resolution context for relative units — callers
+            // with a captured PageLengthContext use the context overload below instead (#150).
             var result = PeachPDF.Html.Core.Parse.DomParser.ParseLengthToPdfPoints(input);
+            Assert.Null(result);
+        }
+
+        // ── ParseLengthToPdfPoints with PageLengthContext (#150) ───────────────
+        // Context: 1em = 12pt (root font), 1rem = 12pt, 100% = 600pt (layout page width).
+
+        private static readonly PeachPDF.Html.Core.Entities.PageLengthContext TestContext = new(12.0, 12.0, 600.0);
+
+        [Theory]
+        [InlineData("2em", 24.0)]
+        [InlineData("1.5rem", 18.0)]
+        [InlineData("2ex", 12.0)]  // ex resolves as em/2, same as the base rule's path
+        [InlineData("50%", 300.0)]
+        [InlineData("96px", 72.0)] // spec-correct px, identical to the context-less overload
+        [InlineData("72pt", 72.0)]
+        [InlineData("1in", 72.0)]
+        [InlineData("0", 0.0)]
+        [InlineData("calc(1in + 96px)", 144.0)]
+        [InlineData("calc(50% - 100pt)", 200.0)]
+        [InlineData("calc(2em * 2)", 48.0)]
+        public void ParseLengthToPdfPoints_WithContext_ResolvesRelativeUnitsAndCalc(string input, double expectedPt)
+        {
+            var result = PeachPDF.Html.Core.Parse.DomParser.ParseLengthToPdfPoints(input, TestContext);
+            Assert.NotNull(result);
+            Assert.Equal(expectedPt, result!.Value, 1);
+        }
+
+        [Theory]
+        [InlineData("10vw")]
+        [InlineData("10vh")]
+        [InlineData("10vmin")]
+        [InlineData("10vmax")]
+        [InlineData("3ch")]
+        [InlineData("")]
+        [InlineData("   ")]
+        [InlineData("not-a-length")]
+        [InlineData("5")] // unitless non-zero is invalid per CSS Values & Units §5.1
+        public void ParseLengthToPdfPoints_WithContext_ReturnsNull_ForUnresolvableInput(string input)
+        {
+            // Viewport-relative and ch units have no meaningful page context — they must fall
+            // back to the base margin (null), not silently resolve to a zero margin.
+            var result = PeachPDF.Html.Core.Parse.DomParser.ParseLengthToPdfPoints(input, TestContext);
             Assert.Null(result);
         }
 

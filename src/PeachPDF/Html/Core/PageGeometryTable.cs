@@ -149,7 +149,8 @@ namespace PeachPDF.Html.Core
 
             var activeName = PageRuleResolver.ActiveNameAtSlotStart(container.NamedPageElements, top);
             var rule = PageRuleResolver.SelectPageRule(container.PageRules, pageIndex + 1, activeName);
-            var (mL, mT, mR, mB) = PageRuleResolver.ResolvePageMargins(rule, baseLPt, baseTPt, baseRPt, baseBPt);
+            var (mL, mT, mR, mB) = PageRuleResolver.ResolvePageMargins(
+                rule, baseLPt, baseTPt, baseRPt, baseBPt, container.PageLengthContext);
 
             var bandHeight = sheetPx - (mT + mB) * ppp;
             if (bandHeight < 1.0)

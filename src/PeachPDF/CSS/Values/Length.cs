@@ -10,6 +10,13 @@ namespace PeachPDF.CSS
     internal struct Length : IEquatable<Length>, IComparable<Length>, IFormattable
     {
         /// <summary>
+        ///     Internal layout units (points) per CSS pixel: 1px = 1/96in = 0.75pt
+        ///     (CSS Values &amp; Units §6.2). The single place this ratio is defined —
+        ///     every px conversion in the engine must route through this constant.
+        /// </summary>
+        internal const double PointsPerPx = 72d / 96d;
+
+        /// <summary>
         ///     Gets a zero pixel length value.
         /// </summary>
         public static readonly Length Zero = new(0f, Unit.Px);
@@ -232,20 +239,18 @@ namespace PeachPDF.CSS
         /// <param name="emFactor">Pixels per 1em, i.e. the relevant font size in pixels.</param>
         /// <param name="remFactor">Pixels per 1rem, i.e. the root element's font size in pixels.</param>
         /// <param name="hundredPercent">The pixel value equivalent to 100%.</param>
-        /// <param name="fontAdjust">If the length is in pixels and font related, apply the 72/96 factor.</param>
-        internal double ToPixels(double emFactor, double remFactor, double hundredPercent, bool fontAdjust = false)
+        internal double ToPixels(double emFactor, double remFactor, double hundredPercent)
         {
-            // Physical units (in/cm/mm/pc/pt) resolve directly against points, not the browser's
-            // 96dpi CSS-px convention: this engine's native "pixel" unit already equals 1 point at
-            // the default PixelsPerInch=72 (matching @page's own mm->pt conversion in DomParser and
-            // font-size resolution in FontSizeResolver), so no 96dpi scaling belongs here - applying
-            // one inflated every pt/in/cm/mm length by 96/72 relative to the rest of the engine.
+            // The engine's internal layout unit is 1 point (PixelsPerInch defaults to 72), so
+            // physical units (in/cm/mm/pc/pt) resolve directly against points. CSS px resolves
+            // spec-correctly at 1px = 1/96in = 0.75pt (PointsPerPx) in every context - font sizes,
+            // box lengths, and @page geometry all share this one conversion.
             return Type switch
             {
                 Unit.Em => emFactor * Value,
                 Unit.Rem => remFactor * Value,
                 Unit.Ex => emFactor / 2 * Value,
-                Unit.Px => (fontAdjust ? 72d / 96d : 1d) * Value, //TODO: a check support for hi dpi
+                Unit.Px => PointsPerPx * Value,
                 Unit.In => // 1 in = 72 pt
                     72d * Value,
                 Unit.Mm => // 1 mm = 72/25.4 pt
@@ -277,8 +282,8 @@ namespace PeachPDF.CSS
                     value,
                 Unit.Cm => // 1 cm = 72/2.54 pt
                     value * 2.54f / 72f,
-                Unit.Px => // 1 px = 1 pt
-                    value,
+                Unit.Px => // 1 px = 0.75 pt (1/96 in)
+                    (float)(value / PointsPerPx),
                 _ => throw new InvalidOperationException("An absolute unit cannot be converted to a relative one.")
             };
         }

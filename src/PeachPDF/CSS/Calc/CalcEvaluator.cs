@@ -10,19 +10,17 @@ namespace PeachPDF.CSS
     /// </summary>
     internal readonly struct CalcContext
     {
-        public CalcContext(double hundredPercent, double emFactor, double remFactor, bool fontAdjust, bool returnPoints = false)
+        public CalcContext(double hundredPercent, double emFactor, double remFactor, bool returnPoints = false)
         {
             HundredPercent = hundredPercent;
             EmFactor = emFactor;
             RemFactor = remFactor;
-            FontAdjust = fontAdjust;
             ReturnPoints = returnPoints;
         }
 
         public double HundredPercent { get; }
         public double EmFactor { get; }
         public double RemFactor { get; }
-        public bool FontAdjust { get; }
 
         /// <summary>
         /// Mirrors ParseLength's returnPoints parameter: when the caller's em/rem/percent factors are
@@ -34,7 +32,7 @@ namespace PeachPDF.CSS
 
     /// <summary>
     /// Evaluates a validated calc-family AST to a pixel-space number. This is the one place calc()
-    /// numbers actually get computed — called only from Layer B (<see cref="PeachPDF.Html.Core.Parse.CssValueParser.ParseLength(string, double, double, double, string, bool, bool)"/>),
+    /// numbers actually get computed — called only from Layer B (<see cref="PeachPDF.Html.Core.Parse.CssValueParser.ParseLength(string, double, double, double, string, bool)"/>),
     /// since only layout has the <see cref="CalcContext"/> a percentage/em/rem leaf needs to resolve.
     /// Reuses <see cref="Length.ToPixels"/> for every leaf, so no unit-conversion arithmetic is duplicated
     /// here. A null result signals a divide-by-zero; per the type-checker's rules every legal divisor is
@@ -55,11 +53,11 @@ namespace PeachPDF.CSS
 
                 case DimensionCalcNode dimension:
                     return new Length((float)dimension.Value, dimension.Unit)
-                        .ToPixels(context.EmFactor, context.RemFactor, context.HundredPercent, context.FontAdjust);
+                        .ToPixels(context.EmFactor, context.RemFactor, context.HundredPercent);
 
                 case PercentageCalcNode percentage:
                     return new Length((float)percentage.Value, Length.Unit.Percent)
-                        .ToPixels(context.EmFactor, context.RemFactor, context.HundredPercent, context.FontAdjust);
+                        .ToPixels(context.EmFactor, context.RemFactor, context.HundredPercent);
 
                 case UnaryCalcNode unary:
                 {

@@ -46,7 +46,7 @@ namespace PeachPDF.Tests.Integration
         public async Task BorderStyleDouble_DrawsTwoEqualWidthStripesWithGap()
         {
             var (root, _) = await BuildAndLayout(Wrap(
-                "<div id='b' style='border-top-style: double; border-top-width: 12px; border-top-color: rgb(51,51,51)'>x</div>"));
+                "<div id='b' style='border-top-style: double; border-top-width: 12pt; border-top-color: rgb(51,51,51)'>x</div>"));
             var div = FindById(root, "b")!;
 
             var g = new TestRecordingGraphics();

@@ -12,7 +12,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task BorderRadius_Shorthand_SetsAllCorners()
         {
-            var divBox = await FindDivBox("border-radius: 10px; border: 1px solid black;");
+            var divBox = await FindDivBox("border-radius: 10pt; border: 1pt solid black;");
 
             Assert.Equal(10.0, divBox.ActualBorderTopLeftRadiusX);
             Assert.Equal(10.0, divBox.ActualBorderTopLeftRadiusY);
@@ -28,7 +28,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task BorderRadius_TwoValues_SetsOpposingCorners()
         {
-            var divBox = await FindDivBox("border-radius: 10px 20px;");
+            var divBox = await FindDivBox("border-radius: 10pt 20pt;");
 
             Assert.Equal(10.0, divBox.ActualBorderTopLeftRadiusX);
             Assert.Equal(20.0, divBox.ActualBorderTopRightRadiusX);
@@ -39,7 +39,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task BorderRadius_FourValues_SetsAllCornersIndividually()
         {
-            var divBox = await FindDivBox("border-radius: 5px 10px 15px 20px;");
+            var divBox = await FindDivBox("border-radius: 5pt 10pt 15pt 20pt;");
 
             Assert.Equal(5.0, divBox.ActualBorderTopLeftRadiusX);
             Assert.Equal(10.0, divBox.ActualBorderTopRightRadiusX);
@@ -50,7 +50,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task BorderTopLeftRadius_Longhand_SetsOnlyTopLeft()
         {
-            var divBox = await FindDivBox("border-top-left-radius: 12px;");
+            var divBox = await FindDivBox("border-top-left-radius: 12pt;");
 
             Assert.Equal(12.0, divBox.ActualBorderTopLeftRadiusX);
             Assert.Equal(12.0, divBox.ActualBorderTopLeftRadiusY);
@@ -72,8 +72,8 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task BorderRadius_EllipticalShorthand_SetsAllCornersXAndY()
         {
-            // border-radius: 40px / 15px → each corner: X=40, Y=15
-            var divBox = await FindDivBox("border-radius: 40px / 15px;");
+            // border-radius: 40pt / 15pt → each corner: X=40, Y=15
+            var divBox = await FindDivBox("border-radius: 40pt / 15pt;");
 
             Assert.Equal(40.0, divBox.ActualBorderTopLeftRadiusX);
             Assert.Equal(15.0, divBox.ActualBorderTopLeftRadiusY);
@@ -88,8 +88,8 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task BorderTopLeftRadius_Longhand_EllipticalValues()
         {
-            // border-top-left-radius: 15px 25px → X=15, Y=25
-            var divBox = await FindDivBox("border-top-left-radius: 15px 25px;");
+            // border-top-left-radius: 15pt 25pt → X=15, Y=25
+            var divBox = await FindDivBox("border-top-left-radius: 15pt 25pt;");
 
             Assert.Equal(15.0, divBox.ActualBorderTopLeftRadiusX);
             Assert.Equal(25.0, divBox.ActualBorderTopLeftRadiusY);
@@ -101,9 +101,9 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task BorderRadius_Percentage_ResolvesRelativeToDimensions()
         {
-            // 200px × 100px box; border-radius: 50% → X = 50% of 200 = 100, Y = 50% of 100 = 50
+            // 200pt × 100pt box; border-radius: 50% → X = 50% of 200 = 100, Y = 50% of 100 = 50
             var html = @"<!DOCTYPE html><html><head><style>
-div { width: 200px; height: 100px; border-radius: 50%; }
+div { width: 200pt; height: 100pt; border-radius: 50%; }
 </style></head><body><div></div></body></html>";
 
             var divBox = await FindDivBoxFromHtml(html);
@@ -117,10 +117,10 @@ div { width: 200px; height: 100px; border-radius: 50%; }
         [Fact]
         public async Task BorderRadius_OverlappingRadii_AreReducedProportionally()
         {
-            // 100px × 100px box; border-radius: 60px — adjacent radii sum to 120 > 100,
-            // so all must scale by 100/120 ≈ 0.833, giving ~50px at the boundary.
+            // 100pt × 100pt box; border-radius: 60pt — adjacent radii sum to 120 > 100,
+            // so all must scale by 100/120 ≈ 0.833, giving ~50pt at the boundary.
             var html = @"<!DOCTYPE html><html><head><style>
-div { width: 100px; height: 100px; border-radius: 60px; }
+div { width: 100pt; height: 100pt; border-radius: 60pt; }
 </style></head><body><div></div></body></html>";
 
             var divBox = await FindDivBoxFromHtml(html);
@@ -136,9 +136,9 @@ div { width: 100px; height: 100px; border-radius: 60px; }
         [Fact]
         public async Task BorderRadius_NonOverlappingRadii_AreNotChanged()
         {
-            // 200px × 200px box; border-radius: 30px — 30+30=60 < 200, no reduction.
+            // 200pt × 200pt box; border-radius: 30pt — 30+30=60 < 200, no reduction.
             var html = @"<!DOCTYPE html><html><head><style>
-div { width: 200px; height: 200px; border-radius: 30px; }
+div { width: 200pt; height: 200pt; border-radius: 30pt; }
 </style></head><body><div></div></body></html>";
 
             var divBox = await FindDivBoxFromHtml(html);
@@ -153,7 +153,7 @@ div { width: 200px; height: 200px; border-radius: 30px; }
         private Task<CssBox> FindDivBox(string css)
         {
             var html = $@"<!DOCTYPE html><html><head><style>
-div {{ width: 200px; height: 100px; {css} }}
+div {{ width: 200pt; height: 100pt; {css} }}
 </style></head><body><div></div></body></html>";
             return FindDivBoxFromHtml(html);
         }

@@ -444,6 +444,12 @@ namespace PeachPDF
             container.MarginRight = config.MarginRight;
             container.MarginTop = config.MarginTop;
 
+            // Parse-time @page relative units (% / em, base rule and the captured PageLengthContext
+            // alike) resolve against PageSize as it stands during SetHtml — carry the physical sheet
+            // in so a percentage margin resolves against the page-box width (css-page-3 §7.1), not a
+            // stale band from a previous pass or the unset 0 default on the first pass.
+            container.PageSize = orgPageSize;
+
             await container.SetHtml(html, cssData?.CssData);
 
             // The document's own <html lang> always wins; config.DefaultLanguage only fills in when the

@@ -76,17 +76,20 @@ namespace PeachPDF.Tests.Html.Core.Dom
         {
             // Regression test: availableHeight was missing - marginTop, so the page break fired
             // too late, allowing the last row on a page to extend into the bottom margin area.
+            // Fixture lengths are in pt and the body margin is pinned to 8pt (what the UA default
+            // `body { margin: 8px }` resolved to when this knife-edge scenario was calibrated,
+            // before px became 0.75pt) so the row-vs-page-bottom geometry stays exact.
             var pageHeight = 150.0;
             var marginBottom = 20.0;
 
             var html = @"
 <!DOCTYPE html>
 <html>
-<body>
+<body style='margin:8pt'>
     <table style='width:100%;border-collapse:collapse;'>
         <tbody>
 " + string.Join("", Enumerable.Range(1, 15).Select(i =>
-    $"<tr><td style='border:1px solid black;padding:5px;'>Row {i}</td></tr>")) + @"
+    $"<tr><td style='border:1pt solid black;padding:5pt;'>Row {i}</td></tr>")) + @"
         </tbody>
     </table>
 </body>
