@@ -468,9 +468,9 @@ var html = @"
 <html>
 <head>
     <style>
- table { width: 600px; border-collapse: collapse; }
+ table { width: 600pt; border-collapse: collapse; }
     td { border: 1px solid black; padding: 8px; }
-      td:first-child { width: 200px; }
+      td:first-child { width: 200pt; }
     </style>
 </head>
 <body>
@@ -641,7 +641,7 @@ Assert.NotNull(tbody);
             // ("ul { display: table; margin: -1em 7em 0; }"), which rendered detached to the right
             // of the chin instead of flush against it.
             var html = "<html><body><div id='wrap'>" +
-                       "<table id='t' style='margin-left: 50px; margin-top: 0;'><tr><td>A</td></tr></table>" +
+                       "<table id='t' style='margin-left: 50pt; margin-top: 0;'><tr><td>A</td></tr></table>" +
                        "</div></body></html>";
 
             var (rootBox, _) = await BuildCssBoxTree(html);

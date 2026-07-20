@@ -183,13 +183,13 @@ namespace PeachPDF.Tests.Integration
             const string html = """
                 <!DOCTYPE html><html><head><style>
                 body { margin: 0; }
-                h2 { margin: 6px 0; }
+                h2 { margin: 6pt 0; }
                 table { border-collapse: collapse; width: 100%; }
-                td { padding: 3px; }
+                td { padding: 3pt; }
                 </style></head><body>
-                <div style='height: 500px'></div>
+                <div style='height: 500pt'></div>
                 <h2 class='heading'>Section heading</h2>
-                <table><tr><td><div style='height: 400px'>tall content</div></td></tr></table>
+                <table><tr><td><div style='height: 400pt'>tall content</div></td></tr></table>
                 </body></html>
                 """;
 
@@ -253,10 +253,10 @@ namespace PeachPDF.Tests.Integration
                 <!DOCTYPE html><html><head><style>
                 body { margin: 0; }
                 table { border-collapse: collapse; width: 100%; }
-                td { padding: 3px; }
+                td { padding: 3pt; }
                 </style></head><body>
-                <div style='height: {{spacerHeight}}px'></div>
-                <table><tr><td><div style='height: {{contentHeight}}px'>tall content</div></td></tr></table>
+                <div style='height: {{spacerHeight}}pt'></div>
+                <table><tr><td><div style='height: {{contentHeight}}pt'>tall content</div></td></tr></table>
                 </body></html>
                 """;
         }
@@ -275,10 +275,10 @@ namespace PeachPDF.Tests.Integration
             return $$"""
                 <!DOCTYPE html><html><head><style>
                 body { margin: 0; }
-                .spacer { height: {{spacerHeight}}px; }
+                .spacer { height: {{spacerHeight}}pt; }
                 table { border-collapse: collapse; width: 100%; }
-                td { padding: 3px; }
-                .rbox { height: 60px; }
+                td { padding: 3pt; }
+                .rbox { height: 60pt; }
                 </style></head><body>
                 <div class='spacer'></div>
                 <table>{{rows}}</table>
