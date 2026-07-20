@@ -197,6 +197,34 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(BaseMt + BaseBand + SheetH, container.PageTopOf(2));
         }
 
+        [Fact]
+        public async Task ForcedBreakAfterCollapseThroughSiblingAtBoundary_TargetsSlotAfterIt()
+        {
+            // A fully empty sibling relocated TO a slot boundary by its own preceding break
+            // occupies the LATER slot, so the break between it and the next box computes its
+            // target past that slot (the bumped bottom lands at slot 2's top). The next box's own
+            // POSITION still collapses through the empty sibling to the earlier content's bottom
+            // (CSS2.1 §8.3.1 margin-collapse-through - a pre-existing engine boundary), so only
+            // the bumped bottom is asserted here; the intentional-blank-page behavior for a
+            // non-collapsing sibling is covered by ConsecutiveForcedBreaks above.
+            var container = await BuildLayoutAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 50pt; }
+                body { margin: 0; }
+                div, p { margin: 0; }
+                </style></head><body>
+                <div style='page-break-after: always'>a</div>
+                <div id='b' style='page-break-after: always'></div>
+                <p id='c'>c</p>
+                </body></html>
+                """);
+
+            var b = FindById(container.Root!, "b");
+            Assert.NotNull(b);
+            Assert.Equal(container.PageTopOf(1), b!.Location.Y, 0.1);
+            Assert.Equal(container.PageTopOf(2), b.ActualBottom, 0.1);
+        }
+
         [Theory]
         [InlineData(1.0)]
         [InlineData(1.5)]

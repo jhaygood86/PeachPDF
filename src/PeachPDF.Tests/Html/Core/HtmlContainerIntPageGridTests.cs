@@ -79,5 +79,49 @@ namespace PeachPDF.Tests.Html.Core
             for (var k = 0; k < 5; k++)
                 Assert.Equal(k, container.PageIndexOf(container.PageTopOf(k)));
         }
+
+        // ── CssBox.BreakPage (the block-level relocation used by table spacing boxes) ──
+
+        [Fact]
+        public void CssBoxBreakPage_StraddlingBox_RelocatesToNextSlotTop()
+        {
+            var container = CreateContainer();
+            var box = PeachPDF.Html.Core.Dom.CssBox.CreateBlock();
+            box.HtmlContainer = container;
+            box.Location = new RPoint(0, MarginTop + BandHeight - 50);
+            box.ActualBottom = MarginTop + BandHeight + 50;
+
+            Assert.True(box.BreakPage());
+            // The historical "+1" nudge past the slot top is deliberately preserved.
+            Assert.Equal(container.PageTopOf(1) + 1, box.Location.Y);
+        }
+
+        [Fact]
+        public void CssBoxBreakPage_FlushFitAtBoundary_DoesNotRelocate()
+        {
+            // A box ending exactly ON a slot boundary is wholly inside the earlier slot - the
+            // flush-fit epsilon makes it a non-break (the historical modulo formulation spuriously
+            // relocated it a full page).
+            var container = CreateContainer();
+            var box = PeachPDF.Html.Core.Dom.CssBox.CreateBlock();
+            box.HtmlContainer = container;
+            box.Location = new RPoint(0, MarginTop + BandHeight - 100);
+            box.ActualBottom = MarginTop + BandHeight;
+
+            Assert.False(box.BreakPage());
+            Assert.Equal(MarginTop + BandHeight - 100, box.Location.Y);
+        }
+
+        [Fact]
+        public void CssBoxBreakPage_TallerThanBand_NeverRelocates()
+        {
+            var container = CreateContainer();
+            var box = PeachPDF.Html.Core.Dom.CssBox.CreateBlock();
+            box.HtmlContainer = container;
+            box.Location = new RPoint(0, MarginTop + 10);
+            box.ActualBottom = MarginTop + 10 + BandHeight + 5;
+
+            Assert.False(box.BreakPage());
+        }
     }
 }
