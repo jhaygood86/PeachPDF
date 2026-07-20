@@ -50,6 +50,34 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task ImageWithBlockSibling_InMulticolContainer_ActuallyPaints()
+        {
+            // CssLayoutEngineColumns.Layout uses the exact same (b.HtmlTag != null || !b.IsSpaceOrEmpty)
+            // item filter as CssLayoutEngineFlex - a replaced element sharing a multicol container with a
+            // block-level sibling gets wrapped in an anonymous box (DomParser.CorrectInlineBoxesParent,
+            // per CSS2.1 §9.2.1.1's "block container either contains only block-level boxes, or
+            // establishes an inline formatting context") and was dropped by the same shallow
+            // IsSpaceOrEmpty check the flex fix addressed - see FlexReplacedElementIntegrationTests for
+            // the full root-cause writeup.
+            const string pngDataUri =
+                "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mP4/58BAAT/Af9jgNErAAAAAElFTkSuQmCC";
+            var html = Wrap($"""
+                <div id='mc' style='columns:2; width:200px'>
+                    <img id='i' src='{pngDataUri}' width='40' height='30'>
+                    <div class='title'>Title</div>
+                </div>
+                """);
+            var (root, _) = await BuildAndLayout(html, pageHeight: 1000);
+
+            var g = new PeachPDF.Tests.TestSupport.TestRecordingGraphics();
+            await root.Paint(g);
+
+            var call = Assert.Single(g.DrawImageCalls);
+            Assert.Equal(40, call.DestRect.Width, 1);
+            Assert.Equal(30, call.DestRect.Height, 1);
+        }
+
+        [Fact]
         public async Task ColumnCount1_DegeneratesToOrdinaryBlockFlow()
         {
             var html = Wrap(@"

@@ -493,6 +493,27 @@ namespace PeachPDF.Html.Core
             : new RRect(MarginLeft, MarginTop, PageSize.Width + MarginRight, PageSize.Height);
 
         /// <summary>
+        /// The zero-based pagination-slot index containing document Y-coordinate <paramref name="y"/>,
+        /// on the "shifted grid" every page-boundary decision needs to agree on: slot <c>k</c> occupies
+        /// <c>[k·PageSize.Height + MarginTop, (k+1)·PageSize.Height + MarginTop)</c>. This is the
+        /// convention the painter's own per-page clip/translation (<c>PdfGenerator.AddPdfPages</c>) and
+        /// <see cref="GetPaginationSlots"/> already use - <see cref="PageSize"/>'s <c>Height</c> is
+        /// already margin-free (<c>PdfGenerator.SetContent</c> subtracts both margins from the raw page
+        /// height up front), so every page's real content band starts <see cref="MarginTop"/> past each
+        /// raw multiple of <see cref="PageSize"/>'s height, not at the raw multiple itself. Callers must
+        /// only invoke this when <see cref="PageSize"/>'s <c>Height</c> is a real, finite, positive
+        /// value - unpaginated/measurement passes use a <c>double.MaxValue</c> sentinel and must guard
+        /// around this the same way existing raw-<c>PageSize.Height</c> call sites already do.
+        /// </summary>
+        internal int PageIndexOf(double y) => (int)((y - MarginTop) / PageSize.Height);
+
+        /// <summary>
+        /// The document Y-coordinate of the content-top of pagination slot <paramref name="pageIndex"/>,
+        /// per the same shifted-grid convention as <see cref="PageIndexOf"/> - the inverse operation.
+        /// </summary>
+        internal double PageTopOf(int pageIndex) => pageIndex * PageSize.Height + MarginTop;
+
+        /// <summary>
         /// The page-relative Y ("<c>pageY</c>" in <c>PdfGenerator.AddPdfPages</c>'s own terms - i.e.
         /// <c>-scrollOffset + MarginTop</c>) of every page-slot that should actually be materialized
         /// as a real PDF page, per CSS Paged Media Level 3 §3.2: "User agents SHOULD avoid generating

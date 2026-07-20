@@ -26,13 +26,16 @@ namespace PeachPDF.Tests.Integration
     public class LetterWordSpacingLayoutIntegrationTests
     {
         [Fact]
-        public async Task LetterSpacing_AddsWidthBetweenEachAdjacentCharacterPair_NotTrailing()
+        public async Task LetterSpacing_AddsWidthAfterEveryCharacterIncludingTrailing()
         {
-            // "AAAA" = 4 characters -> 3 gaps, not 4.
+            // "AAAA" = 4 characters -> 4 gaps: the PDF Tc operator (PaintWords/RealizeFont) applies
+            // after every glyph shown including the last, and CSS Text 3 §7.2 only exempts the
+            // start/end of a *line*, not the end of a word - reserving only 3 (an old CSS1/2.1-era
+            // assumption) undersized the word's own box relative to what actually gets painted.
             var spaced = await FirstWordWidthAsync("<p id='p' style='letter-spacing:2px'>AAAA</p>");
             var plain = await FirstWordWidthAsync("<p id='p'>AAAA</p>");
 
-            Assert.Equal(plain + 3 * 2, spaced, 1);
+            Assert.Equal(plain + 4 * 2, spaced, 1);
         }
 
         [Fact]
@@ -59,7 +62,7 @@ namespace PeachPDF.Tests.Integration
             var negative = await FirstWordWidthAsync("<p id='p' style='letter-spacing:-1px'>AAAA</p>");
             var plain = await FirstWordWidthAsync("<p id='p'>AAAA</p>");
 
-            Assert.Equal(plain - 3 * 1, negative, 1);
+            Assert.Equal(plain - 4 * 1, negative, 1);
         }
 
         [Fact]
@@ -69,6 +72,71 @@ namespace PeachPDF.Tests.Integration
             var plainGap = await InterWordGapAsync("<p id='p'>AA BB</p>");
 
             Assert.Equal(plainGap + 5, spacedGap, 1);
+        }
+
+        // Direct regression test for the reported bug: "REMIT PAYMENT TO" style all-caps letter-spaced
+        // labels rendered as "REMITPAYMENTTO" once letter-spacing reached the natural space width, since
+        // each word painted one letter-spacing unit wider than its reserved box and ate into the next
+        // word's gap. A letter-spacing well past any plausible natural space width must still leave a
+        // real, positive gap between words.
+        [Fact]
+        public async Task LetterSpacing_DoesNotCollapseInterWordGap()
+        {
+            var gap = await InterWordGapAsync("<p id='p' style='letter-spacing:10px'>AA BB</p>");
+
+            Assert.True(gap > 0,
+                $"Inter-word gap with letter-spacing should stay positive (no collapse), but was {gap}");
+        }
+
+        // Fix (1) alone (reserving N gaps in the word's own box) makes the *visible* inter-word gap
+        // completely insensitive to letter-spacing; fix (2) (CssRect.ActualWordSpacing folding in one
+        // letter-spacing unit) makes it widen proportionally, matching a real UA where the space
+        // character sits in the same letter-spaced run and gets its own leading/trailing edges spaced
+        // too. Combined, the letter-spaced gap should equal the plain gap plus exactly one letter-spacing
+        // unit, regardless of how large letter-spacing gets.
+        [Theory]
+        [InlineData(2)]
+        [InlineData(10)]
+        [InlineData(20)]
+        public async Task LetterSpacing_InterWordGap_WidensByExactlyOneLetterSpacingUnit(double letterSpacingPx)
+        {
+            var spacedGap = await InterWordGapAsync($"<p id='p' style='letter-spacing:{letterSpacingPx}px'>AA BB</p>");
+            var plainGap = await InterWordGapAsync("<p id='p'>AA BB</p>");
+
+            Assert.Equal(plainGap + letterSpacingPx, spacedGap, 1);
+        }
+
+        // The word-box-width fix (not the inter-word-gap fix, which only ever engages when
+        // CssRect.HasSpaceAfter/IsImage is true) is what closes this case: two adjacent inline runs
+        // with no whitespace between them at all rely entirely on the first run's own box being wide
+        // enough to include its own trailing letter-spacing.
+        [Fact]
+        public async Task LetterSpacing_AdjacentInlineElementsWithNoWhitespace_DoNotOverlap()
+        {
+            var (root, _) = await BuildAndLayout(Wrap(
+                "<span id='a' style='letter-spacing:10px'>AAAA</span><span id='b'>BBBB</span>"));
+
+            var lineOwner = FindLineBoxOwner(root)!;
+            var words = lineOwner.LineBoxes[0].Words.OrderBy(w => w.Left).ToList();
+            Assert.Equal(2, words.Count);
+
+            var aWord = words[0];
+            var bWord = words[1];
+
+            Assert.True(bWord.Left >= aWord.Right,
+                $"'b's word (Left={bWord.Left}) should start at or after 'a's word ends (Right={aWord.Right})");
+        }
+
+        // Closes the coverage gap that let the original bug ship: existing tests only ever exercised
+        // one of word-spacing/letter-spacing at a time on a multi-word string, never both together.
+        [Fact]
+        public async Task WordSpacingAndLetterSpacing_Combined_BothContributeToGap()
+        {
+            var combinedGap = await InterWordGapAsync(
+                "<p id='p' style='word-spacing:5px;letter-spacing:3px'>AA BB</p>");
+            var plainGap = await InterWordGapAsync("<p id='p'>AA BB</p>");
+
+            Assert.Equal(plainGap + 5 + 3, combinedGap, 1);
         }
 
         [Fact]
@@ -118,6 +186,17 @@ namespace PeachPDF.Tests.Integration
 
         private static string Wrap(string body) =>
             $"<!DOCTYPE html><html><head></head><body>{body}</body></html>";
+
+        private static CssBox? FindLineBoxOwner(CssBox box)
+        {
+            if (box.LineBoxes.Count > 0) return box;
+            foreach (var child in box.Boxes)
+            {
+                var found = FindLineBoxOwner(child);
+                if (found != null) return found;
+            }
+            return null;
+        }
 
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildAndLayout(string html)
         {

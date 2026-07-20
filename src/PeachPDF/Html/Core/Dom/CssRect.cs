@@ -95,10 +95,19 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Gets the actual width of whitespace between words - consults <see cref="FirstLineStyle"/>
         /// instead of <see cref="OwnerBox"/> when this word is on the target's first formatted line
-        /// and a <c>::first-line</c> rule overrides <c>word-spacing</c>.
+        /// and a <c>::first-line</c> rule overrides <c>word-spacing</c>/<c>letter-spacing</c>.
         /// </summary>
+        /// <remarks>
+        /// Includes one <c>letter-spacing</c> unit alongside <c>word-spacing</c>: a real UA applies
+        /// letter-spacing at every adjacent-character transition in a run, including the space
+        /// character's own leading/trailing edges - since this engine never paints the space character
+        /// as its own glyph (it's purely this numeric gap between independently-painted word boxes),
+        /// that extra unit has to be folded in here for the inter-word gap to widen proportionally with
+        /// letter-spacing the same way a real browser's does, instead of staying pinned to plain
+        /// word-spacing regardless of how large letter-spacing gets.
+        /// </remarks>
         public double ActualWordSpacing =>
-            (HasSpaceAfter ? (FirstLineStyle?.ActualWordSpacing ?? OwnerBox.ActualWordSpacing) : 0) +
+            (HasSpaceAfter ? (FirstLineStyle?.ActualWordSpacing ?? OwnerBox.ActualWordSpacing) + (FirstLineStyle?.ActualLetterSpacing ?? OwnerBox.ActualLetterSpacing) : 0) +
             (IsImage ? (FirstLineStyle?.ActualWordSpacing ?? OwnerBox.ActualWordSpacing) : 0);
 
         /// <summary>

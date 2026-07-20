@@ -42,6 +42,20 @@ namespace PeachPDF.Html.Core.Dom
     {
         #region Fields and Consts
 
+        /// <summary>
+        /// A page-boundary visibility clip-intersection whose width/height comes out merely
+        /// microscopically positive (e.g. ~1e-13) rather than exactly zero is floating-point noise, not
+        /// real visible area - accumulated rounding across the several arithmetic steps a relocated
+        /// box's Y goes through (layout, ScrollOffset translation, clip intersection) routinely lands a
+        /// hair off exact zero in either direction. <see cref="RRect.IsEmpty"/>'s strict <c>&lt;= 0</c>
+        /// check only catches the exactly-zero-or-negative case; this epsilon (a millionth of a point -
+        /// far below anything a page layout or PDF viewer could ever meaningfully distinguish, but many
+        /// orders of magnitude above the observed rounding noise) is for the paint-time visibility culls
+        /// that need to treat "merely touching the clip edge" the same as "no real overlap." See GitHub
+        /// issue #113.
+        /// </summary>
+        private const double VisibilityClipEpsilon = 1e-6;
+
         private static uint _idCounter = 0;
 
         /// <summary>
@@ -406,22 +420,35 @@ namespace PeachPDF.Html.Core.Dom
         public bool IsImage => Words is [{ IsImage: true }];
 
         /// <summary>
-        /// Tells if the box is empty or contains just blank spaces
+        /// Tells if the box is empty or contains just blank spaces, checked recursively through
+        /// <see cref="Boxes"/> - a box's own <see cref="Words"/> collection only ever holds content it
+        /// owns directly, so an anonymous wrapper box (e.g. the one <c>DomParser.CorrectInlineBoxesParent</c>
+        /// generates around a run of inline content when its siblings force <c>ContainsVariantBoxes</c>,
+        /// or any other box whose real content lives on a child rather than itself) would otherwise
+        /// always read as "empty" here even when it wraps a real image or text run. A word's own
+        /// <c>IsSpaces</c> is false for a replaced element's image word, so this recursion covers
+        /// replaced content the same way it covers text.
         /// </summary>
         public bool IsSpaceOrEmpty
         {
             get
             {
-                if ((Words.Count != 0 || Boxes.Count != 0) && (Words.Count != 1 || !Words[0].IsSpaces))
+                foreach (CssRect word in Words)
                 {
-                    foreach (CssRect word in Words)
+                    if (!word.IsSpaces)
                     {
-                        if (!word.IsSpaces)
-                        {
-                            return false;
-                        }
+                        return false;
                     }
                 }
+
+                foreach (var childBox in Boxes)
+                {
+                    if (!childBox.IsSpaceOrEmpty)
+                    {
+                        return false;
+                    }
+                }
+
                 return true;
             }
         }
@@ -616,7 +643,17 @@ namespace PeachPDF.Html.Core.Dom
                     }
                     clip.Intersect(rect);
 
-                    if (clip != RRect.Empty)
+                    // A relocated box (keep-with-next, break-inside:avoid, orphans/widows, forced
+                    // breaks) lands its top exactly at the next page's content-top boundary by
+                    // construction - its Rectangles entry then sits exactly flush against the previous
+                    // page's own clip bottom. RRect.Intersect (like the .NET RectangleF convention it
+                    // mirrors) treats two rects that merely TOUCH at an edge as a valid, non-Empty
+                    // zero-area intersection, not Empty - comparing against the literal RRect.Empty
+                    // value here missed that degenerate case and treated a box with zero actual visible
+                    // area on this page as visible, emitting a fully-clipped (invisible on screen, but
+                    // present and duplicated in the content stream/text-extraction layer) paint pass on
+                    // the page it just left. See GitHub issue #113.
+                    if (clip.Width > VisibilityClipEpsilon && clip.Height > VisibilityClipEpsilon)
                         visible = true;
                 }
                 else if (HtmlContainer?.HasOutOfFlowBoxes ?? true)
@@ -644,7 +681,9 @@ namespace PeachPDF.Html.Core.Dom
                     }
                     clip.Intersect(rect);
 
-                    visible = clip != RRect.Empty;
+                    // See the identical zero-area-intersection fix/comment in the Rectangles.Count > 0
+                    // branch above (GitHub issue #113) - applies here too, for the Bounds-based cull.
+                    visible = clip.Width > VisibilityClipEpsilon && clip.Height > VisibilityClipEpsilon;
                 }
 
                 if (visible)
@@ -1077,16 +1116,16 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (previousSiblingForBreak is not null)
                 {
-                    var bottomRelativeToCurrentPage = previousSiblingForBreak.ActualBottom;
-                    var pageHeight = HtmlContainer!.PageSize.Height;
-
-                    while (bottomRelativeToCurrentPage > pageHeight)
-                    {
-                        bottomRelativeToCurrentPage -= pageHeight;
-                    }
-
-                    var pixelsToNextPage = pageHeight - bottomRelativeToCurrentPage;
-                    previousSiblingForBreak.ActualBottom += pixelsToNextPage + HtmlContainer.MarginTop;
+                    // HtmlContainer.PageSize.Height is already margin-free (PdfGenerator.SetContent
+                    // subtracts both page margins up front) - a page's real content band is the
+                    // "shifted grid" [k·PageSize.Height + MarginTop, (k+1)·PageSize.Height + MarginTop),
+                    // not raw multiples of PageSize.Height from document Y=0. PageIndexOf/PageTopOf are
+                    // the single, unambiguous definition of that grid (matching what the painter's own
+                    // per-page clip and GetPaginationSlots already use) - computing this via raw modulo
+                    // arithmetic against PageSize.Height alone (as this used to) silently lands a
+                    // marginTop-wide band, right at the end of every raw page, one whole page short.
+                    previousSiblingForBreak.ActualBottom = HtmlContainer!.PageTopOf(
+                        HtmlContainer.PageIndexOf(previousSiblingForBreak.ActualBottom) + 1);
                 }
             }
 
@@ -1145,17 +1184,15 @@ namespace PeachPDF.Html.Core.Dom
                             var pageHeight = HtmlContainer!.PageSize.Height;
                             if (pageHeight > 0)
                             {
-                                // Same grid GetPaginationSlots()/the forced-break logic above use: raw
-                                // multiples of PageSize.Height from document Y=0, un-offset by MarginTop
-                                // (MarginTop is only added back once, below, to land at the same
-                                // "flush at the top of the next page" spot the forced-break bump above
-                                // produces - matching BreakInside_Avoid_PositionsAtTopOfNextPage's
-                                // already-established convention).
-                                var prevSlot = Math.Floor(baseTop / pageHeight);
-                                var naturalSlot = Math.Floor(top / pageHeight);
+                                // Same shifted grid GetPaginationSlots()/the forced-break logic above use
+                                // (see HtmlContainer.PageIndexOf's own doc comment) - matching
+                                // BreakInside_Avoid_PositionsAtTopOfNextPage's already-established
+                                // convention.
+                                var prevSlot = HtmlContainer.PageIndexOf(baseTop);
+                                var naturalSlot = HtmlContainer.PageIndexOf(top);
                                 if (naturalSlot > prevSlot)
                                 {
-                                    top = (prevSlot + 1) * pageHeight + HtmlContainer.MarginTop;
+                                    top = HtmlContainer.PageTopOf(prevSlot + 1);
                                 }
                             }
                         }
@@ -1323,10 +1360,9 @@ namespace PeachPDF.Html.Core.Dom
                 && HtmlContainer!.PageSize.Height > 0)
             {
                 var pageHeight = HtmlContainer.PageSize.Height;
-                var marginTop = HtmlContainer.MarginTop;
                 var firstWordTop = LineBoxes[0].Words.Min(w => w.Top);
-                var ownPage = (int)((Location.Y - marginTop) / pageHeight);
-                var firstLinePage = (int)((firstWordTop - marginTop) / pageHeight);
+                var ownPage = HtmlContainer.PageIndexOf(Location.Y);
+                var firstLinePage = HtmlContainer.PageIndexOf(firstWordTop);
 
                 if (firstLinePage > ownPage)
                 {
@@ -1335,8 +1371,8 @@ namespace PeachPDF.Html.Core.Dom
                     {
                         var runTop = keepWithNextRun[0].Location.Y;
                         var extraAbove = Location.Y - runTop;
-                        var runStartsOnSamePage = (int)((runTop - marginTop) / pageHeight) == ownPage;
-                        var pageStart = firstLinePage * pageHeight + marginTop;
+                        var runStartsOnSamePage = HtmlContainer.PageIndexOf(runTop) == ownPage;
+                        var pageStart = HtmlContainer.PageTopOf(firstLinePage);
 
                         if (extraAbove > 0 && runStartsOnSamePage
                             && extraAbove + ActualBottom - firstWordTop <= pageHeight)
@@ -1368,18 +1404,18 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var pageHeight = HtmlContainer!.PageSize.Height;
 
-                var topRelativeToCurrentPage = Location.Y;
-
-                while (topRelativeToCurrentPage > pageHeight)
-                {
-                    topRelativeToCurrentPage -= pageHeight;
-                }
+                // Shifted-grid convention (see HtmlContainer.PageIndexOf) - topRelativeToCurrentPage is
+                // this box's distance from the start of its own page's real content band, not a raw
+                // modulo of PageSize.Height (which ignored MarginTop and, for the last MarginTop-wide
+                // sliver of every page, mis-detected which page a box's top actually belonged to).
+                var currentPageIndex = HtmlContainer.PageIndexOf(Location.Y);
+                var topRelativeToCurrentPage = Location.Y - HtmlContainer.PageTopOf(currentPageIndex);
 
                 var bottomRelativeToCurrentPage = topRelativeToCurrentPage + ActualBottom - Location.Y;
 
                 if (bottomRelativeToCurrentPage > pageHeight)
                 {
-                    var offset = pageHeight - topRelativeToCurrentPage + HtmlContainer.MarginTop;
+                    var offset = HtmlContainer.PageTopOf(currentPageIndex + 1) - Location.Y;
                     OffsetTopWithKeepWithNextRun(offset, topRelativeToCurrentPage);
                 }
             }
@@ -1401,12 +1437,13 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (owPageHeight > 0 && ActualBottom - Location.Y <= owPageHeight)
                 {
-                    var ownTopRelativeToPage = Location.Y;
-                    while (ownTopRelativeToPage > owPageHeight)
-                        ownTopRelativeToPage -= owPageHeight;
+                    // Same shifted-grid convention as the BreakInside:Avoid block above.
+                    var ownPageIndex = HtmlContainer.PageIndexOf(Location.Y);
+                    var ownPageTop = HtmlContainer.PageTopOf(ownPageIndex);
+                    var ownTopRelativeToPage = Location.Y - ownPageTop;
 
-                    // Absolute Y of the first page boundary at or after this box's own top.
-                    var boundaryY = Location.Y - ownTopRelativeToPage + owPageHeight;
+                    // Absolute Y of the first shifted-page boundary at or after this box's own top.
+                    var boundaryY = HtmlContainer.PageTopOf(ownPageIndex + 1);
 
                     if (boundaryY > Location.Y && boundaryY < ActualBottom)
                     {
@@ -1415,7 +1452,7 @@ namespace PeachPDF.Html.Core.Dom
 
                         if (linesBefore > 0 && linesAfter > 0 && (linesBefore < orphans || linesAfter < widows))
                         {
-                            var offset = boundaryY - Location.Y + HtmlContainer.MarginTop;
+                            var offset = boundaryY - Location.Y;
                             OffsetTopWithKeepWithNextRun(offset, ownTopRelativeToPage);
                         }
                     }
@@ -1564,10 +1601,15 @@ namespace PeachPDF.Html.Core.Dom
                     if (boxWord.IsImage) continue;
                     var font = boxWord.FontSizeScale == 1.0 ? ActualFont : ActualSmallCapsFont;
                     boxWord.Width = boxWord.Text != "\n" ? g.MeasureString(boxWord.Text!, font).Width : 0;
-                    // Letter-spacing adds space between each pair of adjacent characters (N-1 gaps for
-                    // an N-character word), not trailing - matching CSS1/2.1 wording.
+                    // Letter-spacing adds space after every character including the last (N gaps for an
+                    // N-character word) - matching both the PDF Tc operator's actual per-glyph behavior
+                    // (PaintWords/RealizeFont) and CSS Text 3 §7.2, which only exempts the start/end of a
+                    // *line*, not the end of a word. Reserving only N-1 gaps here (an old CSS1/2.1-era
+                    // assumption) undersized the word's own box, so its Tc-driven paint spilled one
+                    // letter-spacing unit into the next word's gap - collapsing adjacent words together
+                    // once letter-spacing reached the gap's width.
                     if (boxWord.Text != "\n" && ActualLetterSpacing != 0)
-                        boxWord.Width += Math.Max(0, boxWord.Text!.Length - 1) * ActualLetterSpacing;
+                        boxWord.Width += boxWord.Text!.Length * ActualLetterSpacing;
                     boxWord.Height = ActualFont.Height;
                 }
             }
@@ -1607,8 +1649,9 @@ namespace PeachPDF.Html.Core.Dom
 
                 var font = boxWord.FontSizeScale == 1.0 ? firstLineStyle.ActualFont : firstLineStyle.ActualSmallCapsFont;
                 boxWord.Width = effectiveText != "\n" ? g.MeasureString(effectiveText!, font).Width : 0;
+                // See MeasureWordsSize's identical fix/comment - N gaps for an N-character word, not N-1.
                 if (effectiveText != "\n" && firstLineStyle.ActualLetterSpacing != 0)
-                    boxWord.Width += Math.Max(0, effectiveText!.Length - 1) * firstLineStyle.ActualLetterSpacing;
+                    boxWord.Width += effectiveText!.Length * firstLineStyle.ActualLetterSpacing;
                 boxWord.Height = font.Height;
             }
         }
@@ -1639,8 +1682,9 @@ namespace PeachPDF.Html.Core.Dom
 
                 var font = boxWord.FontSizeScale == 1.0 ? ActualFont : ActualSmallCapsFont;
                 boxWord.Width = boxWord.Text != "\n" ? g.MeasureString(boxWord.Text!, font).Width : 0;
+                // See MeasureWordsSize's identical fix/comment - N gaps for an N-character word, not N-1.
                 if (boxWord.Text != "\n" && ActualLetterSpacing != 0)
-                    boxWord.Width += Math.Max(0, boxWord.Text!.Length - 1) * ActualLetterSpacing;
+                    boxWord.Width += boxWord.Text!.Length * ActualLetterSpacing;
                 boxWord.Height = font.Height;
             }
         }
@@ -2860,7 +2904,9 @@ namespace PeachPDF.Html.Core.Dom
             rect.Width += 2;
             clip.Intersect(rect);
 
-            return clip != RRect.Empty;
+            // See the zero-area-intersection fix/comment on CssBox.Paint's visibility cull
+            // (GitHub issue #113) - a rect merely touching the clip edge isn't actually visible.
+            return clip.Width > VisibilityClipEpsilon && clip.Height > VisibilityClipEpsilon;
         }
 
         /// <summary>
@@ -3017,7 +3063,15 @@ namespace PeachPDF.Html.Core.Dom
                 wordRect.Offset(offset);
                 clip.Intersect(wordRect);
 
-                if (clip == RRect.Empty) continue;
+                // A word whose box was relocated to the next page's content top (keep-with-next,
+                // break-inside:avoid, orphans/widows) sits exactly flush against the previous page's
+                // clip bottom - RRect.Intersect can land a hair off exact zero in either direction
+                // (floating-point rounding across the several arithmetic steps a relocated box's Y goes
+                // through), so neither RRect.Empty nor a strict zero check reliably catches it; the
+                // epsilon does. Without this, a fully-clipped (invisible on screen, but present in the
+                // content stream and text-extraction layer) duplicate of the word painted on the page it
+                // just left. See GitHub issue #113.
+                if (clip.Width <= VisibilityClipEpsilon || clip.Height <= VisibilityClipEpsilon) continue;
 
                 // A word on the target's first formatted line, under a ::first-line rule, uses that
                 // resolved shadow box's font/color/letter-spacing instead of this box's own - it was

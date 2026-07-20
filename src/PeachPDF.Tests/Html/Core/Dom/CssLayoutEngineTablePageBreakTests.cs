@@ -193,11 +193,13 @@ namespace PeachPDF.Tests.Html.Core.Dom
         [Fact]
         public async Task PageBreakBottoms_BottomYIsWithinPageContentArea()
         {
-            // Each entry in PageBreakBottoms must fall within the content area of its page.
-            // Content area for page N: [N*pageHeight + marginTop, (N+1)*pageHeight - marginBottom]
+            // Each entry in PageBreakBottoms must fall within the content area of its page. Content
+            // area for page N is [PageTopOf(N), PageTopOf(N+1)) - container.PageSize.Height (the
+            // "pageHeight" this harness passes in) is already the margin-free content band per
+            // HtmlContainerInt.PageIndexOf/PageTopOf's own convention (matching PdfGenerator.SetContent
+            // in production), so marginBottom must NOT be subtracted a second time from the band's own
+            // bottom - doing so was exactly the CssLayoutEngineTable availableHeight bug this guards.
             var pageHeight = 200.0;
-            var marginTop = 20.0;
-            var marginBottom = 20.0;
 
             var html = @"
 <!DOCTYPE html>
@@ -222,8 +224,8 @@ namespace PeachPDF.Tests.Html.Core.Dom
 
             foreach (var (pageNum, breakY) in table.PageBreakBottoms)
             {
-                var contentTop = pageNum * pageHeight + marginTop;
-                var contentBottom = (pageNum + 1) * pageHeight - marginBottom;
+                var contentTop = container.PageTopOf(pageNum);
+                var contentBottom = container.PageTopOf(pageNum + 1);
 
                 _output.WriteLine($"Page {pageNum}: breakY={breakY}, contentTop={contentTop}, contentBottom={contentBottom}");
 

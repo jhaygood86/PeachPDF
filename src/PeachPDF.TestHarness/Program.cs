@@ -1283,10 +1283,30 @@ var flexHtml = "<!DOCTYPE html><html><head>" + FlexCss + "</head><body>" +
             FItem("B", "#3498db", "margin-left:auto;width:50px;"))
     ) +
 
+    FSection("15 — Replaced elements (img/svg) mixed with block siblings",
+        "<tr><td colspan='3' style='padding:2px 4px 6px;font:7pt Arial;color:#555'>" +
+        "A flex container mixing an inline-level replaced element (an &lt;img&gt; or inline &lt;svg&gt;) " +
+        "with a block-level sibling wraps the replaced element in an anonymous box per CSS Flexbox §4 — " +
+        "it must still be measured, positioned, and painted like any other flex item." +
+        "</td></tr>" +
+        "<tr><td style=\"font:7pt Arial;color:#333;padding:2px 4px 2px 0;white-space:nowrap\">img + block title</td>" +
+        "<td style=\"padding:2px\"><div style=\"display:flex;align-items:center;gap:8px;border:1px solid #bbb;background:#f8f8f8;padding:4px;\">" +
+        "<img src=\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==\" width=\"48\" height=\"48\" style=\"background:#e74c3c\" />" +
+        "<div style=\"font:bold 9pt Arial;color:#222\">Account Statement</div>" +
+        "</div></td>" +
+        "<td style=\"font:5.5pt Arial;color:#888;padding:2px 4px\">img width=48 height=48</td></tr>" +
+        "<tr><td style=\"font:7pt Arial;color:#333;padding:2px 4px 2px 0;white-space:nowrap\">inline svg + block title</td>" +
+        "<td style=\"padding:2px\"><div style=\"display:flex;align-items:center;gap:8px;border:1px solid #bbb;background:#f8f8f8;padding:4px;\">" +
+        "<svg width=\"32\" height=\"32\"><circle cx=\"16\" cy=\"16\" r=\"16\" fill=\"#27ae60\" /></svg>" +
+        "<div style=\"font:bold 9pt Arial;color:#222\">Status: Active</div>" +
+        "</div></td>" +
+        "<td style=\"font:5.5pt Arial;color:#888;padding:2px 4px\">inline &lt;svg&gt;</td></tr>"
+    ) +
+
     "</body></html>";
 
 await SaveShowcaseAsync("flexbox", "Layout", "Flexbox",
-    "Flexbox layout: direction, wrapping, justification, alignment, gaps, and flexible item sizing.",
+    "Flexbox layout: direction, wrapping, justification, alignment, gaps, flexible item sizing, and replaced elements (img/svg) as flex items.",
     flexHtml, pdfConfig);
 
 // ─── CSS Custom Properties (var()) showcase ─────────────────────────────────

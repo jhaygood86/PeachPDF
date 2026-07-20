@@ -34,6 +34,12 @@ namespace PeachPDF.Html.Core.Dom
         public override bool IsImage => true;
 
         /// <summary>
+        /// See <see cref="CssRectImage.IsSpaces"/>'s identical override/doc comment - an inline SVG is
+        /// never "just spaces" either.
+        /// </summary>
+        public override bool IsSpaces => false;
+
+        /// <summary>
         /// Represents this word for debugging purposes
         /// </summary>
         public override string ToString()

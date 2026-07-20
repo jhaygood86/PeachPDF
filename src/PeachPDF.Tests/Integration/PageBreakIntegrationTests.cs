@@ -293,7 +293,7 @@ body { margin: 0; }
 @page { size: A4; margin: 20mm; }
 body { margin: 0; }
 .filler { height: 800px; margin: 0; padding: 0; border: 0; }
-.second { margin-top: 50px; }
+.second { margin-top: 80px; }
 </style>
 </head>
 <body>
@@ -311,10 +311,15 @@ body { margin: 0; }
             Assert.NotNull(filler);
             Assert.NotNull(second);
 
-            // filler's own bottom (marginTop + 780) plus the 50px margin would land at
-            // marginTop + 830, past the first page boundary at pageHeight - confirm the untruncated
-            // math really would have crossed, so this test is exercising the intended case.
-            Assert.True(filler.ActualBottom + 50 > pageHeight,
+            // This harness's own Root.Location starts at y=0 (not MarginTop - see BuildCssBoxTree),
+            // so filler's own bottom is ~800 (its height) and the real page-1-content-top boundary
+            // (matching HtmlContainerInt.PageTopOf(1)) sits at pageHeight + marginTop, not pageHeight
+            // alone - confirm the untruncated math really would cross that real boundary (800 + 80 =
+            // 880 > pageHeight + marginTop), so this test is exercising the intended case. A margin
+            // that only clears the *raw* pageHeight without also clearing + marginTop (e.g. the
+            // previous 50px here) doesn't actually cross a real page boundary and must NOT truncate -
+            // that was itself the bug this fix corrects.
+            Assert.True(filler.ActualBottom + 80 > pageHeight + marginTop,
                 $"test setup should cross a page boundary: filler.ActualBottom={filler.ActualBottom}, pageHeight={pageHeight}, marginTop={marginTop}");
 
             Assert.True(second.Location.Y >= pageHeight,
