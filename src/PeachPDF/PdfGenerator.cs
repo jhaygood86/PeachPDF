@@ -406,7 +406,7 @@ namespace PeachPDF
             structureTagBuilder?.Finish();
 
             // add web links and anchors
-            HandleLinks(document.PdfDocument, container, orgPageSize, container.PageSize, structureTagBuilder);
+            HandleLinks(document.PdfDocument, container, orgPageSize, pageSlots, structureTagBuilder);
 
             measure?.Dispose();
         }
@@ -475,17 +475,40 @@ namespace PeachPDF
         /// element (see the tagging-aware section below), completing the bidirectional PDF/UA
         /// linkage between the annotation and the structure tree.
         /// </summary>
-        private static void HandleLinks(PdfDocument document, HtmlContainer container, XSize orgPageSize, XSize pageSize, StructureTagBuilder? structureTagBuilder = null)
+        private static void HandleLinks(PdfDocument document, HtmlContainer container, XSize orgPageSize, IReadOnlyList<double> pageSlots, StructureTagBuilder? structureTagBuilder = null)
         {
+            var inner = container.HtmlContainerInt;
+            var ppp = container.PixelsPerPoint;
+
+            // Materialized pages are the emitted pagination slots, which may skip content-empty
+            // grid slots entirely (GetPaginationSlots) - so a document-space slot index and a
+            // document.Pages index are NOT interchangeable. Build the slot -> page mapping once.
+            var slotToPage = new Dictionary<int, int>(pageSlots.Count);
+            for (var p = 0; p < pageSlots.Count; p++)
+                slotToPage[inner.PageIndexOf(pageSlots[p] + inner.MarginTop + HtmlContainerInt.PageBoundaryEpsilon)] = p;
+
+            var maxMappedSlot = slotToPage.Count > 0 ? slotToPage.Keys.Max() : -1;
+
             foreach (var link in container.GetLinks())
             {
-                var i = (int)(link.Rectangle.Top / pageSize.Height);
-                for (; i < document.Pages.Count && pageSize.Height * i < link.Rectangle.Bottom; i++)
+                // Link rects are true points (the public GetLinks wrapper divides by PixelsPerPoint
+                // and resolves relative hrefs against the document base URI); slot attribution runs
+                // on the internal-pixel shifted grid (content starts at MarginTop, not 0) - the
+                // historical raw Top/PageSize.Height attribution ignored that shift.
+                var firstSlot = Math.Max(inner.PageIndexOf(link.Rectangle.Top * ppp), 0);
+                for (var slot = firstSlot; inner.PageTopOf(slot) < link.Rectangle.Bottom * ppp; slot++)
                 {
-                    var offset = pageSize.Height * i;
+                    if (!slotToPage.TryGetValue(slot, out var pageIndex) || pageIndex >= document.Pages.Count)
+                        continue;
 
-                    // position is from the bottom of the page
-                    var xRect = new XRect(link.Rectangle.Left, orgPageSize.Height - (link.Rectangle.Height + link.Rectangle.Top - offset), link.Rectangle.Width, link.Rectangle.Height);
+                    // Page-local geometry in true points: this slot's content band paints starting
+                    // MarginTop from the sheet top; PDF rect y counts from the page bottom.
+                    var topPt = (inner.MarginTop - inner.PageTopOf(slot)) / ppp + link.Rectangle.Top;
+                    var xRect = new XRect(
+                        link.Rectangle.Left,
+                        orgPageSize.Height - (topPt + link.Rectangle.Height),
+                        link.Rectangle.Width,
+                        link.Rectangle.Height);
 
                     PdfLinkAnnotation annotation;
 
@@ -496,27 +519,29 @@ namespace PeachPDF
 
                         if (!anchorRect.HasValue) continue;
 
-                        var anchorPageNumber = 1;
-                        var top = anchorRect.Value.Top;
+                        var anchorSlot = inner.PageIndexOf(anchorRect.Value.Top * ppp + HtmlContainerInt.PageBoundaryEpsilon);
+                        // An anchor inside a skipped (content-empty) slot attributes to the next
+                        // materialized page - the nearest place a reader can actually land.
+                        var anchorPage = -1;
+                        for (var s = Math.Max(anchorSlot, 0); anchorPage < 0 && s <= maxMappedSlot; s++)
+                            if (slotToPage.TryGetValue(s, out var found))
+                                anchorPage = found;
+                        if (anchorPage < 0) anchorPage = pageSlots.Count - 1;
 
-                        while (top > pageSize.Height)
-                        {
-                            top -= pageSize.Height;
-                            anchorPageNumber++;
-                        }
+                        var anchorTopPt = (inner.MarginTop - inner.PageTopOf(anchorSlot)) / ppp + anchorRect.Value.Top;
 
-                        document.AddNamedDestination(link.AnchorId, anchorPageNumber, PdfNamedDestinationParameters.CreateFitVertically(top));
-                        annotation = document.Pages[i].AddDocumentLink(new PdfRectangle(xRect), link.AnchorId);
+                        document.AddNamedDestination(link.AnchorId, anchorPage + 1, PdfNamedDestinationParameters.CreateFitVertically(anchorTopPt));
+                        annotation = document.Pages[pageIndex].AddDocumentLink(new PdfRectangle(xRect), link.AnchorId);
                     }
                     else
                     {
                         // create link to URL
-                        annotation = document.Pages[i].AddWebLink(new PdfRectangle(xRect), link.Href);
+                        annotation = document.Pages[pageIndex].AddWebLink(new PdfRectangle(xRect), link.Href);
                     }
 
                     if (structureTagBuilder != null && link.SourceBox != null)
                     {
-                        structureTagBuilder.LinkAnnotationToStructureElement(link.SourceBox, document.Pages[i], annotation);
+                        structureTagBuilder.LinkAnnotationToStructureElement(link.SourceBox, document.Pages[pageIndex], annotation);
                     }
                 }
             }

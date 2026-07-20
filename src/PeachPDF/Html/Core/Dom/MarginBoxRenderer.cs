@@ -212,7 +212,7 @@ namespace PeachPDF.Html.Core.Dom
         // without tolerance, that noise alone can exclude the true first/last string on a page. This is
         // a boundary-precision fuzz factor only, not a layout unit - deliberately much smaller than any
         // real line height.
-        internal const double PageBoundaryEpsilon = 0.5;
+        internal const double PageBoundaryEpsilon = HtmlContainerInt.PageBoundaryEpsilon;
 
         internal static string ResolveNamedString(
             string name,

@@ -255,13 +255,12 @@ namespace PeachPDF.Html.Core.Dom
             if (Height >= container!.PageSize.Height)
                 return false;
 
-            var remTop = (Top - container.MarginTop) % container.PageSize.Height;
-            var remBottom = (Bottom - container.MarginTop) % container.PageSize.Height;
+            // Equivalent to the historical modulo formulation — see CssBox.BreakPage's comment.
+            if (container.PageIndexOf(Top) >= container.PageIndexOf(Bottom))
+                return false;
 
-            if (!(remTop > remBottom)) return false;
-            Top += container.PageSize.Height - remTop + 1;
+            Top = container.NextPageTopOf(Top) + 1;
             return true;
-
         }
     }
 }

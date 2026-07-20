@@ -523,6 +523,35 @@ namespace PeachPDF.Html.Core
         internal double PageTopOf(int pageIndex) => pageIndex * PageSize.Height + MarginTop;
 
         /// <summary>
+        /// Tolerance for comparing a document Y-coordinate against a pagination-slot boundary — the
+        /// several arithmetic steps a relocated/fragmented box's Y goes through can land it a hair on
+        /// either side of the exact boundary value (same class of noise <c>MarginBoxRenderer</c>'s
+        /// named-string page attribution guards against, which shares this constant).
+        /// </summary>
+        internal const double PageBoundaryEpsilon = 0.5;
+
+        /// <summary>
+        /// The content-band height of pagination slot <paramref name="pageIndex"/>. On the uniform
+        /// grid every slot's band is <see cref="PageSize"/>'s <c>Height</c>; kept as a per-slot lookup
+        /// so per-page <c>@page</c> margin geometry has a single seam to vary it through. Same
+        /// sentinel caveat as <see cref="PageIndexOf"/>.
+        /// </summary>
+        internal double PageBandHeightOf(int pageIndex) => PageSize.Height;
+
+        /// <summary>
+        /// The document Y-coordinate one past the bottom of pagination slot <paramref name="pageIndex"/>'s
+        /// content band — bands are contiguous, so this equals <see cref="PageTopOf"/> of the next slot.
+        /// </summary>
+        internal double PageBottomOf(int pageIndex) => PageTopOf(pageIndex) + PageBandHeightOf(pageIndex);
+
+        /// <summary>
+        /// The document Y-coordinate of the content-top of the pagination slot after the one containing
+        /// <paramref name="y"/> — the universal "start of the next page" target every page-break
+        /// relocation uses. Same sentinel caveat as <see cref="PageIndexOf"/>.
+        /// </summary>
+        internal double NextPageTopOf(double y) => PageTopOf(PageIndexOf(y) + 1);
+
+        /// <summary>
         /// The page-relative Y ("<c>pageY</c>" in <c>PdfGenerator.AddPdfPages</c>'s own terms - i.e.
         /// <c>-scrollOffset + MarginTop</c>) of every page-slot that should actually be materialized
         /// as a real PDF page, per CSS Paged Media Level 3 §3.2: "User agents SHOULD avoid generating

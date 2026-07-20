@@ -121,17 +121,16 @@ namespace PeachPDF.Html.Core.Dom
             // (page, column) slot, preserving the natural gap the virtual pass already computed between
             // consecutive children that stay in the same column.
             var pageHeight = htmlContainer.PageSize.Height;
-            var pageContentTop = htmlContainer.MarginTop;
             var boxTop = columnsBox.ClientTop;
 
             var columnLeft = columnsBox.ClientLeft;
             var pitch = columnWidth + gap;
 
             // Which document-wide page (0-based) the container's own top falls on.
-            var startPage = pageHeight > 0 ? (int)((boxTop - pageContentTop) / pageHeight) : 0;
+            var startPage = pageHeight > 0 ? htmlContainer.PageIndexOf(boxTop) : 0;
 
             // Top of the content area of the page `startPage + row` places rows on.
-            double PageContentTopOf(int row) => pageContentTop + (startPage + row) * pageHeight;
+            double PageContentTopOf(int row) => htmlContainer.PageTopOf(startPage + row);
 
             // Row 0 starts wherever the container itself starts (which may be partway down its page);
             // every later row starts at the top of its page's content area.

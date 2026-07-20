@@ -1359,7 +1359,6 @@ namespace PeachPDF.Html.Core.Dom
                 && LineBoxes.Count > 0 && LineBoxes[0].Words.Count > 0
                 && HtmlContainer!.PageSize.Height > 0)
             {
-                var pageHeight = HtmlContainer.PageSize.Height;
                 var firstWordTop = LineBoxes[0].Words.Min(w => w.Top);
                 var ownPage = HtmlContainer.PageIndexOf(Location.Y);
                 var firstLinePage = HtmlContainer.PageIndexOf(firstWordTop);
@@ -1375,7 +1374,7 @@ namespace PeachPDF.Html.Core.Dom
                         var pageStart = HtmlContainer.PageTopOf(firstLinePage);
 
                         if (extraAbove > 0 && runStartsOnSamePage
-                            && extraAbove + ActualBottom - firstWordTop <= pageHeight)
+                            && extraAbove + ActualBottom - firstWordTop <= HtmlContainer.PageBandHeightOf(firstLinePage))
                         {
                             var runDelta = pageStart - runTop;
 
@@ -1402,18 +1401,16 @@ namespace PeachPDF.Html.Core.Dom
 
             if (BreakInside is CssConstants.Avoid)
             {
-                var pageHeight = HtmlContainer!.PageSize.Height;
-
                 // Shifted-grid convention (see HtmlContainer.PageIndexOf) - topRelativeToCurrentPage is
                 // this box's distance from the start of its own page's real content band, not a raw
                 // modulo of PageSize.Height (which ignored MarginTop and, for the last MarginTop-wide
                 // sliver of every page, mis-detected which page a box's top actually belonged to).
-                var currentPageIndex = HtmlContainer.PageIndexOf(Location.Y);
+                var currentPageIndex = HtmlContainer!.PageIndexOf(Location.Y);
                 var topRelativeToCurrentPage = Location.Y - HtmlContainer.PageTopOf(currentPageIndex);
 
                 var bottomRelativeToCurrentPage = topRelativeToCurrentPage + ActualBottom - Location.Y;
 
-                if (bottomRelativeToCurrentPage > pageHeight)
+                if (bottomRelativeToCurrentPage > HtmlContainer.PageBandHeightOf(currentPageIndex))
                 {
                     var offset = HtmlContainer.PageTopOf(currentPageIndex + 1) - Location.Y;
                     OffsetTopWithKeepWithNextRun(offset, topRelativeToCurrentPage);
@@ -1435,7 +1432,8 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var owPageHeight = HtmlContainer!.PageSize.Height;
 
-                if (owPageHeight > 0 && ActualBottom - Location.Y <= owPageHeight)
+                if (owPageHeight > 0
+                    && ActualBottom - Location.Y <= HtmlContainer.PageBandHeightOf(HtmlContainer.PageIndexOf(Location.Y)))
                 {
                     // Same shifted-grid convention as the BreakInside:Avoid block above.
                     var ownPageIndex = HtmlContainer.PageIndexOf(Location.Y);
@@ -2339,16 +2337,16 @@ namespace PeachPDF.Html.Core.Dom
             if (Size.Height >= container!.PageSize.Height)
                 return false;
 
-            var remTop = (Location.Y - container.MarginTop) % container.PageSize.Height;
-            var remBottom = (ActualBottom - container.MarginTop) % container.PageSize.Height;
+            // Equivalent to the historical modulo formulation ((y - MarginTop) % PageSize.Height for
+            // top vs bottom): given the height guard above, the box straddles a slot boundary exactly
+            // when its top and bottom land in different slots — including a bottom flush ON the
+            // boundary, which PageIndexOf already attributes to the next slot.
+            if (container.PageIndexOf(Location.Y) >= container.PageIndexOf(ActualBottom))
+                return false;
 
-            if (!(remTop > remBottom)) return false;
-
-            var diff = container.PageSize.Height - remTop;
-            Location = Location with { Y = Location.Y + diff + 1 };
+            Location = Location with { Y = container.NextPageTopOf(Location.Y) + 1 };
 
             return true;
-
         }
 
         /// <summary>
@@ -2513,7 +2511,9 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="topRelativeToCurrentPage">this box's top, reduced to page-relative coordinates by the caller</param>
         internal void OffsetTopWithKeepWithNextRun(double offset, double topRelativeToCurrentPage)
         {
-            var pageHeight = HtmlContainer!.PageSize.Height;
+            // "Fits on a single page" is judged against the destination page's band (the page this
+            // box's top lands on after the offset), not the page it is leaving.
+            var targetPageBand = HtmlContainer!.PageBandHeightOf(HtmlContainer.PageIndexOf(Location.Y + offset));
             var keepWithNextRun = DomUtils.GetPrecedingKeepWithNextRun(this);
 
             if (keepWithNextRun.Count > 0)
@@ -2522,7 +2522,7 @@ namespace PeachPDF.Html.Core.Dom
                 var extraAbove = Location.Y - runTop;
 
                 if (extraAbove > 0 && extraAbove < topRelativeToCurrentPage
-                    && extraAbove + ActualBottom - Location.Y <= pageHeight)
+                    && extraAbove + ActualBottom - Location.Y <= targetPageBand)
                 {
                     // Shift the run and this box by one common offset, chosen so the run's top lands at
                     // the next page's content top - relative spacing inside the group is preserved.
@@ -2732,7 +2732,12 @@ namespace PeachPDF.Html.Core.Dom
                     var pageHeight = HtmlContainer.PageSize.Height;
                     if (pageHeight > 0)
                     {
-                        var currentPageIndex = (int)(-offset.Y / pageHeight + 0.001);
+                        // -offset.Y is the current slot's top in scrollOffset space (slotTop, no
+                        // MarginTop shift), so re-add MarginTop to express it as a document-space
+                        // content-band Y before asking the shared grid which slot it is; the epsilon
+                        // absorbs the same float noise the old "+0.001" fudge did.
+                        var currentPageIndex = HtmlContainer.PageIndexOf(
+                            -offset.Y + HtmlContainer.MarginTop + HtmlContainerInt.PageBoundaryEpsilon);
                         if (PageBreakBottoms.TryGetValue(currentPageIndex, out var pageBreakBottom))
                         {
                             var pageBreakBottomVisual = pageBreakBottom + offset.Y;
