@@ -18,6 +18,10 @@ namespace PeachPDF.Tests.Network
         [InlineData("tex.tga", "image/x-tga")]
         [InlineData("art.psd", "image/vnd.adobe.photoshop")]
         [InlineData("scene.hdr", "image/vnd.radiance")]
+        [InlineData("font.ttf", "font/ttf")]
+        [InlineData("font.otf", "font/otf")]
+        [InlineData("font.woff", "font/woff")]
+        [InlineData("font.woff2", "font/woff2")]
         public void StaticMap_ResolvesKnownExtensions(string extension, string expected)
         {
             var extensionNoDot = extension.Contains('.') ? extension[(extension.LastIndexOf('.') + 1)..].ToLowerInvariant() : extension;
@@ -53,9 +57,29 @@ namespace PeachPDF.Tests.Network
             Assert.Equal(expected, MimeTypeResolver.GetMimeType(path));
         }
 
+        [Theory]
+        [InlineData("image/png", true)]
+        [InlineData("text/css", true)]
+        [InlineData("font/woff2", true)]
+        // A Windows shell property descriptor, returned by AssocQueryString when no Content Type is
+        // registered - must be rejected so it never becomes a Content-Type header.
+        [InlineData("prop:System.ItemTypeText;System.Size;System.DateModified", false)]
+        [InlineData("PROP:whatever", false)]
+        [InlineData("image", false)]
+        [InlineData("/leadingslash", false)]
+        [InlineData("", false)]
+        [InlineData("   ", false)]
+        [InlineData(null, false)]
+        public void LooksLikeMimeType_AcceptsRealMimeTypesRejectsJunk(string? value, bool expected)
+        {
+            Assert.Equal(expected, MimeTypeResolver.LooksLikeMimeType(value));
+        }
+
         // ---- Platform-native lookups. Each runs only on its own OS (skipped elsewhere) and asserts a
-        //      handful of MIME types that platform is expected to know by default. These verify the real
-        //      OS integration and are not counted on for cross-platform coverage. ----
+        //      handful of MIME types that platform resolves. These verify the real OS integration and are
+        //      not counted on for cross-platform coverage. On macOS/Linux the CI runner already resolves
+        //      these types; on Windows a bare Server image registers no Content Type, so the CI workflow's
+        //      "Ensure MIME content-type associations (Windows)" step registers exactly this asserted set. ----
 
         [Theory]
         [InlineData(".html", "text/html")]

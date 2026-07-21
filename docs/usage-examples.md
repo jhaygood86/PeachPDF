@@ -100,6 +100,12 @@ document.Save(stream);
 
 `file:` URIs are always resolved from disk regardless of which loader is configured (the same way `data:` URIs always are), so a document loaded over HTTP or from an MHTML archive can still reference an absolute `file:` resource.
 
+### How a local file's content type is determined
+
+Each local file's `Content-Type` is resolved from the **operating system's own MIME mechanism by default** — the shell file-association database on Windows, the Uniform Type Identifiers API on macOS/iOS, and `/etc/mime.types` on Linux — **falling back to a built-in set** when the OS provides nothing: HTML, CSS, SVG, the raster image formats PeachPDF decodes (PNG, JPEG, BMP, GIF, TGA, PSD, HDR), and the TTF/OTF/WOFF/WOFF2 font formats. Anything else resolves to `application/octet-stream`.
+
+If you reference a local file whose extension falls outside that built-in set and your OS has no MIME association for it, **register the type with the OS** — for example, set the shell `Content Type` association for the extension on Windows, or add an entry to `/etc/mime.types` (or `~/.local/share/mime`) on Linux — so PeachPDF can resolve it. This matters only where the content type is actually enforced: as in a browser, PeachPDF accepts a linked stylesheet only when its type is `text/css`, whereas images and fonts are recognized by their bytes and load regardless of content type.
+
 ## Rendering an MHTML file
 
 Self-contained MHTML archives (what Chrome calls "single page documents") bundle the HTML plus every referenced image, stylesheet, and font into one file. `MimeKitNetworkLoader` resolves all of those references from the archive, so nothing is fetched from disk or the network.

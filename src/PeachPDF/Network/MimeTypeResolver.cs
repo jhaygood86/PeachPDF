@@ -58,11 +58,26 @@ namespace PeachPDF.Network
         private static string Resolve(string extensionNoDot)
         {
             // OS-provided mechanism first (per the "OS by default" requirement), static map as the
-            // fallback for the formats PeachPDF renders.
+            // fallback for the formats PeachPDF renders. Each OS helper already validates its result
+            // (see LooksLikeMimeType) and returns null for a non-MIME answer, so a host with no real
+            // registration for the extension falls through to the static map / octet-stream rather than
+            // leaking a bogus value into the synthesized Content-Type.
             return TryGetFromOperatingSystem("." + extensionNoDot, extensionNoDot)
                    ?? TryGetFromStaticMap(extensionNoDot)
                    ?? DefaultMimeType;
         }
+
+        /// <summary>
+        /// Whether <paramref name="value"/> looks like a real <c>type/subtype</c> MIME type, used to reject
+        /// non-MIME strings some OS association APIs return for an extension that has no registered content
+        /// type — e.g. Windows' shell returns a property descriptor like
+        /// <c>prop:System.ItemTypeText;System.Size;…</c>, which must not become a <c>Content-Type</c> header
+        /// (it isn't a valid MIME type and would throw when parsed). Exposed <c>internal</c> for direct testing.
+        /// </summary>
+        internal static bool LooksLikeMimeType(string? value) =>
+            !string.IsNullOrWhiteSpace(value)
+            && value.IndexOf('/') > 0
+            && !value.StartsWith("prop:", StringComparison.OrdinalIgnoreCase);
 
         // Each OS-native lookup below only executes on its own platform, so on any single CI leg the other
         // platforms' branches are unreachable - they are verified by the platform-gated MimeTypeResolverTests
@@ -90,9 +105,10 @@ namespace PeachPDF.Network
         }
 
         /// <summary>
-        /// The built-in fallback map. Covers the document formats PeachPDF parses (HTML/CSS/SVG) and
-        /// every raster format <c>StbImageSharpImageSource</c> decodes, so these always resolve
-        /// regardless of the host OS's own registrations. Exposed <c>internal</c> for direct testing.
+        /// The built-in fallback map. Covers the document formats PeachPDF parses (HTML/CSS/SVG), every
+        /// raster format <c>StbImageSharpImageSource</c> decodes, and the <c>@font-face</c> font formats
+        /// PeachPDF loads (TTF/OTF/WOFF/WOFF2), so these always resolve regardless of the host OS's own
+        /// registrations. Exposed <c>internal</c> for direct testing.
         /// </summary>
         internal static string? TryGetFromStaticMap(string extensionNoDot) => extensionNoDot switch
         {
@@ -106,6 +122,11 @@ namespace PeachPDF.Network
             "tga" => "image/x-tga",
             "psd" => "image/vnd.adobe.photoshop",
             "hdr" => "image/vnd.radiance",
+            // RFC 8081 font MIME types, matching the formats PdfSharpAdapter.AddFontFamilyFromUrl accepts.
+            "ttf" => "font/ttf",
+            "otf" => "font/otf",
+            "woff" => "font/woff",
+            "woff2" => "font/woff2",
             _ => null
         };
 
@@ -144,7 +165,11 @@ namespace PeachPDF.Network
                 }
 
                 var contentType = buffer.ToString();
-                return string.IsNullOrWhiteSpace(contentType) ? null : contentType;
+
+                // A bare Windows install often has no registered Content Type for an extension, in which
+                // case AssocQueryString returns a non-MIME shell property string (prop:System.…) rather
+                // than failing - reject anything that isn't a real MIME type.
+                return LooksLikeMimeType(contentType) ? contentType : null;
             }
             catch
             {
@@ -196,7 +221,7 @@ namespace PeachPDF.Network
                 }
 
                 var mime = CFStringToManaged(mimeRef);
-                return string.IsNullOrWhiteSpace(mime) ? null : mime;
+                return LooksLikeMimeType(mime) ? mime : null;
             }
             catch
             {
@@ -278,7 +303,7 @@ namespace PeachPDF.Network
                     {
                         if (tokens[i].Equals(extensionNoDot, StringComparison.OrdinalIgnoreCase))
                         {
-                            return tokens[0];
+                            return LooksLikeMimeType(tokens[0]) ? tokens[0] : null;
                         }
                     }
                 }

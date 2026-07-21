@@ -116,6 +116,8 @@ document.Save(stream);
 
 Note that loading resources using relative paths resolves against the configured `NetworkLoader`'s `BaseUri` (e.g. an `HttpClientNetworkLoader` or `FileUriNetworkLoader`), or a `<base href>` element if the HTML has one. With the default loader, relative paths resolve against the current working directory and load from the local file system. `file:` URIs are always loaded from disk regardless of which loader is configured, the same way `data:` URIs always are.
 
+A local file's content type is resolved from the OS's own MIME mechanism by default (Windows shell associations, macOS/iOS Uniform Type Identifiers, or Linux `/etc/mime.types`), falling back to a built-in set for HTML, CSS, SVG, PeachPDF's raster image formats, and TTF/OTF/WOFF/WOFF2 fonts. For a local file with an extension outside that set, register its MIME type with the OS so PeachPDF can resolve it. See [Rendering a local HTML file](docs/usage-examples.md#rendering-a-local-html-file) for details.
+
 ## Thread safety
 
 A `PdfGenerator` instance is **not thread-safe** — don't call it concurrently from multiple threads, and don't reuse one instance across overlapping renders.
