@@ -232,7 +232,18 @@ PdfGenerator generator = new();
 await generator.AddFontFromStream(fontStream); // Supports TrueType (TTF), CFF, WOFF, and WOFF2 formats
 ```
 
-Web fonts loaded via `@font-face` (`url()`, with a comma-separated fallback list, and `local()`) are also supported — see [`@font-face` in CSS At-Rules](html-css-support.md#css-at-rules) for the full descriptor support notes.
+To restrict a stream-registered font to specific codepoints — the programmatic equivalent of an `@font-face` [`unicode-range`](https://developer.mozilla.org/en-US/docs/Web/CSS/@font-face/unicode-range) descriptor — pass a list of `RuneRange`s. Characters outside the declared ranges resolve to another registered font (per-character font matching):
+
+```csharp
+using System.Text;
+
+PdfGenerator generator = new();
+// Use this font only for Basic Latin; other characters fall back to another registered font.
+await generator.AddFontFromStream(fontStream,
+    [new RuneRange(new Rune(0x0000), new Rune(0x00FF))]);
+```
+
+Web fonts loaded via `@font-face` (`url()`, with a comma-separated fallback list, and `local()`) are also supported, including per-character selection via `unicode-range` — see [`@font-face` in CSS At-Rules](html-css-support.md#css-at-rules) and [Per-character font matching](html-css-support.md#per-character-font-matching-and-coverage-fallback) for the full descriptor support notes.
 
 ### Supported font formats
 

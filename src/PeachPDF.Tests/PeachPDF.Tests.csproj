@@ -11,6 +11,7 @@
   <ItemGroup>
     <None Remove="CSS\bootstrap.css" />
     <None Remove="Inter-Medium.woff2" />
+    <None Remove="NotoEmoji-Regular.ttf" />
     <None Remove="SourceCodePro-Regular.otf" />
     <None Remove="SourceSans3-Regular.ttf" />
   </ItemGroup>
@@ -21,6 +22,9 @@
 
   <ItemGroup>
     <None Include="Inter-Medium.woff2">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="NotoEmoji-Regular.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="SourceCodePro-Regular.otf">

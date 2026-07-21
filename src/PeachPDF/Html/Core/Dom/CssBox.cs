@@ -835,13 +835,26 @@ namespace PeachPDF.Html.Core.Dom
                         // CssLayoutEngine.FlowBox actually needs to break the line - see AddWord.
                         var honorSoftHyphen = Hyphens != CssConstants.None;
 
+                        // Scan by whole codepoint (Rune), not UTF-16 code unit, so an astral character (an
+                        // emoji, a CJK Extension-B ideograph, etc.) is never split across its surrogate pair -
+                        // its two halves would otherwise each be treated as a separate per-character Asian
+                        // word break and emitted as two invalid lone-surrogate words.
                         endIdx = startIdx;
-                        while (endIdx < text.Length && !HtmlUtils.IsCollapsibleWhitespace(text[endIdx]) && text[endIdx] != '-'
-                               && WordBreak != CssConstants.BreakAll && !CommonUtils.IsAsianCharacter(text[endIdx]))
-                            endIdx++;
+                        while (endIdx < text.Length)
+                        {
+                            Rune.DecodeFromUtf16(text.AsSpan(endIdx), out var rune, out var runeLength);
+                            if (HtmlUtils.IsCollapsibleWhitespace(text[endIdx]) || text[endIdx] == '-'
+                                || WordBreak == CssConstants.BreakAll || CommonUtils.IsAsianCharacter(rune))
+                                break;
+                            endIdx += runeLength;
+                        }
 
-                        if (endIdx < text.Length && (text[endIdx] == '-' || WordBreak == CssConstants.BreakAll || CommonUtils.IsAsianCharacter(text[endIdx])))
-                            endIdx++;
+                        if (endIdx < text.Length)
+                        {
+                            Rune.DecodeFromUtf16(text.AsSpan(endIdx), out var rune, out var runeLength);
+                            if (text[endIdx] == '-' || WordBreak == CssConstants.BreakAll || CommonUtils.IsAsianCharacter(rune))
+                                endIdx += runeLength;
+                        }
 
                         if (endIdx > startIdx)
                         {
@@ -922,12 +935,23 @@ namespace PeachPDF.Html.Core.Dom
             if (originalText is null || originalText.Length != text.Length)
                 originalText = text;
 
+            // Whether this word needs per-codepoint font selection (an @font-face unicode-range applies, or
+            // the box's own font can't render some character and a later family in the stack can). The vast
+            // majority of words don't - they take the single-word fast path unchanged.
+            var needsPerCodepoint = NeedsPerCodepointFont(text);
+
             if (FontVariant != CssConstants.SmallCaps || !ContainsLowerLetter(text))
             {
-                Words.Add(new CssRectWord(this, text, hasSpaceBefore, hasSpaceAfter, originalText)
+                if (!needsPerCodepoint)
                 {
-                    HyphenationCandidates = hyphenationCandidates
-                });
+                    Words.Add(new CssRectWord(this, text, hasSpaceBefore, hasSpaceAfter, originalText)
+                    {
+                        HyphenationCandidates = hyphenationCandidates
+                    });
+                    return;
+                }
+
+                EmitPerCodepointFragments(text, originalText, hasSpaceBefore, hasSpaceAfter, fontSizeScale: 1.0, alwaysSuppressWrap: false);
                 return;
             }
 
@@ -950,18 +974,118 @@ namespace PeachPDF.Html.Core.Dom
                 var (start, length, isLower) = runs[i];
                 var runText = text.Substring(start, length);
                 var runOriginalText = originalText.Substring(start, length);
+                var displayText = isLower ? runText.ToUpperInvariant() : runText;
+                var scale = isLower ? CssBoxProperties.SmallCapsFontScale : 1.0;
+                var runSpaceBefore = i == 0 && hasSpaceBefore;
+                var runSpaceAfter = i == runs.Count - 1 && hasSpaceAfter;
 
-                Words.Add(new CssRectWord(
-                    this,
-                    isLower ? runText.ToUpperInvariant() : runText,
-                    hasSpaceBefore: i == 0 && hasSpaceBefore,
-                    hasSpaceAfter: i == runs.Count - 1 && hasSpaceAfter,
-                    runOriginalText)
+                if (!needsPerCodepoint)
                 {
-                    FontSizeScale = isLower ? CssBoxProperties.SmallCapsFontScale : 1.0,
-                    SuppressWrapBefore = i > 0
-                });
+                    Words.Add(new CssRectWord(this, displayText, runSpaceBefore, runSpaceAfter, runOriginalText)
+                    {
+                        FontSizeScale = scale,
+                        SuppressWrapBefore = i > 0
+                    });
+                }
+                else
+                {
+                    // Per-codepoint splitting composes inside each small-caps case-run. Every fragment
+                    // after the very first of the whole word suppresses wrap: run i>0 is never first, and
+                    // within run 0 only its own first fragment is.
+                    EmitPerCodepointFragments(displayText, runOriginalText, runSpaceBefore, runSpaceAfter, scale, alwaysSuppressWrap: i > 0);
+                }
             }
+        }
+
+        /// <summary>
+        /// Splits <paramref name="text"/> into maximal runs of consecutive codepoints that resolve to the
+        /// same face (via <see cref="CssBoxProperties.ActualFontForCodepoint"/>) and adds one
+        /// <see cref="CssRectWord"/> per run, each marked <see cref="CssRect.UsesPerCodepointFont"/>. The
+        /// split is glued back together for line-breaking (<see cref="CssRect.SuppressWrapBefore"/> on every
+        /// fragment after the first) and only the boundary fragments carry the surrounding whitespace flags,
+        /// exactly like the small-caps split it composes with.
+        /// </summary>
+        private void EmitPerCodepointFragments(string text, string originalText, bool hasSpaceBefore, bool hasSpaceAfter, double fontSizeScale, bool alwaysSuppressWrap)
+        {
+            if (originalText.Length != text.Length)
+                originalText = text;
+
+            var index = 0;
+            var first = true;
+
+            while (index < text.Length)
+            {
+                Rune.DecodeFromUtf16(text.AsSpan(index), out var rune, out var consumed);
+                var faceKey = ActualFontForCodepoint(rune, fontSizeScale).FaceKey;
+                var start = index;
+                index += consumed;
+
+                while (index < text.Length)
+                {
+                    Rune.DecodeFromUtf16(text.AsSpan(index), out var next, out var nextConsumed);
+                    if (ActualFontForCodepoint(next, fontSizeScale).FaceKey != faceKey)
+                        break;
+                    index += nextConsumed;
+                }
+
+                Words.Add(new CssRectWord(this, text.Substring(start, index - start), first && hasSpaceBefore, index >= text.Length && hasSpaceAfter, originalText.Substring(start, index - start))
+                {
+                    FontSizeScale = fontSizeScale,
+                    SuppressWrapBefore = !first || alwaysSuppressWrap,
+                    UsesPerCodepointFont = true
+                });
+
+                first = false;
+            }
+        }
+
+        /// <summary>
+        /// Whether <paramref name="text"/> must be resolved per-codepoint: an <c>@font-face</c>
+        /// <c>unicode-range</c> applies to one of this box's candidate families (so a covered character must
+        /// come from that face even if the default face has the glyph), or the box's own font lacks a glyph
+        /// for some character (so a later family in the <c>font-family</c> stack should supply it). Ordinary
+        /// fully-covered text with no ranged faces returns false - the single-word fast path.
+        /// </summary>
+        private bool NeedsPerCodepointFont(string text)
+        {
+            if (HtmlContainer is null)
+                return false;
+
+            var adapter = HtmlContainer.Adapter;
+
+            foreach (var family in (FontFamilyList ?? FontFamily ?? string.Empty).Split(','))
+            {
+                var name = family.Trim().TrimStart('"', '\'').TrimEnd('"', '\'');
+                if (adapter.FamilyHasExplicitUnicodeRanges(name))
+                    return true;
+            }
+
+            var font = ActualFont;
+            foreach (var rune in text.EnumerateRunes())
+            {
+                if (!font.HasGlyph(rune))
+                    return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// The font a word/fragment is measured and painted with: its per-codepoint face (resolved from its
+        /// first <see cref="Rune"/>) when <see cref="CssRect.UsesPerCodepointFont"/>, otherwise the box's
+        /// own <see cref="CssBoxProperties.ActualFont"/> (or <see cref="CssBoxProperties.ActualSmallCapsFont"/>
+        /// for a synthesized small-caps run). <paramref name="styleSource"/> is the box whose font applies -
+        /// the owner box, or a <c>::first-line</c> shadow box for a word on the first formatted line.
+        /// </summary>
+        private static RFont ResolveWordFont(CssRect word, CssBoxProperties styleSource)
+        {
+            if (word.UsesPerCodepointFont && word.Text is { Length: > 0 } text)
+            {
+                Rune.DecodeFromUtf16(text, out var rune, out _);
+                return styleSource.ActualFontForCodepoint(rune, word.FontSizeScale);
+            }
+
+            return word.FontSizeScale == 1.0 ? styleSource.ActualFont : styleSource.ActualSmallCapsFont;
         }
 
         private static bool ContainsLowerLetter(string text)
@@ -1706,7 +1830,7 @@ namespace PeachPDF.Html.Core.Dom
                 foreach (var boxWord in Words)
                 {
                     if (boxWord.IsImage) continue;
-                    var font = boxWord.FontSizeScale == 1.0 ? ActualFont : ActualSmallCapsFont;
+                    var font = ResolveWordFont(boxWord, this);
                     boxWord.Width = boxWord.Text != "\n" ? g.MeasureString(boxWord.Text!, font).Width : 0;
                     // Letter-spacing adds space after every character including the last (N gaps for an
                     // N-character word) - matching both the PDF Tc operator's actual per-glyph behavior
@@ -1754,7 +1878,7 @@ namespace PeachPDF.Html.Core.Dom
                     : null;
                 var effectiveText = boxWord.FirstLineText ?? boxWord.Text;
 
-                var font = boxWord.FontSizeScale == 1.0 ? firstLineStyle.ActualFont : firstLineStyle.ActualSmallCapsFont;
+                var font = ResolveWordFont(boxWord, firstLineStyle);
                 boxWord.Width = effectiveText != "\n" ? g.MeasureString(effectiveText!, font).Width : 0;
                 // See MeasureWordsSize's identical fix/comment - N gaps for an N-character word, not N-1.
                 if (effectiveText != "\n" && firstLineStyle.ActualLetterSpacing != 0)
@@ -1787,7 +1911,7 @@ namespace PeachPDF.Html.Core.Dom
                 boxWord.FirstLineStyle = null;
                 boxWord.FirstLineText = null;
 
-                var font = boxWord.FontSizeScale == 1.0 ? ActualFont : ActualSmallCapsFont;
+                var font = ResolveWordFont(boxWord, this);
                 boxWord.Width = boxWord.Text != "\n" ? g.MeasureString(boxWord.Text!, font).Width : 0;
                 // See MeasureWordsSize's identical fix/comment - N gaps for an N-character word, not N-1.
                 if (boxWord.Text != "\n" && ActualLetterSpacing != 0)
@@ -3215,13 +3339,14 @@ namespace PeachPDF.Html.Core.Dom
                 // word.Top/Height are already consistent with it.
                 var styleSource = word.FirstLineStyle ?? this;
 
-                // A synthesized small-caps run is drawn with a smaller font than the rest of its line
-                // (see ActualSmallCapsFont) — both are drawn top-anchored at the same word.Top (the
-                // shared line box's top), so without correction the smaller glyphs' baseline would sit
-                // higher than their full-size neighbors'. Shift down by the ascent difference so every
-                // fragment's baseline lines up regardless of its font size.
-                var font = word.FontSizeScale == 1.0 ? styleSource.ActualFont : styleSource.ActualSmallCapsFont;
-                var baselineAdjust = word.FontSizeScale == 1.0 ? 0 : styleSource.ActualFont.Ascent - font.Ascent;
+                // A fragment drawn with a different font than the box's own ActualFont - a synthesized
+                // small-caps run (smaller size) or a per-codepoint fallback face (different metrics) - is
+                // top-anchored at the same word.Top (the shared line box's top), so without correction its
+                // baseline would sit at a different height than its full-size neighbors'. Shift down by the
+                // ascent difference so every fragment's baseline lines up. This is exactly 0 for an ordinary
+                // word (font == ActualFont), so it is a no-op there.
+                var font = ResolveWordFont(word, styleSource);
+                var baselineAdjust = styleSource.ActualFont.Ascent - font.Ascent;
                 var wordPoint = new RPoint(word.Left + offset.X, word.Top + offset.Y + baselineAdjust);
                 var text = word.FirstLineText ?? word.Text!;
                 g.DrawString(text, font, styleSource.ActualColor, wordPoint, new RSize(word.Width, word.Height), isRtl, styleSource.ActualLetterSpacing);
@@ -3352,6 +3477,11 @@ namespace PeachPDF.Html.Core.Dom
         protected override RFont? GetCachedFont(string fontFamily, double fsize, RFontStyle st, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null)
         {
             return FontFamilyResolver.Resolve(HtmlContainer!.Adapter, fontFamily, fsize, st, weight, stretch, obliqueSkewSinus);
+        }
+
+        protected override RFont? GetCachedFontForCodepoint(string fontFamily, double fsize, RFontStyle st, System.Text.Rune codepoint, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null)
+        {
+            return FontFamilyResolver.Resolve(HtmlContainer!.Adapter, fontFamily, fsize, st, codepoint, weight, stretch, obliqueSkewSinus);
         }
 
         protected override RColor GetActualColor(string colorStr)

@@ -141,7 +141,7 @@ namespace PeachPDF.Adapters
             await AddFont(stream, fontFamilyName, weightOverride: null, isItalicOverride: null, stretchOverride: null);
         }
 
-        internal async Task AddFont(Stream stream, string? fontFamilyName, int? weightOverride, bool? isItalicOverride, int? stretchOverride)
+        internal async Task AddFont(Stream stream, string? fontFamilyName, int? weightOverride, bool? isItalicOverride, int? stretchOverride, IReadOnlyList<RuneRange>? unicodeRanges = null)
         {
             using var memoryStream = new MemoryStream();
             await stream.CopyToAsync(memoryStream);
@@ -156,7 +156,7 @@ namespace PeachPDF.Adapters
 
             convertedStream.Seek(0, SeekOrigin.Begin);
 
-            _fontResolver.AddFont(convertedStream, fontFamilyName, weightOverride, isItalicOverride, stretchOverride);
+            _fontResolver.AddFont(convertedStream, fontFamilyName, weightOverride, isItalicOverride, stretchOverride, unicodeRanges);
         }
 
         protected override RColor GetColorInt(string colorName)
@@ -251,7 +251,23 @@ namespace PeachPDF.Adapters
             return new FontAdapter(xFont, PixelsPerPoint);
         }
 
-        protected override async Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null)
+        protected override RFont? CreateFontForCodepointInt(string family, double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint)
+        {
+            var fontStyle = (XFontStyle)((int)style);
+            var isItalic = (fontStyle & XFontStyle.Italic) == XFontStyle.Italic;
+
+            // Pre-check coverage so we never build an XFont for a family that can't render this codepoint:
+            // a null here tells the caller to try the next family in the stack.
+            if (_fontResolver.ResolveTypeface(family, weight, isItalic, stretch, codepoint) is null)
+                return null;
+
+            var xFont = new XFont(family, size / PixelsPerPoint, fontStyle, new XPdfFontOptions(PdfFontEncoding.Unicode), weight, stretch, obliqueSkewSinus, codepoint, _fontResolver);
+            return new FontAdapter(xFont, PixelsPerPoint);
+        }
+
+        protected override bool FamilyHasExplicitUnicodeRangesInt(string family) => _fontResolver.HasExplicitRanges(family);
+
+        protected override async Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<RuneRange>? unicodeRanges = null)
         {
             // A missing format() hint is valid CSS (it's an optional hint, not a requirement) and must
             // still be attempted - real-world stylesheets (e.g. css4.pub's Icelandic dictionary page)
@@ -262,14 +278,14 @@ namespace PeachPDF.Adapters
             // should still be skipped.
             if (format is null or "truetype" or "woff" or "woff2" or "opentype")
             {
-                await AddFont(stream, fontFamilyName, weightOverride, isItalicOverride, stretchOverride);
+                await AddFont(stream, fontFamilyName, weightOverride, isItalicOverride, stretchOverride, unicodeRanges);
                 return true;
             }
 
             return false;
         }
 
-        protected override async Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null)
+        protected override async Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<RuneRange>? unicodeRanges = null)
         {
             var hasLocalFont = _fontResolver.HasFont(localFontFaceName);
 
@@ -277,7 +293,7 @@ namespace PeachPDF.Adapters
 
             var bytes = _fontResolver.GetFont(localFontFaceName);
             var stream = new MemoryStream(bytes);
-            await AddFont(stream, fontFamilyName, weightOverride, isItalicOverride, stretchOverride);
+            await AddFont(stream, fontFamilyName, weightOverride, isItalicOverride, stretchOverride, unicodeRanges);
 
             return true;
         }

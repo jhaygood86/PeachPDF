@@ -45,7 +45,7 @@ namespace PeachPDF
     /// resolver, and network loader are owned exclusively by that instance, so calling its methods
     /// concurrently from multiple threads on the <i>same</i> instance (or reusing one instance across
     /// overlapping renders) is not supported and can corrupt its internal state. This includes every
-    /// custom font registered on it — via <c>@font-face</c> or <see cref="AddFontFromStream"/> — whose
+    /// custom font registered on it — via <c>@font-face</c> or <see cref="AddFontFromStream(Stream)"/> — whose
     /// resolved glyph/metrics data lives in caches private to that instance, so two instances that
     /// register <i>different</i> bytes under the <i>same</i> font family name never collide.
     /// </para>
@@ -87,6 +87,19 @@ namespace PeachPDF
         public async Task AddFontFromStream(Stream stream)
         {
             await _pdfSharpAdapter.AddFont(stream, null);
+        }
+
+        /// <summary>
+        /// Add a font to be rendered, restricting it to the given codepoint ranges - the programmatic
+        /// equivalent of an <c>@font-face</c> <c>unicode-range</c> descriptor. Characters outside these
+        /// ranges resolve to another registered font (per-codepoint font matching). Pass an empty list to
+        /// register a font that is never selected by codepoint coverage.
+        /// </summary>
+        /// <param name="stream">Font stream</param>
+        /// <param name="unicodeRanges">The codepoint ranges this font should be used for</param>
+        public async Task AddFontFromStream(Stream stream, IReadOnlyList<RuneRange> unicodeRanges)
+        {
+            await _pdfSharpAdapter.AddFont(stream, null, weightOverride: null, isItalicOverride: null, stretchOverride: null, unicodeRanges);
         }
 
         /// <summary>

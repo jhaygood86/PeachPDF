@@ -134,6 +134,10 @@ namespace PeachPDF.Html.Core.Parse
                     var isItalicOverride = FontFaceDescriptorResolver.ResolveIsItalic(fontRule.Style);
                     var stretchOverride = FontFaceDescriptorResolver.ResolveStretch(fontRule.Stretch);
 
+                    // The unicode-range descriptor restricts which codepoints this face is used for; null
+                    // (absent/unparseable) means "use it for whatever the font's cmap covers".
+                    var unicodeRanges = UnicodeRangeParser.Parse(fontRule.Range);
+
                     // src is itself a comma-separated fallback list (e.g. woff2, then woff, then a local()
                     // match) - try each candidate in declaration order, local() before url() within a
                     // candidate exactly as before, and stop at the first one that actually loads.
@@ -143,12 +147,12 @@ namespace PeachPDF.Html.Core.Parse
 
                         if (fontFaceDefinition.Local is not null)
                         {
-                            isLoaded = await adapter.AddLocalFontFamily(fontFamilyName, fontFaceDefinition.Local, weightOverride, isItalicOverride, stretchOverride);
+                            isLoaded = await adapter.AddLocalFontFamily(fontFamilyName, fontFaceDefinition.Local, weightOverride, isItalicOverride, stretchOverride, unicodeRanges);
                         }
 
                         if (!isLoaded && fontFaceDefinition.Url is not null)
                         {
-                            isLoaded = await adapter.AddFontFamilyFromUrl(fontFamilyName, fontFaceDefinition.Url, fontFaceDefinition.Format, stylesheet.BaseUri, weightOverride, isItalicOverride, stretchOverride);
+                            isLoaded = await adapter.AddFontFamilyFromUrl(fontFamilyName, fontFaceDefinition.Url, fontFaceDefinition.Format, stylesheet.BaseUri, weightOverride, isItalicOverride, stretchOverride, unicodeRanges);
                         }
 
                         if (isLoaded) break;

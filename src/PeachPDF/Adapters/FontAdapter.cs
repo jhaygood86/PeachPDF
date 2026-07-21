@@ -78,6 +78,10 @@ namespace PeachPDF.Adapters
             return _whitespaceWidth;
         }
 
+        public override bool HasGlyph(System.Text.Rune rune) => Font.Descriptor?.HasGlyph(rune) ?? false;
+
+        public override string FaceKey => Font.GlyphTypeface.Key;
+
         /// <summary>
         /// Set font metrics to be cached for the font for future use.
         /// </summary>

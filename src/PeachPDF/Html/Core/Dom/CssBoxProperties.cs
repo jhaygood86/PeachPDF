@@ -534,6 +534,15 @@ namespace PeachPDF.Html.Core.Dom
 
         public string? FontFamily { get; set; }
 
+        /// <summary>
+        /// The full, unresolved <c>font-family</c> list as authored (e.g. <c>"Latin", "Symbols", serif</c>),
+        /// as opposed to <see cref="FontFamily"/> which the cascade already collapses to the first family
+        /// that exists. Retained so per-codepoint font matching can walk the whole stack - a character the
+        /// first family can't render (or that a later family's <c>unicode-range</c> claims) falls back to
+        /// the next family that covers it. Inherited alongside <see cref="FontFamily"/>.
+        /// </summary>
+        public string? FontFamilyList { get; set; }
+
         public string FontSize
         {
             get => _fontSize;
@@ -1331,6 +1340,34 @@ namespace PeachPDF.Html.Core.Dom
 
         protected abstract RFont? GetCachedFont(string fontFamily, double fsize, RFontStyle st, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null);
 
+        protected abstract RFont? GetCachedFontForCodepoint(string fontFamily, double fsize, RFontStyle st, System.Text.Rune codepoint, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null);
+
+        private Dictionary<(int Codepoint, double Scale), RFont>? _codepointFontCache;
+
+        /// <summary>
+        /// The font this box uses for <paramref name="codepoint"/> specifically - the first family in the
+        /// <c>font-family</c> stack whose face both covers the codepoint (its <c>unicode-range</c>/cmap
+        /// coverage) and has a glyph for it. Falls back to <see cref="ActualFont"/> (or
+        /// <see cref="ActualSmallCapsFont"/> when <paramref name="sizeScale"/> marks a small-caps run) when
+        /// no declared family covers it, so an uncovered character renders exactly as it does today. Cached
+        /// per (codepoint, scale); mirrors <see cref="ActualSmallCapsFont"/>'s size/style derivation.
+        /// </summary>
+        public RFont ActualFontForCodepoint(System.Text.Rune codepoint, double sizeScale = 1.0)
+        {
+            var cacheKey = (codepoint.Value, sizeScale);
+            if (_codepointFontCache is not null && _codepointFontCache.TryGetValue(cacheKey, out var cached))
+                return cached;
+
+            var size = ActualFont.Size * sizeScale;
+            // Resolve against the full authored font-family stack (not the cascade-collapsed single family)
+            // so a codepoint the first family can't supply falls back to a later one.
+            var font = GetCachedFontForCodepoint(FontFamilyList ?? FontFamily!, size, GetActualFontStyleFlags(), codepoint, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus)
+                       ?? (sizeScale == 1.0 ? ActualFont : ActualSmallCapsFont);
+
+            (_codepointFontCache ??= [])[cacheKey] = font;
+            return font;
+        }
+
         /// <summary>
         /// Gets the line height
         /// </summary>
@@ -1561,6 +1598,7 @@ namespace PeachPDF.Html.Core.Dom
             TextTransform = p.TextTransform;
             VerticalAlign = p.VerticalAlign;
             FontFamily = p.FontFamily;
+            FontFamilyList = p.FontFamilyList;
             _fontSize = p._fontSize;
             FontStyle = p.FontStyle;
             FontVariant = p.FontVariant;

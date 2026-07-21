@@ -476,15 +476,15 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             {
                 StringBuilder sb = new StringBuilder();
                 bool isSymbolFont = descriptor.FontFace.cmap.symbol;
-                for (int idx = 0; idx < s.Length; idx++)
+                foreach (Rune rune in s.EnumerateRunes())
                 {
-                    char ch = s[idx];
-                    if (isSymbolFont)
+                    Rune lookup = rune;
+                    if (isSymbolFont && rune.Value <= 0xFFFF)
                     {
-                        // Remap ch for symbol fonts.
-                        ch = (char)(ch | (descriptor.FontFace.os2.usFirstCharIndex & 0xFF00));  // @@@ refactor
+                        // Remap for symbol fonts (BMP-only).
+                        lookup = new Rune(rune.Value | (descriptor.FontFace.os2.usFirstCharIndex & 0xFF00));
                     }
-                    int glyphID = descriptor.CharCodeToGlyphIndex(ch);
+                    int glyphID = descriptor.CharCodeToGlyphIndex(lookup);
                     sb.Append((char)glyphID);
                 }
                 s = sb.ToString();

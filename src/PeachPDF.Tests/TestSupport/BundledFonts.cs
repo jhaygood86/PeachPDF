@@ -26,6 +26,14 @@ namespace PeachPDF.Tests.TestSupport
         internal static string Woff2 => Path.Combine(AppContext.BaseDirectory, "Inter-Medium.woff2");
 
         /// <summary>
+        /// A subset of the monochrome "Noto Emoji" font (see NotoEmoji-Regular.LICENSE.txt): a real
+        /// TrueType font with <c>glyf</c> outlines and a cmap <b>format-12</b> subtable mapping
+        /// supplementary-plane (astral) emoji codepoints such as U+1F600. Used to exercise real astral
+        /// glyph resolution and rendering end to end.
+        /// </summary>
+        internal static string Emoji => Path.Combine(AppContext.BaseDirectory, "NotoEmoji-Regular.ttf");
+
+        /// <summary>
         /// A real font file path: the first one the host OS reports, or the bundled TTF
         /// if the host reports none.
         /// </summary>

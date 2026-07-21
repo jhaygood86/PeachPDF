@@ -83,43 +83,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             Elements[Keys.DescendantFonts] = descendantFonts;
         }
 
-        public PdfType0Font(PdfDocument document, string idName, byte[] fontData, bool vertical)
-            : base(document)
-        {
-            Elements.SetName(Keys.Type, "/Font");
-            Elements.SetName(Keys.Subtype, "/Type0");
-            Elements.SetName(Keys.Encoding, vertical ? "/Identity-V" : "/Identity-H");
-
-            OpenTypeDescriptor ttDescriptor = (OpenTypeDescriptor)FontDescriptorCache.GetOrCreateDescriptor(idName, fontData);
-            FontDescriptor = new PdfFontDescriptor(document, ttDescriptor);
-            _fontOptions = new XPdfFontOptions(PdfFontEncoding.Unicode);
-            Debug.Assert(_fontOptions != null);
-
-            _cmapInfo = new CMapInfo(ttDescriptor);
-            _descendantFont = new PdfCIDFont(document, FontDescriptor, fontData);
-            _descendantFont.CMapInfo = _cmapInfo;
-
-            // Create ToUnicode map
-            _toUnicode = new PdfToUnicodeMap(document, _cmapInfo);
-            document.Internals.AddObject(_toUnicode);
-            Elements.Add(Keys.ToUnicode, _toUnicode);
-
-            //BaseFont = ttDescriptor.FontName.Replace(" ", "");
-            BaseFont = ttDescriptor.FontName;
-
-            // CID fonts are always embedded
-            if (!BaseFont.Contains("+"))  // HACK in PdfType0Font
-                BaseFont = CreateEmbeddedFontSubsetName(BaseFont);
-
-            FontDescriptor.FontName = BaseFont;
-            _descendantFont.BaseFont = BaseFont;
-
-            PdfArray descendantFonts = new PdfArray(document);
-            Owner._irefTable.Add(_descendantFont);
-            descendantFonts.Elements.Add(_descendantFont.Reference);
-            Elements[Keys.DescendantFonts] = descendantFonts;
-        }
-
         XPdfFontOptions FontOptions
         {
             get { return _fontOptions; }

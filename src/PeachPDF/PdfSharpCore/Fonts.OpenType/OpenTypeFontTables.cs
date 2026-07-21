@@ -144,6 +144,81 @@ namespace PeachPDF.PdfSharpCore.Fonts.OpenType
     }
 
     /// <summary>
+    /// CMap format 12: Segmented coverage. Maps 32-bit character codes (full Unicode, including
+    /// supplementary-plane / astral codepoints such as emoji) to glyph indices via sorted, non-overlapping
+    /// sequential map groups. This is the subtable that carries codepoints above U+FFFF, which format 4
+    /// cannot represent.
+    /// </summary>
+    internal class CMap12 : OpenTypeFontTable
+    {
+        public WinEncodingId encodingId; // Windows encoding ID.
+        public ushort format; // Format number is set to 12.
+        public ushort reserved; // Set to 0.
+        public uint length; // Byte length of this subtable.
+        public uint language;
+        public uint numGroups; // Number of groupings which follow.
+        public uint[] startCharCode = null!; // [numGroups] / First character code in each group.
+        public uint[] endCharCode = null!;   // [numGroups] / Last character code in each group.
+        public uint[] startGlyphId = null!;  // [numGroups] / Glyph index of the first character in each group.
+
+        public CMap12(OpenTypeFontface fontData, WinEncodingId encodingId)
+            : base(fontData, "----")
+        {
+            this.encodingId = encodingId;
+            Read();
+        }
+
+        internal void Read()
+        {
+            try
+            {
+                format = _fontData.ReadUShort();
+                Debug.Assert(format == 12, "Only format 12 expected.");
+                reserved = _fontData.ReadUShort();
+                length = _fontData.ReadULong();
+                language = _fontData.ReadULong();
+                numGroups = _fontData.ReadULong();
+
+                startCharCode = new uint[numGroups];
+                endCharCode = new uint[numGroups];
+                startGlyphId = new uint[numGroups];
+
+                for (int idx = 0; idx < numGroups; idx++)
+                {
+                    startCharCode[idx] = _fontData.ReadULong();
+                    endCharCode[idx] = _fontData.ReadULong();
+                    startGlyphId[idx] = _fontData.ReadULong();
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
+            }
+        }
+
+        /// <summary>
+        /// Maps a codepoint to a glyph index via binary search over the sorted groups; returns 0 (the
+        /// missing glyph) when no group covers it.
+        /// </summary>
+        public int MapCodeToGlyph(int codepoint)
+        {
+            uint cp = (uint)codepoint;
+            int lo = 0, hi = (int)numGroups - 1;
+            while (lo <= hi)
+            {
+                int mid = (lo + hi) >> 1;
+                if (cp < startCharCode[mid])
+                    hi = mid - 1;
+                else if (cp > endCharCode[mid])
+                    lo = mid + 1;
+                else
+                    return (int)((startGlyphId[mid] + (cp - startCharCode[mid])) & 0xFFFF);
+            }
+            return 0;
+        }
+    }
+
+    /// <summary>
     /// This table defines the mapping of character codes to the glyph index values used in the font.
     /// It may contain more than one subtable, in order to support more than one character encoding scheme.
     /// </summary>
@@ -160,6 +235,12 @@ namespace PeachPDF.PdfSharpCore.Fonts.OpenType
         public bool symbol;
 
         public CMap4 cmap4 = null!;
+
+        /// <summary>
+        /// Optional format-12 subtable, present when the font maps supplementary-plane (astral) codepoints
+        /// such as emoji. Null when the font has no format-12 subtable.
+        /// </summary>
+        public CMap12? cmap12;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="CMapTable"/> class.
@@ -183,7 +264,7 @@ namespace PeachPDF.PdfSharpCore.Fonts.OpenType
                     Debug-Break.Break();
 #endif
 
-                bool success = false;
+                bool cmap4Found = false;
                 for (int idx = 0; idx < numTables; idx++)
                 {
                     PlatformId platformId = (PlatformId)_fontData.ReadUShort();
@@ -192,32 +273,36 @@ namespace PeachPDF.PdfSharpCore.Fonts.OpenType
 
                     int currentPosition = _fontData.Position;
 
-                    // Just read Windows stuff.
-                    if (platformId == PlatformId.Win && ((WinEncodingId)encodingId == WinEncodingId.Symbol || (WinEncodingId)encodingId == WinEncodingId.Unicode))
-                    {
-                        symbol = (WinEncodingId)encodingId == WinEncodingId.Symbol;
+                    // Peek the subtable's format so we parse it with the right reader and never force-read
+                    // a non-format-4 subtable as format 4.
+                    _fontData.Position = tableOffset + offset;
+                    ushort subtableFormat = _fontData.ReadUShort();
+                    _fontData.Position = tableOffset + offset;
 
-                        _fontData.Position = tableOffset + offset;
-                        cmap4 = new CMap4(_fontData, (WinEncodingId)encodingId);
-                        _fontData.Position = currentPosition;
-                        // We have found what we are looking for, so break.
-                        success = true;
-                        break;
+                    // The BMP (format-4) subtable: keep the original platform/encoding preference and
+                    // symbol-font detection.
+                    bool isBmpCandidate =
+                        (platformId == PlatformId.Win && ((WinEncodingId)encodingId == WinEncodingId.Symbol || (WinEncodingId)encodingId == WinEncodingId.Unicode))
+                        || (platformId == PlatformId.Apple && (AppleEncodingId)encodingId == AppleEncodingId.Unicode20BmpOnly);
+
+                    if (!cmap4Found && subtableFormat == 4 && isBmpCandidate)
+                    {
+                        symbol = platformId == PlatformId.Win && (WinEncodingId)encodingId == WinEncodingId.Symbol;
+                        cmap4 = new CMap4(_fontData, symbol ? WinEncodingId.Symbol : WinEncodingId.Unicode);
+                        cmap4Found = true;
+                    }
+                    // The full-Unicode (format-12) subtable carries astral codepoints; take the first one.
+                    else if (cmap12 is null && subtableFormat == 12)
+                    {
+                        cmap12 = new CMap12(_fontData, WinEncodingId.Unicode);
                     }
 
-                    if (platformId == PlatformId.Apple && (AppleEncodingId)encodingId == AppleEncodingId.Unicode20BmpOnly)
-                    {
-                        symbol = false;
+                    _fontData.Position = currentPosition;
 
-                        _fontData.Position = tableOffset + offset;
-                        cmap4 = new CMap4(_fontData, WinEncodingId.Unicode);
-                        _fontData.Position = currentPosition;
-                        // We have found what we are looking for, so break.
-                        success = true;
+                    if (cmap4Found && cmap12 is not null)
                         break;
-                    }
                 }
-                if (!success)
+                if (!cmap4Found)
                     throw new InvalidOperationException("Font has no usable platform or encoding ID. It cannot be used with PeachPDF.PdfSharpCore.");
             }
             catch (Exception ex)

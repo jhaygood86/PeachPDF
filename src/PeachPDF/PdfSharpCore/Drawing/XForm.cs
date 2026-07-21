@@ -386,24 +386,6 @@ namespace PeachPDF.PdfSharpCore.Drawing
             return name;
         }
 
-        /// <summary>
-        /// Gets the resource name of the specified font data within this form.
-        /// </summary>
-        internal string GetFontName(string idName, byte[] fontData, out PdfFont pdfFont)
-        {
-            Debug.Assert(IsTemplate, "This function is for form templates only.");
-            pdfFont = _document.FontTable.GetFont(idName, fontData);
-            //pdfFont = new PdfType0Font(Owner, idName, fontData);
-            //pdfFont.Document = _document;
-            Debug.Assert(pdfFont != null);
-            string name = Resources.AddFont(pdfFont);
-            return name;
-        }
-
-        string IContentStream.GetFontName(string idName, byte[] fontData, out PdfFont pdfFont)
-        {
-            return GetFontName(idName, fontData, out pdfFont);
-        }
 
         /// <summary>
         /// Gets the resource name of the specified image within this form.

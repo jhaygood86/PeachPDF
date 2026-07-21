@@ -63,25 +63,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             FontEncoding = font.PdfOptions.FontEncoding;
         }
 
-        public PdfCIDFont(PdfDocument document, PdfFontDescriptor fontDescriptor, byte[] fontData)
-            : base(document)
-        {
-            Elements.SetName(Keys.Type, "/Font");
-            Elements.SetName(Keys.Subtype, "/CIDFontType2");
-            PdfDictionary cid = new PdfDictionary();
-            cid.Elements.SetString("/Ordering", "Identity");
-            cid.Elements.SetString("/Registry", "Adobe");
-            cid.Elements.SetInteger("/Supplement", 0);
-            Elements.SetValue(Keys.CIDSystemInfo, cid);
-
-            FontDescriptor = fontDescriptor;
-            // ReSharper disable once DoNotCallOverridableMethodsInConstructor
-            Owner._irefTable.Add(fontDescriptor);
-            Elements[Keys.FontDescriptor] = fontDescriptor.Reference;
-
-            FontEncoding = PdfFontEncoding.Unicode;
-        }
-
         public string BaseFont
         {
             get { return Elements.GetName(Keys.BaseFont); }

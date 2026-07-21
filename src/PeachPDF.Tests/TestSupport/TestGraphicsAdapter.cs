@@ -65,9 +65,13 @@ namespace PeachPDF.Tests.TestSupport
 
         protected override RFont CreateFontInt(RFontFamily family, double size, RFontStyle style, int weight = 400, int stretch = 5, double? obliqueSkewSinus = null) => new TestFont(size);
 
-        protected override Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null) => Task.FromResult(false);
+        protected override RFont? CreateFontForCodepointInt(string family, double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint) => new TestFont(size);
 
-        protected override Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null) => Task.FromResult(false);
+        protected override bool FamilyHasExplicitUnicodeRangesInt(string family) => false;
+
+        protected override Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<PeachPDF.RuneRange>? unicodeRanges = null) => Task.FromResult(false);
+
+        protected override Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<PeachPDF.RuneRange>? unicodeRanges = null) => Task.FromResult(false);
     }
 
     /// <summary>A solid-color brush that remembers the color it was created with.</summary>
@@ -109,6 +113,8 @@ namespace PeachPDF.Tests.TestSupport
         public override double Ascent => size * 0.8;
         public override double LeftPadding => 0;
         public override double GetWhitespaceWidth(RGraphics graphics) => size * 0.25;
+        public override bool HasGlyph(System.Text.Rune rune) => true;
+        public override string FaceKey => "test";
     }
 
     /// <summary>No-op path builder - sufficient for shape markers, since color assertions only need

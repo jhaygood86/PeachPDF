@@ -85,29 +85,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             return pdfFont;
         }
 
-#if true
-        /// <summary>
-        /// Gets a PdfFont from a font program. If no PdfFont already exists, a new one is created.
-        /// </summary>
-        public PdfFont GetFont(string idName, byte[] fontData)
-        {
-            Debug.Assert(false);
-            //FontSelector selector = new FontSelector(idName);
-            string selector = null; // ComputeKey(font); //new FontSelector(font);
-            PdfFont pdfFont;
-            if (!_fonts.TryGetValue(selector, out pdfFont))
-            {
-                //if (font.Unicode)
-                pdfFont = new PdfType0Font(Owner, idName, fontData, false);
-                //else
-                //  pdfFont = new PdfTrueTypeFont(_owner, font);
-                //pdfFont.Document = _document;
-                Debug.Assert(pdfFont.Owner == Owner);
-                _fonts[selector] = pdfFont;
-            }
-            return pdfFont;
-        }
-#endif
 
         /// <summary>
         /// Tries to gets a PdfFont from the font dictionary.
@@ -126,7 +103,12 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         internal static string ComputeKey(XFont font)
         {
             XGlyphTypeface glyphTypeface = font.GlyphTypeface;
-            string key = glyphTypeface.Fontface.FullFaceName.ToLowerInvariant() +
+            // Include the font source's content checksum, not just its internal FullFaceName: two DIFFERENT
+            // font files can share one internal name (a common webfont-subset pattern), and keying the
+            // per-document embed cache on the name alone would merge them into a single embedded font -
+            // the second silently rendering with the first's glyphs. The checksum makes identity content-
+            // addressed (identical bytes still coalesce to one embed; different bytes never do).
+            string key = glyphTypeface.Fontface.FullFaceName.ToLowerInvariant() + "/" + glyphTypeface.FontSource.Key +
                 (glyphTypeface.IsBold ? "/b" : "") + (glyphTypeface.IsItalic ? "/i" : "") + font.Unicode;
             return key;
         }

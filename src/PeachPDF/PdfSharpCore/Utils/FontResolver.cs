@@ -12,6 +12,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
+using System.Text;
 
 
 namespace PeachPDF.PdfSharpCore.Utils
@@ -39,6 +40,14 @@ namespace PeachPDF.PdfSharpCore.Utils
         /// a cache slot for it.
         /// </summary>
         private readonly HashSet<string> _customFamilyNames = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Per-face cmap-coverage cache (face name → covered codepoint ranges), populated lazily the
+        /// first time a face with no explicit <c>unicode-range</c> is coverage-tested during
+        /// per-codepoint matching. Instance-scoped (like <see cref="_CustomFonts"/>) so it is collected
+        /// with this resolver and never shared across <c>PdfGenerator</c> instances.
+        /// </summary>
+        private readonly Dictionary<string, IReadOnlyList<RuneRange>> _coverageCache = new(StringComparer.Ordinal);
 
         /// <summary>
         /// This instance's own typeface-key-keyed glyph-typeface cache, used only for custom
@@ -216,8 +225,11 @@ namespace PeachPDF.PdfSharpCore.Utils
         /// resource participates in matching, independent of what the file's own internal tables say -
         /// see <c>DomParser.CascadeApplyStyleFonts</c>). Null means "use the value sniffed from the file
         /// itself" (the previous, only, behavior).
+        /// <para><paramref name="unicodeRanges"/> restricts which codepoints this face is used for (an
+        /// <c>@font-face</c> <c>unicode-range</c> descriptor, or an explicit registration list); null
+        /// means "no restriction - use this face for whatever its font's cmap actually covers".</para>
         /// </summary>
-        public void AddFont(Stream stream, string fontFamilyName, int? weightOverride, bool? isItalicOverride, int? stretchOverride = null)
+        public void AddFont(Stream stream, string fontFamilyName, int? weightOverride, bool? isItalicOverride, int? stretchOverride = null, IReadOnlyList<RuneRange>? unicodeRanges = null)
         {
             var memoryStream = new MemoryStream();
             stream.CopyTo(memoryStream);
@@ -232,12 +244,27 @@ namespace PeachPDF.PdfSharpCore.Utils
             var weight = weightOverride ?? fontFileInfo.FontDescription.Weight;
             var isItalic = isItalicOverride ?? fontFileInfo.FontDescription.Style is XFontStyle.Italic or XFontStyle.BoldItalic;
             var stretch = stretchOverride ?? fontFileInfo.FontDescription.Stretch;
-            var faceKey = (weight, isItalic, stretch);
+
+            // The face name is the identity under which the bytes are stored and later fetched
+            // (GetFont) for embedding. It is normally the font's own internal name, which keeps every
+            // existing test asserting FaceName == the file's internal name valid. But two DIFFERENT fonts
+            // can share one internal name (a common webfont-subset pattern - e.g. every "Roboto" subset
+            // file reports "Roboto"); those must not collide in _CustomFonts (the second would overwrite
+            // the first's bytes). So when a *different* byte set is already registered under this internal
+            // name, disambiguate with a content checksum. Browsers identify a font resource by its bytes,
+            // never by the file's self-reported name - this makes the byte store do the same.
+            var internalName = fontFileInfo.FontDescription.FontNameInvariantCulture;
+            var faceName = internalName;
+            if (_CustomFonts.TryGetValue(internalName, out var existingBytes) && !existingBytes.AsSpan().SequenceEqual(fontBytes))
+            {
+                faceName = $"{internalName}#{FontHelper.CalcChecksum(fontBytes):x}";
+            }
 
             // The STORED description's own Weight/Style/Stretch must reflect the override too, not just
-            // the dictionary key it's filed under - FontResolver.ResolveTypeface's synthesis decision
-            // (and any other future consumer) reads these fields directly off the returned face, not the
-            // key.
+            // the matching axes it's filed under - FontResolver.ResolveTypeface's synthesis decision
+            // (and any other future consumer) reads these fields directly off the returned face. The face
+            // name is likewise stored on it, so ResolveTypeface hands back the (possibly disambiguated)
+            // name GetFont expects.
             var effectiveStyle = (isItalic, weight >= 700) switch
             {
                 (true, true) => XFontStyle.BoldItalic,
@@ -245,32 +272,52 @@ namespace PeachPDF.PdfSharpCore.Utils
                 (false, true) => XFontStyle.Bold,
                 (false, false) => XFontStyle.Regular
             };
-            var faceDescription = weightOverride is null && isItalicOverride is null && stretchOverride is null
+            var baseDescription = weightOverride is null && isItalicOverride is null && stretchOverride is null
                 ? fontFileInfo.FontDescription
                 : fontFileInfo.FontDescription with { Weight = weight, Style = effectiveStyle, Stretch = stretch };
+            var faceDescription = baseDescription with { FontNameInvariantCulture = faceName };
 
-            if (InstalledFonts.TryGetValue(key, out var family))
+            var entry = new FontFaceEntry(weight, isItalic, stretch, unicodeRanges, faceDescription);
+
+            // family may be a shared static FontFamilyModel from _systemFamilies (or an already-private
+            // clone from a prior AddFont call on this instance). Clone before mutating so we never write
+            // into state shared with other FontResolver instances/threads. Replace any existing face
+            // occupying the same slot (same axes AND same range set) - a re-registration - while letting a
+            // same-axes face with a *different* range set coexist (that is exactly the unicode-range
+            // subset case).
+            var clonedFamily = new FontFamilyModel { Name = InstalledFonts.TryGetValue(key, out var family) ? family.Name : key };
+            if (family is not null)
             {
-                // family may be a shared static FontFamilyModel from _systemFamilies (or an
-                // already-private clone from a prior AddFont call on this instance). Clone
-                // before mutating so we never write into state shared with other FontResolver
-                // instances/threads.
-                var clonedFamily = new FontFamilyModel { Name = family.Name };
                 foreach (var face in family.Faces)
                 {
-                    clonedFamily.Faces[face.Key] = face.Value;
+                    if (!IsSameFaceSlot(face, weight, isItalic, stretch, unicodeRanges))
+                        clonedFamily.Faces.Add(face);
                 }
-                clonedFamily.Faces[faceKey] = faceDescription;
-                InstalledFonts[key] = clonedFamily;
             }
-            else
-            {
-                var fontFamilyModel = new FontFamilyModel { Name = key };
-                fontFamilyModel.Faces[faceKey] = faceDescription;
-                InstalledFonts.Add(key, fontFamilyModel);
-            }
+            clonedFamily.Faces.Add(entry);
+            InstalledFonts[key] = clonedFamily;
 
-            _CustomFonts[fontFileInfo.FontDescription.FontNameInvariantCulture] = fontBytes;
+            _CustomFonts[faceName] = fontBytes;
+        }
+
+        private static bool IsSameFaceSlot(FontFaceEntry entry, int weight, bool isItalic, int stretch, IReadOnlyList<RuneRange>? ranges)
+        {
+            return entry.Weight == weight && entry.Italic == isItalic && entry.Stretch == stretch
+                   && RangesEqual(entry.ExplicitRanges, ranges);
+        }
+
+        private static bool RangesEqual(IReadOnlyList<RuneRange>? a, IReadOnlyList<RuneRange>? b)
+        {
+            if (a is null || b is null)
+                return a is null && b is null;
+            if (a.Count != b.Count)
+                return false;
+            for (var i = 0; i < a.Count; i++)
+            {
+                if (!a[i].Equals(b[i]))
+                    return false;
+            }
+            return true;
         }
 
         private static (FrozenDictionary<string, string> Paths, FrozenDictionary<string, FontFamilyModel> Families) ParseSystemFonts(string[] sSupportedFonts)
@@ -323,9 +370,11 @@ namespace PeachPDF.PdfSharpCore.Utils
             foreach (var info in fontList)
             {
                 var isItalic = info.FontDescription.Style is XFontStyle.Italic or XFontStyle.BoldItalic;
-                var key = (info.FontDescription.Weight, isItalic, info.FontDescription.Stretch);
-                if (!font.Faces.ContainsKey(key))
-                    font.Faces.Add(key, info.FontDescription);
+                // System fonts declare no explicit unicode-range; their effective coverage is whatever
+                // their cmap supports (resolved lazily). Keep the first face seen per (weight, italic,
+                // stretch) - the same de-dup the previous dictionary key provided.
+                if (!font.Faces.Any(f => f.Weight == info.FontDescription.Weight && f.Italic == isItalic && f.Stretch == info.FontDescription.Stretch))
+                    font.Faces.Add(new FontFaceEntry(info.FontDescription.Weight, isItalic, info.FontDescription.Stretch, null, info.FontDescription));
             }
 
             return font;
@@ -351,6 +400,17 @@ namespace PeachPDF.PdfSharpCore.Utils
             return _CustomFonts.ContainsKey(fontFaceName) || _systemFontPaths.ContainsKey(fontFaceName);
         }
 
+        /// <summary>
+        /// Whether any face of <paramref name="familyName"/> declares an explicit <c>unicode-range</c>.
+        /// The layout fast path uses this to decide whether a word must be resolved per-codepoint (to
+        /// honor a ranged face) even when the family's default face already covers every character.
+        /// </summary>
+        public bool HasExplicitRanges(string familyName)
+        {
+            return InstalledFonts.TryGetValue(familyName.ToLower(), out var family)
+                   && family.Faces.Any(f => f.ExplicitRanges is not null);
+        }
+
         public bool NullIfFontNotFound { get; set; } = false;
 
         public virtual FontResolverInfo ResolveTypeface(string familyName, bool isBold, bool isItalic) =>
@@ -359,14 +419,26 @@ namespace PeachPDF.PdfSharpCore.Utils
         public virtual FontResolverInfo ResolveTypeface(string familyName, int weight, bool isItalic) =>
             ResolveTypeface(familyName, weight, isItalic, TtfFontDescription.DefaultStretch);
 
-        public virtual FontResolverInfo ResolveTypeface(string familyName, int weight, bool isItalic, int stretch)
+        public virtual FontResolverInfo ResolveTypeface(string familyName, int weight, bool isItalic, int stretch) =>
+            ResolveTypeface(familyName, weight, isItalic, stretch, codepoint: null);
+
+        /// <summary>
+        /// Resolves a face for <paramref name="familyName"/> at the requested axes, optionally restricted
+        /// to faces that actually cover <paramref name="codepoint"/> (its <c>unicode-range</c> or, absent
+        /// that, its cmap coverage). A codepoint-scoped request that finds no covering face returns null,
+        /// so per-codepoint font matching can move on to the next family in the stack instead of
+        /// substituting a face that cannot render the character. A codepoint-less request keeps the
+        /// previous behavior exactly (no coverage filter, plus the "give the caller something" last
+        /// resort), so ordinary box/metrics resolution is unchanged.
+        /// </summary>
+        public virtual FontResolverInfo ResolveTypeface(string familyName, int weight, bool isItalic, int stretch, Rune? codepoint)
         {
             if (InstalledFonts.Count == 0)
                 throw new System.IO.FileNotFoundException("No Fonts installed on this device!");
 
             if (InstalledFonts.TryGetValue(familyName.ToLower(), out var family))
             {
-                if (TryFindNearestFace(family, weight, isItalic, stretch, out var face))
+                if (TryFindNearestFace(family, weight, isItalic, stretch, codepoint, out var face))
                 {
                     // The chosen face may be a compromise (nearest-weight/slant match, not exact) -
                     // decide whether the gap is large enough that faux-bold/italic synthesis should
@@ -382,48 +454,93 @@ namespace PeachPDF.PdfSharpCore.Utils
                     return new FontResolverInfo(face.FontNameInvariantCulture, mustSimulateBold, mustSimulateItalic);
                 }
 
-                // Family is registered but somehow has zero faces at all (shouldn't happen in practice -
-                // every code path that creates a FontFamilyModel adds at least one) - fall through to the
-                // same "give the caller SOMETHING rather than nothing" behavior as an unknown family.
+                // Family is registered but has no face covering the request. For a codepoint-scoped
+                // request that is a real "this family can't render this character" signal (fall through
+                // to null below); for a codepoint-less request it should not happen (every family has at
+                // least one face) and falls through to the same last resort as an unknown family.
             }
+
+            // A codepoint-scoped miss must not substitute an arbitrary non-covering face - report it so
+            // the caller tries the next family (and ultimately the box default).
+            if (codepoint is not null)
+                return null;
 
             if (NullIfFontNotFound)
                 return null;
 
-            var description = InstalledFonts.First().Value.Faces.First().Value;
+            var description = InstalledFonts.First().Value.Faces[0].Description;
             return new FontResolverInfo(description.FontNameInvariantCulture);
         }
 
         /// <summary>
-        /// CSS Fonts Level 4 §5.2 face matching, narrowing in this order: italic/slant first, then
-        /// stretch, then weight. An exact (weight, italic, stretch) match short-circuits all of this.
-        /// Falls back to the nearest weight among ALL faces (any slant/stretch) only if the family has
-        /// no faces at all matching the requested italic-ness - a family with at least one registered
-        /// face always yields a result here.
+        /// CSS Fonts Level 4 §5 face matching. When <paramref name="codepoint"/> is supplied, only faces
+        /// whose effective coverage (explicit <c>unicode-range</c>, else lazily-computed cmap coverage)
+        /// includes it are candidates; among equally-good matches the last-declared wins (CSS cascade
+        /// order for overlapping ranges). Otherwise every face is a candidate. Within the candidates it
+        /// narrows italic/slant first, then stretch, then weight; an exact axis match short-circuits.
+        /// Returns false when no candidate face qualifies.
         /// </summary>
-        private static bool TryFindNearestFace(FontFamilyModel family, int weight, bool isItalic, int stretch, out TtfFontDescription face)
+        private bool TryFindNearestFace(FontFamilyModel family, int weight, bool isItalic, int stretch, Rune? codepoint, out TtfFontDescription face)
         {
-            if (family.Faces.TryGetValue((weight, isItalic, stretch), out face))
-                return true;
+            face = default;
 
-            var sameSlant = family.Faces.Where(kv => kv.Key.Italic == isItalic).ToList();
-            var candidates = sameSlant.Count > 0 ? sameSlant : family.Faces.ToList();
+            List<FontFaceEntry> covering = codepoint is Rune rune
+                ? family.Faces.Where(f => FaceCovers(f, rune)).ToList()
+                : family.Faces;
 
-            if (candidates.Count == 0)
-            {
-                face = default;
+            if (covering.Count == 0)
                 return false;
+
+            var exact = covering.Where(f => f.Weight == weight && f.Italic == isItalic && f.Stretch == stretch).ToList();
+            if (exact.Count > 0)
+            {
+                face = exact[^1].Description;
+                return true;
             }
 
-            var availableStretches = candidates.Select(kv => kv.Key.Stretch).Distinct().ToList();
-            var chosenStretch = PickNearestStretch(availableStretches, stretch);
-            var stretchCandidates = candidates.Where(kv => kv.Key.Stretch == chosenStretch).ToList();
+            var sameSlant = covering.Where(f => f.Italic == isItalic).ToList();
+            var candidates = sameSlant.Count > 0 ? sameSlant : covering;
 
-            var availableWeights = stretchCandidates.Select(kv => kv.Key.Weight).Distinct().ToList();
+            var availableStretches = candidates.Select(f => f.Stretch).Distinct().ToList();
+            var chosenStretch = PickNearestStretch(availableStretches, stretch);
+            var stretchCandidates = candidates.Where(f => f.Stretch == chosenStretch).ToList();
+
+            var availableWeights = stretchCandidates.Select(f => f.Weight).Distinct().ToList();
             var chosenWeight = PickNearestWeight(availableWeights, weight);
 
-            face = stretchCandidates.First(kv => kv.Key.Weight == chosenWeight).Value;
+            face = stretchCandidates.Last(f => f.Weight == chosenWeight).Description;
             return true;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="entry"/> is used for <paramref name="rune"/>: inside its declared
+        /// <c>unicode-range</c> if it has one, else inside what its font's cmap actually covers (computed
+        /// lazily and cached per face, so only faces of an actually-requested family are ever scanned).
+        /// </summary>
+        private bool FaceCovers(FontFaceEntry entry, Rune rune)
+        {
+            var ranges = entry.ExplicitRanges ?? GetOrComputeCoverage(entry.Description.FontNameInvariantCulture);
+            return CMapCoverage.Contains(ranges, rune);
+        }
+
+        private IReadOnlyList<RuneRange> GetOrComputeCoverage(string faceName)
+        {
+            if (_coverageCache.TryGetValue(faceName, out var cached))
+                return cached;
+
+            IReadOnlyList<RuneRange> coverage;
+            try
+            {
+                var fontSource = XFontSource.GetOrCreateFrom(GetFont(faceName));
+                coverage = CMapCoverage.Extract(fontSource.Fontface?.cmap);
+            }
+            catch
+            {
+                coverage = [];
+            }
+
+            _coverageCache[faceName] = coverage;
+            return coverage;
         }
 
         /// <summary>
