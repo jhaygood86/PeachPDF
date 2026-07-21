@@ -52,6 +52,20 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task SingleLayer_BackgroundRepeatY_TilesVertically()
+        {
+            var pdfText = await GetPdfText(ImageBoxHtml(
+                "background-size: 20pt 20pt; background-position: left top; background-repeat: repeat-y;"));
+
+            // "repeat-y" tiles multiple 20pt-tall copies starting from the padding-box top-left (30,
+            // 792) and moving down the page (decreasing PDF y) - mirrors the repeat-x assertions above
+            // for DrawRepeatY, the sibling code path to DrawRepeatX/DrawRepeat.
+            Assert.Matches(new Regex(@"q 20 0 0 20 30 792 cm"), pdfText); // first tile, padding-box top-left
+            Assert.Matches(new Regex(@"q 20 0 0 20 30 772 cm"), pdfText); // second tile, 20pt further down
+            Assert.Matches(new Regex(@"q 20 0 0 20 30 752 cm"), pdfText); // third tile
+        }
+
+        [Fact]
         public async Task MultipleLayers_BackgroundOriginAndClip_DifferPerLayer()
         {
             var pdfText = await GetPdfText(BoxHtml(

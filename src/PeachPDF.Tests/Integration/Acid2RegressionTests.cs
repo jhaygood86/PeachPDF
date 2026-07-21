@@ -1,5 +1,7 @@
 using PeachPDF;
 using PeachPDF.Adapters;
+using PeachPDF.Html.Adapters;
+using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
@@ -411,6 +413,39 @@ namespace PeachPDF.Tests.Integration
             var backgroundImage = Assert.Single(resolvedObjectWithBackground!.BackgroundImages!);
             var urlImage = Assert.IsType<PeachPDF.Html.Core.Entities.CssImage.Url>(backgroundImage);
             Assert.NotNull(urlImage.Image);
+        }
+
+        [Fact]
+        public async Task ZeroHeightContainer_OverflowingInlineReplacedContent_StillPaints()
+        {
+            // Regression: the two tests above only check that the eye-icon's image/background LOADED
+            // (BackgroundImages/Words populated) - neither actually paints, so neither would catch a
+            // paint-time-only regression (see this repo's testing conventions on content-stream/
+            // structural assertions not proving a feature renders). CssBox.Paint()'s own cheap "is this
+            // box's rectangle even in the visible clip" pre-check (for a box with Rectangles.Count > 0,
+            // i.e. inline-positioned content) intersected the CONTAINING BLOCK's ClientRectangle against
+            // the clip, not the box's own Rectangles - for "#eyes-a { height: 0; line-height: 2em }"
+            // (deliberately zero-height, with inline content positioned purely via line-height/
+            // vertical-align, exactly like this test's minimal "#target"), the containing block's own
+            // client rectangle is always zero-height, so the intersection was always zero-area and the
+            // nested replaced element's entire Paint() call - image, background, everything - was
+            // skipped outright, not just mis-measured. Caught by rasterizing the real Acid2 showcase and
+            // finding the eye-icon's own checkerboard-interlock background had vanished entirely (a much
+            // more complete failure than the narrow, already-accepted ~1em edge-case gap this area of
+            // Acid2 is documented to have).
+            var html = "<html><body>" +
+                "<div id='target' style='height:0; line-height:2em;'>" +
+                "<img id='icon' src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAABnRSTlMAAAAAAABupgeRAAAABmJLR0QA/wD/AP+gvaeTAAAAEUlEQVR42mP4/58BCv7/ZwAAHfAD/abwPj4AAAAASUVORK5CYII=' style='width:24px;height:24px;vertical-align:bottom;'>" +
+                "</div>" +
+                "</body></html>";
+            var (root, _) = await BuildAndLayout(html);
+            var icon = FindById(root, "icon")!;
+
+            var spy = new RecordingGraphics();
+            await icon.Paint(spy);
+
+            Assert.True(spy.DrawImageCallCount > 0,
+                "expected the inline replaced element inside a zero-height container to still paint its image");
         }
 
         [Fact]
@@ -846,6 +881,52 @@ namespace PeachPDF.Tests.Integration
                 if (found != null) return found;
             }
             return null;
+        }
+
+        /// <summary>
+        /// Minimal <see cref="Html.Adapters.RGraphics"/> recording just the DrawImage call count -
+        /// enough to prove a box's Paint() actually reached its image-drawing code, not merely that
+        /// the image loaded (see <see cref="ZeroHeightContainer_OverflowingInlineReplacedContent_StillPaints"/>).
+        /// Mirrors the established SpyGraphics/RecordingGraphics mock pattern used elsewhere in this
+        /// suite (e.g. TransformIntegrationTests.SpyGraphics) rather than a full PDF render.
+        /// </summary>
+        private sealed class RecordingGraphics : RGraphics
+        {
+            public int DrawImageCallCount { get; private set; }
+
+            public RecordingGraphics() : base(new PdfSharpAdapter(), new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
+
+            public override void DrawImage(RImage image, RRect destRect, RRect srcRect) => DrawImageCallCount++;
+            public override void DrawImage(RImage image, RRect destRect) => DrawImageCallCount++;
+            public override void PushTransform(RMatrix matrix) { }
+            public override void PopTransform() { }
+            public override void PushClip(RRect rect) => _clipStack.Push(rect);
+            public override void PushClip(RGraphicsPath path) => _clipStack.Push(_clipStack.Peek());
+            public override void PopClip() { if (_clipStack.Count > 1) _clipStack.Pop(); }
+            public override void PushClipExclude(RRect rect) { }
+            public override object SetAntiAliasSmoothingMode() => new object();
+            public override void ReturnPreviousSmoothingMode(object? prevMode) { }
+            public override RGraphicsPath GetGraphicsPath() => null!;
+            public override (RGraphics Graphics, RImage Image)? CreateTile(double width, double height) => null;
+            public override void DrawImageMasked(RImage image, RImage maskImage, RRect destRect) { }
+            public override void DrawImageWithOpacity(RImage image, RRect destRect, double opacity) { }
+            public override void BeginMarkedContent(string structureType, int mcid) { }
+            public override void EndMarkedContent() { }
+            public override void BeginArtifact() { }
+            public override RSize MeasureString(string str, RFont font) => new(0, 12);
+            public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth)
+            {
+                charFit = str?.Length ?? 0;
+                charFitWidth = 0;
+            }
+            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl, double letterSpacing = 0) { }
+            public override void DrawLine(RPen pen, double x1, double y1, double x2, double y2) { }
+            public override void DrawRectangle(RPen pen, double x, double y, double width, double height) { }
+            public override void DrawRectangle(RBrush brush, double x, double y, double width, double height) { }
+            public override void DrawPath(RPen pen, RGraphicsPath path) { }
+            public override void DrawPath(RBrush brush, RGraphicsPath path) { }
+            public override void DrawPolygon(RBrush brush, RPoint[] points) { }
+            public override void Dispose() { }
         }
     }
 }
