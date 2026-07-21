@@ -691,6 +691,13 @@ namespace PeachPDF.Html.Core
             // the point-space sheet, and the public wrappers scale PageSize and margins by PixelsPerPoint.
             var sheetPx = PageSize.Width + MarginLeft + MarginRight;
             var bandWidth = sheetPx - (geom.MarginLeftPt + geom.MarginRightPt) * ppp;
+
+            // Degenerate override (left+right margins consume the whole sheet): fall back to the base
+            // measure, the horizontal mirror of PageGeometryTable.Compute's band-height clamp, so a
+            // pathological @page rule can never collapse content to a zero/negative width.
+            if (bandWidth < 1.0)
+                return MarginLeft + PageSize.Width;
+
             return MarginLeft + bandWidth;
         }
 

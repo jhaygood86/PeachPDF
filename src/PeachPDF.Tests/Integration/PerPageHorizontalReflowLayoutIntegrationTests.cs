@@ -138,6 +138,36 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task BodyMargin_RightInsetRespected_ContentDoesNotOverrunBodyMargin()
+        {
+            // The containing block (body) carries a non-zero margin, so a reflowed main-column paragraph
+            // must stay inside body's margin box: its right edge lands one body-right-margin short of the
+            // page-area edge, not flush against it. Regression guard for the containing-block right inset
+            // (the horizontal mirror of ClientLeft) - without it the block overruns body's right margin.
+            var container = await BuildLayoutAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 50pt; }
+                @page :first { margin-left: 0; }
+                body { margin: 20pt; }
+                p { margin: 0; }
+                </style></head><body>
+                <p id='p0'>first page paragraph inside a margined body</p>
+                </body></html>
+                """);
+
+            var p0 = FindById(container.Root!, "p0")!;
+            Assert.Equal(0, container.PageIndexOf(p0.Location.Y));
+
+            // Page 0's area right edge is 612 (margin-left:0, right stays base 50). body's 20pt margins
+            // inset the content box on both sides: left = base 50 + 20 = 70, right = 612 - 20 = 592.
+            const double pageAreaRight = BaseMargin + (SheetW - 0 - BaseMargin); // 612
+            Assert.Equal(70, p0.Location.X, 0.5);
+            Assert.Equal(pageAreaRight - 20, p0.ActualRight, 0.5);
+            Assert.True(p0.ActualRight < container.PageContentRightOf(p0.Location.Y),
+                "content must stay inside body's right margin, not reach the page-area edge");
+        }
+
+        [Fact]
         public async Task ManyParagraphsAcrossPages_ReflowConverges_EachBlockOwnPageMeasure()
         {
             // Many separate main-column paragraphs flow across several pages with a wide first page.
@@ -178,6 +208,53 @@ namespace PeachPDF.Tests.Integration
             Assert.NotEmpty(laterPages);
             Assert.True(pageZero.Max(b => b.ActualRight) > laterPages.Min(b => b.ActualRight),
                 "the full-bleed first page should reflow wider than the base-margin later pages");
+        }
+
+        [Fact]
+        public async Task ConstrainedBody_ExplicitWidth_DoesNotReflow()
+        {
+            // body has an explicit width, so the main column no longer spans the page area: per-page
+            // reflow is not applied and a child resolves against body's constrained width instead of the
+            // wide page-0 measure (accepted gap - see issues #199/#201).
+            var container = await BuildLayoutAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 50pt; }
+                @page :first { margin-left: 0; }
+                body { margin: 0; width: 300pt; }
+                p { margin: 0; }
+                </style></head><body>
+                <p id='p0'>constrained-body paragraph</p>
+                </body></html>
+                """);
+
+            var p0 = FindById(container.Root!, "p0")!;
+            Assert.Equal(0, container.PageIndexOf(p0.Location.Y));
+            // body is 300pt wide at the base left origin (50); p0 fills that, NOT the wide page-0 area.
+            Assert.Equal(BaseMargin + 300, p0.ActualRight, 0.5);
+            Assert.True(p0.ActualRight < container.PageContentRightOf(p0.Location.Y),
+                "a constrained containing block must not be widened to the page area");
+        }
+
+        [Fact]
+        public async Task DegenerateOverride_MarginsConsumeSheet_FallsBackToBaseMeasure()
+        {
+            // Left+right margins wider than the sheet would collapse the content box; PageContentRightOf
+            // falls back to the base measure (mirror of the vertical band-height clamp) so content never
+            // gets a zero/negative width.
+            var container = await BuildLayoutAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 50pt; }
+                @page :first { margin-left: 700pt; }
+                body { margin: 0; }
+                p { margin: 0; }
+                </style></head><body>
+                <p id='p0'>degenerate-margin paragraph</p>
+                </body></html>
+                """);
+
+            var p0 = FindById(container.Root!, "p0")!;
+            Assert.Equal(BaseRightEdge, container.PageContentRightOf(p0.Location.Y), 0.5);
+            Assert.Equal(BaseRightEdge, p0.ActualRight, 0.5);
         }
 
         [Fact]
