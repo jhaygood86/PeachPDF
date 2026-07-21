@@ -220,12 +220,17 @@ namespace PeachPDF.Html.Adapters
 
             var resourceStream = await GetResourceStream(resolvedUri);
 
-            if (resourceStream?.ResourceStream is not null)
+            if (resourceStream?.ResourceStream is null)
             {
-                return await AddFontFromStream(fontFamilyName, resourceStream.ResourceStream, format, weightOverride, isItalicOverride, stretchOverride, unicodeRanges);
+                return false;
             }
 
-            return false;
+            // Dispose the response stream once the font is loaded - AddFontFromStream copies the bytes up
+            // front (see PdfSharpAdapter.AddFont's CopyToAsync), so nothing needs it afterward. Critically,
+            // for a local FileUriNetworkLoader font this is a FileStream, and leaving it open keeps a handle
+            // on the file - which locks it on Windows (a real bug, and it broke temp-file cleanup in tests).
+            using var fontStream = resourceStream.ResourceStream;
+            return await AddFontFromStream(fontFamilyName, fontStream, format, weightOverride, isItalicOverride, stretchOverride, unicodeRanges);
         }
 
         public async Task<bool> AddLocalFontFamily(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<RuneRange>? unicodeRanges = null)

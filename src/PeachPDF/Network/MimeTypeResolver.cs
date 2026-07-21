@@ -326,7 +326,7 @@ namespace PeachPDF.Network
             // ---- Windows: Shlwapi AssocQueryString ----
 
             internal const int AssocfNone = 0;
-            internal const int AssocStrContentType = 12; // ASSOCSTR_CONTENTTYPE
+            internal const int AssocStrContentType = 14; // ASSOCSTR_CONTENTTYPE (12 is ASSOCSTR_QUICKTIP, which returns a "prop:…" tooltip string)
 
             [DllImport("Shlwapi.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = false)]
             internal static extern int AssocQueryStringW(int flags, int str, string pszAssoc, string? pszExtra, StringBuilder? pszOut, ref uint pcchOut);

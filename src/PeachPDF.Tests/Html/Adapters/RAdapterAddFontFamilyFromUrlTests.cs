@@ -28,5 +28,20 @@ namespace PeachPDF.Tests.Html.Adapters
 
             await adapter.AddFontFamilyFromUrl("TestFont", "fonts/relative.ttf", null, baseUri: null);
         }
+
+        [Fact]
+        public async Task AbsoluteUrl_MissingResource_ReturnsFalse()
+        {
+            var adapter = new PdfSharpAdapter();
+
+            // An absolute file: URL that resolves but has nothing behind it: GetResourceStream returns
+            // null, so the font simply doesn't load (no throw, returns false).
+            var missing = new Uri(System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(), "peachpdf-no-such-font-" + Guid.NewGuid().ToString("N") + ".ttf"));
+
+            var result = await adapter.AddFontFamilyFromUrl("TestFont", missing.AbsoluteUri, null);
+
+            Assert.False(result);
+        }
     }
 }
