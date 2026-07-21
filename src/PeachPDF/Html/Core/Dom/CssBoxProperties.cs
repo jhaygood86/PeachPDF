@@ -325,6 +325,18 @@ namespace PeachPDF.Html.Core.Dom
         public string CounterSet { get; set; } = CssConstants.None;
         public string StringSet { get; set; } = CssConstants.None;
         public string PageName { get; set; } = string.Empty;
+
+        /// <summary>
+        /// The <em>used</em> value of the CSS <c>page</c> property for this box (CSS Paged Media
+        /// Level 3 §3): this box's own <see cref="PageName"/> unless it is empty/<c>auto</c>, in which
+        /// case the parent box's used value (the root's <c>auto</c> resolves to <see cref="string.Empty"/>).
+        /// Unlike <see cref="PageName"/> this propagates down the box tree, so a later sibling of a
+        /// named-page element correctly reverts to its ancestors' used page rather than inheriting the
+        /// named page in document flow order. Computed top-down in <see cref="Dom.CssBox.PerformLayoutImp"/>
+        /// and recomputed every layout pass - not a cascaded property, so it is intentionally absent
+        /// from <see cref="InheritStyle"/>.
+        /// </summary>
+        internal string UsedPageName { get; set; } = string.Empty;
         public string PdfTagType { get; set; } = CssConstants.Auto;
 
         public string MarginBottom { get; set; } = "0";

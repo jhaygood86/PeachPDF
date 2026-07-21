@@ -157,6 +157,53 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(chapterBox.Location.Y, registered.Y, 1);
         }
 
+        [Fact]
+        public async Task FollowingSibling_OfNamedPage_RegistersReversionToDefault()
+        {
+            // Issue #126: after a named-page element, a following sibling with no `page` of its own
+            // must revert to the default page - registered as an empty-name reversion entry - so the
+            // named page's margins/margin boxes stop applying to later default content instead of
+            // leaking forward.
+            var html = Wrap("""
+                <div id="d1">default</div>
+                <div id="wide" style="page:wide">wide</div>
+                <div id="d3">default again</div>
+                """);
+
+            var (_, container) = await BuildAndLayout(html);
+
+            var names = container.NamedPageElements.Select(e => e.Name).ToList();
+            // The wide element registers its name; the following sibling registers a reversion to "".
+            Assert.Contains("wide", names);
+            Assert.Contains(string.Empty, names);
+            // The reversion is the last transition, so the active page ends back at the default.
+            Assert.Equal(string.Empty, container.ActivePageName);
+        }
+
+        [Fact]
+        public async Task FollowingSibling_InsideOuterNamedPage_RevertsToOuter_NotDefault()
+        {
+            // The used value of `page` is tree-based: a reverting box adopts its PARENT box's used
+            // value, not always the empty default. A sibling that follows an inner named page but is
+            // still inside an outer named container must revert to the OUTER name.
+            var html = Wrap("""
+                <div id="outer" style="page:outer">
+                    <div id="inner" style="page:inner">inner</div>
+                    <div id="back">back to outer</div>
+                </div>
+                """);
+
+            var (_, container) = await BuildAndLayout(html);
+
+            var names = container.NamedPageElements.Select(e => e.Name).ToList();
+            Assert.Contains("outer", names);
+            Assert.Contains("inner", names);
+            // The revert does NOT go all the way to "" - it lands on the enclosing outer named page,
+            // which is also where the active page ends.
+            Assert.DoesNotContain(string.Empty, names);
+            Assert.Equal("outer", container.ActivePageName);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>
