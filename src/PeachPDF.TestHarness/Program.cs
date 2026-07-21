@@ -953,6 +953,49 @@ await SaveShowcaseAsync("paged_media", "Paged Media", "Paged Media",
     "url() logo image in a margin box (@top-left-corner).",
     pagedMediaHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// ─── CSS Paged Media showcase — margin-box image alignment ─────────────────
+
+// A margin box's image content follows the box's alignment exactly as text does (CSS Paged
+// Media Level 3 §7.2): the default follows the box's position - @top-left flush left, @top-center
+// centered, @top-right flush right - and an explicit text-align applies. The same peach logo is
+// dropped into each of the three top boxes with no per-box width, so its horizontal placement is
+// driven purely by alignment; the bottom row adds an explicit text-align: right override.
+var marginImageAlignHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    @page {
+      size: A4 portrait;
+      margin: 22mm 20mm 22mm 20mm;
+      @top-left    { content: url('{{PEACH_DATA_URI}}'); }
+      @top-center  { content: url('{{PEACH_DATA_URI}}'); }
+      @top-right   { content: url('{{PEACH_DATA_URI}}'); }
+      @bottom-left { content: url('{{PEACH_DATA_URI}}'); text-align: right; }
+      @bottom-right { content: "explicit text-align: right \2192"; font: 8pt Arial; color: #888; vertical-align: middle; }
+    }
+    body { font: 11pt Arial, sans-serif; color: #333; margin: 0; }
+    h1 { font-size: 20pt; margin: 0 0 12pt; }
+    p  { margin: 0 0 8pt; line-height: 1.6; }
+    </style>
+    </head>
+    <body>
+      <h1>Margin-box image alignment</h1>
+      <p>The peach logo appears three times across the top margin: flush to the left in
+      <code>@top-left</code>, centered in <code>@top-center</code>, and flush to the right in
+      <code>@top-right</code> &mdash; each placed purely by the margin box's default alignment,
+      with no explicit box width.</p>
+      <p>In the bottom-left box the logo carries an explicit <code>text-align: right</code>, so it
+      hugs the right edge of its box instead of its default left.</p>
+    </body>
+    </html>
+    """.Replace("{{PEACH_DATA_URI}}", peachDataUri);
+
+await SaveShowcaseAsync("margin_box_image_alignment", "Paged Media", "Margin-box Image Alignment",
+    "An image in a @page margin box follows the box's alignment like text does: default from the " +
+    "box position (@top-left/@top-center/@top-right) plus an explicit text-align override.",
+    marginImageAlignHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // ─── CSS Paged Media showcase — named strings (string-set / string()) ──────
 
 var namedStringsHtml = """
@@ -3368,17 +3411,17 @@ var catalogHtml = $$"""
     }
     /* Book-style running furniture, mirrored between left- and right-hand pages:
        the product name sits at the top on the matching (outside) side, aligned to
-       that edge; the company logo (a real image in a margin box) sits at top-center
-       with the box width pinned to the image so it truly centers; the folio sits in
-       the inside (gutter) bottom corner */
+       that edge; the company logo (a real image in a margin box) sits at top-center,
+       centered within the box by the margin box's own default alignment (no explicit
+       box width needed); the folio sits in the inside (gutter) bottom corner */
     @page :right {
       @top-right { content: string(item-name); font: italic 8.5pt Georgia, serif; color: #666; }
-      @top-center { content: url("{{catalogLogoDataUri}}"); width: 20px; }
+      @top-center { content: url("{{catalogLogoDataUri}}"); }
       @bottom-left { content: counter(page); font: 9pt Georgia, serif; color: #8a5a3b; }
     }
     @page :left {
       @top-left { content: string(item-name); font: italic 8.5pt Georgia, serif; color: #666; }
-      @top-center { content: url("{{catalogLogoDataUri}}"); width: 20px; }
+      @top-center { content: url("{{catalogLogoDataUri}}"); }
       @bottom-right { content: counter(page); font: 9pt Georgia, serif; color: #8a5a3b; }
     }
     @page :first {

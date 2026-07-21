@@ -88,6 +88,117 @@ namespace PeachPDF.Tests.Integration
             Assert.InRange(y, 800, 841.89);
         }
 
+        // ─── Issue #140: margin-box images follow the box's alignment ──────────
+        //
+        // A margin box's image content must be placed within the box the same way its text content
+        // is: per CSS Paged Media Level 3 §7.2 the box's default text-align follows its position
+        // (@top-right end-aligned, @top-center centered) and an explicit text-align applies. Before
+        // the fix a margin-box image was always hard-anchored at the box's content-start (left edge),
+        // ignoring both the default and any explicit alignment. These assert the actual `cm ... Do`
+        // translation (a substring match alone can't tell a right-aligned image from a left-aligned
+        // one), parsing the x coordinate exactly as the top-left test above does.
+
+        private static (double X, double Y) GetImagePlacement(string pdfText)
+        {
+            var match = Regex.Match(pdfText, @"[\d.]+ 0 0 [\d.]+ (\d+\.\d+) (\d+\.\d+) cm /\w+ Do");
+            Assert.True(match.Success, "Expected an axis-aligned image `cm ... Do` placement in the content stream.");
+            return (
+                double.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture),
+                double.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture));
+        }
+
+        [Fact]
+        public async Task RasterUrlContent_TopRight_ImageFlushToRightContentEdge()
+        {
+            var pdfText = await GetPdfText($"@top-right {{ content: url(\"data:image/png;base64,{PngBase64}\"); }}");
+
+            var (x, _) = GetImagePlacement(pdfText);
+
+            // A4 = 595.28pt wide, 20mm ≈ 56.69pt margins → right content edge ≈ 538.58pt. The
+            // 1x1 PNG is 0.75pt wide, so a right-aligned image's left edge lands at ≈537.8, NOT
+            // ~2/3 across the page (where the @top-right box merely begins).
+            Assert.InRange(x, 534, 539);
+        }
+
+        [Fact]
+        public async Task RasterUrlContent_TopCenter_ImageHorizontallyCentered()
+        {
+            var pdfText = await GetPdfText($"@top-center {{ content: url(\"data:image/png;base64,{PngBase64}\"); }}");
+
+            var (x, _) = GetImagePlacement(pdfText);
+
+            // Centered image: its left edge sits half its own 0.75pt width left of the page centre
+            // (595.28 / 2 ≈ 297.64), i.e. ≈297.3 — not the left edge of the centre box (~217).
+            Assert.InRange(x, 295, 300);
+        }
+
+        [Fact]
+        public async Task RasterUrlContent_ExplicitTextAlignRight_OverridesInferredCenter()
+        {
+            // text-align:right on a box whose inferred default is center (@top-center) must move the
+            // image to the right edge of the centre box (contentLeft + tL + tC ≈ 377.9), proving the
+            // explicit value reaches images, not just the position-inferred default.
+            var pdfText = await GetPdfText(
+                $"@top-center {{ content: url(\"data:image/png;base64,{PngBase64}\"); text-align: right; }}");
+
+            var (x, _) = GetImagePlacement(pdfText);
+
+            Assert.InRange(x, 374, 379);
+        }
+
+        [Fact]
+        public async Task RasterUrlContent_ExplicitTextAlignRight_OverridesInferredLeft()
+        {
+            // The mirror case: text-align:right on a box whose inferred default is left (@top-left)
+            // must push the image to the right edge of the left box (contentLeft + tL ≈ 217.3),
+            // rather than staying at the box's left content-start (≈56.7) where it defaults.
+            var pdfText = await GetPdfText(
+                $"@top-left {{ content: url(\"data:image/png;base64,{PngBase64}\"); text-align: right; }}");
+
+            var (x, _) = GetImagePlacement(pdfText);
+
+            Assert.InRange(x, 214, 219);
+        }
+
+        // Vertical alignment: like text, a margin-box image defaults to vertical-align: middle
+        // (centered in the margin band) and honors an explicit top/bottom. PDF's y-axis runs
+        // bottom-up, so a larger y is nearer the top of the page. The top row's boxes are the full
+        // top-margin height (20mm ≈ 56.69pt) tall; a 0.75pt-tall image lands near the page top
+        // (y ≈ 841.1) for `top`, mid-band (y ≈ 813.2) for the middle default, and near the band's
+        // bottom (y ≈ 785.2) for `bottom`.
+
+        [Fact]
+        public async Task RasterUrlContent_DefaultVerticalAlign_CentersInMarginBand()
+        {
+            var pdfText = await GetPdfText($"@top-center {{ content: url(\"data:image/png;base64,{PngBase64}\"); }}");
+
+            var (_, y) = GetImagePlacement(pdfText);
+
+            Assert.InRange(y, 810, 816);
+        }
+
+        [Fact]
+        public async Task RasterUrlContent_VerticalAlignTop_AnchorsToBandTop()
+        {
+            var pdfText = await GetPdfText(
+                $"@top-center {{ content: url(\"data:image/png;base64,{PngBase64}\"); vertical-align: top; }}");
+
+            var (_, y) = GetImagePlacement(pdfText);
+
+            Assert.InRange(y, 839, 841.89);
+        }
+
+        [Fact]
+        public async Task RasterUrlContent_VerticalAlignBottom_AnchorsToBandBottom()
+        {
+            var pdfText = await GetPdfText(
+                $"@top-center {{ content: url(\"data:image/png;base64,{PngBase64}\"); vertical-align: bottom; }}");
+
+            var (_, y) = GetImagePlacement(pdfText);
+
+            Assert.InRange(y, 783, 788);
+        }
+
         [Fact]
         public async Task SvgUrlContent_RendersAsVectorContentNotRasterImage()
         {
