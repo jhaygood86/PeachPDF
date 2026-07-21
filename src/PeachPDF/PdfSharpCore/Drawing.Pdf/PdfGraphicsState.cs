@@ -198,7 +198,11 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             }
             else if (colorMode != PdfColorMode.Cmyk)
             {
-                if (_realizedStrokeColor.Rgb != color.Rgb)
+                // The IsEmpty guard mirrors the fill side (RealizeFillColor): after a brush/pattern
+                // stroke the tracked color is reset to Empty, and a following solid stroke must then
+                // re-emit its DeviceRGB color to switch the stroke color space back out of /Pattern -
+                // otherwise it would silently keep stroking with the previous shape's shading pattern.
+                if (_realizedStrokeColor.IsEmpty || _realizedStrokeColor.Rgb != color.Rgb)
                 {
                     _renderer.Append(PdfEncoders.ToString(color, PdfColorMode.Rgb));
                     _renderer.Append(" RG\n");
@@ -213,17 +217,30 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 }
             }
 
-            if (_renderer.Owner.Version >= 14 && (_realizedStrokeColor.A != color.A || _realizedStrokeOverPrint != overPrint))
+            // A pen that strokes with a brush (e.g. an SVG stroke="url(#gradient)") carries no
+            // meaningful pen.Color: the brush constructor leaves it at the default transparent black,
+            // so color.A is 0. The brush itself supplies the stroke's color, and any real transparency
+            // rides the brush's own soft-mask ExtGState (see RealizeBrush), so the constant stroke
+            // alpha must stay fully opaque. Driving /CA from color.A here would emit /CA 0 and make the
+            // whole brush stroke invisible whenever the previously realized stroke alpha wasn't already
+            // 0 (e.g. right after any opaque solid stroke).
+            double strokeAlpha = pen.Brush != null ? 1.0 : color.A;
+
+            if (_renderer.Owner.Version >= 14 && (_realizedStrokeColor.A != strokeAlpha || _realizedStrokeOverPrint != overPrint))
             {
-                PdfExtGState extGState = _renderer.Owner.ExtGStateTable.GetExtGStateStroke(color.A, overPrint);
+                PdfExtGState extGState = _renderer.Owner.ExtGStateTable.GetExtGStateStroke(strokeAlpha, overPrint);
                 string gs = _renderer.Resources.AddExtGState(extGState);
                 _renderer.AppendFormatString("{0} gs\n", gs);
 
                 // Must create transparency group.
-                if (_renderer._page != null && color.A < 1)
+                if (_renderer._page != null && strokeAlpha < 1)
                     _renderer._page.TransparencyUsed = true;
             }
-            _realizedStrokeColor = color;
+            // A brush stroke switched the stroke color space to /Pattern and painted through the brush;
+            // invalidate the tracked stroke color (as RealizeBrush already does for the fill side) so a
+            // following solid stroke re-establishes its own DeviceRGB/CMYK color instead of reusing this
+            // pattern. Solid strokes keep tracking their realized color for the dedup above.
+            _realizedStrokeColor = pen.Brush != null ? XColor.Empty : color;
             _realizedStrokeOverPrint = overPrint;
         }
 

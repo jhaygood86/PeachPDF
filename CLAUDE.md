@@ -37,6 +37,7 @@ If a new or changed feature gives PeachPDF a new visible capability, add a new s
 - `src/PeachPDF.TestHarness/` — a runnable showcase app for visually exercising features (`Program.cs`).
 - `src/PeachPDF.Benchmarks/` — BenchmarkDotNet project.
 - Working directory for `dotnet build`/`dotnet test` is `src/` — if a shell session resets to repo root, commands silently fail with "Project file does not exist"; always confirm you're in `src/` first.
+- If the .NET SDK is missing (e.g. a fresh sandboxed/web session), install it with `apt` — `sudo apt-get install -y dotnet-sdk-10.0` (add `aspnetcore-runtime-8.0` so the net8.0 target framework can run). The `dot.net/v1/dotnet-install.sh` route is blocked in this environment (the Microsoft CDN host returns 403 through the egress proxy), so apt is the working path. `global.json` pins SDK 10.0.100 (rollForward `latestFeature`), which the apt `dotnet-sdk-10.0` (10.0.1xx) satisfies.
 
 ## Critical: `dotnet test` invocation
 
