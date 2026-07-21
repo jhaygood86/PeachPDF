@@ -305,4 +305,85 @@ namespace PeachPDF.Tests.Integration
             return (adapter, container);
         }
     }
+
+    /// <summary>
+    /// Regression tests for the margin-box <b>text</b> alignment corrected alongside issue #140.
+    /// <c>MarginBoxRenderer.ResolveAlignment</c> is shared between the text
+    /// (<c>BuildStringFormat</c>) and image paths; before the fix its
+    /// <c>?? InferAlignment</c> fallback was dead code (an unset <c>text-align</c> reads as
+    /// <see cref="string.Empty"/>, not <c>null</c>), so every margin box's text was centered within
+    /// its box regardless of position. Per CSS Paged Media Level 3 §7.2 an unset <c>text-align</c>
+    /// must follow the box's position (<c>@top-left</c> start-aligned, <c>@top-right</c> end-aligned,
+    /// <c>@top-center</c> centered). These assert the actual <c>Td</c> x-translation of the running
+    /// header text (a single margin box per case, so its <c>Td</c> is absolute), guarding the text
+    /// path directly rather than only via the image tests.
+    /// </summary>
+    public class MarginBoxRendererTextAlignmentTests
+    {
+        private static async Task<string> GetPdfText(string marginBoxCss)
+        {
+            var html = $$"""
+                <!DOCTYPE html><html><head><style>
+                @page { size: A4; margin: 20mm; {{marginBoxCss}} }
+                </style></head><body><p>body</p></body></html>
+                """;
+
+            var generator = new PdfGenerator();
+            var config = new PdfGenerateConfig { PageSize = PageSize.A4, CompressContentStreams = false };
+            var doc = await generator.GeneratePdf(html, config);
+            var ms = new MemoryStream();
+            doc.Save(ms);
+            return Encoding.Latin1.GetString(ms.ToArray());
+        }
+
+        // The running header text lands high on an A4 page (y ≈ 809.8, well above the body's
+        // y ≈ 762.9); a single margin box emits exactly one `x y Td <glyphs> Tj` whose x is the
+        // absolute left edge of the (aligned) text. PeachPDF uses CID fonts, so the shown text is
+        // hex glyph ids - we key off the y band, not the (unreadable) glyph bytes.
+        private static double GetHeaderTextX(string pdfText)
+        {
+            var match = Regex.Match(pdfText, @"(\d+\.\d+) (8\d\d\.\d+) Td <[0-9A-Fa-f]+> Tj");
+            Assert.True(match.Success, "Expected a running-header `x y Td <...> Tj` text placement in the top band.");
+            return double.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+        }
+
+        [Fact]
+        public async Task TopLeftDefault_TextIsFlushLeft()
+        {
+            // The key regression guard: before the ResolveAlignment fix this text was centered in the
+            // left box (x ≈ 137); it must now start flush at the left content edge (20mm ≈ 56.69pt).
+            var x = GetHeaderTextX(await GetPdfText("@top-left { content: \"X\"; }"));
+
+            Assert.InRange(x, 54, 62);
+        }
+
+        [Fact]
+        public async Task TopRightDefault_TextIsRightAligned()
+        {
+            // Right-aligned within the rightmost box: the text's right edge meets the right content
+            // edge (≈538.6pt), so its left edge sits distinctly to the right of centre.
+            var x = GetHeaderTextX(await GetPdfText("@top-right { content: \"X\"; }"));
+
+            Assert.InRange(x, 520, 539);
+        }
+
+        [Fact]
+        public async Task TopCenterDefault_TextIsCentered()
+        {
+            // Centered on the page (595.28 / 2 ≈ 297.6), so the text's left edge sits just left of it.
+            var x = GetHeaderTextX(await GetPdfText("@top-center { content: \"X\"; }"));
+
+            Assert.InRange(x, 285, 297);
+        }
+
+        [Fact]
+        public async Task ExplicitTextAlignRight_OverridesInferredLeft()
+        {
+            // text-align:right on a @top-left box (inferred default left) pushes the text to the right
+            // edge of the left box (contentLeft + tL ≈ 217.3), well right of its flush-left default.
+            var x = GetHeaderTextX(await GetPdfText("@top-left { content: \"X\"; text-align: right; }"));
+
+            Assert.InRange(x, 205, 218);
+        }
+    }
 }
