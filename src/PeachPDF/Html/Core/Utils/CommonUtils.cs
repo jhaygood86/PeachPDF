@@ -71,12 +71,6 @@ namespace PeachPDF.Html.Core.Utils
         ];
 
         /// <summary>
-        /// the temp path to use for local files
-        /// </summary>
-        public static string? _tempPath;
-
-
-        /// <summary>
         /// Check if the given codepoint is of Asian range. Takes a <see cref="Rune"/> (a whole Unicode
         /// scalar value) rather than a <c>char</c>: the range 0x4E00-0xFA2D otherwise wrongly includes the
         /// UTF-16 surrogate range (0xD800-0xDFFF), which would classify each half of an astral character
@@ -148,24 +142,44 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         /// <summary>
-        /// Get Uri object for the given path if it is valid uri path.
+        /// Resolves <paramref name="src"/> (a <c>src</c>/<c>href</c>/<c>url()</c> reference) to an absolute
+        /// URI against the document's base URI, the single place this resolution rule lives for images and
+        /// stylesheets alike. Precedence: an explicit <paramref name="overrideBaseUri"/> (e.g. the location
+        /// of an importing stylesheet, against which its own relative references resolve) if given, else a
+        /// <c>&lt;base href&gt;</c> element, else the adapter's base URI (which defaults to the current
+        /// working directory as a <c>file:</c> URI, so relative references load from disk by default).
+        /// Returns <c>null</c> when the reference cannot be resolved to any URI.
         /// </summary>
-        /// <param name="path">the path to get uri for</param>
-        /// <returns>uri or null if not valid</returns>
-        public static RUri? TryGetUri(string path)
+        /// <param name="htmlContainer">the container whose document base and adapter to resolve against</param>
+        /// <param name="src">the (possibly relative) reference to resolve</param>
+        /// <param name="overrideBaseUri">a base URI that takes precedence over the document's own base, if any</param>
+        public static RUri? ResolveAgainstDocumentBase(HtmlContainerInt htmlContainer, string src, RUri? overrideBaseUri = null)
         {
+            RUri? baseUri;
+
+            if (overrideBaseUri is not null)
+            {
+                baseUri = overrideBaseUri;
+            }
+            else
+            {
+                var baseElement = DomUtils.GetBoxByTagName(htmlContainer.Root, "base");
+                var baseHref = baseElement?.HtmlTag?.TryGetAttribute("href", "");
+                baseUri = string.IsNullOrWhiteSpace(baseHref) ? htmlContainer.Adapter.BaseUri : new RUri(baseHref);
+            }
+
             try
             {
                 // Deliberately not pre-filtered with Uri.IsWellFormedUriString: it applies stricter
                 // generic-syntax rules than Uri's own parser and rejects some URIs Uri/RUri parse
-                // correctly (e.g. certain percent-encoded `data:` URIs) - RUri's constructor already
-                // performs real validation, and any failure is caught below.
-                return new RUri(path);
+                // correctly (e.g. certain percent-encoded `data:` URIs). new Uri(base, src) resolves an
+                // absolute src as-is, so this handles absolute and relative references uniformly.
+                return baseUri is null ? new RUri(src, UriKind.RelativeOrAbsolute) : new RUri(baseUri, src);
             }
-            catch
-            { }
-
-            return null;
+            catch (UriFormatException)
+            {
+                return null;
+            }
         }
 
         /// <summary>
@@ -184,92 +198,6 @@ namespace PeachPDF.Html.Core.Utils
                 return value.Value;
 
             return defaultValue;
-        }
-
-        /// <summary>
-        /// Get file info object for the given path if it is valid file path.
-        /// </summary>
-        /// <param name="path">the path to get file info for</param>
-        /// <returns>file info or null if not valid</returns>
-        public static FileInfo? TryGetFileInfo(string path)
-        {
-            try
-            {
-                return new FileInfo(path);
-            }
-            catch
-            { }
-
-            return null;
-        }
-
-        /// <summary>
-        /// Gets the representation of the online uri on the local disk.
-        /// </summary>
-        /// <param name="imageUri">The online image uri.</param>
-        /// <returns>The path of the file on the disk.</returns>
-        public static FileInfo? GetLocalFileName(RUri imageUri)
-        {
-            StringBuilder fileNameBuilder = new();
-            string absoluteUri = imageUri.AbsoluteUri;
-            int lastSlash = absoluteUri.LastIndexOf('/');
-            if (lastSlash == -1)
-            {
-                return null;
-            }
-
-            string uriUntilSlash = absoluteUri[..lastSlash];
-            fileNameBuilder.Append(uriUntilSlash.GetHashCode());
-            fileNameBuilder.Append('_');
-
-            string restOfUri = absoluteUri[(lastSlash + 1)..];
-            int indexOfParams = restOfUri.IndexOf('?');
-            if (indexOfParams == -1)
-            {
-                string ext = ".png";
-                int indexOfDot = restOfUri.IndexOf('.');
-                if (indexOfDot > -1)
-                {
-                    ext = restOfUri[indexOfDot..];
-                    restOfUri = restOfUri[..indexOfDot];
-                }
-
-                fileNameBuilder.Append(restOfUri);
-                fileNameBuilder.Append(ext);
-            }
-            else
-            {
-                int indexOfDot = restOfUri.IndexOf('.');
-                if (indexOfDot == -1 || indexOfDot > indexOfParams)
-                {
-                    //The uri is not for a filename
-                    fileNameBuilder.Append(restOfUri);
-                    fileNameBuilder.Append(".png");
-                }
-                else if (indexOfParams > indexOfDot)
-                {
-                    //Adds the filename without extension.
-                    fileNameBuilder.Append(restOfUri, 0, indexOfDot);
-                    //Adds the parameters
-                    fileNameBuilder.Append(restOfUri, indexOfParams, restOfUri.Length - indexOfParams);
-                    //Adds the filename extension.
-                    fileNameBuilder.Append(restOfUri, indexOfDot, indexOfParams - indexOfDot);
-                }
-            }
-
-            var validFileName = GetValidFileName(fileNameBuilder.ToString());
-            if (validFileName.Length > 25)
-            {
-                validFileName = validFileName[..24] + validFileName[24..].GetHashCode() + Path.GetExtension(validFileName);
-            }
-
-            if (_tempPath != null) return new FileInfo(Path.Combine(_tempPath, validFileName));
-
-            _tempPath = Path.Combine(Path.GetTempPath(), "HtmlRenderer");
-            if (!Directory.Exists(_tempPath))
-                Directory.CreateDirectory(_tempPath);
-
-            return new FileInfo(Path.Combine(_tempPath, validFileName));
         }
 
         /// <summary>
@@ -312,22 +240,6 @@ namespace PeachPDF.Html.Core.Utils
                 return true;
             }
             return false;
-        }
-
-        /// <summary>
-        /// Replaces invalid filename chars to '_'
-        /// </summary>
-        /// <param name="source">The possibly-not-valid filename</param>
-        /// <returns>A valid filename.</returns>
-        private static string GetValidFileName(string source)
-        {
-            string retVal = source;
-            char[] invalidFileNameChars = Path.GetInvalidFileNameChars();
-            foreach (var invalidFileNameChar in invalidFileNameChars)
-            {
-                retVal = retVal.Replace(invalidFileNameChar, '_');
-            }
-            return retVal;
         }
 
         /// <summary>

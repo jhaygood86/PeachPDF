@@ -57,7 +57,7 @@ public abstract class RNetworkLoader
 |---|---|
 | `GetPrimaryContents()` | Returns the root HTML string. Called once at the start of the pipeline when `null` is passed to `PdfGenerator.GeneratePdf`. |
 | `GetResourceStream(RUri)` | Returns a `RNetworkResponse` (stream + HTTP-style headers) for any external resource URI. Called for stylesheets and images. |
-| `BaseUri` | The document's base URL. Used to resolve relative URIs in `href`, `src`, and `url()` values. If `null`, relative references are resolved against the file system. |
+| `BaseUri` | The document's base URL. Used to resolve relative URIs in `href`, `src`, and `url()` values. If `null`, relative references resolve against the current working directory as a `file:` URI (the default working-directory base is supplied by `PdfSharpAdapter`). |
 
 `RNetworkResponse` is a simple record: `(Stream? ResourceStream, Dictionary<string, string[]>? ResponseHeaders)`. The headers are inspected by `StylesheetLoadHandler` to validate the `Content-Type` is `text/css` before accepting the body as a stylesheet.
 
@@ -65,23 +65,23 @@ public abstract class RNetworkLoader
 
 ### How the pipeline uses it
 
-**HTML document** — when `GeneratePdf` is called with a `null` HTML string, `GetPrimaryContents()` is called to obtain the document. The `HttpClientNetworkLoader` fetches the URL passed to its constructor; the `MimeKitNetworkLoader` extracts `MimeMessage.HtmlBody` from the MHTML archive.
+**HTML document** — when `GeneratePdf` is called with a `null` HTML string, `GetPrimaryContents()` is called to obtain the document. The `HttpClientNetworkLoader` fetches the URL passed to its constructor; the `FileUriNetworkLoader` reads the file passed to its constructor; the `MimeKitNetworkLoader` extracts `MimeMessage.HtmlBody` from the MHTML archive.
 
-**Stylesheets** — `StylesheetLoadHandler.LoadStylesheet` resolves the `href` on a `<link>` element against `BaseUri` (or the `<base href>` element if present), then:
-- For `file://` URIs, opens the file directly from disk.
-- For all other URIs, calls `adapter.GetResourceStream(uri)`. Only responses with a `Content-Type: text/css` header are accepted; anything else is silently discarded.
+**Stylesheets and images** — `StylesheetLoadHandler.LoadStylesheet` and `ImageLoadHandler.SetImageFromPath` both resolve their `href`/`src` to an absolute URI against the document base (a `<base href>` element, else `BaseUri`, else the working-directory `file:` default) via the shared `CommonUtils.ResolveAgainstDocumentBase`, then call `adapter.GetResourceStream(uri)`. There is a single resolution path — local files, `data:` URIs, and remote resources all flow through `GetResourceStream` uniformly, with no separate file-system branch. Stylesheet responses are only accepted when the `Content-Type` is `text/css`; a resolved SVG image is detected from its `Content-Type: image/svg+xml` (or `.svg` extension).
 
-**Images** — `ImageLoadHandler.SetImageFromPath` resolves the image `src` the same way. File paths are opened directly; absolute non-file URIs go through `adapter.GetResourceStream(uri)`.
-
-**`data:` URIs** — regardless of which `RNetworkLoader` is configured, `data:` URIs are always handled by `DataUriNetworkLoader` directly inside `PdfSharpAdapter.GetResourceStream`. This ensures inline base64 images and stylesheets work without any network loader needing to implement `data:` support.
+**`data:` and `file:` URIs** — regardless of which `RNetworkLoader` is configured, `PdfSharpAdapter.GetResourceStream` handles `data:` URIs internally via `DataUriNetworkLoader` and `file:` URIs internally via `FileUriNetworkLoader`. This ensures inline base64 resources and local files always work without the configured loader needing to implement either scheme.
 
 ### Built-in implementations
 
-PeachPDF ships three concrete loaders:
+PeachPDF ships four concrete loaders:
 
 #### `DataUriNetworkLoader` ([Network/DataUriNetworkLoader.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Network/DataUriNetworkLoader.cs))
 
-The default loader when no `NetworkLoader` is set in `PdfGenerateConfig`. It handles only `data:` URIs, decoding the base64 payload into a `MemoryStream`. Any other URI scheme returns `null`, meaning external resources (remote stylesheets, external images) are silently skipped. This is the safest default for server-side environments where network access must be controlled explicitly.
+The default loader when no `NetworkLoader` is set in `PdfGenerateConfig`. It handles only `data:` URIs, decoding the base64 payload into a `MemoryStream`. Any other remote URI scheme returns `null`, meaning remote resources (remote stylesheets, remote images) are silently skipped — the safest default for server-side environments where network access must be controlled explicitly. Local `file:` resources still resolve, because `PdfSharpAdapter` routes them through `FileUriNetworkLoader` and supplies a working-directory base URI.
+
+#### `FileUriNetworkLoader` ([Network/FileUriNetworkLoader.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Network/FileUriNetworkLoader.cs))
+
+Serves the root document and referenced resources from the local file system via `file:` URIs. Constructed with no arguments, its `BaseUri` is the current working directory; constructed with a file path, its `BaseUri` is that file's own `file:` URI and `GetPrimaryContents()` reads the file — the way a browser bases a locally-opened document. `GetResourceStream` reads the file and synthesizes a `Content-Type` header from `MimeTypeResolver`, which consults the host OS's own MIME mechanism (the Windows shell association API, the Apple Uniform Type Identifiers API, or the Linux `/etc/mime.types` database) and falls back to a built-in map covering HTML, CSS, SVG, and the raster formats StbImageSharp decodes.
 
 #### `MimeKitNetworkLoader` ([Network/MimeKitNetworkLoader.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Network/MimeKitNetworkLoader.cs))
 

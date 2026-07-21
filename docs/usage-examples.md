@@ -59,7 +59,7 @@ Every custom font registered on a `PdfGenerator` — via `@font-face` or `AddFon
 
 ## Rendering HTML from a local string
 
-The simplest case: render an in-memory HTML string to a PDF stream. All images and assets must be local to the file system or in `data:` URIs, since no `NetworkLoader` is configured.
+The simplest case: render an in-memory HTML string to a PDF stream. With no `NetworkLoader` configured, `data:` URIs are always resolved, and relative `src`/`href`/`url()` references are loaded from the local file system, resolved against the current working directory (the same way a browser resolves them against the document's location). A `<base href>` element overrides that base.
 
 ```csharp
 var html = "<html><body><h1>Hello, PeachPDF</h1></body></html>";
@@ -76,6 +76,29 @@ var stream = new MemoryStream();
 var document = await generator.GeneratePdf(html, pdfConfig);
 document.Save(stream);
 ```
+
+## Rendering a local HTML file
+
+`FileUriNetworkLoader` renders a local `.html` file and every resource it references (stylesheets, images, fonts) from disk. It sets the base URL to the file's own location — exactly like opening the file in a browser — so relative references resolve against the file's directory. Pass `null` as the HTML argument to load the root document from the file.
+
+```csharp
+var pdfConfig = new PdfGenerateConfig
+{
+    PageSize = PageSize.Letter,
+    PageOrientation = PageOrientation.Portrait,
+    NetworkLoader = new FileUriNetworkLoader("report/index.html")
+};
+
+var generator = new PdfGenerator();
+
+var stream = new MemoryStream();
+
+// Passing null to GeneratePdf loads the HTML from the configured NetworkLoader instead
+var document = await generator.GeneratePdf(null, pdfConfig);
+document.Save(stream);
+```
+
+`file:` URIs are always resolved from disk regardless of which loader is configured (the same way `data:` URIs always are), so a document loaded over HTTP or from an MHTML archive can still reference an absolute `file:` resource.
 
 ## Rendering an MHTML file
 
@@ -123,7 +146,7 @@ var document = await generator.GeneratePdf(null, pdfConfig);
 document.Save(stream);
 ```
 
-Loading images via relative paths falls back to the local file system unless the configured `NetworkLoader` has an appropriate `BaseUri` (as above), or the HTML has a `<base href>` element.
+Relative references resolve against the configured `NetworkLoader`'s `BaseUri` (as above), or a `<base href>` element if the document has one. With no loader configured, they resolve against the current working directory and load from the local file system (see [Rendering a local HTML file](#rendering-a-local-html-file) to make that base an explicit file location instead).
 
 ## Sharing a parsed CSS context across renders
 

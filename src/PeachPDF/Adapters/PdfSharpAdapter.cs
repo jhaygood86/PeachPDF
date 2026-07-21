@@ -108,7 +108,17 @@ namespace PeachPDF.Adapters
 
         public RNetworkLoader NetworkLoader { get; set; } = new DataUriNetworkLoader();
 
-        public override RUri? BaseUri => NetworkLoader.BaseUri;
+        // Serves file: URIs (and supplies the default working-directory base URI) whenever the configured
+        // NetworkLoader isn't itself a FileUriNetworkLoader - mirroring how data: URIs are always handled
+        // internally regardless of which loader is configured. Lazily created so its Directory.GetCurrentDirectory()
+        // snapshot isn't taken until a file: resource (or the fallback base URI) is actually needed.
+        private FileUriNetworkLoader? _internalFileLoader;
+        private FileUriNetworkLoader InternalFileLoader => _internalFileLoader ??= new FileUriNetworkLoader();
+
+        // When the configured loader has no base URI of its own (e.g. the default DataUriNetworkLoader), relative
+        // references resolve against the current working directory as a file: URI - preserving the historical
+        // implicit "load relative paths from disk" behavior now that it flows through FileUriNetworkLoader.
+        public override RUri? BaseUri => NetworkLoader.BaseUri ?? InternalFileLoader.BaseUri;
 
         /// <summary>
         /// the amount of pixels per point
@@ -117,18 +127,19 @@ namespace PeachPDF.Adapters
 
         public override async Task<RNetworkResponse?> GetResourceStream(RUri uri)
         {
-            if (!uri.IsAbsoluteUri || uri.Scheme is not "data") return await NetworkLoader.GetResourceStream(uri);
-
-            if (NetworkLoader is DataUriNetworkLoader dataUriNetworkLoader)
+            if (uri.IsAbsoluteUri && uri.Scheme is "data")
             {
-                return await dataUriNetworkLoader.GetResourceStream(uri);
-            }
-            else
-            {
-                var loader = new DataUriNetworkLoader();
-                return await loader.GetResourceStream(uri);
+                var dataLoader = NetworkLoader as DataUriNetworkLoader ?? new DataUriNetworkLoader();
+                return await dataLoader.GetResourceStream(uri);
             }
 
+            if (uri.IsAbsoluteUri && uri.Scheme is "file")
+            {
+                var fileLoader = NetworkLoader as FileUriNetworkLoader ?? InternalFileLoader;
+                return await fileLoader.GetResourceStream(uri);
+            }
+
+            return await NetworkLoader.GetResourceStream(uri);
         }
 
         public override string GetCssMediaType(IEnumerable<string> mediaTypesAvailable)

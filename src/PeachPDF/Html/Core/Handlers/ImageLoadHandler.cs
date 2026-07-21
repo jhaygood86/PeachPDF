@@ -52,9 +52,9 @@ namespace PeachPDF.Html.Core.Handlers
         private readonly HtmlContainerInt _htmlContainer;
 
         /// <summary>
-        /// Must be open as long as the image is in use
+        /// The resource stream the image was decoded from; disposed when the handler is released.
         /// </summary>
-        private FileStream? _imageFileStream;
+        private Stream? _imageStream;
 
         /// <summary>
         /// flag to indicate if to release the image object on box dispose (only if image was loaded by the box)
@@ -145,87 +145,27 @@ namespace PeachPDF.Html.Core.Handlers
         #region Private methods
 
         /// <summary>
-        /// Load image from path of image file or URL.
+        /// Load image from path of image file or URL. The source is resolved to an absolute URI against
+        /// the document base (a <c>&lt;base href&gt;</c> element or the adapter's base URI, which defaults
+        /// to the current working directory as a <c>file:</c> URI) and then fetched through the network
+        /// loader — local files are served by <see cref="Network.FileUriNetworkLoader"/> exactly like a
+        /// remote resource, so there is no separate file-system code path.
         /// </summary>
         /// <param name="path">the file path or uri to load image from</param>
         private async ValueTask SetImageFromPath(string path)
         {
-            var uri = new RUri(path, UriKind.RelativeOrAbsolute);
+            var uri = CommonUtils.ResolveAgainstDocumentBase(_htmlContainer, path);
 
-            if (!uri.IsAbsoluteUri)
+            if (uri is not { IsAbsoluteUri: true })
             {
-                var baseElement = DomUtils.GetBoxByTagName(_htmlContainer.Root, "base");
-                var baseUrl = "";
-
-                if (baseElement is not null)
-                {
-                    baseUrl = baseElement.HtmlTag?.TryGetAttribute("href", "");
-                }
-
-                var baseUri = string.IsNullOrWhiteSpace(baseUrl) ? _htmlContainer.Adapter.BaseUri : new RUri(baseUrl);
-                uri = baseUri is null ? uri : new RUri(baseUri, uri);
-            }
-
-            if (uri is { IsAbsoluteUri: true, Scheme: not "file" })
-            {
-                await SetImageFromUrl(uri);
-            }
-            else
-            {
-                var fileInfo = CommonUtils.TryGetFileInfo(path);
-                if (fileInfo != null)
-                {
-                    SetImageFromFile(fileInfo);
-                }
-                else
-                {
-                    ImageLoadComplete();
-                    _htmlContainer.ReportError(HtmlRenderErrorType.Image, "Failed load image, invalid source: " + path);
-                }
-            }
-        }
-
-        /// <summary>
-        /// Load the image file on thread-pool thread and calling <see cref="ImageLoadComplete"/> after.
-        /// </summary>
-        /// <param name="source">the file path to get the image from</param>
-        private void SetImageFromFile(FileInfo source)
-        {
-            if (source.Exists)
-            {
-                LoadImageFromFile(source.FullName);
-            }
-            else
-            {
+                // An unresolvable source (e.g. a malformed URL) is skipped gracefully - a broken image
+                // shows nothing rather than aborting the whole render - matching how a missing resource is
+                // already handled downstream.
                 ImageLoadComplete();
+                return;
             }
-        }
 
-        /// <summary>
-        /// Load the image file on thread-pool thread and calling <see cref="ImageLoadComplete"/> after.<br/>
-        /// Calling <see cref="ImageLoadComplete"/> on the main thread and not thread-pool.
-        /// </summary>
-        /// <param name="source">the file path to get the image from</param>
-        private void LoadImageFromFile(string source)
-        {
-            try
-            {
-                var imageFileStream = File.Open(source, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                _imageFileStream = imageFileStream;
-
-                if (_disposed is false)
-                {
-                    LoadImageFromStream(imageFileStream, _srcHintsSvg);
-                    _releaseImageObject = true;
-                }
-
-                ImageLoadComplete();
-            }
-            catch (Exception ex)
-            {
-                ImageLoadComplete();
-                _htmlContainer.ReportError(HtmlRenderErrorType.Image, "Failed to load image from disk: " + source, ex);
-            }
+            await SetImageFromUrl(uri);
         }
 
         private void LoadImageFromStream(Stream stream, bool isSvg)
@@ -271,32 +211,30 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         /// <summary>
-        /// Load image from the given URI by downloading it.<br/>
-        /// Create local file name in temp folder from the URI, if the file already exists use it as it has already been downloaded.
-        /// If not download the file.
+        /// Fetch the image from the given absolute URI through the network loader (which serves
+        /// <c>file:</c>, <c>data:</c>, HTTP and archive resources uniformly) and decode it. SVG is
+        /// detected from the source extension or a <c>Content-Type: image/svg+xml</c> response header.
         /// </summary>
         private async ValueTask SetImageFromUrl(RUri source)
         {
-            if (source is { IsAbsoluteUri: true, IsFile: true })
-            {
-                var filePath = CommonUtils.GetLocalFileName(source);
-
-                if (filePath is { Exists: true, Length: > 0 })
-                {
-                    SetImageFromFile(filePath);
-                }
-
-                return;
-            }
-
             var networkResponse = await _htmlContainer.Adapter.GetResourceStream(source);
 
             if (networkResponse?.ResourceStream is not null)
             {
+                _imageStream = networkResponse.ResourceStream;
+
                 var contentTypeHintsSvg = networkResponse.ResponseHeaders?.TryGetValue("Content-Type", out var contentTypeValues) == true
                     && contentTypeValues.Select(ContentType.Parse).Any(ct => ct.IsMimeType("image", "svg+xml"));
 
-                LoadImageFromStream(networkResponse.ResourceStream, _srcHintsSvg || contentTypeHintsSvg);
+                if (_disposed is false)
+                {
+                    LoadImageFromStream(_imageStream, _srcHintsSvg || contentTypeHintsSvg);
+
+                    if (Image is not null)
+                    {
+                        _releaseImageObject = true;
+                    }
+                }
             }
 
             ImageLoadComplete();
@@ -323,10 +261,10 @@ namespace PeachPDF.Html.Core.Handlers
                 Image = null;
             }
 
-            if (_imageFileStream == null) return;
+            if (_imageStream == null) return;
 
-            _imageFileStream.Dispose();
-            _imageFileStream = null;
+            _imageStream.Dispose();
+            _imageStream = null;
         }
 
         #endregion

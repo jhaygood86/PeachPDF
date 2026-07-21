@@ -56,6 +56,18 @@ namespace PeachPDF.Tests.Network
         }
 
         [Fact]
+        public void FileUri_ReportsFileSchemeAndIsFile()
+        {
+            var path = OperatingSystem.IsWindows() ? @"C:\dir\page.html" : "/dir/page.html";
+
+            var uri = new RUri(new Uri(path));
+
+            Assert.Equal("file", uri.Scheme);
+            Assert.True(uri.IsFile);
+            Assert.True(uri.IsAbsoluteUri);
+        }
+
+        [Fact]
         public async Task DataUri_LargePayload_DecodesCorrectlyThroughDataUriNetworkLoader()
         {
             var bytes = new byte[100_000];
