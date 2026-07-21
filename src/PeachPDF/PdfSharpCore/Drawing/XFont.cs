@@ -144,6 +144,26 @@ namespace PeachPDF.PdfSharpCore.Drawing
             Initialize(fontResolver);
         }
 
+        /// <summary>
+        /// Same as the numeric-weight/stretch constructor, but additionally scoped to a single Unicode
+        /// scalar value (<paramref name="codepoint"/>) so the resolver picks the face that actually covers
+        /// that codepoint - the basis of per-codepoint <c>unicode-range</c> selection and glyph-coverage
+        /// fallback. Used only by the per-codepoint resolution path; ordinary font creation stays
+        /// codepoint-less.
+        /// </summary>
+        internal XFont(string familyName, double emSize, XFontStyle style, XPdfFontOptions pdfOptions, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune? codepoint, IFontResolver fontResolver)
+        {
+            _familyName = familyName;
+            _emSize = emSize;
+            _style = style;
+            _pdfOptions = pdfOptions;
+            _weight = weight;
+            _stretch = stretch;
+            ObliqueSkewSinus = obliqueSkewSinus;
+            _codepoint = codepoint;
+            Initialize(fontResolver);
+        }
+
         internal XFont(string familyName, double emSize, XFontStyle style, XPdfFontOptions pdfOptions, XStyleSimulations styleSimulations, IFontResolver fontResolver)
         {
             _familyName = familyName;
@@ -171,6 +191,8 @@ namespace PeachPDF.PdfSharpCore.Drawing
                 : _weight is { } weight
                     ? new FontResolvingOptions(_style, weight, _stretch ?? TtfFontDescription.DefaultStretch)
                     : new FontResolvingOptions(_style);
+
+            fontResolvingOptions.Codepoint = _codepoint;
 
             // HACK: 'PlatformDefault' is used in unit test code.
             if (StringComparer.OrdinalIgnoreCase.Compare(_familyName, GlobalFontSettings.DefaultFontName) == 0)
@@ -291,6 +313,8 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// falls back to normal (5).
         /// </summary>
         readonly int? _stretch;
+
+        readonly System.Text.Rune? _codepoint;
 
         /// <summary>
         /// The sine of a declared CSS Fonts Level 4 <c>oblique &lt;angle&gt;</c>, when the requesting box's

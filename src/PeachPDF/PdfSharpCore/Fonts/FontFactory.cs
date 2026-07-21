@@ -266,7 +266,12 @@ namespace PeachPDF.PdfSharpCore.Fonts
                     fontSource.Fontface = new OpenTypeFontface(fontSource);
                 }
                 FontSourcesByKey.Add(fontSource.Key, fontSource);
-                FontSourcesByName.Add(fontSource.FontName, fontSource);
+                // FontSourcesByKey (the content checksum) is the true identity; FontSourcesByName is only a
+                // convenience by-name lookup. Two DIFFERENT font files can share one internal name (a
+                // common webfont-subset pattern), so the first writer keeps the name slot and later
+                // distinct-byte sources stay addressable by their key - using the indexer instead of Add so
+                // the second registration no longer throws "same key already added".
+                FontSourcesByName[fontSource.FontName] = fontSource;
                 return fontSource;
             }
             finally { Lock.ExitFontFactory(); }

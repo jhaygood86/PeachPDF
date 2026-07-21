@@ -84,6 +84,15 @@ namespace PeachPDF.PdfSharpCore.Drawing
 
         public static XGlyphTypeface GetOrCreateFrom(string familyName, FontResolvingOptions fontResolvingOptions, IFontResolver fontResolver)
         {
+            // Per-codepoint resolution (unicode-range / glyph-coverage fallback) takes a separate path
+            // that keys caches by the RESOLVED face rather than by (family, style), so the many codepoints
+            // a multi-script run resolves to a handful of faces don't each spawn their own glyph typeface.
+            // It is always driven by our own FontResolver instance.
+            if (fontResolvingOptions.Codepoint is { } codepoint && fontResolver is FontResolver codepointResolver)
+            {
+                return GetOrCreateForCodepoint(familyName, fontResolvingOptions, codepoint, codepointResolver);
+            }
+
             string typefaceKey = ComputeKey(familyName, fontResolvingOptions);
 
             // Custom (AddFont/@font-face-registered) families must never share the global, process-wide
@@ -158,6 +167,31 @@ namespace PeachPDF.PdfSharpCore.Drawing
 
             return glyphTypeface;
         }
+        private static XGlyphTypeface GetOrCreateForCodepoint(string familyName, FontResolvingOptions options, System.Text.Rune codepoint, FontResolver resolver)
+        {
+            var info = resolver.ResolveTypeface(familyName, options.Weight, options.IsItalic, options.Stretch, codepoint);
+            if (info == null)
+            {
+                // The caller (PdfSharpAdapter) pre-checks coverage before ever building the XFont, so a
+                // null here is not expected - guard defensively rather than dereferencing null.
+                throw new InvalidOperationException("No appropriate font found.");
+            }
+
+            var simSuffix = (info.MustSimulateBold ? "/b+" : "") + (info.MustSimulateItalic ? "/i+" : "");
+            var key = KeyPrefix + "cp/" + info.FaceName.ToLowerInvariant() + simSuffix;
+
+            if (resolver.InstanceGlyphTypefacesByKey.TryGetValue(key, out var cached))
+                return cached;
+
+            var fontSource = XFontSource.GetOrCreateFrom(resolver.GetFont(info.FaceName));
+            var glyphTypeface = new XGlyphTypeface(key, fontSource, info.StyleSimulations)
+            {
+                OwningInstanceResolver = resolver
+            };
+            resolver.InstanceGlyphTypefacesByKey[key] = glyphTypeface;
+            return glyphTypeface;
+        }
+
         /// <summary>
         /// The specific <see cref="Utils.FontResolver"/> instance this typeface was resolved through its
         /// OWN per-instance cache for (i.e. a custom/<c>@font-face</c>-registered family - see

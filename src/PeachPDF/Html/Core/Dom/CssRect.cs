@@ -221,6 +221,16 @@ namespace PeachPDF.Html.Core.Dom
         public double FontSizeScale { get; set; } = 1.0;
 
         /// <summary>
+        /// When true, this fragment's font is resolved per-codepoint (its <see cref="Text"/>'s first
+        /// <see cref="System.Text.Rune"/> against <see cref="CssBoxProperties.ActualFontForCodepoint"/>)
+        /// rather than from the owner box's single <see cref="CssBoxProperties.ActualFont"/> - the basis of
+        /// <c>@font-face</c> <c>unicode-range</c> selection and glyph-coverage fallback. Set in
+        /// <see cref="CssBox.ParseToWords"/> only for boxes whose text actually needs it; every fragment in
+        /// such a split shares one resolved face by construction. <c>false</c> for ordinary words.
+        /// </summary>
+        public bool UsesPerCodepointFont { get; set; }
+
+        /// <summary>
         /// When true, this fragment must never be treated as a line-break opportunity even if it would
         /// otherwise overflow — used to glue synthesized small-caps case-run fragments (which together
         /// make up what was originally one word) back together so splitting a word into runs never

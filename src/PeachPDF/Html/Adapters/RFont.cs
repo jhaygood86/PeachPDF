@@ -44,5 +44,19 @@ namespace PeachPDF.Html.Adapters
         public abstract double LeftPadding { get; }
 
         public abstract double GetWhitespaceWidth(RGraphics graphics);
+
+        /// <summary>
+        /// Whether this font actually contains a glyph for <paramref name="rune"/> (as opposed to
+        /// resolving to the missing-glyph box). Drives per-codepoint font fallback: a run whose resolved
+        /// font lacks a character is re-resolved against the rest of the <c>font-family</c> stack.
+        /// </summary>
+        public abstract bool HasGlyph(System.Text.Rune rune);
+
+        /// <summary>
+        /// A stable identity for the concrete face this font renders with, used only to coalesce adjacent
+        /// per-codepoint fragments that resolve to the same face into one word rather than splitting every
+        /// character. Two <see cref="RFont"/>s with the same key at the same size/style render identically.
+        /// </summary>
+        public abstract string FaceKey { get; }
     }
 }

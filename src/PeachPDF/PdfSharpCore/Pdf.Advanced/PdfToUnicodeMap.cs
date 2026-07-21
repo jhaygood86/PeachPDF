@@ -77,15 +77,15 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
               "/CMapName /Adobe-Identity-UCS def /CMapType 2 def\n";
             string suffix = "endcmap CMapName currentdict /CMap defineresource pop end end";
 
-            Dictionary<int, char> glyphIndexToCharacter = new Dictionary<int, char>();
+            Dictionary<int, int> glyphIndexToCharacter = new Dictionary<int, int>();
             int lowIndex = 65536, hiIndex = -1;
-            foreach (KeyValuePair<char, int> entry in _cmapInfo.CharacterToGlyphIndex)
+            foreach (KeyValuePair<int, int> entry in _cmapInfo.CharacterToGlyphIndex)
             {
-                int index = (int)entry.Value;
+                int index = entry.Value;         // glyph index
                 lowIndex = Math.Min(lowIndex, index);
                 hiIndex = Math.Max(hiIndex, index);
                 //glyphIndexToCharacter.Add(index, entry.Key);
-                glyphIndexToCharacter[index] = entry.Key;
+                glyphIndexToCharacter[index] = entry.Key;   // Unicode scalar value (codepoint)
             }
 
             MemoryStream ms = new MemoryStream();
@@ -98,8 +98,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 
             // Sorting seems not necessary. The limit is 100 entries, we will see.
             wrt.WriteLine(String.Format("{0} beginbfrange", glyphIndexToCharacter.Count));
-            foreach (KeyValuePair<int, char> entry in glyphIndexToCharacter)
-                wrt.WriteLine(String.Format("<{0:X4}><{0:X4}><{1:X4}>", entry.Key, (int)entry.Value));
+            foreach (KeyValuePair<int, int> entry in glyphIndexToCharacter)
+                wrt.WriteLine(String.Format("<{0:X4}><{0:X4}><{1}>", entry.Key, Utf16BigEndianHex(entry.Value)));
             wrt.WriteLine("endbfrange");
 
             wrt.Write(suffix);
@@ -126,6 +126,20 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 Stream.Value = bytes;
                 Elements.SetInteger(PdfStream.Keys.Length, Stream.Length);
             }
+        }
+
+        /// <summary>
+        /// Formats a Unicode scalar value as the UTF-16 (big-endian) hex string a ToUnicode
+        /// <c>bfrange</c> destination expects: a BMP codepoint yields 4 hex digits, an astral codepoint
+        /// yields its 8-hex surrogate pair.
+        /// </summary>
+        private static string Utf16BigEndianHex(int codepoint)
+        {
+            string utf16 = char.ConvertFromUtf32(codepoint);
+            StringBuilder sb = new StringBuilder(utf16.Length * 4);
+            foreach (char c in utf16)
+                sb.Append(((int)c).ToString("X4"));
+            return sb.ToString();
         }
 
         internal sealed class Keys : PdfStream.Keys

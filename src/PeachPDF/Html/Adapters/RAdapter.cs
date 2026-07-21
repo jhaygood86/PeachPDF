@@ -199,7 +199,8 @@ namespace PeachPDF.Html.Adapters
         /// <param name="weightOverride">the <c>@font-face</c> rule's own <c>font-weight</c> descriptor, resolved to a concrete numeric weight - authoritative over the file's own sniffed weight when present</param>
         /// <param name="isItalicOverride">the <c>@font-face</c> rule's own <c>font-style</c> descriptor, resolved to italic-or-not - authoritative over the file's own sniffed style when present</param>
         /// <param name="stretchOverride">the <c>@font-face</c> rule's own <c>font-stretch</c> descriptor, resolved to a concrete numeric stretch - authoritative over the file's own sniffed stretch when present</param>
-        public async Task<bool> AddFontFamilyFromUrl(string fontFamilyName, string url, string? format, RUri? baseUri = null, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null)
+        /// <param name="unicodeRanges">the <c>@font-face</c> rule's own <c>unicode-range</c> descriptor, parsed to codepoint ranges - restricts which characters this face is used for; null means no restriction</param>
+        public async Task<bool> AddFontFamilyFromUrl(string fontFamilyName, string url, string? format, RUri? baseUri = null, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<RuneRange>? unicodeRanges = null)
         {
             RUri resolvedUri;
 
@@ -221,15 +222,15 @@ namespace PeachPDF.Html.Adapters
 
             if (resourceStream?.ResourceStream is not null)
             {
-                return await AddFontFromStream(fontFamilyName, resourceStream.ResourceStream, format, weightOverride, isItalicOverride, stretchOverride);
+                return await AddFontFromStream(fontFamilyName, resourceStream.ResourceStream, format, weightOverride, isItalicOverride, stretchOverride, unicodeRanges);
             }
 
             return false;
         }
 
-        public async Task<bool> AddLocalFontFamily(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null)
+        public async Task<bool> AddLocalFontFamily(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<RuneRange>? unicodeRanges = null)
         {
-            return await AddLocalFont(fontFamilyName, localFontFaceName, weightOverride, isItalicOverride, stretchOverride);
+            return await AddLocalFont(fontFamilyName, localFontFaceName, weightOverride, isItalicOverride, stretchOverride, unicodeRanges);
         }
 
         /// <summary>
@@ -257,6 +258,29 @@ namespace PeachPDF.Html.Adapters
         public RFont? GetFont(string family, double size, RFontStyle style, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null)
         {
             return _fontsHandler.GetCachedFont(family, size, style, weight, stretch, obliqueSkewSinus);
+        }
+
+        /// <summary>
+        /// Resolves a font for <paramref name="family"/> restricted to faces that cover
+        /// <paramref name="codepoint"/> (its <c>unicode-range</c> or, absent that, its cmap coverage).
+        /// Returns null when the family has no face covering the codepoint, so per-codepoint matching can
+        /// move on to the next family in the <c>font-family</c> stack.
+        /// </summary>
+        public RFont? GetFontForCodepoint(string family, double size, RFontStyle style, System.Text.Rune codepoint, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null)
+        {
+            return _fontsHandler.GetCachedFontForCodepoint(family, size, style, codepoint, weight, stretch, obliqueSkewSinus);
+        }
+
+        /// <summary>
+        /// Whether any face registered for <paramref name="family"/> declares an explicit
+        /// <c>unicode-range</c> - used by layout to decide when a fully-covered word must still be
+        /// resolved per-codepoint to honor a ranged face.
+        /// </summary>
+        public bool FamilyHasExplicitUnicodeRanges(string family) => FamilyHasExplicitUnicodeRangesInt(family);
+
+        internal RFont? CreateFontForCodepoint(string family, double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint)
+        {
+            return CreateFontForCodepointInt(family, size, style, weight, stretch, obliqueSkewSinus, codepoint);
         }
 
         /// <summary>
@@ -385,10 +409,19 @@ namespace PeachPDF.Html.Adapters
         /// <returns>font instance</returns>
         protected abstract RFont CreateFontInt(RFontFamily family, double size, RFontStyle style, int weight = 400, int stretch = 5, double? obliqueSkewSinus = null);
 
-        /// <returns>true if the format was recognized and a load was actually attempted, false if the declared format is one this adapter can't handle (so a caller trying a multi-source <c>@font-face src</c> fallback list knows to move on to the next candidate)</returns>
-        protected abstract Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null);
+        /// <summary>
+        /// Builds a font for <paramref name="family"/> that covers <paramref name="codepoint"/>, or returns
+        /// null when the family has no covering face (so the caller can try the next family).
+        /// </summary>
+        protected abstract RFont? CreateFontForCodepointInt(string family, double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint);
 
-        protected abstract Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null);
+        /// <summary>Whether any face of <paramref name="family"/> declares an explicit <c>unicode-range</c>.</summary>
+        protected abstract bool FamilyHasExplicitUnicodeRangesInt(string family);
+
+        /// <returns>true if the format was recognized and a load was actually attempted, false if the declared format is one this adapter can't handle (so a caller trying a multi-source <c>@font-face src</c> fallback list knows to move on to the next candidate)</returns>
+        protected abstract Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<RuneRange>? unicodeRanges = null);
+
+        protected abstract Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<RuneRange>? unicodeRanges = null);
 
         #endregion
     }

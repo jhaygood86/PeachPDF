@@ -61,6 +61,10 @@ namespace PeachPDF.CSS
                 case TokenType.GreaterThanOrEqual:
                 case TokenType.LessThan:
                 case TokenType.LessThanOrEqual:
+                case TokenType.Range:
+                    // A U+... unicode-range value (an @font-face descriptor) is a sequence of Range tokens;
+                    // without this they'd hit the default arm and mark the whole value invalid, so the
+                    // descriptor would be dropped under strict (non-tolerant) parsing - the pipeline default.
                     Add(token);
                     break;
                 case TokenType.Comment:

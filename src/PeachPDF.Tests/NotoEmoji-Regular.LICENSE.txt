@@ -1,0 +1,10 @@
+NotoEmoji-Regular.ttf is a subset (emoticons and a few common symbols) of the
+"Noto Emoji" font, Copyright 2013 Google LLC, licensed under the SIL Open Font
+License, Version 1.1 (OFL-1.1).
+
+The font is bundled solely as a test asset so the test suite never depends on
+whatever fonts happen to be installed on the machine running it. Only a small
+range of glyphs is retained; the outlines are unmodified.
+
+Full license text: https://openfontlicense.org/open-font-license-official-text/
+Source: https://fonts.google.com/noto/specimen/Noto+Emoji

@@ -65,9 +65,18 @@ namespace PeachPDF.Html.Core.Handlers
             _adapter = adapter;
         }
 
+        /// <summary>
+        /// Per-codepoint font cache: (family, size, style/weight/stretch/oblique, codepoint) → resolved
+        /// font (or null when no face of that family covers the codepoint - cached too, so a repeated
+        /// coverage miss isn't re-resolved). Separate from <see cref="_fontsCache"/> so the ordinary
+        /// codepoint-less path is completely unaffected.
+        /// </summary>
+        private readonly Dictionary<(string Family, double Size, RFontStyle Style, int Weight, int Stretch, double? Oblique, int Codepoint), RFont?> _codepointFontsCache = new();
+
         public void ClearCache()
         {
             _fontsCache.Clear();
+            _codepointFontsCache.Clear();
         }
 
         /// <summary>
@@ -160,6 +169,35 @@ namespace PeachPDF.Html.Core.Handlers
             return font;
         }
 
+
+        /// <summary>
+        /// Cached per-codepoint font resolution for <paramref name="family"/> - the font whose face covers
+        /// <paramref name="codepoint"/>, or null when the family has no covering face. Unlike
+        /// <see cref="GetCachedFont"/> this does not apply font-family mapping: the caller
+        /// (<c>FontFamilyResolver</c>) already walks the full <c>font-family</c> stack.
+        /// </summary>
+        public RFont? GetCachedFontForCodepoint(string family, double size, RFontStyle style, System.Text.Rune codepoint, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null)
+        {
+            var resolvedWeight = weight ?? ((style & RFontStyle.Bold) != 0 ? 700 : 400);
+            var resolvedStretch = stretch ?? 5;
+
+            // Apply font-family mapping (e.g. a generic "serif"/"sans-serif"/"monospace" mapped to a real
+            // installed family) before resolving - the resolver only knows real registered family names, so
+            // without this a mapped generic used as a fallback would never resolve during per-codepoint
+            // matching. A directly-registered family is used as-is.
+            var resolvedFamily = _existingFontFamilies.ContainsKey(family)
+                ? family
+                : _fontsMapping.TryGetValue(family, out var mappedFamily) ? mappedFamily : family;
+
+            var key = (resolvedFamily.ToLowerInvariant(), size, style, resolvedWeight, resolvedStretch, obliqueSkewSinus, codepoint.Value);
+
+            if (_codepointFontsCache.TryGetValue(key, out var cached))
+                return cached;
+
+            var font = _adapter.CreateFontForCodepoint(resolvedFamily, size, style, resolvedWeight, resolvedStretch, obliqueSkewSinus, codepoint);
+            _codepointFontsCache[key] = font;
+            return font;
+        }
 
         #region Private methods
 

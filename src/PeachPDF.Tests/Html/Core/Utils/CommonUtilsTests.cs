@@ -7,14 +7,15 @@ namespace PeachPDF.Tests.Html.Core.Utils
     public class CommonUtilsTests
     {
         [Theory]
-        [InlineData('a', false)]
-        [InlineData('中', true)]
-        [InlineData((char)0x4e00, true)]
-        [InlineData((char)0xFA2D, true)]
-        [InlineData((char)0x4dff, false)]
-        public void IsAsianCharacter_ChecksRange(char ch, bool expected)
+        [InlineData(0x61, false)]      // 'a'
+        [InlineData(0x4E2D, true)]     // '中'
+        [InlineData(0x4e00, true)]
+        [InlineData(0xFA2D, true)]
+        [InlineData(0x4dff, false)]
+        [InlineData(0x1F600, false)]   // an astral emoji is outside the BMP Asian range (and, as a Rune, can never be a lone surrogate)
+        public void IsAsianCharacter_ChecksRange(int codepoint, bool expected)
         {
-            Assert.Equal(expected, CommonUtils.IsAsianCharacter(ch));
+            Assert.Equal(expected, CommonUtils.IsAsianCharacter(new System.Text.Rune(codepoint)));
         }
 
         [Theory]
