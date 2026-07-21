@@ -3517,7 +3517,7 @@ await SaveShowcaseAsync("print_catalog", "Real-World Documents", "Print Catalog"
 // for the digit range (U+0030-0039), so digits render in it while letters in the same run fall back to
 // the serif family - a per-character split within one text run, honoring the unicode-range descriptor.
 var monoDigitsFontUri = "data:font/truetype;base64," +
-    Convert.ToBase64String(File.ReadAllBytes("LiberationMono-Regular.ttf"));
+    Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "LiberationMono-Regular.ttf")));
 var unicodeRangeHtml = $$"""
     <html>
     <head>
@@ -3551,7 +3551,7 @@ await SaveShowcaseAsync("unicode_range", "Fonts & Text", "@font-face unicode-ran
 // subset of Noto Emoji) renders its glyf outlines. Color-glyph tables (COLR/CBDT/sbix) are not
 // composited - outlines only.
 var emojiFontUri = "data:font/truetype;base64," +
-    Convert.ToBase64String(File.ReadAllBytes("NotoEmoji-Regular.ttf"));
+    Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoEmoji-Regular.ttf")));
 var emojiRow = string.Join(" ", new[] { 0x1F600, 0x1F60A, 0x1F602, 0x1F44D, 0x1F389, 0x1F680, 0x2764 }
     .Select(char.ConvertFromUtf32));
 var grinning = char.ConvertFromUtf32(0x1F600);
