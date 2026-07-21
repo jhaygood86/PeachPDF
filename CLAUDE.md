@@ -11,6 +11,7 @@ Read these before making non-trivial changes in their area — they are the sour
 - [docs/showcase.html](docs/showcase.html) — feature showcase gallery; cards (thumbnail + PDF + HTML-source links) are driven by `site.data.showcases`, which pages.yml generates at site build time by running the TestHarness (`docs/showcase/` and `docs/_data/showcases.json` are gitignored build output, never source)
 - [docs/getting-started.md](docs/getting-started.md) — install, quick start, thread safety / guide index
 - [docs/architecture.md](docs/architecture.md) — how HTML becomes a PDF: parser, DOM, CSS, layout, painting, PDF renderer
+- [docs/testing.md](docs/testing.md) — reader-facing overview of how the project is tested: the xUnit suite, the CI matrix, the 90% diff-coverage gate, and two-renderer (PDFium + MuPDF) rasterization verification (contributor-facing commands/conventions live in `CONTRIBUTING.md`)
 - [docs/html-css-support.md](docs/html-css-support.md) — full HTML/CSS compatibility matrix (elements, properties, selectors, at-rules, gaps, extensions, PDF metadata extraction, tagged PDF)
 - [docs/supported-svg-features.md](docs/supported-svg-features.md) — full SVG compatibility matrix (inline `<svg>` and standalone), rendered as real vector PDF content
 - [docs/usage-examples.md](docs/usage-examples.md) — copy-pasteable API usage (local HTML, MHTML, HTTP fetch, thread safety, fonts, enabling tagged PDF, ASP.NET Core/Azure Functions)
