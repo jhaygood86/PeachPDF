@@ -213,7 +213,7 @@ Requesting a `font-weight`/`font-style`/`font-stretch` PeachPDF can't find an ex
 - When no real face is close enough to the request, PeachPDF **synthesizes** a faux-bold (fill+stroke render mode) or faux-italic/oblique (glyph shear) rather than rendering with zero visual distinction. `oblique <angle>` (e.g. `oblique 10deg`) drives the exact synthesized shear amount when declared; otherwise a fixed default angle is used.
 - An `@font-face` rule's own declared `font-weight`/`font-style`/`font-stretch` descriptors are authoritative for how that specific registered resource participates in this matching, independent of what the font file's own internal tables say — this is what makes multi-variant web-font families (separate `@font-face` rules per weight) resolve correctly.
 
-See [Color & Typography](html-css-support.md#color--typography) in HTML & CSS Support for per-property compatibility notes, including the [per-run font selection model](html-css-support.md#font-selection-is-per-run-not-per-character).
+See [Color & Typography](html-css-support.md#color--typography) in HTML & CSS Support for per-property compatibility notes, including the [per-character font matching model](html-css-support.md#per-character-font-matching-and-coverage-fallback).
 
 ### Adding custom fonts
 

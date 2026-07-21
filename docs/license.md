@@ -52,6 +52,17 @@ Portions of PeachPDF are sourced from third parties and are licensed under alter
 | Core HTML rendering engine lineage | Derived from [HtmlRenderer](https://github.com/ArthurHub/HTML-Renderer) (José Manuel Menéndez Poo, Arthur Teplitzki) | BSD 3-Clause (the license above) |
 | Hyphenation pattern data (`hyphens: auto`) | CTAN's [hyph-utf8](https://ctan.org/pkg/hyph-utf8) package | A mix of permissive licenses including MIT and LPPL, plus BSD-style and public-domain patterns. Pattern files under copyleft (GPL/LGPL) or missing license terms are deliberately **not** shipped — see [`hyphens: auto` language coverage](html-css-support.md#hyphens-auto-language-coverage) |
 
+### Test-suite font assets (not distributed)
+
+The following fonts are embedded in the `PeachPDF.Tests` project **solely as test assets** — so the test suite can exercise font matching, `unicode-range` selection, subsetting/embedding, and monochrome-emoji (astral / `cmap` format-12) rendering against real font files rather than depending on whatever fonts happen to be installed on the machine running the tests. They are **not shipped in the PeachPDF library or its NuGet package**, and impose no obligation on applications that consume PeachPDF. Each is licensed under the [SIL Open Font License 1.1](https://openfontlicense.org/):
+
+| Font | License |
+|---|---|
+| Noto Emoji (subset; © 2013 Google LLC) — see `src/PeachPDF.Tests/NotoEmoji-Regular.LICENSE.txt` | [SIL OFL 1.1](https://openfontlicense.org/) |
+| Inter | [SIL OFL 1.1](https://openfontlicense.org/) |
+| Source Code Pro | [SIL OFL 1.1](https://openfontlicense.org/) |
+| Source Sans 3 | [SIL OFL 1.1](https://openfontlicense.org/) |
+
 ## License FAQ
 
 ### Can I use PeachPDF in a commercial product?
