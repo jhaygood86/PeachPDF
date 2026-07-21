@@ -16,7 +16,7 @@ Every pull request and every push to `main` runs the [test workflow](https://git
 
 1. restores and **builds** `PeachPDF.Tests` in Release,
 2. **builds the TestHarness** showcase generator (see [below](#the-showcase-harness)),
-3. installs a **Playwright Chromium** browser for the rasterization-based tests,
+3. installs a **Playwright Chromium** browser used by the suite's browser-backed tests,
 4. runs `dotnet test` with code-coverage collection, and
 5. on pull requests, enforces the **diff-coverage gate**.
 
@@ -28,16 +28,16 @@ Pull requests must meet **90% diff coverage** — the coverage of the lines the 
 
 The intent is simple: new and changed code arrives with tests, rather than leaving CI to discover the gap after merge.
 
-## Rasterization-based verification
+## Rasterization-based verification (a development practice, not a CI gate)
 
-A test that only asserts on substrings of the PDF content stream (`/SMask`, `Tj`, `/ShadingType`, and the like) is **not** proof that a feature renders correctly. A token can be fully present while the composed, positioned result is visually broken or blank — an entirely non-functional `<mask>` implementation once passed every substring test it had. For anything touching PDF graphics state — soft masks, patterns, clip paths, gradients, transparency groups, transforms — the suite prefers structural/adjacency assertions (for example, checking that a graphics-state operator and the drawing operator it modifies appear together) or, better, **rasterizes the output and inspects the pixels**.
+A test that only asserts on substrings of the PDF content stream (`/SMask`, `Tj`, `/ShadingType`, and the like) is **not** proof that a feature renders correctly. A token can be fully present while the composed, positioned result is visually broken or blank — an entirely non-functional `<mask>` implementation once passed every substring test it had. For anything touching PDF graphics state — soft masks, patterns, clip paths, gradients, transparency groups, transforms — the automated suite prefers structural/adjacency assertions (for example, checking that a graphics-state operator and the drawing operator it modifies appear together) rather than a bare token search.
 
-Where transparency, soft-mask, or blend-mode output is involved, the discipline is to rasterize with **two independent renderers, not one**:
+Beyond those automated assertions, the strongest check is to **rasterize the output and inspect the pixels** — and where transparency, soft-mask, or blend-mode output is involved, to rasterize with **two independent renderers, not one**:
 
 - **[PDFium](https://pdfium.googlesource.com/pdfium/)** — the engine inside Chrome and Edge, and the stricter, more representative check.
 - **[MuPDF](https://mupdf.com/)** — useful as a second opinion, but unusually lenient about transparency-group conformance: it will happily render content "correctly" that PDFium refuses.
 
-Agreement between both is real evidence; a single lenient render that happens to look right is not. CI provisions a Chromium browser (via Playwright) precisely so the render-and-compare tests can run in the pipeline rather than only on a developer's machine.
+Agreement between both is real evidence; a single lenient render that happens to look right is not. This two-renderer cross-check is **not part of the automated CI pipeline** — it's a manual verification step performed during development when a change touches graphics-state output, and it's a practice we recommend contributors run themselves before submitting such a change. (One way to do it is a short Python script using [`pymupdf`](https://pymupdf.readthedocs.io/) and [`pypdfium2`](https://github.com/pypdfium2-team/pypdfium2) to render the same page with each engine and compare the images.)
 
 ## The showcase harness
 

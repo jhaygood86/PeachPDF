@@ -645,4 +645,4 @@ The `page` CSS longhand (`PageNameProperty`, surfaced as `CssBoxProperties.PageN
 
 ## Testing
 
-Every phase described above is exercised by an automated test suite and a continuous-integration pipeline that verifies output correctness across platforms — including rasterizing PDFs with two independent renderers to confirm they actually *look* right, not merely that they contain the expected operators. See [How PeachPDF Is Tested](testing.md) for the full picture.
+Every phase described above is exercised by an automated test suite and a continuous-integration pipeline that verifies output correctness across platforms. Beyond the automated gate, graphics-state output is verified during development by rasterizing PDFs with two independent renderers (PDFium and MuPDF) to confirm they actually *look* right, not merely that they contain the expected operators — a manual practice, not a CI step. See [How PeachPDF Is Tested](testing.md) for the full picture.
