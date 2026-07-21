@@ -1233,9 +1233,10 @@ namespace PeachPDF.Svg
 
         /// <summary>
         /// Emits one leaf clip shape's geometry. With no active transform (<paramref name="matrix"/> is
-        /// null) the geometry goes straight into the combined <paramref name="path"/> - byte-identical
-        /// to the untransformed path and zero extra allocation. Otherwise the shape is built into a
-        /// fresh sub-path, transformed by <paramref name="matrix"/>, and merged as a disjoint subpath.
+        /// null) the geometry goes straight into the combined <paramref name="path"/> - producing the
+        /// same output as the untransformed path, with no extra sub-path allocation. Otherwise the shape
+        /// is built into a fresh sub-path, transformed by <paramref name="matrix"/>, and merged as a
+        /// disjoint subpath.
         /// </summary>
         private static bool AppendClipLeaf(RGraphics g, RGraphicsPath path, RMatrix? matrix, Action<RGraphicsPath> build)
         {
