@@ -193,6 +193,23 @@ namespace PeachPDF.Html.Core
         public RPoint ScrollOffset { get; set; }
 
         /// <summary>
+        /// When true, <see cref="CssLayoutEngine.FlowBox"/>'s per-word page-break-avoidance check
+        /// (<see cref="Dom.CssRect.BreakPage"/>, which permanently jumps a replaced-element word's
+        /// <c>Top</c> to the next page) is skipped. Set around a throwaway/measurement-only layout
+        /// pass performed at a temporary, not-yet-final position - see
+        /// <see cref="Dom.CssLayoutEngineFlex"/>'s <c>MeasureItem</c>/<c>ResizeItem</c>/stretch
+        /// cross-size re-layout, which lay a flex item out at <c>(ClientLeft, ClientTop)</c> purely
+        /// to measure its natural size before <c>AssignLocations</c> translates it (via
+        /// <c>CssBox.OffsetTop</c>) to its real final position. Without this, a word whose temporary
+        /// position happens to straddle a page boundary gets pushed to the next page during
+        /// measurement - a decision based on coordinates that have nothing to do with where the item
+        /// actually ends up - and that jump silently survives the later translation (which only
+        /// shifts by a delta computed from the box's own <c>Location</c>, not from where its words
+        /// independently drifted to), permanently desyncing the word from its own box.
+        /// </summary>
+        internal bool SuppressWordPageBreaks { get; set; }
+
+        /// <summary>
         /// The top-left most location of the rendered html.<br/>
         /// This will offset the top-left corner of the rendered html.
         /// </summary>
