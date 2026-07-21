@@ -830,6 +830,8 @@ namespace PeachPDF.Tests.Html.Core.Dom
             public override void AddBezierTo(double x1, double y1, double x2, double y2, double x3, double y3) { }
             public override void AddArc(double x, double y, double radiusX, double radiusY, double rotationAngle, bool isLargeArc, bool sweepClockwise) { }
             public override void CloseFigure() { }
+            public override void Transform(PeachPDF.Html.Adapters.Entities.RMatrix matrix) { }
+            public override void AddPath(PeachPDF.Html.Adapters.RGraphicsPath path) { }
             public override PeachPDF.Html.Adapters.Entities.RFillMode FillMode { get; set; }
             public override void Dispose() { }
         }

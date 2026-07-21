@@ -286,6 +286,27 @@ namespace PeachPDF.PdfSharpCore.Drawing
         }
 
         /// <summary>
+        /// Applies an affine transform to every point in the path. Arcs are already stored as Bézier
+        /// segments (see AddArc), so transforming the control points is an exact transform of the whole
+        /// geometry for any affine matrix.
+        /// </summary>
+        public void Transform(XMatrix matrix)
+        {
+            for (int i = 0; i < _points.Count; i++)
+                _points[i] = matrix.Transform(_points[i]);
+        }
+
+        /// <summary>
+        /// Appends another path's points and segment types as disjoint subpath(s). The other path's
+        /// first point is a MoveTo, so it starts a new subpath rather than connecting to this one.
+        /// </summary>
+        public void Append(CoreGraphicsPath other)
+        {
+            _points.AddRange(other._points);
+            _types.AddRange(other._types);
+        }
+
+        /// <summary>
         /// Gets the path points in GDI+ style.
         /// </summary>
         public XPoint[] PathPoints { get { return _points.ToArray(); } }
