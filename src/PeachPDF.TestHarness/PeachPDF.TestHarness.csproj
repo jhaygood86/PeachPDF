@@ -23,6 +23,9 @@
     <None Update="LiberationMono-Regular.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="NotoEmoji-Regular.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="rfc2324.html">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

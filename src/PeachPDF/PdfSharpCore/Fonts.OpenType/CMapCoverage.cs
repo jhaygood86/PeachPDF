@@ -1,17 +1,82 @@
+using System;
 using System.Collections.Generic;
 using System.Text;
 
 namespace PeachPDF.PdfSharpCore.Fonts.OpenType
 {
     /// <summary>
-    /// Derives the set of codepoints a font actually supports from its format-4 <c>cmap</c> subtable, as a
-    /// compact list of inclusive <see cref="RuneRange"/>s (the same representation an <c>@font-face</c>
+    /// Derives the set of codepoints a font actually supports from its <c>cmap</c> subtables (format 4 for
+    /// the BMP, plus format 12 for supplementary-plane / astral codepoints such as emoji), as a compact
+    /// list of inclusive <see cref="RuneRange"/>s (the same representation an <c>@font-face</c>
     /// <c>unicode-range</c> produces). Used as a face's effective coverage when it declares no explicit
     /// <c>unicode-range</c>, so per-codepoint font matching can fall back to whichever family actually
     /// covers a character.
     /// </summary>
     internal static class CMapCoverage
     {
+        /// <summary>
+        /// Extracts covered codepoints from a whole <c>cmap</c> table: the format-4 BMP ranges plus, when
+        /// the font has a format-12 subtable, its astral ranges - sorted and coalesced into one list. Fast
+        /// path (the common case): a font with no format-12 subtable returns exactly its BMP coverage.
+        /// </summary>
+        public static IReadOnlyList<RuneRange> Extract(CMapTable? cmap)
+        {
+            if (cmap is null)
+                return [];
+
+            var bmp = Extract(cmap.cmap4);
+
+            if (cmap.cmap12?.startCharCode is null || cmap.cmap12.numGroups == 0)
+                return bmp;
+
+            var cmap12 = cmap.cmap12;
+
+            // Merge the BMP ranges and the format-12 groups by sorting on start, then coalescing - a
+            // format-12 subtable may itself include BMP codepoints, so a naive append wouldn't stay sorted.
+            var segments = new List<(long Start, long End)>(bmp.Count + (int)cmap12.numGroups);
+            foreach (var r in bmp)
+                segments.Add((r.Start.Value, r.End.Value));
+
+            for (int g = 0; g < cmap12.numGroups; g++)
+            {
+                long start = cmap12.startCharCode[g];
+                long end = cmap12.endCharCode[g];
+
+                if (start > end || start > 0x10FFFF)
+                    continue;
+                if (end > 0x10FFFF)
+                    end = 0x10FFFF;
+
+                // Split around the surrogate block (0xD800-0xDFFF, never legitimately mapped) so no emitted
+                // range ever contains a surrogate - a format-12 group may land inside it or span across it.
+                long belowEnd = Math.Min(end, 0xD7FF);
+                if (start <= belowEnd)
+                    segments.Add((start, belowEnd));
+                long aboveStart = Math.Max(start, 0xE000);
+                if (aboveStart <= end)
+                    segments.Add((aboveStart, end));
+            }
+
+            segments.Sort((a, b) => a.Start.CompareTo(b.Start));
+
+            var ranges = new List<RuneRange>(segments.Count);
+            foreach (var (start, end) in segments)
+            {
+                if (ranges.Count > 0 && start <= ranges[^1].End.Value + 1)
+                {
+                    var prev = ranges[^1];
+                    if (end > prev.End.Value)
+                        ranges[^1] = prev with { End = new Rune((int)end) };
+                }
+                else
+                {
+                    ranges.Add(new RuneRange(new Rune((int)start), new Rune((int)end)));
+                }
+            }
+
+            return ranges;
+        }
+
         /// <summary>
         /// Extracts covered codepoints as coalesced inclusive ranges from <paramref name="cmap4"/>.
         /// Uses each segment's <c>[startCount, endCount]</c> bounds (the standard 0xFFFF terminator

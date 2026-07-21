@@ -30,10 +30,10 @@
 #nullable disable warnings
 
 using PeachPDF.PdfSharpCore.Fonts.OpenType;
-using PeachPDF.PdfSharpCore.Pdf.Internal;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Text;
 
 namespace PeachPDF.PdfSharpCore.Fonts
 {
@@ -50,30 +50,28 @@ namespace PeachPDF.PdfSharpCore.Fonts
         internal OpenTypeDescriptor _descriptor;
 
         /// <summary>
-        /// Adds the characters of the specified string to the hashtable.
+        /// Adds the characters of the specified string to the hashtable, keyed by Unicode scalar value
+        /// (codepoint). Astral characters are handled as a single codepoint, not a surrogate pair.
         /// </summary>
         public void AddChars(string text)
         {
             if (text != null)
             {
                 bool symbol = _descriptor.FontFace.cmap.symbol;
-                int length = text.Length;
-                for (int idx = 0; idx < length; idx++)
+                foreach (Rune rune in text.EnumerateRunes())
                 {
-                    char ch = text[idx];
-                    if (!CharacterToGlyphIndex.ContainsKey(ch))
+                    int codepoint = rune.Value;
+                    if (!CharacterToGlyphIndex.ContainsKey(codepoint))
                     {
-                        char ch2 = ch;
-                        if (symbol)
+                        Rune lookup = rune;
+                        if (symbol && codepoint <= 0xFFFF)
                         {
-                            // Remap ch for symbol fonts.
-                            ch2 = (char)(ch | (_descriptor.FontFace.os2.usFirstCharIndex & 0xFF00));  // @@@ refactor
+                            // Remap for symbol fonts (BMP-only).
+                            lookup = new Rune(codepoint | (_descriptor.FontFace.os2.usFirstCharIndex & 0xFF00));
                         }
-                        int glyphIndex = _descriptor.CharCodeToGlyphIndex(ch2);
-                        CharacterToGlyphIndex.Add(ch, glyphIndex);
+                        int glyphIndex = _descriptor.CharCodeToGlyphIndex(lookup);
+                        CharacterToGlyphIndex.Add(codepoint, glyphIndex);
                         GlyphIndices[glyphIndex] = null;
-                        MinChar = (char)Math.Min(MinChar, ch);
-                        MaxChar = (char)Math.Max(MaxChar, ch);
                     }
                 }
             }
@@ -95,34 +93,6 @@ namespace PeachPDF.PdfSharpCore.Fonts
             }
         }
 
-        /// <summary>
-        /// Adds a ANSI characters.
-        /// </summary>
-        internal void AddAnsiChars()
-        {
-            byte[] ansi = new byte[256 - 32];
-            for (int idx = 0; idx < 256 - 32; idx++)
-                ansi[idx] = (byte)(idx + 32);
-            string text = PdfEncoders.WinAnsiEncoding.GetString(ansi, 0, ansi.Length);
-            AddChars(text);
-        }
-
-        internal bool Contains(char ch)
-        {
-            return CharacterToGlyphIndex.ContainsKey(ch);
-        }
-
-        public char[] Chars
-        {
-            get
-            {
-                char[] chars = new char[CharacterToGlyphIndex.Count];
-                CharacterToGlyphIndex.Keys.CopyTo(chars, 0);
-                Array.Sort(chars);
-                return chars;
-            }
-        }
-
         public int[] GetGlyphIndices()
         {
             int[] indices = new int[GlyphIndices.Count];
@@ -131,9 +101,7 @@ namespace PeachPDF.PdfSharpCore.Fonts
             return indices;
         }
 
-        public char MinChar = char.MaxValue;
-        public char MaxChar = char.MinValue;
-        public Dictionary<char, int> CharacterToGlyphIndex = new Dictionary<char, int>();
+        public Dictionary<int, int> CharacterToGlyphIndex = new Dictionary<int, int>();
         public Dictionary<int, object> GlyphIndices = new Dictionary<int, object>();
     }
 }

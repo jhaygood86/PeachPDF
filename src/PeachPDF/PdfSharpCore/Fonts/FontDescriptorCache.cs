@@ -123,29 +123,6 @@ namespace PeachPDF.PdfSharpCore.Fonts
             finally { Lock.ExitFontFactory(); }
         }
 
-        public static FontDescriptor GetOrCreateDescriptor(string idName, byte[] fontData)
-        {
-            //FontSelector1 selector = new FontSelector1(idName);
-            string fontDescriptorKey = FontDescriptor.ComputeKey(idName);
-            try
-            {
-                Lock.EnterFontFactory();
-                FontDescriptor descriptor;
-                if (!Singleton._cache.TryGetValue(fontDescriptorKey, out descriptor))
-                {
-                    descriptor = GetOrCreateOpenTypeDescriptor(fontDescriptorKey, idName, fontData);
-                    Singleton._cache.Add(fontDescriptorKey, descriptor);
-                }
-                return descriptor;
-            }
-            finally { Lock.ExitFontFactory(); }
-        }
-
-        static OpenTypeDescriptor GetOrCreateOpenTypeDescriptor(string fontDescriptorKey, string idName, byte[] fontData)
-        {
-            return new OpenTypeDescriptor(fontDescriptorKey, idName, fontData);
-        }
-
         /// <summary>
         /// Gets the singleton.
         /// </summary>

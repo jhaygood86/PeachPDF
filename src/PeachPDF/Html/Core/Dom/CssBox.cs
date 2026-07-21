@@ -835,13 +835,26 @@ namespace PeachPDF.Html.Core.Dom
                         // CssLayoutEngine.FlowBox actually needs to break the line - see AddWord.
                         var honorSoftHyphen = Hyphens != CssConstants.None;
 
+                        // Scan by whole codepoint (Rune), not UTF-16 code unit, so an astral character (an
+                        // emoji, a CJK Extension-B ideograph, etc.) is never split across its surrogate pair -
+                        // its two halves would otherwise each be treated as a separate per-character Asian
+                        // word break and emitted as two invalid lone-surrogate words.
                         endIdx = startIdx;
-                        while (endIdx < text.Length && !HtmlUtils.IsCollapsibleWhitespace(text[endIdx]) && text[endIdx] != '-'
-                               && WordBreak != CssConstants.BreakAll && !CommonUtils.IsAsianCharacter(text[endIdx]))
-                            endIdx++;
+                        while (endIdx < text.Length)
+                        {
+                            Rune.DecodeFromUtf16(text.AsSpan(endIdx), out var rune, out var runeLength);
+                            if (HtmlUtils.IsCollapsibleWhitespace(text[endIdx]) || text[endIdx] == '-'
+                                || WordBreak == CssConstants.BreakAll || CommonUtils.IsAsianCharacter(rune))
+                                break;
+                            endIdx += runeLength;
+                        }
 
-                        if (endIdx < text.Length && (text[endIdx] == '-' || WordBreak == CssConstants.BreakAll || CommonUtils.IsAsianCharacter(text[endIdx])))
-                            endIdx++;
+                        if (endIdx < text.Length)
+                        {
+                            Rune.DecodeFromUtf16(text.AsSpan(endIdx), out var rune, out var runeLength);
+                            if (text[endIdx] == '-' || WordBreak == CssConstants.BreakAll || CommonUtils.IsAsianCharacter(rune))
+                                endIdx += runeLength;
+                        }
 
                         if (endIdx > startIdx)
                         {

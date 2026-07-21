@@ -33,6 +33,7 @@ using PeachPDF.PdfSharpCore.Fonts;
 using PeachPDF.PdfSharpCore.Fonts.OpenType;
 using System;
 using System.Diagnostics;
+using System.Text;
 
 namespace PeachPDF.PdfSharpCore.Drawing
 {
@@ -62,50 +63,58 @@ namespace PeachPDF.PdfSharpCore.Drawing
                 Debug.Assert(descriptor.Ascender > 0);
 
                 bool symbol = descriptor.FontFace.cmap.symbol;
-                int length = text.Length;
-                int adjustedLength = length;
+                int adjustedLength = 0;
                 var height = singleLineHeight;
                 int maxWidth = 0;
                 int width = 0;
-                for (int idx = 0; idx < length; idx++)
+                // A '\n' starts a new line only when another rune follows it (a trailing newline adds no
+                // line); iterating runes (not UTF-16 units) loses the index used for that "is-last" test,
+                // so defer the line break until the next rune actually arrives.
+                bool pendingNewlineBreak = false;
+                foreach (Rune rune in text.EnumerateRunes())
                 {
-                    char ch = text[idx];
+                    if (pendingNewlineBreak)
+                    {
+                        maxWidth = Math.Max(maxWidth, width);
+                        width = 0;
+                        height += lineGapHeight + singleLineHeight;
+                        pendingNewlineBreak = false;
+                    }
+
+                    int value = rune.Value;
+                    adjustedLength++;
 
                     // Handle line feed ( \n)
-                    if (ch == 10)
+                    if (value == 10)
                     {
                         adjustedLength--;
-                        if (idx < (length - 1))
-                        {
-                            maxWidth = Math.Max(maxWidth, width);
-                            width = 0;
-                            height += lineGapHeight + singleLineHeight;
-                        }
+                        pendingNewlineBreak = true;
 
                         continue;
                     }
 
                     // HACK: Handle tabulator sign as space (\t)
-                    if (ch == 9)
+                    if (value == 9)
                     {
-                        ch = ' ';
+                        value = ' ';
                     }
 
                     // HACK: Unclear what to do here.
-                    if (ch < 32)
+                    if (value < 32)
                     {
                         adjustedLength--;
 
                         continue;
                     }
 
-                    if (symbol)
+                    Rune lookup = new Rune(value);
+                    if (symbol && value <= 0xFFFF)
                     {
-                        // Remap ch for symbol fonts.
-                        ch = (char)(ch | (descriptor.FontFace.os2.usFirstCharIndex & 0xFF00));  // @@@ refactor
+                        // Remap for symbol fonts (BMP-only).
                         // Used | instead of + because of: http://PeachPDF.PdfSharpCore.codeplex.com/workitem/15954
+                        lookup = new Rune(value | (descriptor.FontFace.os2.usFirstCharIndex & 0xFF00));
                     }
-                    int glyphIndex = descriptor.CharCodeToGlyphIndex(ch);
+                    int glyphIndex = descriptor.CharCodeToGlyphIndex(lookup);
                     width += descriptor.GlyphIndexToWidth(glyphIndex);
                 }
                 maxWidth = Math.Max(maxWidth, width);

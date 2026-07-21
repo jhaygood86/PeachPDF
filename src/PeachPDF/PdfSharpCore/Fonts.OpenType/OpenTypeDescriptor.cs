@@ -68,33 +68,6 @@ namespace PeachPDF.PdfSharpCore.Fonts.OpenType
             }
         }
 
-        internal OpenTypeDescriptor(string fontDescriptorKey, string idName, byte[] fontData)
-            : base(fontDescriptorKey)
-        {
-            try
-            {
-                FontFace = new OpenTypeFontface(fontData, idName);
-                // Try to get real name form name table
-                if (idName.Contains("XPS-Font-") && FontFace.name != null && FontFace.name.Name.Length != 0)
-                {
-                    string tag = String.Empty;
-                    if (idName.IndexOf('+') == 6)
-                        tag = idName.Substring(0, 6);
-                    idName = tag + "+" + FontFace.name.Name;
-                    if (FontFace.name.Style.Length != 0)
-                        idName += "," + FontFace.name.Style;
-                    //idName = idName.Replace(" ", "");
-                }
-                FontName = idName;
-                Initialize();
-            }
-            catch (Exception)
-            {
-                GetType();
-                throw;
-            }
-        }
-
         internal OpenTypeFontface FontFace;
 
         void Initialize()
@@ -250,7 +223,7 @@ namespace PeachPDF.PdfSharpCore.Fonts.OpenType
                     // Remap ch for symbol fonts.
                     ch = (char)(ch | (FontFace.os2.usFirstCharIndex & 0xFF00));  // @@@ refactor
                 }
-                int glyphIndex = CharCodeToGlyphIndex(ch);
+                int glyphIndex = CharCodeToGlyphIndex(new Rune(ch));
                 Widths[idx] = GlyphIndexToPdfWidth(glyphIndex);
             }
         }
@@ -283,16 +256,10 @@ namespace PeachPDF.PdfSharpCore.Fonts.OpenType
         }
 
         /// <summary>
-        /// Maps a unicode to the index of the corresponding glyph.
-        /// See OpenType spec "cmap - Character To Glyph Index Mapping Table / Format 4: Segment mapping to delta values"
-        /// for details about this a little bit strange looking algorithm.
-        /// </summary>
-        public int CharCodeToGlyphIndex(char value) => CharCodeToGlyphIndexCore(value);
-
-        /// <summary>
-        /// <see cref="Rune"/> (Unicode scalar value) overload of <see cref="CharCodeToGlyphIndex(char)"/> -
-        /// the correct type for a full codepoint. A <see cref="Rune"/> above <c>U+FFFF</c> has no mapping
-        /// in the format-4 cmap this fork reads and resolves to the missing glyph (index 0).
+        /// Maps a <see cref="Rune"/> (Unicode scalar value / codepoint) to the index of the corresponding
+        /// glyph. See OpenType spec "cmap - Character To Glyph Index Mapping Table". BMP codepoints resolve
+        /// through the format-4 subtable; codepoints above <c>U+FFFF</c> resolve through the format-12
+        /// subtable when the font provides one, otherwise the missing glyph (index 0).
         /// </summary>
         public int CharCodeToGlyphIndex(Rune value) => CharCodeToGlyphIndexCore(value.Value);
 
@@ -304,10 +271,11 @@ namespace PeachPDF.PdfSharpCore.Fonts.OpenType
 
         private int CharCodeToGlyphIndexCore(int value)
         {
-            // Format-4 cmap only maps the Basic Multilingual Plane; a codepoint above U+FFFF (astral,
-            // reachable via a Rune) has no mapping here and resolves to the missing glyph.
+            // The format-4 cmap only maps the Basic Multilingual Plane. A codepoint above U+FFFF (astral,
+            // e.g. emoji) is resolved through the font's format-12 subtable when it has one; a font
+            // without format-12 has no astral mapping, so it resolves to the missing glyph.
             if (value > 0xFFFF)
-                return 0;
+                return FontFace.cmap.cmap12?.MapCodeToGlyph(value) ?? 0;
 
             try
             {
@@ -368,13 +336,6 @@ namespace PeachPDF.PdfSharpCore.Fonts.OpenType
                 GetType();
                 throw;
             }
-        }
-
-        public int PdfWidthFromCharCode(char ch)
-        {
-            int idx = CharCodeToGlyphIndex(ch);
-            int width = GlyphIndexToPdfWidth(idx);
-            return width;
         }
 
         /// <summary>

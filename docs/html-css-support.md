@@ -297,13 +297,15 @@ Per CSS2.1 §14.2, the root element's background doesn't just paint its own box 
 
 Font matching is per-codepoint, following the [CSS Fonts 4 matching algorithm](https://developer.mozilla.org/en-US/docs/Web/CSS/@font-face/unicode-range): each character is resolved to the first family in the `font-family` list whose face both covers that character (via its `@font-face` [`unicode-range`](https://developer.mozilla.org/en-US/docs/Web/CSS/@font-face/unicode-range), or, for a system/rangeless font, its actual `cmap` coverage) and contains a glyph for it. A run whose primary font lacks a glyph for some character therefore falls back to the next declared family that covers it, and multiple `@font-face` rules sharing one `font-family` but declaring different `unicode-range` subsets each supply their own characters.
 
-Two boundaries remain: fallback walks the declared `font-family` stack (plus the default font) but not a last-resort scan of every installed font, so a character no declared family covers still shows a missing-glyph box; and coverage is derived from the font's format-4 `cmap` subtable (the Basic Multilingual Plane), so a font's supplementary-plane (astral, e.g. emoji) coverage isn't detected for fallback purposes.
+Supplementary-plane (astral) characters above U+FFFF — where nearly all emoji live — are supported: they resolve through the font's format-12 `cmap` subtable, both for glyph lookup and for coverage-based fallback, and render the font's monochrome `glyf`/`CFF` outline. **Color** emoji is not supported: PeachPDF embeds the font program and renders its outlines, so color-glyph tables (`COLR`/`CPAL`, `CBDT`/`CBLC`, `sbix`, SVG-in-OpenType) are ignored — a color-emoji font such as Noto Color Emoji renders blank or monochrome; a monochrome emoji font such as Noto Emoji renders its outlines.
+
+Remaining boundaries: fallback walks the declared `font-family` stack (plus the default font) but not a last-resort scan of every installed font, so a character no declared family covers still shows a missing-glyph box; variation-selector sequences (`cmap` format 14) are not applied; and a font offering *only* a format-12 subtable (with no format-4 subtable) is not used.
 
 ### Text Layout
 
 | Property | MDN Reference | Notes |
 |----------|--------------|-------|
-| `direction` | [direction](https://developer.mozilla.org/en-US/docs/Web/CSS/direction) | `ltr` and `rtl` |
+| `direction` | [direction](https://developer.mozilla.org/en-US/docs/Web/CSS/direction) | `ltr` and `rtl`. `rtl` mirrors the visual order of whole word boxes on a line; there is no Unicode Bidi Algorithm (no per-character reordering or mixed-direction resolution), and `unicode-bidi` is parsed but has no layout effect. See [Text shaping](#text-shaping) |
 | `hyphens` | [hyphens](https://developer.mozilla.org/en-US/docs/Web/CSS/hyphens) | `none`, `manual`, `auto` are parsed, cascaded, and inherited. `manual` and `auto` both honor an explicit soft hyphen (`&shy;`/U+00AD) as a line-break opportunity, rendering a literal `-` glyph only when that break is actually used. `auto` additionally performs real pattern-based automatic hyphenation (Liang's algorithm) for ~73 languages — see the note below the table for language coverage and exclusions |
 | `letter-spacing` | [letter-spacing](https://developer.mozilla.org/en-US/docs/Web/CSS/letter-spacing) | Full support, including negative values; spacing is added after every character including the last (realized via the PDF `Tc` character-spacing operator, which applies to every glyph shown), and one letter-spacing unit is folded into the following inter-word gap so adjacent words never collapse together. Per CSS Text Level 3 §7.2, spacing is not suppressed at the start/end of a *word* — only at the start/end of a *line*, which this engine does not special-case, leaving each line's own leading/trailing edge with a sub-pixel, visually negligible extra inset |
 | `text-align` | [text-align](https://developer.mozilla.org/en-US/docs/Web/CSS/text-align) | `left`, `right`, `center`, `justify` |
@@ -316,6 +318,16 @@ Two boundaries remain: fallback walks the declared `font-family` stack (plus the
 | `white-space` | [white-space](https://developer.mozilla.org/en-US/docs/Web/CSS/white-space) | `normal`, `nowrap`, `pre`, `pre-wrap`, `pre-line` |
 | `word-break` | [word-break](https://developer.mozilla.org/en-US/docs/Web/CSS/word-break) | `normal`, `break-all`, `keep-all` |
 | `word-spacing` | [word-spacing](https://developer.mozilla.org/en-US/docs/Web/CSS/word-spacing) | Full support |
+
+#### Text shaping
+
+PeachPDF does not perform OpenType text shaping. Each character is mapped 1:1 from its Unicode codepoint to a glyph via the font's `cmap`; there is no [OpenType Layout](https://learn.microsoft.com/en-us/typography/opentype/spec/ttochap1) (`GSUB`/`GPOS`) stage. In practice this means:
+
+- **Ligatures** are not formed automatically. A precomposed ligature that has its own codepoint (e.g. `ﬁ`, U+FB01) renders if the source text actually contains that codepoint and the font maps it; but writing `f` + `i` yields two separate glyphs, and designer-defined ligatures that have no codepoint are unreachable. `font-variant-ligatures` is not supported.
+- **Complex-script shaping** (Arabic joining and initial/medial/final/isolated contextual forms, Indic reordering, mark positioning) is not performed — each codepoint uses its nominal glyph regardless of its neighbours.
+- **Bidirectional text**: `direction: rtl` mirrors the visual order of whole word boxes only; there is no [Unicode Bidi Algorithm](https://www.unicode.org/reports/tr9/) (no per-character reordering, no mixed-direction resolution), and `unicode-bidi` has no layout effect.
+
+Kerning (`GPOS`) is likewise not applied.
 
 #### `hyphens: auto` language coverage
 

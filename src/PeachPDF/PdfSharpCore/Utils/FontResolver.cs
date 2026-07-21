@@ -532,7 +532,7 @@ namespace PeachPDF.PdfSharpCore.Utils
             try
             {
                 var fontSource = XFontSource.GetOrCreateFrom(GetFont(faceName));
-                coverage = CMapCoverage.Extract(fontSource.Fontface?.cmap?.cmap4);
+                coverage = CMapCoverage.Extract(fontSource.Fontface?.cmap);
             }
             catch
             {

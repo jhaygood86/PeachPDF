@@ -95,18 +95,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             return GetFontName(font, out pdfFont);
         }
 
-        internal string GetFontName(string idName, byte[] fontData, out PdfFont pdfFont)
-        {
-            pdfFont = _document.FontTable.GetFont(idName, fontData);
-            Debug.Assert(pdfFont != null);
-            string name = Resources.AddFont(pdfFont);
-            return name;
-        }
-
-        string IContentStream.GetFontName(string idName, byte[] fontData, out PdfFont pdfFont)
-        {
-            return GetFontName(idName, fontData, out pdfFont);
-        }
 
         /// <summary>
         /// Gets the resource name of the specified image within this dictionary.

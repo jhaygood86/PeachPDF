@@ -77,13 +77,16 @@ namespace PeachPDF.Html.Core.Utils
 
 
         /// <summary>
-        /// Check if the given char is of Asian range.
+        /// Check if the given codepoint is of Asian range. Takes a <see cref="Rune"/> (a whole Unicode
+        /// scalar value) rather than a <c>char</c>: the range 0x4E00-0xFA2D otherwise wrongly includes the
+        /// UTF-16 surrogate range (0xD800-0xDFFF), which would classify each half of an astral character
+        /// (e.g. an emoji) as its own Asian character and split the surrogate pair into two invalid words.
         /// </summary>
-        /// <param name="ch">the character to check</param>
+        /// <param name="rune">the codepoint to check</param>
         /// <returns>true - Asian char, false - otherwise</returns>
-        public static bool IsAsianCharacter(char ch)
+        public static bool IsAsianCharacter(Rune rune)
         {
-            return ch >= 0x4e00 && ch <= 0xFA2D;
+            return rune.Value >= 0x4e00 && rune.Value <= 0xFA2D;
         }
 
         /// <summary>

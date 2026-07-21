@@ -3546,6 +3546,43 @@ await SaveShowcaseAsync("unicode_range", "Fonts & Text", "@font-face unicode-ran
     "Per-character font matching: a monospaced webfont declared only for the digit range (U+0030-0039) supplies the digits, while letters in the same text run fall back to serif - each character resolved to the family whose unicode-range (or glyph coverage) covers it.",
     unicodeRangeHtml, pdfConfig);
 
+// Emoji / astral (supplementary-plane, codepoint > U+FFFF) rendering. Nearly all emoji live above
+// U+FFFF and are reached through the font's cmap format-12 subtable; a monochrome emoji font (here a
+// subset of Noto Emoji) renders its glyf outlines. Color-glyph tables (COLR/CBDT/sbix) are not
+// composited - outlines only.
+var emojiFontUri = "data:font/truetype;base64," +
+    Convert.ToBase64String(File.ReadAllBytes("NotoEmoji-Regular.ttf"));
+var emojiRow = string.Join(" ", new[] { 0x1F600, 0x1F60A, 0x1F602, 0x1F44D, 0x1F389, 0x1F680, 0x2764 }
+    .Select(char.ConvertFromUtf32));
+var grinning = char.ConvertFromUtf32(0x1F600);
+var emojiHtml = $$"""
+    <html>
+    <head>
+    <style>
+        @font-face {
+            font-family: 'Emoji';
+            src: url('{{emojiFontUri}}') format('truetype');
+        }
+        body { font-family: serif; margin: 40px; }
+        h1 { font-size: 20pt; }
+        .demo { font-family: 'Emoji'; font-size: 40pt; line-height: 1.4; }
+        .note { color: #666; font-size: 11pt; }
+    </style>
+    </head>
+    <body>
+        <h1>Emoji (astral codepoints)</h1>
+        <p class="demo">{{emojiRow}}</p>
+        <p class="note">Every glyph above U+FFFF (e.g. {{grinning}} = U+1F600) is resolved through the
+        font's cmap format-12 subtable and rendered from its monochrome outline. Color emoji fonts
+        (COLR/CBDT/sbix) are not composited.</p>
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("emoji", "Fonts & Text", "Emoji (astral codepoints)",
+    "Supplementary-plane (astral, U+FFFF+) glyph rendering: emoji resolve through the font's cmap format-12 subtable and render as monochrome outlines from a bundled subset of Noto Emoji. Color-glyph tables (COLR/CBDT/sbix) are not composited.",
+    emojiHtml, pdfConfig);
+
 // The manifest that drives the website's /showcase page (see docs/showcase.html and
 // .github/workflows/pages.yml). Field names are camelCased for Liquid (site.data.showcases).
 var manifestJson = JsonSerializer.Serialize(showcaseManifest,

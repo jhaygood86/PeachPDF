@@ -70,19 +70,6 @@ namespace PeachPDF.PdfSharpCore.Fonts.OpenType
             _fullFaceName = fontface._fullFaceName;
         }
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="OpenTypeFontface"/> class.
-        /// </summary>
-        public OpenTypeFontface(byte[] data, string faceName)
-        {
-            _fullFaceName = faceName;
-            // Always save a copy of the font bytes.
-            int length = data.Length;
-            //FontSource = new XFontSource(faceName, new byte[length]);
-            Array.Copy(data, FontSource.Bytes, length);
-            Read();
-        }
-
         public OpenTypeFontface(XFontSource fontSource)
         {
             FontSource = fontSource;

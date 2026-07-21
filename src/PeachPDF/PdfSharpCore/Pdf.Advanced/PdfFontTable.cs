@@ -85,29 +85,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             return pdfFont;
         }
 
-#if true
-        /// <summary>
-        /// Gets a PdfFont from a font program. If no PdfFont already exists, a new one is created.
-        /// </summary>
-        public PdfFont GetFont(string idName, byte[] fontData)
-        {
-            Debug.Assert(false);
-            //FontSelector selector = new FontSelector(idName);
-            string selector = null; // ComputeKey(font); //new FontSelector(font);
-            PdfFont pdfFont;
-            if (!_fonts.TryGetValue(selector, out pdfFont))
-            {
-                //if (font.Unicode)
-                pdfFont = new PdfType0Font(Owner, idName, fontData, false);
-                //else
-                //  pdfFont = new PdfTrueTypeFont(_owner, font);
-                //pdfFont.Document = _document;
-                Debug.Assert(pdfFont.Owner == Owner);
-                _fonts[selector] = pdfFont;
-            }
-            return pdfFont;
-        }
-#endif
 
         /// <summary>
         /// Tries to gets a PdfFont from the font dictionary.
