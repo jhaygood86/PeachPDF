@@ -83,14 +83,19 @@ namespace PeachPDF.PdfSharpCore.Fonts.OpenType
             try
             {
                 Lock.EnterFontFactory();
-                OpenTypeFontface fontfaceCheck;
-                if (TryGetFontface(fontface.FullFaceName, out fontfaceCheck))
-                {
-                    if (fontfaceCheck.CheckSum != fontface.CheckSum)
-                        throw new InvalidOperationException("OpenTypeFontface with same signature but different bytes.");
-                    return fontfaceCheck;
-                }
-                Singleton._fontfaceCache.Add(fontface.FullFaceName, fontface);
+
+                // Content (the byte checksum) is a font's true identity, not its self-reported internal
+                // name: two DIFFERENT font files can legitimately share one FullFaceName (a common
+                // webfont-subset pattern). Intern by checksum first so identical bytes coalesce to a
+                // single fontface regardless of name...
+                if (Singleton._fontfacesByCheckSum.TryGetValue(fontface.CheckSum, out var byChecksum))
+                    return byChecksum;
+
+                // ...and let a same-name/different-bytes face coexist: the first writer keeps the
+                // name-keyed slot (a convenience lookup whose only reader is this guard), while every
+                // distinct-byte face stays addressable by its checksum. This replaces a hard throw that
+                // fired exactly when two subset files shared an internal name.
+                Singleton._fontfaceCache.TryAdd(fontface.FullFaceName, fontface);
                 Singleton._fontfacesByCheckSum.Add(fontface.CheckSum, fontface);
                 return fontface;
             }

@@ -3513,6 +3513,39 @@ await SaveShowcaseAsync("print_catalog", "Real-World Documents", "Print Catalog"
     "A ten-page furniture catalog designed as a book: true four-edge full-bleed gradient cover via @page :first { margin: 0 }, per-item SVG art, string-set running headers, a margin-box image logo, and mirrored gutter folios via :left/:right page selectors.",
     catalogHtml, new PdfGenerateConfig { PageSize = PageSize.Letter });
 
+// @font-face unicode-range: font matching is per-character. The monospaced webfont is declared only
+// for the digit range (U+0030-0039), so digits render in it while letters in the same run fall back to
+// the serif family - a per-character split within one text run, honoring the unicode-range descriptor.
+var monoDigitsFontUri = "data:font/truetype;base64," +
+    Convert.ToBase64String(File.ReadAllBytes("LiberationMono-Regular.ttf"));
+var unicodeRangeHtml = $$"""
+    <html>
+    <head>
+    <style>
+        @font-face {
+            font-family: 'MonoDigits';
+            src: url('{{monoDigitsFontUri}}') format('truetype');
+            unicode-range: U+0030-0039;
+        }
+        body { font-family: serif; margin: 40px; }
+        h1 { font-size: 20pt; }
+        .demo { font-family: 'MonoDigits', serif; font-size: 32pt; }
+        .note { color: #666; font-size: 11pt; }
+    </style>
+    </head>
+    <body>
+        <h1>@font-face unicode-range</h1>
+        <p class="demo">Invoice 2024-00731 - Total 1,299</p>
+        <p class="note">The digits come from the monospaced webfont (unicode-range: U+0030-0039);
+        every letter falls back to serif within the same run - per-character font matching.</p>
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("unicode_range", "Fonts & Text", "@font-face unicode-range",
+    "Per-character font matching: a monospaced webfont declared only for the digit range (U+0030-0039) supplies the digits, while letters in the same text run fall back to serif - each character resolved to the family whose unicode-range (or glyph coverage) covers it.",
+    unicodeRangeHtml, pdfConfig);
+
 // The manifest that drives the website's /showcase page (see docs/showcase.html and
 // .github/workflows/pages.yml). Field names are camelCased for Liquid (site.data.showcases).
 var manifestJson = JsonSerializer.Serialize(showcaseManifest,

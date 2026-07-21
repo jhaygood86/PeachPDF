@@ -34,7 +34,6 @@ namespace PeachPDF.CSS
         {
             Start = range.Replace(Symbols.QuestionMark, '0');
             End = range.Replace(Symbols.QuestionMark, 'F');
-            SelectedRange = GetRange();
         }
 
         public RangeToken(string start, string end, TextPosition position)
@@ -42,12 +41,17 @@ namespace PeachPDF.CSS
         {
             Start = start;
             End = end;
-            SelectedRange = GetRange();
         }
 
         //public bool IsEmpty => (SelectedRange == null) || (SelectedRange.Length == 0);
         public string Start { get; }
         public string End { get; }
-        public string[] SelectedRange { get; }
+
+        // Computed lazily on first access: materializing the full codepoint list is only needed by a
+        // caller that actually enumerates it, and a wide range (e.g. U+0-10FFFF) would otherwise
+        // allocate over a million strings the instant the token is created. Consumers that only read
+        // the Start/End hex bounds (e.g. @font-face unicode-range parsing) never trigger it.
+        private string[] _selectedRange;
+        public string[] SelectedRange => _selectedRange ??= GetRange();
     }
 }

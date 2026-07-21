@@ -640,6 +640,7 @@ namespace PeachPDF.Html.Core.Utils
                     break;
                 case "font-family":
                     cssBox.FontFamily = valueParser.GetFontFamilyByName(value);
+                    cssBox.FontFamilyList = value;
                     break;
                 case "font-size":
                     cssBox.FontSize = value;

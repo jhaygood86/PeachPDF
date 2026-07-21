@@ -103,5 +103,13 @@ namespace PeachPDF.PdfSharpCore.Fonts
         public bool OverrideStyleSimulations;
 
         public XStyleSimulations StyleSimulations;
+
+        /// <summary>
+        /// The specific Unicode scalar value this request is resolving a font for, when doing
+        /// per-codepoint font matching (unicode-range / glyph-coverage fallback). Null for ordinary
+        /// box/metrics resolution, which is not codepoint-scoped. When set, face selection is restricted
+        /// to faces that cover this codepoint (see <c>FontResolver.ResolveTypeface</c>).
+        /// </summary>
+        public System.Text.Rune? Codepoint;
     }
 }

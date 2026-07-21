@@ -293,9 +293,11 @@ Per CSS2.1 §14.2, the root element's background doesn't just paint its own box 
 | `line-height` | [line-height](https://developer.mozilla.org/en-US/docs/Web/CSS/line-height) | Full support |
 | `vertical-align` | [vertical-align](https://developer.mozilla.org/en-US/docs/Web/CSS/vertical-align) | `baseline`, `sub`, `super`, `top`, `middle`, `bottom`, `text-top`, `text-bottom`, and length/percentage values — full support for any inline-level box relative to its line box, not just table cells (which use a separate, table-specific alignment algorithm — see [Tables](#tables)) |
 
-#### Font selection is per-run, not per-character
+#### Per-character font matching and coverage fallback
 
-PeachPDF resolves one font for an entire text run (a `CssBox`'s contiguous text), not per individual character. A run whose resolved font lacks a glyph for some of its characters (e.g. mixed-script text, or an emoji/symbol the font doesn't cover) shows missing-glyph boxes for those characters rather than falling back to a different, glyph-covering font — there is no per-character glyph-coverage fallback across multiple fonts. Splitting mixed-script content into separate elements with their own `font-family` is the current workaround.
+Font matching is per-codepoint, following the [CSS Fonts 4 matching algorithm](https://developer.mozilla.org/en-US/docs/Web/CSS/@font-face/unicode-range): each character is resolved to the first family in the `font-family` list whose face both covers that character (via its `@font-face` [`unicode-range`](https://developer.mozilla.org/en-US/docs/Web/CSS/@font-face/unicode-range), or, for a system/rangeless font, its actual `cmap` coverage) and contains a glyph for it. A run whose primary font lacks a glyph for some character therefore falls back to the next declared family that covers it, and multiple `@font-face` rules sharing one `font-family` but declaring different `unicode-range` subsets each supply their own characters.
+
+Two boundaries remain: fallback walks the declared `font-family` stack (plus the default font) but not a last-resort scan of every installed font, so a character no declared family covers still shows a missing-glyph box; and coverage is derived from the font's format-4 `cmap` subtable (the Basic Multilingual Plane), so a font's supplementary-plane (astral, e.g. emoji) coverage isn't detected for fallback purposes.
 
 ### Text Layout
 
@@ -481,7 +483,7 @@ These properties control how content breaks across PDF pages. Both the legacy `p
 
 | At-rule | Notes |
 |---------|-------|
-| `@font-face` | `src` supports `url()` (remote/data-URI, with a comma-separated fallback list — each candidate is tried in order until one loads) and `local()`. The rule's own `font-weight`/`font-style`/`font-stretch` descriptors are authoritative for how that specific resource participates in matching, independent of what the font file's own internal tables say — this is what makes real multi-variant families (e.g. separate rules for weight 400 and 700) work reliably. `unicode-range` is parsed but not honored: all sources apply to the full character range regardless of a declared subset. See [Fonts](usage-examples.md#fonts) |
+| `@font-face` | `src` supports `url()` (remote/data-URI, with a comma-separated fallback list — each candidate is tried in order until one loads) and `local()`. The rule's own `font-weight`/`font-style`/`font-stretch` descriptors are authoritative for how that specific resource participates in matching, independent of what the font file's own internal tables say — this is what makes real multi-variant families (e.g. separate rules for weight 400 and 700) work reliably. `unicode-range` is honored: multiple rules sharing a family but declaring different codepoint subsets each supply their own characters, and characters outside every declared subset fall back to the next family in the stack (see [Per-character font matching](#per-character-font-matching-and-coverage-fallback)). When two subset files share one internal font name (a common webfont pattern), each is still treated as its own resource. See [Fonts](usage-examples.md#fonts) |
 | `@page` | Full support; see [CSS Paged Media](#css-paged-media) below |
 | `@media` | Partial support; `print` and `all` media types apply, `screen` is ignored; see [CSS Media Queries](#css-media-queries) below |
 | `@keyframes` | Not supported |

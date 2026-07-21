@@ -287,8 +287,28 @@ namespace PeachPDF.PdfSharpCore.Fonts.OpenType
         /// See OpenType spec "cmap - Character To Glyph Index Mapping Table / Format 4: Segment mapping to delta values"
         /// for details about this a little bit strange looking algorithm.
         /// </summary>
-        public int CharCodeToGlyphIndex(char value)
+        public int CharCodeToGlyphIndex(char value) => CharCodeToGlyphIndexCore(value);
+
+        /// <summary>
+        /// <see cref="Rune"/> (Unicode scalar value) overload of <see cref="CharCodeToGlyphIndex(char)"/> -
+        /// the correct type for a full codepoint. A <see cref="Rune"/> above <c>U+FFFF</c> has no mapping
+        /// in the format-4 cmap this fork reads and resolves to the missing glyph (index 0).
+        /// </summary>
+        public int CharCodeToGlyphIndex(Rune value) => CharCodeToGlyphIndexCore(value.Value);
+
+        /// <summary>
+        /// Whether this font actually contains a glyph for <paramref name="value"/> - i.e. its cmap maps
+        /// it to something other than the missing glyph. Used to drive per-codepoint font fallback.
+        /// </summary>
+        public bool HasGlyph(Rune value) => CharCodeToGlyphIndexCore(value.Value) != 0;
+
+        private int CharCodeToGlyphIndexCore(int value)
         {
+            // Format-4 cmap only maps the Basic Multilingual Plane; a codepoint above U+FFFF (astral,
+            // reachable via a Rune) has no mapping here and resolves to the missing glyph.
+            if (value > 0xFFFF)
+                return 0;
+
             try
             {
                 CMap4 cmap4 = FontFace.cmap.cmap4;
