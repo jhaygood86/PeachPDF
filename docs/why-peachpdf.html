@@ -55,13 +55,17 @@ title: Why PeachPDF?
       <h3>Developed in the open</h3>
       <p>Every line of source is on <a href="https://github.com/jhaygood86/PeachPDF" rel="noopener">GitHub</a>. Read it, audit it, debug into it, fork it. Optional <a href="{{ '/support.html' | relative_url }}">paid support</a> and <a href="{{ '/sponsorship.html' | relative_url }}">sponsorship</a> exist for teams that want them — the library never depends on either.</p>
     </div>
+    <div class="card">
+      <h3>Runs on every supported .NET</h3>
+      <p>PeachPDF supports <strong>.NET 8 and newer</strong>, in step with <a href="https://dotnet.microsoft.com/platform/support/policy/dotnet-core" rel="noopener">Microsoft's own .NET support policy</a>, and is ready for trimmed and AOT-compiled deployments. When a new .NET lands, PeachPDF is there — no legacy runtime shims to carry.</p>
+    </div>
   </div>
   <p class="landing-lede">Read the full <a href="{{ '/license.html' | relative_url }}">license and FAQ</a>.</p>
 </section>
 
 <section class="landing-section">
   <h2 class="landing-h2">How PeachPDF compares</h2>
-  <p class="landing-lede">The .NET HTML-to-PDF landscape splits three ways: wrap a browser, wrap a native binary, or make you lay out the PDF in code. PeachPDF takes a fourth path — a real HTML/CSS layout engine written in managed .NET.</p>
+  <p class="landing-lede">The .NET HTML-to-PDF landscape splits three ways: wrap a browser, wrap a native binary, or make you lay out the PDF in code. PeachPDF takes a fourth path — a real HTML/CSS layout engine written in managed .NET. The <strong>.NET runtime support</strong> column shows which runtimes each targets.</p>
   <div class="table-breakout">
   <table>
     <thead>
@@ -72,6 +76,7 @@ title: Why PeachPDF?
         <th>How it renders</th>
         <th>Accessible (tagged) PDF</th>
         <th>Native / external dependencies</th>
+        <th>.NET runtime support</th>
         <th>Containers &amp; serverless</th>
         <th>Status</th>
       </tr>
@@ -84,6 +89,7 @@ title: Why PeachPDF?
         <td>Own layout engine, fully in-process</td>
         <td>✅ Optional tagged output with a structure tree; tag mapping customizable per element via CSS (<code>-peachpdf-pdf-tag-type</code>, including <code>none</code> for decorative content)</td>
         <td>None — pure managed .NET</td>
+        <td>✅ .NET 8 and newer — every currently-supported .NET version</td>
         <td>Excellent — no browser, no native binaries, works in trimmed and AOT deployments</td>
         <td>Actively developed</td>
       </tr>
@@ -94,6 +100,7 @@ title: Why PeachPDF?
         <td>Embedded Chromium renderer</td>
         <td>⚠️ PDF/A and PDF/UA export options; no per-element tag control</td>
         <td>Ships Chromium native binaries with the package</td>
+        <td>.NET Framework 4.6.2+, .NET Standard 2.0, .NET Core / .NET 5–10</td>
         <td>Works, but images grow by hundreds of MB</td>
         <td>Actively developed</td>
       </tr>
@@ -104,6 +111,7 @@ title: Why PeachPDF?
         <td>Drives a headless Chrome in a separate process</td>
         <td>⚠️ Chrome can emit tagged PDFs; no tag customization</td>
         <td>Downloads a full Chromium build (hundreds of MB)</td>
+        <td>.NET Standard 2.0 and .NET 8+</td>
         <td>Hard — browser install, sandbox flags, and extra memory in every image</td>
         <td>Actively developed</td>
       </tr>
@@ -114,6 +122,7 @@ title: Why PeachPDF?
         <td>Wraps the native <code>libwkhtmltox</code> library</td>
         <td>❌ Untagged output</td>
         <td>Per-platform native library you deploy yourself</td>
+        <td>.NET Standard 2.0 / .NET Core (dormant)</td>
         <td>Fragile — native loading issues and long-standing thread-safety problems</td>
         <td>Dormant — no releases in years</td>
       </tr>
@@ -124,6 +133,7 @@ title: Why PeachPDF?
         <td>External command-line process</td>
         <td>❌ Untagged output</td>
         <td>Native binary installed on the host</td>
+        <td>Language-agnostic external CLI</td>
         <td>Possible, but you're baking an archived tool into new images</td>
         <td>Archived — deprecated by its maintainers</td>
       </tr>
@@ -134,6 +144,7 @@ title: Why PeachPDF?
         <td>External native process</td>
         <td>✅ Strong tagged / PDF-UA support with CSS tag customization</td>
         <td>Native binary installed on the host</td>
+        <td>Language-agnostic external process</td>
         <td>Works, but every container counts as a licensed server</td>
         <td>Actively developed</td>
       </tr>
@@ -144,6 +155,7 @@ title: Why PeachPDF?
         <td>Own engine drawing through SkiaSharp</td>
         <td>⚠️ PDF/A and PDF/UA conformance in recent versions, from code-first layouts</td>
         <td>SkiaSharp native binaries</td>
+        <td>.NET Framework 4.x, .NET Standard 2.0, .NET 6+</td>
         <td>Good, but every layout is C# code your developers maintain</td>
         <td>Actively developed</td>
       </tr>
@@ -154,6 +166,7 @@ title: Why PeachPDF?
         <td>Direct PDF drawing; you position content</td>
         <td>⚠️ Tagged / PDF-UA output via <code>UAManager</code> in recent versions; structure marked up in code</td>
         <td>None</td>
+        <td>.NET Framework 4.6.2+, .NET Standard 2.0, .NET 6+</td>
         <td>Good, but all layout is manual</td>
         <td>Actively developed</td>
       </tr>
@@ -164,6 +177,7 @@ title: Why PeachPDF?
         <td>Own converter inside a large general-purpose PDF suite</td>
         <td>✅ Tagged PDF via a programmatic tagging API</td>
         <td>Large closed-source library</td>
+        <td>.NET Framework, .NET Standard 2.0, .NET 6+</td>
         <td>Works</td>
         <td>Actively developed</td>
       </tr>

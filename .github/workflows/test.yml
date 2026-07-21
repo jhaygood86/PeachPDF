@@ -25,7 +25,22 @@ jobs:
       with:
         fetch-depth: 0
 
+    # Doc-only PRs shouldn't pay for the full test suite, but this job is a required
+    # status check — a trigger-level `paths:` filter would leave it stuck pending and
+    # block the merge. So the job always runs; the heavy steps below are gated on
+    # whether anything under src/ (or this workflow) actually changed, and the job
+    # still reports success when they're skipped.
+    - name: Detect source changes
+      uses: dorny/paths-filter@v3
+      id: changes
+      with:
+        filters: |
+          src:
+            - 'src/**'
+            - '.github/workflows/test.yml'
+
     - name: Setup .NET
+      if: steps.changes.outputs.src == 'true'
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: |
@@ -33,32 +48,37 @@ jobs:
           10.0.x
 
     - name: Setup Python
+      if: steps.changes.outputs.src == 'true'
       uses: actions/setup-python@v5
       with:
         python-version: '3.x'
 
     - name: Install fonts (Linux)
-      if: runner.os == 'Linux'
+      if: runner.os == 'Linux' && steps.changes.outputs.src == 'true'
       run: sudo apt-get update && sudo apt-get install -y fontconfig fonts-liberation fonts-dejavu-core
 
     - name: Install diff-cover and ReportGenerator
+      if: steps.changes.outputs.src == 'true'
       run: |
         pip install diff-cover
         dotnet tool install --global dotnet-reportgenerator-globaltool
 
     - name: Restore
+      if: steps.changes.outputs.src == 'true'
       run: dotnet restore src/PeachPDF.Tests/PeachPDF.Tests.csproj
 
     - name: Build
+      if: steps.changes.outputs.src == 'true'
       run: dotnet build src/PeachPDF.Tests/PeachPDF.Tests.csproj --no-restore --configuration Release
 
     # The TestHarness is the showcase generator for the docs site (pages.yml); nothing
     # else builds it in CI, so compile it here to catch breaks before release day.
     - name: Build TestHarness (showcase generator)
-      if: runner.os == 'Linux'
+      if: runner.os == 'Linux' && steps.changes.outputs.src == 'true'
       run: dotnet build src/PeachPDF.TestHarness/PeachPDF.TestHarness.csproj --configuration Release
 
     - name: Install Playwright browsers
+      if: steps.changes.outputs.src == 'true'
       run: |
         $playwrightScript = Get-ChildItem -Path src/PeachPDF.Tests/bin/Release -Filter playwright.ps1 -Recurse | Select-Object -First 1 -ExpandProperty FullName
         if ($IsLinux) {
@@ -68,14 +88,15 @@ jobs:
         }
 
     - name: Test
+      if: steps.changes.outputs.src == 'true'
       run: dotnet test src/PeachPDF.Tests/PeachPDF.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
 
     - name: Generate HTML coverage report
-      if: always()
+      if: always() && steps.changes.outputs.src == 'true'
       run: reportgenerator -reports:coverage/**/coverage.cobertura.xml -targetdir:coverage-report -reporttypes:Html
 
     - name: Diff coverage gate (PRs only)
-      if: github.event_name == 'pull_request'
+      if: github.event_name == 'pull_request' && steps.changes.outputs.src == 'true'
       run: |
         git fetch origin ${{ github.base_ref }}
         $coverageFiles = (Get-ChildItem -Path coverage -Filter coverage.cobertura.xml -Recurse | ForEach-Object FullName)
@@ -83,14 +104,14 @@ jobs:
 
     - name: Upload test results
       uses: actions/upload-artifact@v4
-      if: always()
+      if: always() && steps.changes.outputs.src == 'true'
       with:
         name: test-results-${{ matrix.os }}
         path: src/PeachPDF.Tests/**/*.trx
 
     - name: Upload coverage reports
       uses: actions/upload-artifact@v4
-      if: always()
+      if: always() && steps.changes.outputs.src == 'true'
       with:
         name: coverage-reports-${{ matrix.os }}
         path: |

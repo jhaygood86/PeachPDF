@@ -21,7 +21,7 @@ See [HTML & CSS Support](https://peachpdf.net/html-css-support.html) for the ful
 
 ## PeachPDF Requirements
 
-- .NET 8 or .NET 10
+- .NET 8 or newer (every currently-supported .NET version, per [Microsoft's .NET support policy](https://dotnet.microsoft.com/platform/support/policy/dotnet-core))
 
 _Note: This package embeds a fork of PdfSharpCore directly in its source tree; that fork carries its own license (see `src/PeachPDF/PdfSharpCore/LICENSE.md`), but the end result is still open source_
 

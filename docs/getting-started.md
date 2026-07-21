@@ -2,7 +2,7 @@
 
 PeachPDF is a pure .NET HTML → PDF rendering library. It doesn't shell out to Puppeteer, wkhtmltopdf, or any other external process — everything from HTML parsing to PDF output runs in-process, so it works in virtually any environment where .NET runs (containers, serverless, trimmed/AOT deployments) and benefits automatically from future .NET performance improvements.
 
-Targets .NET 8 and .NET 10.
+**.NET support.** PeachPDF runs on every currently-supported version of .NET — **.NET 8 and newer** — following [Microsoft's .NET support policy](https://dotnet.microsoft.com/platform/support/policy/dotnet-core). The NuGet package builds against the Long-Term-Support targets (`net8.0` and `net10.0`); the Standard-Term-Support releases in between (such as .NET 9) aren't separate build targets but are fully supported — the `net8.0` build runs on them unchanged.
 
 ## Quick Start
 
