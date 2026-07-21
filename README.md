@@ -94,7 +94,29 @@ var document = await generator.GeneratePdf(null, pdfConfig);
 document.Save(stream);
 ```
 
-Note that loading images using relative paths will default to the local file system unless an `HttpClientNetworkLoader` (or custom `RNetworkLoader`) with an appropriate `BaseUri` is provided, or if the HTML has a `<base>` element with an `href` set. Images will need to be in the current working directory when using the default loader.
+### Rendering a local HTML file
+
+You can render a local HTML file and all of its relative resources (stylesheets, images, fonts) from disk with `FileUriNetworkLoader`. It sets the base URL to the file's own location, just like opening the file in a browser.
+
+```csharp
+PdfGenerateConfig pdfConfig = new(){
+  PageSize = PageSize.Letter,
+  PageOrientation = PageOrientation.Portrait,
+  NetworkLoader = new FileUriNetworkLoader("report/index.html")
+};
+
+PdfGenerator generator = new();
+
+var stream = new MemoryStream();
+
+// Passing null to GeneratePdf will load the HTML from the provided network loader instance instead
+var document = await generator.GeneratePdf(null, pdfConfig);
+document.Save(stream);
+```
+
+Note that loading resources using relative paths resolves against the configured `NetworkLoader`'s `BaseUri` (e.g. an `HttpClientNetworkLoader` or `FileUriNetworkLoader`), or a `<base href>` element if the HTML has one. With the default loader, relative paths resolve against the current working directory and load from the local file system. `file:` URIs are always loaded from disk regardless of which loader is configured, the same way `data:` URIs always are.
+
+A local file's content type is resolved from the OS's own MIME mechanism by default (Windows shell associations, macOS/iOS Uniform Type Identifiers, or Linux `/etc/mime.types`), falling back to a built-in set for HTML, CSS, SVG, PeachPDF's raster image formats, and TTF/OTF/WOFF/WOFF2 fonts. For a local file with an extension outside that set, register its MIME type with the OS so PeachPDF can resolve it. See [Rendering a local HTML file](docs/usage-examples.md#rendering-a-local-html-file) for details.
 
 ## Thread safety
 

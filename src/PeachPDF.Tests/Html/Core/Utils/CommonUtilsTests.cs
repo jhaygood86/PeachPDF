@@ -1,6 +1,5 @@
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.Network;
 
 namespace PeachPDF.Tests.Html.Core.Utils
 {
@@ -59,22 +58,6 @@ namespace PeachPDF.Tests.Html.Core.Utils
         }
 
         [Fact]
-        public void TryGetUri_ValidAbsoluteUri_ReturnsUri()
-        {
-            var uri = CommonUtils.TryGetUri("https://example.com/path");
-
-            Assert.NotNull(uri);
-        }
-
-        [Fact]
-        public void TryGetUri_Invalid_ReturnsNull()
-        {
-            var uri = CommonUtils.TryGetUri("not a uri \0");
-
-            Assert.Null(uri);
-        }
-
-        [Fact]
         public void GetFirstValueOrDefault_NonEmptyDictionary_ReturnsFirstValue()
         {
             var dic = new Dictionary<string, int> { ["a"] = 1, ["b"] = 2 };
@@ -100,59 +83,6 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var value = CommonUtils.GetFirstValueOrDefault<string, int>(null, -1);
 
             Assert.Equal(-1, value);
-        }
-
-        [Fact]
-        public void TryGetFileInfo_ValidPath_ReturnsFileInfo()
-        {
-            var info = CommonUtils.TryGetFileInfo("some-file.txt");
-
-            Assert.NotNull(info);
-        }
-
-        [Fact]
-        public void TryGetFileInfo_InvalidPath_ReturnsNull()
-        {
-            // An embedded NUL is rejected by FileInfo's constructor on every OS. An
-            // excessively long path was tried previously, but only Windows validates path
-            // length eagerly in the FileInfo constructor -- macOS/Linux accept it, so that
-            // input isn't reliably invalid across platforms.
-            var info = CommonUtils.TryGetFileInfo("invalid\0path.txt");
-
-            Assert.Null(info);
-        }
-
-        [Fact]
-        public void GetLocalFileName_SimpleImageUrl_ProducesFileWithExtension()
-        {
-            var uri = new RUri("https://example.com/images/photo.png");
-
-            var info = CommonUtils.GetLocalFileName(uri);
-
-            Assert.NotNull(info);
-            Assert.EndsWith(".png", info!.Name);
-        }
-
-        [Fact]
-        public void GetLocalFileName_UrlWithQueryString_HandlesParams()
-        {
-            var uri = new RUri("https://example.com/images/photo.png?size=large");
-
-            var info = CommonUtils.GetLocalFileName(uri);
-
-            Assert.NotNull(info);
-        }
-
-        [Fact]
-        public void GetLocalFileName_UrlWithoutSlash_ReturnsNull()
-        {
-            // AbsoluteUri for a well-formed http(s) URL always has at least the scheme's "//",
-            // so exercise the "no slash found" branch via a URI whose AbsoluteUri has none.
-            var uri = new RUri("mailto:someone@example.com");
-
-            var info = CommonUtils.GetLocalFileName(uri);
-
-            Assert.Null(info);
         }
 
         [Theory]

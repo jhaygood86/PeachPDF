@@ -45,68 +45,36 @@ namespace PeachPDF.Html.Core.Handlers
         {
             try
             {
-                RUri? baseUri;
+                // Local files, data: URIs and remote resources all resolve uniformly through the network
+                // loader now - a local stylesheet is served by FileUriNetworkLoader with a text/css
+                // Content-Type, so it passes the same gate as a fetched one (no separate file-system path).
+                var uri = CommonUtils.ResolveAgainstDocumentBase(htmlContainer, src, importingBaseUri);
 
-                if (importingBaseUri is not null)
+                if (uri is null)
                 {
-                    baseUri = importingBaseUri;
-                }
-                else
-                {
-                    var baseElement = DomUtils.GetBoxByTagName(htmlContainer.Root, "base");
-                    var baseUrl = "";
-
-                    if (baseElement is not null)
-                    {
-                        baseUrl = baseElement.HtmlTag!.TryGetAttribute("href", "");
-                    }
-
-                    baseUri = string.IsNullOrWhiteSpace(baseUrl) ? htmlContainer.Adapter.BaseUri : new RUri(baseUrl);
+                    // An unresolvable reference (e.g. a malformed URL) is treated as "not a stylesheet" -
+                    // return empty and keep rendering, matching the missing/wrong-content-type handling below.
+                    return (string.Empty, null);
                 }
 
-                var href = baseUri is null ? src : new RUri(baseUri, src).AbsoluteUri;
-
-                var uri = CommonUtils.TryGetUri(href)!;
+                var networkResponse = await htmlContainer.Adapter.GetResourceStream(uri);
 
                 Stream? stream = null;
-                var isInvalidNetworkResponse = false;
 
-                if (uri.IsFile)
+                if (networkResponse?.ResponseHeaders?.TryGetValue("Content-Type", out var contentTypeValues) ?? false)
                 {
-                    var fileInfo = CommonUtils.TryGetFileInfo(uri.AbsoluteUri)!;
+                    var contentTypes = contentTypeValues.Select(ContentType.Parse);
 
-                    if (fileInfo.Exists)
+                    if (contentTypes.Any(ct => ct.IsMimeType("text", "css")))
                     {
-                        stream = fileInfo.OpenRead();
+                        stream = networkResponse.ResourceStream;
                     }
-                }
-                else
-                {
-                    var networkResponse = await htmlContainer.Adapter.GetResourceStream(uri);
-
-                    isInvalidNetworkResponse = true;
-
-                    if (networkResponse?.ResponseHeaders?.TryGetValue("Content-Type", out var contentTypeValues) ?? false)
-                    {
-                        var contentTypes = contentTypeValues.Select(ContentType.Parse);
-
-                        if (contentTypes.Any(ct => ct.IsMimeType("text", "css")))
-                        {
-                            stream = networkResponse.ResourceStream;
-                            isInvalidNetworkResponse = false;
-                        }
-                    }
-
-                }
-
-                if (isInvalidNetworkResponse)
-                {
-                    return (string.Empty, uri);
                 }
 
                 if (stream is null)
                 {
-                    htmlContainer.ReportError(HtmlRenderErrorType.CssParsing, "No stylesheet found by path: " + src);
+                    // Missing resource, or a response whose Content-Type isn't text/css: treated as "not a
+                    // stylesheet" - return empty so the rest of the document still renders.
                     return (string.Empty, uri);
                 }
 

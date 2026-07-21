@@ -86,6 +86,22 @@ jobs:
           pwsh $playwrightScript install chromium
         }
 
+    # A bare Windows Server image has no shell Content Type registered for common extensions, so
+    # AssocQueryString returns a non-MIME property descriptor. Register the mappings the Windows
+    # MimeTypeResolver test asserts (adding each only if absent) so the OS-native lookup returns
+    # real MIME types. HKCR maps to HKLM\Software\Classes and is writable on the elevated runner.
+    - name: Ensure MIME content-type associations (Windows)
+      if: runner.os == 'Windows' && steps.changes.outputs.src == 'true'
+      shell: pwsh
+      run: |
+        $map = @{ '.html' = 'text/html'; '.css' = 'text/css'; '.png' = 'image/png'; '.jpg' = 'image/jpeg' }
+        foreach ($ext in $map.Keys) {
+          $existing = (Get-ItemProperty "Registry::HKEY_CLASSES_ROOT\$ext" -Name 'Content Type' -ErrorAction SilentlyContinue).'Content Type'
+          if ($existing -ne $map[$ext]) {
+            reg add "HKCR\$ext" /v 'Content Type' /t REG_SZ /d $map[$ext] /f | Out-Null
+          }
+        }
+
     - name: Test
       if: steps.changes.outputs.src == 'true'
       run: dotnet test src/PeachPDF.Tests/PeachPDF.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
