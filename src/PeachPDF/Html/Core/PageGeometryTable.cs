@@ -40,6 +40,7 @@ namespace PeachPDF.Html.Core
     {
         private readonly List<PageBandGeometry> _pages = [];
         private bool? _hasVerticalOverrides;
+        private bool? _hasHorizontalOverrides;
 
         /// <summary>
         /// Whether any selector-carrying <c>@page</c> rule declares a top or bottom margin — the only
@@ -68,6 +69,35 @@ namespace PeachPDF.Html.Core
             return false;
         }
 
+        /// <summary>
+        /// Whether any selector-carrying <c>@page</c> rule declares a left or right margin — the
+        /// horizontal analogue of <see cref="HasVerticalMarginOverrides"/>. When true, content laid out
+        /// on a page whose left/right margins differ from the base is re-wrapped to that page's own
+        /// content-box width (CSS Paged Media 3: "the edges of the page area act as a containing block
+        /// for layout that occurs between page breaks"), rather than merely shifted/clipped at paint.
+        /// When false, <see cref="HtmlContainerInt"/> keeps the exact historical single-width layout.
+        /// </summary>
+        internal bool HasHorizontalMarginOverrides
+        {
+            get
+            {
+                _hasHorizontalOverrides ??= ComputeHasHorizontalOverrides();
+                return _hasHorizontalOverrides.Value;
+            }
+        }
+
+        private bool ComputeHasHorizontalOverrides()
+        {
+            foreach (var rule in container.PageRules)
+            {
+                if (rule.Selector is null) continue;
+                if (rule.Style.MarginLeft.Length > 0 || rule.Style.MarginRight.Length > 0)
+                    return true;
+            }
+
+            return false;
+        }
+
         /// <summary>Drops every cached slot and re-evaluates the override scan — called at the start
         /// of every layout pass (and via <c>Clear</c>/<c>SetHtml</c>) so a fresh pass never sees the
         /// previous pass's geometry.</summary>
@@ -75,6 +105,7 @@ namespace PeachPDF.Html.Core
         {
             _pages.Clear();
             _hasVerticalOverrides = null;
+            _hasHorizontalOverrides = null;
         }
 
         /// <summary>

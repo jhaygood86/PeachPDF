@@ -1098,6 +1098,52 @@ await SaveShowcaseAsync("paged_media_per_page_margins", "Paged Media", "Per-page
     "Layout-affecting per-page margins: each page's own @page margins define its content band, so text flows into visibly different-height pages (deep first page, mirrored :left/:right bands) - with relative units (%, em) supported in per-page rules too.",
     perPageMarginsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// ── Per-page horizontal reflow showcase (#143) ─────────────────────────────
+// Left/right per-page margins are layout-affecting too: each page's own margins define its
+// content-box WIDTH, so main-column text re-wraps to that page's own measure (CSS Paged Media 3:
+// "the edges of the page area act as a containing block for the layout that occurs between page
+// breaks") - not merely shifted at paint time. This is the classic binding-gutter case: mirrored
+// :left/:right margins put the wide gutter on the inside edge of each leaf, and the justified
+// body text genuinely re-flows to each page's own (different) measure - the right margin of every
+// line lands on that page's own content edge. A wider :first page shows the widest measure of all.
+var perPageReflowHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    @page {
+        size: A4;
+        margin: 25mm 20mm;
+        @bottom-center { content: "Page " counter(page); font: 8pt Arial; color: #888; }
+    }
+    /* Mirrored binding gutters: the wide margin sits on the inner (spine) edge of each leaf. */
+    @page :right { margin-left: 18mm; margin-right: 48mm; }   /* odd pages */
+    @page :left  { margin-left: 48mm; margin-right: 18mm; }   /* even pages */
+    @page :first { margin-left: 12mm; margin-right: 55mm; }   /* widest measure of the set */
+    body { font: 11pt Georgia, serif; text-align: justify; }
+    h1 { font-size: 20pt; text-align: center; margin: 0 0 5mm; }
+    .note { font-style: italic; color: #555; }
+    </style>
+    </head>
+    <body>
+      <h1>Per-Page Horizontal Reflow</h1>
+      <p class="note">Each page below has a different left/right margin (mirrored binding gutters),
+      so the justified body text re-wraps to that page's own measure - the right edge of every line
+      aligns to the page's own content edge, wider or narrower, not a single fixed column.</p>
+    """ +
+    string.Concat(Enumerable.Range(1, 70).Select(i =>
+        $"<p>Paragraph {i}: Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do " +
+        "eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, " +
+        "quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>")) +
+    """
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("paged_media_horizontal_reflow", "Paged Media", "Per-page Reflow",
+    "Left/right per-page margins reflow content to each page's own width: mirrored :left/:right binding gutters re-wrap the justified body text to each page's own measure (CSS Paged Media page-area containing block), not just shift it.",
+    perPageReflowHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // ── Full-bleed page showcase ───────────────────────────────────────────────
 // The headline capability behind layout-affecting per-page margins: a `margin: 0` first
 // page whose content band is the entire physical sheet. The cover plate is sized to the
