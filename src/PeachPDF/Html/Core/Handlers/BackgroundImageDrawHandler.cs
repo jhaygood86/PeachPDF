@@ -71,6 +71,15 @@ namespace PeachPDF.Html.Core.Handlers
             var srcRect = new RRect(0, 0, image.Width, image.Height);
             var destRect = new RRect(location, new RSize(tileWidth, tileHeight));
 
+            // The actual visible painting area - clipRect (rounded corners only ever shrink this
+            // further, so the plain rectangle is always a safe superset) intersected with the current
+            // graphics clip. Used below to bound the repeat loops to the tiles that can actually be
+            // seen, not positioningRect's full extent (the whole page viewport for a `background-
+            // attachment: fixed` layer) - a small clipped element otherwise repeats its tile across the
+            // entire page, emitting tens of thousands of invisible-but-present draw operators.
+            var visibleRect = clipRect;
+            visibleRect.Intersect(g.GetClip());
+
             // clip to the painting area (background-clip, rounded if the box has border-radius)
             // intersected with the current graphics clip
             if (roundedClipPath != null)
@@ -79,9 +88,7 @@ namespace PeachPDF.Html.Core.Handlers
             }
             else
             {
-                var lClipRect = clipRect;
-                lClipRect.Intersect(g.GetClip());
-                g.PushClip(lClipRect);
+                g.PushClip(visibleRect);
             }
 
             // A repeating tile is drawn many times edge-to-edge (or, for two intentionally-offset
@@ -96,19 +103,23 @@ namespace PeachPDF.Html.Core.Handlers
             if (backgroundRepeat != "no-repeat")
                 image.Interpolate = false;
 
+            // Bound the repeat loops to the tiles that can actually land in the visible area, not
+            // positioningRect's full extent - see visibleRect's own doc comment above.
+            var tileBounds = RRect.Intersect(positioningRect, visibleRect);
+
             switch (backgroundRepeat)
             {
                 case "no-repeat":
                     g.DrawImage(image, destRect, srcRect);
                     break;
                 case "repeat-x":
-                    DrawRepeatX(g, image, positioningRect, srcRect, destRect);
+                    DrawRepeatX(g, image, tileBounds, srcRect, destRect);
                     break;
                 case "repeat-y":
-                    DrawRepeatY(g, image, positioningRect, srcRect, destRect);
+                    DrawRepeatY(g, image, tileBounds, srcRect, destRect);
                     break;
                 default:
-                    DrawRepeat(g, image, positioningRect, srcRect, destRect);
+                    DrawRepeat(g, image, tileBounds, srcRect, destRect);
                     break;
             }
 

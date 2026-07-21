@@ -633,28 +633,36 @@ namespace PeachPDF.Html.Core.Dom
                 if (!visible)
                 {
                     var clip = g.GetClip();
-                    var rect = ContainingBlock.ClientRectangle;
-                    rect.X -= 2;
-                    rect.Width += 2;
-                    if (!IsFixed)
-                    {
-                        //rect.Offset(new RPoint(-HtmlContainer.Location.X, -HtmlContainer.Location.Y));
-                        rect.Offset(HtmlContainer!.ScrollOffset);
-                    }
-                    clip.Intersect(rect);
 
-                    // A relocated box (keep-with-next, break-inside:avoid, orphans/widows, forced
-                    // breaks) lands its top exactly at the next page's content-top boundary by
-                    // construction - its Rectangles entry then sits exactly flush against the previous
-                    // page's own clip bottom. RRect.Intersect (like the .NET RectangleF convention it
-                    // mirrors) treats two rects that merely TOUCH at an edge as a valid, non-Empty
-                    // zero-area intersection, not Empty - comparing against the literal RRect.Empty
-                    // value here missed that degenerate case and treated a box with zero actual visible
-                    // area on this page as visible, emitting a fully-clipped (invisible on screen, but
-                    // present and duplicated in the content stream/text-extraction layer) paint pass on
-                    // the page it just left. See GitHub issue #113.
-                    if (clip.Width > VisibilityClipEpsilon && clip.Height > VisibilityClipEpsilon)
-                        visible = true;
+                    // Check this box's OWN rects individually via the same IsRectVisible helper
+                    // PaintImpCore/PaintDecoration already use, not ContainingBlock.ClientRectangle as
+                    // one combined region - an inline box (e.g. a replaced <object>/<img>) can paint
+                    // well outside its containing block's client area whenever that containing block
+                    // collapses to zero height by design (Acid2's own "#eyes-a { height: 0; line-height:
+                    // 2em; }" trick, whose inline content is positioned via line-height/vertical-align
+                    // alone) - using the containing block's rectangle here treated the box as invisible
+                    // and skipped its entire paint (including nested replaced content and backgrounds),
+                    // not just mis-measured its visible area. Checked per rect (rather than unioning
+                    // them all into one bounding rect first) so a box fragmented across many pages -
+                    // Rectangles isn't itself page-scoped - can't produce one giant union spanning pages
+                    // it isn't actually on, which would defeat this check's purpose as a cheap early-out.
+                    // IsRectVisible's own doc comment covers the degenerate-touch/epsilon handling
+                    // (GitHub issue #113) this loop relies on.
+                    foreach (var r in Rectangles.Values)
+                    {
+                        var rect = r;
+                        if (!IsFixed)
+                        {
+                            //rect.Offset(new RPoint(-HtmlContainer.Location.X, -HtmlContainer.Location.Y));
+                            rect.Offset(HtmlContainer!.ScrollOffset);
+                        }
+
+                        if (IsRectVisible(rect, clip))
+                        {
+                            visible = true;
+                            break;
+                        }
+                    }
                 }
                 else if (HtmlContainer?.HasOutOfFlowBoxes ?? true)
                 {
