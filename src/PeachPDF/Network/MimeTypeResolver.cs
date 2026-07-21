@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -20,12 +21,19 @@ namespace PeachPDF.Network
     /// Uniform Type Identifiers C API, or the Linux <c>/etc/mime.types</c> database — falling back to a
     /// built-in static map covering HTML, CSS, SVG and the raster formats StbImageSharp decodes. Every
     /// OS lookup is best-effort and fail-soft: any failure (missing library on a platform, an
-    /// unregistered extension, an interop error) simply falls through to the static map, which
-    /// guarantees the formats PeachPDF itself renders always resolve.
+    /// unregistered extension, an interop error) falls through to the static map, so the formats PeachPDF
+    /// itself renders resolve even on a host whose OS registrations are missing. Results are memoized per
+    /// extension for the process lifetime, so the (potentially syscall- or file-backed) OS lookup runs at
+    /// most once per distinct extension.
     /// </remarks>
     internal static class MimeTypeResolver
     {
         private const string DefaultMimeType = "application/octet-stream";
+
+        // The extension -> MIME mapping is stable for a process's lifetime, so memoize it: a document with
+        // many images of the same type then costs one OS lookup, not one per resource. Keyed by the
+        // lowercase dot-less extension.
+        private static readonly ConcurrentDictionary<string, string> Cache = new();
 
         /// <summary>
         /// Resolves the MIME type for <paramref name="pathOrFileName"/> from its extension. Returns
@@ -40,13 +48,18 @@ namespace PeachPDF.Network
                 return DefaultMimeType;
             }
 
-            // Path.GetExtension keeps the leading dot; normalize to a lowercase dot-less key for the
-            // static map, while the OS lookups take whichever form their native API expects.
+            // Path.GetExtension keeps the leading dot and never returns an all-dots string (it returns ""
+            // for those), so trimming the dot always yields a non-empty key here.
             var extensionNoDot = extension.TrimStart('.').ToLowerInvariant();
 
+            return Cache.GetOrAdd(extensionNoDot, Resolve);
+        }
+
+        private static string Resolve(string extensionNoDot)
+        {
             // OS-provided mechanism first (per the "OS by default" requirement), static map as the
-            // guaranteed fallback for the formats PeachPDF renders.
-            return TryGetFromOperatingSystem(extension, extensionNoDot)
+            // fallback for the formats PeachPDF renders.
+            return TryGetFromOperatingSystem("." + extensionNoDot, extensionNoDot)
                    ?? TryGetFromStaticMap(extensionNoDot)
                    ?? DefaultMimeType;
         }
@@ -215,7 +228,7 @@ namespace PeachPDF.Network
 
             // Slow path: copy into our own buffer, sized from the UTF-16 length (ample for UTF-8 here).
             var length = NativeMethods.CFStringGetLength(cfString);
-            var capacity = (length * 4) + 1;
+            var capacity = (int)(length * 3) + 1;
             var buffer = new byte[capacity];
 
             if (!NativeMethods.CFStringGetCString(cfString, buffer, capacity, NativeMethods.KCFStringEncodingUtf8))
