@@ -67,7 +67,8 @@ namespace PeachPDF.Html.Core.Dom
                 var image = await ResolveContentImage(contentValue, adapter, htmlContainer, imageCache);
                 if (image != null)
                 {
-                    PaintImage(g, image, rect, adapter, htmlContainer);
+                    var position = ResolveImagePosition(marginRule.Style, boxName);
+                    PaintImage(g, image, rect, position, adapter, htmlContainer);
                     continue;
                 }
 
@@ -127,17 +128,19 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Paints a margin box's image content via the same <see cref="CssImagePainter"/>/
         /// <see cref="BackgroundImageDrawHandler"/> pipeline used for in-flow <c>content: url(...)</c>
-        /// (<see cref="CssBox.PaintContentImage"/>) - natural size, anchored at the box's top-left,
-        /// clipped to the box, no repeat, matching that established convention for authored content
-        /// images. <paramref name="g"/> paints in raw, unshrunk PDF-point space (see <see cref="BuildFont"/>'s
+        /// (<see cref="CssBox.PaintContentImage"/>) - natural size, aligned within the box per
+        /// <paramref name="positionList"/> (a CSS <c>background-position</c> value derived from the
+        /// box's resolved <c>text-align</c>/<c>vertical-align</c>, so an image follows the same
+        /// alignment its text content would - CSS Paged Media Level 3 §7.2), clipped to the box, no
+        /// repeat. <paramref name="g"/> paints in raw, unshrunk PDF-point space (see <see cref="BuildFont"/>'s
         /// own doc comment), so it's wrapped in a <see cref="GraphicsAdapter"/> with the rect
         /// pre-multiplied by <c>PixelsPerPoint</c> to cancel that adapter's own division back out.
         /// <paramref name="htmlContainer"/>'s root box stands in for the (non-existent, for a margin
         /// box) owning <c>CssBox</c> that <see cref="BackgroundLayerResolver"/> needs for potential
-        /// em/rem length resolution - unreachable for the fixed "left top"/"auto" values used here, but
+        /// em/rem length resolution - unreachable for the keyword position/"auto" values used here, but
         /// a real, already-laid-out box is a safe, defensible fallback if that ever changes.
         /// </summary>
-        private static void PaintImage(XGraphics g, CssImage image, XRect rect, RAdapter adapter, HtmlContainerInt htmlContainer)
+        private static void PaintImage(XGraphics g, CssImage image, XRect rect, string positionList, RAdapter adapter, HtmlContainerInt htmlContainer)
         {
             // Root is only ever null before the document's initial layout, which has already run by
             // the time page rendering (and so margin-box painting) begins - null here would mean
@@ -151,7 +154,7 @@ namespace PeachPDF.Html.Core.Dom
 
             CssImagePainter.Paint(graphicsAdapter, image, layerIndex: 0, isFirst: true,
                 originRect: paintRect, clipRect: paintRect, roundedClipPath: null,
-                positionList: "left top", sizeList: CssConstants.Auto, repeatList: "no-repeat",
+                positionList: positionList, sizeList: CssConstants.Auto, repeatList: "no-repeat",
                 attachmentList: CssConstants.Scroll, viewportRect: paintRect, box: rootBox,
                 drawBrush: brush =>
                 {
@@ -508,9 +511,45 @@ namespace PeachPDF.Html.Core.Dom
 
         private static (string TextAlign, string VerticalAlign) ResolveAlignment(StyleDeclaration style, string boxName)
         {
-            var textAlign = style.TextAlign?.ToLowerInvariant() ?? InferAlignment(boxName);
-            var verticalAlign = style.VerticalAlign?.ToLowerInvariant() ?? "middle";
+            // StyleDeclaration.TextAlign/VerticalAlign return string.Empty (not null) for an unset
+            // property, so a null-coalescing fallback never fires - an unset text-align must fall
+            // through to the box's position-inferred default (CSS Paged Media Level 3 §7.2), not an
+            // empty string. Check for empty explicitly.
+            var textAlign = string.IsNullOrWhiteSpace(style.TextAlign)
+                ? InferAlignment(boxName)
+                : style.TextAlign.ToLowerInvariant();
+            var verticalAlign = string.IsNullOrWhiteSpace(style.VerticalAlign)
+                ? "middle"
+                : style.VerticalAlign.ToLowerInvariant();
             return (textAlign, verticalAlign);
+        }
+
+        /// <summary>
+        /// Translates a margin box's resolved <c>(text-align, vertical-align)</c> - the same alignment
+        /// its text content uses (defaulting from the box's position per CSS Paged Media Level 3 §7.2,
+        /// via <see cref="ResolveAlignment"/>/<see cref="InferAlignment"/>) - into a CSS
+        /// <c>background-position</c> string, so <c>&lt;image&gt;</c>-valued <c>content</c> is placed
+        /// within the box exactly as text would be, instead of always at the box's content-start.
+        /// Mirror of <see cref="BuildStringFormat"/> for the image paint path.
+        /// </summary>
+        private static string ResolveImagePosition(StyleDeclaration style, string boxName)
+        {
+            var (textAlign, verticalAlign) = ResolveAlignment(style, boxName);
+
+            var horizontal = textAlign switch
+            {
+                "left" => "left",
+                "right" => "right",
+                _ => "center",
+            };
+            var vertical = verticalAlign switch
+            {
+                "top" => "top",
+                "bottom" => "bottom",
+                _ => "center",
+            };
+
+            return $"{horizontal} {vertical}";
         }
 
         private static XStringFormat BuildStringFormat(StyleDeclaration style, string boxName)
