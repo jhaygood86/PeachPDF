@@ -443,9 +443,80 @@ namespace PeachPDF.Html.Core.Dom
             return maxIntrinsicWidth;
         }
 
+        /// <summary>
+        /// Whether <paramref name="box"/> is a "main column" box for per-page horizontal reflow (issue
+        /// #143): the initial containing block (the synthetic root) or the <c>&lt;html&gt;</c>/
+        /// <c>&lt;body&gt;</c> element.
+        /// </summary>
+        private static bool IsMainColumnBox(CssBox box) =>
+            box.IsRoot
+            || string.Equals(box.HtmlTag?.Name, "html", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(box.HtmlTag?.Name, "body", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Whether <paramref name="box"/> (a candidate containing block) is an <b>unconstrained</b> main
+        /// column: it and every main-column ancestor up to the root are main-column boxes with an
+        /// auto-width, so the chain genuinely spans the page area and a child can safely adopt its own
+        /// page's content width (issue #143). If any level carries an explicit/percentage <c>width</c> the
+        /// chain no longer spans the page area, so per-page reflow is not applied there (an accepted gap -
+        /// see docs / issues #199-#201).
+        /// </summary>
+        private static bool IsUnconstrainedMainColumn(CssBox box)
+        {
+            for (var b = box; b is not null; b = b.ParentBox)
+            {
+                if (!IsMainColumnBox(b)) return false;
+                if (!string.IsNullOrEmpty(b.Width) && b.Width != CssConstants.Auto) return false;
+                if (b.IsRoot) break;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// The total right-side inset (margin + border + padding) of a main-column containing block and
+        /// its ancestors up to the root — the horizontal mirror of what <c>ContainingBlock.ClientLeft</c>
+        /// already folds into the left side. Subtracted from the page-area right edge so a reflowed block
+        /// respects its containing block's own right margin/border/padding (e.g. <c>body</c>'s UA-default
+        /// 8px margin) instead of overrunning it to the page edge (issue #143).
+        /// </summary>
+        private static double MainColumnRightInset(CssBox box)
+        {
+            var inset = 0.0;
+            for (var b = box; b is not null; b = b.ParentBox)
+            {
+                inset += b.ActualMarginRight + b.ActualBorderRightWidth + b.ActualPaddingRight;
+                if (b.IsRoot) break;
+            }
+
+            return inset;
+        }
+
         public static async ValueTask<double> GetBoxWidth(RGraphics g, CssBox box)
         {
-            var width = box.ContainingBlock.ClientRight - box.ContainingBlock.ClientLeft - box.ActualMarginLeft - box.ActualMarginRight;
+            // Per-page horizontal reflow (issue #143). When a per-page @page rule overrides left/right
+            // margins, content laid out on a page whose margins differ from the base uses THAT page's own
+            // content-box width as its measure (CSS Paged Media 3: "the edges of the page area act as a
+            // containing block for layout that occurs between page breaks"). Content stays anchored at the
+            // base left origin, so the painter's existing per-page deltaX translate moves the (already
+            // page-width) content to the page's true left edge. The available right edge is the page's own
+            // area right MINUS the containing block's right inset (mirroring ContainingBlock.ClientLeft on
+            // the left), so a margined body/html doesn't get overrun. Scoped to the unconstrained main
+            // column (containing block chain is auto-width root/html/body): a box nested inside some other
+            // (or constrained) block resolves against that block instead - deferred as an accepted gap
+            // (#199-#201), since only the auto-width main column is guaranteed to span the page area.
+            // Keyed off the box's own Location.Y (the previous layout pass's final position - see
+            // HtmlContainerInt.PerformLayout's reflow loop), since a box's width is resolved before its
+            // Location is assigned in this pass.
+            var availableRight = box.ContainingBlock.ClientRight;
+            if (box.HtmlContainer is { } htmlContainer && htmlContainer.UseVariablePageWidth
+                && IsUnconstrainedMainColumn(box.ContainingBlock))
+            {
+                availableRight = htmlContainer.PageContentRightOf(box.Location.Y)
+                                 - MainColumnRightInset(box.ContainingBlock);
+            }
+
+            var width = availableRight - box.ContainingBlock.ClientLeft - box.ActualMarginLeft - box.ActualMarginRight;
 
             if (box.Words.Count > 0)
             {

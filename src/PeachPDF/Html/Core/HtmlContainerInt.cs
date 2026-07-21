@@ -11,6 +11,7 @@
 // "The Art of War"
 
 using PeachPDF;
+using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
@@ -22,6 +23,7 @@ using PeachPDF.PdfSharpCore.Drawing;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core
@@ -475,6 +477,36 @@ namespace PeachPDF.Html.Core
                 await Root.PerformLayout(g);
             }
 
+            // Per-page horizontal reflow (CSS Paged Media 3: "the edges of the page area act as a
+            // containing block for layout that occurs between page breaks"). The pass(es) above laid
+            // every box out against page 0's own measure - a box's width is resolved (CssBox.PerformLayoutImp
+            // via CssLayoutEngine.GetBoxWidth) BEFORE its Location is assigned, so on the first pass no
+            // box's own page was yet known. Re-run layout so each auto-width box now keys its width off
+            // its own page via its previous-pass Location.Y (GetBoxWidth -> PageContentRightOf), and
+            // repeat until the box->page assignment stops changing. For :first/:left/:right the bands are
+            // content-independent, so this converges in a single re-pass; the small cap bounds the
+            // deferred width->height->page-name feedback case (named-page L/R reflow - an accepted gap).
+            if (UseVariablePageWidth)
+            {
+                // The base seed the "real" pass(es) above used - NOT the current Root.Size.Width, which
+                // GetBoxWidth has already replaced with page 0's own (seam-adjusted) measure.
+                var rootWidth = MaxSize.Width > 0 ? MaxSize.Width : Math.Ceiling(ActualSize.Width);
+                var previous = PageAssignmentSignature();
+                for (var i = 0; i < 3; i++)
+                {
+                    Root.Size = new RSize(rootWidth, 0);
+                    Root.Location = Location;
+                    ActualSize = RSize.Empty;
+                    ClearNamedPageElements();
+                    PageGeometry.Reset();
+                    await Root.PerformLayout(g);
+
+                    var current = PageAssignmentSignature();
+                    if (current.SequenceEqual(previous)) break;
+                    previous = current;
+                }
+            }
+
             // After layout, re-apply content to pseudo-elements now that named strings are set
             ReapplyPseudoElementContent(Root);
 
@@ -516,6 +548,29 @@ namespace PeachPDF.Html.Core
                 ComputeFlowFlags(childBox, false, includeStackingHoistCandidates,
                     ref hasFloated, ref hasOutOfFlow, ref hasStackingHoistCandidates);
             }
+        }
+
+        /// <summary>
+        /// A snapshot of every box's pagination-slot assignment (<see cref="PageIndexOf"/> of its
+        /// laid-out top) in a fixed tree-walk order, used by <see cref="PerformLayout"/>'s per-page
+        /// horizontal-reflow loop to detect a fixpoint: once a re-pass leaves every box on the same page
+        /// it was on before, the per-page widths it resolved against are self-consistent and the loop
+        /// stops. Rebuilt from scratch each call — the loop runs at most a few iterations, and only for
+        /// the rare document that carries a per-page left/right <c>@page</c> margin override.
+        /// </summary>
+        private List<int> PageAssignmentSignature()
+        {
+            List<int> signature = [];
+            if (Root is not null)
+                CollectPageAssignments(Root, signature);
+            return signature;
+        }
+
+        private void CollectPageAssignments(CssBox box, List<int> signature)
+        {
+            signature.Add(PageIndexOf(box.Location.Y));
+            foreach (var childBox in box.Boxes)
+                CollectPageAssignments(childBox, signature);
         }
 
         /// <summary>
@@ -598,6 +653,53 @@ namespace PeachPDF.Html.Core
         /// </summary>
         private bool UseVariablePageGeometry =>
             PageSize.Height > 0 && PageSize.Height < double.MaxValue - 1 && PageGeometry.HasVerticalMarginOverrides;
+
+        /// <summary>
+        /// The horizontal analogue of <see cref="UseVariablePageGeometry"/>: whether layout should
+        /// re-wrap content to each page's own content-box width. True only when the page width is real
+        /// (not the <c>double.MaxValue</c> measurement sentinel, not unset) AND some per-page
+        /// <c>@page</c> rule actually overrides a left/right margin. When false, <see cref="PageContentRightOf"/>
+        /// returns the base measure and <see cref="CssLayoutEngine.GetBoxWidth"/> runs its exact
+        /// historical single-width arithmetic — zero change for the overwhelmingly common case.
+        /// </summary>
+        internal bool UseVariablePageWidth =>
+            PageSize.Width > 0 && PageSize.Width < double.MaxValue - 1 && PageGeometry.HasHorizontalMarginOverrides;
+
+        /// <summary>
+        /// The document X-coordinate (layout px, at the <b>base</b> left origin) of the right edge of the
+        /// content box on the pagination slot containing document Y <paramref name="y"/> — the per-page
+        /// wrapping measure, the horizontal analogue of <see cref="PageBandHeightOf"/>. Content stays
+        /// anchored at the base <see cref="MarginLeft"/> in layout space (exactly as the variable-height
+        /// machinery keeps document space anchored at the base content origin); the painter's per-page
+        /// <c>deltaX</c> translate then moves it to that page's own physical left edge. Because the width
+        /// is already the page's own width, the right edge lands correctly with no extra paint work.
+        /// When <see cref="UseVariablePageWidth"/> is off this returns the base
+        /// <c>MarginLeft + PageSize.Width</c>, so callers can invoke it unconditionally.
+        /// The per-page left/right margins come from the same <see cref="PageGeometry"/> table layout
+        /// paginated against; they resolve in true points, scaled into layout space by
+        /// <c>PixelsPerPoint</c> exactly once (issue-#113 discipline).
+        /// </summary>
+        internal double PageContentRightOf(double y)
+        {
+            if (!UseVariablePageWidth)
+                return MarginLeft + PageSize.Width;
+
+            var ppp = (Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+            var geom = PageGeometry.GetPage(PageIndexOf(y));
+            // The raw sheet width in layout px, recovered by construction (mirror of PageGeometryTable's
+            // sheetPx height recovery): PdfGenerator.SetContent subtracts both point-space margins from
+            // the point-space sheet, and the public wrappers scale PageSize and margins by PixelsPerPoint.
+            var sheetPx = PageSize.Width + MarginLeft + MarginRight;
+            var bandWidth = sheetPx - (geom.MarginLeftPt + geom.MarginRightPt) * ppp;
+
+            // Degenerate override (left+right margins consume the whole sheet): fall back to the base
+            // measure, the horizontal mirror of PageGeometryTable.Compute's band-height clamp, so a
+            // pathological @page rule can never collapse content to a zero/negative width.
+            if (bandWidth < 1.0)
+                return MarginLeft + PageSize.Width;
+
+            return MarginLeft + bandWidth;
+        }
 
         /// <summary>
         /// Tolerance for comparing a document Y-coordinate against a pagination-slot boundary — the
