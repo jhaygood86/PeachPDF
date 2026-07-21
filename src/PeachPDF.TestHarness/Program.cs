@@ -1945,6 +1945,11 @@ var svgHtml = "<!DOCTYPE html><html><head>" + SvgShowcaseCss + "</head><body>" +
             $"""<svg viewBox="0 0 100 100" width="80" height="80"><polygon points="{StarPoints}" fill="none" stroke="#c0392b" stroke-width="3"/></svg>""",
             "fill=\"none\" stroke=\"#c0392b\"")
     ) +
+    Row(
+        SvgSwatch("gradient stroke (rounded rect + ellipse)",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><defs><linearGradient id="gs1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c0392b"/><stop offset="1" stop-color="#2980b9"/></linearGradient></defs><rect x="10" y="12" width="80" height="34" rx="8" fill="none" stroke="url(#gs1)" stroke-width="6"/><ellipse cx="50" cy="72" rx="38" ry="20" fill="none" stroke="url(#gs1)" stroke-width="6"/></svg>""",
+            "stroke=\"url(#gradient)\" on a rounded rect and an ellipse - a gradient stroke sharing a page with solid strokes")
+    ) +
 
     "<h2>5 — Group Opacity &amp; Transforms</h2>" +
     Row(
