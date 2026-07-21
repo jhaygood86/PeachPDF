@@ -783,8 +783,15 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// Runs PerformLayout on a flex item, temporarily blockifying it when its computed
-        /// display is inline.  CSS spec §9.2 requires flex items to be blockified, so that
-        /// block-layout sizing (CreateLineBoxes, explicit width/height) works correctly.
+        /// display is inline. CSS spec §9.2 requires flex items to be blockified, so that
+        /// block-layout sizing (CreateLineBoxes, explicit width/height) works correctly. Every
+        /// caller in this class uses this purely to measure/re-measure natural or constrained
+        /// content size at a provisional position (<c>(_flexBox.ClientLeft, _flexBox.ClientTop)</c>
+        /// - whatever <paramref name="box"/>'s <c>Location</c> currently holds), never as the
+        /// item's real final placement (<see cref="AssignLocations"/> always translates it
+        /// afterward). Suppresses the per-word page-break-avoidance check for the duration - see
+        /// <see cref="HtmlContainerInt.SuppressWordPageBreaks"/> for why a page-break decision made
+        /// against this provisional position must never be allowed to stick.
         /// </summary>
         private static async ValueTask PerformLayoutBlockified(RGraphics g, CssBox box)
         {
@@ -795,7 +802,20 @@ namespace PeachPDF.Html.Core.Dom
                 box.Display  = CssConstants.Block;
             }
 
-            await box.PerformLayout(g);
+            var container = box.HtmlContainer;
+            var previousSuppress = container?.SuppressWordPageBreaks ?? false;
+            if (container is not null)
+                container.SuppressWordPageBreaks = true;
+
+            try
+            {
+                await box.PerformLayout(g);
+            }
+            finally
+            {
+                if (container is not null)
+                    container.SuppressWordPageBreaks = previousSuppress;
+            }
 
             if (savedDisplay != null)
                 box.Display = savedDisplay;
