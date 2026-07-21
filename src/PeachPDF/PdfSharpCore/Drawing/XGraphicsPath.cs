@@ -355,6 +355,23 @@ namespace PeachPDF.PdfSharpCore.Drawing
             DiagnosticsHelper.HandleNotImplemented("XGraphicsPath.AddPath");
         }
 
+        /// <summary>
+        /// Appends another path's geometry as one or more disjoint subpaths (the other path's first
+        /// point is a MoveTo, so it starts a new subpath rather than connecting to this one).
+        /// </summary>
+        public void AppendPath(XGraphicsPath path)
+        {
+            _corePath.Append(path._corePath);
+        }
+
+        /// <summary>
+        /// Applies an affine transform to every point in the path.
+        /// </summary>
+        public void Transform(XMatrix matrix)
+        {
+            _corePath.Transform(matrix);
+        }
+
         // ----- AddString ----------------------------------------------------------------------------
 
         /// <summary>

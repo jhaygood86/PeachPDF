@@ -88,6 +88,20 @@ namespace PeachPDF.Adapters
             _graphicsPath.CloseFigure();
         }
 
+        public override void Transform(RMatrix matrix)
+        {
+            // Offsets are applied as-is (no PixelsPerPoint scaling): these path coordinates are the raw
+            // user-space values that reach the backend un-scaled via IntersectClip, so a user-space
+            // transform composes with them directly - the user-to-point conversion happens later at the
+            // ambient-CTM boundary.
+            _graphicsPath.Transform(new XMatrix(matrix.M11, matrix.M12, matrix.M21, matrix.M22, matrix.OffsetX, matrix.OffsetY));
+        }
+
+        public override void AddPath(RGraphicsPath path)
+        {
+            _graphicsPath.AppendPath(((GraphicsPathAdapter)path).GraphicsPath);
+        }
+
         public override RFillMode FillMode
         {
             get => _graphicsPath.FillMode == XFillMode.Winding ? RFillMode.Nonzero : RFillMode.EvenOdd;

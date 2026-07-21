@@ -73,6 +73,23 @@ namespace PeachPDF.Html.Adapters
         public abstract void CloseFigure();
 
         /// <summary>
+        /// Applies an affine transform to every point already added to the path. Because the concrete
+        /// path stores arcs as Bézier segments (which are closed under affine transforms), this is an
+        /// exact transform of the whole geometry for any matrix - translate, scale, rotate or skew.
+        /// Used to bake a clip shape's own <c>transform</c> into its geometry, since a clip region is
+        /// built as a single path and cannot use the graphics-state transform (which would apply to the
+        /// whole clip rather than one contributing shape).
+        /// </summary>
+        public abstract void Transform(RMatrix matrix);
+
+        /// <summary>
+        /// Appends <paramref name="path"/>'s geometry as one or more disjoint subpaths (a union, not a
+        /// connected continuation). Used to merge an individually-transformed clip shape into the
+        /// combined clip region.
+        /// </summary>
+        public abstract void AddPath(RGraphicsPath path);
+
+        /// <summary>
         /// Gets or sets how the interior of a self-intersecting path is determined for filling.
         /// </summary>
         public abstract RFillMode FillMode { get; set; }

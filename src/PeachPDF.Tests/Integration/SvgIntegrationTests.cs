@@ -2,6 +2,7 @@ using PeachPDF.PdfSharpCore;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -1202,6 +1203,71 @@ namespace PeachPDF.Tests.Integration
             var middlePdfText = await GetPdfText(middleHtml);
 
             Assert.NotEqual(startPdfText, middlePdfText);
+        }
+
+        // ----- Clip-shape transform (issue #169) - real-adapter end-to-end -----
+
+        private const string TransformedClipHtml = """
+            <!DOCTYPE html><html><body>
+            <svg viewBox="0 0 100 100" width="100" height="100">
+              <defs><clipPath id="c"><rect x="0" y="0" width="30" height="20" transform="translate(15,25)"/></clipPath></defs>
+              <rect x="0" y="0" width="100" height="100" fill="#3498db" clip-path="url(#c)"/>
+            </svg>
+            </body></html>
+            """;
+
+        // Same clip region, but authored directly at the translated position (no transform).
+        private const string DirectClipHtml = """
+            <!DOCTYPE html><html><body>
+            <svg viewBox="0 0 100 100" width="100" height="100">
+              <defs><clipPath id="c"><rect x="15" y="25" width="30" height="20"/></clipPath></defs>
+              <rect x="0" y="0" width="100" height="100" fill="#3498db" clip-path="url(#c)"/>
+            </svg>
+            </body></html>
+            """;
+
+        // Same clip, but the shape left at the origin with NO transform - the pre-fix (buggy) geometry.
+        private const string UntransformedClipHtml = """
+            <!DOCTYPE html><html><body>
+            <svg viewBox="0 0 100 100" width="100" height="100">
+              <defs><clipPath id="c"><rect x="0" y="0" width="30" height="20"/></clipPath></defs>
+              <rect x="0" y="0" width="100" height="100" fill="#3498db" clip-path="url(#c)"/>
+            </svg>
+            </body></html>
+            """;
+
+        /// <summary>Extracts the numeric coordinates of the path-construction operators emitted
+        /// immediately before the clip operator <c>W n</c> - i.e. the clip region's own geometry.</summary>
+        private static double[] ClipGeometryNumbers(string pdfText)
+        {
+            var idx = pdfText.IndexOf("\nW n\n", StringComparison.Ordinal);
+            Assert.True(idx >= 0, "expected a clip operator (W n) in the content stream");
+
+            var start = Math.Max(0, idx - 240);
+            var window = pdfText.Substring(start, idx - start);
+            return Regex.Matches(window, @"-?\d+(?:\.\d+)?")
+                .Select(m => double.Parse(m.Value, System.Globalization.CultureInfo.InvariantCulture))
+                .ToArray();
+        }
+
+        [Fact]
+        public async Task ClipShapeTransform_ProducesSameGeometryAsDirectlyAuthoredShape()
+        {
+            // The real GraphicsPathAdapter.Transform/AddPath (+ XGraphicsPath/CoreGraphicsPath) must bake
+            // the clip shape's transform into its coordinates, so a transformed clip is byte-identical to
+            // the same region authored directly - and distinct from the un-transformed (pre-fix) geometry.
+            var transformed = ClipGeometryNumbers(await GetPdfText(TransformedClipHtml));
+            var direct = ClipGeometryNumbers(await GetPdfText(DirectClipHtml));
+            var untransformed = ClipGeometryNumbers(await GetPdfText(UntransformedClipHtml));
+
+            Assert.Equal(direct.Length, transformed.Length);
+            Assert.Equal(untransformed.Length, transformed.Length);
+            for (var i = 0; i < transformed.Length; i++)
+                Assert.Equal(direct[i], transformed[i], 4);
+
+            // The transform genuinely moved the clip: at least one coordinate differs from the
+            // un-transformed (pre-fix) geometry.
+            Assert.Contains(Enumerable.Range(0, transformed.Length), i => Math.Abs(untransformed[i] - transformed[i]) > 0.01);
         }
     }
 }

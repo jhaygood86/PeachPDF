@@ -1162,7 +1162,7 @@ namespace PeachPDF.Svg
             var any = false;
 
             foreach (var shape in clipPath.Shapes)
-                any |= AppendClipShapeGeometry(path, shape);
+                any |= AppendClipShapeGeometry(g, path, shape, null);
 
             if (any)
                 return path;
@@ -1171,52 +1171,86 @@ namespace PeachPDF.Svg
             return null;
         }
 
-        private static bool AppendClipShapeGeometry(RGraphicsPath path, SvgElement shape)
+        /// <summary>
+        /// Appends one clip shape's geometry into the combined clip <paramref name="path"/>, baking in
+        /// any <c>transform</c> along the way. A clip region is a single union path (not the
+        /// graphics-state clip stack, which intersects), so a shape's own <c>transform</c> - and the
+        /// <c>translate</c>/<c>transform</c> a wrapping <c>&lt;use&gt;</c>/<c>&lt;g&gt;</c> contribute -
+        /// cannot be pushed onto the CTM the way the normal render path does; it must be composed
+        /// (<see cref="MultiplyMatrix"/>, innermost first) and applied directly to the shape's points.
+        /// When a transform is in effect the shape is built into its own sub-path, transformed, then
+        /// merged; the common no-transform case appends straight into <paramref name="path"/> unchanged.
+        /// </summary>
+        private static bool AppendClipShapeGeometry(RGraphics g, RGraphicsPath path, SvgElement shape, RMatrix? ambient)
         {
+            var m = shape.Transform is { } t ? MultiplyMatrix(t, ambient ?? RMatrix.Identity) : ambient;
+
             switch (shape)
             {
                 case SvgPathElement { Segments.Count: > 0 } p:
-                    AppendPathSegments(path, p.Segments);
-                    return true;
+                    return AppendClipLeaf(g, path, m, sub => AppendPathSegments(sub, p.Segments));
 
                 case SvgCircleElement { R: > 0 } c:
-                    AppendCircleGeometry(path, c);
-                    return true;
+                    return AppendClipLeaf(g, path, m, sub => AppendCircleGeometry(sub, c));
 
                 case SvgPolygonElement { Points.Length: > 0 } poly:
-                    AppendPolygonGeometry(path, poly);
-                    return true;
+                    return AppendClipLeaf(g, path, m, sub => AppendPolygonGeometry(sub, poly));
 
                 case SvgPolylineElement { Points.Length: > 0 } polyline:
-                    AppendPolylineGeometry(path, polyline);
-                    return true;
+                    return AppendClipLeaf(g, path, m, sub => AppendPolylineGeometry(sub, polyline));
 
                 case SvgRectElement { Width: > 0, Height: > 0 } rect:
-                    AppendRectGeometry(path, rect);
-                    return true;
+                    return AppendClipLeaf(g, path, m, sub => AppendRectGeometry(sub, rect));
 
                 case SvgEllipseElement { Rx: > 0, Ry: > 0 } ellipse:
-                    AppendEllipseGeometry(path, ellipse);
-                    return true;
+                    return AppendClipLeaf(g, path, m, sub => AppendEllipseGeometry(sub, ellipse));
 
                 case SvgLineElement line:
-                    AppendLineGeometry(path, line);
-                    return true;
+                    return AppendClipLeaf(g, path, m, sub => AppendLineGeometry(sub, line));
 
-                case SvgUseElement { Target: { } target }:
-                    return AppendClipShapeGeometry(path, target);
+                case SvgUseElement { Target: { } target } use:
+                {
+                    // <use> contributes its own transform (already folded into m above) plus its
+                    // x/y translation; the target's own transform is folded when it's processed below.
+                    var um = use.X != 0 || use.Y != 0
+                        ? MultiplyMatrix(new RMatrix(1, 0, 0, 1, use.X, use.Y), m ?? RMatrix.Identity)
+                        : m;
+                    return AppendClipShapeGeometry(g, path, target, um);
+                }
 
                 case SvgGroupElement group:
                 {
                     var any = false;
                     foreach (var child in group.Children)
-                        any |= AppendClipShapeGeometry(path, child);
+                        any |= AppendClipShapeGeometry(g, path, child, m);
                     return any;
                 }
 
                 default:
                     return false;
             }
+        }
+
+        /// <summary>
+        /// Emits one leaf clip shape's geometry. With no active transform (<paramref name="matrix"/> is
+        /// null) the geometry goes straight into the combined <paramref name="path"/> - byte-identical
+        /// to the untransformed path and zero extra allocation. Otherwise the shape is built into a
+        /// fresh sub-path, transformed by <paramref name="matrix"/>, and merged as a disjoint subpath.
+        /// </summary>
+        private static bool AppendClipLeaf(RGraphics g, RGraphicsPath path, RMatrix? matrix, Action<RGraphicsPath> build)
+        {
+            if (matrix is not { } m)
+            {
+                build(path);
+                return true;
+            }
+
+            var sub = g.GetGraphicsPath();
+            build(sub);
+            sub.Transform(m);
+            path.AddPath(sub);
+            sub.Dispose();
+            return true;
         }
 
         /// <summary>

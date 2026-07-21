@@ -117,18 +117,45 @@ namespace PeachPDF.Tests.TestSupport
         public override string FaceKey => "test";
     }
 
-    /// <summary>No-op path builder - sufficient for shape markers, since color assertions only need
-    /// <see cref="RGraphics.DrawPath(RBrush, RGraphicsPath)"/>/<see cref="RGraphics.DrawPath(RPen, RGraphicsPath)"/>
-    /// to have been called with the right brush/pen, not the exact path geometry.</summary>
+    /// <summary>Records every point added to the path (moves, line endpoints, Bézier control/end
+    /// points, arc endpoints) so tests can assert the resulting clip/paint geometry - e.g. that a
+    /// clip shape's <c>transform</c> was baked into its coordinates (issue #169). <see cref="Transform"/>
+    /// applies the matrix to every recorded point (same convention as the real
+    /// <c>GraphicsPathAdapter</c>/<c>XMatrix</c>) and <see cref="AddPath"/> merges another path's
+    /// recorded points, faithfully mirroring the production path so a test double never diverges from
+    /// what actually renders.</summary>
     internal sealed class TestGraphicsPath : RGraphicsPath
     {
-        public override void Start(double x, double y) { }
-        public override void LineTo(double x, double y) { }
-        public override void ArcTo(double x, double y, double radiusX, double radiusY, Corner corner) { }
-        public override void AddMove(double x, double y) { }
-        public override void AddBezierTo(double x1, double y1, double x2, double y2, double x3, double y3) { }
-        public override void AddArc(double x, double y, double radiusX, double radiusY, double rotationAngle, bool isLargeArc, bool sweepClockwise) { }
+        public List<RPoint> Points { get; } = [];
+
+        public override void Start(double x, double y) => Points.Add(new RPoint(x, y));
+        public override void LineTo(double x, double y) => Points.Add(new RPoint(x, y));
+        public override void ArcTo(double x, double y, double radiusX, double radiusY, Corner corner) => Points.Add(new RPoint(x, y));
+        public override void AddMove(double x, double y) => Points.Add(new RPoint(x, y));
+
+        public override void AddBezierTo(double x1, double y1, double x2, double y2, double x3, double y3)
+        {
+            Points.Add(new RPoint(x1, y1));
+            Points.Add(new RPoint(x2, y2));
+            Points.Add(new RPoint(x3, y3));
+        }
+
+        public override void AddArc(double x, double y, double radiusX, double radiusY, double rotationAngle, bool isLargeArc, bool sweepClockwise) => Points.Add(new RPoint(x, y));
         public override void CloseFigure() { }
+
+        public override void Transform(RMatrix matrix)
+        {
+            for (var i = 0; i < Points.Count; i++)
+            {
+                var p = Points[i];
+                Points[i] = new RPoint(
+                    p.X * matrix.M11 + p.Y * matrix.M21 + matrix.OffsetX,
+                    p.X * matrix.M12 + p.Y * matrix.M22 + matrix.OffsetY);
+            }
+        }
+
+        public override void AddPath(RGraphicsPath path) => Points.AddRange(((TestGraphicsPath)path).Points);
+
         public override RFillMode FillMode { get; set; }
         public override void Dispose() { }
     }
@@ -158,6 +185,10 @@ namespace PeachPDF.Tests.TestSupport
         public List<object> Log { get; } = [];
         public List<DrawStringCall> DrawStringCalls { get; } = [];
         public List<DrawImageCall> DrawImageCalls { get; } = [];
+
+        /// <summary>The path passed to each <see cref="PushClip(RGraphicsPath)"/> call, in order, so
+        /// tests can inspect the resulting clip geometry (e.g. a transformed clip region).</summary>
+        public List<TestGraphicsPath> ClipPaths { get; } = [];
 
         public TestRecordingGraphics() : base(new TestGraphicsAdapter(), new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
 
@@ -199,6 +230,8 @@ namespace PeachPDF.Tests.TestSupport
         }
         public override void PushClip(RGraphicsPath path)
         {
+            if (path is TestGraphicsPath testPath)
+                ClipPaths.Add(testPath);
             var rect = _clipStack.Peek();
             _clipStack.Push(rect);
             Log.Add(new PushClipCall(rect));
