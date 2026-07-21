@@ -1107,16 +1107,27 @@ namespace PeachPDF.Html.Core.Dom
             // forced break value — at least one is sufficient.
             // Forced values include: page, always.
             //
-            // Separately, CSS2.1 §13.2: a page break is also forced whenever a box's own explicit
-            // `page` value differs from the named page currently "in effect" in document flow (the
-            // most recently registered explicit page name so far - see HtmlContainerInt.ActivePageName),
-            // regardless of break-before/break-after. A box with no explicit `page` of its own (empty
-            // or "auto") never triggers this - it simply carries the active page name forward, so a
-            // chapter body's ordinary paragraphs don't each force their own break, only the heading
-            // that actually changes the named page does.
+            // Separately, CSS Paged Media Level 3 §3 (and CSS2.1 §13.2): a page break is also forced
+            // whenever a box's *used* `page` value differs from the named page currently "in effect"
+            // (the most recently registered name so far - see HtmlContainerInt.ActivePageName),
+            // regardless of break-before/break-after. The used value is tree-based, not flow-based:
+            // it is this box's own explicit `page` unless empty/"auto", in which case it is the parent
+            // box's used value (root's "auto" -> empty). So a chapter body's ordinary paragraphs (and
+            // any other descendants of the named element) inherit the same used name and don't each
+            // force a break; but a *following sibling* of the named element - whose used value comes
+            // from a common, un-named ancestor - correctly reverts, registering that reversion and
+            // forcing a break back onto the reverted page.
             var previousSiblingForBreak = DomUtils.GetPreviousSibling(this, false);
             var hasExplicitPageName = !string.IsNullOrEmpty(PageName) && PageName != CssConstants.Auto;
-            var pageNameChanged = hasExplicitPageName && PageName != HtmlContainer!.ActivePageName;
+            UsedPageName = hasExplicitPageName ? PageName : ParentBox?.UsedPageName ?? string.Empty;
+            // A page break is forced only on a used-name *transition* (this includes a reversion, whose
+            // used name comes from an un-named ancestor and differs from the active name). Registration
+            // (below) is broader - it also re-registers a box carrying its own explicit name that
+            // merely equals the active one, so a same-named element relocated by a layout engine still
+            // has a registration entry the tail can re-sync; that registration is redundant for name
+            // resolution but harmless (it resolves to the same name).
+            var pageNameChanged = HtmlContainer is not null && UsedPageName != HtmlContainer.ActivePageName;
+            var shouldRegisterPage = HtmlContainer is not null && (hasExplicitPageName || pageNameChanged);
             var isForcedBreak = IsForcedBreakValue(BreakBefore) || IsForcedBreakValue(previousSiblingForBreak?.BreakAfter) || pageNameChanged;
             if (isForcedBreak)
             {
@@ -1337,19 +1348,23 @@ namespace PeachPDF.Html.Core.Dom
                     }
                 }
 
-                // Register the named page BEFORE any child lays out: descendants' page-break
+                // Register the used page name BEFORE any child lays out: descendants' page-break
                 // decisions consult the per-page geometry table, whose slot bands from this box's
                 // page onward depend on this name being visible (PageRuleResolver.
                 // ActiveNameAtSlotStart) - registering only after child layout (this method's tail,
                 // formerly the sole registration point) let a multi-page named element's own content
-                // paginate against the PREVIOUS name's bands. Movers that can still run after this
-                // point (BreakInside: avoid, orphans/widows, the absolute bottom-edge fallback) all
-                // route through OffsetTop, which keeps the registration in sync via
-                // MoveNamedPageElement; engines that relocate this box directly (e.g.
-                // CssLayoutEngineTable's whole-table pre-check) are re-synced by the tail check.
-                if (!string.IsNullOrEmpty(PageName) && PageName != CssConstants.Auto && HtmlContainer is not null)
+                // paginate against the PREVIOUS name's bands. We register the *used* name whenever this
+                // box either carries its own explicit name or is a used-name transition (see
+                // shouldRegisterPage) - crucially including a reversion whose UsedPageName is empty or
+                // an outer named page, which is what stops a named page's margins/margin-boxes from
+                // leaking onto later default pages. Movers that can still run after this point
+                // (BreakInside: avoid, orphans/widows, the absolute bottom-edge fallback) all route
+                // through OffsetTop, which keeps the registration in sync via MoveNamedPageElement;
+                // engines that relocate this box directly (e.g. CssLayoutEngineTable's whole-table
+                // pre-check) are re-synced by the tail check.
+                if (shouldRegisterPage)
                 {
-                    RegisteredNamedPageElement = HtmlContainer.RegisterNamedPageElement(PageName, NamedPageRegistrationY());
+                    RegisteredNamedPageElement = HtmlContainer!.RegisterNamedPageElement(UsedPageName, NamedPageRegistrationY());
                 }
 
                 if (Display is CssConstants.Flex or CssConstants.InlineFlex)
@@ -1594,16 +1609,20 @@ namespace PeachPDF.Html.Core.Dom
             // box's own PerformLayoutImp has returned (e.g. CssLayoutEngineColumns re-banding a
             // column child via OffsetTop) is handled by retaining the registered element on
             // RegisteredNamedPageElement, which OffsetTop keeps in sync.
-            if (!string.IsNullOrEmpty(PageName) && PageName != CssConstants.Auto && HtmlContainer is not null)
+            // Reuse the shouldRegisterPage boolean computed near the top of this method - it must NOT
+            // be re-derived here: the early registration above mutates HtmlContainer.ActivePageName,
+            // so a fresh UsedPageName != ActivePageName comparison would now read false for an
+            // already-registered box and skip its Y-drift re-sync.
+            if (shouldRegisterPage)
             {
                 var registrationY = NamedPageRegistrationY();
                 if (RegisteredNamedPageElement is null)
                 {
-                    RegisteredNamedPageElement = HtmlContainer.RegisterNamedPageElement(PageName, registrationY);
+                    RegisteredNamedPageElement = HtmlContainer!.RegisterNamedPageElement(UsedPageName, registrationY);
                 }
                 else if (Math.Abs(RegisteredNamedPageElement.Y - registrationY) > HtmlContainerInt.PageBoundaryEpsilon)
                 {
-                    HtmlContainer.MoveNamedPageElement(RegisteredNamedPageElement, registrationY);
+                    HtmlContainer!.MoveNamedPageElement(RegisteredNamedPageElement, registrationY);
                 }
             }
 

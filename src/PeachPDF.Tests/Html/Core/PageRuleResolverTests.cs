@@ -53,5 +53,23 @@ namespace PeachPDF.Tests.Html.Core
             Assert.Equal("two", PageRuleResolver.ActiveNameAtSlotStart(elements, slotTop: 600));
             Assert.Equal("one", PageRuleResolver.ActiveNameAtSlotStart(elements, slotTop: 300));
         }
+
+        [Fact]
+        public void ReversionEntry_ShadowsEarlierNamedPage_ForLaterSlots()
+        {
+            // The used value of `page` reverts to the default when content leaves a named page's
+            // subtree - that reversion is registered as an empty-name entry (issue #126). Both policies
+            // must adopt it for slots/pages at or after it, so a named page's margins/margin boxes stop
+            // applying once content reverts, instead of leaking forward indefinitely.
+            var elements = new List<NamedPageElement> { new("chapter", 800), new(string.Empty, 1600) };
+
+            // Before the reversion: still "chapter".
+            Assert.Equal("chapter", PageRuleResolver.ActiveNameAtSlotStart(elements, slotTop: 800));
+            Assert.Equal("chapter", PageRuleResolver.ActiveNameAtPageEnd(elements, pageY: 800, pageHeight: 800));
+
+            // At/after the reversion Y: reverted to the empty (default) name, NOT "chapter".
+            Assert.Equal(string.Empty, PageRuleResolver.ActiveNameAtSlotStart(elements, slotTop: 1600));
+            Assert.Equal(string.Empty, PageRuleResolver.ActiveNameAtPageEnd(elements, pageY: 1600, pageHeight: 800));
+        }
     }
 }

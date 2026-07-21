@@ -677,7 +677,7 @@ Known boundaries of per-page margins:
 
 - **Left/right overrides shift, but don't reflow.** Content width is laid out once against the base margins; a page with different left/right margins paints its content shifted (and gains/loses paintable width at the paper edges) but text does not re-wrap to a different measure on that page.
 - **Percentage heights resolve against the base band.** The initial containing block's height is the base content band, even on a page whose own band is taller — size full-bleed elements with absolute units, not `height: 100%`.
-- **Named-page bands begin at the forced break.** An element whose `page` name differs from the active one always forces a page break, so a named page's own margins take effect exactly from that fresh page onward (and propagate until another name takes over).
+- **Named-page bands begin at the forced break.** An element whose used `page` name differs from the active one always forces a page break, so a named page's own margins take effect exactly from that fresh page onward (through the element's own content and descendants), and revert to the enclosing page's band once content leaves that subtree — see [Named pages](#named-pages).
 - `position: fixed` elements and `background-attachment: fixed` layers keep positioning against the base page box on margin-overridden pages (they ride the page's content shift rather than re-resolving against that page's own margins).
 - When content-empty pages are skipped (see pagination), `:first`/`:left`/`:right` resolve against the underlying page sequence, not the renumbered output pages.
 
@@ -754,7 +754,7 @@ Margin boxes are sub-rules of `@page` that place text inside the page margins (o
 
 ### Named pages
 
-The CSS `page` property on an element activates a named `@page` rule starting on the page containing that element — and, matching the CSS spec's propagation behavior, stays active on every subsequent page in the normal flow until a later element activates a different named page. This lets different parts of a document use different page styles (e.g., wider margins for an appendix, or a different running header per chapter, continuing correctly across a chapter's own multi-page span). Per css-page-3 §7.2, an element whose `page` name differs from the one currently in effect **forces a page break** before it, so a named page's styles (including layout-affecting top/bottom margins) always begin on a fresh page.
+The CSS `page` property on an element activates a named `@page` rule starting on the page containing that element. Its used value is **tree-based** ([css-page-3 §3](https://www.w3.org/TR/css-page-3/#using-named-pages)): an element with no `page` of its own (`page: auto`) uses its parent's used value, so the named page carries through the element's own content and descendants — continuing correctly across a chapter's own multi-page span — but content that leaves that subtree (a following sibling, or anything back out at an ancestor's level) **reverts** to the enclosing page (the default page, or an outer named page). A named page therefore does not leak its margins or margin-box overrides onto later, unrelated content. This lets different parts of a document use different page styles (e.g., wider margins for an appendix, or a different running header per chapter). Per css-page-3, an element whose used `page` name differs from the one currently in effect — including a reversion back to the default — **forces a page break** before it, so a named page's styles (including layout-affecting top/bottom margins) always begin on a fresh page, and the following default content resumes on its own fresh page.
 
 ```css
 @page chapter {
@@ -788,6 +788,8 @@ An `@page` rule's selector may also list several comma-separated names, sharing 
 ```
 
 Page names are case-sensitive (`page: Chapter` will not activate `@page chapter { }`).
+
+**Limitation:** named-page activation and reversion are honored for normal block-flow content. A `page` change or reversion among the children of a flex container, table, or multi-column block is not — those layout modes position their own children independently of the page-break machinery, so a named page applied deep inside them may not begin (or revert) on a fresh page. Apply `page` to a block-level element in the normal flow for reliable results.
 
 ### Named strings (`string-set` / `string()`)
 

@@ -210,9 +210,12 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task UnsetPageName_CarriesForwardWithoutForcingBreak()
         {
-            // A chapter heading with an explicit `page` value starts a fresh page, but its ordinary
-            // "page: auto" (unset) following siblings must not each force their own additional break -
-            // they simply carry the active named page forward, per CSS2.1 §13.2.
+            // The used value of `page` (CSS Paged Media Level 3 §3) is tree-based: a box with no
+            // explicit `page` uses its parent box's used value. So the ordinary "page: auto" (unset)
+            // *descendants* of a named chapter container all carry that container's named page forward
+            // and must not each force their own additional break - only the container that actually
+            // changes the named page does. (A *following sibling* of the container, by contrast,
+            // reverts - see NamedPageReversion tests.)
             var html = @"<!DOCTYPE html>
 <html>
 <head>
@@ -221,9 +224,11 @@ namespace PeachPDF.Tests.Integration
 </style>
 </head>
 <body>
-<div class='heading' style='page: alpha;'>Chapter</div>
+<div class='chapter' style='page: alpha;'>
+<div class='heading'>Chapter</div>
 <div class='body1'>Paragraph 1</div>
 <div class='body2'>Paragraph 2</div>
+</div>
 </body>
 </html>";
 

@@ -120,21 +120,23 @@ namespace PeachPDF.Tests.Integration
             // CssLayoutEngineTable's whole-table pre-check assigns the table's Location directly
             // (bypassing OffsetTop's MoveNamedPageElement sync), so the tail of
             // CssBox.PerformLayoutImp must re-sync the early registration to the slot the table
-            // actually ended up on. The name is pre-activated by an earlier element so the table
-            // itself doesn't force a break (which would land it at a slot top and mask the move).
+            // actually ended up on. Every element here carries the same explicit `page: tbl`, so the
+            // table itself doesn't force a break (its used name equals the already-active one, which
+            // would otherwise land it at a slot top and mask the move) while still registering (a box
+            // with its own explicit name always registers, so the relocated table has an entry to
+            // re-sync). The leading 660pt named div pushes the table's top near the slot-0 boundary.
             var container = await BuildLayoutAsync("""
                 <!DOCTYPE html><html><head><style>
                 @page { margin: 60pt 50pt; }
                 body { margin: 0; }
                 div, p, table, td { margin: 0; }
                 </style></head><body>
-                <div style='page: tbl; height: 10pt'>x</div>
-                <div style='height: 650pt'></div>
+                <div style='page: tbl; height: 660pt'>x</div>
                 <table id='t' style='page: tbl'><tr><td>row content</td></tr></table>
                 </body></html>
                 """);
 
-            // Table top starts at 60 + 10 + 650 = 720, inside slot 0 (band [60, 732)); the pre-check's
+            // Table top starts at 60 + 660 = 720, inside slot 0 (band [60, 732)); the pre-check's
             // one-line row estimate (~12-30pt) crosses the 732 boundary, relocating the whole table to
             // slot 1's top by direct Location assignment.
             var table = FindById(container.Root!, "t");
@@ -170,6 +172,94 @@ namespace PeachPDF.Tests.Integration
 
             var registered = Assert.Single(container.NamedPageElements, e => e.Name == "tail");
             Assert.Equal(container.PageTopOf(0), registered.Y, 1);
+        }
+
+        [Fact]
+        public async Task ReversionAfterNamedPage_RestoresDefaultBand_DoesNotLeakMargins()
+        {
+            // Issue #126: a named page's margins must not leak onto later default pages. Page 0 is
+            // default, the named `wide` element forces a break to page 1 (full-sheet band), and the
+            // following sibling reverts - forcing a break to page 2 whose band must return to the
+            // BASE band, not the wide element's zero-margin full-sheet band.
+            var container = await BuildLayoutAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 50pt; }
+                @page wide { margin: 0; }
+                body { margin: 0; }
+                div { margin: 0; }
+                </style></head><body>
+                <div id='d1'>default one</div>
+                <div id='wide' style='page: wide'>wide</div>
+                <div id='d3'>default three</div>
+                </body></html>
+                """);
+
+            var d3 = FindById(container.Root!, "d3");
+            Assert.NotNull(d3);
+
+            Assert.Equal(BaseBand, container.PageBandHeightOf(0));   // default page
+            Assert.Equal(SheetH, container.PageBandHeightOf(1));     // wide page (margin: 0)
+            Assert.Equal(BaseBand, container.PageBandHeightOf(2));   // reverted - base band restored
+            // The reverted content actually lands on slot 2 (the third page), not still on the wide page.
+            Assert.Equal(2, container.PageIndexOf(d3!.Location.Y + HtmlContainerInt.PageBoundaryEpsilon));
+        }
+
+        [Fact]
+        public async Task ReversionAfterNamedPage_RestoresDefaultMarginBox_DoesNotLeakSuppression()
+        {
+            // Second symptom from issue #126: a named page that suppresses a margin box
+            // (@top-center { content: none }) must not keep it suppressed on later default pages.
+            var container = await BuildLayoutAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 50pt; @top-center { content: "HEADER"; } }
+                @page wide { margin: 60pt 50pt; @top-center { content: none; } }
+                body { margin: 0; }
+                div { margin: 0; }
+                </style></head><body>
+                <div id='d1'>default one</div>
+                <div id='wide' style='page: wide'>wide</div>
+                <div id='d3'>default three</div>
+                </body></html>
+                """);
+
+            // Wide page (slot 1): the header is suppressed.
+            Assert.Equal("none", TopCenterContentForSlot(container, 1));
+            // Reverted page (slot 2): the default header must be restored, not leaked-suppressed.
+            Assert.Equal("\"HEADER\"", TopCenterContentForSlot(container, 2));
+        }
+
+        private static string? TopCenterContentForSlot(HtmlContainerInt container, int slot)
+        {
+            var activeName = PageRuleResolver.ActiveNameAtPageEnd(
+                container.NamedPageElements, container.PageTopOf(slot), container.PageBandHeightOf(slot));
+            var rules = PageRuleResolver.SelectApplicableMarginRules(
+                container.PageRules, pageNumber: slot + 1, activeName);
+            var topCenter = rules.FirstOrDefault(r =>
+                string.Equals(r.Selector?.Text?.Trim(), "top-center", StringComparison.OrdinalIgnoreCase));
+            return topCenter?.Style.Content;
+        }
+
+        [Fact]
+        public async Task FirstPseudoOverride_DoesNotLeakToLaterPages()
+        {
+            // Companion / regression guard: unlike a named page, an `@page :first` override is not a
+            // registry entry - it is applied per page number by the resolver - so it inherently only
+            // affects page 1. Issue #126 confirms `:first` overrides correctly do NOT leak; this pins
+            // that page 2's band uses the base margins, not `:first`'s.
+            var container = await BuildLayoutAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 50pt; }
+                @page :first { margin: 0; }
+                body { margin: 0; }
+                div { margin: 0; }
+                </style></head><body>
+                <div>page one</div>
+                <div style='page-break-before: always'>page two</div>
+                </body></html>
+                """);
+
+            Assert.Equal(SheetH, container.PageBandHeightOf(0));    // :first { margin: 0 } - full sheet
+            Assert.Equal(BaseBand, container.PageBandHeightOf(1));  // base margins restored, no leak
         }
 
         private static void CollectWords(CssBox box, List<CssRect> words)
