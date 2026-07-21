@@ -28,8 +28,8 @@ jobs:
     # Doc-only PRs shouldn't pay for the full test suite, but this job is a required
     # status check — a trigger-level `paths:` filter would leave it stuck pending and
     # block the merge. So the job always runs; the heavy steps below are gated on
-    # whether anything under src/ (or this workflow) actually changed, and the job
-    # still reports success when they're skipped.
+    # whether anything under src/ actually changed, and the job still reports success
+    # when they're skipped.
     - name: Detect source changes
       uses: dorny/paths-filter@v3
       id: changes
@@ -37,7 +37,6 @@ jobs:
         filters: |
           src:
             - 'src/**'
-            - '.github/workflows/test.yml'
 
     - name: Setup .NET
       if: steps.changes.outputs.src == 'true'
