@@ -336,6 +336,7 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.TextTransform, () => new TextTransformProperty());
             AddLonghand(PropertyNames.TextShadow, () => new TextShadowProperty(), true);
             AddLonghand(PropertyNames.Transform, () => new TransformProperty(), true);
+            AddLonghand(PropertyNames.ClipPath, () => new ClipPathProperty(), true);
             AddLonghand(PropertyNames.TransformOrigin, () => new TransformOriginProperty(), true);
             AddLonghand(PropertyNames.TransformStyle, () => new TransformStyleProperty());
 

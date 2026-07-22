@@ -279,6 +279,7 @@ Known limitation: `double`/`groove`/`ridge` combined with `border-radius` on the
 | Property | MDN Reference | Notes |
 |----------|--------------|-------|
 | `opacity` | [opacity](https://developer.mozilla.org/en-US/docs/Web/CSS/opacity) | Full support; not inherited (it composites the element and its whole subtree as a group, per spec). Rendered as a genuine, isolated PDF transparency group — the element's subtree is painted into an offscreen Form XObject and flattened, then that single flattened result is composited onto the page at the given alpha, so overlapping content within the element (e.g. two overlapping semi-transparent children) doesn't double-darken where it overlaps. |
+| `clip-path` | [clip-path](https://developer.mozilla.org/en-US/docs/Web/CSS/clip-path) | Basic shapes are supported: `polygon()` (with an optional `nonzero`/`evenodd` fill rule), `inset()` (1–4 edge offsets), `circle()` and `ellipse()` (with a `<length-percentage>` or `closest-side`/`farthest-side` radius and an optional `at <position>`), and `none`. The shape is resolved against the element's **border-box** and clips the whole element (background, border, content, and descendants); it is transformed together with any `transform` on the element. Invalid values are dropped at parse time. Not supported: `inset()`'s `round <border-radius>` corners (the clip is rectangular), a `<geometry-box>` reference-box keyword other than the default border-box, `path()`/`url()` (SVG) references, and `calc()` inside a shape component. |
 
 ### Backgrounds
 

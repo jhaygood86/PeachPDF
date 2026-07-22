@@ -300,6 +300,7 @@ namespace PeachPDF.Html.Core
             { "text-transform", CssConstants.None },
             { "top", CssConstants.Auto },
             { "transform", CssConstants.None },
+            { "clip-path", CssConstants.None },
             { "transform-origin", "50% 50% 0" },
             { "opacity", "1" },
             { "vertical-align", "baseline" },

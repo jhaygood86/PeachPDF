@@ -3692,6 +3692,44 @@ await SaveShowcaseAsync("emoji", "Fonts & Text", "Emoji (astral codepoints)",
     "Supplementary-plane (astral, U+FFFF+) glyph rendering: emoji resolve through the font's cmap format-12 subtable and render as monochrome outlines from a bundled subset of Noto Emoji. Color-glyph tables (COLR/CBDT/sbix) are not composited.",
     emojiHtml, pdfConfig);
 
+// clip-path with CSS basic shapes (polygon/inset/circle/ellipse). The shape is parsed once by the
+// shared BasicShapeGrammar and resolved against the element's border-box, then pushed as a PDF clip
+// region around the whole element rendering (background + content).
+var clipPathHtml = """
+    <html>
+    <head>
+    <style>
+        body { font-family: sans-serif; margin: 40px; }
+        h1 { font-size: 20pt; }
+        .row { display: flex; gap: 24px; margin-top: 16px; }
+        .cell { text-align: center; font-size: 10pt; color: #555; }
+        .shape { width: 130px; height: 130px; margin-bottom: 6px; }
+        .poly { clip-path: polygon(50% 0, 100% 38%, 82% 100%, 18% 100%, 0 38%);
+                background: linear-gradient(135deg, #ff6b6b, #c92a2a); }
+        .inset { clip-path: inset(12% 8% round 14px); background: linear-gradient(135deg, #4dabf7, #1971c2); }
+        .circ { clip-path: circle(50% at center); background: linear-gradient(135deg, #69db7c, #2f9e44); }
+        .ell { clip-path: ellipse(50% 34% at center); background: linear-gradient(135deg, #da77f2, #9c36b5); }
+    </style>
+    </head>
+    <body>
+        <h1>clip-path basic shapes</h1>
+        <p>A single <code>clip-path</code> value clips the whole element (here a gradient fill) to a
+        <code>polygon()</code>, <code>inset()</code>, <code>circle()</code>, or <code>ellipse()</code>,
+        resolved against the border-box.</p>
+        <div class="row">
+            <div class="cell"><div class="shape poly"></div>polygon()</div>
+            <div class="cell"><div class="shape inset"></div>inset()</div>
+            <div class="cell"><div class="shape circ"></div>circle()</div>
+            <div class="cell"><div class="shape ell"></div>ellipse()</div>
+        </div>
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("clip_path", "Backgrounds & Borders", "clip-path basic shapes",
+    "CSS clip-path with basic shapes: polygon(), inset(), circle(), and ellipse() clip an element (here a gradient fill) to a shape resolved against its border-box. A shared basic-shape grammar validates the value at parse time and the resolved region is pushed as a PDF clip path.",
+    clipPathHtml, pdfConfig);
+
 // The manifest that drives the website's /showcase page (see docs/showcase.html and
 // .github/workflows/pages.yml). Field names are camelCased for Liquid (site.data.showcases).
 var manifestJson = JsonSerializer.Serialize(showcaseManifest,
