@@ -212,6 +212,11 @@ namespace PeachPDF.Tests.CSS
                     new object[] { "row nowrap", "row", "nowrap" },
                     new object[] { "column wrap", "column", "wrap" },
                     new object[] { "column-reverse wrap-reverse", "column-reverse", "wrap-reverse" },
+                    // flex-flow is "<'flex-direction'> || <'flex-wrap'>" (CSS Flexbox 1 §5.1), so the two
+                    // values are equally valid in the reverse order.
+                    new object[] { "nowrap row", "row", "nowrap" },
+                    new object[] { "wrap column", "column", "wrap" },
+                    new object[] { "wrap-reverse column-reverse", "column-reverse", "wrap-reverse" },
                 };
             }
         }
