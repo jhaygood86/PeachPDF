@@ -67,9 +67,13 @@ namespace PeachPDF.Html.Core
                 return new RegisteredProperty(rule.Name, syntax, hasInitial ? rawInitial!.Trim() : null, inherits);
 
             // A typed syntax REQUIRES an initial-value that matches it, else the whole rule is invalid.
+            // The initial-value is additionally held to the §3 computational-independence rule
+            // (forInitialValue: true), which rejects a calc() built from font/viewport-relative or
+            // percentage terms — a distinction that does NOT apply to values matched later at
+            // computed-value time (Accepts), where any resolvable calc() is fine.
             if (!hasInitial) return null;
             var initial = rawInitial!.Trim();
-            if (!SyntaxMatches(syntax, initial, valueParser)) return null;
+            if (!SyntaxMatches(syntax, initial, valueParser, forInitialValue: true)) return null;
 
             return new RegisteredProperty(rule.Name, syntax, initial, inherits);
         }
@@ -98,9 +102,10 @@ namespace PeachPDF.Html.Core
         /// The universal syntax accepts anything; a typed syntax accepts a value matching any of its
         /// <c>|</c>-separated components.
         /// </summary>
-        public bool Accepts(string value, CssValueParser valueParser) => SyntaxMatches(Syntax, value, valueParser);
+        public bool Accepts(string value, CssValueParser valueParser) =>
+            SyntaxMatches(Syntax, value, valueParser, forInitialValue: false);
 
-        private static bool SyntaxMatches(string syntax, string value, CssValueParser valueParser)
+        private static bool SyntaxMatches(string syntax, string value, CssValueParser valueParser, bool forInitialValue)
         {
             if (syntax == "*") return true;
             if (string.IsNullOrWhiteSpace(value)) return false;
@@ -110,22 +115,22 @@ namespace PeachPDF.Html.Core
             {
                 var component = rawComponent.Trim();
                 if (component.Length == 0) continue;
-                if (ComponentMatches(component, value.Trim(), valueParser)) return true;
+                if (ComponentMatches(component, value.Trim(), valueParser, forInitialValue)) return true;
             }
 
             return false;
         }
 
-        private static bool ComponentMatches(string component, string value, CssValueParser valueParser)
+        private static bool ComponentMatches(string component, string value, CssValueParser valueParser, bool forInitialValue)
         {
             // List multipliers: '<type>+' (space-separated) / '<type>#' (comma-separated). Validate each item
             // against the single-type base. (A base with no multiplier validates the whole value as one item.)
             if (component.EndsWith("+", StringComparison.Ordinal))
-                return SplitList(value, ' ').All(item => BaseTypeMatches(component[..^1].Trim(), item, valueParser));
+                return SplitList(value, ' ').All(item => BaseTypeMatches(component[..^1].Trim(), item, valueParser, forInitialValue));
             if (component.EndsWith("#", StringComparison.Ordinal))
-                return SplitList(value, ',').All(item => BaseTypeMatches(component[..^1].Trim(), item, valueParser));
+                return SplitList(value, ',').All(item => BaseTypeMatches(component[..^1].Trim(), item, valueParser, forInitialValue));
 
-            return BaseTypeMatches(component, value, valueParser);
+            return BaseTypeMatches(component, value, valueParser, forInitialValue);
         }
 
         /// <summary>
@@ -159,14 +164,20 @@ namespace PeachPDF.Html.Core
             return items.Where(item => item.Length > 0).ToArray();
         }
 
-        private static bool BaseTypeMatches(string type, string value, CssValueParser valueParser)
+        private static bool BaseTypeMatches(string type, string value, CssValueParser valueParser, bool forInitialValue)
         {
             if (value.Length == 0) return false;
 
             // A calc()-family expression is valid wherever a numeric data type is (length/number/percentage/…).
-            // Note: a calc() with font/viewport-relative units (e.g. calc(1em + 2px)) is accepted here even as
-            // an initial-value, where the spec requires computational independence (§3) — see issue #212.
-            static bool NumericOk(string v, Func<string, bool> check) => CssValueParser.IsCalcFunction(v) || check(v);
+            // When validating an initial-value (forInitialValue), it additionally has to be computationally
+            // independent (CSS Properties & Values API §3): a calc() built from font/viewport-relative or
+            // percentage terms (e.g. calc(1em + 2px)) is rejected there, though it is fine at computed-value time.
+            bool NumericOk(string v, Func<string, bool> check)
+            {
+                if (CssValueParser.IsCalcFunction(v))
+                    return !forInitialValue || CalcIsComputationallyIndependent(v);
+                return check(v);
+            }
 
             switch (type)
             {
@@ -188,19 +199,69 @@ namespace PeachPDF.Html.Core
                     return NumericOk(value, v => AspectRatioGrammar.TryParseRatio(CssValueParser.GetCssTokens(v), out _));
                 case "<color>":
                     return valueParser.IsColorValid(value);
+                case "<url>":
+                    // A single url() token (CSS Values 4 §4.5).
+                    return CssValueParser.GetCssTokens(value).ToUri() != null;
+                case "<image>":
+                    // url() or a supported gradient (CSS Images 3 §2). image-set()/cross-fade()/element()
+                    // aren't supported by the engine, so they fall back to the initial-value like any other
+                    // unrenderable value rather than registering.
+                    return valueParser.ParseImage(value) != null;
+                case "<time>":
+                    // A literal <time> dimension only — the calc engine models no time units, so a calc()
+                    // time value can't be validated (or evaluated) and isn't accepted here.
+                    return CssValueParser.GetCssTokens(value).ToTime() != null;
+                case "<resolution>":
+                    // A literal <resolution> dimension only (dpi/dppx/dpcm) — same rationale as <time>.
+                    return CssValueParser.GetCssTokens(value).ToResolution() != null;
+                case "<transform-function>":
+                    // Exactly one transform function, validated (name + argument arity/types) through the
+                    // shared Layer-A transform grammar. FunctionValueConverter's OnlyOrDefault rejects a list.
+                    return Converters.TransformConverter.Convert(CssValueParser.GetCssTokens(value)) is not null;
+                case "<transform-list>":
+                    // One or more space-separated transform functions (CSS Transforms 1). GetCssTokens drops
+                    // whitespace, but ToItems() (used by Many) starts a new item at each function token, so a
+                    // multi-function list still splits correctly.
+                    return Converters.TransformConverter.Many().Convert(CssValueParser.GetCssTokens(value)) is not null;
                 case "<custom-ident>":
                     return IsIdent(value);
                 case "<string>":
                     return value.Length >= 2 && value[0] is '"' or '\'' && value[^1] == value[0];
                 default:
                     // A bare ident literal in the syntax (e.g. `auto`) is a <custom-ident> and matches that
-                    // keyword case-sensitively (CSS Syntax 3 — idents are case-sensitive). Any data type we
-                    // don't model (<image>, <url>, <time>, <resolution>, <transform-*>) degrades to "accept"
-                    // rather than wrongly reject (documented accepted gap, issue #212).
+                    // keyword case-sensitively (CSS Syntax 3 — idents are case-sensitive). Every standard
+                    // syntax data type above is now validated; a genuinely non-standard/future <foo> type we
+                    // don't model still degrades to "accept" rather than wrongly reject.
                     if (type.StartsWith("<", StringComparison.Ordinal)) return true;
                     return string.Equals(type, value, StringComparison.Ordinal);
             }
         }
+
+        /// <summary>
+        /// Whether a calc()-family <paramref name="value"/> is computationally independent (CSS Properties &amp;
+        /// Values API §3): it may not depend on element context, so every leaf must be a plain number, an angle,
+        /// or an <em>absolute</em> length — font-relative (em/ex/ch/rem), viewport-relative, or percentage terms
+        /// are rejected. A non-calc value is trivially independent (its own type check handles it).
+        /// </summary>
+        private static bool CalcIsComputationallyIndependent(string value)
+        {
+            var tokens = CssValueParser.GetCssTokens(value);
+            if (tokens is not [FunctionToken fn] || !CalcParser.IsCalcFamily(fn.Data)) return true;
+            var node = CalcParser.Parse(fn);
+            return node is not null && IsComputationallyIndependent(node);
+        }
+
+        private static bool IsComputationallyIndependent(CalcNode node) => node switch
+        {
+            NumberCalcNode or AngleCalcNode => true,
+            // Viewport/ch units never reach the tree (CalcParser doesn't admit them); em/ex/rem do, and are relative.
+            DimensionCalcNode dimension => new Length(0f, dimension.Unit).IsAbsolute,
+            PercentageCalcNode => false,
+            UnaryCalcNode unary => IsComputationallyIndependent(unary.Operand),
+            BinaryCalcNode binary => IsComputationallyIndependent(binary.Left) && IsComputationallyIndependent(binary.Right),
+            CallCalcNode call => call.Arguments.All(IsComputationallyIndependent),
+            _ => false,
+        };
 
         private static bool IsIdent(string value)
         {

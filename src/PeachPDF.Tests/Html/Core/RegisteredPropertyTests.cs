@@ -127,6 +127,31 @@ namespace PeachPDF.Tests.Html.Core
         [InlineData("<color>", "rebeccapurple", true)]
         [InlineData("<color>", "#abc", true)]
         [InlineData("<color>", "notacolor", false)]
+        [InlineData("<url>", "url(a.png)", true)]
+        [InlineData("<url>", "url(https://x/y.svg)", true)]
+        [InlineData("<url>", "red", false)]
+        [InlineData("<url>", "linear-gradient(red, blue)", false)] // a gradient is an <image>, not a <url>
+        [InlineData("<image>", "url(a.png)", true)]
+        [InlineData("<image>", "linear-gradient(red, blue)", true)]
+        [InlineData("<image>", "radial-gradient(red, blue)", true)]
+        [InlineData("<image>", "conic-gradient(red, blue)", true)]
+        [InlineData("<image>", "red", false)]
+        [InlineData("<time>", "5s", true)]
+        [InlineData("<time>", "250ms", true)]
+        [InlineData("<time>", "10px", false)]
+        [InlineData("<time>", "5", false)]
+        [InlineData("<resolution>", "96dpi", true)]
+        [InlineData("<resolution>", "2dppx", true)]
+        [InlineData("<resolution>", "5", false)]
+        [InlineData("<transform-function>", "rotate(45deg)", true)]
+        [InlineData("<transform-function>", "translate(1px, 2px)", true)]
+        [InlineData("<transform-function>", "matrix(1, 0, 0, 1, 0, 0)", true)]
+        [InlineData("<transform-function>", "red", false)]
+        [InlineData("<transform-function>", "translate(1px) rotate(1deg)", false)] // a list, not one function
+        [InlineData("<transform-list>", "translate(1px) rotate(1deg)", true)]
+        [InlineData("<transform-list>", "scale(2)", true)]
+        [InlineData("<transform-list>", "red", false)]
+        [InlineData("<transform-list>", "rotate(1deg) red", false)]
         [InlineData("<custom-ident>", "my-ident", true)]
         [InlineData("<custom-ident>", "10px", false)]
         [InlineData("<custom-ident>", "a.b", false)]
@@ -185,13 +210,49 @@ namespace PeachPDF.Tests.Html.Core
             Assert.True(reg!.Accepts("literally anything <here>", ValueParser));
         }
 
-        // A modeled data type not in our grammar (<image>) degrades to "accept" rather than wrongly reject.
+        // A modeled data type whose initial-value doesn't match is now invalid (the rule drops), instead of
+        // degrading to "accept" — so an <image> with a garbage initial-value no longer registers.
         [Fact]
-        public void UnmodeledType_DegradesToAccept()
+        public void ModeledType_InitialNotMatching_IsInvalid()
         {
-            var reg = Register("syntax: \"<image>\"; inherits: false; initial-value: whatever;");
+            Assert.Null(Register("syntax: \"<image>\"; inherits: false; initial-value: whatever;"));
+            Assert.Null(Register("syntax: \"<url>\"; inherits: false; initial-value: red;"));
+            Assert.Null(Register("syntax: \"<transform-list>\"; inherits: false; initial-value: nope;"));
+        }
+
+        // A genuinely non-standard/future <foo> data type still degrades to "accept" (safety fallback).
+        [Fact]
+        public void NonStandardType_DegradesToAccept()
+        {
+            var reg = Register("syntax: \"<future-thing>\"; inherits: false; initial-value: whatever;");
             Assert.NotNull(reg);
-            Assert.True(reg!.Accepts("url(x.png)", ValueParser));
+            Assert.True(reg!.Accepts("anything at all", ValueParser));
+        }
+
+        // ── Computational independence of initial-value calc() (§3) ───────────────────
+
+        [Theory]
+        [InlineData("<length>", "calc(1px + 2px)", true)]   // absolute-only → independent
+        [InlineData("<length>", "calc(2px * 3)", true)]
+        [InlineData("<length>", "calc(1em + 2px)", false)]  // em is font-relative
+        [InlineData("<length>", "calc(1rem)", false)]
+        [InlineData("<length-percentage>", "calc(50% + 1px)", false)] // percentage term
+        [InlineData("<number>", "calc(2 * 3)", true)]
+        [InlineData("<angle>", "calc(45deg + 10deg)", true)]
+        public void InitialValueCalc_ComputationalIndependence(string syntax, string initial, bool valid)
+        {
+            var reg = Register($"syntax: \"{syntax}\"; inherits: false; initial-value: {initial};");
+            Assert.Equal(valid, reg is not null);
+        }
+
+        [Fact]
+        public void ComputationalIndependence_AppliesOnlyToInitialValue()
+        {
+            // A registered property still ACCEPTS a font-relative calc() at computed-value time — the
+            // independence rule constrains the initial-value only, not values set later.
+            var reg = Register("syntax: \"<length>\"; inherits: false; initial-value: 0px;");
+            Assert.NotNull(reg);
+            Assert.True(reg!.Accepts("calc(1em + 2px)", ValueParser));
         }
 
         // ── BuildRegistry (shared by the HTML cascade and the standalone-SVG loader) ──
@@ -233,6 +294,12 @@ namespace PeachPDF.Tests.Html.Core
             "<angle>" => "0deg",
             "<ratio>" => "1",
             "<color>" => "black",
+            "<url>" => "url(x)",
+            "<image>" => "url(x)",
+            "<time>" => "0s",
+            "<resolution>" => "96dpi",
+            "<transform-function>" => "scale(1)",
+            "<transform-list>" => "scale(1)",
             "<custom-ident>" => "x",
             "<string>" => "\"x\"",
             _ => "auto",
