@@ -1376,6 +1376,21 @@ namespace PeachPDF.Html.Core.Parse
             if (dist.HasValue && dist.Value.Type == Length.Unit.Percent)
                 return dist.Value.Value / 100.0 * (2.0 * Math.PI);
 
+            // A calc()-family expression as an angular stop position (e.g. `calc(1turn * 0.35)`), evaluated
+            // to radians. CalcEvaluator maps an angle leaf to radians and a number leaf to a unitless scalar,
+            // so `1turn * 0.35` → 0.35 turn; any percentage inside resolves against a full turn (100% = 2π),
+            // matching the plain-percentage branch above. This is what lets a Charts.css pie slice — whose
+            // every stop position is `calc(1turn * <value>)` — get its correct angular sweep.
+            if (item.Count == 1 && item[0] is FunctionToken function && CalcParser.IsCalcFamily(function.Data))
+            {
+                var node = CalcParser.Parse(function);
+                if (node is not null)
+                {
+                    var radians = CalcEvaluator.Evaluate(node, new CalcContext(2.0 * Math.PI, 0, 0));
+                    if (radians.HasValue) return radians.Value;
+                }
+            }
+
             // In CSS, bare 0 is a valid zero value for any dimension including angles.
             if (item.Count == 1 && item[0].Type == TokenType.Number && ((NumberToken)item[0]).Value == 0f)
                 return 0.0;
@@ -1514,24 +1529,31 @@ namespace PeachPDF.Html.Core.Parse
             int r = -1;
             int g = -1;
             int b = -1;
+            double a = 1d; // rgb() is opaque unless a CSS Color 4 `/ <alpha>` component is present.
 
             if (length > 10)
             {
                 int s = idx + 4;
+                int end = idx + length;
                 r = ParseIntAtIndex(str, ref s);
-                if (s < idx + length)
+                if (s < end)
                 {
                     g = ParseIntAtIndex(str, ref s);
                 }
-                if (s < idx + length)
+                if (s < end)
                 {
                     b = ParseIntAtIndex(str, ref s);
+                }
+                if (s < end)
+                {
+                    var parsedAlpha = ParseAlphaAtIndex(str, ref s, end);
+                    if (parsedAlpha >= 0d) a = parsedAlpha;
                 }
             }
 
             if (r > -1 && g > -1 && b > -1)
             {
-                color = RColor.FromArgb(r, g, b);
+                color = RColor.FromArgb((int)Math.Round(Math.Clamp(a, 0d, 1d) * 255), r, g, b);
                 return true;
             }
             color = RColor.Empty;
@@ -1547,34 +1569,74 @@ namespace PeachPDF.Html.Core.Parse
             int r = -1;
             int g = -1;
             int b = -1;
-            double a = -1d;
+            double a = 1d; // Default to opaque if the alpha component is missing/omitted.
 
             if (length > 13)
             {
                 int s = idx + 5;
+                int end = idx + length;
                 r = ParseIntAtIndex(str, ref s);
 
-                if (s < idx + length)
+                if (s < end)
                 {
                     g = ParseIntAtIndex(str, ref s);
                 }
-                if (s < idx + length)
+                if (s < end)
                 {
                     b = ParseIntAtIndex(str, ref s);
                 }
-                if (s < idx + length)
+                if (s < end)
                 {
-                    a = ParseDoubleAtIndex(str, ref s);
+                    var parsedAlpha = ParseAlphaAtIndex(str, ref s, end);
+                    if (parsedAlpha >= 0d) a = parsedAlpha;
                 }
             }
 
-            if (r > -1 && g > -1 && b > -1 && a >= 0d)
+            if (r > -1 && g > -1 && b > -1)
             {
-                color = RColor.FromArgb((int)Math.Round(a * 255), r, g, b);
+                color = RColor.FromArgb((int)Math.Round(Math.Clamp(a, 0d, 1d) * 255), r, g, b);
                 return true;
             }
             color = RColor.Empty;
             return false;
+        }
+
+        /// <summary>
+        /// Parses the optional trailing alpha of an <c>rgb()/rgba()</c> value, supporting both the legacy
+        /// comma form (<c>…, 0.75</c>) and the CSS Color 4 slash form (<c>… / 75%</c> or <c>… / 0.75</c>).
+        /// The component separator (comma or the space before <c>/</c>) has already been consumed by the
+        /// preceding <see cref="ParseIntAtIndex"/> call, so this skips whitespace and an optional leading
+        /// <c>/</c>, then reads a number optionally suffixed by <c>%</c> (percent → 0..1). Returns the alpha
+        /// in 0..1, or -1 when no alpha is present.
+        /// </summary>
+        private static double ParseAlphaAtIndex(string str, ref int startIdx, int limit)
+        {
+            while (startIdx < limit && char.IsWhiteSpace(str, startIdx))
+                startIdx++;
+            if (startIdx < limit && str[startIdx] == '/')
+            {
+                startIdx++;
+                while (startIdx < limit && char.IsWhiteSpace(str, startIdx))
+                    startIdx++;
+            }
+
+            int len = 0;
+            while (startIdx + len < limit && (char.IsDigit(str, startIdx + len) || str[startIdx + len] == '.'))
+                len++;
+            if (len < 1)
+                return -1d;
+
+            if (!double.TryParse(str.Substring(startIdx, len), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double val))
+                return -1d;
+
+            startIdx += len;
+            if (startIdx < limit && str[startIdx] == '%')
+            {
+                val /= 100.0;
+                startIdx++;
+            }
+
+            return val;
         }
 
         /// <summary>

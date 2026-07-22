@@ -45,6 +45,34 @@ namespace PeachPDF.Tests.CSS
         }
 
         [Fact]
+        public void Polygon_CalcComponent_IsAcceptedAndPreserved()
+        {
+            // A calc()-family expression is a valid <length-percentage> polygon vertex component
+            // (resolved at render time). The whole shape must stay valid and the calc text preserved.
+            var shape = Parse("polygon(0% calc(100% * 0.65), 100% 100%, 0% 100%)");
+
+            Assert.NotNull(shape);
+            Assert.Equal(BasicShapeGrammar.BasicShapeKind.Polygon, shape.Kind);
+            Assert.Equal(3, shape.PolygonPoints.Count);
+            Assert.Equal("0%", shape.PolygonPoints[0].X);
+            Assert.StartsWith("calc(", shape.PolygonPoints[0].Y);
+            Assert.Contains("0.65", shape.PolygonPoints[0].Y);
+            Assert.Equal(("100%", "100%"), (shape.PolygonPoints[1].X, shape.PolygonPoints[1].Y));
+            Assert.Equal(("0%", "100%"), (shape.PolygonPoints[2].X, shape.PolygonPoints[2].Y));
+        }
+
+        [Theory]
+        [InlineData("polygon(min(10px, 20px) 0, 100% 0, 0 100%)")]
+        [InlineData("polygon(0 max(10%, 5px), 100% 0, 0 100%)")]
+        [InlineData("polygon(clamp(0px, 50%, 100px) 0, 100% 0, 0 100%)")]
+        public void Polygon_CalcFamilyFunctions_AreAccepted(string value)
+        {
+            var shape = Parse(value);
+            Assert.NotNull(shape);
+            Assert.Equal(3, shape.PolygonPoints.Count);
+        }
+
+        [Fact]
         public void Polygon_SinglePoint_IsValid()
         {
             var shape = Parse("polygon(50% 50%)");

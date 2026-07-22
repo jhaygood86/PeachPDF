@@ -383,6 +383,11 @@ namespace PeachPDF.CSS
         private static bool IsLengthPercentage(Token token)
         {
             if (token.Type is TokenType.Dimension or TokenType.Percentage) return true;
+            // A calc()-family function computes to a <length-percentage> at used-value time. The render-time
+            // resolver (CssClipPathResolver → CssValueParser.ParseLength) evaluates it, and the token's
+            // ToValue() reconstructs the full "calc(…)" text, so accept it here rather than invalidating the
+            // whole shape (this is what lets a Charts.css area/line polygon vertex be a calc() expression).
+            if (token is FunctionToken function && CalcParser.IsCalcFamily(function.Data)) return true;
             // Unitless zero is a valid length.
             return token is NumberToken { Value: 0f };
         }

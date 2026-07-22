@@ -82,6 +82,17 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task ConicGradient_CalcAngleStops_RendersSuccessfully()
+        {
+            // CSS Color 4 / Values 4: a stop position may be a calc()-family angle (e.g. calc(1turn * 0.35)),
+            // evaluated to radians via CalcEvaluator's angle-leaf case. The Charts.css pie-slice pattern.
+            var pdfText = await GetPdfText(GradientHtml(
+                "background-image: conic-gradient(red calc(1turn * 0.35), blue calc(1turn * 0.7), green 1turn);"));
+
+            Assert.Contains("/ShadingType", pdfText);
+        }
+
+        [Fact]
         public async Task ConicGradient_HardStop_RendersSuccessfully()
         {
             // Hard stop: same angle for end of one slice and start of next

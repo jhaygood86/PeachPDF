@@ -59,6 +59,13 @@ namespace PeachPDF.CSS
                     return new Length((float)percentage.Value, Length.Unit.Percent)
                         .ToPixels(context.EmFactor, context.RemFactor, context.HundredPercent);
 
+                case AngleCalcNode angle:
+                    // An angle leaf evaluates to radians (the canonical angle unit), so an angle-typed
+                    // calc such as `calc(1turn * 0.35)` yields 0.35 turn in radians (a Number leaf stays a
+                    // unitless scalar). Length calc()s never contain an angle leaf, so this never perturbs
+                    // length evaluation; the only current caller is conic-gradient stop-position parsing.
+                    return new Angle((float)angle.Value, angle.Unit).ToRadian();
+
                 case UnaryCalcNode unary:
                 {
                     var operand = Evaluate(unary.Operand, context);
