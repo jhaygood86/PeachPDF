@@ -110,6 +110,173 @@ namespace PeachPDF.Tests.Svg
             Assert.Equal(shouldMatch, matched!.ContainsKey("fill"));
         }
 
+        // Issue #205: !important is honored via a separate important pass, so an !important declaration in a
+        // LOWER-specificity rule beats a normal declaration in a HIGHER-specificity rule (CSS Cascade 4 §6.3),
+        // not merely when it also sorts last.
+        [Fact]
+        public void MatchedDeclarations_ImportantBeatsNormal_RegardlessOfSpecificity()
+        {
+            var markup = """
+                <svg xmlns="http://www.w3.org/2000/svg">
+                  <style>#r { fill: #ff0000; } rect { fill: #00ff00 !important; }</style>
+                  <rect id="r"/>
+                </svg>
+                """;
+            var root = XDocument.Parse(markup).Root!;
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+
+            var rectElement = root.Descendants().Single(e => e.Name.LocalName == "rect");
+            var matched = SvgCssStyling.GetMatchedDeclarations(new SvgXmlDomNode(rectElement, root), cssData, "print");
+
+            // #ff0000 has higher specificity (#r) but the lower-specificity !important green wins.
+            Assert.Equal("rgb(0, 255, 0)", matched!["fill"]);
+        }
+
+        // Within the important pass, winner-last still honors specificity: the higher-specificity !important
+        // declaration wins over a lower-specificity one.
+        [Fact]
+        public void MatchedDeclarations_ImportantVsImportant_HigherSpecificityWins()
+        {
+            var markup = """
+                <svg xmlns="http://www.w3.org/2000/svg">
+                  <style>rect { fill: #ff0000 !important; } #r { fill: #00ff00 !important; }</style>
+                  <rect id="r"/>
+                </svg>
+                """;
+            var root = XDocument.Parse(markup).Root!;
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+
+            var rectElement = root.Descendants().Single(e => e.Name.LocalName == "rect");
+            var matched = SvgCssStyling.GetMatchedDeclarations(new SvgXmlDomNode(rectElement, root), cssData, "print");
+
+            Assert.Equal("rgb(0, 255, 0)", matched!["fill"]);
+        }
+
+        // Issue #205: revert/revert-layer roll the author cascade back to a lower origin. The winning
+        // declaration is present but its resolved value is null (present-but-invalid), the same signal used
+        // for a guaranteed-invalid var(), so the consumer computes the property to inherited/initial rather
+        // than falling through to a lower-priority declaration (or the presentation attribute) - instead of
+        // passing the literal string "revert" to the SVG value parsers, which don't understand it.
+        // (Uses fill-opacity, whose converter accepts CSS-wide keywords, so the value reaches the merge -
+        // fill/stroke's paint converter drops global keywords at parse time, a separate pre-existing gap.)
+        [Theory]
+        [InlineData("revert")]
+        [InlineData("revert-layer")]
+        public void MatchedDeclarations_Revert_IsPresentWithNullValue(string keyword)
+        {
+            var markup = $$"""
+                <svg xmlns="http://www.w3.org/2000/svg">
+                  <style>rect { fill-opacity: {{keyword}}; }</style>
+                  <rect/>
+                </svg>
+                """;
+            var root = XDocument.Parse(markup).Root!;
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+
+            var rectElement = root.Descendants().Single(e => e.Name.LocalName == "rect");
+            var matched = SvgCssStyling.GetMatchedDeclarations(new SvgXmlDomNode(rectElement, root), cssData, "print");
+
+            Assert.True(matched!.ContainsKey("fill-opacity")); // present (the revert declaration won the cascade)...
+            Assert.Null(matched["fill-opacity"]);              // ...but with a null value (rolled back to inherited/initial)
+        }
+
+        // A higher-specificity normal declaration overwrites a lower-specificity revert (winner-last): the
+        // revert does not win the cascade here, so the concrete value survives.
+        [Fact]
+        public void MatchedDeclarations_Revert_LosesToHigherSpecificityNormal()
+        {
+            var markup = """
+                <svg xmlns="http://www.w3.org/2000/svg">
+                  <style>rect { fill-opacity: revert; } #r { fill-opacity: 0.25; }</style>
+                  <rect id="r"/>
+                </svg>
+                """;
+            var root = XDocument.Parse(markup).Root!;
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+
+            var rectElement = root.Descendants().Single(e => e.Name.LocalName == "rect");
+            var matched = SvgCssStyling.GetMatchedDeclarations(new SvgXmlDomNode(rectElement, root), cssData, "print");
+
+            Assert.Equal("0.25", matched!["fill-opacity"]);
+        }
+
+        // An !important revert still wins the cascade over a higher-specificity normal declaration (the
+        // important pass runs last), and its rollback is represented as the null-present signal.
+        [Fact]
+        public void MatchedDeclarations_ImportantRevert_WinsAndIsNull()
+        {
+            var markup = """
+                <svg xmlns="http://www.w3.org/2000/svg">
+                  <style>#r { fill-opacity: 0.25; } rect { fill-opacity: revert !important; }</style>
+                  <rect id="r"/>
+                </svg>
+                """;
+            var root = XDocument.Parse(markup).Root!;
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+
+            var rectElement = root.Descendants().Single(e => e.Name.LocalName == "rect");
+            var matched = SvgCssStyling.GetMatchedDeclarations(new SvgXmlDomNode(rectElement, root), cssData, "print");
+
+            Assert.True(matched!.ContainsKey("fill-opacity"));
+            Assert.Null(matched["fill-opacity"]);
+        }
+
+        // Issue #230: the fill/stroke paint properties (and length stroke properties) now accept the CSS-wide
+        // keywords in a <style> rule (their converters were extended with .OrGlobalValue()), and the merge
+        // resolves each: initial -> the property's SVG initial value, inherit -> the literal "inherit"
+        // (the consumer maps it to inherited), unset/revert/revert-layer -> null-present (inherited/initial).
+        [Theory]
+        [InlineData("fill", "initial", "black")]
+        [InlineData("fill", "inherit", "inherit")]
+        [InlineData("fill", "unset", null)]
+        [InlineData("fill", "revert", null)]
+        [InlineData("fill", "revert-layer", null)]
+        [InlineData("stroke", "initial", "none")]
+        [InlineData("stroke-width", "initial", "1")]
+        [InlineData("stroke-linejoin", "initial", "miter")]
+        [InlineData("stroke-miterlimit", "initial", "4")]
+        [InlineData("stroke-dasharray", "initial", "none")]
+        [InlineData("stroke-dashoffset", "initial", "0")]
+        public void MatchedDeclarations_PaintProperties_ResolveCssWideKeywords(string property, string keyword, string? expected)
+        {
+            var markup = $$"""
+                <svg xmlns="http://www.w3.org/2000/svg">
+                  <style>rect { {{property}}: {{keyword}}; }</style>
+                  <rect/>
+                </svg>
+                """;
+            var root = XDocument.Parse(markup).Root!;
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+
+            var rectElement = root.Descendants().Single(e => e.Name.LocalName == "rect");
+            var matched = SvgCssStyling.GetMatchedDeclarations(new SvgXmlDomNode(rectElement, root), cssData, "print");
+
+            Assert.True(matched!.ContainsKey(property)); // the declaration is no longer dropped at parse time
+            Assert.Equal(expected, matched[property]);
+        }
+
+        // Custom-property (--*) declarations are excluded from the matched paint declarations even when they
+        // match the queried element directly (they participate via var() resolution, not as SVG properties).
+        [Fact]
+        public void MatchedDeclarations_ExcludesCustomProperties()
+        {
+            var markup = """
+                <svg xmlns="http://www.w3.org/2000/svg">
+                  <style>rect { --x: #ff0000; fill: #00ff00; }</style>
+                  <rect/>
+                </svg>
+                """;
+            var root = XDocument.Parse(markup).Root!;
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+            SvgCssStyling.CascadeCustomProperties(root, cssData, "print");
+
+            var rectElement = root.Descendants().Single(e => e.Name.LocalName == "rect");
+            var matched = SvgCssStyling.GetMatchedDeclarations(new SvgXmlDomNode(rectElement, root), cssData, "print");
+
+            Assert.Equal("rgb(0, 255, 0)", matched!["fill"]);
+            Assert.False(matched.ContainsKey("--x")); // custom property not surfaced as a paint declaration
+        }
+
         [Fact]
         public void CustomPropertyCascade_InheritsAndVarResolves()
         {
