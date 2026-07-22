@@ -65,6 +65,27 @@ namespace PeachPDF.Tests.Svg
             Assert.Equal(expected, SvgValueParsers.ParseLength(value)!.Value, 3);
         }
 
+        [Theory]
+        [InlineData("calc(2px + 3px)", 5.0)]
+        [InlineData("calc(10px - 4px)", 6.0)]
+        [InlineData("calc(2 * 8px)", 16.0)]
+        [InlineData("calc(1in - 24px)", 72.0)]      // 96px - 24px
+        [InlineData("min(10px, 4px)", 4.0)]
+        [InlineData("max(10px, 4px)", 10.0)]
+        [InlineData("clamp(2px, 20px, 8px)", 8.0)]
+        public void ParseLength_Calc_EvaluatesViaSharedParser(string value, double expected)
+        {
+            Assert.Equal(expected, SvgValueParsers.ParseLength(value)!.Value, 3);
+        }
+
+        [Theory]
+        [InlineData("calc(50% + 10px)", 200.0, 110.0)] // 50% of 200 + 10
+        [InlineData("calc(100% - 20px)", 80.0, 60.0)]
+        public void ParseLength_Calc_WithPercentage_ResolvesAgainstReferenceLength(string value, double referenceLength, double expected)
+        {
+            Assert.Equal(expected, SvgValueParsers.ParseLength(value, referenceLength)!.Value, 3);
+        }
+
         [Fact]
         public void ParseLength_UnrecognizedSuffix_ReturnsNull()
         {

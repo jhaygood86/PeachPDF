@@ -41,5 +41,22 @@ namespace PeachPDF.Svg
         /// elements rather than text.
         /// </summary>
         string GetTextContent();
+
+        /// <summary>
+        /// The author-stylesheet declarations (property → value, cascade-resolved winner-last, with
+        /// <c>var()</c> already substituted) that apply to this node, matched through the full CSS engine
+        /// against the relevant <c>CssData</c> (the host document's for inline <c>&lt;svg&gt;</c>, the
+        /// SVG's own for standalone). Null when there is no CSS context (a geometry-only source). Consumed
+        /// as the middle tier of <see cref="SvgTreeBuilder"/>'s <c>style=""</c> &gt; matched-rule &gt;
+        /// presentation-attribute precedence.
+        /// </summary>
+        IReadOnlyDictionary<string, string>? GetMatchedCssDeclarations() => null;
+
+        /// <summary>
+        /// Resolves any <c>var()</c> references in a raw value (e.g. from a <c>style=""</c> attribute)
+        /// against this node's cascaded custom properties; returns the value unchanged when there is no
+        /// CSS context, or null if the value is guaranteed-invalid.
+        /// </summary>
+        string? ResolveVar(string value) => value;
     }
 }

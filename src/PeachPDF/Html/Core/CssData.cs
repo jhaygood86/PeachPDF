@@ -180,7 +180,7 @@ namespace PeachPDF.Html.Core
         /// <summary>
         /// Determines which bucket(s) a rule's selector should be indexed under, based on the simple
         /// selector that must match the box itself (for <see cref="ComplexSelector"/>, that's its
-        /// rightmost/subject selector - see the reversal in <see cref="DoesSelectorMatch(ComplexSelector, CssBox?)"/>).
+        /// rightmost/subject selector - see the reversal in <see cref="DoesSelectorMatch(ComplexSelector, ICssDomNode?)"/>).
         /// A <see cref="ListSelector"/> (comma-separated) contributes one key per alternative, since
         /// matching any alternative matches the rule.
         /// </summary>
@@ -267,19 +267,19 @@ namespace PeachPDF.Html.Core
             return await parser.ParseStyleSheet(stylesheet, combineWithDefault);
         }
 
-        internal IEnumerable<IStyleRule> GetStyleRules(string media, CssBox box) =>
-            GetStyleRulesByOrigin(media, box, userAgentOnly: null);
+        internal IEnumerable<IStyleRule> GetStyleRules(string media, ICssDomNode node) =>
+            GetStyleRulesByOrigin(media, node, userAgentOnly: null);
 
-        internal IEnumerable<IStyleRule> GetUserAgentStyleRules(string media, CssBox box) =>
-            GetStyleRulesByOrigin(media, box, userAgentOnly: true);
+        internal IEnumerable<IStyleRule> GetUserAgentStyleRules(string media, ICssDomNode node) =>
+            GetStyleRulesByOrigin(media, node, userAgentOnly: true);
 
-        internal IEnumerable<IStyleRule> GetAuthorStyleRules(string media, CssBox box) =>
-            GetStyleRulesByOrigin(media, box, userAgentOnly: false);
+        internal IEnumerable<IStyleRule> GetAuthorStyleRules(string media, ICssDomNode node) =>
+            GetStyleRulesByOrigin(media, node, userAgentOnly: false);
 
         /// <summary>
         /// Same candidate-gathering (tag/class/id/universal index buckets) as
         /// <see cref="GetUserAgentStyleRules"/>/<see cref="GetAuthorStyleRules"/>, but matched via
-        /// <see cref="MatchesAsFirstLineSelector"/> instead of the ordinary <see cref="DoesSelectorMatch(ISelector, CssBox?)"/>.
+        /// <see cref="MatchesAsFirstLineSelector"/> instead of the ordinary <see cref="DoesSelectorMatch(ISelector, ICssDomNode?)"/>.
         /// Needed because the ordinary matcher deliberately returns false for a real (non-pseudo-element)
         /// box against any `*::first-line` selector - unlike `::before`/`::after`/`::marker`/
         /// `::first-letter`, first-line has no synthesized box of its own for a later, separate cascade
@@ -289,7 +289,7 @@ namespace PeachPDF.Html.Core
         internal IEnumerable<IStyleRule> GetFirstLineStyleRules(string media, CssBox box, bool userAgentOnly) =>
             GetStyleRulesByOrigin(media, box, userAgentOnly, firstLineOnly: true);
 
-        private IEnumerable<IStyleRule> GetStyleRulesByOrigin(string media, CssBox box, bool? userAgentOnly, bool firstLineOnly = false)
+        private IEnumerable<IStyleRule> GetStyleRulesByOrigin(string media, ICssDomNode node, bool? userAgentOnly, bool firstLineOnly = false)
         {
             EnsureIndex();
 
@@ -303,9 +303,10 @@ namespace PeachPDF.Html.Core
             {
                 if (userAgentOnly.HasValue && indexed.IsUserAgent != userAgentOnly.Value) return;
                 if (!EnclosingMediaMatches(indexed.EnclosingMedia, media)) return;
+                // firstLineOnly is HTML-cascade-only (DomParser.ResolveFirstLineStyle), always a CssBox.
                 var isMatch = firstLineOnly
-                    ? MatchesAsFirstLineSelector(indexed.Rule.Selector, box!)
-                    : DoesSelectorMatch(indexed.Rule.Selector, box);
+                    ? MatchesAsFirstLineSelector(indexed.Rule.Selector, (CssBox)node)
+                    : DoesSelectorMatch(indexed.Rule.Selector, node);
                 if (!isMatch) return;
                 seen ??= [];
                 if (!seen.Add(indexed.Rule)) return;
@@ -315,33 +316,35 @@ namespace PeachPDF.Html.Core
             foreach (var indexed in _universalRules!)
                 Collect(indexed);
 
-            if (box.HtmlTag is not null)
+            // The index buckets are keyed on the stylesheet's own selector names; candidate gathering is a
+            // superset pre-filter (may over-gather, e.g. a case-mismatched bucket), and per-candidate
+            // DoesSelectorMatch applies this node's own case-sensitivity, so no bucket-key change is needed
+            // for SVG's case-sensitive matching.
+            if (node.TagName is { } tagName)
             {
-                if (_tagIndex!.TryGetValue(box.HtmlTag.Name, out var tagRules))
+                if (_tagIndex!.TryGetValue(tagName, out var tagRules))
                 {
                     foreach (var indexed in tagRules)
                         Collect(indexed);
                 }
 
-                if (box.HtmlTag.Attributes is not null)
+                var classAttr = node.GetAttribute("class");
+                if (!string.IsNullOrEmpty(classAttr))
                 {
-                    if (box.HtmlTag.Attributes.TryGetValue("class", out var classAttr) && classAttr.Length > 0)
+                    foreach (var className in classAttr.Split(' '))
                     {
-                        foreach (var className in classAttr.Split(' '))
-                        {
-                            if (className.Length == 0) continue;
-                            if (_classIndex!.TryGetValue(className, out var classRules))
-                                foreach (var indexed in classRules)
-                                    Collect(indexed);
-                        }
+                        if (className.Length == 0) continue;
+                        if (_classIndex!.TryGetValue(className, out var classRules))
+                            foreach (var indexed in classRules)
+                                Collect(indexed);
                     }
+                }
 
-                    if (box.HtmlTag.Attributes.TryGetValue("id", out var idAttr) && idAttr.Length > 0
-                        && _idIndex!.TryGetValue(idAttr, out var idRules))
-                    {
-                        foreach (var indexed in idRules)
-                            Collect(indexed);
-                    }
+                var idAttr = node.GetAttribute("id");
+                if (!string.IsNullOrEmpty(idAttr) && _idIndex!.TryGetValue(idAttr, out var idRules))
+                {
+                    foreach (var indexed in idRules)
+                        Collect(indexed);
                 }
             }
 
@@ -355,7 +358,7 @@ namespace PeachPDF.Html.Core
             // case of multiple ::first-line rules of equal origin/importance whose relative order
             // depends on a mixed-list specificity nuance.
             return matched
-                .OrderBy(indexed => firstLineOnly ? indexed.Rule.Selector.Specificity : GetMatchedSpecificity(indexed.Rule.Selector, box))
+                .OrderBy(indexed => firstLineOnly ? indexed.Rule.Selector.Specificity : GetMatchedSpecificity(indexed.Rule.Selector, node))
                 .ThenBy(indexed => indexed.DocumentOrder)
                 .Select(indexed => indexed.Rule);
         }
@@ -372,12 +375,12 @@ namespace PeachPDF.Html.Core
         /// ListSelector-checking is sufficient since the grammar can't nest one directly inside
         /// another top-level list.
         /// </summary>
-        private static Priority GetMatchedSpecificity(ISelector selector, CssBox? box)
+        private static Priority GetMatchedSpecificity(ISelector selector, ICssDomNode? node)
         {
             if (selector is ListSelector list)
             {
                 return list
-                    .Where(s => DoesSelectorMatch(s, box))
+                    .Where(s => DoesSelectorMatch(s, node))
                     .Select(s => s.Specificity)
                     .DefaultIfEmpty(Priority.Zero)
                     .Max();
@@ -386,7 +389,7 @@ namespace PeachPDF.Html.Core
             return selector.Specificity;
         }
 
-        private static bool DoesSelectorMatch(ISelector selector, CssBox? box)
+        private static bool DoesSelectorMatch(ISelector selector, ICssDomNode? node)
         {
             return selector switch
             {
@@ -400,34 +403,47 @@ namespace PeachPDF.Html.Core
                 // standards-mode-only engine like this one, since real browsers have no element above
                 // <html> for "*" to match) incorrectly match. Acid2's own "* html .parser" rule
                 // exercises exactly this.
-                AllSelector => box is { IsRoot: false },
-                ListSelector listSelector => DoesSelectorMatch(listSelector, box),
-                TypeSelector typeSelector => DoesSelectorMatch(typeSelector, box),
-                ComplexSelector complexSelector => DoesSelectorMatch(complexSelector, box),
-                CompoundSelector compoundSelector => DoesSelectorMatch(compoundSelector, box),
-                PseudoElementSelector pseudoElementSelector => DoesSelectorMatch(pseudoElementSelector, box),
-                PseudoClassSelector pseudoClassSelector => DoesSelectorMatch(pseudoClassSelector, box),
-                AttrMatchSelector attrMatchSelector => DoesSelectorMatch(attrMatchSelector, box),
-                ClassSelector classSelector => DoesSelectorMatch(classSelector, box),
-                IdSelector idSelector => DoesSelectorMatch(idSelector, box),
-                AttrAvailableSelector attrAvailableSelector => DoesSelectorMatch(attrAvailableSelector, box),
-                AttrContainsSelector attrContainsSelector => DoesSelectorMatch(attrContainsSelector, box),
-                AttrListSelector attrListSelector => DoesSelectorMatch(attrListSelector, box),
-                AttrBeginsSelector attrBeginsSelector => DoesSelectorMatch(attrBeginsSelector, box),
-                AttrEndsSelector attrEndsSelector => DoesSelectorMatch(attrEndsSelector, box),
-                AttrHyphenSelector attrHyphenSelector => DoesSelectorMatch(attrHyphenSelector, box),
-                ChildSelector childSelector => DoesSelectorMatch(childSelector, box),
-                OnlyChildSelector onlyChildSelector => DoesSelectorMatch(onlyChildSelector, box),
-                OnlyOfTypeSelector onlyOfTypeSelector => DoesSelectorMatch(onlyOfTypeSelector, box),
-                NotSelector notSelector => DoesSelectorMatch(notSelector, box),
-                MatchesSelector matchesSelector => DoesSelectorMatch(matchesSelector, box),
-                HasSelector hasSelector => DoesSelectorMatch(hasSelector, box),
+                AllSelector => node is { IsRoot: false },
+                ListSelector listSelector => DoesSelectorMatch(listSelector, node),
+                TypeSelector typeSelector => DoesSelectorMatch(typeSelector, node),
+                ComplexSelector complexSelector => DoesSelectorMatch(complexSelector, node),
+                CompoundSelector compoundSelector => DoesSelectorMatch(compoundSelector, node),
+                PseudoElementSelector pseudoElementSelector => DoesSelectorMatch(pseudoElementSelector, node),
+                PseudoClassSelector pseudoClassSelector => DoesSelectorMatch(pseudoClassSelector, node),
+                AttrMatchSelector attrMatchSelector => DoesSelectorMatch(attrMatchSelector, node),
+                ClassSelector classSelector => DoesSelectorMatch(classSelector, node),
+                IdSelector idSelector => DoesSelectorMatch(idSelector, node),
+                AttrAvailableSelector attrAvailableSelector => DoesSelectorMatch(attrAvailableSelector, node),
+                AttrContainsSelector attrContainsSelector => DoesSelectorMatch(attrContainsSelector, node),
+                AttrListSelector attrListSelector => DoesSelectorMatch(attrListSelector, node),
+                AttrBeginsSelector attrBeginsSelector => DoesSelectorMatch(attrBeginsSelector, node),
+                AttrEndsSelector attrEndsSelector => DoesSelectorMatch(attrEndsSelector, node),
+                AttrHyphenSelector attrHyphenSelector => DoesSelectorMatch(attrHyphenSelector, node),
+                ChildSelector childSelector => DoesSelectorMatch(childSelector, node),
+                OnlyChildSelector onlyChildSelector => DoesSelectorMatch(onlyChildSelector, node),
+                OnlyOfTypeSelector onlyOfTypeSelector => DoesSelectorMatch(onlyOfTypeSelector, node),
+                NotSelector notSelector => DoesSelectorMatch(notSelector, node),
+                MatchesSelector matchesSelector => DoesSelectorMatch(matchesSelector, node),
+                HasSelector hasSelector => DoesSelectorMatch(hasSelector, node),
                 _ => false
             };
         }
-        private static bool DoesSelectorMatch(ListSelector listSelector, CssBox? box)
+
+        /// <summary>The nearest ancestor that is an element node (has a <see cref="ICssDomNode.TagName"/>), skipping anonymous/text nodes - the node-agnostic analogue of <c>DomUtils.GetNearestParentElementBox</c>.</summary>
+        private static ICssDomNode? GetNearestParentElement(ICssDomNode node)
         {
-            return listSelector.Any(selector => DoesSelectorMatch(selector, box));
+            var parent = node.Parent;
+            while (parent is not null)
+            {
+                if (parent.TagName is not null) return parent;
+                parent = parent.Parent;
+            }
+            return null;
+        }
+
+        private static bool DoesSelectorMatch(ListSelector listSelector, ICssDomNode? node)
+        {
+            return listSelector.Any(selector => DoesSelectorMatch(selector, node));
         }
 
         /// <summary>
@@ -435,8 +451,8 @@ namespace PeachPDF.Html.Core
         /// subject is a <c>::first-line</c> pseudo-element match <paramref name="box"/> on its
         /// non-pseudo-element part? Used by <c>DomParser</c> to gather exactly the declarations that
         /// apply to <c>box::first-line</c> - deliberately does NOT dispatch through the ordinary
-        /// <see cref="DoesSelectorMatch(CompoundSelector, CssBox?)"/>/
-        /// <see cref="DoesSelectorMatch(ComplexSelector, CssBox?)"/> entry points, since those
+        /// <see cref="DoesSelectorMatch(CompoundSelector, ICssDomNode?)"/>/
+        /// <see cref="DoesSelectorMatch(ComplexSelector, ICssDomNode?)"/> entry points, since those
         /// synthesize <c>::before</c>/<c>::after</c>/<c>::marker</c> boxes as a side effect when a
         /// compound selector's subject ends in one of those (different) pseudo-elements - this method
         /// must never trigger that, so it re-derives the "match ignoring the trailing pseudo-element"
@@ -484,8 +500,8 @@ namespace PeachPDF.Html.Core
 
         /// <summary>
         /// Does <paramref name="selector"/> (a single reversed-chain item's compound, as seen by
-        /// <see cref="DoesSelectorMatch(ComplexSelector, CssBox?)"/>) end in a pseudo-element - i.e.
-        /// is it the same structural shape that makes <see cref="DoesSelectorMatch(CompoundSelector, CssBox?)"/>
+        /// <see cref="DoesSelectorMatch(ComplexSelector, ICssDomNode?)"/>) end in a pseudo-element - i.e.
+        /// is it the same structural shape that makes <see cref="DoesSelectorMatch(CompoundSelector, ICssDomNode?)"/>
         /// take its <c>box.IsPseudoElement</c> branch when tested against an existing pseudo box?
         /// </summary>
         private static bool EndsWithPseudoElement(ISelector selector) => selector switch
@@ -495,9 +511,9 @@ namespace PeachPDF.Html.Core
             _ => false
         };
 
-        private static bool DoesSelectorMatch(CompoundSelector compoundSelector, CssBox? box)
+        private static bool DoesSelectorMatch(CompoundSelector compoundSelector, ICssDomNode? node)
         {
-            if (box is null)
+            if (node is null)
             {
                 return false;
             }
@@ -505,11 +521,17 @@ namespace PeachPDF.Html.Core
             var lastSelector = compoundSelector.Last();
 
             // Structural pseudo-classes (ChildSelector subtypes, OnlyChildSelector, OnlyOfTypeSelector)
-            // are matched against `box` itself here, same as every other compound member - their own
-            // DoesSelectorMatch overload re-derives sibling scope from `box` as needed, so no special
+            // are matched against `node` itself here, same as every other compound member - their own
+            // DoesSelectorMatch overload re-derives sibling scope from `node` as needed, so no special
             // handling is required for them beyond the plain path below.
             if (lastSelector is not PseudoElementSelector)
-                return compoundSelector.All(selector => DoesSelectorMatch(selector, box));
+                return compoundSelector.All(selector => DoesSelectorMatch(selector, node));
+
+            // Pseudo-elements (::before/::after/::marker/::first-letter) exist only in the HTML box tree
+            // and the synthesis below mutates it; an SVG node never has one, so a pseudo-element compound
+            // simply never matches an SVG node.
+            if (node is not CssBox box)
+                return false;
 
             if (lastSelector is PseudoElementSelector pseudoElementSelector)
             {
@@ -596,149 +618,101 @@ namespace PeachPDF.Html.Core
             return false;
         }
 
-        private static bool DoesSelectorMatch(TypeSelector typeSelector, CssBox? box)
+        private static bool DoesSelectorMatch(TypeSelector typeSelector, ICssDomNode? node)
         {
-            return box?.HtmlTag is not null && typeSelector.Name.Equals(box.HtmlTag.Name, StringComparison.InvariantCultureIgnoreCase);
+            return node?.TagName is { } tagName && typeSelector.Name.Equals(tagName, node.NameComparison);
         }
 
-        private static bool DoesSelectorMatch(ClassSelector classSelector, CssBox? box)
+        private static bool DoesSelectorMatch(ClassSelector classSelector, ICssDomNode? node)
         {
-            if (box?.HtmlTag?.Attributes is not null && box.HtmlTag.Attributes.TryGetValue("class", out var classNames))
-            {
-                return classNames.Split(' ').Any(className =>
-                    className.Equals(classSelector.Class, StringComparison.InvariantCultureIgnoreCase));
-            }
+            if (node is null) return false;
+            var classNames = node.GetAttribute("class");
+            if (string.IsNullOrEmpty(classNames)) return false;
 
-            return false;
+            return classNames.Split(' ').Any(className =>
+                className.Equals(classSelector.Class, node.NameComparison));
         }
 
-        private static bool DoesSelectorMatch(IdSelector idSelector, CssBox? box)
+        private static bool DoesSelectorMatch(IdSelector idSelector, ICssDomNode? node)
         {
-            if (box?.HtmlTag?.Attributes is not null && box.HtmlTag.Attributes.TryGetValue("id", out var id))
-            {
-                return id.Equals(idSelector.Id, StringComparison.InvariantCultureIgnoreCase);
-            }
-
-            return false;
+            if (node is null) return false;
+            var id = node.GetAttribute("id");
+            return id is not null && id.Equals(idSelector.Id, node.NameComparison);
         }
 
-        private static bool DoesSelectorMatch(AttrAvailableSelector attrAvailableSelector, CssBox? box)
+        // Attribute selectors read the value once via node.GetAttribute (case-sensitivity of the
+        // attribute-name lookup is the node's own: case-insensitive for HTML/CssBox, case-sensitive for
+        // SVG), then compare the value with node.NameComparison (InvariantCultureIgnoreCase for HTML -
+        // byte-identical to the previous behaviour - Ordinal for SVG).
+        private static bool DoesSelectorMatch(AttrAvailableSelector s, ICssDomNode? node)
         {
-            if (box?.HtmlTag?.Attributes is null)
-            {
-                return false;
-            }
-
-            foreach (var attribute in box.HtmlTag.Attributes)
-            {
-                if (attribute.Key.Equals(attrAvailableSelector.Attribute, StringComparison.InvariantCultureIgnoreCase))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return node?.GetAttribute(s.Attribute) is not null;
         }
 
-        private static bool DoesSelectorMatch(AttrMatchSelector attrMatchSelector, CssBox? box)
+        private static bool DoesSelectorMatch(AttrMatchSelector s, ICssDomNode? node)
         {
-            if (box?.HtmlTag?.Attributes is null)
-            {
-                return false;
-            }
-
-            foreach (var attribute in box.HtmlTag.Attributes)
-            {
-                if (attribute.Key.Equals(attrMatchSelector.Attribute, StringComparison.InvariantCultureIgnoreCase))
-                {
-                    return attribute.Value.Equals(attrMatchSelector.Value, StringComparison.InvariantCultureIgnoreCase);
-                }
-            }
-
-            return false;
+            if (node is null) return false;
+            var value = node.GetAttribute(s.Attribute);
+            return value is not null && value.Equals(s.Value, node.NameComparison);
         }
 
-        private static bool DoesSelectorMatch(AttrListSelector attrListSelector, CssBox? box)
+        private static bool DoesSelectorMatch(AttrListSelector s, ICssDomNode? node)
         {
-            if (box?.HtmlTag?.Attributes is null)
-            {
-                return false;
-            }
-
-            foreach (var attribute in box.HtmlTag.Attributes)
-            {
-                if (attribute.Key.Equals(attrListSelector.Attribute, StringComparison.InvariantCultureIgnoreCase))
-                {
-                    var attributeValues = attribute.Value.Split(' ').Where(x => x.Length > 0).ToArray();
-
-                    return attributeValues.Any(value => value.Equals(attrListSelector.Value, StringComparison.InvariantCultureIgnoreCase));
-                }
-            }
-
-            return false;
+            if (node is null) return false;
+            var value = node.GetAttribute(s.Attribute);
+            if (value is null) return false;
+            return value.Split(' ').Where(x => x.Length > 0).Any(x => x.Equals(s.Value, node.NameComparison));
         }
 
-        private static bool DoesSelectorMatch(AttrContainsSelector attrContainsSelector, CssBox? box)
+        private static bool DoesSelectorMatch(AttrContainsSelector s, ICssDomNode? node)
         {
-            if (box?.HtmlTag?.Attributes is null)
-            {
-                return false;
-            }
-
-            foreach (var attribute in box.HtmlTag.Attributes)
-            {
-                if (attribute.Key.Equals(attrContainsSelector.Attribute, StringComparison.InvariantCultureIgnoreCase))
-                {
-                    return attribute.Value.Contains(attrContainsSelector.Value, StringComparison.InvariantCultureIgnoreCase);
-                }
-            }
-
-            return false;
+            if (node is null) return false;
+            var value = node.GetAttribute(s.Attribute);
+            return value is not null && value.Contains(s.Value, node.NameComparison);
         }
 
-        private static bool DoesSelectorMatch(AttrBeginsSelector s, CssBox? box)
+        private static bool DoesSelectorMatch(AttrBeginsSelector s, ICssDomNode? node)
         {
-            if (box?.HtmlTag?.Attributes is null) return false;
-            foreach (var attr in box.HtmlTag.Attributes)
-                if (attr.Key.Equals(s.Attribute, StringComparison.InvariantCultureIgnoreCase))
-                    return attr.Value.StartsWith(s.Value, StringComparison.InvariantCultureIgnoreCase);
-            return false;
+            if (node is null) return false;
+            var value = node.GetAttribute(s.Attribute);
+            return value is not null && value.StartsWith(s.Value, node.NameComparison);
         }
 
-        private static bool DoesSelectorMatch(AttrEndsSelector s, CssBox? box)
+        private static bool DoesSelectorMatch(AttrEndsSelector s, ICssDomNode? node)
         {
-            if (box?.HtmlTag?.Attributes is null) return false;
-            foreach (var attr in box.HtmlTag.Attributes)
-                if (attr.Key.Equals(s.Attribute, StringComparison.InvariantCultureIgnoreCase))
-                    return attr.Value.EndsWith(s.Value, StringComparison.InvariantCultureIgnoreCase);
-            return false;
+            if (node is null) return false;
+            var value = node.GetAttribute(s.Attribute);
+            return value is not null && value.EndsWith(s.Value, node.NameComparison);
         }
 
-        private static bool DoesSelectorMatch(AttrHyphenSelector s, CssBox? box)
+        private static bool DoesSelectorMatch(AttrHyphenSelector s, ICssDomNode? node)
         {
-            if (box?.HtmlTag?.Attributes is null) return false;
-            foreach (var attr in box.HtmlTag.Attributes)
-                if (attr.Key.Equals(s.Attribute, StringComparison.InvariantCultureIgnoreCase))
-                    return attr.Value.Equals(s.Value, StringComparison.InvariantCultureIgnoreCase)
-                        || attr.Value.StartsWith(s.Value + "-", StringComparison.InvariantCultureIgnoreCase);
-            return false;
+            if (node is null) return false;
+            var value = node.GetAttribute(s.Attribute);
+            return value is not null && (value.Equals(s.Value, node.NameComparison)
+                || value.StartsWith(s.Value + "-", node.NameComparison));
         }
 
-        private static bool DoesSelectorMatch(PseudoClassSelector pseudoClassSelector, CssBox? box)
+        private static bool DoesSelectorMatch(PseudoClassSelector pseudoClassSelector, ICssDomNode? node)
         {
             if (pseudoClassSelector.Class == PseudoClassNames.Root)
             {
-                return box?.HtmlTag is not null
-                    && box.HtmlTag.Name.Equals("html", StringComparison.OrdinalIgnoreCase)
-                    && DomUtils.GetNearestParentElementBox(box) is null;
+                // :root is the document's root element - <html> for HTML, or the outermost element of a
+                // (standalone/inline) SVG fragment, which is any element node with no parent element.
+                if (node?.TagName is null) return false;
+                if (GetNearestParentElement(node) is not null) return false;
+                return node is not CssBox
+                    || node.TagName.Equals("html", StringComparison.OrdinalIgnoreCase);
             }
 
-            return pseudoClassSelector.Class == "link" && box is not null && box.IsClickable;
+            // :link never matches an SVG node (no interaction/link state); IsClickable is CssBox-only.
+            return pseudoClassSelector.Class == "link" && node is CssBox { IsClickable: true };
         }
 
-        private static bool DoesSelectorMatch(PseudoElementSelector pseudoElementSelector, CssBox? box)
+        private static bool DoesSelectorMatch(PseudoElementSelector pseudoElementSelector, ICssDomNode? node)
         {
-            if (box is null)
+            // Pseudo-elements exist only in the HTML box tree; an SVG node never matches one.
+            if (node is not CssBox box)
             {
                 return false;
             }
@@ -763,9 +737,9 @@ namespace PeachPDF.Html.Core
         /// count from the start or the end; the actual "does this position satisfy An+B" test is
         /// shared via <see cref="MatchesAnPlusB"/>.
         /// </summary>
-        private static bool DoesSelectorMatch(ChildSelector childSelector, CssBox? box)
+        private static bool DoesSelectorMatch(ChildSelector childSelector, ICssDomNode? node)
         {
-            if (box?.HtmlTag is null)
+            if (node?.TagName is not { } nodeTag)
             {
                 return false;
             }
@@ -773,22 +747,21 @@ namespace PeachPDF.Html.Core
             switch (childSelector)
             {
                 case FirstColumnSelector or LastColumnSelector:
-                    return DoesColumnSelectorMatch(childSelector, box, fromEnd: childSelector is LastColumnSelector);
+                    return DoesColumnSelectorMatch(childSelector, node, fromEnd: childSelector is LastColumnSelector);
             }
 
-            var parentBox = DomUtils.GetNearestParentElementBox(box);
-            if (parentBox is null)
+            var parent = GetNearestParentElement(node);
+            if (parent is null)
             {
                 return false;
             }
 
-            IEnumerable<CssBox> siblingBoxes = parentBox.Boxes.Where(b => b.HtmlTag is not null);
+            IEnumerable<ICssDomNode> siblingNodes = parent.Children.Where(b => b.TagName is not null);
 
             var sameTypeOnly = childSelector is FirstTypeSelector or LastTypeSelector;
             if (sameTypeOnly)
             {
-                siblingBoxes = siblingBoxes.Where(b =>
-                    b.HtmlTag!.Name.Equals(box.HtmlTag.Name, StringComparison.InvariantCultureIgnoreCase));
+                siblingNodes = siblingNodes.Where(b => b.TagName!.Equals(nodeTag, node.NameComparison));
             }
 
             // CSS4 "of <selector>" extension (:nth-child(An+B of S)/:nth-last-child(An+B of S)).
@@ -796,10 +769,10 @@ namespace PeachPDF.Html.Core
             // written, and the parser only ever allows a non-default Kind on FirstChildSelector/
             // LastChildSelector - so this filter is always a no-op for the four other subtypes.
             // Applying it unconditionally is simpler than special-casing which subtypes can have it.
-            siblingBoxes = siblingBoxes.Where(b => DoesSelectorMatch(childSelector.Kind, b));
+            siblingNodes = siblingNodes.Where(b => DoesSelectorMatch(childSelector.Kind, b));
 
-            var siblings = siblingBoxes.ToList();
-            var index = siblings.IndexOf(box);
+            var siblings = siblingNodes.ToList();
+            var index = siblings.IndexOf(node);
             if (index < 0)
             {
                 return false;
@@ -820,22 +793,22 @@ namespace PeachPDF.Html.Core
         /// A colspan-N cell occupies N columns; per spec this matches if ANY occupied column position
         /// satisfies the An+B formula, not just the cell's starting column.
         /// </summary>
-        private static bool DoesColumnSelectorMatch(ChildSelector childSelector, CssBox box, bool fromEnd)
+        private static bool DoesColumnSelectorMatch(ChildSelector childSelector, ICssDomNode node, bool fromEnd)
         {
-            var row = box.ParentBox;
+            var row = node.Parent;
             if (row is null)
             {
                 return false;
             }
 
-            var cellsInRow = row.Boxes.Where(b => b.HtmlTag is not null).ToList();
+            var cellsInRow = row.Children.Where(b => b.TagName is not null).ToList();
             var columnIndex = 0;
             var totalColumns = 0;
             var found = false;
 
             foreach (var cell in cellsInRow)
             {
-                if (cell == box)
+                if (cell.Equals(node))
                 {
                     columnIndex = totalColumns;
                     found = true;
@@ -849,7 +822,7 @@ namespace PeachPDF.Html.Core
                 return false;
             }
 
-            var boxSpan = GetColSpan(box);
+            var boxSpan = GetColSpan(node);
             for (var column = columnIndex; column < columnIndex + boxSpan; column++)
             {
                 var position = fromEnd ? totalColumns - column : column + 1;
@@ -868,9 +841,9 @@ namespace PeachPDF.Html.Core
         /// shared - this runs at cascade time, before the layout-phase state that method's column
         /// bookkeeping otherwise depends on exists.
         /// </summary>
-        private static int GetColSpan(CssBox box)
+        private static int GetColSpan(ICssDomNode node)
         {
-            var value = box.GetAttribute("colspan", "1");
+            var value = node.GetAttribute("colspan") ?? "1";
             return !int.TryParse(value, out var colSpan) || colSpan < 1 ? 1 : colSpan;
         }
 
@@ -890,48 +863,48 @@ namespace PeachPDF.Html.Core
             return diff % step == 0 && (step > 0 ? diff >= 0 : diff <= 0);
         }
 
-        private static bool DoesSelectorMatch(OnlyChildSelector _, CssBox? box)
+        private static bool DoesSelectorMatch(OnlyChildSelector _, ICssDomNode? node)
         {
-            if (box?.HtmlTag is null)
+            if (node?.TagName is null)
             {
                 return false;
             }
 
-            var parentBox = DomUtils.GetNearestParentElementBox(box);
-            return parentBox is not null && parentBox.Boxes.Count(b => b.HtmlTag is not null) == 1;
+            var parent = GetNearestParentElement(node);
+            return parent is not null && parent.Children.Count(b => b.TagName is not null) == 1;
         }
 
-        private static bool DoesSelectorMatch(OnlyOfTypeSelector _, CssBox? box)
+        private static bool DoesSelectorMatch(OnlyOfTypeSelector _, ICssDomNode? node)
         {
-            if (box?.HtmlTag is null)
+            if (node?.TagName is not { } nodeTag)
             {
                 return false;
             }
 
-            var parentBox = DomUtils.GetNearestParentElementBox(box);
-            if (parentBox is null)
+            var parent = GetNearestParentElement(node);
+            if (parent is null)
             {
                 return false;
             }
 
-            return parentBox.Boxes.Count(b =>
-                b.HtmlTag is not null &&
-                b.HtmlTag.Name.Equals(box.HtmlTag.Name, StringComparison.InvariantCultureIgnoreCase)) == 1;
+            return parent.Children.Count(b =>
+                b.TagName is not null &&
+                b.TagName.Equals(nodeTag, node.NameComparison)) == 1;
         }
 
-        private static bool DoesSelectorMatch(NotSelector notSelector, CssBox? box)
+        private static bool DoesSelectorMatch(NotSelector notSelector, ICssDomNode? node)
         {
-            return box is not null && !DoesSelectorMatch(notSelector.Inner, box);
+            return node is not null && !DoesSelectorMatch(notSelector.Inner, node);
         }
 
-        private static bool DoesSelectorMatch(MatchesSelector matchesSelector, CssBox? box)
+        private static bool DoesSelectorMatch(MatchesSelector matchesSelector, ICssDomNode? node)
         {
-            return DoesSelectorMatch(matchesSelector.Inner, box);
+            return DoesSelectorMatch(matchesSelector.Inner, node);
         }
 
-        private static bool DoesSelectorMatch(HasSelector hasSelector, CssBox? box)
+        private static bool DoesSelectorMatch(HasSelector hasSelector, ICssDomNode? node)
         {
-            return box is not null && HasDescendantMatch(box, hasSelector.Inner);
+            return node is not null && HasDescendantMatch(node, hasSelector.Inner);
         }
 
         /// <summary>
@@ -940,9 +913,9 @@ namespace PeachPDF.Html.Core
         /// Backs :has()'s default (descendant) relative-selector form; leading-combinator forms
         /// (":has(&gt; x)"/"+"/"~") aren't supported - see HasSelector's doc comment.
         /// </summary>
-        private static bool HasDescendantMatch(CssBox box, ISelector inner)
+        private static bool HasDescendantMatch(ICssDomNode node, ISelector inner)
         {
-            foreach (var child in box.Boxes)
+            foreach (var child in node.Children)
             {
                 if (DoesSelectorMatch(inner, child)) return true;
                 if (HasDescendantMatch(child, inner)) return true;
@@ -951,12 +924,12 @@ namespace PeachPDF.Html.Core
             return false;
         }
 
-        private static bool DoesSelectorMatch(ComplexSelector complexSelector, CssBox? box)
+        private static bool DoesSelectorMatch(ComplexSelector complexSelector, ICssDomNode? node)
         {
             var selectorsInReverse = complexSelector.Reverse().ToList();
 
             var isLowestItem = true;
-            var currentRef = box;
+            ICssDomNode? currentRef = node;
 
             foreach (var selector in selectorsInReverse)
             {
@@ -979,9 +952,9 @@ namespace PeachPDF.Html.Core
                     // (".nose") would satisfy both "div" AND, one level further up, get reused... -
                     // this is exactly the bug that made a bogus ::before appear on `.nose > div`
                     // instead of only on `.nose > div > div` in the Acid2 fixture).
-                    if (currentRef is not null && currentRef.IsPseudoElement && EndsWithPseudoElement(selector.Selector))
+                    if (currentRef is CssBox { IsPseudoElement: true } pseudoRef && EndsWithPseudoElement(selector.Selector))
                     {
-                        currentRef = currentRef.ParentBox;
+                        currentRef = pseudoRef.ParentBox;
                     }
 
                     isLowestItem = false;
@@ -993,24 +966,24 @@ namespace PeachPDF.Html.Core
                 switch (selector.Delimiter)
                 {
                     case ">":
-                        currentRef = currentRef.ParentBox;
+                        currentRef = currentRef.Parent;
                         if (!DoesSelectorMatch(selector.Selector, currentRef)) return false;
                         break;
 
                     case " " or null:
-                        currentRef = currentRef.ParentBox;
+                        currentRef = currentRef.Parent;
                         while (currentRef is not null && !DoesSelectorMatch(selector.Selector, currentRef))
                         {
-                            currentRef = currentRef.ParentBox;
+                            currentRef = currentRef.Parent;
                         }
                         if (currentRef is null) return false;
                         break;
 
                     case "+":
                     {
-                        var parent = currentRef.ParentBox;
+                        var parent = currentRef.Parent;
                         if (parent is null) return false;
-                        var siblings = parent.Boxes.Where(b => b.HtmlTag is not null).ToList();
+                        var siblings = parent.Children.Where(b => b.TagName is not null).ToList();
                         var idx = siblings.IndexOf(currentRef);
                         if (idx <= 0) return false;
                         currentRef = siblings[idx - 1];
@@ -1020,12 +993,12 @@ namespace PeachPDF.Html.Core
 
                     case "~":
                     {
-                        var parent = currentRef.ParentBox;
+                        var parent = currentRef.Parent;
                         if (parent is null) return false;
-                        var siblings = parent.Boxes.Where(b => b.HtmlTag is not null).ToList();
+                        var siblings = parent.Children.Where(b => b.TagName is not null).ToList();
                         var idx = siblings.IndexOf(currentRef);
                         if (idx <= 0) return false;
-                        CssBox? match = null;
+                        ICssDomNode? match = null;
                         for (var i = idx - 1; i >= 0; i--)
                             if (DoesSelectorMatch(selector.Selector, siblings[i])) { match = siblings[i]; break; }
                         if (match is null) return false;

@@ -1269,5 +1269,153 @@ namespace PeachPDF.Tests.Integration
             // un-transformed (pre-fix) geometry.
             Assert.Contains(Enumerable.Range(0, transformed.Length), i => Math.Abs(untransformed[i] - transformed[i]) > 0.01);
         }
+
+        #region CSS cascade for SVG (issues #159 / #192): <style>, HTML cascade, selectors, var(), case-sensitivity, precedence
+
+        private static string InlineSvgDoc(string headStyles, string svgBody) =>
+            $"<!DOCTYPE html><html><head><style>body{{margin:0}}{headStyles}</style></head><body>" +
+            $"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\" width=\"100\" height=\"100\">{svgBody}</svg></body></html>";
+
+        private static string ImgSvgDoc(string headStyles, string svgMarkup)
+        {
+            var svg = $"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\" width=\"100\" height=\"100\">{svgMarkup}</svg>";
+            var dataUri = "data:image/svg+xml;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(svg));
+            return $"<!DOCTYPE html><html><head><style>body{{margin:0}}{headStyles}</style></head><body>" +
+                   $"<img src=\"{dataUri}\" width=\"100\" height=\"100\"/></body></html>";
+        }
+
+        // #00ff00 -> "0 1 0 rg" (green fill); #0000ff -> "0 0 1 rg" (blue); #ff0000 -> "1 0 0 rg" (red).
+        private const string Green = "0 1 0 rg";
+        private const string Blue = "0 0 1 rg";
+        private const string Red = "1 0 0 rg";
+
+        // Issue #159: a <style> nested inside an inline <svg> now applies to that SVG's shapes,
+        // end-to-end through the full PdfGenerator pipeline.
+        [Fact]
+        public async Task InlineSvg_StyleElement_ClassSelectorAppliesToShape()
+        {
+            var html = InlineSvgDoc("", """<style>.hl { fill: #00ff00; }</style><rect class="hl" x="10" y="10" width="80" height="80"/>""");
+            Assert.Contains(Green, await GetPdfText(html));
+        }
+
+        // Issue #192 gap 2 / SVG 2 §6: an HTML document-level <style> rule cascades into inline SVG.
+        [Fact]
+        public async Task InlineSvg_HtmlHeadStyle_TypeSelector_StylesShape()
+        {
+            var html = InlineSvgDoc("rect { fill: #00ff00; }", """<rect x="10" y="10" width="80" height="80"/>""");
+            Assert.Contains(Green, await GetPdfText(html));
+        }
+
+        [Fact]
+        public async Task InlineSvg_HtmlHeadStyle_ClassSelector_StylesShape()
+        {
+            var html = InlineSvgDoc(".hl { fill: #00ff00; }", """<rect class="hl" x="10" y="10" width="80" height="80"/>""");
+            Assert.Contains(Green, await GetPdfText(html));
+        }
+
+        // Issue #192 gap 1: combinators/attribute/structural-pseudo selectors (unsupported by the old
+        // SvgStyleSheet mini-matcher) now work via the full engine - inline and standalone.
+        [Fact]
+        public async Task InlineSvg_DescendantCombinatorSelector_StylesShape()
+        {
+            var html = InlineSvgDoc("g rect { fill: #00ff00; }", """<g><rect x="10" y="10" width="80" height="80"/></g>""");
+            Assert.Contains(Green, await GetPdfText(html));
+        }
+
+        [Fact]
+        public async Task ImgSvg_ChildCombinatorSelector_StylesShape()
+        {
+            var html = ImgSvgDoc("", """<style>g > rect { fill: #00ff00; }</style><g><rect x="10" y="10" width="80" height="80"/></g>""");
+            Assert.Contains(Green, await GetPdfText(html));
+        }
+
+        [Fact]
+        public async Task InlineSvg_AttributeSelector_StylesShape()
+        {
+            var html = InlineSvgDoc("rect[data-hl=\"1\"] { fill: #00ff00; }", """<rect data-hl="1" x="10" y="10" width="80" height="80"/>""");
+            Assert.Contains(Green, await GetPdfText(html));
+        }
+
+        [Fact]
+        public async Task InlineSvg_StructuralPseudoSelector_StylesShape()
+        {
+            var html = InlineSvgDoc("rect:only-of-type { fill: #00ff00; }", """<g><rect x="10" y="10" width="80" height="80"/></g>""");
+            Assert.Contains(Green, await GetPdfText(html));
+        }
+
+        // SVG selectors are case-sensitive (XML/Selectors 4 §6): a correctly-cased camelCase selector
+        // matches, a mis-cased one does not.
+        [Fact]
+        public async Task InlineSvg_MixedCaseSelector_MatchesWhenCaseAgrees()
+        {
+            var html = InlineSvgDoc("rect[data-Kind=\"Hi\"] { fill: #00ff00; }", """<rect data-Kind="Hi" x="10" y="10" width="80" height="80"/>""");
+            Assert.Contains(Green, await GetPdfText(html));
+        }
+
+        [Fact]
+        public async Task InlineSvg_MisCasedTypeSelector_DoesNotMatch()
+        {
+            // "RECT" must NOT match <rect> (case-sensitive); the presentation fill (blue) stands.
+            var html = InlineSvgDoc("RECT { fill: #00ff00; }", """<rect fill="#0000ff" x="10" y="10" width="80" height="80"/>""");
+            var pdf = await GetPdfText(html);
+            Assert.DoesNotContain(Green, pdf);
+            Assert.Contains(Blue, pdf);
+        }
+
+        [Fact]
+        public async Task Html_MisCasedSelector_StillMatches_CaseInsensitive()
+        {
+            // Regression guard: HTML matching stays ASCII case-insensitive (CssBox.NameComparison
+            // unchanged) - a mis-cased selector still styles an HTML element's background.
+            var html = "<!DOCTYPE html><html><head><style>body{margin:0}DIV{background-color:#00ff00}</style></head>" +
+                       "<body><div style=\"width:50px;height:50px\">x</div></body></html>";
+            Assert.Contains(Green, await GetPdfText(html));
+        }
+
+        // var() custom properties resolve for inline (via the HTML cascade) and standalone (via the
+        // SVG-local custom-property cascade).
+        [Fact]
+        public async Task InlineSvg_VarCustomProperty_Resolves()
+        {
+            var html = InlineSvgDoc(":root { --c: #00ff00; } rect { fill: var(--c); }", """<rect x="10" y="10" width="80" height="80"/>""");
+            Assert.Contains(Green, await GetPdfText(html));
+        }
+
+        [Fact]
+        public async Task ImgSvg_VarCustomProperty_Resolves()
+        {
+            var html = ImgSvgDoc("", """<style>:root { --c: #00ff00; } rect { fill: var(--c); }</style><rect x="10" y="10" width="80" height="80"/>""");
+            Assert.Contains(Green, await GetPdfText(html));
+        }
+
+        // calc() in an SVG length renders (delegated to the shared CSS length parser); exact evaluation
+        // is unit-tested in SvgValueParsersTests.
+        [Fact]
+        public async Task InlineSvg_CalcStrokeWidth_Renders()
+        {
+            var html = InlineSvgDoc("", """<rect x="10" y="10" width="80" height="80" fill="none" stroke="#000" stroke-width="calc(2px + 3px)"/>""");
+            Assert.Contains("\nS\n", await GetPdfText(html));
+        }
+
+        // Precedence: inline style="" beats a <style> rule beats a presentation attribute.
+        [Fact]
+        public async Task InlineSvg_StylePrecedence_InlineStyleWins()
+        {
+            var html = InlineSvgDoc(".foo { fill: #0000ff; }", """<rect class="foo" fill="#ff0000" style="fill:#00ff00" x="10" y="10" width="80" height="80"/>""");
+            var pdf = await GetPdfText(html);
+            Assert.Contains(Green, pdf);
+            Assert.DoesNotContain(Blue, pdf);
+            Assert.DoesNotContain(Red, pdf);
+        }
+
+        // A host-document <style> must NOT leak into a standalone <img>-referenced SVG (separate document).
+        [Fact]
+        public async Task ImgSvg_HostDocumentStyle_DoesNotStyleStandaloneSvg()
+        {
+            var html = ImgSvgDoc("rect { fill: #ff0000; }", """<rect x="10" y="10" width="80" height="80"/>""");
+            Assert.DoesNotContain(Red, await GetPdfText(html));
+        }
+
+        #endregion
     }
 }
