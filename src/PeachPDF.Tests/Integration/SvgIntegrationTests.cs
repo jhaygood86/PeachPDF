@@ -1464,6 +1464,23 @@ namespace PeachPDF.Tests.Integration
             Assert.Contains(Green, await GetPdfText(html));
         }
 
+        // The SVG inline style="" tier (ResolveStyledAttr) also honors @property: an inline
+        // style="fill: var(--c)" consuming a registered-but-unset property resolves to its initial-value,
+        // standalone and inline.
+        [Fact]
+        public async Task ImgSvg_InlineStyleConsumer_AtPropertyInitialValue()
+        {
+            var html = ImgSvgDoc("", """<style><![CDATA[ @property --c { syntax: "<color>"; inherits: false; initial-value: #00ff00; } ]]></style><rect x="10" y="10" width="80" height="80" style="fill: var(--c)"/>""");
+            Assert.Contains(Green, await GetPdfText(html));
+        }
+
+        [Fact]
+        public async Task InlineSvg_InlineStyleConsumer_AtPropertyInitialValue()
+        {
+            var html = InlineSvgDoc("""@property --c { syntax: "<color>"; inherits: false; initial-value: #00ff00; }""", """<rect x="10" y="10" width="80" height="80" style="fill: var(--c)"/>""");
+            Assert.Contains(Green, await GetPdfText(html));
+        }
+
         // Regression guard: an unregistered, unset var() with no fallback still drops the declaration (the
         // presentation fill stands), unchanged by the @property threading.
         [Fact]

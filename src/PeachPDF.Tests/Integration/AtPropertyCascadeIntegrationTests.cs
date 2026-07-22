@@ -173,6 +173,34 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal("rgb(128, 0, 128)", el.Color);     // the fallback; no crash
         }
 
+        // An inline style="" consumer resolves var() through the same deferred-resolution path as a
+        // <style> rule, so it honors an @property registration's initial-value when the property is unset.
+        [Fact]
+        public async Task InlineStyleConsumer_RegisteredInitialValue_ResolvesViaVar_WhenUnset()
+        {
+            var html = """
+                <!DOCTYPE html><html><head><style>
+                  @property --c { syntax: "<color>"; inherits: false; initial-value: blue; }
+                </style></head><body><div id="el" style="color: var(--c)">text</div></body></html>
+                """;
+            var root = await BuildBoxTree(html);
+            Assert.Equal("rgb(0, 0, 255)", FindById(root, "el")!.Color);
+        }
+
+        // An inline style="" that both sets --c to a syntax-mismatched value AND consumes it inline falls
+        // back to the registered initial-value (invalid at computed-value time), same as via <style> rules.
+        [Fact]
+        public async Task InlineStyleConsumer_SyntaxMismatch_FallsBackToInitial()
+        {
+            var html = """
+                <!DOCTYPE html><html><head><style>
+                  @property --c { syntax: "<color>"; inherits: false; initial-value: green; }
+                </style></head><body><div id="el" style="--c: 123notacolor; color: var(--c)">text</div></body></html>
+                """;
+            var root = await BuildBoxTree(html);
+            Assert.Equal("rgb(0, 128, 0)", FindById(root, "el")!.Color);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static async Task<CssBox> BuildBoxTree(string html)
