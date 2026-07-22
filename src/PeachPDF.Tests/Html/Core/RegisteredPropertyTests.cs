@@ -239,6 +239,10 @@ namespace PeachPDF.Tests.Html.Core
         [InlineData("<length-percentage>", "calc(50% + 1px)", false)] // percentage term
         [InlineData("<number>", "calc(2 * 3)", true)]
         [InlineData("<angle>", "calc(45deg + 10deg)", true)]
+        [InlineData("<length>", "calc(-(2px) + 4px)", true)]   // unary sign on an absolute group → independent
+        [InlineData("<length>", "calc(-(1em) + 4px)", false)]  // unary sign on a font-relative group → dependent
+        [InlineData("<length>", "min(2px, 4px)", true)]        // min()/clamp() args must all be independent
+        [InlineData("<length>", "clamp(1px, 1em, 4px)", false)]
         public void InitialValueCalc_ComputationalIndependence(string syntax, string initial, bool valid)
         {
             var reg = Register($"syntax: \"{syntax}\"; inherits: false; initial-value: {initial};");
