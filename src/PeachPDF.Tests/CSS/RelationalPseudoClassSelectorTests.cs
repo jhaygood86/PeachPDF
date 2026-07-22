@@ -117,6 +117,46 @@ public class RelationalPseudoClassSelectorTests
         Assert.Equal("transparent", no.BackgroundColor);
     }
 
+    // ── :where() ───────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Where_MatchesEitherBranch_LikeIs()
+    {
+        var html = Html(
+            "p:where(.a, .b) { background-color: #ff0000; }",
+            "<div><p class='a'>1</p><p class='b'>2</p><p>3</p></div>");
+        var boxes = await FindAllBoxesByTag(html, "p");
+        Assert.Equal(3, boxes.Count);
+        Assert.NotEqual("transparent", boxes[0].BackgroundColor);
+        Assert.NotEqual("transparent", boxes[1].BackgroundColor);
+        Assert.Equal("transparent", boxes[2].BackgroundColor);
+    }
+
+    [Fact]
+    public async Task Where_ContributesZeroSpecificity_LosesToATypeSelector()
+    {
+        // ":where(#b)" matches, but per CSS Selectors 4 §16 it contributes ZERO specificity - so a
+        // bare type selector "p" (0,0,1) outranks it even though ":where(#b)"'s argument is an id.
+        // Contrast Is_SpecificityIsTheStaticMaxOfItsArguments (where ":is(#b)" WOULD win at one-id).
+        var html = Html(
+            ":where(#b) { color: #0000ff; } p { color: #ff0000; }",
+            "<p id='b'>text</p>");
+        var box = await FindBoxByTag(html, "p");
+        Assert.Equal("rgb(255, 0, 0)", box.Color);
+    }
+
+    [Fact]
+    public async Task Where_StillMatches_WhenUncontested()
+    {
+        // Proves the zero-specificity rule above lost on specificity, not because :where() failed to
+        // match: uncontested, the same ":where(#b)" rule applies its color.
+        var html = Html(
+            ":where(#b) { color: #0000ff; }",
+            "<p id='b'>text</p>");
+        var box = await FindBoxByTag(html, "p");
+        Assert.Equal("rgb(0, 0, 255)", box.Color);
+    }
+
     // ── Helpers (mirrors SelectorMatchingTests.cs conventions) ────────────────
 
     private static string Html(string css, string body) =>

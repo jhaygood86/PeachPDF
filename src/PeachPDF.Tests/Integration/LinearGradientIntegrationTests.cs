@@ -106,12 +106,17 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task HardStopShorthand_ExpandsToTwoStops()
         {
-            // red 0 50%, blue 50% 100% — each stop with two positions should expand
+            // "red 0 50%, blue 50% 100%" expands to four stops (red@0, red@50%, blue@50%, blue@100%),
+            // producing a hard colour edge at 50%. A merely-present /FunctionType is not enough to prove
+            // that: if either stop's first position is dropped the value collapses to "red 50%, blue 100%",
+            // a single smooth interpolation with no stitching, which still emits a /FunctionType. Assert the
+            // stitching structure instead - a type-3 function whose /Bounds place a coincident pair at the
+            // 0.5 hard edge - so the test actually fails if a position is lost.
             var pdfText = await GetPdfText(GradientHtml("background-image: linear-gradient(to right, red 0 50%, blue 50% 100%);"));
 
             Assert.Contains("/ShadingType", pdfText);
-            // Two-position shorthand expands to 4 stops, requiring a stitching function
-            Assert.Contains("/FunctionType", pdfText);
+            Assert.Contains("/FunctionType 3", pdfText);
+            Assert.Matches(@"/Bounds\s*\[\s*0?\.5\s+0?\.5\s*\]", pdfText);
         }
 
         // ── Phase A: color hints ──────────────────────────────────────────

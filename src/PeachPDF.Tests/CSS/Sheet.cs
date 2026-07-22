@@ -7,37 +7,61 @@ namespace PeachPDF.Tests.CSS
     public class CssSheetTests : CssConstructionFunctions
     {
         [Fact]
-        public void CssSheetBareTopLevelSemicolonIsIgnoredAsEmptyStatement()
+        public void CssSheetBareSemicolonInsideBlockIsDiscarded()
         {
-            // A stray top-level ';' between rules is an empty statement per the CSS2.1 core grammar -
-            // it must not corrupt/drop the rule that follows it. Regression test: this exact shape
-            // (".parser { ... } ; .parser { height: 3em; }") appears in the real Acid2 test's CSS
-            // parser-torture-test block.
+            // "Consume a block's contents" discards a <semicolon-token> just like whitespace
+            // (CSS Syntax 3 §5.5.5), so a stray ';' inside a grouping rule must not disturb the block or
+            // anything after it.
             var sheet = ParseStyleSheet(@"
-            .a { color: red; }
-            ;
-            .b { color: blue; }
-            ");
-            Assert.Equal(2, sheet.Rules.Length);
-            Assert.IsType<StyleRule>(sheet.Rules[0]);
-            Assert.IsType<StyleRule>(sheet.Rules[1]);
-            var a = (StyleRule)sheet.Rules[0];
-            var b = (StyleRule)sheet.Rules[1];
-            Assert.Equal(".a", a.SelectorText);
-            Assert.Equal("rgb(255, 0, 0)", a.Style.Color);
-            Assert.Equal(".b", b.SelectorText);
-            Assert.Equal("rgb(0, 0, 255)", b.Style.Color);
+            @media screen {
+                .a { color: red; }
+                ;
+                .b { color: blue; }
+            }");
+            Assert.Equal(1, sheet.Rules.Length);
+            var media = (MediaRule)sheet.Rules[0];
+            Assert.Equal(2, media.Rules.Length);
+            Assert.Equal(".a", ((StyleRule)media.Rules[0]).SelectorText);
+            Assert.Equal(".b", ((StyleRule)media.Rules[1]).SelectorText);
         }
 
         [Fact]
-        public void CssSheetMultipleBareTopLevelSemicolonsAreIgnored()
+        public void CssSheetBareSemicolonInsideBlockDoesNotSwallowFollowingRule()
         {
-            var sheet = ParseStyleSheet(@";;.a { color: red; };;");
+            // The trailing ';' used to be folded into a run-on selector that consumed the block's closing
+            // brace, taking the *next* top-level rule with it.
+            var sheet = ParseStyleSheet(@"
+            @media screen { .a { color: red; } ; }
+            @media print { .b { color: blue; } }");
+            Assert.Equal(2, sheet.Rules.Length);
+            Assert.Equal(RuleType.Media, sheet.Rules[0].Type);
+            Assert.Equal(RuleType.Media, sheet.Rules[1].Type);
+        }
+
+        [Fact]
+        public void CssSheetMultipleBareSemicolonsInsideBlockAreDiscarded()
+        {
+            var sheet = ParseStyleSheet(@"@media screen { ;;.a { color: red; };; }");
             Assert.Equal(1, sheet.Rules.Length);
-            Assert.IsType<StyleRule>(sheet.Rules[0]);
-            var a = (StyleRule)sheet.Rules[0];
-            Assert.Equal(".a", a.SelectorText);
-            Assert.Equal("rgb(255, 0, 0)", a.Style.Color);
+            var media = (MediaRule)sheet.Rules[0];
+            Assert.Equal(1, media.Rules.Length);
+            Assert.Equal(".a", ((StyleRule)media.Rules[0]).SelectorText);
+        }
+
+        [Fact]
+        public void CssSheetBareTopLevelSemicolonInvalidatesTheFollowingRule()
+        {
+            // Deliberately asymmetric with the block case above. "Consume a stylesheet's contents"
+            // (CSS Syntax 3 §5.5.1) has no <semicolon-token> case, so a stray top-level ';' falls to
+            // "anything else" and is consumed into the next qualified rule's prelude by §5.5.3, leaving an
+            // invalid selector. Only a block passes <semicolon-token> as that algorithm's stop token.
+            //
+            // The Acid2 parser-torture block depends on this: its ".parser { m\argin: 2em; };" is followed
+            // by ".parser { height: 3em; }", which must NOT apply - one of a run of deliberately-dropped
+            // rules alongside "width: 200" and "border: 5em solid red ! error".
+            var sheet = ParseStyleSheet(@".a { color: red; } ; .b { color: blue; }");
+            Assert.Equal(1, sheet.Rules.Length);
+            Assert.Equal(".a", ((StyleRule)sheet.Rules[0]).SelectorText);
         }
 
         [Fact]

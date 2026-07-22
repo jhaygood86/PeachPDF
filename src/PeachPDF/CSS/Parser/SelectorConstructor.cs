@@ -59,6 +59,7 @@ namespace PeachPDF.CSS
                 {PseudoClassNames.Has, ctx => new HasFunctionState(ctx)},
                 {PseudoClassNames.Matches, ctx => new MatchesFunctionState(ctx, PseudoClassNames.Matches)},
                 {PseudoClassNames.Is, ctx => new MatchesFunctionState(ctx, PseudoClassNames.Is)},
+                {PseudoClassNames.Where, ctx => new MatchesFunctionState(ctx, PseudoClassNames.Where)},
                 {PseudoClassNames.HostContext, ctx => new HostContextFunctionState(ctx)}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
@@ -811,6 +812,7 @@ namespace PeachPDF.CSS
                     ParseState.Initial => OnInitial(token),
                     ParseState.AfterInitialSign => OnAfterInitialSign(token),
                     ParseState.Offset => OnOffset(token),
+                    ParseState.AfterOffsetSign => OnAfterOffsetSign(token),
                     ParseState.BeforeOf => OnBeforeOf(token),
                     _ => OnAfter(token)
                 };
@@ -884,10 +886,13 @@ namespace PeachPDF.CSS
                         return false;
                     case TokenType.Delim when token.Data.IsOneOf("+", "-"):
                         // The An+B offset's sign is a standalone delim token when whitespace separates it
-                        // from B (e.g. `10n + 1`, per CSS Syntax 3 §5.6). The compact form `10n+1` instead
-                        // arrives as a single signed <number>, handled by the Number case below. Without
-                        // this branch a spaced sign fell through to OnBeforeOf and invalidated the selector.
+                        // from B - the "<n-dimension> ['+' | '-'] <signless-integer>" production of
+                        // <a-n-plus-b> (CSS Syntax 3 §6.2); §6.1 gives `3n + 1` as a valid example. The
+                        // compact form `10n+1` instead arrives as a single signed <number>, handled by the
+                        // Number case below. Without this branch a spaced sign fell through to OnBeforeOf
+                        // and invalidated the selector.
                         _sign = token.Data == "-" ? -1 : 1;
+                        _state = ParseState.AfterOffsetSign;
                         return false;
                     case TokenType.Number:
                         _valid = _valid && ((NumberToken)token).IsInteger && int.TryParse(token.Data, out _offset);
@@ -896,6 +901,26 @@ namespace PeachPDF.CSS
                         return false;
                     default:
                         return OnBeforeOf(token);
+                }
+            }
+
+            private bool OnAfterOffsetSign(Token token)
+            {
+                switch (token.Type)
+                {
+                    case TokenType.Whitespace:
+                        return false;
+                    case TokenType.Number when !token.Data.StartsWith('+') && !token.Data.StartsWith('-'):
+                        // The production requires a <signless-integer> here, defined as "a <number-token>
+                        // with its type flag set to integer, and no sign character" (CSS Syntax 3 §6.2), so
+                        // `10n + -1` and `10n + +1` are invalid - §6.1 lists `3n + -6` as an invalid example.
+                        _valid = _valid && ((NumberToken)token).IsInteger && int.TryParse(token.Data, out _offset);
+                        _offset *= _sign;
+                        _state = ParseState.BeforeOf;
+                        return false;
+                    default:
+                        _valid = false;
+                        return token.Type == TokenType.RoundBracketClose;
                 }
             }
 
@@ -933,6 +958,7 @@ namespace PeachPDF.CSS
                 Initial,
                 AfterInitialSign,
                 Offset,
+                AfterOffsetSign,
                 BeforeOf,
                 AfterOf
             }

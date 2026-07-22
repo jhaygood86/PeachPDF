@@ -311,6 +311,39 @@ namespace PeachPDF.Tests.CSS
             Assert.False(backgroundImage.IsInitial);
         }
 
+        [Theory]
+        // <color-stop-length> = <length-percentage>{1,2} (CSS Images 4 §3.5.1). Both positions must survive
+        // serialization: the render layer (CssValueParser.ParseLinearGradient) reads the property's value
+        // and expands two positions into two stops, so dropping one here collapsed the solid band. This
+        // asserts the non-lossy value directly - the LinearGradientIntegrationTests only check that a
+        // stitching function is present, which is true with or without the dropped position.
+        [InlineData("background-image: linear-gradient(red 0 50%, blue 50% 100%)",
+            "linear-gradient(rgb(255, 0, 0) 0 50%, rgb(0, 0, 255) 50% 100%)")]
+        [InlineData("background-image: linear-gradient(90deg, red 0 8px, blue)",
+            "linear-gradient(90deg, rgb(255, 0, 0) 0 8px, rgb(0, 0, 255))")]
+        [InlineData("background-image: radial-gradient(red 0 8px, blue)",
+            "radial-gradient(rgb(255, 0, 0) 0 8px, rgb(0, 0, 255))")]
+        public void GradientTwoPositionColorStopRoundTrips(string snippet, string expected)
+        {
+            var property = ParseDeclaration(snippet);
+            Assert.IsType<BackgroundImageProperty>(property);
+            var backgroundImage = (BackgroundImageProperty)property;
+            Assert.True(backgroundImage.HasValue);
+            Assert.Equal(expected, backgroundImage.Value);
+        }
+
+        [Theory]
+        // Single-position and no-position stops, plus a bare-position colour hint, are unaffected; three
+        // positions on one stop and two bare positions with no colour remain invalid.
+        [InlineData("background-image: linear-gradient(red 50%, blue)", true)]
+        [InlineData("background-image: linear-gradient(red, 25%, blue)", true)]
+        [InlineData("background-image: linear-gradient(red 0 25% 50%, blue)", false)]
+        [InlineData("background-image: linear-gradient(0 50%, blue)", false)]
+        public void GradientColorStopValidity(string snippet, bool valid)
+        {
+            var property = ParseDeclaration(snippet);
+            Assert.Equal(valid, ((BackgroundImageProperty)property).HasValue);
+        }
     }
 }
 

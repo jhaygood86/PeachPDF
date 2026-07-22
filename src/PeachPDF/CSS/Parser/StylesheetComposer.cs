@@ -43,6 +43,8 @@ namespace PeachPDF.CSS
 
             if (token.Data.Is(RuleNames.Property)) return CreateProperty(token);
 
+            if (token.Data.Is(RuleNames.Layer)) return CreateLayer(token);
+
             return token.Data.Is(RuleNames.Document) ? CreateDocument(token) : CreateUnknown(token);
         }
 
@@ -65,13 +67,6 @@ namespace PeachPDF.CSS
                 case TokenType.SquareBracketClose:
                     RaiseErrorOccurred(ParseError.InvalidToken, token.Position);
                     MoveToRuleEnd(ref token);
-                    return null;
-
-                // A bare top-level ';' is an empty statement (CSS2.1 core grammar) - a no-op, not the
-                // start of a malformed rule. Falling through to CreateStyle here would feed it into
-                // SelectorConstructor, which has no recovery for an unexpected Semicolon and silently
-                // merges it into (and invalidates) the *next* rule's selector instead.
-                case TokenType.Semicolon:
                     return null;
 
                 default:
@@ -309,6 +304,78 @@ namespace PeachPDF.CSS
             //_nodes.Pop();
             //return rule;
         }
+        public Rule CreateLayer(Token current)
+        {
+            var start = current.Position;
+            var token = NextToken();
+            ParseComments(ref token);
+
+            // Read the (optional) comma-separated layer name list, stopping at '{' (block form) or
+            // ';'/EOF (statement form).
+            var names = ReadLayerNames(ref token);
+
+            if (token.Type == TokenType.CurlyBracketOpen)
+            {
+                // Block form: `@layer name { rules }` (at most one name; anonymous if none).
+                var rule = new LayerRule(_parser)
+                {
+                    Name = names.Count > 0 ? names[0] : string.Empty
+                };
+                _nodes.Push(rule);
+                var end = FillRules(rule);
+                rule.StylesheetText = CreateView(start, end);
+                _nodes.Pop();
+                return rule;
+            }
+
+            // Statement form: `@layer a, b, c;` — declares layer order only, no rules. token is at ';'/EOF.
+            var statement = new LayerStatementRule(_parser);
+            statement.Names.AddRange(names);
+            statement.StylesheetText = CreateView(start, token.Position);
+            return statement;
+        }
+
+        /// <summary>
+        /// Reads a <c>@layer</c> prelude: zero or more comma-separated layer names, each a dotted
+        /// ident sequence (e.g. <c>framework.utilities</c>). Advances <paramref name="token"/> up to
+        /// (but not past) the terminating <c>{</c>, <c>;</c>, or end of file.
+        /// </summary>
+        private List<string> ReadLayerNames(ref Token token)
+        {
+            var names = new List<string>();
+            var current = new System.Text.StringBuilder();
+
+            void Flush()
+            {
+                if (current.Length <= 0) return;
+                names.Add(current.ToString());
+                current.Clear();
+            }
+
+            while (token.IsNot(TokenType.EndOfFile, TokenType.CurlyBracketOpen, TokenType.Semicolon))
+            {
+                switch (token.Type)
+                {
+                    case TokenType.Ident:
+                        current.Append(token.Data);
+                        break;
+                    case TokenType.Delim when token.Data == ".":
+                        current.Append('.');
+                        break;
+                    case TokenType.Comma:
+                        Flush();
+                        break;
+                    // Whitespace/comments and anything else separating names are ignored.
+                }
+
+                token = NextToken();
+                ParseComments(ref token);
+            }
+
+            Flush();
+            return names;
+        }
+
         public Rule CreateNamespace(Token current)
         {
             var rule = new NamespaceRule(_parser);
@@ -1141,6 +1208,26 @@ namespace PeachPDF.CSS
 
             while (token.IsNot(TokenType.EndOfFile, TokenType.CurlyBracketClose))
             {
+                // "Consume a block's contents" discards a <semicolon-token> outright, exactly as it does a
+                // <whitespace-token> (CSS Syntax 3 §5.5.5). Passing it on to CreateStyle instead feeds it to
+                // SelectorConstructor, which has no recovery for an unexpected semicolon: it folds the token
+                // into the next rule's selector and invalidates it, and because the run-on rule keeps
+                // consuming, the block's own closing brace is swallowed and the following sibling rule is
+                // lost with it.
+                //
+                // Deliberately NOT done in CreateRules: "consume a stylesheet's contents" (§5.5.1) has no
+                // <semicolon-token> case, so a stray semicolon at the top level falls to "anything else" and
+                // is consumed into the next qualified rule's prelude, invalidating it. Only a block passes
+                // <semicolon-token> as the stop token to "consume a qualified rule" (§5.5.3). The Acid2
+                // parser-torture block relies on that: its ".parser { m\argin: 2em; };" is followed by
+                // ".parser { height: 3em; }", which must NOT apply.
+                if (token.Type == TokenType.Semicolon)
+                {
+                    token = NextToken();
+                    ParseComments(ref token);
+                    continue;
+                }
+
                 var rule = CreateRule(token);
                 token = NextToken();
                 ParseComments(ref token);
