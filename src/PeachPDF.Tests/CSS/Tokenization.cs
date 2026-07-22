@@ -74,6 +74,11 @@ namespace PeachPDF.Tests.CSS
             Check("#hero", TokenType.Hash, "hero");
             Check("#top", TokenType.Hash, "top");
             Check("#f00bar", TokenType.Hash, "f00bar");
+            Check("#\\41", TokenType.Hash, "A"); // an escape in the name → id hash-token (not a color)
+
+            // '#' not followed by a name code point or valid escape is a plain '#' delimiter, not a hash-token.
+            var delim = new Lexer(new TextSource("# ")) { IsInValue = true };
+            Assert.Equal(TokenType.Delim, delim.Get().Type);
         }
 
         [Fact]

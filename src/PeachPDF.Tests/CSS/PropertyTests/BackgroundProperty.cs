@@ -231,7 +231,9 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             var property = ParseDeclaration(snippet);
             Assert.Equal("background-image", property.Name);
             Assert.IsType<BackgroundImageProperty>(property);
-            Assert.True(((BackgroundImageProperty)property).HasValue);
+            var concrete = (BackgroundImageProperty)property;
+            Assert.True(concrete.HasValue);
+            Assert.False(string.IsNullOrEmpty(concrete.Value)); // serializes back through ImageFunctionValue.CssText
         }
 
         [Theory]
