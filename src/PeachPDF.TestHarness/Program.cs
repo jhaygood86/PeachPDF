@@ -295,6 +295,83 @@ await SaveShowcaseAsync("border_radius", "Backgrounds & Borders", "Border Radius
     "border-radius from simple uniform rounding to per-corner and elliptical radii, on filled and bordered boxes.",
     radiusHtml, pdfConfig);
 
+// --- Box-shadow showcase ---
+
+const string ShadowCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0; background: #eef1f5 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 1.1em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
+    p.intro { margin: 0 0 0.7em; color: #555; break-after: avoid }
+    table.sw { border-collapse: separate; border-spacing: 0; width: 100%; margin-bottom: 0.3em }
+    table.sw td { padding: 14px 8px 20px; vertical-align: top; width: 25%; text-align: center }
+    .sbox { height: 46px; width: 70px; margin: 6px auto 8px; background: #fff; border-radius: 4px;
+            display: flex; align-items: center; justify-content: center; color: #333; font-size: 7pt }
+    .desc { font-size: 7pt; font-weight: bold; color: #444; margin-bottom: 1px }
+    .css { font-size: 6pt; color: #666; line-height: 1.3; word-break: break-all }
+    </style>
+    """;
+
+string ShadowSwatch(string label, string shadow, string extra = "") =>
+    "<td><div class=\"sbox\" style=\"box-shadow: " + shadow + "; " + extra + "\">box</div>" +
+    "<div class=\"desc\">" + label + "</div>" +
+    "<div class=\"css\">box-shadow: " + shadow + "</div></td>";
+
+string ShadowRow(params string[] cells) => "<table class=\"sw\"><tr>" + string.Concat(cells) + "</tr></table>";
+
+var shadowHtml = "<!DOCTYPE html><html><head>" + ShadowCss + "</head><body>" +
+
+    "<h1>CSS box-shadow Test Page</h1>" +
+    "<p class=\"intro\">Each 70&#215;46 white box carries one or more box-shadow layers. Offsets, blur, spread, color, inset, and multiple layers are exercised.</p>" +
+
+    "<h2>1 — Drop Shadows (offset, no blur)</h2>" +
+    ShadowRow(
+        ShadowSwatch("down-right", "6px 6px 0 #888"),
+        ShadowSwatch("up-left (negative)", "-6px -6px 0 #888"),
+        ShadowSwatch("straight down", "0 6px 0 #b06"),
+        ShadowSwatch("colored", "5px 5px 0 #0a7")
+    ) +
+
+    "<h2>2 — Blur</h2>" +
+    ShadowRow(
+        ShadowSwatch("soft, small (4px)", "3px 3px 4px rgba(0,0,0,.4)"),
+        ShadowSwatch("soft, large (12px)", "4px 4px 12px rgba(0,0,0,.5)"),
+        ShadowSwatch("ambient (no offset)", "0 0 12px rgba(0,0,0,.55)"),
+        ShadowSwatch("lifted card", "0 8px 16px rgba(20,40,80,.35)")
+    ) +
+
+    "<h2>3 — Spread</h2>" +
+    ShadowRow(
+        ShadowSwatch("solid ring (+6px)", "0 0 0 6px #4a90d9"),
+        ShadowSwatch("negative spread", "6px 6px 6px -2px rgba(0,0,0,.6)"),
+        ShadowSwatch("glow (blur + spread)", "0 0 10px 4px rgba(240,160,0,.7)"),
+        ShadowSwatch("halo", "0 0 0 3px #f0a, 0 0 0 6px #a0f")
+    ) +
+
+    "<h2>4 — Inset</h2>" +
+    ShadowRow(
+        ShadowSwatch("inset vignette", "inset 0 0 14px rgba(0,0,0,.55)", "background: #fd0"),
+        ShadowSwatch("inset top-left", "inset 5px 5px 8px rgba(0,0,0,.45)", "background: #cde"),
+        ShadowSwatch("inset ring", "inset 0 0 0 5px #4a90d9"),
+        ShadowSwatch("pressed", "inset 0 3px 6px rgba(0,0,0,.4)", "background: #ddd")
+    ) +
+
+    "<h2>5 — Multiple Layers &amp; Rounded</h2>" +
+    "<p class=\"intro\">The first-listed layer paints on top. box-shadow honors border-radius.</p>" +
+    ShadowRow(
+        ShadowSwatch("two-tone", "3px 3px 4px #d33, -3px -3px 4px #33d"),
+        ShadowSwatch("elevation stack", "0 1px 2px rgba(0,0,0,.3), 0 6px 14px rgba(0,0,0,.25)"),
+        ShadowSwatch("rounded + blur", "5px 6px 10px rgba(0,0,0,.45)", "border-radius: 22px"),
+        ShadowSwatch("neumorphic", "6px 6px 12px #b9c2cf, -6px -6px 12px #ffffff", "background: #eef1f5; border-radius: 12px")
+    ) +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("box_shadow", "Backgrounds & Borders", "Box Shadow",
+    "box-shadow: drop shadows, blur, spread, inset, colored and multiple layered shadows, with border-radius — blur approximated as vector geometry.",
+    shadowHtml, pdfConfig);
+
 // --- background-origin + background-clip showcase ---
 
 const string OriginCss = """

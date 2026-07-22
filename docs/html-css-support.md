@@ -266,6 +266,16 @@ Percentages are relative to the border-box width (horizontal radius) and height 
 
 Known limitation: `double`/`groove`/`ridge` combined with `border-radius` on the same edge falls back to a single solid-colored stroke at the full border width — full rounded rendering of these three styles (two concentric arcs, or a two-tone beveled arc) is out of scope for CSS1 compliance.
 
+### Box Shadow
+
+| Property | MDN Reference | Notes |
+|----------|--------------|-------|
+| `box-shadow` | [box-shadow](https://developer.mozilla.org/en-US/docs/Web/CSS/box-shadow) | Comma-separated list of shadow layers, each `inset? <offset-x> <offset-y> <blur-radius>? <spread-radius>? <color>?`. Supports outset (drop) and `inset` shadows, negative offsets, negative spread, multiple layers, and an omitted color (which uses the element's own `color`, i.e. `currentColor`). Blur and spread may use any `<length>` unit (including `em`/`rem`). The first-listed layer paints on top. Honors `border-radius`. **Blur is a vector approximation** (PDF has no native blur filter): the falloff is rendered as concentric overlapping fills ramping opacity over the blur radius, which reads correctly for typical UI shadows but is not a true Gaussian. An outset shadow fills its whole shape behind the box rather than knocking out the box's own area, so it can show through a fully transparent element; a rounded `inset` shadow's inner edge is drawn with square corners. |
+
+The first two lengths are the shadow's horizontal and vertical offset; the optional third is the blur radius (must be non-negative) and the optional fourth is the spread radius. Multiple shadows are layered, the first-listed drawn last (on top). An outset shadow paints behind the element's background; an `inset` shadow paints over the background, clipped to the padding box and fading inward.
+
+Blur rendering: PDF has no native blur filter, so a blurred shadow is approximated with vector geometry — a stack of concentric, overlapping shape fills whose accumulated alpha ramps the shadow color from opaque (the interior) to transparent (the outer blur edge), with corners that round off over the blur radius. This reads correctly for typical drop-shadow and soft/neumorphic-shadow use; it is not a true Gaussian blur, so it will not match a browser pixel-for-pixel. Known limitations: an outset shadow is not knocked out from behind the element's own border-box (it relies on an opaque background to hide the overlap, so it can show through a transparent element), a rounded `inset` shadow's inner (hole) edge is drawn with square corners, and `text-shadow` is separate and still unsupported (see [Unsupported CSS Features](#unsupported-css-features)).
+
 ### Transforms
 
 | Property | MDN Reference | Notes |
