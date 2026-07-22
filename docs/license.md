@@ -63,6 +63,14 @@ The following fonts are embedded in the `PeachPDF.Tests` project **solely as tes
 | Source Code Pro | [SIL OFL 1.1](https://openfontlicense.org/) |
 | Source Sans 3 | [SIL OFL 1.1](https://openfontlicense.org/) |
 
+### Showcase assets (not distributed)
+
+The following asset is embedded in the `PeachPDF.TestHarness` project **solely to render a showcase** — it is **not shipped in the PeachPDF library or its NuGet package**, and imposes no obligation on applications that consume PeachPDF. Its original license notice is kept intact in the file header and in an accompanying `LICENSE.txt`:
+
+| Asset | License |
+|---|---|
+| [Charts.css](https://chartscss.org) v1.2.0 (© 2020 Rami Yushuvaev) — the pure-CSS charting framework used by the [Charts.css showcase](showcase.html); see `src/PeachPDF.TestHarness/charts.css.LICENSE.txt` | [MIT](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF.TestHarness/charts.css.LICENSE.txt) |
+
 ## License FAQ
 
 ### Can I use PeachPDF in a commercial product?
