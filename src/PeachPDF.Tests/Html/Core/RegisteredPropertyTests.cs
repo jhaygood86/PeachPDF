@@ -135,6 +135,9 @@ namespace PeachPDF.Tests.Html.Core
         [InlineData("<image>", "linear-gradient(red, blue)", true)]
         [InlineData("<image>", "radial-gradient(red, blue)", true)]
         [InlineData("<image>", "conic-gradient(red, blue)", true)]
+        // Hex-color gradient stops (the value tokenizes with '#f00' as a Hash token outside a value context).
+        [InlineData("<image>", "linear-gradient(#f00, #00f)", true)]
+        [InlineData("<image>", "radial-gradient(#abc, #ffcc00)", true)]
         [InlineData("<image>", "red", false)]
         // Extended image functions (issue #229 gap 3): syntactically valid <image> values (not rendered).
         [InlineData("<image>", "image-set(\"a.png\" 1x, \"b.png\" 2x)", true)]

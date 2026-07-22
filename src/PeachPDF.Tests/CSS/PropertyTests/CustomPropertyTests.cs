@@ -30,6 +30,18 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.True(property.HasValue);
         }
 
+        [Theory]
+        [InlineData("--x: #hero", "#hero")]   // an id-shaped hash-token value (CSS Syntax accepts it)
+        [InlineData("--x: #f00", "#f00")]      // a hex color hash
+        public void CustomProperty_HashValue_ParsesAndRoundTrips(string snippet, string expected)
+        {
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("--x", property.Name);
+            Assert.IsType<CustomProperty>(property);
+            Assert.True(property.HasValue);
+            Assert.Equal(expected, property.Value);
+        }
+
         [Fact]
         public void CustomProperty_WithVarReference_RoundTripsLiterally()
         {

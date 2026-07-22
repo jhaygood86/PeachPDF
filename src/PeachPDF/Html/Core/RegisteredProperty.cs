@@ -214,8 +214,9 @@ namespace PeachPDF.Html.Core
                     // Validate through the shared Layer-A <image> grammar (Converters.ImageSourceConverter):
                     // url(), gradients, and the syntactically-valid-but-not-rendered image functions
                     // image-set()/cross-fade()/element() (CSS Images 4 §2) — the same grammar background-image
-                    // and friends use, so registration and property parsing agree.
-                    return Converters.ImageSourceConverter.Convert(CssValueParser.GetCssTokens(value)) is not null;
+                    // and friends use, so registration and property parsing agree. Tokenized in value context
+                    // so hex gradient stops (#f00 / #00f) resolve as Color tokens for the gradient converters.
+                    return Converters.ImageSourceConverter.Convert(CssValueParser.GetCssTokens(value, inValueContext: true)) is not null;
                 case "<time>":
                     // A literal <time> dimension (s/ms) or a <time>-category calc() (CalcParser now models
                     // time units); s/ms are absolute, so a time calc() is always computationally independent.
