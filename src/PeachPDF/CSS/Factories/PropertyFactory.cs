@@ -21,6 +21,13 @@ namespace PeachPDF.CSS
 
         private readonly Dictionary<string, ShorthandCreator> _shorthandsBuilder = new(StringComparer.OrdinalIgnoreCase);
 
+        // Logical shorthands (margin-block, inset, border-inline, …) parse and expand like any other, but are
+        // NOT used to reconstruct a shorthand when serializing a declaration block: they alias the same
+        // physical longhands as their physical counterparts (margin-top/-bottom/…), so letting the serializer
+        // collapse e.g. margin-top+margin-bottom into `margin-block` would change existing output. Excluded
+        // from GetShorthands (the serialization query) only; CreateShorthand/GetLonghands/IsShorthand still work.
+        private readonly HashSet<string> _logicalShorthands = new(StringComparer.OrdinalIgnoreCase);
+
         private readonly FrozenDictionary<string, LonghandCreator> _fonts;
 
         // @property descriptors (syntax / initial-value / inherits). Their values have no fixed CSS grammar
@@ -357,6 +364,124 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.ObjectPosition, () => new ObjectPositionProperty(), true);
             AddLonghand(PropertyNames.Size, () => new PageSizeProperty());
 
+            // CSS Logical Properties and Values Level 1. PeachPDF is always LTR / horizontal-tb,
+            // so each logical property is registered to produce/export the existing physical
+            // longhands (block-start = top, block-end = bottom, inline-start = left,
+            // inline-end = right). Layer B needs no changes since it already handles every
+            // physical longhand.
+
+            // Logical margin longhands (aliases to the physical longhand classes).
+            AddLonghand(PropertyNames.MarginBlockStart, () => new MarginTopProperty(), true);
+            AddLonghand(PropertyNames.MarginBlockEnd, () => new MarginBottomProperty(), true);
+            AddLonghand(PropertyNames.MarginInlineStart, () => new MarginLeftProperty(), true);
+            AddLonghand(PropertyNames.MarginInlineEnd, () => new MarginRightProperty(), true);
+            // Logical margin shorthands.
+            AddLogicalShorthand(PropertyNames.MarginBlock, () => new MarginBlockProperty(),
+                PropertyNames.MarginTop,
+                PropertyNames.MarginBottom);
+            AddLogicalShorthand(PropertyNames.MarginInline, () => new MarginInlineProperty(),
+                PropertyNames.MarginLeft,
+                PropertyNames.MarginRight);
+
+            // Logical padding longhands (aliases to the physical longhand classes).
+            AddLonghand(PropertyNames.PaddingBlockStart, () => new PaddingTopProperty(), true);
+            AddLonghand(PropertyNames.PaddingBlockEnd, () => new PaddingBottomProperty(), true);
+            AddLonghand(PropertyNames.PaddingInlineStart, () => new PaddingLeftProperty(), true);
+            AddLonghand(PropertyNames.PaddingInlineEnd, () => new PaddingRightProperty(), true);
+            // Logical padding shorthands.
+            AddLogicalShorthand(PropertyNames.PaddingBlock, () => new PaddingBlockProperty(),
+                PropertyNames.PaddingTop,
+                PropertyNames.PaddingBottom);
+            AddLogicalShorthand(PropertyNames.PaddingInline, () => new PaddingInlineProperty(),
+                PropertyNames.PaddingLeft,
+                PropertyNames.PaddingRight);
+
+            // Logical inset longhands (aliases to the physical coordinate longhand classes).
+            AddLonghand(PropertyNames.InsetBlockStart, () => new TopProperty(), true);
+            AddLonghand(PropertyNames.InsetBlockEnd, () => new BottomProperty(), true);
+            AddLonghand(PropertyNames.InsetInlineStart, () => new LeftProperty(), true);
+            AddLonghand(PropertyNames.InsetInlineEnd, () => new RightProperty(), true);
+            // Inset shorthands.
+            AddLogicalShorthand(PropertyNames.Inset, () => new InsetProperty(),
+                PropertyNames.Top,
+                PropertyNames.Right,
+                PropertyNames.Bottom,
+                PropertyNames.Left);
+            AddLogicalShorthand(PropertyNames.InsetBlock, () => new InsetBlockProperty(),
+                PropertyNames.Top,
+                PropertyNames.Bottom);
+            AddLogicalShorthand(PropertyNames.InsetInline, () => new InsetInlineProperty(),
+                PropertyNames.Left,
+                PropertyNames.Right);
+
+            // Logical per-edge border longhands (aliases to the physical longhand classes).
+            AddLonghand(PropertyNames.BorderBlockStartWidth, () => new BorderTopWidthProperty(), true);
+            AddLonghand(PropertyNames.BorderBlockStartStyle, () => new BorderTopStyleProperty());
+            AddLonghand(PropertyNames.BorderBlockStartColor, () => new BorderTopColorProperty(), true);
+            AddLonghand(PropertyNames.BorderBlockEndWidth, () => new BorderBottomWidthProperty(), true);
+            AddLonghand(PropertyNames.BorderBlockEndStyle, () => new BorderBottomStyleProperty());
+            AddLonghand(PropertyNames.BorderBlockEndColor, () => new BorderBottomColorProperty(), true);
+            AddLonghand(PropertyNames.BorderInlineStartWidth, () => new BorderLeftWidthProperty(), true);
+            AddLonghand(PropertyNames.BorderInlineStartStyle, () => new BorderLeftStyleProperty());
+            AddLonghand(PropertyNames.BorderInlineStartColor, () => new BorderLeftColorProperty(), true);
+            AddLonghand(PropertyNames.BorderInlineEndWidth, () => new BorderRightWidthProperty(), true);
+            AddLonghand(PropertyNames.BorderInlineEndStyle, () => new BorderRightStyleProperty());
+            AddLonghand(PropertyNames.BorderInlineEndColor, () => new BorderRightColorProperty(), true);
+
+            // Logical per-edge border shorthands (aliases to the physical edge shorthand classes).
+            AddLogicalShorthand(PropertyNames.BorderBlockStart, () => new BorderTopProperty(),
+                PropertyNames.BorderTopWidth,
+                PropertyNames.BorderTopStyle,
+                PropertyNames.BorderTopColor);
+            AddLogicalShorthand(PropertyNames.BorderBlockEnd, () => new BorderBottomProperty(),
+                PropertyNames.BorderBottomWidth,
+                PropertyNames.BorderBottomStyle,
+                PropertyNames.BorderBottomColor);
+            AddLogicalShorthand(PropertyNames.BorderInlineStart, () => new BorderLeftProperty(),
+                PropertyNames.BorderLeftWidth,
+                PropertyNames.BorderLeftStyle,
+                PropertyNames.BorderLeftColor);
+            AddLogicalShorthand(PropertyNames.BorderInlineEnd, () => new BorderRightProperty(),
+                PropertyNames.BorderRightWidth,
+                PropertyNames.BorderRightStyle,
+                PropertyNames.BorderRightColor);
+
+            // Logical two-edge border shorthands (both block/inline edges the same value).
+            AddLogicalShorthand(PropertyNames.BorderBlock, () => new BorderBlockProperty(),
+                PropertyNames.BorderTopWidth,
+                PropertyNames.BorderTopStyle,
+                PropertyNames.BorderTopColor,
+                PropertyNames.BorderBottomWidth,
+                PropertyNames.BorderBottomStyle,
+                PropertyNames.BorderBottomColor);
+            AddLogicalShorthand(PropertyNames.BorderInline, () => new BorderInlineProperty(),
+                PropertyNames.BorderLeftWidth,
+                PropertyNames.BorderLeftStyle,
+                PropertyNames.BorderLeftColor,
+                PropertyNames.BorderRightWidth,
+                PropertyNames.BorderRightStyle,
+                PropertyNames.BorderRightColor);
+
+            // Logical two-edge border width/style/color shorthands.
+            AddLogicalShorthand(PropertyNames.BorderBlockWidth, () => new BorderBlockWidthProperty(),
+                PropertyNames.BorderTopWidth,
+                PropertyNames.BorderBottomWidth);
+            AddLogicalShorthand(PropertyNames.BorderBlockStyle, () => new BorderBlockStyleProperty(),
+                PropertyNames.BorderTopStyle,
+                PropertyNames.BorderBottomStyle);
+            AddLogicalShorthand(PropertyNames.BorderBlockColor, () => new BorderBlockColorProperty(),
+                PropertyNames.BorderTopColor,
+                PropertyNames.BorderBottomColor);
+            AddLogicalShorthand(PropertyNames.BorderInlineWidth, () => new BorderInlineWidthProperty(),
+                PropertyNames.BorderLeftWidth,
+                PropertyNames.BorderRightWidth);
+            AddLogicalShorthand(PropertyNames.BorderInlineStyle, () => new BorderInlineStyleProperty(),
+                PropertyNames.BorderLeftStyle,
+                PropertyNames.BorderRightStyle);
+            AddLogicalShorthand(PropertyNames.BorderInlineColor, () => new BorderInlineColorProperty(),
+                PropertyNames.BorderLeftColor,
+                PropertyNames.BorderRightColor);
+
             _fontsBuilder.Add(PropertyNames.Src, () => new SrcProperty());
             _fontsBuilder.Add(PropertyNames.UnicodeRange, () => new UnicodeRangeProperty());
 
@@ -381,6 +506,14 @@ namespace PeachPDF.CSS
         {
             _shorthandsBuilder.Add(name, creator);
             _mappingsBuilder.Add(name, longhands);
+        }
+
+        // A logical shorthand: registered for parsing/expansion, but excluded from serialization reconstruction
+        // (see the _logicalShorthands field comment).
+        private void AddLogicalShorthand(string name, ShorthandCreator creator, params string[] longhands)
+        {
+            AddShorthand(name, creator, longhands);
+            _logicalShorthands.Add(name);
         }
 
         private void AddLonghand(string name, LonghandCreator creator, bool animatable = false, bool font = false)
@@ -462,7 +595,10 @@ namespace PeachPDF.CSS
 
         public IEnumerable<string> GetShorthands(string name)
         {
-            return from mapping in _mappings where mapping.Value.Contains(name, StringComparison.OrdinalIgnoreCase) select mapping.Key;
+            return from mapping in _mappings
+                   where !_logicalShorthands.Contains(mapping.Key)
+                         && mapping.Value.Contains(name, StringComparison.OrdinalIgnoreCase)
+                   select mapping.Key;
         }
 
         private delegate Property LonghandCreator();

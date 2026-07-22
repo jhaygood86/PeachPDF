@@ -220,6 +220,26 @@ Form elements are rendered as static boxes. There is no interactive behavior —
 | `padding` | [padding](https://developer.mozilla.org/en-US/docs/Web/CSS/padding) | Shorthand and all four longhands (`padding-top`, `padding-right`, `padding-bottom`, `padding-left`) are supported |
 | `box-sizing` | [box-sizing](https://developer.mozilla.org/en-US/docs/Web/CSS/box-sizing) | `content-box` and `border-box` are supported |
 
+#### Logical box-model properties
+
+The [CSS logical box-model properties](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_logical_properties_and_values) are supported and resolve to their physical equivalents. PeachPDF lays out as `writing-mode: horizontal-tb` / `direction: ltr`, so the mapping is fixed: **block-start → top, block-end → bottom, inline-start → left, inline-end → right**.
+
+| Logical property | Resolves to | Notes |
+|------------------|-------------|-------|
+| `margin-block` / `margin-inline` | `margin-top`+`margin-bottom` / `margin-left`+`margin-right` | 1–2 values (1 applies to both edges) |
+| `margin-block-start` / `-end`, `margin-inline-start` / `-end` | `margin-top`/`-bottom`/`-left`/`-right` | single edge |
+| `padding-block` / `padding-inline` (+ `-start`/`-end` longhands) | the physical `padding-*` edges | same 1–2-value / single-edge model as margin |
+| `inset` | `top`+`right`+`bottom`+`left` | 1–4 values (the standard box-edge shorthand) |
+| `inset-block` / `inset-inline` (+ `-start`/`-end` longhands) | the physical `top`/`right`/`bottom`/`left` edges | 1–2-value / single-edge |
+| `border-block-start` / `-end`, `border-inline-start` / `-end` | the physical `border-top`/`-right`/`-bottom`/`-left` edge shorthands | `<width> <style> <color>` |
+| `border-block` / `border-inline` | both block / both inline edges | one `<width> <style> <color>` applied to both edges |
+| `border-block-width` / `-style` / `-color` (and `border-inline-*`) | the two physical edge width/style/color longhands | 1–2 values |
+| `border-block-start-width` / `-style` / `-color` (all four edges) | the physical per-edge `border-*-width`/`-style`/`-color` longhands | single edge |
+
+Because these map to the physical longhands, a logical and a physical declaration for the same edge cascade together (last-declared wins). When a declaration block is serialized back to CSS, the physical longhands are used — a logical shorthand is never reconstructed from them.
+
+> **Limitation:** the logical→physical mapping is fixed to LTR / horizontal-tb; it does not vary with `direction` or `writing-mode`. Under `direction: rtl` (or a vertical writing mode) the inline/block edges are therefore *not* remapped as the spec requires — `margin-inline-start` always resolves to `margin-left`, never `margin-right`. This is inherent to PeachPDF's fixed layout orientation (see [`direction`](#positioning) support, which is itself partial).
+
 ### Borders
 
 | Property | MDN Reference | Notes |

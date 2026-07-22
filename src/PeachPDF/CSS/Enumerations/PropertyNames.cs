@@ -248,5 +248,58 @@ namespace PeachPDF.CSS
         public static readonly string ObjectFit = "object-fit";
         public static readonly string ObjectPosition = "object-position";
         public static readonly string Size = "size";
+
+        // CSS Logical Properties and Values Level 1. PeachPDF is always LTR / horizontal-tb,
+        // so each logical property maps 1:1 to a physical one (block-start = top,
+        // block-end = bottom, inline-start = left, inline-end = right) and is registered to
+        // produce/export the existing physical longhands.
+        public static readonly string MarginBlock = "margin-block";
+        public static readonly string MarginBlockStart = "margin-block-start";
+        public static readonly string MarginBlockEnd = "margin-block-end";
+        public static readonly string MarginInline = "margin-inline";
+        public static readonly string MarginInlineStart = "margin-inline-start";
+        public static readonly string MarginInlineEnd = "margin-inline-end";
+
+        public static readonly string PaddingBlock = "padding-block";
+        public static readonly string PaddingBlockStart = "padding-block-start";
+        public static readonly string PaddingBlockEnd = "padding-block-end";
+        public static readonly string PaddingInline = "padding-inline";
+        public static readonly string PaddingInlineStart = "padding-inline-start";
+        public static readonly string PaddingInlineEnd = "padding-inline-end";
+
+        public static readonly string Inset = "inset";
+        public static readonly string InsetBlock = "inset-block";
+        public static readonly string InsetBlockStart = "inset-block-start";
+        public static readonly string InsetBlockEnd = "inset-block-end";
+        public static readonly string InsetInline = "inset-inline";
+        public static readonly string InsetInlineStart = "inset-inline-start";
+        public static readonly string InsetInlineEnd = "inset-inline-end";
+
+        public static readonly string BorderBlock = "border-block";
+        public static readonly string BorderBlockStart = "border-block-start";
+        public static readonly string BorderBlockEnd = "border-block-end";
+        public static readonly string BorderInline = "border-inline";
+        public static readonly string BorderInlineStart = "border-inline-start";
+        public static readonly string BorderInlineEnd = "border-inline-end";
+
+        public static readonly string BorderBlockWidth = "border-block-width";
+        public static readonly string BorderBlockStyle = "border-block-style";
+        public static readonly string BorderBlockColor = "border-block-color";
+        public static readonly string BorderInlineWidth = "border-inline-width";
+        public static readonly string BorderInlineStyle = "border-inline-style";
+        public static readonly string BorderInlineColor = "border-inline-color";
+
+        public static readonly string BorderBlockStartWidth = "border-block-start-width";
+        public static readonly string BorderBlockStartStyle = "border-block-start-style";
+        public static readonly string BorderBlockStartColor = "border-block-start-color";
+        public static readonly string BorderBlockEndWidth = "border-block-end-width";
+        public static readonly string BorderBlockEndStyle = "border-block-end-style";
+        public static readonly string BorderBlockEndColor = "border-block-end-color";
+        public static readonly string BorderInlineStartWidth = "border-inline-start-width";
+        public static readonly string BorderInlineStartStyle = "border-inline-start-style";
+        public static readonly string BorderInlineStartColor = "border-inline-start-color";
+        public static readonly string BorderInlineEndWidth = "border-inline-end-width";
+        public static readonly string BorderInlineEndStyle = "border-inline-end-style";
+        public static readonly string BorderInlineEndColor = "border-inline-end-color";
     }
 }
