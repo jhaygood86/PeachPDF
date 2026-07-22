@@ -13,5 +13,6 @@ namespace PeachPDF.CSS
         public static readonly string Namespace = "namespace";
         public static readonly string Page = "page";
         public static readonly string Container = "container";
+        public static readonly string Property = "property";
     }
 }

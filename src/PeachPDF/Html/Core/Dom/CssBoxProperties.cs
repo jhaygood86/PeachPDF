@@ -1547,11 +1547,33 @@ namespace PeachPDF.Html.Core.Dom
         {
             if (p == null) return;
 
-            // Custom properties are always inherited, regardless of the `everything` special case.
-            // Cloned (not shared) so a child's local override never mutates the parent's or a sibling's dictionary.
-            CustomProperties = p.CustomProperties is { Count: > 0 }
-                ? new Dictionary<string, string>(p.CustomProperties)
-                : null;
+            // Custom properties are inherited by default. Cloned (not shared) so a child's local override
+            // never mutates the parent's or a sibling's dictionary. A property registered via @property with
+            // `inherits: false` is the exception (CSS Properties & Values API §2.1): it does NOT inherit — the
+            // child instead resolves it to its registered initial-value (via the var resolver), so it is
+            // dropped from the inherited copy here.
+            if (p.CustomProperties is { Count: > 0 } parentCustom)
+            {
+                var registered = p.HtmlContainer?.RegisteredProperties;
+                if (registered is { Count: > 0 })
+                {
+                    Dictionary<string, string>? copy = null;
+                    foreach (var (customName, customValue) in parentCustom)
+                    {
+                        if (registered.TryGetValue(customName, out var reg) && !reg.Inherits) continue;
+                        (copy ??= new Dictionary<string, string>(parentCustom.Count))[customName] = customValue;
+                    }
+                    CustomProperties = copy;
+                }
+                else
+                {
+                    CustomProperties = new Dictionary<string, string>(parentCustom);
+                }
+            }
+            else
+            {
+                CustomProperties = null;
+            }
 
             BorderSpacing = p.BorderSpacing;
             BorderCollapse = p.BorderCollapse;

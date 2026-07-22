@@ -34,6 +34,14 @@ namespace PeachPDF.Html.Core.Parse
         internal readonly record struct VarResolution(bool Success, string? Value);
 
         /// <summary>
+        /// Optional <c>@property</c> registry context: supplies a registered custom property's
+        /// <c>initial-value</c> when the property isn't set on the node, and validates a set value against the
+        /// registered <c>syntax</c> (a mismatch is invalid at computed-value time and also falls back to the
+        /// initial-value). Null on paths with no registry (e.g. standalone SVG), which simply skip both.
+        /// </summary>
+        internal sealed record VarContext(IReadOnlyDictionary<string, RegisteredProperty> Registered, CssValueParser ValueParser);
+
+        /// <summary>
         /// Single-shot convenience: resolves every <c>var()</c> in <paramref name="value"/> against
         /// <paramref name="node"/>'s custom properties, returning the substituted string, or null if the
         /// value is guaranteed-invalid. Used where no cross-declaration cache sharing is needed (e.g. the
@@ -52,7 +60,7 @@ namespace PeachPDF.Html.Core.Parse
         /// The <c>resolvedCache</c>/<c>resolving</c>/<c>cyclic</c> triple is caller-owned so multiple
         /// declarations on the same node share cycle detection.
         /// </summary>
-        internal static VarResolution Substitute(ICssDomNode node, string value, Dictionary<string, string> resolvedCache, HashSet<string> resolving, HashSet<string> cyclic)
+        internal static VarResolution Substitute(ICssDomNode node, string value, Dictionary<string, string> resolvedCache, HashSet<string> resolving, HashSet<string> cyclic, VarContext? context = null)
         {
             if (value.IndexOf("var(", StringComparison.OrdinalIgnoreCase) < 0)
                 return new VarResolution(true, value);
@@ -65,13 +73,13 @@ namespace PeachPDF.Html.Core.Parse
                 {
                     var (name, fallback) = SplitFirstTopLevelComma(value, argsStart, callEnd - 1);
 
-                    if (TryResolveCustomProperty(node, name, resolvedCache, resolving, cyclic, out var found))
+                    if (TryResolveCustomProperty(node, name, resolvedCache, resolving, cyclic, context, out var found))
                     {
                         sb.Append(found);
                     }
                     else if (fallback != null)
                     {
-                        var fallbackResult = Substitute(node, fallback, resolvedCache, resolving, cyclic);
+                        var fallbackResult = Substitute(node, fallback, resolvedCache, resolving, cyclic, context);
                         if (!fallbackResult.Success) return new VarResolution(false, null);
                         sb.Append(fallbackResult.Value);
                     }
@@ -110,7 +118,7 @@ namespace PeachPDF.Html.Core.Parse
         /// this permanent marker, the fallback used to locally satisfy the mid-cycle lookup would get cached
         /// as if it were --self's legitimately resolved value.
         /// </summary>
-        private static bool TryResolveCustomProperty(ICssDomNode node, string name, Dictionary<string, string> resolvedCache, HashSet<string> resolving, HashSet<string> cyclic, out string? value)
+        private static bool TryResolveCustomProperty(ICssDomNode node, string name, Dictionary<string, string> resolvedCache, HashSet<string> resolving, HashSet<string> cyclic, VarContext? context, out string? value)
         {
             if (cyclic.Contains(name))
             {
@@ -120,10 +128,14 @@ namespace PeachPDF.Html.Core.Parse
 
             if (resolvedCache.TryGetValue(name, out value)) return true;
 
+            RegisteredProperty? registered = null;
+            context?.Registered.TryGetValue(name, out registered);
+
             if (node.CustomProperties == null || !node.CustomProperties.TryGetValue(name, out var rawValue))
             {
-                value = null;
-                return false;
+                // Not set on this node. A registered property (typed or universal) falls back to its
+                // initial-value (CSS Properties & Values API §2.2). Otherwise it is guaranteed-invalid.
+                return TryUseInitialValue(node, name, registered, resolvedCache, resolving, cyclic, context, out value);
             }
 
             if (!resolving.Add(name))
@@ -133,7 +145,7 @@ namespace PeachPDF.Html.Core.Parse
                 return false;
             }
 
-            var result = Substitute(node, rawValue, resolvedCache, resolving, cyclic);
+            var result = Substitute(node, rawValue, resolvedCache, resolving, cyclic, context);
             resolving.Remove(name);
 
             if (cyclic.Contains(name) || !result.Success)
@@ -143,8 +155,34 @@ namespace PeachPDF.Html.Core.Parse
                 return false;
             }
 
+            // A set value that doesn't match the registered syntax is invalid at computed-value time and
+            // falls back to the initial-value (CSS Properties & Values API §2.2 "computationally invalid").
+            if (registered is not null && context is not null && !registered.Accepts(result.Value!, context.ValueParser))
+                return TryUseInitialValue(node, name, registered, resolvedCache, resolving, cyclic, context, out value);
+
             resolvedCache[name] = value = result.Value!;
             return true;
+        }
+
+        /// <summary>
+        /// Resolves a registered property's <c>initial-value</c> (itself run through substitution for safety)
+        /// and caches it under <paramref name="name"/>. Returns false (guaranteed-invalid) when there is no
+        /// registration, no initial-value, or the initial-value itself fails to resolve.
+        /// </summary>
+        private static bool TryUseInitialValue(ICssDomNode node, string name, RegisteredProperty? registered, Dictionary<string, string> resolvedCache, HashSet<string> resolving, HashSet<string> cyclic, VarContext? context, out string? value)
+        {
+            if (registered?.InitialValue is { } initial)
+            {
+                var initialResult = Substitute(node, initial, resolvedCache, resolving, cyclic, context);
+                if (initialResult.Success)
+                {
+                    resolvedCache[name] = value = initialResult.Value!;
+                    return true;
+                }
+            }
+
+            value = null;
+            return false;
         }
 
         /// <summary>

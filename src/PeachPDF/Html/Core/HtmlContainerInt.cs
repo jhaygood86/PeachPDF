@@ -272,6 +272,14 @@ namespace PeachPDF.Html.Core
         public IReadOnlyList<PageRule> PageRules { get; internal set; } = [];
 
         /// <summary>
+        /// Custom properties registered with <c>@property</c> at-rules, keyed by name (case-sensitive, per
+        /// CSS custom-property naming). Supplies typed custom properties' <c>initial-value</c> during var()
+        /// resolution and governs their <c>inherits</c> behavior. Rebuilt each parse pass.
+        /// </summary>
+        internal IReadOnlyDictionary<string, RegisteredProperty> RegisteredProperties { get; set; }
+            = new Dictionary<string, RegisteredProperty>(StringComparer.Ordinal);
+
+        /// <summary>
         /// The relative-unit resolution context for per-page <c>@page</c> margins, captured by
         /// <c>DomParser.CascadeApplyPageStyles</c> on every parse pass (see
         /// <see cref="Entities.PageLengthContext"/> for why capture-at-parse). Null until a document

@@ -89,6 +89,18 @@ namespace PeachPDF.Html.Core.Parse
                 .SelectMany(s => s.Rules.OfType<PageRule>())
                 .ToList();
 
+            // Collect @property registrations before the cascade runs — InheritStyle (step 2) and var()
+            // resolution both consult the registry. Later duplicate registrations of the same name win
+            // (cascade order), and invalid rules (FromRule returns null) are dropped per spec.
+            var registeredProperties = new Dictionary<string, RegisteredProperty>(StringComparer.Ordinal);
+            foreach (var propertyRule in cssData.Stylesheets.SelectMany(s => s.Rules.OfType<PropertyRule>()))
+            {
+                var registered = RegisteredProperty.FromRule(propertyRule, cssValueParser);
+                if (registered is not null)
+                    registeredProperties[registered.Name] = registered;
+            }
+            htmlContainer.RegisteredProperties = registeredProperties;
+
             // The cascade (CascadeApplyStyles) still recurses into an inline <svg>'s descendants on
             // purpose - inline SVG participates in the document cascade, and its shape boxes need their
             // custom properties (--x) populated for var() to resolve. Likewise CorrectTextBoxes only
@@ -199,8 +211,12 @@ namespace PeachPDF.Html.Core.Parse
                 if (box.HtmlTag.Name.Equals("style", StringComparison.CurrentCultureIgnoreCase) && box.Boxes.Count > 0)
                 {
                     CloneCssData(ref cssData, ref cssDataChanged);
-                    foreach (var child in box.Boxes)
-                        await _cssParser.ParseStyleSheet(cssData, child.Text!);
+                    // The tokenizer splits a <style> element's raw text into multiple data tokens whenever the
+                    // CSS contains a '<' (e.g. an @property `syntax: "<color>"` descriptor, or content: "<"),
+                    // producing several child text boxes. They are one stylesheet and must be concatenated
+                    // before parsing — parsing each fragment separately splits declarations mid-value.
+                    var styleText = string.Concat(box.Boxes.Select(child => child.Text));
+                    await _cssParser.ParseStyleSheet(cssData, styleText);
                 }
             }
 
@@ -954,10 +970,18 @@ namespace PeachPDF.Html.Core.Parse
         {
             var rawValue = prop.Value switch
             {
-                CssConstants.Inherit or CssConstants.Unset // custom properties are always inherited
+                CssConstants.Inherit // explicit inherit always takes the parent's value
                     => box.ParentBox?.CustomProperties != null &&
                        box.ParentBox.CustomProperties.TryGetValue(prop.Name, out var pv)
                         ? pv
+                        : null,
+                // unset = inherit if the property inherits (the default, and every unregistered custom
+                // property), else initial (=> absent here, then resolved to its initial-value via @property).
+                CssConstants.Unset
+                    => CustomPropertyInherits(box, prop.Name) &&
+                       box.ParentBox?.CustomProperties != null &&
+                       box.ParentBox.CustomProperties.TryGetValue(prop.Name, out var uv)
+                        ? uv
                         : null,
                 CssConstants.Initial
                     => null, // guaranteed-invalid value => property becomes absent
@@ -977,6 +1001,18 @@ namespace PeachPDF.Html.Core.Parse
         }
 
         /// <summary>
+        /// Whether a custom property inherits: true for every unregistered custom property (the CSS default)
+        /// and for one registered via <c>@property</c> with <c>inherits: true</c>; false only when registered
+        /// with <c>inherits: false</c>.
+        /// </summary>
+        private static bool CustomPropertyInherits(CssBox box, string name)
+        {
+            return box.HtmlContainer?.RegisteredProperties is not { } registered
+                   || !registered.TryGetValue(name, out var reg)
+                   || reg.Inherits;
+        }
+
+        /// <summary>
         /// Resolves every regular property deferred during the cascade's three phases (see
         /// <see cref="AssignCssBlock"/>) now that this box's custom properties reflect their FINAL cascaded
         /// (though not yet var()-resolved) values. Resolution is graph-based and memoized per box via a shared
@@ -992,9 +1028,14 @@ namespace PeachPDF.Html.Core.Parse
             var resolving = new HashSet<string>();
             var cyclic = new HashSet<string>();
 
+            var registered = box.HtmlContainer?.RegisteredProperties;
+            var context = registered is { Count: > 0 }
+                ? new CssVarResolver.VarContext(registered, valueParser)
+                : null;
+
             foreach (var (name, rawValue) in pendingVarProperties)
             {
-                var result = CssVarResolver.Substitute(box, rawValue, resolvedCache, resolving, cyclic);
+                var result = CssVarResolver.Substitute(box, rawValue, resolvedCache, resolving, cyclic, context);
                 var finalValue = result.Success ? result.Value : GetGuaranteedInvalidFallback(box, name);
 
                 if (finalValue is not null)
