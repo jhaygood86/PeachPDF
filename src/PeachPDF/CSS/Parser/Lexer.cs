@@ -948,7 +948,12 @@ namespace PeachPDF.CSS
             // through to the shared range handling below.
             if (StringBuffer.Length != 6 && current == Symbols.QuestionMark)
             {
-                for (var i = 0; i < 6 - StringBuffer.Length; i++)
+                // The wildcard budget must be captured up front: appending to StringBuffer inside the loop
+                // would otherwise shrink a "6 - StringBuffer.Length" bound on every iteration, so only half
+                // the available wildcards were ever consumed (U+?????? stopped after three).
+                var wildcards = 6 - StringBuffer.Length;
+
+                for (var i = 0; i < wildcards; i++)
                 {
                     if (current != Symbols.QuestionMark)
                     {

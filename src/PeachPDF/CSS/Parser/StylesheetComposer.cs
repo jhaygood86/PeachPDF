@@ -67,13 +67,6 @@ namespace PeachPDF.CSS
                     MoveToRuleEnd(ref token);
                     return null;
 
-                // A bare top-level ';' is an empty statement (CSS2.1 core grammar) - a no-op, not the
-                // start of a malformed rule. Falling through to CreateStyle here would feed it into
-                // SelectorConstructor, which has no recovery for an unexpected Semicolon and silently
-                // merges it into (and invalidates) the *next* rule's selector instead.
-                case TokenType.Semicolon:
-                    return null;
-
                 default:
                     return CreateStyle(token);
             }
@@ -1141,6 +1134,26 @@ namespace PeachPDF.CSS
 
             while (token.IsNot(TokenType.EndOfFile, TokenType.CurlyBracketClose))
             {
+                // "Consume a block's contents" discards a <semicolon-token> outright, exactly as it does a
+                // <whitespace-token> (CSS Syntax 3 §5.5.5). Passing it on to CreateStyle instead feeds it to
+                // SelectorConstructor, which has no recovery for an unexpected semicolon: it folds the token
+                // into the next rule's selector and invalidates it, and because the run-on rule keeps
+                // consuming, the block's own closing brace is swallowed and the following sibling rule is
+                // lost with it.
+                //
+                // Deliberately NOT done in CreateRules: "consume a stylesheet's contents" (§5.5.1) has no
+                // <semicolon-token> case, so a stray semicolon at the top level falls to "anything else" and
+                // is consumed into the next qualified rule's prelude, invalidating it. Only a block passes
+                // <semicolon-token> as the stop token to "consume a qualified rule" (§5.5.3). The Acid2
+                // parser-torture block relies on that: its ".parser { m\argin: 2em; };" is followed by
+                // ".parser { height: 3em; }", which must NOT apply.
+                if (token.Type == TokenType.Semicolon)
+                {
+                    token = NextToken();
+                    ParseComments(ref token);
+                    continue;
+                }
+
                 var rule = CreateRule(token);
                 token = NextToken();
                 ParseComments(ref token);
