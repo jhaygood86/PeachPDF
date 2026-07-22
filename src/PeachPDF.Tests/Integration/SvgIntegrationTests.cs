@@ -1288,6 +1288,7 @@ namespace PeachPDF.Tests.Integration
         private const string Green = "0 1 0 rg";
         private const string Blue = "0 0 1 rg";
         private const string Red = "1 0 0 rg";
+        private const string Black = "0 0 0 rg";
 
         // Issue #159: a <style> nested inside an inline <svg> now applies to that SVG's shapes,
         // end-to-end through the full PdfGenerator pipeline.
@@ -1504,6 +1505,61 @@ namespace PeachPDF.Tests.Integration
             var pdf = await GetPdfText(html);
             Assert.Contains(Green, pdf);      // inherited from <g>
             Assert.DoesNotContain(Red, pdf);  // neither the <style> rule nor the presentation attr is used
+        }
+
+        // Issue #205: !important in a lower-specificity <style> rule beats a normal declaration in a
+        // higher-specificity rule (CSS Cascade 4 §6.3), end-to-end. #r (id) has higher specificity than
+        // rect, but the lower-specificity rect rule is !important, so the rect renders green, not red.
+        [Fact]
+        public async Task ImgSvg_ImportantBeatsHigherSpecificityNormal()
+        {
+            var html = ImgSvgDoc("", """<style>#r { fill: #ff0000; } rect { fill: #00ff00 !important; }</style><rect id="r" x="10" y="10" width="80" height="80"/>""");
+            var pdf = await GetPdfText(html);
+            Assert.Contains(Green, pdf);
+            Assert.DoesNotContain(Red, pdf);
+        }
+
+        [Fact]
+        public async Task InlineSvg_ImportantBeatsHigherSpecificityNormal()
+        {
+            var html = InlineSvgDoc("#r { fill: #ff0000; } rect { fill: #00ff00 !important; }", """<rect id="r" x="10" y="10" width="80" height="80"/>""");
+            var pdf = await GetPdfText(html);
+            Assert.Contains(Green, pdf);
+            Assert.DoesNotContain(Red, pdf);
+        }
+
+        // Issue #230: `fill: revert` in a <style> rule now parses (the paint converter accepts CSS-wide
+        // keywords) and rolls the author cascade back to a lower origin. fill is inherited, so it computes to
+        // the parent <g>'s green, suppressing the rect's own presentation red - an SVG presentation attribute
+        // is itself author origin (SVG 2 §6.3), so revert rolls back past it too.
+        [Fact]
+        public async Task ImgSvg_FillRevert_ComputesToInherited_NotPresentationAttribute()
+        {
+            var html = ImgSvgDoc("", """<style>rect { fill: revert; }</style><g fill="#00ff00"><rect x="10" y="10" width="80" height="80" fill="#ff0000"/></g>""");
+            var pdf = await GetPdfText(html);
+            Assert.Contains(Green, pdf);      // inherited from <g>
+            Assert.DoesNotContain(Red, pdf);  // the rect's presentation attr is suppressed (revert rolled past it)
+        }
+
+        // Issue #230: `fill: inherit` in a <style> rule now parses and takes the parent <g>'s green.
+        [Fact]
+        public async Task ImgSvg_FillInherit_TakesParentValue()
+        {
+            var html = ImgSvgDoc("", """<style>rect { fill: inherit; }</style><g fill="#00ff00"><rect x="10" y="10" width="80" height="80" fill="#ff0000"/></g>""");
+            var pdf = await GetPdfText(html);
+            Assert.Contains(Green, pdf);
+            Assert.DoesNotContain(Red, pdf);
+        }
+
+        // Issue #230: `fill: initial` in a <style> rule now parses and computes to fill's SVG initial value
+        // (black) - NOT the inherited red - even when an ancestor sets fill.
+        [Fact]
+        public async Task ImgSvg_FillInitial_ComputesToBlack_NotInherited()
+        {
+            var html = ImgSvgDoc("", """<style>rect { fill: initial; }</style><g fill="#ff0000"><rect x="10" y="10" width="80" height="80"/></g>""");
+            var pdf = await GetPdfText(html);
+            Assert.Contains(Black, pdf);      // fill's initial value
+            Assert.DoesNotContain(Red, pdf);  // NOT the ancestor's inherited red
         }
 
         // A nested data:image/svg+xml document (an <image> inside an outer SVG) is its own standalone SVG,
