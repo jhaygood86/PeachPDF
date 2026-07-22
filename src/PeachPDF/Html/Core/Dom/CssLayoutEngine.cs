@@ -534,7 +534,9 @@ namespace PeachPDF.Html.Core.Dom
             if (box.Width != CssConstants.Auto && !string.IsNullOrEmpty(box.Width)
                 && !(box.Display == CssConstants.Inline && box.Words.Count == 0))
             {
-                width = CssValueParser.ParseLength(box.Width, box.ContainingBlock.Size.Width, box);
+                // Absolute boxes resolve a percentage width against their nearest positioned ancestor
+                // (CSS 2.1 §10.1), consistent with GetBoxHeight and the left/top positioning code.
+                width = CssValueParser.ParseLength(box.Width, PercentageBase(box).Size.Width, box);
             }
 
             if (box is { Width: CssConstants.Auto, Position: not CssConstants.Absolute })
@@ -544,7 +546,23 @@ namespace PeachPDF.Html.Core.Dom
 
             if (box is { Width: CssConstants.Auto, Position: CssConstants.Absolute })
             {
-                width = await GetFitContentWidth(g, box, box.ContainingBlock.Size.Width);
+                var absCb = PercentageBase(box);
+                if (box.Left != CssConstants.Auto && box.Right != CssConstants.Auto)
+                {
+                    // CSS 2.1 §10.3.7: an absolutely-positioned box with auto width but both `left` and
+                    // `right` set fills the space between them in the containing block (rather than shrinking
+                    // to fit its content). This is what sizes a Charts.css area/line `td::before` (auto width,
+                    // `inset: 0`) to cover its cell.
+                    var left = CssValueParser.ParseLength(box.Left, absCb.Size.Width, box);
+                    var right = CssValueParser.ParseLength(box.Right, absCb.Size.Width, box);
+                    // An over-constrained fill (left + right wider than the containing block) clamps to 0, per
+                    // CSS 2.1 §10.3.7 (a used width is never negative).
+                    width = Math.Max(0, absCb.Size.Width - left - right - box.ActualMarginLeft - box.ActualMarginRight - box.ActualBoxSizeIncludedWidth);
+                }
+                else
+                {
+                    width = await GetFitContentWidth(g, box, absCb.Size.Width);
+                }
             }
 
             // Apply max-width constraint (before min-width, so min wins on conflict per CSS 2.1 §10.4)
@@ -564,6 +582,16 @@ namespace PeachPDF.Html.Core.Dom
             return width;
         }
 
+        /// <summary>
+        /// The box against whose size a percentage width/height on <paramref name="box"/> resolves. For an
+        /// absolutely-positioned box that is the nearest positioned ancestor (CSS 2.1 §10.1) — the same box
+        /// its <c>left</c>/<c>top</c> already measure from — rather than <see cref="CssBox.ContainingBlock"/>
+        /// (the nearest in-flow block container), which they differ from when the parent block chain is not
+        /// itself positioned. For every other box the two are the same.
+        /// </summary>
+        private static CssBox PercentageBase(CssBox box) =>
+            box.Position is CssConstants.Absolute ? DomUtils.GetNearestPositionedAncestor(box) : box.ContainingBlock;
+
         public static double? GetBoxHeight(CssBox box)
         {
             var height = box.ActualBoxSizingHeight;
@@ -582,18 +610,39 @@ namespace PeachPDF.Html.Core.Dom
                 height = Math.Max(height, box.Words.Sum(w => w.Height));
             }
 
+            // CSS 2.1 §10.1: percentages on an absolutely-positioned box resolve against its containing
+            // block — the *nearest positioned ancestor's* padding box — not the nearest in-flow block
+            // container that ContainingBlock returns. (Positioning already uses GetNearestPositionedAncestor;
+            // this keeps % height resolution consistent, so e.g. a Charts.css pie slice `td { position:
+            // absolute; height: 100% }` fills its position:relative tbody even though its parent <tr> is
+            // static and zero-height.)
+            var heightCb = PercentageBase(box);
+
             // CSS 2.1 §10.6.3: a definite (non-auto) `height` is the used height regardless of
             // content - content taller than it overflows past ActualBottom (clipped or not per
             // `overflow`), it does not grow the box. This must run BEFORE min-height, not after (as
             // the previous order here had it), so min-height can still win on conflict per §10.7.
             if (CssValueParser.IsValidLength(box.Height))
             {
-                if (!box.ContainingBlock.IsHeightCalculated && box.Height.EndsWith('%'))
+                if (!heightCb.IsHeightCalculated && box.Height.EndsWith('%'))
                 {
                     return null;
                 }
 
-                height = CssValueParser.ParseLength(box.Height, box.ContainingBlock.Size.Height, box) + box.ActualBoxSizeIncludedHeight;
+                height = CssValueParser.ParseLength(box.Height, heightCb.Size.Height, box) + box.ActualBoxSizeIncludedHeight;
+            }
+            else if (box.Position is CssConstants.Absolute
+                     && box.Top != CssConstants.Auto && box.Bottom != CssConstants.Auto
+                     && heightCb.IsHeightCalculated)
+            {
+                // CSS 2.1 §10.6.4: an absolutely-positioned box with auto height but both `top` and `bottom`
+                // set fills the space between them in the containing block. The counterpart of the §10.3.7
+                // width rule above; sizes a Charts.css area/line `td::before` (auto height, `inset: 0`) to
+                // its cell's height.
+                var top = CssValueParser.ParseLength(box.Top, heightCb.Size.Height, box);
+                var bottom = CssValueParser.ParseLength(box.Bottom, heightCb.Size.Height, box);
+                // Over-constrained fill clamps to 0 (a used height is never negative), per CSS 2.1 §10.6.4.
+                height = Math.Max(0, heightCb.Size.Height - top - bottom - box.ActualMarginTop - box.ActualMarginBottom);
             }
             else if (TryGetAspectRatioHeight(box, out var ratioHeight))
             {
@@ -604,9 +653,9 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             if (CssValueParser.IsValidLength(box.MinHeight) &&
-                (box.ContainingBlock.IsHeightCalculated || !box.MinHeight.EndsWith('%')))
+                (heightCb.IsHeightCalculated || !box.MinHeight.EndsWith('%')))
             {
-                var minHeight = CssValueParser.ParseLength(box.MinHeight, box.ContainingBlock.Size.Height, box) + box.ActualBoxSizeIncludedHeight;
+                var minHeight = CssValueParser.ParseLength(box.MinHeight, heightCb.Size.Height, box) + box.ActualBoxSizeIncludedHeight;
 
                 if (minHeight > height)
                 {
@@ -624,7 +673,7 @@ namespace PeachPDF.Html.Core.Dom
         /// border-box height for both <c>content-box</c> and <c>border-box</c> sizing (the included term is 0
         /// for <c>border-box</c>, where <c>Size.Width</c> is already the border-box width).
         /// </summary>
-        private static bool TryGetAspectRatioHeight(CssBox box, out double height)
+        internal static bool TryGetAspectRatioHeight(CssBox box, out double height)
         {
             height = 0;
 

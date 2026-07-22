@@ -163,6 +163,10 @@ namespace PeachPDF.Html.Core
                     return NumericOk(value, v => CssValueParser.GetCssTokens(v).ToInteger() != null);
                 case "<angle>":
                     return NumericOk(value, v => CssValueParser.GetCssTokens(v).ToAngle() != null);
+                case "<ratio>":
+                    // <ratio> = <number [0,∞]> [ / <number [0,∞]> ]? (CSS Values 4 §11) — notably NOT `auto`,
+                    // so `@property { syntax: "<ratio>"; initial-value: auto }` is invalid and the rule drops.
+                    return NumericOk(value, v => AspectRatioGrammar.TryParseRatio(CssValueParser.GetCssTokens(v), out _));
                 case "<color>":
                     return valueParser.IsColorValid(value);
                 case "<custom-ident>":

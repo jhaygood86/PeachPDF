@@ -33,8 +33,41 @@ namespace PeachPDF.CSS
 
             if (i == toks.Length) return hasAuto; // bare `auto`
 
+            // <ratio> = <number> [ / <number> ]?
+            if (!TryRatioCore(toks, ref i, out ratio)) return false;
+
+            // An optional trailing `auto` (the `||` allows either order: `<ratio> auto`).
+            if (i < toks.Length && !hasAuto && IsAuto(toks[i])) i++;
+
+            if (i != toks.Length) return false; // trailing junk
+
+            return true;
+        }
+
+        /// <summary>
+        /// Validates a bare <c>&lt;ratio&gt;</c> value (<c>&lt;number [0,∞]&gt; [ / &lt;number [0,∞]&gt; ]?</c>),
+        /// with no <c>auto</c> — the CSS Values 4 <c>&lt;ratio&gt;</c> data type, as used by the <c>@property</c>
+        /// <c>syntax: "&lt;ratio&gt;"</c> matcher. Distinct from <see cref="TryParse"/>, whose <c>aspect-ratio</c>
+        /// grammar additionally permits <c>auto</c>. On success <paramref name="ratio"/> is the used width/height
+        /// ratio, or null when a term is zero.
+        /// </summary>
+        internal static bool TryParseRatio(IReadOnlyList<Token> tokens, out double? ratio)
+        {
+            ratio = null;
+
+            Token[] toks = tokens.Where(t => t.Type != TokenType.Whitespace).ToArray();
+
+            var i = 0;
+            if (!TryRatioCore(toks, ref i, out ratio)) return false;
+            return i == toks.Length; // no trailing junk (and, since we never consume `auto`, no `auto`)
+        }
+
+        private static bool TryRatioCore(Token[] toks, ref int i, out double? ratio)
+        {
+            ratio = null;
+
             // <number> [ / <number> ]?
-            if (!TryNonNegativeNumber(toks[i], out var width)) return false;
+            if (i >= toks.Length || !TryNonNegativeNumber(toks[i], out var width)) return false;
             double height = 1;
             i++;
 
@@ -44,11 +77,6 @@ namespace PeachPDF.CSS
                 if (i >= toks.Length || !TryNonNegativeNumber(toks[i], out height)) return false;
                 i++;
             }
-
-            // An optional trailing `auto` (the `||` allows either order: `<ratio> auto`).
-            if (i < toks.Length && !hasAuto && IsAuto(toks[i])) i++;
-
-            if (i != toks.Length) return false; // trailing junk
 
             // A zero term degenerates to "no preferred aspect ratio".
             ratio = width <= 0 || height <= 0 ? null : width / height;

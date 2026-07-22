@@ -3845,6 +3845,269 @@ await SaveShowcaseAsync("aspect_ratio", "Layout", "aspect-ratio",
     "CSS aspect-ratio: a box with a definite width and auto height takes its height from the width via the ratio. The ratio-derived height is definite, so a percentage-height child resolves against it — the basis for pure-CSS charts sizing their bars from a ratio-sized container.",
     aspectRatioHtml, pdfConfig);
 
+// ── Charts.css showcase ─────────────────────────────────────────────────────
+// Renders charts with the pure-CSS Charts.css framework (https://chartscss.org, MIT, v1.2.0).
+// The full official stylesheet is embedded verbatim (its MIT header kept intact); the five
+// data-drawing chart types (column, bar, area, line, pie) plus a multi-series example and the
+// documented customizations (extruded 3D bars via stacked box-shadows, a skewY tilt, and
+// shadowed bars via inset+outset box-shadows) are authored with real charts.css markup. This one document exercises @property (the
+// whole palette + typed descriptors), aspect-ratio (every chart takes its height from a
+// ratio-sized tbody), clip-path (area/line fills and the a11y label hiding), box-shadow (the
+// extruded 3D bars), CSS logical properties (axes, spacing), conic/linear gradients, transforms,
+// and flexbox — all together, at once.
+var chartsCss = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "charts.css"));
+
+// A charts.css <td>: the normalized value goes in inline custom properties (0..1), the human
+// label in a <span class="data">. --size drives column/bar/area/line; --start/--end drive pie.
+string ColRow(string label, int pct, string value) =>
+    $"""<tr><th scope="row">{label}</th><td style="--size:calc({pct}/100)"><span class="data">{value}</span></td></tr>""";
+
+string PieRow(double start, double end, string value) =>
+    $"""<tr><td style="--start:{start.ToString("0.####", CultureInfo.InvariantCulture)}; --end:{end.ToString("0.####", CultureInfo.InvariantCulture)}"><span class="data">{value}</span></td></tr>""";
+
+// Multi-series row: two <td>s per row, each a dataset column, coloured by :nth-of-type.
+string MultiRow(string label, int a, int b) =>
+    $"""<tr><th scope="row">{label}</th><td style="--size:calc({a}/100)"><span class="data">{a}</span></td><td style="--size:calc({b}/100)"><span class="data">{b}</span></td></tr>""";
+
+// Area/line rows: each cell's segment rises from the previous point (--start, left edge) to this
+// point (--end, right edge), so consecutive cells share a boundary and the points connect into a
+// sloped area/line rather than flat steps. The first cell is flat (starts at its own value).
+static string F(double v) => v.ToString("0.####", CultureInfo.InvariantCulture);
+string ConnectedRows(string[] labels, int[] vals, string suffix)
+{
+    var rows = new StringBuilder();
+    for (var i = 0; i < vals.Length; i++)
+    {
+        var start = (i > 0 ? vals[i - 1] : vals[i]) / 100.0;
+        var end = vals[i] / 100.0;
+        rows.Append($"""<tr><th scope="row">{labels[i]}</th><td style="--start:{F(start)}; --end:{F(end)}"><span class="data">{vals[i]}{suffix}</span></td></tr>""");
+    }
+    return rows.ToString();
+}
+
+var columnChart = $"""
+    <table class="charts-css column show-heading show-labels show-primary-axis show-4-secondary-axes data-spacing-10">
+      <caption>Quarterly Revenue — 2024 ($M)</caption>
+      <thead><tr><th scope="col">Quarter</th><th scope="col">Revenue</th></tr></thead>
+      <tbody>
+        {ColRow("Q1", 42, "$42M")}
+        {ColRow("Q2", 63, "$63M")}
+        {ColRow("Q3", 55, "$55M")}
+        {ColRow("Q4", 91, "$91M")}
+      </tbody>
+    </table>
+    """;
+
+var barChart = $"""
+    <table class="charts-css bar show-heading show-labels show-primary-axis data-spacing-5" style="--aspect-ratio: 5 / 2">
+      <caption>Language Popularity (% of respondents)</caption>
+      <thead><tr><th scope="col">Language</th><th scope="col">Share</th></tr></thead>
+      <tbody>
+        {ColRow("JavaScript", 95, "95%")}
+        {ColRow("Python", 88, "88%")}
+        {ColRow("Java", 65, "65%")}
+        {ColRow("C#", 60, "60%")}
+        {ColRow("Go", 42, "42%")}
+      </tbody>
+    </table>
+    """;
+
+var areaChart = $"""
+    <table class="charts-css area show-heading show-labels show-primary-axis show-4-secondary-axes">
+      <caption>Monthly Active Users (thousands)</caption>
+      <thead><tr><th scope="col">Month</th><th scope="col">Users</th></tr></thead>
+      <tbody>
+        {ConnectedRows(["Jan", "Feb", "Mar", "Apr", "May", "Jun"], [30, 45, 40, 62, 78, 92], "k")}
+      </tbody>
+    </table>
+    """;
+
+var lineChart = $"""
+    <table class="charts-css line show-heading show-labels show-primary-axis show-4-secondary-axes">
+      <caption>Response Time p95 (ms, lower is better)</caption>
+      <thead><tr><th scope="col">Week</th><th scope="col">p95</th></tr></thead>
+      <tbody>
+        {ConnectedRows(["W1", "W2", "W3", "W4", "W5", "W6"], [80, 72, 58, 61, 44, 35], "")}
+      </tbody>
+    </table>
+    """;
+
+var pieChart = $"""
+    <table class="charts-css pie show-heading show-data-on-hover">
+      <caption>Browser Market Share</caption>
+      <tbody>
+        {PieRow(0.00, 0.35, "35%")}
+        {PieRow(0.35, 0.60, "25%")}
+        {PieRow(0.60, 0.80, "20%")}
+        {PieRow(0.80, 0.92, "12%")}
+        {PieRow(0.92, 1.00, "8%")}
+      </tbody>
+    </table>
+    """;
+
+var multiChart = $"""
+    <table class="charts-css column multiple show-heading show-labels show-primary-axis show-4-secondary-axes data-spacing-10">
+      <caption>Revenue vs. Target by Quarter ($M)</caption>
+      <thead><tr><th scope="col">Quarter</th><th scope="col">Actual</th><th scope="col">Target</th></tr></thead>
+      <tbody>
+        {MultiRow("Q1", 42, 50)}
+        {MultiRow("Q2", 63, 55)}
+        {MultiRow("Q3", 55, 60)}
+        {MultiRow("Q4", 91, 75)}
+      </tbody>
+    </table>
+    """;
+
+// 3D effects — Charts.css documents these as *customization examples* layered on a plain
+// .column chart (https://chartscss.org/customization/3d-effects/), not built-in classes.
+//   • 3D Bars — a stack of ~10 offset box-shadows extrudes each bar's top/right face.
+//   • 3D Tilt — a single skewY() shears the whole chart.
+//   • Charts with Shadows — a white panel + each bar get a rounded inset+outset box-shadow.
+var barsChart = $"""
+    <table class="charts-css column fx-bars data-spacing-10">
+      <tbody>
+        {ColRow("A", 55, "55")}
+        {ColRow("B", 80, "80")}
+        {ColRow("C", 48, "48")}
+        {ColRow("D", 95, "95")}
+      </tbody>
+    </table>
+    """;
+
+var tiltChart = $"""
+    <table class="charts-css column fx-tilt data-spacing-8">
+      <tbody>
+        {ColRow("A", 55, "55")}
+        {ColRow("B", 80, "80")}
+        {ColRow("C", 48, "48")}
+        {ColRow("D", 95, "95")}
+      </tbody>
+    </table>
+    """;
+
+// "Charts with Shadows" — the official example gives the whole tbody and each bar a rounded,
+// inset+outset box-shadow (a raised/pressed look), spacing the bars with margin-inline.
+var shadowChart = $"""
+    <table class="charts-css column fx-shadow hide-data">
+      <tbody>
+        {ColRow("A", 40, "40")}
+        {ColRow("B", 60, "60")}
+        {ColRow("C", 75, "75")}
+        {ColRow("D", 55, "55")}
+        {ColRow("E", 90, "90")}
+      </tbody>
+    </table>
+    """;
+
+// Page chrome + the three "3D effect" recipes (authored on top of the framework, as the
+// Charts.css docs present them). Kept separate from the embedded stylesheet above.
+var chartsPageStyles = """
+    body { font-family: sans-serif; margin: 34px 40px; color: #212529; }
+    h1 { font-size: 22pt; margin: 0 0 4px; }
+    h2 { font-size: 15pt; margin: 26px 0 4px; color: #1864ab; }
+    .lede { color: #555; font-size: 10.5pt; margin: 0 0 8px; }
+    p.note { color: #666; font-size: 9.5pt; margin: 4px 0 14px; }
+    .chart { width: 460px; margin: 6px 0 8px; }
+    .chart.tall { height: 240px; }
+    .chart.square { width: 300px; height: 300px; }
+    .charts-css caption { font-weight: 600; font-size: 11pt; padding-bottom: 8px; text-align: center; }
+    .charts-css .data { font-size: 8pt; color: #333; }
+    .chart.fx { width: 340px; }
+    h3.fx-h { font-size: 11pt; margin: 18px 0 2px; color: #333; font-weight: 600; }
+    .page-break { break-before: page; }
+
+    /* --- 3D effect recipes (Charts.css customization examples) --- */
+    /* 3D Bars: a stack of offset box-shadows extrudes each bar's top-right face. */
+    .charts-css.column.fx-bars tbody tr td {
+      box-shadow:
+        1px -1px 1px lightgrey, 2px -2px 1px lightgrey, 3px -3px 1px lightgrey,
+        4px -4px 1px lightgrey, 5px -5px 1px lightgrey, 6px -6px 1px lightgrey,
+        7px -7px 1px lightgrey, 8px -8px 1px lightgrey, 9px -9px 1px lightgrey,
+        10px -10px 1px lightgrey;
+    }
+    /* 3D Tilt: a single skew on the whole chart. */
+    .charts-css.column.fx-tilt { transform: skewY(-4deg); transform-origin: bottom left; }
+    /* Charts with Shadows: a rounded inset+outset box-shadow on the chart area and each bar. */
+    .charts-css.column.fx-shadow tbody {
+      padding: 30px;
+      border-radius: 10px;
+      background: #fff;
+      box-shadow: inset -5px -5px 10px rgba(0, 0, 0, 0.5), 5px 5px 5px rgba(0, 0, 0, 0.5);
+    }
+    .charts-css.column.fx-shadow tbody td {
+      margin-inline: 10px;
+      border-radius: 10px;
+      box-shadow: inset -5px -5px 10px rgba(0, 0, 0, 0.5), 5px 5px 5px rgba(0, 0, 0, 0.5);
+    }
+    """;
+
+var chartsHtml =
+    "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><style>\n" +
+    chartsCss + "\n" + chartsPageStyles +
+    "</style></head><body>" +
+    "<h1>Charts.css</h1>" +
+    "<p class=\"lede\">Charts rendered purely with CSS via the <a href=\"https://chartscss.org\">Charts.css</a> " +
+    "framework (MIT). A semantic <code>&lt;table&gt;</code> of normalized values becomes a chart through " +
+    "<code>@property</code>, <code>aspect-ratio</code>, <code>clip-path</code>, <code>conic-gradient</code>, " +
+    "logical properties, and flexbox — no script, no canvas, no images.</p>" +
+
+    "<h2>Column</h2>" +
+    "<p class=\"note\">Vertical bars: each <code>td</code> is <code>height: calc(100% * var(--size))</code> " +
+    "of a <code>tbody</code> whose height comes from <code>aspect-ratio: 21/9</code>.</p>" +
+    $"<div class=\"chart\">{columnChart}</div>" +
+
+    "<h2>Bar</h2>" +
+    "<p class=\"note\">Horizontal bars: <code>td</code> is <code>width: calc(100% * var(--size))</code>.</p>" +
+    $"<div class=\"chart\" style=\"height:200px\">{barChart}</div>" +
+
+    "<div class=\"page-break\"></div>" +
+    "<h2>Area</h2>" +
+    "<p class=\"note\">A filled quad per point, drawn by a <code>td::before</code> with " +
+    "<code>clip-path: polygon(...)</code> whose vertices are <code>calc()</code> of the data values.</p>" +
+    $"<div class=\"chart tall\">{areaChart}</div>" +
+
+    "<h2>Line</h2>" +
+    "<p class=\"note\">The same <code>clip-path: polygon()</code> technique, clipped to a thin band " +
+    "(<code>--line-size</code>) so only the connecting line shows.</p>" +
+    $"<div class=\"chart tall\">{lineChart}</div>" +
+
+    "<div class=\"page-break\"></div>" +
+    "<h2>Pie</h2>" +
+    "<p class=\"note\">Each slice is a <code>conic-gradient</code> from <code>var(--start)turn</code> to " +
+    "<code>var(--end)turn</code>, stacked in a square (<code>aspect-ratio: 1</code>) rounded container.</p>" +
+    $"<div class=\"chart square\">{pieChart}</div>" +
+
+    "<h2>Multiple series</h2>" +
+    "<p class=\"note\">Two datasets per row (<code>.multiple</code>): each <code>td</code> is coloured from the " +
+    "<code>--color-1..10</code> palette by <code>:nth-of-type</code>.</p>" +
+    $"<div class=\"chart\">{multiChart}</div>" +
+
+    "<div class=\"page-break\"></div>" +
+    "<h2>3D effects</h2>" +
+    "<p class=\"note\">Charts.css documents 3D looks as CSS customizations layered on a plain column chart — " +
+    "no special classes (see <a href=\"https://chartscss.org/customization/3d-effects/\">chartscss.org</a>).</p>" +
+    "<h3 class=\"fx-h\">3D Bars — a stack of offset <code>box-shadow</code>s</h3>" +
+    "<p class=\"note\">Ten <code>box-shadow</code> layers, each offset one more pixel up-and-right, build the " +
+    "extruded top-right face of every bar.</p>" +
+    $"<div class=\"chart fx\">{barsChart}</div>" +
+    "<h3 class=\"fx-h\">3D Tilt — a single <code>transform: skewY()</code></h3>" +
+    "<p class=\"note\">One skew on the whole chart shears every bar in concert.</p>" +
+    $"<div class=\"chart fx\">{tiltChart}</div>" +
+
+    "<h3 class=\"fx-h\">Charts with Shadows — inset + outset <code>box-shadow</code></h3>" +
+    "<p class=\"note\">The chart area and each bar get a rounded <code>box-shadow</code> combining an inset " +
+    "(inner top-left) and an outset (bottom-right) layer, for a raised, tactile look.</p>" +
+    $"<div class=\"chart fx\">{shadowChart}</div>" +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("charts_css", "Charts & Data Viz", "Charts.css",
+    "The Charts.css framework (MIT) rendering column, bar, area, line, and pie charts — plus a multi-series " +
+    "example and the documented customizations (extruded 3D bars via stacked box-shadows, a skewY tilt, and " +
+    "shadowed bars with inset+outset box-shadow) — purely from CSS. The full official stylesheet is embedded, " +
+    "exercising @property, aspect-ratio, clip-path, box-shadow, logical properties, and conic/linear gradients together.",
+    chartsHtml, pdfConfig);
+
 // The manifest that drives the website's /showcase page (see docs/showcase.html and
 // .github/workflows/pages.yml). Field names are camelCased for Liquid (site.data.showcases).
 var manifestJson = JsonSerializer.Serialize(showcaseManifest,

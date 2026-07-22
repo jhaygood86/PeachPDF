@@ -134,6 +134,43 @@ public class StructuralPseudoClassSelectorTests
     }
 
     [Fact]
+    public async Task NthChild_2nPlus1_WhitespaceSeparatedSign_MatchesSameAsCompactForm()
+    {
+        // CSS Syntax §5.6: when whitespace separates the sign from B, the '+' arrives as a standalone
+        // delim token (`2n + 1`) rather than a signed number (`2n+1`). Both must select the same elements.
+        var html = Html(":nth-child(2n + 1) { background-color: #ff0000; }", "<div><p>1</p><p>2</p><p>3</p><p>4</p></div>");
+        var boxes = await FindAllBoxesByTag(html, "p");
+        Assert.NotEqual("transparent", boxes[0].BackgroundColor);
+        Assert.Equal("transparent", boxes[1].BackgroundColor);
+        Assert.NotEqual("transparent", boxes[2].BackgroundColor);
+        Assert.Equal("transparent", boxes[3].BackgroundColor);
+    }
+
+    [Fact]
+    public async Task NthOfType_10nPlus1_WhitespaceSeparatedSign_MatchesFirstOfType()
+    {
+        // 10n + 1 over 3 elements matches only position 1; proves the spaced sign is parsed (not silently
+        // invalidating the selector, which would leave every element transparent).
+        var html = Html("p:nth-of-type(10n + 1) { background-color: #ff0000; }", "<div><p>1</p><p>2</p><p>3</p></div>");
+        var boxes = await FindAllBoxesByTag(html, "p");
+        Assert.NotEqual("transparent", boxes[0].BackgroundColor);
+        Assert.Equal("transparent", boxes[1].BackgroundColor);
+        Assert.Equal("transparent", boxes[2].BackgroundColor);
+    }
+
+    [Fact]
+    public async Task NthChild_2nMinus1_WhitespaceSeparatedNegativeSign_MatchesOddPositions()
+    {
+        // A spaced negative sign (`2n - 1`) must also parse: 2n-1 selects positions 1 and 3.
+        var html = Html(":nth-child(2n - 1) { background-color: #ff0000; }", "<div><p>1</p><p>2</p><p>3</p><p>4</p></div>");
+        var boxes = await FindAllBoxesByTag(html, "p");
+        Assert.NotEqual("transparent", boxes[0].BackgroundColor);
+        Assert.Equal("transparent", boxes[1].BackgroundColor);
+        Assert.NotEqual("transparent", boxes[2].BackgroundColor);
+        Assert.Equal("transparent", boxes[3].BackgroundColor);
+    }
+
+    [Fact]
     public async Task NthChild_Odd_MatchesOddPositions()
     {
         var html = Html(":nth-child(odd) { background-color: #ff0000; }", "<div><p>1</p><p>2</p><p>3</p></div>");

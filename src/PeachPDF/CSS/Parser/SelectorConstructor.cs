@@ -882,6 +882,13 @@ namespace PeachPDF.CSS
                 {
                     case TokenType.Whitespace:
                         return false;
+                    case TokenType.Delim when token.Data.IsOneOf("+", "-"):
+                        // The An+B offset's sign is a standalone delim token when whitespace separates it
+                        // from B (e.g. `10n + 1`, per CSS Syntax 3 §5.6). The compact form `10n+1` instead
+                        // arrives as a single signed <number>, handled by the Number case below. Without
+                        // this branch a spaced sign fell through to OnBeforeOf and invalidated the selector.
+                        _sign = token.Data == "-" ? -1 : 1;
+                        return false;
                     case TokenType.Number:
                         _valid = _valid && ((NumberToken)token).IsInteger && int.TryParse(token.Data, out _offset);
                         _offset *= _sign;

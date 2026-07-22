@@ -44,6 +44,75 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(0, color.A);
         }
 
+        // ─── CSS Color 4 space-separated rgb()/rgba() with slash-alpha ────────────
+
+        [Fact]
+        public void Rgb_SpaceSeparated_SlashPercentAlpha_FullyOpaque()
+        {
+            var parser = new CssValueParser(new PdfSharpAdapter());
+            var color = parser.GetActualColor("rgb(0 0 0 / 100%)");
+            Assert.Equal(255, color.A);
+            Assert.Equal(0, color.R);
+            Assert.Equal(0, color.G);
+            Assert.Equal(0, color.B);
+        }
+
+        [Fact]
+        public void Rgba_SpaceSeparated_SlashPercentAlpha_HalfAlpha()
+        {
+            var parser = new CssValueParser(new PdfSharpAdapter());
+            var color = parser.GetActualColor("rgba(255 0 0 / 50%)");
+            Assert.Equal(255, color.R);
+            Assert.Equal(0, color.G);
+            Assert.Equal(0, color.B);
+            // 50% of 255 ≈ 128 (rounded).
+            Assert.InRange((int)color.A, 127, 128);
+        }
+
+        [Fact]
+        public void Rgb_SpaceSeparated_SlashNumberAlpha_HalfAlpha()
+        {
+            var parser = new CssValueParser(new PdfSharpAdapter());
+            var color = parser.GetActualColor("rgb(10 20 30 / 0.5)");
+            Assert.Equal(10, color.R);
+            Assert.Equal(20, color.G);
+            Assert.Equal(30, color.B);
+            Assert.InRange((int)color.A, 127, 128);
+        }
+
+        [Fact]
+        public void Rgb_SpaceSeparated_ThreeValues_NoAlpha_IsOpaque()
+        {
+            var parser = new CssValueParser(new PdfSharpAdapter());
+            var color = parser.GetActualColor("rgb(245 245 245)");
+            Assert.Equal(255, color.A);
+            Assert.Equal(245, color.R);
+            Assert.Equal(245, color.G);
+            Assert.Equal(245, color.B);
+        }
+
+        [Fact]
+        public void Rgba_LegacyCommaForm_StillParses()
+        {
+            // Regression guard: the legacy comma form with a decimal alpha must keep working.
+            var parser = new CssValueParser(new PdfSharpAdapter());
+            var color = parser.GetActualColor("rgba(240, 50, 50, 0.75)");
+            Assert.Equal(240, color.R);
+            Assert.Equal(50, color.G);
+            Assert.Equal(50, color.B);
+            // 0.75 * 255 ≈ 191.
+            Assert.InRange((int)color.A, 190, 192);
+        }
+
+        [Fact]
+        public void Rgb_LegacyCommaForm_NoAlpha_IsOpaque()
+        {
+            var parser = new CssValueParser(new PdfSharpAdapter());
+            var color = parser.GetActualColor("rgb(255, 0, 0)");
+            Assert.Equal(255, color.A);
+            Assert.Equal(255, color.R);
+        }
+
         [Fact]
         public async Task BackgroundNoneShorthand_OverridesEarlierBackgroundColor_AtEqualSpecificity()
         {

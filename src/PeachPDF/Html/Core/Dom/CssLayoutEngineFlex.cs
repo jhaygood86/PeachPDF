@@ -46,9 +46,15 @@ namespace PeachPDF.Html.Core.Dom
             _flexBox.ActualRight = _flexBox.Location.X + containerWidth + _flexBox.ActualBoxSizeIncludedWidth;
             _flexBox.ActualBottom = _flexBox.Location.Y;
 
-            // Pre-apply explicit height when set, so ClientBottom is correct for cross-axis sizing
+            // Pre-apply a definite height when one exists, so ClientBottom is correct for cross-axis sizing.
+            // A definite height comes either from an explicit `height` length or — when the height is auto —
+            // from a preferred `aspect-ratio` against the (now-known) definite width (CSS Box Sizing 4 §5).
+            // Both make the container's cross size (row) / main size (column) definite, which stretch and
+            // percentage-height children resolve against — the Charts.css `tbody { aspect-ratio: … }` case.
             bool hasExplicitHeight = CssValueParser.IsValidLength(_flexBox.Height);
-            if (hasExplicitHeight)
+            bool hasDefiniteHeight = hasExplicitHeight
+                || CssLayoutEngine.TryGetAspectRatioHeight(_flexBox, out _);
+            if (hasDefiniteHeight)
             {
                 var fullHeight = CssLayoutEngine.GetBoxHeight(_flexBox) ?? 0;
                 _flexBox.ActualBottom = _flexBox.Location.Y + fullHeight;
@@ -60,11 +66,11 @@ namespace PeachPDF.Html.Core.Dom
 
             // Container cross-axis size (0 when auto/unknown until content lays out)
             double containerCrossSize = _isRow
-                ? (hasExplicitHeight ? _flexBox.ClientBottom - _flexBox.ClientTop : 0)
+                ? (hasDefiniteHeight ? _flexBox.ClientBottom - _flexBox.ClientTop : 0)
                 : containerWidth;
 
             // Whether the main axis has indefinite size (column + auto height = no grow/shrink)
-            bool mainSizeIndefinite = !_isRow && !hasExplicitHeight;
+            bool mainSizeIndefinite = !_isRow && !hasDefiniteHeight;
 
             // Phase 1: collect and order flex items.
             // Anonymous whitespace-only boxes between flex items must be discarded per CSS spec.
@@ -77,7 +83,7 @@ namespace PeachPDF.Html.Core.Dom
 
             if (rawItems.Count == 0)
             {
-                if (!hasExplicitHeight)
+                if (!hasDefiniteHeight)
                     _flexBox.ActualBottom = _flexBox.Location.Y + _flexBox.ActualBoxSizeIncludedHeight;
                 return;
             }
@@ -169,7 +175,7 @@ namespace PeachPDF.Html.Core.Dom
                 ? lines.Max(l => l.CrossOffset + l.CrossSize)
                 : 0;
 
-            if (!hasExplicitHeight)
+            if (!hasDefiniteHeight)
             {
                 if (_isRow)
                     _flexBox.ActualBottom = _flexBox.ClientTop + maxCrossEnd
