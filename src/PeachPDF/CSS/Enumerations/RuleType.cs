@@ -19,6 +19,7 @@ namespace PeachPDF.CSS
         FontFeatureValues,
         Viewport,
         RegionStyle,
-        Container
+        Container,
+        Property
     }
 }

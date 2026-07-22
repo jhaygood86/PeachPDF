@@ -23,6 +23,11 @@ namespace PeachPDF.CSS
 
         private readonly FrozenDictionary<string, LonghandCreator> _fonts;
 
+        // @property descriptors (syntax / initial-value / inherits). Their values have no fixed CSS grammar
+        // (initial-value depends on the syntax; syntax is an arbitrary string), so each is stored raw via an
+        // UnknownProperty (Converters.Any) and validated later against the syntax string in Layer B.
+        private readonly FrozenDictionary<string, LonghandCreator> _propertyDescriptors;
+
         private readonly FrozenDictionary<string, LonghandCreator> _longhands;
 
         private readonly FrozenDictionary<string, string[]> _mappings;
@@ -356,6 +361,15 @@ namespace PeachPDF.CSS
             _fontsBuilder.Add(PropertyNames.UnicodeRange, () => new UnicodeRangeProperty());
 
             _fonts = _fontsBuilder.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
+            var propertyDescriptorsBuilder = new Dictionary<string, LonghandCreator>(StringComparer.OrdinalIgnoreCase)
+            {
+                [PropertyNames.Syntax] = () => new UnknownProperty(PropertyNames.Syntax),
+                [PropertyNames.InitialValue] = () => new UnknownProperty(PropertyNames.InitialValue),
+                [PropertyNames.Inherits] = () => new UnknownProperty(PropertyNames.Inherits),
+            };
+            _propertyDescriptors = propertyDescriptorsBuilder.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
             _longhands = _longhandsBuilder.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
             _mappings = _mappingsBuilder.ToFrozenDictionary();
             _shorthands = _shorthandsBuilder.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
@@ -396,6 +410,11 @@ namespace PeachPDF.CSS
         public Property CreateFont(string name)
         {
             return _fonts.TryGetValue(name, out var propertyCreator) ? propertyCreator() : null;
+        }
+
+        public Property CreatePropertyDescriptor(string name)
+        {
+            return _propertyDescriptors.TryGetValue(name, out var propertyCreator) ? propertyCreator() : null;
         }
 
         public Property CreateViewport(string name)
