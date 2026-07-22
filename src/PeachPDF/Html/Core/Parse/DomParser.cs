@@ -938,8 +938,7 @@ namespace PeachPDF.Html.Core.Parse
                 {
                     // A later plain value supersedes an earlier deferred var() value for the same property.
                     pendingVarProperties.Remove(prop.Name);
-                    if (IsStyleOnElementAllowed(box, prop.Name, value))
-                        CssUtils.SetPropertyValue(valueParser, box, prop.Name, value);
+                    CssUtils.SetPropertyValue(valueParser, box, prop.Name, value);
                 }
             }
         }
@@ -1043,14 +1042,14 @@ namespace PeachPDF.Html.Core.Parse
                     var longhandValue = longhand.HasValue && longhand.Value != CssConstants.Initial
                         ? longhand.Value
                         : CssDefaults.GetInitialValue(longhand.Name);
-                    if (longhandValue is not null && IsStyleOnElementAllowed(box, longhand.Name, longhandValue))
+                    if (longhandValue is not null)
                         CssUtils.SetPropertyValue(valueParser, box, longhand.Name, longhandValue);
                 }
 
                 return;
             }
 
-            if (reparsed is { HasValue: true } property && IsStyleOnElementAllowed(box, name, property.Value))
+            if (reparsed is { HasValue: true } property)
                 CssUtils.SetPropertyValue(valueParser, box, name, property.Value);
         }
 
@@ -1064,38 +1063,6 @@ namespace PeachPDF.Html.Core.Parse
             return CssDefaults.InheritedProperties.Contains(propName) && box.ParentBox != null
                 ? CssUtils.GetPropertyValue(box.ParentBox, propName)
                 : CssDefaults.GetInitialValue(propName);
-        }
-
-        /// <summary>
-        /// Check if the given style is allowed to be set on the given css box.<br/>
-        /// Used to prevent invalid CssBoxes creation like table with inline display style.
-        /// </summary>
-        /// <param name="box">the css box to assign css to</param>
-        /// <param name="key">the style key to check</param>
-        /// <param name="value">the style value to check</param>
-        /// <returns>true - style allowed, false - not allowed</returns>
-        private static bool IsStyleOnElementAllowed(CssBox box, string key, string value)
-        {
-            if (box.HtmlTag == null || key != HtmlConstants.Display) return true;
-
-            if (value is CssConstants.None)
-            {
-                return true;
-            }
-
-            return box.HtmlTag.Name.ToLowerInvariant() switch
-            {
-                HtmlConstants.Table => value == CssConstants.Table,
-                HtmlConstants.Tr => value == CssConstants.TableRow,
-                HtmlConstants.Tbody => value == CssConstants.TableRowGroup,
-                HtmlConstants.Thead => value == CssConstants.TableHeaderGroup,
-                HtmlConstants.Tfoot => value == CssConstants.TableFooterGroup,
-                HtmlConstants.Col => value == CssConstants.TableColumn,
-                HtmlConstants.Colgroup => value == CssConstants.TableColumnGroup,
-                HtmlConstants.Td or HtmlConstants.Th => value == CssConstants.TableCell,
-                HtmlConstants.Caption => value == CssConstants.TableCaption,
-                _ => true
-            };
         }
 
         /// <summary>
