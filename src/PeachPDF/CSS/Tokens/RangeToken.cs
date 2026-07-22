@@ -18,6 +18,13 @@ namespace PeachPDF.CSS
             End = end;
         }
 
+        // Data holds the range without its "U+" prefix, so serializing it bare would emit "41-5A" - not a
+        // valid <urange> and not what was authored.
+        public override string ToValue()
+        {
+            return string.Concat("U+", Data);
+        }
+
         public string Start { get; }
         public string End { get; }
     }
