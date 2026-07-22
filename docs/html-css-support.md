@@ -219,6 +219,7 @@ Form elements are rendered as static boxes. There is no interactive behavior —
 | `margin` | [margin](https://developer.mozilla.org/en-US/docs/Web/CSS/margin) | Shorthand and all four longhands (`margin-top`, `margin-right`, `margin-bottom`, `margin-left`) are supported |
 | `padding` | [padding](https://developer.mozilla.org/en-US/docs/Web/CSS/padding) | Shorthand and all four longhands (`padding-top`, `padding-right`, `padding-bottom`, `padding-left`) are supported |
 | `box-sizing` | [box-sizing](https://developer.mozilla.org/en-US/docs/Web/CSS/box-sizing) | `content-box` and `border-box` are supported |
+| `aspect-ratio` | [aspect-ratio](https://developer.mozilla.org/en-US/docs/Web/CSS/aspect-ratio) | Supported for the common case: a box with a **definite width** and an **auto height** takes its height from the width via the ratio (`aspect-ratio: <number> [ / <number> ]?`, `auto`, or `auto <ratio>`). The ratio applies to the box-sizing box, and the resulting height is definite — so a percentage-height descendant resolves against it (this is what makes a pure-CSS chart's bars take their height from a ratio-sized container). A definite `height` overrides the ratio. Not yet applied: the reverse direction (deriving width from a definite height), the ratio's interaction with min/max sizing and content min-size, and replaced-element natural ratios. |
 
 #### Logical box-model properties
 

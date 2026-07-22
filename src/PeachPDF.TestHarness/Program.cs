@@ -3730,6 +3730,44 @@ await SaveShowcaseAsync("clip_path", "Backgrounds & Borders", "clip-path basic s
     "CSS clip-path with basic shapes: polygon(), inset(), circle(), and ellipse() clip an element (here a gradient fill) to a shape resolved against its border-box. A shared basic-shape grammar validates the value at parse time and the resolved region is pushed as a PDF clip path.",
     clipPathHtml, pdfConfig);
 
+// aspect-ratio: a box with a definite width and an auto height takes its height from the width via the
+// ratio, and the ratio-derived height is definite, so a percentage-height child resolves against it.
+var aspectRatioHtml = """
+    <html>
+    <head>
+    <style>
+        body { font-family: sans-serif; margin: 40px; }
+        h1 { font-size: 20pt; }
+        .row { display: flex; gap: 20px; align-items: flex-start; margin-top: 16px; }
+        .cell { text-align: center; font-size: 10pt; color: #555; }
+        .box { width: 130px; background: #e9ecef; border: 1px solid #adb5bd; color: #495057;
+               font-size: 11pt; display: flex; align-items: center; justify-content: center; }
+        .r-16-9 { aspect-ratio: 16 / 9; }
+        .r-1-1 { aspect-ratio: 1; }
+        .r-3-4 { aspect-ratio: 3 / 4; }
+        .fill { width: 130px; aspect-ratio: 2; background: #dee2e6; }
+        .fill > .bar { height: 60%; width: 40px; background: #1971c2; margin: 0 auto; }
+    </style>
+    </head>
+    <body>
+        <h1>aspect-ratio</h1>
+        <p>Each box below is 130px wide with an auto height taken from its <code>aspect-ratio</code>.</p>
+        <div class="row">
+            <div class="cell"><div class="box r-16-9">16 / 9</div>16 / 9</div>
+            <div class="cell"><div class="box r-1-1">1 / 1</div>1 / 1</div>
+            <div class="cell"><div class="box r-3-4">3 / 4</div>3 / 4</div>
+        </div>
+        <p style="margin-top:20px">The ratio-derived height is definite, so a percentage-height child
+        resolves against it — the blue bar is <code>height: 60%</code> of the <code>aspect-ratio: 2</code> box:</p>
+        <div class="fill"><div class="bar"></div></div>
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("aspect_ratio", "Layout", "aspect-ratio",
+    "CSS aspect-ratio: a box with a definite width and auto height takes its height from the width via the ratio. The ratio-derived height is definite, so a percentage-height child resolves against it — the basis for pure-CSS charts sizing their bars from a ratio-sized container.",
+    aspectRatioHtml, pdfConfig);
+
 // The manifest that drives the website's /showcase page (see docs/showcase.html and
 // .github/workflows/pages.yml). Field names are camelCased for Liquid (site.data.showcases).
 var manifestJson = JsonSerializer.Serialize(showcaseManifest,
