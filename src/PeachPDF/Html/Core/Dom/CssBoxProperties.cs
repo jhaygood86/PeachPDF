@@ -221,6 +221,8 @@ namespace PeachPDF.Html.Core.Dom
 
         public string AspectRatio { get; set; } = CssConstants.Auto;
 
+        public string BoxShadow { get; set; } = CssConstants.None;
+
         private string _transformOrigin = "50% 50% 0";
         public string TransformOrigin
         {
