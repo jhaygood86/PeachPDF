@@ -923,7 +923,7 @@ All five CSS-wide keywords are supported on every CSS property. They are resolve
 | `initial` | Resets the property to its CSS specification initial value, ignoring inheritance. |
 | `unset` | Acts as `inherit` for inherited properties (e.g. `color`, `font-size`) and as `initial` for non-inherited properties (e.g. `margin`, `padding`). |
 | `revert` | Rolls back to the value from the previous cascade origin. In an author stylesheet rule, reverts to the user-agent (UA) stylesheet value. In an inline style, reverts to the author stylesheet value. |
-| `revert-layer` | Without `@layer` support, behaves identically to `revert`. |
+| `revert-layer` | Parsed and applied, but **not yet layer-aware**: it currently behaves identically to `revert` (rolls back to the previous cascade *origin*) rather than to the value from lower [`@layer`](#css-at-rules) cascade layers of the same origin. Correct only when the property has no lower-layer value to reveal. Tracked as a known gap. |
 
 All five keywords can be combined with `!important`.
 
@@ -950,7 +950,7 @@ PeachPDF supports [CSS custom properties](https://developer.mozilla.org/en-US/do
 | Shorthand properties | Full | `var()` inside a shorthand (e.g. `margin: var(--a) var(--b)`) is resolved before the shorthand is expanded into its longhands |
 | `inherit` / `unset` on a custom property | Full | Pulls the parent element's value, since custom properties are always inherited |
 | `initial` on a custom property | Full | Clears the property to the guaranteed-invalid value (absent) |
-| `revert` / `revert-layer` on a custom property | Full | Restores the value from the previous cascade origin, same as for built-in properties |
+| `revert` / `revert-layer` on a custom property | Full | Restores the value from the previous cascade origin, same as for built-in properties. As with built-in properties, `revert-layer` is not yet distinct from `revert` when cascade layers are involved (see the [CSS-wide keywords](#cascade--specificity) note) |
 | Cyclic references | Handled | A custom property that references itself, directly or through a chain (`--a: var(--b); --b: var(--a);`), resolves to the guaranteed-invalid value instead of looping |
 | `@property` (typed/registered custom properties) | Supported | A custom property registered via [`@property`](https://developer.mozilla.org/en-US/docs/Web/CSS/@property) gains a typed `syntax`, an `initial-value`, and an `inherits` flag (see the [`@property` at-rule row](#css-at-rules)); this applies to both HTML and SVG styling |
 
