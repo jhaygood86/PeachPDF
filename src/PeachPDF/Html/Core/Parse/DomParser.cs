@@ -938,8 +938,7 @@ namespace PeachPDF.Html.Core.Parse
                 {
                     // A later plain value supersedes an earlier deferred var() value for the same property.
                     pendingVarProperties.Remove(prop.Name);
-                    if (IsStyleOnElementAllowed(box, prop.Name, value))
-                        CssUtils.SetPropertyValue(valueParser, box, prop.Name, value);
+                    CssUtils.SetPropertyValue(valueParser, box, prop.Name, value);
                 }
             }
         }
@@ -1043,14 +1042,14 @@ namespace PeachPDF.Html.Core.Parse
                     var longhandValue = longhand.HasValue && longhand.Value != CssConstants.Initial
                         ? longhand.Value
                         : CssDefaults.GetInitialValue(longhand.Name);
-                    if (longhandValue is not null && IsStyleOnElementAllowed(box, longhand.Name, longhandValue))
+                    if (longhandValue is not null)
                         CssUtils.SetPropertyValue(valueParser, box, longhand.Name, longhandValue);
                 }
 
                 return;
             }
 
-            if (reparsed is { HasValue: true } property && IsStyleOnElementAllowed(box, name, property.Value))
+            if (reparsed is { HasValue: true } property)
                 CssUtils.SetPropertyValue(valueParser, box, name, property.Value);
         }
 
@@ -1064,38 +1063,6 @@ namespace PeachPDF.Html.Core.Parse
             return CssDefaults.InheritedProperties.Contains(propName) && box.ParentBox != null
                 ? CssUtils.GetPropertyValue(box.ParentBox, propName)
                 : CssDefaults.GetInitialValue(propName);
-        }
-
-        /// <summary>
-        /// Check if the given style is allowed to be set on the given css box.<br/>
-        /// Used to prevent invalid CssBoxes creation like table with inline display style.
-        /// </summary>
-        /// <param name="box">the css box to assign css to</param>
-        /// <param name="key">the style key to check</param>
-        /// <param name="value">the style value to check</param>
-        /// <returns>true - style allowed, false - not allowed</returns>
-        private static bool IsStyleOnElementAllowed(CssBox box, string key, string value)
-        {
-            if (box.HtmlTag == null || key != HtmlConstants.Display) return true;
-
-            if (value is CssConstants.None)
-            {
-                return true;
-            }
-
-            return box.HtmlTag.Name.ToLowerInvariant() switch
-            {
-                HtmlConstants.Table => value == CssConstants.Table,
-                HtmlConstants.Tr => value == CssConstants.TableRow,
-                HtmlConstants.Tbody => value == CssConstants.TableRowGroup,
-                HtmlConstants.Thead => value == CssConstants.TableHeaderGroup,
-                HtmlConstants.Tfoot => value == CssConstants.TableFooterGroup,
-                HtmlConstants.Col => value == CssConstants.TableColumn,
-                HtmlConstants.Colgroup => value == CssConstants.TableColumnGroup,
-                HtmlConstants.Td or HtmlConstants.Th => value == CssConstants.TableCell,
-                HtmlConstants.Caption => value == CssConstants.TableCaption,
-                _ => true
-            };
         }
 
         /// <summary>
@@ -1830,22 +1797,47 @@ namespace PeachPDF.Html.Core.Parse
 
             if (DomUtils.IsProperTableChild(box))
             {
-                var isMissingParent = box.ParentBox is null;
-                var isParentNotTable = box.ParentBox?.Display is not CssConstants.Table;
-                var isParentNotInlineTable = box.ParentBox?.Display is not CssConstants.InlineTable;
+                // CSS2.1 §17.2.1 rule 3.2 — whether a proper table child is misparented depends on the
+                // child's own type, not merely on whether it has a parent:
+                //   - a 'table-row' is misparented unless its parent is a row group box or a table/inline-table;
+                //   - a 'table-column' is misparented unless its parent is a table-column-group or a table/inline-table;
+                //   - a row group, 'table-column-group', or 'table-caption' is misparented unless its parent is a table/inline-table.
+                // (The prior condition AND-ed in "parent is null", which collapsed the whole test to
+                // "parent is null" and never wrapped a proper table child under a non-null, non-table
+                // parent — so e.g. a `<table style="display:block">`'s rows, or the anonymous row synthesized
+                // around cells under a `display:block` `<tr>`, lost their table box and silently dropped all
+                // content. That case only became reachable once author `display` could override table tags.)
+                var parent = box.ParentBox;
+                var parentIsTable = parent?.Display is CssConstants.Table or CssConstants.InlineTable;
 
-                var isMisparented = isMissingParent && isParentNotTable && isParentNotInlineTable;
+                var isMisparented = parent is null || box.Display switch
+                {
+                    CssConstants.TableRow => !parentIsTable && !parent.IsTableRowGroupBox,
+                    CssConstants.TableColumn => !parentIsTable && parent.Display is not CssConstants.TableColumnGroup,
+                    _ => !parentIsTable // row group, table-column-group, or table-caption
+                };
 
                 if (isMisparented)
                 {
-                    var parentDisplay = box.ParentBox is null || box.ParentBox.IsBlock ? CssConstants.Table : CssConstants.InlineTable;
+                    var originalParent = box.ParentBox;
+                    var parentDisplay = originalParent is null || originalParent.IsBlock ? CssConstants.Table : CssConstants.InlineTable;
 
                     var followingMatchingSiblings =
                         DomUtils.GetFollowingSiblings(box, DomUtils.IsProperTableChild, true)
                             .ToList();
 
-                    var tableBox = new CssBox(box.ParentBox, null);
+                    var tableBox = new CssBox(originalParent, null);
                     tableBox.Display = parentDisplay;
+
+                    // Position the synthesized table at the child's original index in the grandparent (the
+                    // constructor only appends it) — same as the SetBeforeBox in rules 2.1/2.3/3.1 — so it
+                    // takes the child's place in document order instead of drifting to the end once the child
+                    // is reparented into it. Skipped only when the child was the root (no parent to order in).
+                    if (originalParent is not null)
+                    {
+                        tableBox.SetBeforeBox(box);
+                    }
+
                     box.ParentBox = tableBox;
 
                     followingMatchingSiblings.ForEach(sib => sib.ParentBox = tableBox);

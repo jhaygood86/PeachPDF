@@ -123,16 +123,17 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task MisparentedTableCell_WrappedInAnonymousRow_AtItsOriginalDocumentPosition()
+        public async Task MisparentedTableCell_WrappedInAnonymousRowThenTable_AtItsOriginalDocumentPosition()
         {
-            // Rule 3.1 (CorrectAnonymousTablesGenerateMissingParents): a `table-cell` box whose parent
-            // isn't a `table-row` must be wrapped in an anonymous `table-row`, positioned via
-            // SetBeforeBox at the cell's original index among its siblings - not appended at the end,
-            // which would silently reorder it after later, unrelated siblings. No `display:table`
-            // ancestor here deliberately - rule 3.1 fires purely off "table-cell whose parent isn't
-            // table-row", regardless of any table context; wrapping this in `display:table` would
-            // instead hit rule 2.1 first (a `table-cell` isn't a "proper child of table", only of
-            // table-row, so it groups into an anonymous row before rule 3.1 ever gets a chance to run).
+            // Two rules fire in sequence (CorrectAnonymousTablesGenerateMissingParents):
+            //   3.1 — a `table-cell` whose parent isn't a `table-row` is wrapped in an anonymous
+            //         `table-row` (both cells group into one, at cell1's original index);
+            //   3.2 — that anonymous `table-row`, now a proper table child under a non-table parent
+            //         (the body), is itself misparented and must be wrapped in an anonymous `table`.
+            // Both wrappers are positioned via SetBeforeBox at the run's original index among its
+            // siblings - not appended at the end, which would silently reorder it after later,
+            // unrelated siblings. No `display:table` ancestor here deliberately - rule 3.1 fires purely
+            // off "table-cell whose parent isn't table-row", regardless of any table context.
             var html = """
                 <!DOCTYPE html><html><head></head><body>
                   <div class="before"></div>
@@ -150,13 +151,20 @@ namespace PeachPDF.Tests.Integration
             var cell1 = FindByClass(root, "cell1")!;
             var cell2 = FindByClass(root, "cell2")!;
 
+            // 3.1: both cells share one anonymous table-row.
             var anonRow = cell1.ParentBox!;
             Assert.Equal(CssConstants.TableRow, anonRow.Display);
             Assert.Same(anonRow, cell2.ParentBox);
 
-            // The anonymous row must sit between "before" and "after" in document order, not after
+            // 3.2: the anonymous row is wrapped in an anonymous table (the table formatting context the
+            // stray cells require per CSS2.1 §17.2.1) — without it the row would render outside any table.
+            var anonTable = anonRow.ParentBox!;
+            Assert.Null(anonTable.HtmlTag);
+            Assert.Equal(CssConstants.Table, anonTable.Display);
+
+            // The synthesized table must sit between "before" and "after" in document order, not after
             // "after" (which is what a naive append-at-the-end would produce).
-            Assert.Equal(new[] { before, anonRow, after }, body.Boxes);
+            Assert.Equal(new[] { before, anonTable, after }, body.Boxes);
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
