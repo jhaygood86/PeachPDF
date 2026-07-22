@@ -13,8 +13,17 @@ namespace PeachPDF.Tests.Svg
     {
         private static readonly PdfSharpAdapter Adapter = new();
 
-        private static SvgDocument BuildFrom(string markup) =>
-            SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), Adapter);
+        // Mirrors the standalone-SVG loader (ImageLoadHandler.LoadSvgFromStream): builds an SVG-local
+        // CssData from the markup's own <style> elements and cascades custom properties, so <style>-based
+        // styling and var() resolve exactly as they do for a real <img src="x.svg">.
+        private static SvgDocument BuildFrom(string markup)
+        {
+            var root = XDocument.Parse(markup).Root!;
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+            if (cssData is not null)
+                SvgCssStyling.CascadeCustomProperties(root, cssData, "print");
+            return SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, cssData, "print"), Adapter);
+        }
 
         [Fact]
         public void Build_FromCssBoxTree_ProducesExpectedStructure()
@@ -491,43 +500,19 @@ namespace PeachPDF.Tests.Svg
             Assert.Equal(RFillMode.EvenOdd, path.FillRule);
         }
 
-        [Fact]
-        public void StyleElement_ClassSelector_AppliesToMatchingShape_FromCssBoxTree()
-        {
-            // Uses HtmlParser.ParseDocument directly (bypassing DomParser's full cascade/
-            // CorrectReplacedElementBoxes pipeline) specifically to isolate SvgTreeBuilder's own
-            // <style>-handling correctness from a separate, pre-existing bug: MimeKit's HTML
-            // tokenizer currently hoists a <style> tag out of a nested inline <svg> (making <svg>'s
-            // own CssBox never get constructed as CssBoxSvg at all), so a <style>-inside-inline-<svg>
-            // integration test through the *full* PdfGenerator pipeline would fail for a reason
-            // unrelated to SVG - see ImgSvg_StyleElement_ClassSelectorAppliesToShape in
-            // SvgIntegrationTests.cs for the equivalent full-pipeline proof via standalone/<img> SVG,
-            // which parses as real XML and isn't affected by this HTML-tokenizer quirk.
-            var root = HtmlParser.ParseDocument("""
-                <!DOCTYPE html><html><body>
-                <svg xmlns="http://www.w3.org/2000/svg">
-                  <style>.highlight { fill: #ff0000; }</style>
-                  <circle class="highlight" cx="5" cy="5" r="5"/>
-                </svg>
-                </body></html>
-                """);
-            var svgBox = DomUtils.GetBoxByTagName(root, "svg");
-            var document = SvgTreeBuilder.Build(new CssBoxSvgSourceNode(svgBox!), Adapter);
-
-            var circle = Assert.IsType<SvgCircleElement>(Assert.Single(document.Children));
-            Assert.Equal(RColor.FromArgb(0xff, 0x00, 0x00), circle.Fill.Color);
-        }
-
+        // The inline-<svg><style> case (issue #159) now works end-to-end through the full PdfGenerator
+        // pipeline - see InlineSvg_StyleElement_ClassSelectorAppliesToShape and the HTML-<style>/var()/calc
+        // /combinator/case-sensitivity tests in SvgIntegrationTests.cs. This unit-level test covers the
+        // standalone (real-XML) path, which the loader builds an SVG-local CssData for.
         [Fact]
         public void StyleElement_ClassSelector_AppliesToMatchingShape_FromXmlDocument()
         {
-            var xdoc = XDocument.Parse("""
+            var document = BuildFrom("""
                 <svg xmlns="http://www.w3.org/2000/svg">
                   <style>.highlight { fill: #ff0000; }</style>
                   <circle class="highlight" cx="5" cy="5" r="5"/>
                 </svg>
                 """);
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(xdoc.Root!), Adapter);
 
             var circle = Assert.IsType<SvgCircleElement>(Assert.Single(document.Children));
             Assert.Equal(RColor.FromArgb(0xff, 0x00, 0x00), circle.Fill.Color);

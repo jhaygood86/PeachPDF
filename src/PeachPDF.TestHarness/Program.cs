@@ -1868,10 +1868,9 @@ var rasterDataUri = MakeRasterDataUri();
 var nestedVectorMarkup = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><radialGradient id="nvg" gradientUnits="userSpaceOnUse" cx="50" cy="50" r="50"><stop offset="0" stop-color="#fceabb"/><stop offset="1" stop-color="#f8b500"/></radialGradient></defs><circle cx="50" cy="50" r="45" fill="url(#nvg)"/></svg>""";
 var nestedVectorDataUri = "data:image/svg+xml;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(nestedVectorMarkup));
 
-// Two data:image/svg+xml <img> payloads for the <style> showcase below - a nested <style> element
-// inside an INLINE <svg> has a known limitation (MimeKit's HTML tokenizer can hoist it out of the
-// <svg> before SvgTreeBuilder ever sees it), so <style>-element demos deliberately use the
-// standalone/<img> path instead, exactly like the automated test suite works around the same gap.
+// SVG <style> works for both inline and standalone SVG (issues #159/#192) - matched through the full
+// CSS engine (combinators, attribute/structural selectors, var(), calc()). These two data:image/svg+xml
+// <img> payloads exercise the standalone path; the inline path is shown by the swatches below them.
 var styleClassMarkup = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="80" height="80"><style>.hi{fill:#2980b9}.lo{fill:#bdc3c7}</style><rect x="10" y="10" width="35" height="80" class="lo"/><rect x="55" y="10" width="35" height="80" class="hi"/></svg>""";
 var styleClassDataUri = "data:image/svg+xml;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(styleClassMarkup));
 var styleIdMarkup = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="80" height="80"><style>#target{fill:#c0392b}</style><circle id="target" cx="50" cy="50" r="35" fill="#bdc3c7"/></svg>""";
@@ -2093,16 +2092,29 @@ var svgHtml = "<!DOCTYPE html><html><head>" + SvgShowcaseCss + "</head><body>" +
             "fill=\"currentColor\" resolves the ancestor's CSS color"),
         "<td>" +
             $"<div class=\"sbox\"><img src=\"{styleClassDataUri}\" width=\"80\" height=\"80\"/></div>" +
-            "<div class=\"desc\">&lt;style&gt; class selector</div>" +
-            "<div class=\"css\">.hi/.lo rules, via &lt;img&gt; (see note below)</div>" +
+            "<div class=\"desc\">&lt;style&gt; class selector (standalone)</div>" +
+            "<div class=\"css\">.hi/.lo rules, via &lt;img&gt;</div>" +
         "</td>",
         "<td>" +
             $"<div class=\"sbox\"><img src=\"{styleIdDataUri}\" width=\"80\" height=\"80\"/></div>" +
-            "<div class=\"desc\">&lt;style&gt; id selector</div>" +
-            "<div class=\"css\">#target rule, via &lt;img&gt; (see note below)</div>" +
+            "<div class=\"desc\">&lt;style&gt; id selector (standalone)</div>" +
+            "<div class=\"css\">#target rule, via &lt;img&gt;</div>" +
         "</td>"
     ) +
-    "<p class=\"intro\">Note: a &lt;style&gt; element nested inside an <em>inline</em> &lt;svg&gt; has a known limitation in PeachPDF's HTML tokenizer, so the two &lt;style&gt; swatches above use the standalone &lt;img src=\"data:image/svg+xml\"&gt; path, which is unaffected — see supported-svg-features.md.</p>" +
+    Row(
+        SvgSwatch("inline &lt;svg&gt;&lt;style&gt;",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><style>.hi{fill:#2980b9}.lo{fill:#bdc3c7}</style><rect x="10" y="10" width="35" height="80" class="lo"/><rect x="55" y="10" width="35" height="80" class="hi"/></svg>""",
+            "a &lt;style&gt; nested in an inline &lt;svg&gt; now applies (issue #159)"),
+        SvgSwatch("HTML &lt;style&gt; cascades into SVG",
+            """<style>svg.svgCascadeDemo circle{fill:#8e44ad}</style><svg class="svgCascadeDemo" viewBox="0 0 100 100" width="80" height="80"><circle cx="50" cy="50" r="35"/></svg>""",
+            "a document-level rule matching SVG shapes applies (SVG 2 §6)"),
+        SvgSwatch("combinator selector",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><style>g rect{fill:#16a085}</style><g><rect x="20" y="20" width="60" height="60"/></g></svg>""",
+            "\"g rect\" descendant combinator, via the full selector engine"),
+        SvgSwatch("var() custom property",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><style>:root{--c:#d35400}circle{fill:var(--c)}</style><circle cx="50" cy="50" r="35"/></svg>""",
+            "fill:var(--c) resolves through the CSS cascade")
+    ) +
 
     "<h2>14 — &lt;switch&gt; &amp; &lt;a&gt; Links</h2>" +
     Row(

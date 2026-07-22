@@ -38,7 +38,7 @@ namespace PeachPDF.Html.Core.Dom
     /// To know more about boxes visit CSS spec:
     /// http://www.w3.org/TR/CSS21/box.html
     /// </remarks>
-    internal class CssBox : CssBoxProperties, IDisposable
+    internal class CssBox : CssBoxProperties, IDisposable, ICssDomNode
     {
         #region Fields and Consts
 
@@ -220,7 +220,7 @@ namespace PeachPDF.Html.Core.Dom
         public bool FirstLetterProcessed { get; set; }
 
         /// <summary>
-        /// Set during <see cref="CssData.DoesSelectorMatch(CSS.CompoundSelector, CssBox?)"/> when some
+        /// Set during <see cref="CssData.DoesSelectorMatch(CSS.CompoundSelector, ICssDomNode?)"/> when some
         /// rule's <c>*::first-letter</c> selector matches this box. The actual DFS-and-split (see
         /// <c>DomParser.ApplyFirstLetterPseudoElements</c>) is deliberately deferred to a separate
         /// pass run after the whole document's cascade completes, rather than performed immediately
@@ -2020,6 +2020,34 @@ namespace PeachPDF.Html.Core.Dom
         {
             return HtmlTag != null ? HtmlTag.TryGetAttribute(attribute, defaultValue) : defaultValue;
         }
+
+        #region ICssDomNode
+
+        // The HTML box tree is the primary ICssDomNode implementation the selector engine matches
+        // against; these members are thin views over the box's existing state. HTML matches element/
+        // attribute names ASCII case-insensitively (unlike SVG's XML case-sensitivity), so NameComparison
+        // reports InvariantCultureIgnoreCase - the value the matcher previously hardcoded, keeping HTML
+        // matching byte-identical. Implemented explicitly where the natural name collides with an existing
+        // member (GetAttribute, the CustomProperties field).
+        string? ICssDomNode.TagName => HtmlTag?.Name;
+
+        string? ICssDomNode.GetAttribute(string name) => GetAttribute(name, null);
+
+        StringComparison ICssDomNode.NameComparison => StringComparison.InvariantCultureIgnoreCase;
+
+        ICssDomNode? ICssDomNode.Parent => ParentBox;
+
+        IReadOnlyList<ICssDomNode> ICssDomNode.Children => Boxes;
+
+        bool ICssDomNode.IsRoot => IsRoot;
+
+        Dictionary<string, string>? ICssDomNode.CustomProperties
+        {
+            get => CustomProperties;
+            set => CustomProperties = value;
+        }
+
+        #endregion
 
         /// <summary>
         /// Gets the minimum width that the box can be.<br/>

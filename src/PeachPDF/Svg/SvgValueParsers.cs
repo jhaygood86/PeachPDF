@@ -79,6 +79,26 @@ namespace PeachPDF.Svg
 
             var trimmed = value.Trim();
 
+            // calc()/min()/max()/clamp() are delegated to the shared CSS length parser (which owns the
+            // whole calc grammar + evaluator) rather than duplicated here. That parser works in points
+            // (1px = 0.75pt), while SVG lengths here are CSS px (1px = 1 user unit), so the percentage/
+            // em/rem bases are converted into points on the way in and the result back to px on the way
+            // out. A percentage inside the calc resolves against the SVG reference length; em/rem use the
+            // same 16px approximation this parser uses for a plain em/rem length (see UnitConversions). Any
+            // var() has already been substituted by SvgTreeBuilder.ResolveStyledAttr before this point.
+            if (IsCalcExpression(trimmed))
+            {
+                const double pointsPerPx = 0.75; // Length.PointsPerPx: 1px = 1/96in = 0.75pt
+                var points = CssValueParser.ParseLength(
+                    trimmed,
+                    hundredPercent: (referenceLength ?? 0) * pointsPerPx,
+                    emFactor: 16 * pointsPerPx,
+                    remFactor: 16 * pointsPerPx,
+                    defaultUnit: null,
+                    returnPoints: false);
+                return points / pointsPerPx;
+            }
+
             if (trimmed.EndsWith('%'))
             {
                 if (referenceLength is not { } refLen)
@@ -103,6 +123,13 @@ namespace PeachPDF.Svg
 
             return double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v * scale : null;
         }
+
+        /// <summary>Is <paramref name="value"/> a CSS math function (<c>calc</c>/<c>min</c>/<c>max</c>/<c>clamp</c>) call?</summary>
+        private static bool IsCalcExpression(string value) =>
+            value.StartsWith("calc(", StringComparison.OrdinalIgnoreCase)
+            || value.StartsWith("min(", StringComparison.OrdinalIgnoreCase)
+            || value.StartsWith("max(", StringComparison.OrdinalIgnoreCase)
+            || value.StartsWith("clamp(", StringComparison.OrdinalIgnoreCase);
 
         /// <summary>
         /// Parses a <c>fill-rule</c>/<c>clip-rule</c> value (<c>nonzero</c> or <c>evenodd</c>,

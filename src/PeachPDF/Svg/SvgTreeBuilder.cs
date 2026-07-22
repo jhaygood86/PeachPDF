@@ -39,15 +39,6 @@ namespace PeachPDF.Svg
         private readonly SvgDocument _document = new();
         private int _useDepth;
 
-        /// <summary>
-        /// Every <c>&lt;style&gt;</c> element's text found anywhere in the document (there is
-        /// deliberately no scoping by nesting depth - a document-wide <c>&lt;style&gt;</c> can style
-        /// any SVG shape, matching how a single <c>&lt;style&gt;</c> anywhere legally styles a whole
-        /// SVG fragment per spec), concatenated in document order and parsed once <see cref="CollectDefinitions"/>
-        /// has found them all.
-        /// </summary>
-        private readonly System.Text.StringBuilder _styleSheetText = new();
-        private SvgStyleSheet _styleSheet = new();
 
         /// <summary>
         /// The document's own viewport dimensions (from <c>viewBox</c>, falling back to
@@ -149,7 +140,6 @@ namespace PeachPDF.Svg
             _viewportHeight = _document.ViewBox?.Height ?? _document.Height;
 
             CollectDefinitions(root);
-            _styleSheet = SvgStyleSheet.Parse(_styleSheetText.ToString());
 
             foreach (var child in root.Children)
             {
@@ -187,15 +177,10 @@ namespace PeachPDF.Svg
                     case "mask" when !string.IsNullOrEmpty(id):
                         _document.Masks[id] = BuildMask(child);
                         break;
-                    case "style":
-                        // Note: for CssBoxSvgSourceNode (inline <svg>), DomParser.CascadeParseStyles
-                        // already, separately, feeds every <style> element's text into the whole
-                        // document's own page-wide CssData - including one nested inside an <svg>,
-                        // since that walk isn't scoped to <head>. That's a pre-existing behavior
-                        // (unrelated to SVG support existing or not) that this doesn't change; parsing
-                        // it again here just for SVG-local shape matching is a harmless duplicate read.
-                        _styleSheetText.Append(child.GetTextContent()).Append('\n');
-                        break;
+                    // <style> elements are no longer collected here: SVG styling is matched through the
+                    // full CSS engine (ISvgSourceNode.GetMatchedCssDeclarations) against the relevant
+                    // CssData - the host document's for inline <svg> (which already contains every nested
+                    // and document-level <style>), or the SVG's own for standalone (built by the loader).
                 }
 
                 CollectDefinitions(child);
@@ -502,7 +487,17 @@ namespace PeachPDF.Svg
                 {
                     var xdoc = System.Xml.Linq.XDocument.Parse(System.Text.Encoding.UTF8.GetString(bytes));
                     if (xdoc.Root is not null)
-                        image.NestedDocument = Build(new XElementSvgSourceNode(xdoc.Root), _adapter, _contextColor);
+                    {
+                        // A nested data:image/svg+xml is a standalone SVG document: match against its own
+                        // <style> (built here), exactly like an <img>-referenced SVG.
+                        var nestedRoot = xdoc.Root;
+                        var nestedCssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(nestedRoot));
+                        if (nestedCssData is not null)
+                            SvgCssStyling.CascadeCustomProperties(nestedRoot, nestedCssData, "print");
+
+                        var nestedSource = new XElementSvgSourceNode(nestedRoot, nestedRoot, nestedCssData, "print");
+                        image.NestedDocument = Build(nestedSource, _adapter, _contextColor);
+                    }
                 }
                 catch (System.Xml.XmlException)
                 {
@@ -684,15 +679,24 @@ namespace PeachPDF.Svg
         /// <c>class</c> per call rather than caching, matching this builder's existing preference for
         /// simplicity over micro-optimization elsewhere (e.g. <see cref="BuildDefinitionChildren"/>).
         /// </summary>
-        private string? ResolveStyledAttr(ISvgSourceNode node, string name)
+        private static string? ResolveStyledAttr(ISvgSourceNode node, string name)
         {
+            // Precedence (highest to lowest): inline style="" attribute > matched author-stylesheet rules
+            // (full CSS engine: combinators/attr/pseudo selectors, specificity, var()) > presentation
+            // attribute. The matched-rule tier comes from the document/SVG-local CssData (see the source
+            // node's GetMatchedCssDeclarations), replacing the former SVG-local mini stylesheet.
             var styleDeclarations = SvgValueParsers.ParseStyleDeclarations(node.GetAttribute("style"));
-            var classList = (node.GetAttribute("class") ?? "").Split([' ', '\t', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries);
-            var stylesheetDeclarations = _styleSheet.Match(node.Name, node.GetAttribute("id"), classList);
+            if (styleDeclarations.TryGetValue(name, out var styleValue))
+            {
+                var resolved = node.ResolveVar(styleValue);
+                if (resolved is not null) return resolved;
+            }
 
-            return styleDeclarations.TryGetValue(name, out var v1) ? v1
-                : stylesheetDeclarations.TryGetValue(name, out var v2) ? v2
-                : node.GetAttribute(name);
+            var matched = node.GetMatchedCssDeclarations();
+            if (matched is not null && matched.TryGetValue(name, out var matchedValue))
+                return matchedValue;
+
+            return node.GetAttribute(name);
         }
 
         /// <summary>

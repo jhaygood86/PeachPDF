@@ -89,6 +89,13 @@ namespace PeachPDF.Html.Core.Parse
                 .SelectMany(s => s.Rules.OfType<PageRule>())
                 .ToList();
 
+            // The cascade (CascadeApplyStyles) still recurses into an inline <svg>'s descendants on
+            // purpose - inline SVG participates in the document cascade, and its shape boxes need their
+            // custom properties (--x) populated for var() to resolve. Likewise CorrectTextBoxes only
+            // strips whitespace-only text boxes / parses words and never reparents element boxes, so it
+            // can't corrupt the structure SvgTreeBuilder reads. The *restructuring* passes below
+            // (block/inline/anonymous-table normalization) DO reparent boxes, so each guards against
+            // descending into a CssBoxSvg - see their `if (box is CssBoxSvg) return;` and issue #159.
             CascadeApplyStyles(cssValueParser, root, cssData, media);
 
             EnsureListItemMarkers(cssValueParser, root, cssData, media);
@@ -652,7 +659,7 @@ namespace PeachPDF.Html.Core.Parse
         /// by the *computed* <c>Display</c> value, not by any particular selector or tag. The common
         /// <c>&lt;li&gt;</c> case already gets one during <see cref="CascadeApplyStyles"/> above (via
         /// the UA stylesheet's <c>li::marker</c> rule's selector-match-time synthesis in
-        /// <see cref="CssData.DoesSelectorMatch(CSS.CompoundSelector, CssBox?)"/>) - this only needs to
+        /// <see cref="CssData.DoesSelectorMatch(CSS.CompoundSelector, ICssDomNode?)"/>) - this only needs to
         /// cover elements that reach <c>Display: list-item</c> WITHOUT that selector matching (e.g.
         /// <c>div { display: list-item }</c>), since selector matching can't key off a computed
         /// <c>Display</c> value (it isn't resolved yet at match time within a cascade pass). Must run
@@ -975,13 +982,6 @@ namespace PeachPDF.Html.Core.Parse
         }
 
         /// <summary>
-        /// Result of attempting to resolve every var() reference in a declaration's value. Success is false
-        /// only when a reference is "guaranteed-invalid" (no matching custom property, no fallback, or a
-        /// cyclic reference) — per spec this invalidates the whole value, not just the failing substring.
-        /// </summary>
-        private readonly record struct VarResolution(bool Success, string? Value);
-
-        /// <summary>
         /// Resolves every regular property deferred during the cascade's three phases (see
         /// <see cref="AssignCssBlock"/>) now that this box's custom properties reflect their FINAL cascaded
         /// (though not yet var()-resolved) values. Resolution is graph-based and memoized per box via a shared
@@ -999,7 +999,7 @@ namespace PeachPDF.Html.Core.Parse
 
             foreach (var (name, rawValue) in pendingVarProperties)
             {
-                var result = SubstituteVarReferences(box, rawValue, resolvedCache, resolving, cyclic);
+                var result = CssVarResolver.Substitute(box, rawValue, resolvedCache, resolving, cyclic);
                 var finalValue = result.Success ? result.Value : GetGuaranteedInvalidFallback(box, name);
 
                 if (finalValue is not null)
@@ -1054,206 +1054,6 @@ namespace PeachPDF.Html.Core.Parse
                 CssUtils.SetPropertyValue(valueParser, box, name, property.Value);
         }
 
-        /// <summary>
-        /// Resolves every var(...) occurrence in <paramref name="value"/> to plain text. Quote-aware (so
-        /// `content: "var(--x)"` is left untouched) and paren-depth-aware (so a fallback containing nested
-        /// commas, e.g. `var(--a, var(--b, red))` or a fallback with a comma-taking function, splits correctly).
-        /// </summary>
-        private static VarResolution SubstituteVarReferences(CssBox box, string value, Dictionary<string, string> resolvedCache, HashSet<string> resolving, HashSet<string> cyclic)
-        {
-            if (value.IndexOf("var(", StringComparison.OrdinalIgnoreCase) < 0)
-                return new VarResolution(true, value);
-
-            var sb = new StringBuilder();
-            var i = 0;
-            while (i < value.Length)
-            {
-                if (TryMatchVarCall(value, i, out var argsStart, out var callEnd))
-                {
-                    var (name, fallback) = SplitFirstTopLevelComma(value, argsStart, callEnd - 1);
-
-                    if (TryResolveCustomProperty(box, name, resolvedCache, resolving, cyclic, out var found))
-                    {
-                        sb.Append(found);
-                    }
-                    else if (fallback != null)
-                    {
-                        var fallbackResult = SubstituteVarReferences(box, fallback, resolvedCache, resolving, cyclic);
-                        if (!fallbackResult.Success) return new VarResolution(false, null);
-                        sb.Append(fallbackResult.Value);
-                    }
-                    else
-                    {
-                        return new VarResolution(false, null); // guaranteed-invalid
-                    }
-
-                    i = callEnd;
-                }
-                else if (value[i] is '"' or '\'')
-                {
-                    var quoteEnd = SkipQuotedString(value, i);
-                    sb.Append(value, i, quoteEnd - i);
-                    i = quoteEnd;
-                }
-                else
-                {
-                    sb.Append(value[i]);
-                    i++;
-                }
-            }
-
-            return new VarResolution(true, sb.ToString());
-        }
-
-        /// <summary>
-        /// Recursive + memoized: resolves box.CustomProperties[name]'s own var() references first (so a custom
-        /// property may reference another custom property, in any declaration order), using `resolving` as a
-        /// visited-set for cycle detection across the whole reference graph for this box.
-        /// <paramref name="cyclic"/> permanently marks a property that was found to (directly or transitively)
-        /// reference itself. This is distinct from a plain "not found" — per the CSS spec, a property that
-        /// references itself is guaranteed-invalid regardless of any fallback written inside that same
-        /// reference (e.g. `--self: var(--self, red);` must NOT resolve to "red": writing var(--self, ...)
-        /// inside --self's own definition is a self-reference, full stop, matching real browsers). Without
-        /// this permanent marker, the fallback used to locally satisfy the mid-cycle lookup would get cached
-        /// as if it were --self's legitimately resolved value.
-        /// </summary>
-        private static bool TryResolveCustomProperty(CssBox box, string name, Dictionary<string, string> resolvedCache, HashSet<string> resolving, HashSet<string> cyclic, out string? value)
-        {
-            if (cyclic.Contains(name))
-            {
-                value = null;
-                return false;
-            }
-
-            if (resolvedCache.TryGetValue(name, out value)) return true;
-
-            if (box.CustomProperties == null || !box.CustomProperties.TryGetValue(name, out var rawValue))
-            {
-                value = null;
-                return false;
-            }
-
-            if (!resolving.Add(name))
-            {
-                cyclic.Add(name); // name is referenced while already being resolved — a cycle
-                value = null;
-                return false;
-            }
-
-            var result = SubstituteVarReferences(box, rawValue, resolvedCache, resolving, cyclic);
-            resolving.Remove(name);
-
-            if (cyclic.Contains(name) || !result.Success)
-            {
-                cyclic.Add(name);
-                value = null;
-                return false;
-            }
-
-            resolvedCache[name] = value = result.Value!;
-            return true;
-        }
-
-        /// <summary>
-        /// Matches a case-insensitive "var(" starting at <paramref name="start"/> and scans forward for the
-        /// matching close paren. On success, <paramref name="argsStart"/> is the index of the first argument
-        /// character and <paramref name="callEnd"/> is the index just past the closing paren.
-        /// </summary>
-        private static bool TryMatchVarCall(string value, int start, out int argsStart, out int callEnd)
-        {
-            argsStart = 0;
-            callEnd = 0;
-
-            if (start + 4 > value.Length) return false;
-            if (string.Compare(value, start, "var(", 0, 4, StringComparison.OrdinalIgnoreCase) != 0) return false;
-
-            var depth = 1;
-            var i = start + 4;
-            while (i < value.Length)
-            {
-                var c = value[i];
-                if (c is '"' or '\'')
-                {
-                    i = SkipQuotedString(value, i);
-                    continue;
-                }
-
-                if (c == '(') depth++;
-                else if (c == ')')
-                {
-                    depth--;
-                    if (depth == 0)
-                    {
-                        argsStart = start + 4;
-                        callEnd = i + 1;
-                        return true;
-                    }
-                }
-
-                i++;
-            }
-
-            return false;
-        }
-
-        /// <summary>
-        /// Splits a var() argument list at the first top-level (paren-depth 0, outside quotes) comma.
-        /// The text before it is the custom property name (trimmed); everything after — commas and all —
-        /// is the fallback, per spec.
-        /// </summary>
-        private static (string Name, string? Fallback) SplitFirstTopLevelComma(string value, int start, int end)
-        {
-            var depth = 0;
-            var i = start;
-            while (i < end)
-            {
-                var c = value[i];
-                if (c is '"' or '\'')
-                {
-                    i = SkipQuotedString(value, i);
-                    continue;
-                }
-
-                if (c == '(') depth++;
-                else if (c == ')') depth--;
-                else if (c == ',' && depth == 0)
-                {
-                    var name = value[start..i].Trim();
-                    var fallback = value[(i + 1)..end].Trim();
-                    return (name, fallback.Length > 0 ? fallback : null);
-                }
-
-                i++;
-            }
-
-            return (value[start..end].Trim(), null);
-        }
-
-        /// <summary>
-        /// Advances past a quoted string literal starting at <paramref name="start"/> (which must point at the
-        /// opening quote), honoring backslash escapes so an escaped quote doesn't end the string early.
-        /// Returns the index just past the closing quote (or the string's end, if unterminated).
-        /// </summary>
-        private static int SkipQuotedString(string value, int start)
-        {
-            var quote = value[start];
-            var i = start + 1;
-            while (i < value.Length)
-            {
-                if (value[i] == '\\' && i + 1 < value.Length)
-                {
-                    i += 2;
-                    continue;
-                }
-
-                if (value[i] == quote)
-                    return i + 1;
-
-                i++;
-            }
-
-            return i;
-        }
 
         /// <summary>
         /// The value a property falls back to when a var() reference in it is guaranteed-invalid — reuses
@@ -1589,6 +1389,10 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="box">the current box to correct its sub-tree</param>
         private static void CorrectReplacedElementBoxes(CssBox box)
         {
+            // Inline <svg> is foreign content: its descendants are read directly by SvgTreeBuilder
+            // and are never laid out as HTML boxes, so HTML box-tree normalization must not descend into
+            // (and restructure) them. See CssBoxSvg / issue #159.
+            if (box is CssBoxSvg) return;
             for (int i = box.Boxes.Count - 1; i >= 0; i--)
             {
                 var childBox = box.Boxes[i];
@@ -1614,6 +1418,10 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="box">the current box to correct its sub-tree</param>
         private static void CorrectLineBreaksBlocks(CssBox box)
         {
+            // Inline <svg> is foreign content: its descendants are read directly by SvgTreeBuilder
+            // and are never laid out as HTML boxes, so HTML box-tree normalization must not descend into
+            // (and restructure) them. See CssBoxSvg / issue #159.
+            if (box is CssBoxSvg) return;
             foreach (var childBox in box.Boxes)
             {
                 CorrectLineBreaksBlocks(childBox);
@@ -1645,6 +1453,10 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="box">the current box to correct its sub-tree</param>
         private static void CorrectBlockInsideInline(CssBox box)
         {
+            // Inline <svg> is foreign content: its descendants are read directly by SvgTreeBuilder
+            // and are never laid out as HTML boxes, so HTML box-tree normalization must not descend into
+            // (and restructure) them. See CssBoxSvg / issue #159.
+            if (box is CssBoxSvg) return;
             try
             {
                 if (DomUtils.ContainsInlinesOnly(box) && !ContainsInlinesOnlyDeep(box))
@@ -1789,6 +1601,10 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="box">the current box to correct its sub-tree</param>
         private static void CorrectInlineBoxesParent(CssBox box)
         {
+            // Inline <svg> is foreign content: its descendants are read directly by SvgTreeBuilder
+            // and are never laid out as HTML boxes, so HTML box-tree normalization must not descend into
+            // (and restructure) them. See CssBoxSvg / issue #159.
+            if (box is CssBoxSvg) return;
             if (ContainsVariantBoxes(box))
             {
                 for (int i = 0; i < box.Boxes.Count; i++)
@@ -1816,6 +1632,10 @@ namespace PeachPDF.Html.Core.Parse
 
         private static void CorrectAbsolutelyPositionedInlineElements(CssBox box)
         {
+            // Inline <svg> is foreign content: its descendants are read directly by SvgTreeBuilder
+            // and are never laid out as HTML boxes, so HTML box-tree normalization must not descend into
+            // (and restructure) them. See CssBoxSvg / issue #159.
+            if (box is CssBoxSvg) return;
             if (box is { Display: CssConstants.Inline, Position: CssConstants.Absolute })
             {
                 var blockBox = new CssBox(box.ParentBox, null);
@@ -1845,6 +1665,10 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="box"></param>
         private static void CorrectAnonymousTables(CssBox box)
         {
+            // Inline <svg> is foreign content: its descendants are read directly by SvgTreeBuilder
+            // and are never laid out as HTML boxes, so HTML box-tree normalization must not descend into
+            // (and restructure) them. See CssBoxSvg / issue #159.
+            if (box is CssBoxSvg) return;
             // 1. Remove irrelevant boxes
             CorrectAnonymousTablesRemoveIrrelevantBoxes(box);
 
@@ -2037,6 +1861,16 @@ namespace PeachPDF.Html.Core.Parse
         /// <returns>true - only inline child boxes, false - otherwise</returns>
         private static bool ContainsInlinesOnlyDeep(CssBox box)
         {
+            // A replaced element (<img>, inline <svg>) is an atomic inline-level box; its descendants
+            // (SVG foreign content) are not HTML flow content and must not be inspected here - otherwise a
+            // block-ish child inside the SVG (e.g. a display:none <style>) would make an ancestor look like
+            // it has block-in-inline content and trigger a restructuring split that hoists the SVG's own
+            // children out of it. See CssBoxSvg / issue #159.
+            if (box is CssBoxImage or CssBoxSvg)
+            {
+                return true;
+            }
+
             foreach (var childBox in box.Boxes)
             {
                 if (!childBox.IsInline || !ContainsInlinesOnlyDeep(childBox))

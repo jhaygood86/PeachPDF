@@ -200,7 +200,16 @@ namespace PeachPDF.Html.Core.Handlers
 
                 if (xdoc.Root is not null)
                 {
-                    SvgDocument = SvgTreeBuilder.Build(new XElementSvgSourceNode(xdoc.Root), _htmlContainer.Adapter);
+                    // A standalone SVG's styling is its own: build an SVG-local CssData from its <style>
+                    // elements (host-document CSS does not apply here) and cascade custom properties for
+                    // var(), then match through the full CSS engine like inline SVG does.
+                    var root = xdoc.Root;
+                    var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+                    if (cssData is not null)
+                        SvgCssStyling.CascadeCustomProperties(root, cssData, "print");
+
+                    var source = new XElementSvgSourceNode(root, root, cssData, "print");
+                    SvgDocument = SvgTreeBuilder.Build(source, _htmlContainer.Adapter);
                 }
             }
             catch (XmlException ex)
