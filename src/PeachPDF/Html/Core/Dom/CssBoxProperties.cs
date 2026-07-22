@@ -219,6 +219,8 @@ namespace PeachPDF.Html.Core.Dom
 
         public string ClipPath { get; set; } = CssConstants.None;
 
+        public string AspectRatio { get; set; } = CssConstants.Auto;
+
         private string _transformOrigin = "50% 50% 0";
         public string TransformOrigin
         {

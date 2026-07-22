@@ -1,0 +1,74 @@
+#nullable disable
+
+using System.Collections.Generic;
+using System.Linq;
+
+namespace PeachPDF.CSS
+{
+    /// <summary>
+    /// The shared grammar for the <c>aspect-ratio</c> value (<c>[ auto || &lt;ratio&gt; ]</c>, where
+    /// <c>&lt;ratio&gt; = &lt;number [0,∞]&gt; [ / &lt;number [0,∞]&gt; ]?</c>). Used by both Layer A (to
+    /// validate/accept-or-reject at parse time) and Layer B (to compute the used ratio during layout), so the
+    /// grammar is defined once — the <see cref="BasicShapeGrammar"/> precedent.
+    /// </summary>
+    internal static class AspectRatioGrammar
+    {
+        /// <summary>
+        /// Validates the token stream as an <c>aspect-ratio</c> value. Returns false for anything that is not a
+        /// valid value. On success, <paramref name="ratio"/> is the used width/height ratio, or null when there
+        /// is no usable ratio (a bare <c>auto</c>, or a ratio with a zero term — both of which mean "no
+        /// preferred aspect ratio" for a non-replaced box).
+        /// </summary>
+        internal static bool TryParse(IReadOnlyList<Token> tokens, out double? ratio)
+        {
+            ratio = null;
+
+            Token[] toks = tokens.Where(t => t.Type != TokenType.Whitespace).ToArray();
+            if (toks.Length == 0) return false;
+
+            var i = 0;
+            var hasAuto = false;
+
+            if (IsAuto(toks[i])) { hasAuto = true; i++; }
+
+            if (i == toks.Length) return hasAuto; // bare `auto`
+
+            // <number> [ / <number> ]?
+            if (!TryNonNegativeNumber(toks[i], out var width)) return false;
+            double height = 1;
+            i++;
+
+            if (i < toks.Length && IsSlash(toks[i]))
+            {
+                i++;
+                if (i >= toks.Length || !TryNonNegativeNumber(toks[i], out height)) return false;
+                i++;
+            }
+
+            // An optional trailing `auto` (the `||` allows either order: `<ratio> auto`).
+            if (i < toks.Length && !hasAuto && IsAuto(toks[i])) i++;
+
+            if (i != toks.Length) return false; // trailing junk
+
+            // A zero term degenerates to "no preferred aspect ratio".
+            ratio = width <= 0 || height <= 0 ? null : width / height;
+            return true;
+        }
+
+        private static bool IsAuto(Token token) => token.Type == TokenType.Ident && token.Data.Isi(Keywords.Auto);
+
+        private static bool IsSlash(Token token) => token.Type == TokenType.Delim && token.Data == "/";
+
+        private static bool TryNonNegativeNumber(Token token, out double value)
+        {
+            if (token is NumberToken number && number.Value >= 0f)
+            {
+                value = number.Value;
+                return true;
+            }
+
+            value = 0;
+            return false;
+        }
+    }
+}

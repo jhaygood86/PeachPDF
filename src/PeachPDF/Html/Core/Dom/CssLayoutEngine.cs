@@ -595,6 +595,13 @@ namespace PeachPDF.Html.Core.Dom
 
                 height = CssValueParser.ParseLength(box.Height, box.ContainingBlock.Size.Height, box) + box.ActualBoxSizeIncludedHeight;
             }
+            else if (TryGetAspectRatioHeight(box, out var ratioHeight))
+            {
+                // CSS Box Sizing 4 §5: with a preferred aspect-ratio and an auto height, the height is
+                // computed from the (definite) width via the ratio. This is what gives a Charts.css
+                // `tbody { aspect-ratio: … }` its height, from which the bars take their percentage heights.
+                height = ratioHeight;
+            }
 
             if (CssValueParser.IsValidLength(box.MinHeight) &&
                 (box.ContainingBlock.IsHeightCalculated || !box.MinHeight.EndsWith('%')))
@@ -608,6 +615,27 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             return height;
+        }
+
+        /// <summary>
+        /// Computes a box's border-box height from its <c>aspect-ratio</c> and its (definite) used width, when
+        /// the box has a usable preferred ratio and no definite height. The ratio applies to the box-sizing
+        /// box, so dividing the content width by the ratio and adding the box-sizing-included height yields the
+        /// border-box height for both <c>content-box</c> and <c>border-box</c> sizing (the included term is 0
+        /// for <c>border-box</c>, where <c>Size.Width</c> is already the border-box width).
+        /// </summary>
+        private static bool TryGetAspectRatioHeight(CssBox box, out double height)
+        {
+            height = 0;
+
+            if (string.IsNullOrEmpty(box.AspectRatio) || box.AspectRatio == CssConstants.Auto) return false;
+            if (box.Size.Width <= 0) return false;
+
+            var tokens = CssValueParser.GetCssTokens(box.AspectRatio);
+            if (!AspectRatioGrammar.TryParse(tokens, out var ratio) || ratio is not (> 0)) return false;
+
+            height = box.Size.Width / ratio.Value + box.ActualBoxSizeIncludedHeight;
+            return true;
         }
 
         public static void ApplyParentHeight(CssBox box)
@@ -667,7 +695,11 @@ namespace PeachPDF.Html.Core.Dom
             var isRootWithPageHeight = box == box.ContainingBlock && box.HtmlContainer is not null;
             var isDefiniteHeight = CssValueParser.IsValidLength(box.Height) &&
                 (box.ContainingBlock.IsHeightCalculated || !box.Height.EndsWith('%'));
-            box.IsHeightCalculated = isRootWithPageHeight || isDefiniteHeight;
+            // An aspect-ratio with a definite width and an auto height yields a definite (ratio-derived)
+            // height too, so a percentage-height descendant resolves against it — this is what lets the
+            // Charts.css bars take their height from the ratio-sized tbody.
+            var isRatioHeight = !CssValueParser.IsValidLength(box.Height) && TryGetAspectRatioHeight(box, out _);
+            box.IsHeightCalculated = isRootWithPageHeight || isDefiniteHeight || isRatioHeight;
 
             // Apply max-height constraint. Unlike min-height/explicit-height above (which only ever
             // grow ActualBottom), max-height must be able to shrink the box below its content's

@@ -40,6 +40,7 @@ namespace PeachPDF.CSS
         public static readonly string BorderBottomRightRadius = "border-bottom-right-radius";
         public static readonly string BoxShadow = "box-shadow";
         public static readonly string BoxSizing = "box-sizing";
+        public static readonly string AspectRatio = "aspect-ratio";
         public static readonly string BoxDecorationBreak = "box-decoration-break";
         public static readonly string BreakAfter = "break-after";
         public static readonly string BreakBefore = "break-before";
