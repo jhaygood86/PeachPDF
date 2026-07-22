@@ -181,11 +181,17 @@ namespace PeachPDF.CSS
             }
             if (tokens.Count == 0) return false;
 
-            var last = tokens[tokens.Count - 1];
-            if (last.Type == TokenType.Percentage)
+            // The optional percentage may appear before or after the color (CSS Color 5 §3.1), e.g.
+            // both `red 30%` and `30% red` are valid.
+            if (tokens[^1].Type == TokenType.Percentage)
             {
-                percent = AsTokens(last).ToPercent()?.NormalizedValue;
+                percent = AsTokens(tokens[^1]).ToPercent()?.NormalizedValue;
                 tokens.RemoveAt(tokens.Count - 1);
+            }
+            else if (tokens[0].Type == TokenType.Percentage)
+            {
+                percent = AsTokens(tokens[0]).ToPercent()?.NormalizedValue;
+                tokens.RemoveAt(0);
             }
 
             // A color-mix operand may itself be any color form (named/hex/rgb/oklch/...), so resolve it

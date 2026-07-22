@@ -185,6 +185,18 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public void ColorMix_PercentageBeforeColor_IsAccepted()
+        {
+            // Per CSS Color 5 §3.1 the percentage may precede the color; `30% white` == `white 30%`.
+            var before = Parse("color-mix(in srgb, 30% white, black)");
+            var after = Parse("color-mix(in srgb, white 30%, black)");
+            Assert.Equal(after.R, before.R);
+            Assert.Equal(after.G, before.G);
+            Assert.Equal(after.B, before.B);
+            Assert.InRange(before.R, 76, 77); // 0.30 gray
+        }
+
+        [Fact]
         public void ColorMix_PercentagesBelow100_ScaleResultAlpha()
         {
             // 30% red + 30% blue: components mix 50/50, but the 60% total scales alpha to 0.6.

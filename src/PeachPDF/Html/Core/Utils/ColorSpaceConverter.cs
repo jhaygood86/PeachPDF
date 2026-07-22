@@ -8,8 +8,10 @@ namespace PeachPDF.Html.Core.Utils
     /// <summary>
     /// Gradient color-stop interpolation across CSS Color 4 interpolation spaces. The actual color-space
     /// transform math lives once in <see cref="ColorSpaceMath"/> (CSS-OM); this render-layer type just
-    /// maps the gradient enums onto it and applies premultiplied-alpha interpolation with polar-hue
-    /// handling.
+    /// maps the gradient enums onto it and interpolates each channel (with polar-hue handling), lerping
+    /// alpha separately. Note this is <b>not</b> premultiplied — unlike <see cref="Color.Mix"/> (which
+    /// premultiplies per CSS Color 5 color-mix). Gradient-stop premultiplication (CSS Images 4 §3.2)
+    /// only matters for translucent stops and is a pre-existing, separate gap.
     /// </summary>
     internal static class ColorSpaceConverter
     {
