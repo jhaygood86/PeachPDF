@@ -127,6 +127,49 @@ namespace PeachPDF.Tests.Html.Core
         [InlineData("<color>", "rebeccapurple", true)]
         [InlineData("<color>", "#abc", true)]
         [InlineData("<color>", "notacolor", false)]
+        [InlineData("<url>", "url(a.png)", true)]
+        [InlineData("<url>", "url(https://x/y.svg)", true)]
+        [InlineData("<url>", "red", false)]
+        [InlineData("<url>", "linear-gradient(red, blue)", false)] // a gradient is an <image>, not a <url>
+        [InlineData("<image>", "url(a.png)", true)]
+        [InlineData("<image>", "linear-gradient(red, blue)", true)]
+        [InlineData("<image>", "radial-gradient(red, blue)", true)]
+        [InlineData("<image>", "conic-gradient(red, blue)", true)]
+        // Hex-color gradient stops (the value tokenizes with '#f00' as a Hash token outside a value context).
+        [InlineData("<image>", "linear-gradient(#f00, #00f)", true)]
+        [InlineData("<image>", "radial-gradient(#abc, #ffcc00)", true)]
+        [InlineData("<image>", "red", false)]
+        // Extended image functions (issue #229 gap 3): syntactically valid <image> values (not rendered).
+        [InlineData("<image>", "image-set(\"a.png\" 1x, \"b.png\" 2x)", true)]
+        [InlineData("<image>", "image-set(url(a.png) 1x, url(b.png) 2dppx)", true)]
+        [InlineData("<image>", "image-set(\"a.png\" 1x type(\"image/png\"))", true)] // resolution + type()
+        [InlineData("<image>", "cross-fade(url(a.png), url(b.png), 50%)", true)]
+        [InlineData("<image>", "cross-fade(50% url(a.png), url(b.png))", true)]
+        [InlineData("<image>", "element(#hero)", true)]
+        [InlineData("<image>", "image-set(banana)", false)]   // leading item isn't an <image>/<string>
+        [InlineData("<image>", "image-set(\"a.png\" 5px)", false)] // trailing token is neither resolution nor type()
+        [InlineData("<image>", "element(.klass)", false)]     // not an #id selector
+        [InlineData("<image>", "cross-fade(5px)", false)]     // no <image>/<color>
+        [InlineData("<image>", "notafunction(1)", false)]     // a function, but not a recognized image function
+        [InlineData("<time>", "5s", true)]
+        [InlineData("<time>", "250ms", true)]
+        [InlineData("<time>", "calc(1s + 2s)", true)]         // <time> calc() (issue #229 gap 2)
+        [InlineData("<time>", "10px", false)]
+        [InlineData("<time>", "5", false)]
+        [InlineData("<resolution>", "96dpi", true)]
+        [InlineData("<resolution>", "2dppx", true)]
+        [InlineData("<resolution>", "2x", true)]              // `x` is the dppx alias (CSS Values 4 §7.4)
+        [InlineData("<resolution>", "calc(2dppx * 2)", true)] // <resolution> calc() (issue #229 gap 2)
+        [InlineData("<resolution>", "5", false)]
+        [InlineData("<transform-function>", "rotate(45deg)", true)]
+        [InlineData("<transform-function>", "translate(1px, 2px)", true)]
+        [InlineData("<transform-function>", "matrix(1, 0, 0, 1, 0, 0)", true)]
+        [InlineData("<transform-function>", "red", false)]
+        [InlineData("<transform-function>", "translate(1px) rotate(1deg)", false)] // a list, not one function
+        [InlineData("<transform-list>", "translate(1px) rotate(1deg)", true)]
+        [InlineData("<transform-list>", "scale(2)", true)]
+        [InlineData("<transform-list>", "red", false)]
+        [InlineData("<transform-list>", "rotate(1deg) red", false)]
         [InlineData("<custom-ident>", "my-ident", true)]
         [InlineData("<custom-ident>", "10px", false)]
         [InlineData("<custom-ident>", "a.b", false)]
@@ -185,13 +228,103 @@ namespace PeachPDF.Tests.Html.Core
             Assert.True(reg!.Accepts("literally anything <here>", ValueParser));
         }
 
-        // A modeled data type not in our grammar (<image>) degrades to "accept" rather than wrongly reject.
+        // A modeled data type whose initial-value doesn't match is now invalid (the rule drops), instead of
+        // degrading to "accept" — so an <image> with a garbage initial-value no longer registers.
         [Fact]
-        public void UnmodeledType_DegradesToAccept()
+        public void ModeledType_InitialNotMatching_IsInvalid()
         {
-            var reg = Register("syntax: \"<image>\"; inherits: false; initial-value: whatever;");
+            Assert.Null(Register("syntax: \"<image>\"; inherits: false; initial-value: whatever;"));
+            Assert.Null(Register("syntax: \"<url>\"; inherits: false; initial-value: red;"));
+            Assert.Null(Register("syntax: \"<transform-list>\"; inherits: false; initial-value: nope;"));
+        }
+
+        // A syntax naming an unsupported/unknown <foo> data type is not a valid syntax string, so the whole
+        // @property rule is invalid and ignored (CSS Properties & Values API §3) — issue #229.
+        [Theory]
+        [InlineData("<future-thing>")]
+        [InlineData("<bogus>")]
+        [InlineData("<length> | <nope>")] // one bad alternation component invalidates the whole syntax
+        [InlineData("10px")]              // a component that's neither a <type> nor a valid ident
+        [InlineData("<length> |")]        // an empty alternation component
+        public void UnknownSyntaxType_InvalidatesRule(string syntax)
+        {
+            Assert.Null(Register($"syntax: \"{syntax}\"; inherits: false; initial-value: whatever;"));
+        }
+
+        // Valid syntax strings — every component is a supported <data-type> or an ident literal — still register.
+        [Theory]
+        [InlineData("<length>", "1px")]
+        [InlineData("<length> | <color>", "1px")]
+        [InlineData("<length>+", "1px")]
+        [InlineData("<color>#", "red")]
+        [InlineData("auto | <length>", "auto")]
+        [InlineData("small | medium | large", "small")]
+        public void ValidSyntaxString_Registers(string syntax, string initial)
+        {
+            Assert.NotNull(Register($"syntax: \"{syntax}\"; inherits: false; initial-value: {initial};"));
+        }
+
+        // ── initial-value calc(): category match (§3) + computational independence ────
+
+        [Theory]
+        [InlineData("<length>", "calc(1px + 2px)", true)]   // absolute-only → independent
+        [InlineData("<length>", "calc(2px * 3)", true)]
+        [InlineData("<length>", "calc(1em + 2px)", false)]  // em is font-relative
+        [InlineData("<length>", "calc(1rem)", false)]
+        [InlineData("<number>", "calc(2 * 3)", true)]
+        [InlineData("<angle>", "calc(45deg + 10deg)", true)]
+        [InlineData("<length>", "calc(-(2px) + 4px)", true)]   // unary sign on an absolute group → independent
+        [InlineData("<length>", "calc(-(1em) + 4px)", false)]  // unary sign on a font-relative group → dependent
+        [InlineData("<length>", "min(2px, 4px)", true)]        // min()/clamp() args must all be independent
+        [InlineData("<length>", "clamp(1px, 1em, 4px)", false)]
+        // Category match (issue #229): a percentage IS computationally independent (it computes to itself),
+        // so it registers wherever its category is allowed — <length-percentage> and <percentage> — but the
+        // category subset-test still rejects it for a pure <length>.
+        [InlineData("<length-percentage>", "calc(50% + 1px)", true)]
+        [InlineData("<length-percentage>", "calc(50%)", true)]
+        [InlineData("<percentage>", "calc(50%)", true)]
+        [InlineData("<length>", "calc(50%)", false)]   // percentage category ≠ length
+        [InlineData("<length>", "calc(45deg)", false)] // angle category ≠ length
+        // <time>/<resolution> calc() (issue #229 gap 2): now parseable/category-checked; s/ms & dpi/dppx are absolute.
+        [InlineData("<time>", "calc(1s + 2s)", true)]
+        [InlineData("<time>", "calc(1s + 1px)", false)]     // mixed time+length → type-invalid calc
+        [InlineData("<resolution>", "calc(2dppx * 2)", true)]
+        public void InitialValueCalc_CategoryAndIndependence(string syntax, string initial, bool valid)
+        {
+            var reg = Register($"syntax: \"{syntax}\"; inherits: false; initial-value: {initial};");
+            Assert.Equal(valid, reg is not null);
+        }
+
+        // The category subset-test also gates set values (Accepts), not just initial-values.
+        [Theory]
+        [InlineData("<length-percentage>", "calc(50%)", true)]
+        [InlineData("<length>", "calc(50%)", false)]
+        [InlineData("<length>", "calc(45deg)", false)]
+        public void Accepts_CalcCategory(string syntax, string value, bool expected)
+        {
+            var reg = Register($"syntax: \"{syntax}\"; inherits: false; initial-value: {InitialFor(syntax)};");
             Assert.NotNull(reg);
-            Assert.True(reg!.Accepts("url(x.png)", ValueParser));
+            Assert.Equal(expected, reg!.Accepts(value, ValueParser));
+        }
+
+        // An <image> property whose initial-value is a well-formed extended image function registers, even
+        // though the function paints nothing when consumed (issue #229 gap 3).
+        [Fact]
+        public void ImageProperty_ExtendedFunctionInitial_Registers()
+        {
+            Assert.NotNull(Register("syntax: \"<image>\"; inherits: false; initial-value: image-set(\"a.png\" 1x, \"b.png\" 2x);"));
+            Assert.NotNull(Register("syntax: \"<image>\"; inherits: false; initial-value: element(#hero);"));
+            Assert.Null(Register("syntax: \"<image>\"; inherits: false; initial-value: image-set(banana);"));
+        }
+
+        [Fact]
+        public void ComputationalIndependence_AppliesOnlyToInitialValue()
+        {
+            // A registered property still ACCEPTS a font-relative calc() at computed-value time — the
+            // independence rule constrains the initial-value only, not values set later.
+            var reg = Register("syntax: \"<length>\"; inherits: false; initial-value: 0px;");
+            Assert.NotNull(reg);
+            Assert.True(reg!.Accepts("calc(1em + 2px)", ValueParser));
         }
 
         // ── BuildRegistry (shared by the HTML cascade and the standalone-SVG loader) ──
@@ -233,6 +366,12 @@ namespace PeachPDF.Tests.Html.Core
             "<angle>" => "0deg",
             "<ratio>" => "1",
             "<color>" => "black",
+            "<url>" => "url(x)",
+            "<image>" => "url(x)",
+            "<time>" => "0s",
+            "<resolution>" => "96dpi",
+            "<transform-function>" => "scale(1)",
+            "<transform-list>" => "scale(1)",
             "<custom-ident>" => "x",
             "<string>" => "\"x\"",
             _ => "auto",

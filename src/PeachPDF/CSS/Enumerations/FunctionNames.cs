@@ -57,5 +57,8 @@ namespace PeachPDF.CSS
         public static readonly string ConicGradient = "conic-gradient";
         public static readonly string RepeatingConicGradient = "repeating-conic-gradient";
         public static readonly string Var = "var";
+        public static readonly string ImageSet = "image-set";
+        public static readonly string CrossFade = "cross-fade";
+        public static readonly string Element = "element";
     }
 }

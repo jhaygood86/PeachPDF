@@ -174,6 +174,20 @@ namespace PeachPDF.CSS
                         return new AngleCalcNode(unitToken.Value, angleUnit);
                     }
 
+                    var timeUnit = Time.GetUnit(unitToken.Unit);
+                    if (timeUnit != Time.Unit.None)
+                    {
+                        pos++;
+                        return new TimeCalcNode(unitToken.Value, timeUnit);
+                    }
+
+                    var resolutionUnit = Resolution.GetUnit(unitToken.Unit);
+                    if (resolutionUnit != Resolution.Unit.None)
+                    {
+                        pos++;
+                        return new ResolutionCalcNode(unitToken.Value, resolutionUnit);
+                    }
+
                     return null;
                 }
 

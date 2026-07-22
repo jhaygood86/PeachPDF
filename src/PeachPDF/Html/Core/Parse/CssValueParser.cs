@@ -425,9 +425,12 @@ namespace PeachPDF.Html.Core.Parse
             return result;
         }
 
-        public static List<Token> GetCssTokens(string propValue)
+        public static List<Token> GetCssTokens(string propValue, bool inValueContext = false)
         {
-            var lexer = new Lexer(propValue);
+            // In a value context '#rrggbb' lexes to a single Color token; otherwise a letter-leading hex is a
+            // Hash token and a digit-leading hex is '#' + number. Callers that hand the tokens to the Layer-A
+            // color/gradient grammar (which reads Color tokens) must set inValueContext so hex stops resolve.
+            var lexer = new Lexer(propValue) { IsInValue = inValueContext };
 
             List<Token> tokens = [];
 

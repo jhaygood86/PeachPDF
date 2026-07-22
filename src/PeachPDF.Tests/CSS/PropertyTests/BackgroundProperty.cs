@@ -220,6 +220,32 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.Equal("url(\"image.png\")", concrete.Value);
         }
 
+        [Theory]
+        [InlineData("background-image: image-set(\"a.png\" 1x, \"b.png\" 2x)")]
+        [InlineData("background-image: cross-fade(url(a.png), url(b.png), 50%)")]
+        [InlineData("background-image: element(#hero)")]
+        public void BackgroundImageExtendedFunctionLegal(string snippet)
+        {
+            // image-set()/cross-fade()/element() are valid <image> values (CSS Images 4) and now parse via the
+            // shared ImageSourceConverter, even though PeachPDF renders nothing for them (issue #229 gap 3).
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("background-image", property.Name);
+            Assert.IsType<BackgroundImageProperty>(property);
+            var concrete = (BackgroundImageProperty)property;
+            Assert.True(concrete.HasValue);
+            Assert.False(string.IsNullOrEmpty(concrete.Value)); // serializes back through ImageFunctionValue.CssText
+        }
+
+        [Theory]
+        [InlineData("background-image: image-set(banana)")]
+        [InlineData("background-image: element(.klass)")]
+        [InlineData("background-image: cross-fade(5px)")]
+        public void BackgroundImageMalformedExtendedFunctionIllegal(string snippet)
+        {
+            var property = ParseDeclaration(snippet);
+            Assert.False(((BackgroundImageProperty)property).HasValue);
+        }
+
         [Fact]
         public void BackgroundImageUrlAbsoluteLegal()
         {
