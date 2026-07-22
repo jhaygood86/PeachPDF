@@ -90,16 +90,8 @@ namespace PeachPDF.Html.Core.Parse
                 .ToList();
 
             // Collect @property registrations before the cascade runs — InheritStyle (step 2) and var()
-            // resolution both consult the registry. Later duplicate registrations of the same name win
-            // (cascade order), and invalid rules (FromRule returns null) are dropped per spec.
-            var registeredProperties = new Dictionary<string, RegisteredProperty>(StringComparer.Ordinal);
-            foreach (var propertyRule in cssData.Stylesheets.SelectMany(s => s.Rules.OfType<PropertyRule>()))
-            {
-                var registered = RegisteredProperty.FromRule(propertyRule, cssValueParser);
-                if (registered is not null)
-                    registeredProperties[registered.Name] = registered;
-            }
-            htmlContainer.RegisteredProperties = registeredProperties;
+            // resolution both consult the registry. (Shared with the standalone-SVG loader via BuildRegistry.)
+            htmlContainer.RegisteredProperties = RegisteredProperty.BuildRegistry(cssData, cssValueParser);
 
             // The cascade (CascadeApplyStyles) still recurses into an inline <svg>'s descendants on
             // purpose - inline SVG participates in the document cascade, and its shape boxes need their

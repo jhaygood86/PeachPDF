@@ -463,6 +463,26 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal("rgb(211, 84, 0)", el!.BackgroundColor);
         }
 
+        // CSS Custom Properties 1 §3 (invalid at computed-value time): a guaranteed-invalid var() in the
+        // WINNING declaration does NOT roll the cascade back to a lower-priority declaration — the property
+        // computes to its inherited/initial value. #el's var() (specificity 1,0,0) wins over div{color:red}
+        // (0,0,1); being invalid, color computes to inherited (default black), NOT the lower rule's red.
+        [Fact]
+        public async Task Var_GuaranteedInvalid_InWinningRule_DoesNotRollBackToLowerRule()
+        {
+            var html = """
+                <!DOCTYPE html><html><head><style>
+                  div { color: red; }
+                  #el { color: var(--undefined); }
+                </style></head><body><div id="el">text</div></body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var el = FindById(root, "el")!;
+
+            Assert.Equal("rgb(0, 0, 0)", el.Color);
+        }
+
         // ── helpers ───────────────────────────────────────────────────────────
 
         private static async Task<CssBox> BuildBoxTree(string html)

@@ -13,10 +13,12 @@
 using MimeKit;
 using PeachPDF;
 using PeachPDF.Html.Adapters;
+using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
 using PeachPDF.Svg;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -205,10 +207,21 @@ namespace PeachPDF.Html.Core.Handlers
                     // var(), then match through the full CSS engine like inline SVG does.
                     var root = xdoc.Root;
                     var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
-                    if (cssData is not null)
-                        SvgCssStyling.CascadeCustomProperties(root, cssData, "print");
 
-                    var source = new XElementSvgSourceNode(root, root, cssData, "print");
+                    // Honor the SVG's own @property registrations (initial-value/inherits/syntax) when
+                    // resolving var() in its styling — the standalone analogue of the HTML cascade's registry.
+                    IReadOnlyDictionary<string, RegisteredProperty>? registered = null;
+                    CssVarResolver.VarContext? varContext = null;
+                    if (cssData is not null)
+                    {
+                        var valueParser = new CssValueParser(_htmlContainer.Adapter);
+                        registered = RegisteredProperty.BuildRegistry(cssData, valueParser);
+                        if (registered.Count > 0)
+                            varContext = new CssVarResolver.VarContext(registered, valueParser);
+                        SvgCssStyling.CascadeCustomProperties(root, cssData, "print", registered);
+                    }
+
+                    var source = new XElementSvgSourceNode(root, root, cssData, "print", varContext);
                     SvgDocument = SvgTreeBuilder.Build(source, _htmlContainer.Adapter);
                 }
             }

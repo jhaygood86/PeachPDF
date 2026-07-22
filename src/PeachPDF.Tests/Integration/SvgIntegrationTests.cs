@@ -1425,6 +1425,98 @@ namespace PeachPDF.Tests.Integration
             Assert.DoesNotContain(Red, await GetPdfText(html));
         }
 
+        // Issue #213: @property registrations declared in a standalone SVG's own <style> are now honored
+        // when resolving var(). An unset registered property resolves to its initial-value. (A standalone
+        // SVG is strict XML, so a syntax containing "<" is wrapped in CDATA, as a real author would.)
+        [Fact]
+        public async Task ImgSvg_AtPropertyInitialValue_ResolvesWhenUnset()
+        {
+            var html = ImgSvgDoc("", """<style><![CDATA[ @property --c { syntax: "<color>"; inherits: false; initial-value: #00ff00; } rect { fill: var(--c); } ]]></style><rect x="10" y="10" width="80" height="80"/>""");
+            Assert.Contains(Green, await GetPdfText(html));
+        }
+
+        // A set value that fails the registered syntax is invalid at computed-value time and falls back to
+        // the initial-value (CSS Properties & Values API §2.2) - the standalone-SVG path now enforces this.
+        [Fact]
+        public async Task ImgSvg_AtPropertySyntaxMismatch_FallsBackToInitialValue()
+        {
+            var html = ImgSvgDoc("", """<style><![CDATA[ @property --c { syntax: "<color>"; inherits: false; initial-value: #00ff00; } rect { --c: 42px; fill: var(--c); } ]]></style><rect x="10" y="10" width="80" height="80"/>""");
+            Assert.Contains(Green, await GetPdfText(html));
+        }
+
+        // inherits: false - a descendant that doesn't set the property resolves it to the initial-value,
+        // NOT the ancestor's set value.
+        [Fact]
+        public async Task ImgSvg_AtPropertyInheritsFalse_DescendantUsesInitialValue()
+        {
+            var html = ImgSvgDoc("", """<style><![CDATA[ @property --c { syntax: "<color>"; inherits: false; initial-value: #00ff00; } rect { fill: var(--c); } ]]></style><g style="--c: #ff0000"><rect x="10" y="10" width="80" height="80"/></g>""");
+            var pdf = await GetPdfText(html);
+            Assert.Contains(Green, pdf);   // the initial-value green, not the ancestor's red
+            Assert.DoesNotContain(Red, pdf);
+        }
+
+        // Inline SVG re-resolves var() through the host document's @property registry too: a registered-but-
+        // unset custom property declared in the HTML <head> resolves to its initial-value in the SVG.
+        [Fact]
+        public async Task InlineSvg_AtPropertyInitialValue_ResolvesWhenUnset()
+        {
+            var html = InlineSvgDoc("""@property --c { syntax: "<color>"; inherits: false; initial-value: #00ff00; } rect { fill: var(--c); }""", """<rect x="10" y="10" width="80" height="80"/>""");
+            Assert.Contains(Green, await GetPdfText(html));
+        }
+
+        // The SVG inline style="" tier (ResolveStyledAttr) also honors @property: an inline
+        // style="fill: var(--c)" consuming a registered-but-unset property resolves to its initial-value,
+        // standalone and inline.
+        [Fact]
+        public async Task ImgSvg_InlineStyleConsumer_AtPropertyInitialValue()
+        {
+            var html = ImgSvgDoc("", """<style><![CDATA[ @property --c { syntax: "<color>"; inherits: false; initial-value: #00ff00; } ]]></style><rect x="10" y="10" width="80" height="80" style="fill: var(--c)"/>""");
+            Assert.Contains(Green, await GetPdfText(html));
+        }
+
+        [Fact]
+        public async Task InlineSvg_InlineStyleConsumer_AtPropertyInitialValue()
+        {
+            var html = InlineSvgDoc("""@property --c { syntax: "<color>"; inherits: false; initial-value: #00ff00; }""", """<rect x="10" y="10" width="80" height="80" style="fill: var(--c)"/>""");
+            Assert.Contains(Green, await GetPdfText(html));
+        }
+
+        // CSS Custom Properties 1 §3 (invalid at computed-value time): a guaranteed-invalid var() (missing
+        // property, no fallback) does NOT fall through to a lower-priority declaration — the declaration wins
+        // the cascade and the property computes to its inherited value (fill is inherited). Here the matched
+        // <style> rule (fill: var(--missing)) wins over the rect's own presentation fill, so the rect takes
+        // the parent <g>'s green, not its own presentation red.
+        [Fact]
+        public async Task ImgSvg_GuaranteedInvalidVar_ComputesToInherited_NotPresentationAttribute()
+        {
+            var html = ImgSvgDoc("", """<style>rect { fill: var(--missing); }</style><g fill="#00ff00"><rect x="10" y="10" width="80" height="80" fill="#ff0000"/></g>""");
+            var pdf = await GetPdfText(html);
+            Assert.Contains(Green, pdf);      // inherited from <g>
+            Assert.DoesNotContain(Red, pdf);  // the rect's presentation attr is suppressed (the <style> rule won)
+        }
+
+        // Same rule for the inline style="" tier: an invalid var() there wins the cascade and computes to
+        // inherited, suppressing both the rect's presentation fill and any lower <style> rule.
+        [Fact]
+        public async Task ImgSvg_InlineStyleInvalidVar_ComputesToInherited_NotLowerTiers()
+        {
+            var html = ImgSvgDoc("", """<style>rect { fill: #ff0000; }</style><g fill="#00ff00"><rect x="10" y="10" width="80" height="80" fill="#ff0000" style="fill: var(--missing)"/></g>""");
+            var pdf = await GetPdfText(html);
+            Assert.Contains(Green, pdf);      // inherited from <g>
+            Assert.DoesNotContain(Red, pdf);  // neither the <style> rule nor the presentation attr is used
+        }
+
+        // A nested data:image/svg+xml document (an <image> inside an outer SVG) is its own standalone SVG,
+        // so its own <style>'s @property registrations are honored too (SvgTreeBuilder.BuildImage path).
+        [Fact]
+        public async Task InlineSvg_NestedDataUriSvg_AtPropertyInitialValueResolves()
+        {
+            var embeddedSvg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100"><style><![CDATA[ @property --c { syntax: "<color>"; inherits: false; initial-value: #00ff00; } rect { fill: var(--c); } ]]></style><rect x="0" y="0" width="100" height="100"/></svg>""";
+            var embeddedDataUri = "data:image/svg+xml;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(embeddedSvg));
+            var html = $"""<!DOCTYPE html><html><body><svg viewBox="0 0 100 100" width="100" height="100"><image x="0" y="0" width="100" height="100" href="{embeddedDataUri}"/></svg></body></html>""";
+            Assert.Contains(Green, await GetPdfText(html));
+        }
+
         #endregion
     }
 }
