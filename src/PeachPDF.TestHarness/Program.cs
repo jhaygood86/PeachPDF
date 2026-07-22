@@ -3849,10 +3849,11 @@ await SaveShowcaseAsync("aspect_ratio", "Layout", "aspect-ratio",
 // Renders charts with the pure-CSS Charts.css framework (https://chartscss.org, MIT, v1.2.0).
 // The full official stylesheet is embedded verbatim (its MIT header kept intact); the five
 // data-drawing chart types (column, bar, area, line, pie) plus a multi-series example and the
-// documented "3D tilt" customization are authored with real charts.css markup. This one
-// document exercises @property (the whole palette + typed descriptors), aspect-ratio (every
-// chart takes its height from a ratio-sized tbody), clip-path (area/line fills and the a11y
-// label hiding), CSS logical properties (axes, spacing), conic/linear gradients, transforms,
+// documented "3D effects" customizations (extruded bars via stacked box-shadows, and a skewY
+// tilt) are authored with real charts.css markup. This one document exercises @property (the
+// whole palette + typed descriptors), aspect-ratio (every chart takes its height from a
+// ratio-sized tbody), clip-path (area/line fills and the a11y label hiding), box-shadow (the
+// extruded 3D bars), CSS logical properties (axes, spacing), conic/linear gradients, transforms,
 // and flexbox — all together, at once.
 var chartsCss = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "charts.css"));
 
@@ -3957,9 +3958,21 @@ var multiChart = $"""
     </table>
     """;
 
-// 3D tilt — Charts.css documents 3D looks as *customization examples* layered on a plain
+// 3D effects — Charts.css documents these as *customization examples* layered on a plain
 // .column chart (https://chartscss.org/customization/3d-effects/), not built-in classes.
-// The tilt is a single skewY() on the whole chart.
+//   • 3D Bars — a stack of ~10 offset box-shadows extrudes each bar's top/right face.
+//   • 3D Tilt — a single skewY() shears the whole chart.
+var barsChart = $"""
+    <table class="charts-css column fx-bars data-spacing-10">
+      <tbody>
+        {ColRow("A", 55, "55")}
+        {ColRow("B", 80, "80")}
+        {ColRow("C", 48, "48")}
+        {ColRow("D", 95, "95")}
+      </tbody>
+    </table>
+    """;
+
 var tiltChart = $"""
     <table class="charts-css column fx-tilt data-spacing-8">
       <tbody>
@@ -3988,7 +4001,16 @@ var chartsPageStyles = """
     h3.fx-h { font-size: 11pt; margin: 18px 0 2px; color: #333; font-weight: 600; }
     .page-break { break-before: page; }
 
-    /* --- 3D tilt recipe (a Charts.css customization example) --- */
+    /* --- 3D effect recipes (Charts.css customization examples) --- */
+    /* 3D Bars: a stack of offset box-shadows extrudes each bar's top-right face. */
+    .charts-css.column.fx-bars tbody tr td {
+      box-shadow:
+        1px -1px 1px lightgrey, 2px -2px 1px lightgrey, 3px -3px 1px lightgrey,
+        4px -4px 1px lightgrey, 5px -5px 1px lightgrey, 6px -6px 1px lightgrey,
+        7px -7px 1px lightgrey, 8px -8px 1px lightgrey, 9px -9px 1px lightgrey,
+        10px -10px 1px lightgrey;
+    }
+    /* 3D Tilt: a single skew on the whole chart. */
     .charts-css.column.fx-tilt { transform: skewY(-4deg); transform-origin: bottom left; }
     """;
 
@@ -4034,18 +4056,24 @@ var chartsHtml =
     $"<div class=\"chart\">{multiChart}</div>" +
 
     "<div class=\"page-break\"></div>" +
-    "<h2>3D tilt effect</h2>" +
+    "<h2>3D effects</h2>" +
     "<p class=\"note\">Charts.css documents 3D looks as CSS customizations layered on a plain column chart — " +
-    "no special classes. The tilt below is a single <code>transform: skewY()</code> on the whole chart, " +
-    "shearing every bar in concert.</p>" +
+    "no special classes (see <a href=\"https://chartscss.org/customization/3d-effects/\">chartscss.org</a>).</p>" +
+    "<h3 class=\"fx-h\">3D Bars — a stack of offset <code>box-shadow</code>s</h3>" +
+    "<p class=\"note\">Ten <code>box-shadow</code> layers, each offset one more pixel up-and-right, build the " +
+    "extruded top-right face of every bar.</p>" +
+    $"<div class=\"chart fx\">{barsChart}</div>" +
+    "<h3 class=\"fx-h\">3D Tilt — a single <code>transform: skewY()</code></h3>" +
+    "<p class=\"note\">One skew on the whole chart shears every bar in concert.</p>" +
     $"<div class=\"chart fx\">{tiltChart}</div>" +
 
     "</body></html>";
 
 await SaveShowcaseAsync("charts_css", "Charts & Data Viz", "Charts.css",
     "The Charts.css framework (MIT) rendering column, bar, area, line, and pie charts — plus a multi-series " +
-    "example and a 3D tilt — purely from CSS. The full official stylesheet is embedded, exercising @property, " +
-    "aspect-ratio, clip-path, logical properties, and conic/linear gradients together.",
+    "example and the documented 3D effects (extruded bars via stacked box-shadows, and a skewY tilt) — purely " +
+    "from CSS. The full official stylesheet is embedded, exercising @property, aspect-ratio, clip-path, " +
+    "box-shadow, logical properties, and conic/linear gradients together.",
     chartsHtml, pdfConfig);
 
 // The manifest that drives the website's /showcase page (see docs/showcase.html and
