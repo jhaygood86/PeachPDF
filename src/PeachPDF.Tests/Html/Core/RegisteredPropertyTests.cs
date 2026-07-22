@@ -139,12 +139,15 @@ namespace PeachPDF.Tests.Html.Core
         // Extended image functions (issue #229 gap 3): syntactically valid <image> values (not rendered).
         [InlineData("<image>", "image-set(\"a.png\" 1x, \"b.png\" 2x)", true)]
         [InlineData("<image>", "image-set(url(a.png) 1x, url(b.png) 2dppx)", true)]
+        [InlineData("<image>", "image-set(\"a.png\" 1x type(\"image/png\"))", true)] // resolution + type()
         [InlineData("<image>", "cross-fade(url(a.png), url(b.png), 50%)", true)]
         [InlineData("<image>", "cross-fade(50% url(a.png), url(b.png))", true)]
         [InlineData("<image>", "element(#hero)", true)]
         [InlineData("<image>", "image-set(banana)", false)]   // leading item isn't an <image>/<string>
+        [InlineData("<image>", "image-set(\"a.png\" 5px)", false)] // trailing token is neither resolution nor type()
         [InlineData("<image>", "element(.klass)", false)]     // not an #id selector
         [InlineData("<image>", "cross-fade(5px)", false)]     // no <image>/<color>
+        [InlineData("<image>", "notafunction(1)", false)]     // a function, but not a recognized image function
         [InlineData("<time>", "5s", true)]
         [InlineData("<time>", "250ms", true)]
         [InlineData("<time>", "calc(1s + 2s)", true)]         // <time> calc() (issue #229 gap 2)
@@ -237,6 +240,8 @@ namespace PeachPDF.Tests.Html.Core
         [InlineData("<future-thing>")]
         [InlineData("<bogus>")]
         [InlineData("<length> | <nope>")] // one bad alternation component invalidates the whole syntax
+        [InlineData("10px")]              // a component that's neither a <type> nor a valid ident
+        [InlineData("<length> |")]        // an empty alternation component
         public void UnknownSyntaxType_InvalidatesRule(string syntax)
         {
             Assert.Null(Register($"syntax: \"{syntax}\"; inherits: false; initial-value: whatever;"));
