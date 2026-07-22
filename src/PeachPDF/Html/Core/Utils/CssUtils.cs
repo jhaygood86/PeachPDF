@@ -140,7 +140,6 @@ namespace PeachPDF.Html.Core.Utils
                 ["vertical-align"] = b => b.VerticalAlign,
                 ["text-indent"] = b => b.TextIndent,
                 ["text-align"] = b => b.TextAlign,
-                ["text-decoration"] = b => b.TextDecoration,
                 ["text-decoration-color"] = b => b.TextDecorationColor,
                 ["text-decoration-line"] = b => b.TextDecorationLine,
                 ["text-decoration-style"] = b => b.TextDecorationStyle,
@@ -209,18 +208,18 @@ namespace PeachPDF.Html.Core.Utils
             "padding-bottom", "padding-left", "padding-right", "padding-top",
             "position",
             "right", "string-set",
-            "text-align", "text-decoration", "text-decoration-color", "text-decoration-line", "text-decoration-style",
+            "text-align", "text-decoration-color", "text-decoration-line", "text-decoration-style",
             "text-indent", "text-transform", "top",
             "transform", "transform-origin", "opacity",
             "vertical-align", "visibility",
             "white-space", "width", "word-break", "word-spacing",
             "z-index",
             "align-content", "align-items", "align-self",
-            "flex", "flex-basis", "flex-direction", "flex-flow", "flex-grow", "flex-shrink", "flex-wrap",
+            "flex-basis", "flex-direction", "flex-grow", "flex-shrink", "flex-wrap",
             "justify-content", "order",
-            "gap", "row-gap", "column-gap",
-            "columns", "column-count", "column-width", "column-fill", "column-span",
-            "column-rule", "column-rule-width", "column-rule-style", "column-rule-color",
+            "row-gap", "column-gap",
+            "column-count", "column-width", "column-fill", "column-span",
+            "column-rule-width", "column-rule-style", "column-rule-color",
         ];
 
         /// <summary>
@@ -270,14 +269,6 @@ namespace PeachPDF.Html.Core.Utils
         private static readonly FrozenDictionary<string, Action<CssValueParser, CssBox, string>> _propertySetters =
             new Dictionary<string, Action<CssValueParser, CssBox, string>>
             {
-                ["border"] = (p, b, v) => SetBorderPropertyValue(p, b, v, null),
-                ["border-bottom"] = (p, b, v) => SetBorderPropertyValue(p, b, v, "bottom"),
-                ["border-left"] = (p, b, v) => SetBorderPropertyValue(p, b, v, "left"),
-                ["border-right"] = (p, b, v) => SetBorderPropertyValue(p, b, v, "right"),
-                ["border-top"] = (p, b, v) => SetBorderPropertyValue(p, b, v, "top"),
-                ["border-width"] = (p, b, v) => SetBorderChildPropertyValue(p, b, "width", v),
-                ["border-style"] = (p, b, v) => SetBorderChildPropertyValue(p, b, "style", v),
-                ["border-color"] = (p, b, v) => SetBorderChildPropertyValue(p, b, "color", v),
                 ["border-bottom-width"] = (_, b, v) => { if (IsValidLengthProperty(v)) b.BorderBottomWidth = v; },
                 ["border-left-width"] = (_, b, v) => { if (IsValidLengthProperty(v)) b.BorderLeftWidth = v; },
                 ["border-right-width"] = (_, b, v) => { if (IsValidLengthProperty(v)) b.BorderRightWidth = v; },
@@ -293,7 +284,6 @@ namespace PeachPDF.Html.Core.Utils
                 ["border-spacing"] = (_, b, v) => b.BorderSpacing = v,
                 ["border-collapse"] = (_, b, v) => b.BorderCollapse = v,
                 ["box-sizing"] = (_, b, v) => { if (IsValidBoxSizing(v)) b.BoxSizing = v; },
-                ["border-radius"] = (_, b, v) => b.BorderRadius = v,
                 ["transform"] = (_, b, v) => b.Transform = v,
                 ["transform-origin"] = (_, b, v) => b.TransformOrigin = v,
                 ["opacity"] = (_, b, v) => b.Opacity = v,
@@ -307,12 +297,10 @@ namespace PeachPDF.Html.Core.Utils
                 ["string-set"] = (_, b, v) => b.StringSet = v,
                 ["page"] = (_, b, v) => b.PageName = v,
                 ["-peachpdf-pdf-tag-type"] = (_, b, v) => b.PdfTagType = v,
-                ["margin"] = (p, b, v) => SetMultiDirectionProperty(p, b, "margin", v),
                 ["margin-bottom"] = (_, b, v) => b.MarginBottom = v,
                 ["margin-left"] = (_, b, v) => b.MarginLeft = v,
                 ["margin-right"] = (_, b, v) => b.MarginRight = v,
                 ["margin-top"] = (_, b, v) => b.MarginTop = v,
-                ["padding"] = (p, b, v) => SetMultiDirectionProperty(p, b, "padding", v),
                 ["padding-bottom"] = (_, b, v) => b.PaddingBottom = v,
                 ["padding-left"] = (_, b, v) => b.PaddingLeft = v,
                 ["padding-right"] = (_, b, v) => b.PaddingRight = v,
@@ -361,7 +349,6 @@ namespace PeachPDF.Html.Core.Utils
                 ["vertical-align"] = (_, b, v) => b.VerticalAlign = v,
                 ["text-indent"] = (_, b, v) => b.TextIndent = v,
                 ["text-align"] = (_, b, v) => b.TextAlign = v,
-                ["text-decoration"] = (_, b, v) => b.TextDecoration = v,
                 ["text-decoration-color"] = (_, b, v) => b.TextDecorationColor = v,
                 ["text-decoration-line"] = (_, b, v) => b.TextDecorationLine = v,
                 ["text-decoration-style"] = (_, b, v) => b.TextDecorationStyle = v,
@@ -377,7 +364,6 @@ namespace PeachPDF.Html.Core.Utils
                 ["font-variant"] = (_, b, v) => b.FontVariant = v,
                 ["font-weight"] = (_, b, v) => b.FontWeight = v,
                 ["font-stretch"] = (_, b, v) => b.FontStretch = v,
-                ["list-style"] = (p, b, v) => SetListStyle(p, b, v),
                 ["list-style-position"] = (_, b, v) => b.ListStylePosition = v,
                 ["list-style-image"] = (p, b, v) => b.ListStyleImage = p.ParseImage(v),
                 ["list-style-type"] = (_, b, v) => b.ListStyleType = v,
@@ -396,17 +382,12 @@ namespace PeachPDF.Html.Core.Utils
                 ["flex-basis"] = (_, b, v) => b.FlexBasis = v,
                 ["align-self"] = (_, b, v) => b.AlignSelf = v,
                 ["order"] = (_, b, v) => b.Order = v,
-                ["flex"] = (_, b, v) => SetFlexShorthand(b, v),
-                ["flex-flow"] = (_, b, v) => SetFlexFlowShorthand(b, v),
-                ["gap"] = (_, b, v) => SetFlexGapShorthand(b, v),
                 ["row-gap"] = (_, b, v) => b.FlexRowGap = v,
                 ["column-gap"] = (_, b, v) => b.FlexColumnGap = v,
                 ["column-count"] = (_, b, v) => { if (v is CssConstants.Auto || (int.TryParse(v, out var columnCount) && columnCount > 0)) b.ColumnCount = v; },
                 ["column-width"] = (_, b, v) => { if (v is CssConstants.Auto || CssValueParser.IsValidLength(v)) b.ColumnWidth = v; },
-                ["columns"] = (_, b, v) => SetColumnsShorthand(b, v),
                 ["column-fill"] = (_, b, v) => { if (v is CssConstants.Auto or "balance") b.ColumnFill = v; },
                 ["column-span"] = (_, b, v) => { if (v is CssConstants.None or "all") b.ColumnSpan = v; },
-                ["column-rule"] = (p, b, v) => SetColumnRuleShorthand(p, b, v),
                 ["column-rule-width"] = (_, b, v) => { if (IsValidLengthProperty(v)) b.ColumnRuleWidth = v; },
                 ["column-rule-style"] = (_, b, v) => { if (IsValidBorderStyleProperty(v)) b.ColumnRuleStyle = v; },
                 ["column-rule-color"] = (p, b, v) => { if (IsValidColorProperty(p, v)) b.ColumnRuleColor = v; },
@@ -415,102 +396,8 @@ namespace PeachPDF.Html.Core.Utils
                 ["overflow-wrap"] = (_, _, _) => { },
             }.ToFrozenDictionary(StringComparer.Ordinal);
 
-        private static void SetFlexShorthand(CssBox cssBox, string value)
-        {
-            switch (value)
-            {
-                case "none": cssBox.FlexGrow = "0"; cssBox.FlexShrink = "0"; cssBox.FlexBasis = "auto"; return;
-                case "auto": cssBox.FlexGrow = "1"; cssBox.FlexShrink = "1"; cssBox.FlexBasis = "auto"; return;
-            }
-            // TODO: a calc()-valued flex-basis component (e.g. "flex: 1 1 calc(10px + 5px)") would be
-            // mis-split here, same as gap was - use CssValueParser.SplitTopLevelWhitespace if that's needed.
-            var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length >= 1 && float.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _))
-                cssBox.FlexGrow = parts[0];
-            if (parts.Length >= 2 && float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _))
-                cssBox.FlexShrink = parts[1];
-            if (parts.Length >= 3)
-                cssBox.FlexBasis = parts[2];
-            else if (parts.Length == 1)
-            {
-                cssBox.FlexShrink = "1";
-                cssBox.FlexBasis = "0";
-            }
-        }
-
-        private static void SetFlexFlowShorthand(CssBox cssBox, string value)
-        {
-            foreach (var part in value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
-            {
-                switch (part)
-                {
-                    case "row":
-                    case "row-reverse":
-                    case "column":
-                    case "column-reverse":
-                        cssBox.FlexDirection = part;
-                        break;
-                    case "nowrap":
-                    case "wrap":
-                    case "wrap-reverse":
-                        cssBox.FlexWrap = part;
-                        break;
-                }
-            }
-        }
-
-        private static void SetFlexGapShorthand(CssBox cssBox, string value)
-        {
-            // Paren-depth-aware split so a calc()/min()/max()/clamp() value's internal spaces aren't
-            // mistaken for the row/column delimiter (e.g. "gap: calc(10px + 5px) 20px").
-            var parts = CssValueParser.SplitTopLevelWhitespace(value).ToArray();
-            cssBox.FlexRowGap    = parts[0];
-            cssBox.FlexColumnGap = parts.Length > 1 ? parts[1] : parts[0];
-        }
-
         // <'column-width'> || <'column-count'> — each token is either "auto" (leave that longhand at
         // its default), an integer (column-count), or a length (column-width).
-        private static void SetColumnsShorthand(CssBox cssBox, string value)
-        {
-            cssBox.ColumnCount = CssConstants.Auto;
-            cssBox.ColumnWidth = CssConstants.Auto;
-
-            foreach (var part in value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
-            {
-                if (part is CssConstants.Auto) continue;
-
-                if (int.TryParse(part, out var count) && count > 0)
-                {
-                    cssBox.ColumnCount = part;
-                }
-                else if (CssValueParser.IsValidLength(part))
-                {
-                    cssBox.ColumnWidth = part;
-                }
-            }
-        }
-
-        private static void SetColumnRuleShorthand(CssValueParser valueParser, CssBox cssBox, string value)
-        {
-            // column-rule has the exact same <width> || <style> || <color> grammar as a border side,
-            // so it reuses the same shorthand tokenizer rather than a second copy of the same parsing rules.
-            ParseBorder(valueParser, value, out var width, out var style, out var color);
-
-            if (width is not null)
-            {
-                cssBox.ColumnRuleWidth = width;
-            }
-
-            if (style is not null)
-            {
-                cssBox.ColumnRuleStyle = style;
-            }
-
-            if (color is not null)
-            {
-                cssBox.ColumnRuleColor = color;
-            }
-        }
 
         public static void ApplyCurrentColor(CssBox box, CssValueParser valueParser)
         {
@@ -572,277 +459,5 @@ namespace PeachPDF.Html.Core.Utils
             return propValue is CssConstants.BorderBox or CssConstants.ContentBox;
         }
 
-        private static void SetBorderPropertyValue(CssValueParser valueParser, CssBox box, string propValue, string? direction)
-        {
-            ParseBorder(valueParser, propValue, out var borderWidth, out var borderStyle, out var borderColor);
-
-            var borderDirectionPropertyName = "border";
-
-            if (direction is not null)
-            {
-                borderDirectionPropertyName += "-" + direction;
-            }
-
-            if (borderWidth is not null)
-            {
-                SetPropertyValue(valueParser, box, borderDirectionPropertyName + "-width", borderWidth);
-            }
-
-            if (borderStyle is not null)
-            {
-                SetPropertyValue(valueParser, box, borderDirectionPropertyName + "-style", borderStyle);
-            }
-
-            if (borderColor is not null)
-            {
-                SetPropertyValue(valueParser, box, borderDirectionPropertyName + "-color", borderColor);
-            }
-        }
-
-        private static void SetBorderChildPropertyValue(CssValueParser valueParser, CssBox box, string borderChildProperty, string propValue)
-        {
-            SplitMultiDirectionValues(propValue, out var left, out var top, out var right, out var bottom);
-
-            if (left is not null)
-            {
-                SetPropertyValue(valueParser, box, $"border-left-{borderChildProperty}", left);
-            }
-
-            if (top is not null)
-            {
-                SetPropertyValue(valueParser, box, $"border-top-{borderChildProperty}", top);
-            }
-
-            if (right is not null)
-            {
-                SetPropertyValue(valueParser, box, $"border-right-{borderChildProperty}", right);
-            }
-
-            if (bottom is not null)
-            {
-                SetPropertyValue(valueParser, box, $"border-bottom-{borderChildProperty}", bottom);
-            }
-        }
-
-        private static void SetMultiDirectionProperty(CssValueParser valueParser, CssBox box, string basePropertyName, string propValue)
-        {
-            SplitMultiDirectionValues(propValue, out var left, out var top, out var right, out var bottom);
-
-            if (left is not null)
-            {
-                SetPropertyValue(valueParser, box, $"{basePropertyName}-left", left);
-            }
-
-            if (top is not null)
-            {
-                SetPropertyValue(valueParser, box, $"{basePropertyName}-top", top);
-            }
-
-            if (right is not null)
-            {
-                SetPropertyValue(valueParser, box, $"{basePropertyName}-right", right);
-            }
-
-            if (bottom is not null)
-            {
-                SetPropertyValue(valueParser, box, $"{basePropertyName}-bottom", bottom);
-            }
-        }
-
-        /// <summary>
-        /// Split multi direction value into the proper direction values (left, top, right, bottom).
-        /// </summary>
-        private static void SplitMultiDirectionValues(string propValue, out string? left, out string? top, out string? right, out string? bottom)
-        {
-            top = null;
-            left = null;
-            right = null;
-            bottom = null;
-
-            var values = SplitValues(propValue).ToArray();
-
-            switch (values.Length)
-            {
-                case 1:
-                    top = left = right = bottom = values[0];
-                    break;
-                case 2:
-                    top = bottom = values[0];
-                    left = right = values[1];
-                    break;
-                case 3:
-                    top = values[0];
-                    left = right = values[1];
-                    bottom = values[2];
-                    break;
-                case 4:
-                    top = values[0];
-                    right = values[1];
-                    bottom = values[2];
-                    left = values[3];
-                    break;
-            }
-        }
-
-        private static void SetListStyle(CssValueParser valueParser, CssBox box, string propValue)
-        {
-            var values = SplitValues(propValue);
-
-            var listStyleType = CssConstants.None;
-            CssImage? listStyleImage = null;
-            var listStylePosition = CssConstants.Outside;
-
-            foreach (var value in values)
-            {
-                if (value is CssConstants.Inside or CssConstants.Outside)
-                {
-                    listStylePosition = value;
-                    continue;
-                }
-
-                var imageValue = valueParser.ParseImage(value);
-
-                if (imageValue is null)
-                    listStyleType = value;
-                else
-                    listStyleImage = imageValue;
-            }
-
-            box.ListStyleType = listStyleType;
-            box.ListStyleImage = listStyleImage;
-            box.ListStylePosition = listStylePosition;
-        }
-
-
-        /// <summary>
-        /// Split the value by the specified separator; e.g. Useful in values like 'padding:5 4 3 inherit'
-        /// </summary>
-        /// <param name="value">Value to be splitted</param>
-        /// <param name="separator"> </param>
-        /// <returns>Splitted and trimmed values</returns>
-        private static IEnumerable<string> SplitValues(string value, char separator = ' ')
-        {
-            //TODO: CRITICAL! Don't split values on parenthesis (like rgb(0, 0, 0)) or quotes ("strings")
-
-            if (string.IsNullOrEmpty(value)) yield break;
-            var values = value.Split(separator);
-
-            foreach (var t in values)
-            {
-                var val = t.Trim();
-
-                if (!string.IsNullOrEmpty(val))
-                {
-                    yield return val;
-                }
-            }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="valueParser"></param>
-        /// <param name="value"></param>
-        /// <param name="width"> </param>
-        /// <param name="style"></param>
-        /// <param name="color"></param>
-        private static void ParseBorder(CssValueParser valueParser, string value, out string? width, out string? style, out string? color)
-        {
-            width = style = color = null;
-            if (string.IsNullOrEmpty(value)) return;
-
-            var idx = 0;
-            while ((idx = CommonUtils.GetNextSubString(value, idx, out var length)) > -1)
-            {
-                width ??= ParseBorderWidth(value, idx, length);
-                style ??= ParseBorderStyle(value, idx, length);
-                color ??= ParseBorderColor(valueParser, value, idx, length);
-
-                idx = idx + length + 1;
-            }
-        }
-
-        /// <summary>
-        /// Parse the given substring to extract border width substring.
-        /// Assume given substring is not empty and all indexes are valid!<br/>
-        /// </summary>
-        /// <returns>found border width value or null</returns>
-        private static string? ParseBorderWidth(string str, int idx, int length)
-        {
-            if ((length > 2 && char.IsDigit(str[idx])) || (length > 3 && str[idx] == '.'))
-            {
-                string? unit = null;
-                if (CommonUtils.SubStringEquals(str, idx + length - 2, 2, CssConstants.Px))
-                    unit = CssConstants.Px;
-                else if (CommonUtils.SubStringEquals(str, idx + length - 2, 2, CssConstants.Pt))
-                    unit = CssConstants.Pt;
-                else if (CommonUtils.SubStringEquals(str, idx + length - 2, 2, CssConstants.Em))
-                    unit = CssConstants.Em;
-                else if (CommonUtils.SubStringEquals(str, idx + length - 2, 2, CssConstants.Ex))
-                    unit = CssConstants.Ex;
-                else if (CommonUtils.SubStringEquals(str, idx + length - 2, 2, CssConstants.In))
-                    unit = CssConstants.In;
-                else if (CommonUtils.SubStringEquals(str, idx + length - 2, 2, CssConstants.Cm))
-                    unit = CssConstants.Cm;
-                else if (CommonUtils.SubStringEquals(str, idx + length - 2, 2, CssConstants.Mm))
-                    unit = CssConstants.Mm;
-                else if (CommonUtils.SubStringEquals(str, idx + length - 2, 2, CssConstants.Pc))
-                    unit = CssConstants.Pc;
-
-                if (unit == null) return null;
-                if (CssValueParser.IsFloat(str, idx, length - 2))
-                    return str.Substring(idx, length);
-            }
-            else
-            {
-                if (CommonUtils.SubStringEquals(str, idx, length, CssConstants.Thin))
-                    return CssConstants.Thin;
-                if (CommonUtils.SubStringEquals(str, idx, length, CssConstants.Medium))
-                    return CssConstants.Medium;
-                if (CommonUtils.SubStringEquals(str, idx, length, CssConstants.Thick))
-                    return CssConstants.Thick;
-            }
-            return null;
-        }
-
-        /// <summary>
-        /// Parse the given substring to extract border style substring.<br/>
-        /// Assume given substring is not empty and all indexes are valid!<br/>
-        /// </summary>
-        /// <returns>found border width value or null</returns>
-        private static string? ParseBorderStyle(string str, int idx, int length)
-        {
-            if (CommonUtils.SubStringEquals(str, idx, length, CssConstants.None))
-                return CssConstants.None;
-            if (CommonUtils.SubStringEquals(str, idx, length, CssConstants.Solid))
-                return CssConstants.Solid;
-            if (CommonUtils.SubStringEquals(str, idx, length, CssConstants.Hidden))
-                return CssConstants.Hidden;
-            if (CommonUtils.SubStringEquals(str, idx, length, CssConstants.Dotted))
-                return CssConstants.Dotted;
-            if (CommonUtils.SubStringEquals(str, idx, length, CssConstants.Dashed))
-                return CssConstants.Dashed;
-            if (CommonUtils.SubStringEquals(str, idx, length, CssConstants.Double))
-                return CssConstants.Double;
-            if (CommonUtils.SubStringEquals(str, idx, length, CssConstants.Groove))
-                return CssConstants.Groove;
-            if (CommonUtils.SubStringEquals(str, idx, length, CssConstants.Ridge))
-                return CssConstants.Ridge;
-            if (CommonUtils.SubStringEquals(str, idx, length, CssConstants.Inset))
-                return CssConstants.Inset;
-            if (CommonUtils.SubStringEquals(str, idx, length, CssConstants.Outset))
-                return CssConstants.Outset;
-            return null;
-        }
-
-        /// <summary>
-        /// Parse the given substring to extract border style substring.<br/>
-        /// Assume given substring is not empty and all indexes are valid!<br/>
-        /// </summary>
-        /// <returns>found border width value or null</returns>
-        private static string? ParseBorderColor(CssValueParser valueParser, string str, int idx, int length)
-        {
-            return valueParser.TryGetColor(str, idx, length, out _) ? str.Substring(idx, length) : null;
-        }
     }
 }

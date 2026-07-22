@@ -3403,43 +3403,13 @@ namespace PeachPDF.Html.Core.Dom
         /// </param>
         protected void PaintDecoration(RGraphics g, RRect rectangle, bool isFirst, bool isLast, CssBox? firstLineStyle = null)
         {
+            // The `text-decoration` shorthand is expanded into these longhands by the CSS-OM (Layer A) before
+            // it ever reaches the box, so the painter reads the longhands directly. text-decoration-line may
+            // carry several space-separated line keywords (e.g. "underline overline"); each is drawn.
             var styleSource = firstLineStyle ?? this;
             var textDecorationLine = styleSource.TextDecorationLine;
             var textDecorationStyle = styleSource.TextDecorationStyle;
             var textDecorationColor = styleSource.TextDecorationColor;
-
-            var textDecorationParts = styleSource.TextDecoration?.Split(' ') ?? [];
-
-
-            if (textDecorationParts.Length > 0)
-            {
-                HashSet<string> lineValues =
-                    [
-                    CssConstants.Underline, CssConstants.Overline, CssConstants.LineThrough, CssConstants.Blink];
-
-                HashSet<string> styleValues =
-                [
-                    CssConstants.Solid, CssConstants.Double, CssConstants.Dotted, CssConstants.Dashed, CssConstants.Wavy
-                ];
-
-                foreach (var textDecorationPart in textDecorationParts)
-                {
-                    if (string.IsNullOrEmpty(textDecorationLine) && lineValues.Contains(textDecorationPart))
-                    {
-                        textDecorationLine = textDecorationPart;
-                    }
-
-                    if (string.IsNullOrEmpty(textDecorationStyle) && styleValues.Contains(textDecorationPart))
-                    {
-                        textDecorationStyle = textDecorationPart;
-                    }
-
-                    if (string.IsNullOrEmpty(textDecorationColor) && _htmlContainer!.CssParser.IsColorValid(textDecorationPart))
-                    {
-                        textDecorationColor = textDecorationPart;
-                    }
-                }
-            }
 
             if (string.IsNullOrEmpty(textDecorationLine) || textDecorationLine == CssConstants.None)
                 return;
@@ -3455,16 +3425,6 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             var textDecorationActualColor = string.IsNullOrEmpty(textDecorationColor) ? styleSource.ActualColor : HtmlContainer!.CssParser.ParseColor(textDecorationColor);
-
-            double y = textDecorationLine switch
-            {
-                CssConstants.Underline => Math.Round(rectangle.Top + styleSource.ActualFont.UnderlineOffset),
-                CssConstants.LineThrough => rectangle.Top + rectangle.Height / 2f,
-                CssConstants.Overline => rectangle.Top,
-                _ => 0f
-            };
-
-            y -= ActualPaddingBottom - ActualBorderBottomWidth;
 
             double x1 = rectangle.X;
             if (isFirst)
@@ -3487,7 +3447,24 @@ namespace PeachPDF.Html.Core.Dom
             var pen = g.GetPen(textDecorationActualColor);
             pen.Width = 1;
             pen.DashStyle = dashStyle;
-            g.DrawLine(pen, x1, y, x2, y);
+
+            // text-decoration-line may list several keywords (e.g. "underline overline"); draw each.
+            var bottomInset = ActualPaddingBottom - ActualBorderBottomWidth;
+            foreach (var line in textDecorationLine.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            {
+                double y = line switch
+                {
+                    CssConstants.Underline => Math.Round(rectangle.Top + styleSource.ActualFont.UnderlineOffset),
+                    CssConstants.LineThrough => rectangle.Top + rectangle.Height / 2f,
+                    CssConstants.Overline => rectangle.Top,
+                    _ => double.NaN
+                };
+
+                if (double.IsNaN(y)) continue;
+
+                y -= bottomInset;
+                g.DrawLine(pen, x1, y, x2, y);
+            }
         }
 
         /// <summary>
