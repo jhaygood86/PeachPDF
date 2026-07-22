@@ -137,6 +137,12 @@ namespace PeachPDF.Svg
         /// <c>initial</c> CSS-wide keyword to a concrete value the SVG paint consumers can parse (per the
         /// property's SVG 1.1/2 initial value). Every property here is inherited, so <c>unset</c> resolves as
         /// <c>inherit</c> (the null-present signal) rather than needing an entry.
+        /// <para>
+        /// Maintenance: when adding a new inherited SVG property that is (a) registered with a
+        /// globals-accepting converter and (b) consumed via the <c>null → inherited</c> path in
+        /// <c>SvgTreeBuilder.ApplyCommon</c>, add its initial value here too — otherwise <c>initial</c> on it
+        /// would silently resolve to null (i.e. <em>inherited</em>) instead of its actual initial value.
+        /// </para>
         /// </summary>
         private static readonly Dictionary<string, string> SvgInitialValues = new(StringComparer.OrdinalIgnoreCase)
         {
