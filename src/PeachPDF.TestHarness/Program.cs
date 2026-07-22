@@ -3849,8 +3849,8 @@ await SaveShowcaseAsync("aspect_ratio", "Layout", "aspect-ratio",
 // Renders charts with the pure-CSS Charts.css framework (https://chartscss.org, MIT, v1.2.0).
 // The full official stylesheet is embedded verbatim (its MIT header kept intact); the five
 // data-drawing chart types (column, bar, area, line, pie) plus a multi-series example and the
-// documented "3D effects" customizations (extruded bars via stacked box-shadows, and a skewY
-// tilt) are authored with real charts.css markup. This one document exercises @property (the
+// documented customizations (extruded 3D bars via stacked box-shadows, a skewY tilt, and
+// shadowed bars via inset+outset box-shadows) are authored with real charts.css markup. This one document exercises @property (the
 // whole palette + typed descriptors), aspect-ratio (every chart takes its height from a
 // ratio-sized tbody), clip-path (area/line fills and the a11y label hiding), box-shadow (the
 // extruded 3D bars), CSS logical properties (axes, spacing), conic/linear gradients, transforms,
@@ -3962,6 +3962,7 @@ var multiChart = $"""
 // .column chart (https://chartscss.org/customization/3d-effects/), not built-in classes.
 //   • 3D Bars — a stack of ~10 offset box-shadows extrudes each bar's top/right face.
 //   • 3D Tilt — a single skewY() shears the whole chart.
+//   • Charts with Shadows — a white panel + each bar get a rounded inset+outset box-shadow.
 var barsChart = $"""
     <table class="charts-css column fx-bars data-spacing-10">
       <tbody>
@@ -3980,6 +3981,20 @@ var tiltChart = $"""
         {ColRow("B", 80, "80")}
         {ColRow("C", 48, "48")}
         {ColRow("D", 95, "95")}
+      </tbody>
+    </table>
+    """;
+
+// "Charts with Shadows" — the official example gives the whole tbody and each bar a rounded,
+// inset+outset box-shadow (a raised/pressed look), spacing the bars with margin-inline.
+var shadowChart = $"""
+    <table class="charts-css column fx-shadow hide-data">
+      <tbody>
+        {ColRow("A", 40, "40")}
+        {ColRow("B", 60, "60")}
+        {ColRow("C", 75, "75")}
+        {ColRow("D", 55, "55")}
+        {ColRow("E", 90, "90")}
       </tbody>
     </table>
     """;
@@ -4012,6 +4027,18 @@ var chartsPageStyles = """
     }
     /* 3D Tilt: a single skew on the whole chart. */
     .charts-css.column.fx-tilt { transform: skewY(-4deg); transform-origin: bottom left; }
+    /* Charts with Shadows: a rounded inset+outset box-shadow on the chart area and each bar. */
+    .charts-css.column.fx-shadow tbody {
+      padding: 30px;
+      border-radius: 10px;
+      background: #fff;
+      box-shadow: inset -5px -5px 10px rgba(0, 0, 0, 0.5), 5px 5px 5px rgba(0, 0, 0, 0.5);
+    }
+    .charts-css.column.fx-shadow tbody td {
+      margin-inline: 10px;
+      border-radius: 10px;
+      box-shadow: inset -5px -5px 10px rgba(0, 0, 0, 0.5), 5px 5px 5px rgba(0, 0, 0, 0.5);
+    }
     """;
 
 var chartsHtml =
@@ -4067,13 +4094,18 @@ var chartsHtml =
     "<p class=\"note\">One skew on the whole chart shears every bar in concert.</p>" +
     $"<div class=\"chart fx\">{tiltChart}</div>" +
 
+    "<h3 class=\"fx-h\">Charts with Shadows — inset + outset <code>box-shadow</code></h3>" +
+    "<p class=\"note\">The chart area and each bar get a rounded <code>box-shadow</code> combining an inset " +
+    "(inner top-left) and an outset (bottom-right) layer, for a raised, tactile look.</p>" +
+    $"<div class=\"chart fx\">{shadowChart}</div>" +
+
     "</body></html>";
 
 await SaveShowcaseAsync("charts_css", "Charts & Data Viz", "Charts.css",
     "The Charts.css framework (MIT) rendering column, bar, area, line, and pie charts — plus a multi-series " +
-    "example and the documented 3D effects (extruded bars via stacked box-shadows, and a skewY tilt) — purely " +
-    "from CSS. The full official stylesheet is embedded, exercising @property, aspect-ratio, clip-path, " +
-    "box-shadow, logical properties, and conic/linear gradients together.",
+    "example and the documented customizations (extruded 3D bars via stacked box-shadows, a skewY tilt, and " +
+    "shadowed bars with inset+outset box-shadow) — purely from CSS. The full official stylesheet is embedded, " +
+    "exercising @property, aspect-ratio, clip-path, box-shadow, logical properties, and conic/linear gradients together.",
     chartsHtml, pdfConfig);
 
 // The manifest that drives the website's /showcase page (see docs/showcase.html and
