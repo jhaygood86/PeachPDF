@@ -1506,6 +1506,27 @@ namespace PeachPDF.Tests.Integration
             Assert.DoesNotContain(Red, pdf);  // neither the <style> rule nor the presentation attr is used
         }
 
+        // Issue #205: !important in a lower-specificity <style> rule beats a normal declaration in a
+        // higher-specificity rule (CSS Cascade 4 §6.3), end-to-end. #r (id) has higher specificity than
+        // rect, but the lower-specificity rect rule is !important, so the rect renders green, not red.
+        [Fact]
+        public async Task ImgSvg_ImportantBeatsHigherSpecificityNormal()
+        {
+            var html = ImgSvgDoc("", """<style>#r { fill: #ff0000; } rect { fill: #00ff00 !important; }</style><rect id="r" x="10" y="10" width="80" height="80"/>""");
+            var pdf = await GetPdfText(html);
+            Assert.Contains(Green, pdf);
+            Assert.DoesNotContain(Red, pdf);
+        }
+
+        [Fact]
+        public async Task InlineSvg_ImportantBeatsHigherSpecificityNormal()
+        {
+            var html = InlineSvgDoc("#r { fill: #ff0000; } rect { fill: #00ff00 !important; }", """<rect id="r" x="10" y="10" width="80" height="80"/>""");
+            var pdf = await GetPdfText(html);
+            Assert.Contains(Green, pdf);
+            Assert.DoesNotContain(Red, pdf);
+        }
+
         // A nested data:image/svg+xml document (an <image> inside an outer SVG) is its own standalone SVG,
         // so its own <style>'s @property registrations are honored too (SvgTreeBuilder.BuildImage path).
         [Fact]

@@ -13,6 +13,7 @@
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
+using PeachPDF.Html.Core.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -136,10 +137,24 @@ namespace PeachPDF.Svg
         /// with each value's <c>var()</c> references resolved against the node's custom properties. Custom
         /// property (<c>--*</c>) declarations are excluded (they participate via <c>var()</c> resolution,
         /// not as SVG paint properties). Null when there is no CSS context (e.g. a geometry-only source).
+        /// <para>
+        /// The merge runs a normal pass then an <c>!important</c> pass (CSS Cascade 4 §6.3): because the
+        /// important pass runs second and always overwrites, an <c>!important</c> author declaration beats
+        /// every normal author declaration regardless of specificity, not merely when it happens to sort
+        /// last. Within each pass, winner-last honors specificity/source order.
+        /// </para>
+        /// <para>
         /// A property present with a <c>null</c> value is the winning declaration but <em>invalid at
-        /// computed-value time</em> (a guaranteed-invalid <c>var()</c>, CSS Custom Properties 1 §3): it still
-        /// wins the cascade, so the consumer must compute the property to its inherited/initial value rather
-        /// than fall through to a lower-priority declaration — hence null-present is kept distinct from absent.
+        /// computed-value time</em>, or a <c>revert</c>/<c>revert-layer</c> that rolls the author cascade
+        /// back to a lower origin: either way the consumer must compute the property to its inherited/initial
+        /// value rather than fall through to a lower-priority declaration — hence null-present is kept
+        /// distinct from absent. This covers a guaranteed-invalid <c>var()</c> (CSS Custom Properties 1 §3)
+        /// and <c>revert</c>/<c>revert-layer</c> (CSS Cascade 4 §6.1): an SVG presentation attribute is
+        /// itself author origin (SVG 2 §6.3, specificity 0), so reverting the author cascade rolls back past
+        /// it — represented as null-present so <c>ResolveStyledAttr</c> does not fall through to the
+        /// presentation attribute. (SVG styling has no <c>@layer</c> support, so <c>revert-layer</c> with no
+        /// prior layer behaves as <c>revert</c>.)
+        /// </para>
         /// </summary>
         public static IReadOnlyDictionary<string, string?>? GetMatchedDeclarations(ICssDomNode node, CssData? cssData, string media, CssVarResolver.VarContext? varContext = null)
         {
@@ -148,19 +163,36 @@ namespace PeachPDF.Svg
             // CSS property names are case-insensitive (unlike SVG selectors), so key case-insensitively.
             var result = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var rule in cssData.GetAuthorStyleRules(media, node))
-            {
-                foreach (var property in rule.Style)
-                {
-                    if (property.Name.StartsWith("--", StringComparison.Ordinal)) continue;
+            // Materialize once so both passes reuse the same matched/sorted list instead of re-querying.
+            var rules = cssData.GetAuthorStyleRules(media, node).ToList();
 
-                    // Winner-last: a later (higher-specificity/source-order) rule overwrites an earlier one,
-                    // including overwriting a valid value with null when the winner is guaranteed-invalid.
-                    result[property.Name] = CssVarResolver.Resolve(node, property.Value, varContext);
-                }
-            }
+            ApplyPass(importantPass: false);
+            ApplyPass(importantPass: true);
 
             return result;
+
+            void ApplyPass(bool importantPass)
+            {
+                foreach (var rule in rules)
+                {
+                    foreach (var property in rule.Style)
+                    {
+                        if (property.IsImportant != importantPass) continue;
+                        if (property.Name.StartsWith("--", StringComparison.Ordinal)) continue;
+
+                        // revert/revert-layer roll the author origin back past the presentation attribute
+                        // (also author origin) to the inherited/initial value; represent that as a
+                        // present-but-null winner, the same signal ResolveStyledAttr maps to inherited/initial.
+                        var trimmed = property.Value.Trim();
+                        var isRevert = trimmed.Equals(CssConstants.Revert, StringComparison.OrdinalIgnoreCase)
+                                    || trimmed.Equals(CssConstants.RevertLayer, StringComparison.OrdinalIgnoreCase);
+
+                        // Winner-last: a later (higher-specificity/source-order) rule overwrites an earlier one,
+                        // including overwriting a valid value with null when the winner is guaranteed-invalid or a revert.
+                        result[property.Name] = isRevert ? null : CssVarResolver.Resolve(node, property.Value, varContext);
+                    }
+                }
+            }
         }
 
         /// <summary>
