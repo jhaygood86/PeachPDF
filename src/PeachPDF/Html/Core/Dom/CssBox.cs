@@ -710,6 +710,26 @@ namespace PeachPDF.Html.Core.Dom
                         g.PushTransform(pageMatrix);
                     }
 
+                    // clip-path clips the entire element rendering (background, border, content, children).
+                    // It is established inside the transform push so the clip and the content it clips are
+                    // transformed together (CSS Masking 1: the clip is in the element's local coordinate
+                    // system, which any `transform` then maps). The reference box is the border-box (the
+                    // default), in absolute paint coordinates (Bounds shifted by the current page scroll).
+                    var clipped = false;
+                    if (ClipPath != CssConstants.None && !string.IsNullOrEmpty(ClipPath))
+                    {
+                        var referenceBox = new RRect(
+                            Bounds.X + pageOffset.X, Bounds.Y + pageOffset.Y,
+                            ActualBoxSizingWidth, ActualBoxSizingHeight);
+
+                        if (CssClipPathResolver.TryBuildClipPath(g, ClipPath, referenceBox, this, out var clipGeometry, out _)
+                            && clipGeometry is not null)
+                        {
+                            g.PushClip(clipGeometry);
+                            clipped = true;
+                        }
+                    }
+
                     if (IsOpaque)
                     {
                         await PaintImp(g);
@@ -718,6 +738,9 @@ namespace PeachPDF.Html.Core.Dom
                     {
                         await PaintWithOpacity(g);
                     }
+
+                    if (clipped)
+                        g.PopClip();
 
                     if (transformed)
                         g.PopTransform();

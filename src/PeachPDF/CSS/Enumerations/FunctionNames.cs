@@ -11,6 +11,10 @@ namespace PeachPDF.CSS
         public static readonly string Hsl = "hsl";
         public static readonly string Hsla = "hsla";
         public static readonly string Rect = "rect";
+        public static readonly string Polygon = "polygon";
+        public static readonly string Circle = "circle";
+        public static readonly string Ellipse = "ellipse";
+        public static readonly string Inset = "inset";
         public static readonly string Attr = "attr";
         public static readonly string LinearGradient = "linear-gradient";
         public static readonly string RadialGradient = "radial-gradient";
