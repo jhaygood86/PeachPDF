@@ -136,13 +136,17 @@ namespace PeachPDF.Svg
         /// with each value's <c>var()</c> references resolved against the node's custom properties. Custom
         /// property (<c>--*</c>) declarations are excluded (they participate via <c>var()</c> resolution,
         /// not as SVG paint properties). Null when there is no CSS context (e.g. a geometry-only source).
+        /// A property present with a <c>null</c> value is the winning declaration but <em>invalid at
+        /// computed-value time</em> (a guaranteed-invalid <c>var()</c>, CSS Custom Properties 1 §3): it still
+        /// wins the cascade, so the consumer must compute the property to its inherited/initial value rather
+        /// than fall through to a lower-priority declaration — hence null-present is kept distinct from absent.
         /// </summary>
-        public static IReadOnlyDictionary<string, string>? GetMatchedDeclarations(ICssDomNode node, CssData? cssData, string media, CssVarResolver.VarContext? varContext = null)
+        public static IReadOnlyDictionary<string, string?>? GetMatchedDeclarations(ICssDomNode node, CssData? cssData, string media, CssVarResolver.VarContext? varContext = null)
         {
             if (cssData is null) return null;
 
             // CSS property names are case-insensitive (unlike SVG selectors), so key case-insensitively.
-            var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var result = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var rule in cssData.GetAuthorStyleRules(media, node))
             {
@@ -150,11 +154,9 @@ namespace PeachPDF.Svg
                 {
                     if (property.Name.StartsWith("--", StringComparison.Ordinal)) continue;
 
-                    var resolved = CssVarResolver.Resolve(node, property.Value, varContext);
-                    if (resolved is not null)
-                        result[property.Name] = resolved;
-                    else
-                        result.Remove(property.Name); // a guaranteed-invalid var() drops the declaration
+                    // Winner-last: a later (higher-specificity/source-order) rule overwrites an earlier one,
+                    // including overwriting a valid value with null when the winner is guaranteed-invalid.
+                    result[property.Name] = CssVarResolver.Resolve(node, property.Value, varContext);
                 }
             }
 

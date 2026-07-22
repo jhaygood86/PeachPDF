@@ -48,9 +48,11 @@ namespace PeachPDF.Svg
         /// against the relevant <c>CssData</c> (the host document's for inline <c>&lt;svg&gt;</c>, the
         /// SVG's own for standalone). Null when there is no CSS context (a geometry-only source). Consumed
         /// as the middle tier of <see cref="SvgTreeBuilder"/>'s <c>style=""</c> &gt; matched-rule &gt;
-        /// presentation-attribute precedence.
+        /// presentation-attribute precedence. A property present with a <c>null</c> value is the winning
+        /// declaration but invalid at computed-value time (guaranteed-invalid <c>var()</c>) — the consumer
+        /// computes it to inherited/initial rather than consulting the presentation attribute.
         /// </summary>
-        IReadOnlyDictionary<string, string>? GetMatchedCssDeclarations() => null;
+        IReadOnlyDictionary<string, string?>? GetMatchedCssDeclarations() => null;
 
         /// <summary>
         /// Resolves any <c>var()</c> references in a raw value (e.g. from a <c>style=""</c> attribute)

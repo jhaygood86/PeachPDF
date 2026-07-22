@@ -1481,15 +1481,29 @@ namespace PeachPDF.Tests.Integration
             Assert.Contains(Green, await GetPdfText(html));
         }
 
-        // Regression guard: an unregistered, unset var() with no fallback still drops the declaration (the
-        // presentation fill stands), unchanged by the @property threading.
+        // CSS Custom Properties 1 §3 (invalid at computed-value time): a guaranteed-invalid var() (missing
+        // property, no fallback) does NOT fall through to a lower-priority declaration — the declaration wins
+        // the cascade and the property computes to its inherited value (fill is inherited). Here the matched
+        // <style> rule (fill: var(--missing)) wins over the rect's own presentation fill, so the rect takes
+        // the parent <g>'s green, not its own presentation red.
         [Fact]
-        public async Task ImgSvg_UnregisteredUnsetVar_DropsDeclaration()
+        public async Task ImgSvg_GuaranteedInvalidVar_ComputesToInherited_NotPresentationAttribute()
         {
-            var html = ImgSvgDoc("", """<style>rect { fill: var(--missing); }</style><rect x="10" y="10" width="80" height="80" fill="#0000ff"/>""");
+            var html = ImgSvgDoc("", """<style>rect { fill: var(--missing); }</style><g fill="#00ff00"><rect x="10" y="10" width="80" height="80" fill="#ff0000"/></g>""");
             var pdf = await GetPdfText(html);
-            Assert.Contains(Blue, pdf);      // the presentation blue survives
-            Assert.DoesNotContain(Green, pdf);
+            Assert.Contains(Green, pdf);      // inherited from <g>
+            Assert.DoesNotContain(Red, pdf);  // the rect's presentation attr is suppressed (the <style> rule won)
+        }
+
+        // Same rule for the inline style="" tier: an invalid var() there wins the cascade and computes to
+        // inherited, suppressing both the rect's presentation fill and any lower <style> rule.
+        [Fact]
+        public async Task ImgSvg_InlineStyleInvalidVar_ComputesToInherited_NotLowerTiers()
+        {
+            var html = ImgSvgDoc("", """<style>rect { fill: #ff0000; }</style><g fill="#00ff00"><rect x="10" y="10" width="80" height="80" fill="#ff0000" style="fill: var(--missing)"/></g>""");
+            var pdf = await GetPdfText(html);
+            Assert.Contains(Green, pdf);      // inherited from <g>
+            Assert.DoesNotContain(Red, pdf);  // neither the <style> rule nor the presentation attr is used
         }
 
         // A nested data:image/svg+xml document (an <image> inside an outer SVG) is its own standalone SVG,

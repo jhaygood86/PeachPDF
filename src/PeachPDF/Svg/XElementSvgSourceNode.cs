@@ -74,7 +74,7 @@ namespace PeachPDF.Svg
         /// </summary>
         public string GetTextContent() => string.Concat(_element.Nodes().OfType<XText>().Select(t => t.Value));
 
-        public IReadOnlyDictionary<string, string>? GetMatchedCssDeclarations() =>
+        public IReadOnlyDictionary<string, string?>? GetMatchedCssDeclarations() =>
             SvgCssStyling.GetMatchedDeclarations(new SvgXmlDomNode(_element, _svgRoot), _cssData, _media, _varContext);
 
         public string? ResolveVar(string value) =>

@@ -694,16 +694,18 @@ namespace PeachPDF.Svg
             // (full CSS engine: combinators/attr/pseudo selectors, specificity, var()) > presentation
             // attribute. The matched-rule tier comes from the document/SVG-local CssData (see the source
             // node's GetMatchedCssDeclarations), replacing the former SVG-local mini stylesheet.
+            //
+            // The first tier that DECLARES the property is the cascade winner and is authoritative: if its
+            // var() is guaranteed-invalid the declaration is invalid at computed-value time (CSS Custom
+            // Properties 1 §3) — it still wins, so this returns null and the caller computes the property to
+            // its inherited/initial value, rather than the cascade rolling back to a lower-priority tier.
             var styleDeclarations = SvgValueParsers.ParseStyleDeclarations(node.GetAttribute("style"));
             if (styleDeclarations.TryGetValue(name, out var styleValue))
-            {
-                var resolved = node.ResolveVar(styleValue);
-                if (resolved is not null) return resolved;
-            }
+                return node.ResolveVar(styleValue); // null (guaranteed-invalid) → inherited/initial, no fall-through
 
             var matched = node.GetMatchedCssDeclarations();
             if (matched is not null && matched.TryGetValue(name, out var matchedValue))
-                return matchedValue;
+                return matchedValue; // present (incl. null = invalid at computed-value time) → authoritative
 
             return node.GetAttribute(name);
         }
