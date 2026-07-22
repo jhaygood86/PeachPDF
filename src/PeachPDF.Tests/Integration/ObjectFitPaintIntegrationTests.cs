@@ -125,6 +125,58 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(-72, right.X - left.X, 1);
         }
 
+        // ─── object-fit also applies to <object>, <video poster>, and inline <svg> ─────
+
+        [Fact]
+        public async Task Object_WithImageData_HonorsObjectFit()
+        {
+            var html = $"<!DOCTYPE html><html><body><object data='{Png2To1}' style='width:96px;height:96px;object-fit:contain'></object></body></html>";
+            var (root, _) = await BuildAndLayout(html);
+            var g = new TestRecordingGraphics();
+            await root.Paint(g);
+            var r = Assert.Single(g.DrawImageCalls).DestRect;
+            Assert.Equal(72, r.Width, 1);
+            Assert.Equal(36, r.Height, 1);
+        }
+
+        [Fact]
+        public async Task Video_Poster_IsRendered_AndHonorsObjectFit()
+        {
+            var html = $"<!DOCTYPE html><html><body><video poster='{Png2To1}' style='width:96px;height:96px;object-fit:contain'></video></body></html>";
+            var (root, _) = await BuildAndLayout(html);
+            var g = new TestRecordingGraphics();
+            await root.Paint(g);
+            var r = Assert.Single(g.DrawImageCalls).DestRect;
+            Assert.Equal(72, r.Width, 1);
+            Assert.Equal(36, r.Height, 1);
+        }
+
+        [Fact]
+        public async Task Video_WithoutPoster_DrawsNoImage()
+        {
+            var html = "<!DOCTYPE html><html><body><video style='width:96px;height:96px'></video></body></html>";
+            var (root, _) = await BuildAndLayout(html);
+            var g = new TestRecordingGraphics();
+            await root.Paint(g);
+            Assert.Empty(g.DrawImageCalls);
+        }
+
+        [Fact]
+        public async Task InlineSvg_Cover_ClipsToContentBox()
+        {
+            // An inline <svg> with a 2:1 intrinsic under object-fit:cover overflows its 72×72pt content
+            // box, so the shared renderer clips to it. (SVG paints via paths, not DrawImage, so we assert
+            // the content-box clip rather than a DrawImage rect.)
+            var html = "<!DOCTYPE html><html><body>" +
+                       "<svg xmlns='http://www.w3.org/2000/svg' width='20' height='10' style='width:96px;height:96px;object-fit:cover'>" +
+                       "<rect width='20' height='10' fill='red'/></svg></body></html>";
+            var (root, _) = await BuildAndLayout(html);
+            var g = new TestRecordingGraphics();
+            await root.Paint(g);
+            Assert.Contains(g.Log, o => o is TestRecordingGraphics.PushClipCall c
+                && System.Math.Abs(c.Rect.Width - 72) < 1 && System.Math.Abs(c.Rect.Height - 72) < 1);
+        }
+
         // ─── Helpers (mirrors FlexReplacedElementIntegrationTests) ────────────────
 
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildAndLayout(string html)

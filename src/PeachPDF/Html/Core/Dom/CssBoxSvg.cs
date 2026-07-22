@@ -88,10 +88,8 @@ namespace PeachPDF.Html.Core.Dom
             r.X = Math.Floor(r.X);
             r.Y = Math.Floor(r.Y);
 
-            if (_document is not null && r is { Width: > 0, Height: > 0 })
-            {
-                SvgRenderer.RenderInto(g, _document, r);
-            }
+            // object-fit / object-position honored via the shared replaced-content renderer.
+            ReplacedContentRenderer.Paint(g, r, null, _document, this);
 
             if (clipped)
                 g.PopClip();
