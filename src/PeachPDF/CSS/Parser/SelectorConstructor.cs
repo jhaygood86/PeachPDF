@@ -59,6 +59,7 @@ namespace PeachPDF.CSS
                 {PseudoClassNames.Has, ctx => new HasFunctionState(ctx)},
                 {PseudoClassNames.Matches, ctx => new MatchesFunctionState(ctx, PseudoClassNames.Matches)},
                 {PseudoClassNames.Is, ctx => new MatchesFunctionState(ctx, PseudoClassNames.Is)},
+                {PseudoClassNames.Where, ctx => new MatchesFunctionState(ctx, PseudoClassNames.Where)},
                 {PseudoClassNames.HostContext, ctx => new HostContextFunctionState(ctx)}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 

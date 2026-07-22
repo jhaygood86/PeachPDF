@@ -60,7 +60,13 @@ namespace PeachPDF.Html.Core
         // for specificity tie-breaking (see GetStyleRulesByOrigin). EnclosingMedia carries the
         // chain of @media conditions (outermost first) a rule was nested under, so media matching
         // no longer needs a separate unindexed scan.
-        private readonly record struct IndexedRule(IStyleRule Rule, bool IsUserAgent, int DocumentOrder, MediaList[]? EnclosingMedia);
+        // LayerRank encodes @layer cascade-layer precedence (CSS Cascade 5 §6.4.2): unlayered rules
+        // use int.MaxValue so they always outrank layered rules for normal declarations, and layered
+        // rules carry their layer's first-appearance order index (earlier layer = lower rank = lower
+        // priority). Applied ahead of specificity in the cascade sort (see GetStyleRulesByOrigin).
+        private readonly record struct IndexedRule(IStyleRule Rule, bool IsUserAgent, int DocumentOrder, MediaList[]? EnclosingMedia, int LayerRank);
+
+        private const int UnlayeredRank = int.MaxValue;
 
         private Dictionary<string, List<IndexedRule>>? _tagIndex;
         private Dictionary<string, List<IndexedRule>>? _classIndex;
@@ -76,11 +82,13 @@ namespace PeachPDF.Html.Core
             var idIndex = new Dictionary<string, List<IndexedRule>>(StringComparer.InvariantCultureIgnoreCase);
             var universal = new List<IndexedRule>();
             var keys = new List<(SelectorBucketKind Kind, string Key)>();
+            // Layer names are case-sensitive custom idents; first-appearance order = registration order.
+            var layerOrder = new Dictionary<string, int>(StringComparer.Ordinal);
             var order = 0;
 
             foreach (var stylesheet in Stylesheets)
             {
-                IndexRules(stylesheet.Rules, stylesheet.IsUserAgent, null, tagIndex, classIndex, idIndex, universal, keys, ref order);
+                IndexRules(stylesheet.Rules, stylesheet.IsUserAgent, null, null, tagIndex, classIndex, idIndex, universal, keys, layerOrder, ref order);
             }
 
             _tagIndex = tagIndex;
@@ -99,11 +107,13 @@ namespace PeachPDF.Html.Core
             IEnumerable<IRule> rules,
             bool isUserAgent,
             MediaList[]? enclosingMedia,
+            string? currentLayer,
             Dictionary<string, List<IndexedRule>> tagIndex,
             Dictionary<string, List<IndexedRule>> classIndex,
             Dictionary<string, List<IndexedRule>> idIndex,
             List<IndexedRule> universal,
             List<(SelectorBucketKind Kind, string Key)> keys,
+            Dictionary<string, int> layerOrder,
             ref int order)
         {
             foreach (var rule in rules)
@@ -111,7 +121,8 @@ namespace PeachPDF.Html.Core
                 switch (rule)
                 {
                     case IStyleRule styleRule:
-                        var indexedRule = new IndexedRule(styleRule, isUserAgent, order++, enclosingMedia);
+                        var layerRank = currentLayer is null ? UnlayeredRank : layerOrder[currentLayer];
+                        var indexedRule = new IndexedRule(styleRule, isUserAgent, order++, enclosingMedia, layerRank);
 
                         keys.Clear();
                         CollectIndexKeys(styleRule.Selector, keys);
@@ -143,10 +154,44 @@ namespace PeachPDF.Html.Core
                         var nestedMedia = enclosingMedia is null
                             ? [mediaRule.Media]
                             : (MediaList[])[.. enclosingMedia, mediaRule.Media];
-                        IndexRules(mediaRule.Rules, isUserAgent, nestedMedia, tagIndex, classIndex, idIndex, universal, keys, ref order);
+                        IndexRules(mediaRule.Rules, isUserAgent, nestedMedia, currentLayer, tagIndex, classIndex, idIndex, universal, keys, layerOrder, ref order);
+                        break;
+
+                    // @layer statement (`@layer a, b, c;`) only declares layer order — register each
+                    // name so later block-form rules inherit the declared first-appearance order.
+                    case LayerStatementRule layerStatement:
+                        foreach (var name in layerStatement.Names)
+                            RegisterLayer(QualifyLayer(currentLayer, name), layerOrder);
+                        break;
+
+                    // @layer block (`@layer name { rules }`) — its rules belong to that layer.
+                    case ILayerRule layerRule:
+                        var qualified = string.IsNullOrEmpty(layerRule.Name)
+                            // Each anonymous layer is its own distinct layer; give it a unique key.
+                            ? QualifyLayer(currentLayer, " anon" + layerOrder.Count)
+                            : QualifyLayer(currentLayer, layerRule.Name);
+                        RegisterLayer(qualified, layerOrder);
+                        IndexRules(layerRule.Rules, isUserAgent, enclosingMedia, qualified, tagIndex, classIndex, idIndex, universal, keys, layerOrder, ref order);
+                        break;
+
+                    // @supports / @container: PeachPDF can't evaluate the condition, so (matching the
+                    // @media-feature convention) treat it as met and index the inner rules in place.
+                    // Deliberately scoped to these two — @keyframes/@document/etc. are grouping rules
+                    // too but must not have their contents applied as document style rules.
+                    case IGroupingRule groupingRule when rule is ISupportsRule or IContainerRule:
+                        IndexRules(groupingRule.Rules, isUserAgent, enclosingMedia, currentLayer, tagIndex, classIndex, idIndex, universal, keys, layerOrder, ref order);
                         break;
                 }
             }
+        }
+
+        private static string QualifyLayer(string? parent, string name) =>
+            string.IsNullOrEmpty(parent) ? name : parent + "." + name;
+
+        private static void RegisterLayer(string qualifiedName, Dictionary<string, int> layerOrder)
+        {
+            if (!layerOrder.ContainsKey(qualifiedName))
+                layerOrder[qualifiedName] = layerOrder.Count;
         }
 
         /// <summary>
@@ -357,8 +402,14 @@ namespace PeachPDF.Html.Core
             // the selector's own overall specificity instead, a documented simplification for the rare
             // case of multiple ::first-line rules of equal origin/importance whose relative order
             // depends on a mixed-list specificity nuance.
+            // @layer cascade-layer precedence (CSS Cascade 5 §6.4.2) sorts ahead of specificity for
+            // normal declarations: a rule in a lower-ranked layer loses to any rule in a higher-ranked
+            // layer (or an unlayered rule) regardless of specificity. Within one layer, specificity
+            // then true document order break ties. (The !important layer-order reversal is not modeled
+            // — see the accepted-gap note; default utility-framework output is layered but not important.)
             return matched
-                .OrderBy(indexed => firstLineOnly ? indexed.Rule.Selector.Specificity : GetMatchedSpecificity(indexed.Rule.Selector, node))
+                .OrderBy(indexed => indexed.LayerRank)
+                .ThenBy(indexed => firstLineOnly ? indexed.Rule.Selector.Specificity : GetMatchedSpecificity(indexed.Rule.Selector, node))
                 .ThenBy(indexed => indexed.DocumentOrder)
                 .Select(indexed => indexed.Rule);
         }

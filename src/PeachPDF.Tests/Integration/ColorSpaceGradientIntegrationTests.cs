@@ -67,6 +67,19 @@ namespace PeachPDF.Tests.Integration
             Assert.Contains("/ShadingType", pdfText);
         }
 
+        [Theory]
+        [InlineData("in hwb, red, blue")]
+        [InlineData("in lch, red, blue")]
+        [InlineData("in xyz-d50, red, blue")]
+        [InlineData("in oklch increasing hue, red, blue")]
+        [InlineData("in oklch decreasing hue, red, blue")]
+        public async Task LinearGradient_AcrossSpacesAndHueMethods_RendersSuccessfully(string args)
+        {
+            var pdfText = await GetPdfText(GradientHtml($"background-image: linear-gradient({args});"));
+
+            Assert.Contains("/ShadingType", pdfText);
+        }
+
         [Fact]
         public async Task LinearGradient_InOklch_RendersSuccessfully()
         {

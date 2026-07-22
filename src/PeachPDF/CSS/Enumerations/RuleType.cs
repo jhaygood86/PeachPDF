@@ -20,6 +20,8 @@ namespace PeachPDF.CSS
         Viewport,
         RegionStyle,
         Container,
-        Property
+        Property,
+        Layer,
+        LayerStatement
     }
 }
