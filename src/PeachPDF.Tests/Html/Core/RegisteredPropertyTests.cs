@@ -74,6 +74,24 @@ namespace PeachPDF.Tests.Html.Core
         }
 
         [Fact]
+        public void RatioSyntax_WithMatchingInitial_IsRegistered()
+        {
+            // <ratio> = <number [0,∞]> [ / <number [0,∞]> ]? (CSS Values 4 §11).
+            var reg = Register("syntax: \"<ratio>\"; inherits: false; initial-value: 16 / 9;");
+            Assert.NotNull(reg);
+            Assert.Equal("<ratio>", reg!.Syntax);
+            Assert.Equal("16/9", reg.InitialValue); // normalized (whitespace stripped) at parse time
+        }
+
+        [Fact]
+        public void RatioSyntax_AutoInitial_IsInvalid()
+        {
+            // <ratio> notably does NOT permit `auto` (that belongs to the aspect-ratio grammar, not the
+            // data type), so this initial-value fails syntax validation and the rule is dropped.
+            Assert.Null(Register("syntax: \"<ratio>\"; inherits: false; initial-value: auto;"));
+        }
+
+        [Fact]
         public void UniversalSyntax_MayOmitInitial()
         {
             var reg = Register("syntax: \"*\"; inherits: false;");
@@ -102,6 +120,10 @@ namespace PeachPDF.Tests.Html.Core
         [InlineData("<angle>", "45deg", true)]
         [InlineData("<angle>", "1turn", true)]
         [InlineData("<angle>", "5", false)]
+        [InlineData("<ratio>", "16 / 9", true)]
+        [InlineData("<ratio>", "3", true)]
+        [InlineData("<ratio>", "auto", false)]
+        [InlineData("<ratio>", "16px / 9", false)]
         [InlineData("<color>", "rebeccapurple", true)]
         [InlineData("<color>", "#abc", true)]
         [InlineData("<color>", "notacolor", false)]
@@ -180,6 +202,7 @@ namespace PeachPDF.Tests.Html.Core
             "<number>" => "0",
             "<integer>" => "0",
             "<angle>" => "0deg",
+            "<ratio>" => "1",
             "<color>" => "black",
             "<custom-ident>" => "x",
             "<string>" => "\"x\"",

@@ -68,5 +68,49 @@ namespace PeachPDF.Tests.CSS
             var applied = !string.IsNullOrEmpty(style.GetPropertyValue("aspect-ratio"));
             Assert.Equal(shouldApply, applied);
         }
+
+        // ─── TryParseRatio: the pure <ratio> data type (no `auto`) used by @property ───
+
+        private static bool TryParseRatio(string value, out double? ratio) =>
+            AspectRatioGrammar.TryParseRatio(CssValueParser.GetCssTokens(value), out ratio);
+
+        [Theory]
+        [InlineData("16/9", 16.0 / 9.0)]
+        [InlineData("16 / 9", 16.0 / 9.0)]
+        [InlineData("1", 1.0)]
+        [InlineData("2", 2.0)]
+        [InlineData("3 / 2", 1.5)]
+        public void TryParseRatio_ValidRatio_ParsesToWidthOverHeight(string value, double expected)
+        {
+            Assert.True(TryParseRatio(value, out var ratio));
+            Assert.NotNull(ratio);
+            Assert.Equal(expected, ratio!.Value, 5);
+        }
+
+        [Theory]
+        [InlineData("0/1")]  // a zero term => valid, but no usable ratio
+        [InlineData("0")]
+        [InlineData("5 / 0")]
+        public void TryParseRatio_ZeroTerm_IsValidButHasNullRatio(string value)
+        {
+            Assert.True(TryParseRatio(value, out var ratio));
+            Assert.Null(ratio);
+        }
+
+        [Theory]
+        [InlineData("auto")]        // <ratio> — unlike aspect-ratio — does NOT permit `auto`
+        [InlineData("auto 16 / 9")]
+        [InlineData("16 / 9 auto")]
+        [InlineData("")]
+        [InlineData("banana")]
+        [InlineData("2 3")]         // two numbers without a slash
+        [InlineData("16 /")]        // slash without a second number
+        [InlineData("-2")]          // negative number
+        [InlineData("2 / -3")]      // negative second term
+        [InlineData("2px")]         // a length, not a number
+        public void TryParseRatio_Invalid_ReturnsFalse(string value)
+        {
+            Assert.False(TryParseRatio(value, out _));
+        }
     }
 }
