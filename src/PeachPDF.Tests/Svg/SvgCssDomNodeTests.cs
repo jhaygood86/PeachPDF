@@ -221,6 +221,40 @@ namespace PeachPDF.Tests.Svg
             Assert.Null(matched["fill-opacity"]);
         }
 
+        // Issue #230: the fill/stroke paint properties (and length stroke properties) now accept the CSS-wide
+        // keywords in a <style> rule (their converters were extended with .OrGlobalValue()), and the merge
+        // resolves each: initial -> the property's SVG initial value, inherit -> the literal "inherit"
+        // (the consumer maps it to inherited), unset/revert/revert-layer -> null-present (inherited/initial).
+        [Theory]
+        [InlineData("fill", "initial", "black")]
+        [InlineData("fill", "inherit", "inherit")]
+        [InlineData("fill", "unset", null)]
+        [InlineData("fill", "revert", null)]
+        [InlineData("fill", "revert-layer", null)]
+        [InlineData("stroke", "initial", "none")]
+        [InlineData("stroke-width", "initial", "1")]
+        [InlineData("stroke-linejoin", "initial", "miter")]
+        [InlineData("stroke-miterlimit", "initial", "4")]
+        [InlineData("stroke-dasharray", "initial", "none")]
+        [InlineData("stroke-dashoffset", "initial", "0")]
+        public void MatchedDeclarations_PaintProperties_ResolveCssWideKeywords(string property, string keyword, string? expected)
+        {
+            var markup = $$"""
+                <svg xmlns="http://www.w3.org/2000/svg">
+                  <style>rect { {{property}}: {{keyword}}; }</style>
+                  <rect/>
+                </svg>
+                """;
+            var root = XDocument.Parse(markup).Root!;
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+
+            var rectElement = root.Descendants().Single(e => e.Name.LocalName == "rect");
+            var matched = SvgCssStyling.GetMatchedDeclarations(new SvgXmlDomNode(rectElement, root), cssData, "print");
+
+            Assert.True(matched!.ContainsKey(property)); // the declaration is no longer dropped at parse time
+            Assert.Equal(expected, matched[property]);
+        }
+
         // Custom-property (--*) declarations are excluded from the matched paint declarations even when they
         // match the queried element directly (they participate via var() resolution, not as SVG properties).
         [Fact]

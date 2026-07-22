@@ -132,6 +132,29 @@ namespace PeachPDF.Svg
     internal static class SvgCssStyling
     {
         /// <summary>
+        /// SVG initial (default) values for the paint/geometry properties whose <c>&lt;style&gt;</c>
+        /// declarations flow through <see cref="GetMatchedDeclarations"/>, used to resolve the
+        /// <c>initial</c> CSS-wide keyword to a concrete value the SVG paint consumers can parse (per the
+        /// property's SVG 1.1/2 initial value). Every property here is inherited, so <c>unset</c> resolves as
+        /// <c>inherit</c> (the null-present signal) rather than needing an entry.
+        /// </summary>
+        private static readonly Dictionary<string, string> SvgInitialValues = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["fill"] = "black",
+            ["stroke"] = "none",
+            ["stroke-width"] = "1",
+            ["stroke-dasharray"] = "none",
+            ["stroke-dashoffset"] = "0",
+            ["stroke-linecap"] = "butt",
+            ["stroke-linejoin"] = "miter",
+            ["stroke-miterlimit"] = "4",
+            ["fill-opacity"] = "1",
+            ["stroke-opacity"] = "1",
+            ["fill-rule"] = "nonzero",
+            ["clip-rule"] = "nonzero",
+        };
+
+        /// <summary>
         /// The author-stylesheet declarations that apply to <paramref name="node"/>, merged winner-last
         /// (<see cref="CssData.GetAuthorStyleRules"/> returns them specificity- then source-order-sorted),
         /// with each value's <c>var()</c> references resolved against the node's custom properties. Custom
@@ -144,16 +167,18 @@ namespace PeachPDF.Svg
         /// last. Within each pass, winner-last honors specificity/source order.
         /// </para>
         /// <para>
-        /// A property present with a <c>null</c> value is the winning declaration but <em>invalid at
-        /// computed-value time</em>, or a <c>revert</c>/<c>revert-layer</c> that rolls the author cascade
-        /// back to a lower origin: either way the consumer must compute the property to its inherited/initial
-        /// value rather than fall through to a lower-priority declaration — hence null-present is kept
-        /// distinct from absent. This covers a guaranteed-invalid <c>var()</c> (CSS Custom Properties 1 §3)
-        /// and <c>revert</c>/<c>revert-layer</c> (CSS Cascade 4 §6.1): an SVG presentation attribute is
-        /// itself author origin (SVG 2 §6.3, specificity 0), so reverting the author cascade rolls back past
-        /// it — represented as null-present so <c>ResolveStyledAttr</c> does not fall through to the
-        /// presentation attribute. (SVG styling has no <c>@layer</c> support, so <c>revert-layer</c> with no
-        /// prior layer behaves as <c>revert</c>.)
+        /// The CSS-wide keywords (CSS Cascade 4 §7.3) are resolved here: <c>initial</c> to the property's SVG
+        /// initial value (<see cref="SvgInitialValues"/>); <c>inherit</c> passes through literally (the SVG
+        /// paint consumers map "inherit" to the inherited value); and <c>unset</c>/<c>revert</c>/
+        /// <c>revert-layer</c> to the <c>null</c>-present signal (§6.1). A property present with a <c>null</c>
+        /// value is the winning declaration but the consumer must compute the property to its inherited/initial
+        /// value rather than fall through to a lower-priority declaration — hence null-present is kept distinct
+        /// from absent. This covers a guaranteed-invalid <c>var()</c> (CSS Custom Properties 1 §3), <c>unset</c>
+        /// on an (always-inherited) SVG paint property, and <c>revert</c>/<c>revert-layer</c>: an SVG
+        /// presentation attribute is itself author origin (SVG 2 §6.3, specificity 0), so reverting the author
+        /// cascade rolls back past it — represented as null-present so <c>ResolveStyledAttr</c> does not fall
+        /// through to the presentation attribute. (SVG styling has no <c>@layer</c> support, so <c>revert-layer</c>
+        /// with no prior layer behaves as <c>revert</c>.)
         /// </para>
         /// </summary>
         public static IReadOnlyDictionary<string, string?>? GetMatchedDeclarations(ICssDomNode node, CssData? cssData, string media, CssVarResolver.VarContext? varContext = null)
@@ -180,16 +205,31 @@ namespace PeachPDF.Svg
                         if (property.IsImportant != importantPass) continue;
                         if (property.Name.StartsWith("--", StringComparison.Ordinal)) continue;
 
-                        // revert/revert-layer roll the author origin back past the presentation attribute
-                        // (also author origin) to the inherited/initial value; represent that as a
-                        // present-but-null winner, the same signal ResolveStyledAttr maps to inherited/initial.
+                        // Resolve a CSS-wide keyword (CSS Cascade 4 §7.3). null-present is the same signal
+                        // ResolveStyledAttr maps to inherited/initial (never a fall-through to the presentation
+                        // attribute):
+                        //  - revert/revert-layer (§6.1) roll the author origin back past the presentation
+                        //    attribute (itself author origin, specificity 0) to inherited/initial → null-present.
+                        //  - unset: every SVG paint/geometry property that reaches here is inherited, so unset
+                        //    behaves as inherit → null-present (inherited).
+                        //  - initial: the property's SVG initial value (or null-present when unknown).
+                        //  - inherit: falls through as the literal "inherit" below — the SVG paint consumers
+                        //    already map both "inherit" and null to the inherited value.
                         var trimmed = property.Value.Trim();
-                        var isRevert = trimmed.Equals(CssConstants.Revert, StringComparison.OrdinalIgnoreCase)
-                                    || trimmed.Equals(CssConstants.RevertLayer, StringComparison.OrdinalIgnoreCase);
+                        string? resolved;
+                        if (trimmed.Equals(CssConstants.Revert, StringComparison.OrdinalIgnoreCase)
+                            || trimmed.Equals(CssConstants.RevertLayer, StringComparison.OrdinalIgnoreCase)
+                            || trimmed.Equals(CssConstants.Unset, StringComparison.OrdinalIgnoreCase))
+                            resolved = null;
+                        else if (trimmed.Equals(CssConstants.Initial, StringComparison.OrdinalIgnoreCase))
+                            resolved = SvgInitialValues.GetValueOrDefault(property.Name);
+                        else
+                            resolved = CssVarResolver.Resolve(node, property.Value, varContext);
 
                         // Winner-last: a later (higher-specificity/source-order) rule overwrites an earlier one,
-                        // including overwriting a valid value with null when the winner is guaranteed-invalid or a revert.
-                        result[property.Name] = isRevert ? null : CssVarResolver.Resolve(node, property.Value, varContext);
+                        // including overwriting a valid value with null when the winner is guaranteed-invalid,
+                        // a revert/unset, or an initial with no known SVG default.
+                        result[property.Name] = resolved;
                     }
                 }
             }
