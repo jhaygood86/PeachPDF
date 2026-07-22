@@ -34,18 +34,20 @@ namespace PeachPDF.Svg
         private readonly XElement _svgRoot;
         private readonly CssData? _cssData;
         private readonly string _media;
+        private readonly CssVarResolver.VarContext? _varContext;
 
         public XElementSvgSourceNode(XElement element)
-            : this(element, element, null, "print")
+            : this(element, element, null, "print", null)
         {
         }
 
-        internal XElementSvgSourceNode(XElement element, XElement svgRoot, CssData? cssData, string media)
+        internal XElementSvgSourceNode(XElement element, XElement svgRoot, CssData? cssData, string media, CssVarResolver.VarContext? varContext = null)
         {
             _element = element;
             _svgRoot = svgRoot;
             _cssData = cssData;
             _media = media;
+            _varContext = varContext;
         }
 
         public string Name => _element.Name.LocalName;
@@ -59,7 +61,7 @@ namespace PeachPDF.Svg
         }
 
         public IEnumerable<ISvgSourceNode> Children =>
-            _element.Elements().Select(e => (ISvgSourceNode)new XElementSvgSourceNode(e, _svgRoot, _cssData, _media));
+            _element.Elements().Select(e => (ISvgSourceNode)new XElementSvgSourceNode(e, _svgRoot, _cssData, _media, _varContext));
 
         /// <summary>
         /// Only this element's own direct text-node children - deliberately NOT <see cref="XElement.Value"/>,
@@ -73,9 +75,9 @@ namespace PeachPDF.Svg
         public string GetTextContent() => string.Concat(_element.Nodes().OfType<XText>().Select(t => t.Value));
 
         public IReadOnlyDictionary<string, string>? GetMatchedCssDeclarations() =>
-            SvgCssStyling.GetMatchedDeclarations(new SvgXmlDomNode(_element, _svgRoot), _cssData, _media);
+            SvgCssStyling.GetMatchedDeclarations(new SvgXmlDomNode(_element, _svgRoot), _cssData, _media, _varContext);
 
         public string? ResolveVar(string value) =>
-            _cssData is null ? value : CssVarResolver.Resolve(new SvgXmlDomNode(_element, _svgRoot), value);
+            _cssData is null ? value : CssVarResolver.Resolve(new SvgXmlDomNode(_element, _svgRoot), value, _varContext);
     }
 }

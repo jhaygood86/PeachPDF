@@ -194,6 +194,35 @@ namespace PeachPDF.Tests.Html.Core
             Assert.True(reg!.Accepts("url(x.png)", ValueParser));
         }
 
+        // ── BuildRegistry (shared by the HTML cascade and the standalone-SVG loader) ──
+
+        private static CssData StyleData(string css)
+        {
+            var data = new CssData();
+            data.Stylesheets.Add(CssParser.ParseStyleSheet(css));
+            return data;
+        }
+
+        [Fact]
+        public void BuildRegistry_RegistersValidRules_DropsInvalid_LastDuplicateWins()
+        {
+            var registry = RegisteredProperty.BuildRegistry(StyleData(
+                "@property --a { syntax: \"<color>\"; inherits: false; initial-value: red; }" +
+                "@property --bad { syntax: \"<length>\"; inherits: false; initial-value: red; }" + // typed w/ mismatched initial → dropped
+                "@property --a { syntax: \"<color>\"; inherits: true; initial-value: blue; }"), ValueParser);
+
+            Assert.False(registry.ContainsKey("--bad"));
+            Assert.True(registry.TryGetValue("--a", out var a));
+            Assert.Equal("blue", a!.InitialValue); // later duplicate wins
+            Assert.True(a.Inherits);
+        }
+
+        [Fact]
+        public void BuildRegistry_NoPropertyRules_IsEmpty()
+        {
+            Assert.Empty(RegisteredProperty.BuildRegistry(StyleData("rect { fill: red; }"), ValueParser));
+        }
+
         private static string InitialFor(string syntax) => syntax switch
         {
             "<length>" => "0px",

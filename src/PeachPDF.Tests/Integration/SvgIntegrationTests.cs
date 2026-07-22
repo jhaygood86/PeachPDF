@@ -1425,6 +1425,67 @@ namespace PeachPDF.Tests.Integration
             Assert.DoesNotContain(Red, await GetPdfText(html));
         }
 
+        // Issue #213: @property registrations declared in a standalone SVG's own <style> are now honored
+        // when resolving var(). An unset registered property resolves to its initial-value. (A standalone
+        // SVG is strict XML, so a syntax containing "<" is wrapped in CDATA, as a real author would.)
+        [Fact]
+        public async Task ImgSvg_AtPropertyInitialValue_ResolvesWhenUnset()
+        {
+            var html = ImgSvgDoc("", """<style><![CDATA[ @property --c { syntax: "<color>"; inherits: false; initial-value: #00ff00; } rect { fill: var(--c); } ]]></style><rect x="10" y="10" width="80" height="80"/>""");
+            Assert.Contains(Green, await GetPdfText(html));
+        }
+
+        // A set value that fails the registered syntax is invalid at computed-value time and falls back to
+        // the initial-value (CSS Properties & Values API §2.2) - the standalone-SVG path now enforces this.
+        [Fact]
+        public async Task ImgSvg_AtPropertySyntaxMismatch_FallsBackToInitialValue()
+        {
+            var html = ImgSvgDoc("", """<style><![CDATA[ @property --c { syntax: "<color>"; inherits: false; initial-value: #00ff00; } rect { --c: 42px; fill: var(--c); } ]]></style><rect x="10" y="10" width="80" height="80"/>""");
+            Assert.Contains(Green, await GetPdfText(html));
+        }
+
+        // inherits: false - a descendant that doesn't set the property resolves it to the initial-value,
+        // NOT the ancestor's set value.
+        [Fact]
+        public async Task ImgSvg_AtPropertyInheritsFalse_DescendantUsesInitialValue()
+        {
+            var html = ImgSvgDoc("", """<style><![CDATA[ @property --c { syntax: "<color>"; inherits: false; initial-value: #00ff00; } rect { fill: var(--c); } ]]></style><g style="--c: #ff0000"><rect x="10" y="10" width="80" height="80"/></g>""");
+            var pdf = await GetPdfText(html);
+            Assert.Contains(Green, pdf);   // the initial-value green, not the ancestor's red
+            Assert.DoesNotContain(Red, pdf);
+        }
+
+        // Inline SVG re-resolves var() through the host document's @property registry too: a registered-but-
+        // unset custom property declared in the HTML <head> resolves to its initial-value in the SVG.
+        [Fact]
+        public async Task InlineSvg_AtPropertyInitialValue_ResolvesWhenUnset()
+        {
+            var html = InlineSvgDoc("""@property --c { syntax: "<color>"; inherits: false; initial-value: #00ff00; } rect { fill: var(--c); }""", """<rect x="10" y="10" width="80" height="80"/>""");
+            Assert.Contains(Green, await GetPdfText(html));
+        }
+
+        // Regression guard: an unregistered, unset var() with no fallback still drops the declaration (the
+        // presentation fill stands), unchanged by the @property threading.
+        [Fact]
+        public async Task ImgSvg_UnregisteredUnsetVar_DropsDeclaration()
+        {
+            var html = ImgSvgDoc("", """<style>rect { fill: var(--missing); }</style><rect x="10" y="10" width="80" height="80" fill="#0000ff"/>""");
+            var pdf = await GetPdfText(html);
+            Assert.Contains(Blue, pdf);      // the presentation blue survives
+            Assert.DoesNotContain(Green, pdf);
+        }
+
+        // A nested data:image/svg+xml document (an <image> inside an outer SVG) is its own standalone SVG,
+        // so its own <style>'s @property registrations are honored too (SvgTreeBuilder.BuildImage path).
+        [Fact]
+        public async Task InlineSvg_NestedDataUriSvg_AtPropertyInitialValueResolves()
+        {
+            var embeddedSvg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100"><style><![CDATA[ @property --c { syntax: "<color>"; inherits: false; initial-value: #00ff00; } rect { fill: var(--c); } ]]></style><rect x="0" y="0" width="100" height="100"/></svg>""";
+            var embeddedDataUri = "data:image/svg+xml;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(embeddedSvg));
+            var html = $"""<!DOCTYPE html><html><body><svg viewBox="0 0 100 100" width="100" height="100"><image x="0" y="0" width="100" height="100" href="{embeddedDataUri}"/></svg></body></html>""";
+            Assert.Contains(Green, await GetPdfText(html));
+        }
+
         #endregion
     }
 }

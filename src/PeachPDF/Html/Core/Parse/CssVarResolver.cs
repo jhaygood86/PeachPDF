@@ -45,11 +45,12 @@ namespace PeachPDF.Html.Core.Parse
         /// Single-shot convenience: resolves every <c>var()</c> in <paramref name="value"/> against
         /// <paramref name="node"/>'s custom properties, returning the substituted string, or null if the
         /// value is guaranteed-invalid. Used where no cross-declaration cache sharing is needed (e.g. the
-        /// SVG tree builder resolving one paint/style value at a time).
+        /// SVG tree builder resolving one paint/style value at a time). Pass <paramref name="context"/> to
+        /// honor <c>@property</c> registrations (initial-value fallback + syntax validation) on this path.
         /// </summary>
-        internal static string? Resolve(ICssDomNode node, string value)
+        internal static string? Resolve(ICssDomNode node, string value, VarContext? context = null)
         {
-            var result = Substitute(node, value, new Dictionary<string, string>(), new HashSet<string>(), new HashSet<string>());
+            var result = Substitute(node, value, new Dictionary<string, string>(), new HashSet<string>(), new HashSet<string>(), context);
             return result.Success ? result.Value : null;
         }
 

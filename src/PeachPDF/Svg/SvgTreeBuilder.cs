@@ -12,6 +12,8 @@
 
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.Html.Core;
+using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System;
 using System.Collections.Generic;
@@ -492,10 +494,17 @@ namespace PeachPDF.Svg
                         // <style> (built here), exactly like an <img>-referenced SVG.
                         var nestedRoot = xdoc.Root;
                         var nestedCssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(nestedRoot));
-                        if (nestedCssData is not null)
-                            SvgCssStyling.CascadeCustomProperties(nestedRoot, nestedCssData, "print");
 
-                        var nestedSource = new XElementSvgSourceNode(nestedRoot, nestedRoot, nestedCssData, "print");
+                        var valueParser = new CssValueParser(_adapter);
+                        var registered = nestedCssData is null ? null : RegisteredProperty.BuildRegistry(nestedCssData, valueParser);
+                        var nestedVarContext = registered is { Count: > 0 }
+                            ? new CssVarResolver.VarContext(registered, valueParser)
+                            : null;
+
+                        if (nestedCssData is not null)
+                            SvgCssStyling.CascadeCustomProperties(nestedRoot, nestedCssData, "print", registered);
+
+                        var nestedSource = new XElementSvgSourceNode(nestedRoot, nestedRoot, nestedCssData, "print", nestedVarContext);
                         image.NestedDocument = Build(nestedSource, _adapter, _contextColor);
                     }
                 }

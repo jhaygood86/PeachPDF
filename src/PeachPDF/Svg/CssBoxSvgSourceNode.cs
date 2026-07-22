@@ -33,26 +33,38 @@ namespace PeachPDF.Svg
         private readonly CssBox _svgRoot;
         private readonly CssData? _cssData;
         private readonly string _media;
+        private readonly CssVarResolver.VarContext? _varContext;
 
         public CssBoxSvgSourceNode(CssBox box)
-            : this(box, box, box.HtmlContainer?.CssData, "print")
+            : this(box, box, box.HtmlContainer?.CssData, "print", BuildVarContext(box.HtmlContainer))
         {
         }
 
-        private CssBoxSvgSourceNode(CssBox box, CssBox svgRoot, CssData? cssData, string media)
+        private CssBoxSvgSourceNode(CssBox box, CssBox svgRoot, CssData? cssData, string media, CssVarResolver.VarContext? varContext)
         {
             _box = box;
             _svgRoot = svgRoot;
             _cssData = cssData;
             _media = media;
+            _varContext = varContext;
         }
+
+        /// <summary>
+        /// The host document's <c>@property</c> registry (built by the HTML cascade) as a <c>var()</c>
+        /// context, so a registered custom property's <c>initial-value</c>/<c>syntax</c> is honored when the
+        /// SVG re-resolves <c>var()</c> in its own paint values. Null when nothing is registered.
+        /// </summary>
+        private static CssVarResolver.VarContext? BuildVarContext(HtmlContainerInt? container) =>
+            container?.RegisteredProperties is { Count: > 0 } registered
+                ? new CssVarResolver.VarContext(registered, new CssValueParser(container.Adapter))
+                : null;
 
         public string Name => _box.HtmlTag?.Name ?? "";
 
         public string? GetAttribute(string name) => _box.GetAttribute(name, null);
 
         public IEnumerable<ISvgSourceNode> Children =>
-            _box.Boxes.Select(b => (ISvgSourceNode)new CssBoxSvgSourceNode(b, _svgRoot, _cssData, _media));
+            _box.Boxes.Select(b => (ISvgSourceNode)new CssBoxSvgSourceNode(b, _svgRoot, _cssData, _media, _varContext));
 
         /// <summary>
         /// Mirrors <c>DomParser.CascadeParseStyles</c>'s own precedent for reading a <c>&lt;style&gt;</c>
@@ -63,9 +75,9 @@ namespace PeachPDF.Svg
         public string GetTextContent() => string.Concat(_box.Boxes.Select(b => b.Text ?? string.Empty));
 
         public IReadOnlyDictionary<string, string>? GetMatchedCssDeclarations() =>
-            SvgCssStyling.GetMatchedDeclarations(new SvgCssBoxDomNode(_box, _svgRoot), _cssData, _media);
+            SvgCssStyling.GetMatchedDeclarations(new SvgCssBoxDomNode(_box, _svgRoot), _cssData, _media, _varContext);
 
         public string? ResolveVar(string value) =>
-            _cssData is null ? value : CssVarResolver.Resolve(new SvgCssBoxDomNode(_box, _svgRoot), value);
+            _cssData is null ? value : CssVarResolver.Resolve(new SvgCssBoxDomNode(_box, _svgRoot), value, _varContext);
     }
 }

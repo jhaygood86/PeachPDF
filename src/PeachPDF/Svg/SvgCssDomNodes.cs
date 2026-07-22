@@ -137,7 +137,7 @@ namespace PeachPDF.Svg
         /// property (<c>--*</c>) declarations are excluded (they participate via <c>var()</c> resolution,
         /// not as SVG paint properties). Null when there is no CSS context (e.g. a geometry-only source).
         /// </summary>
-        public static IReadOnlyDictionary<string, string>? GetMatchedDeclarations(ICssDomNode node, CssData? cssData, string media)
+        public static IReadOnlyDictionary<string, string>? GetMatchedDeclarations(ICssDomNode node, CssData? cssData, string media, CssVarResolver.VarContext? varContext = null)
         {
             if (cssData is null) return null;
 
@@ -150,7 +150,7 @@ namespace PeachPDF.Svg
                 {
                     if (property.Name.StartsWith("--", StringComparison.Ordinal)) continue;
 
-                    var resolved = CssVarResolver.Resolve(node, property.Value);
+                    var resolved = CssVarResolver.Resolve(node, property.Value, varContext);
                     if (resolved is not null)
                         result[property.Name] = resolved;
                     else
@@ -194,16 +194,26 @@ namespace PeachPDF.Svg
         /// already carry theirs from the HTML cascade). Walks top-down, inheriting the parent's dictionary
         /// and overlaying each element's own matched <c>--*</c> rules then its inline <c>style=""</c>
         /// custom properties. Values are stored raw (they may themselves contain <c>var()</c>), matching the
-        /// HTML cascade.
+        /// HTML cascade. A property registered via <c>@property</c> with <c>inherits: false</c> is dropped from
+        /// the inherited copy (the descendant resolves it to its <c>initial-value</c> instead — CSS Properties
+        /// &amp; Values API §2.2), mirroring <c>CssBoxProperties.InheritStyle</c> on the HTML side.
         /// </summary>
-        public static void CascadeCustomProperties(XElement root, CssData? cssData, string media)
+        public static void CascadeCustomProperties(XElement root, CssData? cssData, string media, IReadOnlyDictionary<string, RegisteredProperty>? registered = null)
         {
-            CascadeCustomProperties(new SvgXmlDomNode(root, root), cssData, media, null);
+            CascadeCustomProperties(new SvgXmlDomNode(root, root), cssData, media, registered, null);
         }
 
-        private static void CascadeCustomProperties(SvgXmlDomNode node, CssData? cssData, string media, Dictionary<string, string>? inherited)
+        private static void CascadeCustomProperties(SvgXmlDomNode node, CssData? cssData, string media, IReadOnlyDictionary<string, RegisteredProperty>? registered, Dictionary<string, string>? inherited)
         {
-            Dictionary<string, string>? own = inherited is null ? null : new Dictionary<string, string>(inherited);
+            Dictionary<string, string>? own = null;
+            if (inherited is not null)
+            {
+                own = new Dictionary<string, string>(inherited);
+                if (registered is { Count: > 0 })
+                    foreach (var (name, reg) in registered)
+                        if (!reg.Inherits)
+                            own.Remove(name);
+            }
 
             if (cssData is not null)
             {
@@ -221,7 +231,7 @@ namespace PeachPDF.Svg
 
             foreach (var child in node.Children)
                 if (child is SvgXmlDomNode childNode)
-                    CascadeCustomProperties(childNode, cssData, media, own);
+                    CascadeCustomProperties(childNode, cssData, media, registered, own);
         }
     }
 }

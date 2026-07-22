@@ -75,6 +75,25 @@ namespace PeachPDF.Html.Core
         }
 
         /// <summary>
+        /// Harvests every valid <c>@property</c> rule from <paramref name="cssData"/>'s stylesheets into a
+        /// name-keyed registry (case-sensitive, per CSS custom-property naming). Later duplicate registrations
+        /// of the same name win (cascade order); invalid rules (<see cref="FromRule"/> returns null) are dropped
+        /// per spec. Shared by the HTML cascade (<c>DomParser.GenerateCssTree</c>) and the standalone-SVG loader
+        /// so both build the registry the same way.
+        /// </summary>
+        public static Dictionary<string, RegisteredProperty> BuildRegistry(CssData cssData, CssValueParser valueParser)
+        {
+            var registry = new Dictionary<string, RegisteredProperty>(StringComparer.Ordinal);
+            foreach (var propertyRule in cssData.Stylesheets.SelectMany(s => s.Rules.OfType<PropertyRule>()))
+            {
+                var registered = FromRule(propertyRule, valueParser);
+                if (registered is not null)
+                    registry[registered.Name] = registered;
+            }
+            return registry;
+        }
+
+        /// <summary>
         /// Whether <paramref name="value"/> is accepted by this property's registered <c>syntax</c>.
         /// The universal syntax accepts anything; a typed syntax accepts a value matching any of its
         /// <c>|</c>-separated components.
