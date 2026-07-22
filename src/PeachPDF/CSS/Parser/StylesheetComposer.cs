@@ -43,6 +43,8 @@ namespace PeachPDF.CSS
 
             if (token.Data.Is(RuleNames.Property)) return CreateProperty(token);
 
+            if (token.Data.Is(RuleNames.Layer)) return CreateLayer(token);
+
             return token.Data.Is(RuleNames.Document) ? CreateDocument(token) : CreateUnknown(token);
         }
 
@@ -302,6 +304,78 @@ namespace PeachPDF.CSS
             //_nodes.Pop();
             //return rule;
         }
+        public Rule CreateLayer(Token current)
+        {
+            var start = current.Position;
+            var token = NextToken();
+            ParseComments(ref token);
+
+            // Read the (optional) comma-separated layer name list, stopping at '{' (block form) or
+            // ';'/EOF (statement form).
+            var names = ReadLayerNames(ref token);
+
+            if (token.Type == TokenType.CurlyBracketOpen)
+            {
+                // Block form: `@layer name { rules }` (at most one name; anonymous if none).
+                var rule = new LayerRule(_parser)
+                {
+                    Name = names.Count > 0 ? names[0] : string.Empty
+                };
+                _nodes.Push(rule);
+                var end = FillRules(rule);
+                rule.StylesheetText = CreateView(start, end);
+                _nodes.Pop();
+                return rule;
+            }
+
+            // Statement form: `@layer a, b, c;` — declares layer order only, no rules. token is at ';'/EOF.
+            var statement = new LayerStatementRule(_parser);
+            statement.Names.AddRange(names);
+            statement.StylesheetText = CreateView(start, token.Position);
+            return statement;
+        }
+
+        /// <summary>
+        /// Reads a <c>@layer</c> prelude: zero or more comma-separated layer names, each a dotted
+        /// ident sequence (e.g. <c>framework.utilities</c>). Advances <paramref name="token"/> up to
+        /// (but not past) the terminating <c>{</c>, <c>;</c>, or end of file.
+        /// </summary>
+        private List<string> ReadLayerNames(ref Token token)
+        {
+            var names = new List<string>();
+            var current = new System.Text.StringBuilder();
+
+            void Flush()
+            {
+                if (current.Length <= 0) return;
+                names.Add(current.ToString());
+                current.Clear();
+            }
+
+            while (token.IsNot(TokenType.EndOfFile, TokenType.CurlyBracketOpen, TokenType.Semicolon))
+            {
+                switch (token.Type)
+                {
+                    case TokenType.Ident:
+                        current.Append(token.Data);
+                        break;
+                    case TokenType.Delim when token.Data == ".":
+                        current.Append('.');
+                        break;
+                    case TokenType.Comma:
+                        Flush();
+                        break;
+                    // Whitespace/comments and anything else separating names are ignored.
+                }
+
+                token = NextToken();
+                ParseComments(ref token);
+            }
+
+            Flush();
+            return names;
+        }
+
         public Rule CreateNamespace(Token current)
         {
             var rule = new NamespaceRule(_parser);

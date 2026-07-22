@@ -1655,21 +1655,23 @@ namespace PeachPDF.Html.Core.Parse
         private bool GetColorByName(string str, int idx, int length, out RColor color)
         {
             var substring = str.Substring(idx, length);
-            var tokens = GetCssTokens(substring);
-            var value = Converters.ColorConverter.Convert(tokens);
 
-            if (value is not null)
+            // Tokenization and grammar parsing are the CSS-OM's job: ToResolvedColor resolves named
+            // colors, hex, and every color function (rgb/hsl/hwb/gray/lab/oklab/lch/oklch/color-mix) to a
+            // concrete Color. This method's only remaining role is the Color -> RColor conversion.
+            var parsed = GetCssTokens(substring).ToResolvedColor();
+
+            if (parsed.HasValue)
             {
-                // The CSS-OM's Color.ToString() always formats as a canonical rgb(...)/rgba(...) call,
-                // which this method's own sibling fast-paths (GetColorByRgb/GetColorByRgba, reached via
-                // TryGetColor) already parse correctly - re-entering through there avoids needing to
-                // reach into StructValueConverter<Color>'s private result wrapper.
-                return TryGetColor(value.CssText, 0, value.CssText.Length, out color);
+                var c = parsed.Value;
+                color = RColor.FromArgb(c.A, c.R, c.G, c.B);
+                return true;
             }
 
             color = RColor.Black;
             return false;
         }
+
 
         /// <summary>
         /// Parse the given decimal number string to positive int value.<br/>

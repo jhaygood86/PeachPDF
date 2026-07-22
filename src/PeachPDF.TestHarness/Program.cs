@@ -4108,6 +4108,94 @@ await SaveShowcaseAsync("charts_css", "Charts & Data Viz", "Charts.css",
     "exercising @property, aspect-ratio, clip-path, box-shadow, logical properties, and conic/linear gradients together.",
     chartsHtml, pdfConfig);
 
+// ── Modern CSS colors: oklch/oklab/lab/lch palette + color-mix() opacity ──────────────
+var modernColorHtml =
+    "<html><head><style>" +
+    "body { font-family: sans-serif; margin: 24px; color: #1a1a1a; }" +
+    "h2 { font-size: 20px; margin: 0 0 4px; } h3 { font-size: 14px; margin: 20px 0 8px; }" +
+    ".note { color: #555; font-size: 12px; margin: 0 0 12px; }" +
+    ".row { display: flex; flex-wrap: wrap; gap: 10px; }" +
+    ".swatch { width: 96px; height: 72px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.25);" +
+    "  display: flex; align-items: flex-end; }" +
+    ".swatch span { font-size: 10px; color: #fff; padding: 4px 6px; }" +
+    // A two-tone backdrop so a semi-transparent color-mix result visibly composites over it.
+    ".checker { background: repeating-conic-gradient(#ddd 0% 25%, #fff 0% 50%) 0 / 24px 24px; padding: 10px; border-radius: 10px; }" +
+    "</style></head><body>" +
+    "<h2>Modern CSS Colors</h2>" +
+    "<p class=\"note\">A tailwind-style palette authored entirely in <code>oklch()</code>, plus " +
+    "<code>oklab()/lab()/lch()/hsl()/hwb()</code> and <code>color-mix()</code> opacity modifiers — all resolved to real PDF colors.</p>" +
+
+    "<h3>oklch() palette (constant lightness &amp; chroma, hue sweep)</h3>" +
+    "<div class=\"row\">" +
+    string.Concat(Enumerable.Range(0, 8).Select(i =>
+    {
+        var hue = 30 + i * 45;
+        return $"<div class=\"swatch\" style=\"background: oklch(0.68 0.17 {hue})\"><span>{hue}&deg;</span></div>";
+    })) +
+    "</div>" +
+
+    "<h3>Other color spaces</h3>" +
+    "<div class=\"row\">" +
+    "<div class=\"swatch\" style=\"background: oklab(0.62 0.22 0.13)\"><span>oklab</span></div>" +
+    "<div class=\"swatch\" style=\"background: lab(55 70 -40)\"><span>lab</span></div>" +
+    "<div class=\"swatch\" style=\"background: lch(65 90 130)\"><span>lch</span></div>" +
+    "<div class=\"swatch\" style=\"background: hsl(280 70% 55%)\"><span>hsl</span></div>" +
+    "<div class=\"swatch\" style=\"background: hwb(200 10% 10%)\"><span>hwb</span></div>" +
+    "</div>" +
+
+    "<h3>color-mix() opacity modifiers (over a checkerboard)</h3>" +
+    "<div class=\"checker\"><div class=\"row\">" +
+    string.Concat(new[] { 100, 75, 50, 25 }.Select(p =>
+        $"<div class=\"swatch\" style=\"background: color-mix(in oklab, oklch(0.62 0.2 265) {p}%, transparent)\"><span>{p}%</span></div>")) +
+    "</div></div>" +
+
+    "<h3>color-mix() blends</h3>" +
+    "<div class=\"row\">" +
+    "<div class=\"swatch\" style=\"background: color-mix(in oklch, oklch(0.7 0.2 30), oklch(0.7 0.2 260))\"><span>oklch mix</span></div>" +
+    "<div class=\"swatch\" style=\"background: color-mix(in srgb, crimson, royalblue)\"><span>srgb mix</span></div>" +
+    "<div class=\"swatch\" style=\"background: color-mix(in oklab, gold 60%, black)\"><span>+black</span></div>" +
+    "</div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("modern_colors", "Color", "Modern CSS Colors (oklch, color-mix)",
+    "A wide-gamut palette authored in oklch() with oklab()/lab()/lch()/hsl()/hwb() companions, plus " +
+    "color-mix() opacity modifiers and blends composited over a checkerboard — the CSS Color 4/5 function " +
+    "set most utility frameworks (e.g. Tailwind v4) emit, resolved to real PDF colors.",
+    modernColorHtml, pdfConfig);
+
+// ── @layer cascade layers: layer order beats specificity; unlayered beats layered ─────
+var cascadeLayerHtml =
+    "<html><head><style>" +
+    "body { font-family: sans-serif; margin: 24px; color: #1a1a1a; }" +
+    "h2 { font-size: 20px; margin: 0 0 4px; } .note { color: #555; font-size: 12px; margin: 0 0 16px; }" +
+    ".card { width: 150px; padding: 16px; border-radius: 10px; color: #fff; font-size: 13px; margin: 0 12px 12px 0;" +
+    "  display: inline-block; vertical-align: top; box-shadow: 0 1px 3px rgba(0,0,0,.25); }" +
+    ".card b { display: block; font-size: 15px; margin-bottom: 6px; }" +
+    // Declare the layer order up front, exactly like a utility framework does.
+    "@layer base, components, utilities;" +
+    // A high-specificity rule in an EARLIER layer...
+    "@layer base { #c1.card, #c2.card, #c3.card { background: #64748b; } }" +
+    // ...loses to a low-specificity rule in a LATER layer.
+    "@layer utilities { .card { background: oklch(0.55 0.17 250); } }" +
+    // components sits between base and utilities.
+    "@layer components { .card { background: #16a34a; } }" +
+    // An UNLAYERED rule beats every layer, regardless of specificity (no !important needed).
+    ".unlayered { background: #db2777; }" +
+    "</style></head><body>" +
+    "<h2>@layer cascade layers</h2>" +
+    "<p class=\"note\">Layer order (declared <code>base, components, utilities</code>) decides the winner ahead of " +
+    "specificity: the <code>utilities</code> rule wins over a higher-specificity <code>base</code> rule; an unlayered rule wins over all layers.</p>" +
+    "<div class=\"card\" id=\"c1\"><b>utilities wins</b>base #id rule loses to the later utilities layer &rarr; blue.</div>" +
+    "<div class=\"card\" id=\"c2\"><b>order matters</b>components is later than base but earlier than utilities.</div>" +
+    "<div class=\"card unlayered\" id=\"c3\"><b>unlayered wins</b>An unlayered rule outranks every layer &rarr; pink.</div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("cascade_layers", "Selectors & Cascade", "@layer Cascade Layers",
+    "CSS cascade layers: an @layer order declaration makes a later layer's low-specificity rule win over an " +
+    "earlier layer's high-specificity (#id) rule, and an unlayered rule beat every layer — the layering model " +
+    "utility frameworks like Tailwind v4 rely on.",
+    cascadeLayerHtml, pdfConfig);
+
 // The manifest that drives the website's /showcase page (see docs/showcase.html and
 // .github/workflows/pages.yml). Field names are camelCased for Liquid (site.data.showcases).
 var manifestJson = JsonSerializer.Serialize(showcaseManifest,

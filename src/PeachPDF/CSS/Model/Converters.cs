@@ -68,6 +68,8 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter PureColorConverter =
             new StructValueConverter<Color>(ValueExtensions.ToColor);
 
+        public static IValueConverter Any = new AnyValueConverter();
+
         public static readonly IValueConverter LengthOrPercentConverter =
             new StructValueConverter<Length>(ValueExtensions.ToDistance)
                 .Or(new CalcValueConverter(CalcCategory.LengthPercentage));
@@ -178,6 +180,39 @@ namespace PeachPDF.CSS
             var alpha = AlphaValueConverter.Option(1f);
             return new FunctionValueConverter(FunctionNames.Hwb, WithArgs(hue, percent, percent, alpha));
         });
+
+        // CSS Color 4/5 function forms. These validate the function name and accept its argument list
+        // leniently (preserving the specified text for serialization and shorthand expansion); the
+        // exact grammar check and the sRGB resolution happen in the render layer
+        // (ColorFunctionExtensions), so a `background: oklch(...)` shorthand still carries its color
+        // through to the background-color longhand. Construct(...) defers the `Any` reference until
+        // first use, avoiding a static-init ordering dependency.
+        public static readonly IValueConverter LabColorConverter =
+            Construct(() => new FunctionValueConverter(FunctionNames.Lab, Any));
+        public static readonly IValueConverter OklabColorConverter =
+            Construct(() => new FunctionValueConverter(FunctionNames.Oklab, Any));
+        public static readonly IValueConverter LchColorConverter =
+            Construct(() => new FunctionValueConverter(FunctionNames.Lch, Any));
+        public static readonly IValueConverter OklchColorConverter =
+            Construct(() => new FunctionValueConverter(FunctionNames.Oklch, Any));
+        public static readonly IValueConverter ColorMixConverter =
+            Construct(() => new FunctionValueConverter(FunctionNames.ColorMix, Any));
+
+        // Lenient fallbacks for the CSS Color 4 space/slash syntax of the legacy functions. The strict
+        // comma-form converters above run first (so their canonical serialization is preserved); these
+        // catch the space-separated / slash-alpha forms the strict grammars reject, so e.g.
+        // `background: hsl(280 70% 55%)` or `rgb(1 2 3 / .5)` still populate the color longhand and get
+        // resolved in the render layer.
+        public static readonly IValueConverter RgbLenientConverter =
+            Construct(() => new FunctionValueConverter(FunctionNames.Rgb, Any));
+        public static readonly IValueConverter RgbaLenientConverter =
+            Construct(() => new FunctionValueConverter(FunctionNames.Rgba, Any));
+        public static readonly IValueConverter HslLenientConverter =
+            Construct(() => new FunctionValueConverter(FunctionNames.Hsl, Any));
+        public static readonly IValueConverter HslaLenientConverter =
+            Construct(() => new FunctionValueConverter(FunctionNames.Hsla, Any));
+        public static readonly IValueConverter HwbLenientConverter =
+            Construct(() => new FunctionValueConverter(FunctionNames.Hwb, Any));
 
         public static readonly IValueConverter PerspectiveConverter =
             Construct(() => new FunctionValueConverter(FunctionNames.Perspective, WithArgs(LengthConverter)));
@@ -405,7 +440,13 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter ColorConverter = PureColorConverter
             .Or(RgbColorConverter.Or(RgbaColorConverter))
             .Or(HslColorConverter.Or(HslaColorConverter))
-            .Or(GrayColorConverter.Or(HwbColorConverter));
+            .Or(GrayColorConverter.Or(HwbColorConverter))
+            .Or(LabColorConverter.Or(OklabColorConverter))
+            .Or(LchColorConverter.Or(OklchColorConverter))
+            .Or(ColorMixConverter)
+            .Or(RgbLenientConverter.Or(RgbaLenientConverter))
+            .Or(HslLenientConverter.Or(HslaLenientConverter))
+            .Or(HwbLenientConverter);
 
         public static readonly IValueConverter CurrentColorConverter = ColorConverter.WithCurrentColor();
         public static readonly IValueConverter InvertedColorConverter = CurrentColorConverter.Or(Keywords.Invert);
@@ -478,7 +519,6 @@ namespace PeachPDF.CSS
 
         #region Misc
 
-        public static IValueConverter Any = new AnyValueConverter();
 
         public static IValueConverter Assign<T>(string identifier, T result)
         {
