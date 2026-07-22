@@ -612,6 +612,14 @@ namespace PeachPDF.Html.Core.Parse
             // 9. Resolve var() references now that every custom property's final cascaded value is known
             ResolveDeferredVarProperties(valueParser, box, pendingVarProperties);
 
+            // 10. Blockify an absolutely/fixed-positioned box (CSS 2.1 §9.7 / CSS Display 3 §2.7): its
+            // computed display's inline-level outer type is coerced to the block-level equivalent. Without
+            // this a box whose display is (or defaults to) inline — e.g. a `::before` with no explicit
+            // display — would stay inline+in-flow even with `position: absolute`, so it never becomes
+            // out-of-flow and its left/top/width/height never apply (the Charts.css area/line `td::before`
+            // fill relies on exactly this blockification).
+            BlockifyPositionedBox(box);
+
             // Correct current color
             CssUtils.ApplyCurrentColor(box, valueParser);
 
@@ -625,6 +633,27 @@ namespace PeachPDF.Html.Core.Parse
             {
                 CascadeApplyStyles(valueParser, childBox, cssData, media);
             }
+        }
+
+        /// <summary>
+        /// Blockifies an absolutely/fixed-positioned box (CSS 2.1 §9.7 / CSS Display 3 §2.7): its inline-level
+        /// outer display type is coerced to the block-level equivalent (<c>inline</c>/<c>inline-block</c> →
+        /// <c>block</c>, <c>inline-flex</c> → <c>flex</c>, <c>inline-table</c> → <c>table</c>). Only
+        /// <c>position: absolute</c>/<c>fixed</c> are handled here; floats are also blockified per spec but are
+        /// left as-is (PeachPDF's float layout already treats them block-like, and changing that is out of
+        /// scope for this fix).
+        /// </summary>
+        private static void BlockifyPositionedBox(CssBox box)
+        {
+            if (box.Position is not (CssConstants.Absolute or CssConstants.Fixed)) return;
+
+            box.Display = box.Display switch
+            {
+                CssConstants.Inline or CssConstants.InlineBlock => CssConstants.Block,
+                CssConstants.InlineFlex => CssConstants.Flex,
+                CssConstants.InlineTable => CssConstants.Table,
+                _ => box.Display
+            };
         }
 
         /// <summary>

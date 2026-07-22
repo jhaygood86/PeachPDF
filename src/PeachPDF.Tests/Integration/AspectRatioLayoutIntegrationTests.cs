@@ -100,6 +100,39 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(40, child.ActualHeight, 1);      // 40% of the ratio-derived parent height
         }
 
+        [Fact]
+        public async Task FlexRow_AspectRatio_GivesDefiniteCrossSize_StretchChildFills()
+        {
+            // A row flex container with a definite width and aspect-ratio (no explicit height) has a definite
+            // cross size derived from the ratio, so an align-items:stretch child fills it. Container 210pt
+            // wide, aspect-ratio 21/9 => 90pt tall; the stretched child fills the 90pt cross size, and a
+            // percentage-height grandchild (height:50%) resolves against the child's now-definite height.
+            var html = """
+                <!DOCTYPE html><html><head><style>
+                  #flex { display: flex; width: 210pt; aspect-ratio: 21 / 9; align-items: stretch; }
+                  #item { width: 40pt; }
+                  #gc { height: 50%; width: 10pt; }
+                </style></head><body>
+                <div id="flex"><div id="item"><div id="gc"></div></div></div>
+                </body></html>
+                """;
+            var adapter = new PdfSharpAdapter();
+            adapter.PixelsPerPoint = 1.0;
+            var container = new HtmlContainerInt(adapter);
+            await container.SetHtml(html, null);
+            var size = new XSize(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
+            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            await container.PerformLayout(graphics);
+
+            var item = FindById(container.Root!, "item")!;
+            var gc = FindById(container.Root!, "gc")!;
+            Assert.Equal(90, item.ActualHeight, 1.5);  // stretched to the ratio-derived cross size
+            Assert.Equal(45, gc.ActualHeight, 1.5);    // 50% of the stretched item height
+        }
+
         private static async Task<CssBox> LayoutDiv(string style)
         {
             var html = $"<!DOCTYPE html><html><head></head><body><div id=\"el\" style=\"{style}\">x</div></body></html>";

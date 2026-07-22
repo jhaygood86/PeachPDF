@@ -1233,6 +1233,28 @@ namespace PeachPDF.Html.Core.Dom
         /// Performs layout of the DOM structure creating lines by set bounds restrictions.<br/>
         /// </summary>
         /// <param name="g">Device context to use</param>
+        /// <summary>
+        /// Lays out this box's out-of-flow (absolutely/fixed-positioned) direct children. The flex and table
+        /// layout engines only place in-flow items and deliberately skip out-of-flow children (CSS Flexbox 1
+        /// §4 / CSS2.1 §9.7: an absolutely-positioned child of a flex/table container does not participate in
+        /// flex/table layout), so — unlike the generic block-children loop, which lays out every child — those
+        /// children would otherwise never get a <see cref="PerformLayout"/> call. Running it here, after the
+        /// engine has sized this container, lets each such child resolve its own <c>width</c>/<c>height</c>
+        /// (e.g. <c>width: 100%</c>) and <c>left</c>/<c>top</c> against this now-sized containing block, exactly
+        /// as the block path already does. Recurses naturally: each child's own <see cref="PerformLayoutImp"/>
+        /// runs this again for its out-of-flow descendants.
+        /// </summary>
+        private async ValueTask LayoutOutOfFlowChildren(RGraphics g)
+        {
+            foreach (var childBox in Boxes)
+            {
+                if (childBox.IsOutOfFlow && childBox.Display != CssConstants.None)
+                {
+                    await childBox.PerformLayout(g);
+                }
+            }
+        }
+
         protected virtual async ValueTask PerformLayoutImp(RGraphics g)
         {
 #if DEBUG
@@ -1525,10 +1547,12 @@ namespace PeachPDF.Html.Core.Dom
                 if (Display is CssConstants.Flex or CssConstants.InlineFlex)
                 {
                     await CssLayoutEngineFlex.PerformLayout(g, this);
+                    await LayoutOutOfFlowChildren(g);
                 }
                 else if (Display is CssConstants.Table or CssConstants.InlineTable)
                 {
                     await CssLayoutEngineTable.PerformLayout(g, this);
+                    await LayoutOutOfFlowChildren(g);
                 }
                 else
                 {
