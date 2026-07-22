@@ -243,6 +243,10 @@ namespace PeachPDF.Tests.Html.Core
         [InlineData("<length>", "calc(-(1em) + 4px)", false)]  // unary sign on a font-relative group → dependent
         [InlineData("<length>", "min(2px, 4px)", true)]        // min()/clamp() args must all be independent
         [InlineData("<length>", "clamp(1px, 1em, 4px)", false)]
+        // Documented narrowing (issue #212 "reject any percentage term"): a percentage inside a calc()
+        // initial-value is treated as not computationally independent, so `calc(50%)` drops the rule even
+        // for a pure <percentage> property — while a bare `50%` (the non-calc path) still registers.
+        [InlineData("<percentage>", "calc(50%)", false)]
         public void InitialValueCalc_ComputationalIndependence(string syntax, string initial, bool valid)
         {
             var reg = Register($"syntax: \"{syntax}\"; inherits: false; initial-value: {initial};");
