@@ -1328,6 +1328,106 @@ namespace PeachPDF.Html.Core.Parse
             return result.Count > 0 ? result : null;
         }
 
+        /// <summary>
+        /// Syntax-only validation of the <see cref="CssImage"/>-grammar image functions PeachPDF does not
+        /// render but that are still valid <c>&lt;image&gt;</c> values (CSS Images 4 §2): <c>image-set()</c>,
+        /// <c>cross-fade()</c>, and <c>element()</c>. Used by <c>@property</c> <c>syntax: "&lt;image&gt;"</c>
+        /// validation so a registration whose value is well-formed is accepted (per spec) even though it
+        /// paints nothing when consumed. This checks well-formedness only — it never produces a paintable image.
+        /// </summary>
+        public bool IsExtendedImageFunction(string value)
+        {
+            if (GetCssTokens(value) is not [FunctionToken fn]) return false;
+
+            var open = value.IndexOf('(');
+            var close = value.LastIndexOf(')');
+            if (open < 0 || close <= open) return false;
+            var inner = value[(open + 1)..close].Trim();
+
+            if (fn.Data.Equals(FunctionNames.Element, StringComparison.OrdinalIgnoreCase))
+                return IsElementImage(inner);
+            if (fn.Data.Equals(FunctionNames.ImageSet, StringComparison.OrdinalIgnoreCase))
+                return IsImageSet(inner);
+            if (fn.Data.Equals(FunctionNames.CrossFade, StringComparison.OrdinalIgnoreCase))
+                return IsCrossFade(inner);
+
+            return false;
+        }
+
+        // element( <id-selector> ) — a single '#id' hash token (CSS Images 4 §3). '#f00'-shaped ids lex as a
+        // Color token, other ids as Hash; both are the '#'-prefixed single-token form, so accept either.
+        private static bool IsElementImage(string inner) =>
+            GetCssTokens(inner) is [{ Type: TokenType.Hash or TokenType.Color }];
+
+        // image-set( <image-set-option># ), <image-set-option> = [ <image> | <string> ] [ <resolution> || type(<string>) ]?
+        private bool IsImageSet(string inner)
+        {
+            var options = SplitTopLevelCommas(inner).Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
+            if (options.Count == 0) return false;
+
+            foreach (var option in options)
+            {
+                var parts = SplitTopLevelWhitespace(option).ToList();
+                if (parts.Count == 0) return false;
+
+                // The first component is the source: a <string> or a url()/gradient <image>.
+                if (!IsStringLiteral(parts[0]) && ParseImage(parts[0]) is null) return false;
+
+                // Any remaining components are a <resolution> and/or a type(<string>), in either order.
+                for (var i = 1; i < parts.Count; i++)
+                    if (!IsResolution(parts[i]) && !IsTypeFunction(parts[i])) return false;
+            }
+
+            return true;
+        }
+
+        // cross-fade( <cf-image># ), <cf-image> = <percentage>? && [ <image> | <color> ];
+        // plus the legacy cross-fade( <image>, <image>, <percentage> ) form.
+        private bool IsCrossFade(string inner)
+        {
+            var args = SplitTopLevelCommas(inner).Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
+            if (args.Count == 0) return false;
+
+            if (args.All(IsCrossFadeImage)) return true;
+
+            return args.Count == 3 && IsCrossFadeImage(args[0]) && IsCrossFadeImage(args[1]) && IsPercentageValue(args[2]);
+        }
+
+        private bool IsCrossFadeImage(string arg)
+        {
+            var hasImageOrColor = false;
+            foreach (var part in SplitTopLevelWhitespace(arg))
+            {
+                if (ParseImage(part) is not null || IsColorValid(part)) { hasImageOrColor = true; continue; }
+                if (IsPercentageValue(part)) continue;
+                return false;
+            }
+
+            return hasImageOrColor;
+        }
+
+        private static bool IsStringLiteral(string value) => GetCssTokens(value) is [StringToken];
+
+        private static bool IsPercentageValue(string value) => GetCssTokens(value).ToPercent() != null;
+
+        // A <resolution> (dpi/dpcm/dppx), or the 'x' unit which is an alias for dppx (CSS Values 4 §7.4) that
+        // Resolution.GetUnit doesn't model on its own.
+        private static bool IsResolution(string value)
+        {
+            var tokens = GetCssTokens(value);
+            if (tokens.ToResolution() != null) return true;
+            return tokens is [UnitToken { Type: TokenType.Dimension } u] && u.Unit.Equals("x", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsTypeFunction(string value)
+        {
+            if (GetCssTokens(value) is not [FunctionToken t] || !t.Data.Equals("type", StringComparison.OrdinalIgnoreCase))
+                return false;
+            var open = value.IndexOf('(');
+            var close = value.LastIndexOf(')');
+            return open >= 0 && close > open && IsStringLiteral(value[(open + 1)..close].Trim());
+        }
+
         internal static IEnumerable<string> SplitTopLevelCommas(string value)
         {
             int depth = 0, start = 0;

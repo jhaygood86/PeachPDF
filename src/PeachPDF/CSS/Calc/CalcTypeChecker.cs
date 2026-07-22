@@ -28,6 +28,12 @@ namespace PeachPDF.CSS
                 case AngleCalcNode:
                     return CalcCategory.Angle;
 
+                case TimeCalcNode:
+                    return CalcCategory.Time;
+
+                case ResolutionCalcNode:
+                    return CalcCategory.Resolution;
+
                 case UnaryCalcNode unary:
                     return Check(unary.Operand);
 

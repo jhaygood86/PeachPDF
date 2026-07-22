@@ -66,6 +66,16 @@ namespace PeachPDF.CSS
                     // length evaluation; the only current caller is conic-gradient stop-position parsing.
                     return new Angle((float)angle.Value, angle.Unit).ToRadian();
 
+                case TimeCalcNode time:
+                    // Canonical time unit is milliseconds. No layout property evaluates a time calc() today
+                    // (these nodes only arise from @property `syntax: "<time>"` validation, which type-checks
+                    // rather than evaluates), so this case is defensive completeness paralleling the angle leaf.
+                    return new Time((float)time.Value, time.Unit).ToMilliseconds();
+
+                case ResolutionCalcNode resolution:
+                    // Canonical resolution unit is dots-per-pixel; same @property-only provenance as TimeCalcNode.
+                    return new Resolution((float)resolution.Value, resolution.Unit).ToDotsPerPixel();
+
                 case UnaryCalcNode unary:
                 {
                     var operand = Evaluate(unary.Operand, context);

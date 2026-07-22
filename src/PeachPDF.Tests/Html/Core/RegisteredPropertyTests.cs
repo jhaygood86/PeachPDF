@@ -136,12 +136,23 @@ namespace PeachPDF.Tests.Html.Core
         [InlineData("<image>", "radial-gradient(red, blue)", true)]
         [InlineData("<image>", "conic-gradient(red, blue)", true)]
         [InlineData("<image>", "red", false)]
+        // Extended image functions (issue #229 gap 3): syntactically valid <image> values (not rendered).
+        [InlineData("<image>", "image-set(\"a.png\" 1x, \"b.png\" 2x)", true)]
+        [InlineData("<image>", "image-set(url(a.png) 1x, url(b.png) 2dppx)", true)]
+        [InlineData("<image>", "cross-fade(url(a.png), url(b.png), 50%)", true)]
+        [InlineData("<image>", "cross-fade(50% url(a.png), url(b.png))", true)]
+        [InlineData("<image>", "element(#hero)", true)]
+        [InlineData("<image>", "image-set(banana)", false)]   // leading item isn't an <image>/<string>
+        [InlineData("<image>", "element(.klass)", false)]     // not an #id selector
+        [InlineData("<image>", "cross-fade(5px)", false)]     // no <image>/<color>
         [InlineData("<time>", "5s", true)]
         [InlineData("<time>", "250ms", true)]
+        [InlineData("<time>", "calc(1s + 2s)", true)]         // <time> calc() (issue #229 gap 2)
         [InlineData("<time>", "10px", false)]
         [InlineData("<time>", "5", false)]
         [InlineData("<resolution>", "96dpi", true)]
         [InlineData("<resolution>", "2dppx", true)]
+        [InlineData("<resolution>", "calc(2dppx * 2)", true)] // <resolution> calc() (issue #229 gap 2)
         [InlineData("<resolution>", "5", false)]
         [InlineData("<transform-function>", "rotate(45deg)", true)]
         [InlineData("<transform-function>", "translate(1px, 2px)", true)]
@@ -220,37 +231,81 @@ namespace PeachPDF.Tests.Html.Core
             Assert.Null(Register("syntax: \"<transform-list>\"; inherits: false; initial-value: nope;"));
         }
 
-        // A genuinely non-standard/future <foo> data type still degrades to "accept" (safety fallback).
-        [Fact]
-        public void NonStandardType_DegradesToAccept()
+        // A syntax naming an unsupported/unknown <foo> data type is not a valid syntax string, so the whole
+        // @property rule is invalid and ignored (CSS Properties & Values API §3) — issue #229.
+        [Theory]
+        [InlineData("<future-thing>")]
+        [InlineData("<bogus>")]
+        [InlineData("<length> | <nope>")] // one bad alternation component invalidates the whole syntax
+        public void UnknownSyntaxType_InvalidatesRule(string syntax)
         {
-            var reg = Register("syntax: \"<future-thing>\"; inherits: false; initial-value: whatever;");
-            Assert.NotNull(reg);
-            Assert.True(reg!.Accepts("anything at all", ValueParser));
+            Assert.Null(Register($"syntax: \"{syntax}\"; inherits: false; initial-value: whatever;"));
         }
 
-        // ── Computational independence of initial-value calc() (§3) ───────────────────
+        // Valid syntax strings — every component is a supported <data-type> or an ident literal — still register.
+        [Theory]
+        [InlineData("<length>", "1px")]
+        [InlineData("<length> | <color>", "1px")]
+        [InlineData("<length>+", "1px")]
+        [InlineData("<color>#", "red")]
+        [InlineData("auto | <length>", "auto")]
+        [InlineData("small | medium | large", "small")]
+        public void ValidSyntaxString_Registers(string syntax, string initial)
+        {
+            Assert.NotNull(Register($"syntax: \"{syntax}\"; inherits: false; initial-value: {initial};"));
+        }
+
+        // ── initial-value calc(): category match (§3) + computational independence ────
 
         [Theory]
         [InlineData("<length>", "calc(1px + 2px)", true)]   // absolute-only → independent
         [InlineData("<length>", "calc(2px * 3)", true)]
         [InlineData("<length>", "calc(1em + 2px)", false)]  // em is font-relative
         [InlineData("<length>", "calc(1rem)", false)]
-        [InlineData("<length-percentage>", "calc(50% + 1px)", false)] // percentage term
         [InlineData("<number>", "calc(2 * 3)", true)]
         [InlineData("<angle>", "calc(45deg + 10deg)", true)]
         [InlineData("<length>", "calc(-(2px) + 4px)", true)]   // unary sign on an absolute group → independent
         [InlineData("<length>", "calc(-(1em) + 4px)", false)]  // unary sign on a font-relative group → dependent
         [InlineData("<length>", "min(2px, 4px)", true)]        // min()/clamp() args must all be independent
         [InlineData("<length>", "clamp(1px, 1em, 4px)", false)]
-        // Documented narrowing (issue #212 "reject any percentage term"): a percentage inside a calc()
-        // initial-value is treated as not computationally independent, so `calc(50%)` drops the rule even
-        // for a pure <percentage> property — while a bare `50%` (the non-calc path) still registers.
-        [InlineData("<percentage>", "calc(50%)", false)]
-        public void InitialValueCalc_ComputationalIndependence(string syntax, string initial, bool valid)
+        // Category match (issue #229): a percentage IS computationally independent (it computes to itself),
+        // so it registers wherever its category is allowed — <length-percentage> and <percentage> — but the
+        // category subset-test still rejects it for a pure <length>.
+        [InlineData("<length-percentage>", "calc(50% + 1px)", true)]
+        [InlineData("<length-percentage>", "calc(50%)", true)]
+        [InlineData("<percentage>", "calc(50%)", true)]
+        [InlineData("<length>", "calc(50%)", false)]   // percentage category ≠ length
+        [InlineData("<length>", "calc(45deg)", false)] // angle category ≠ length
+        // <time>/<resolution> calc() (issue #229 gap 2): now parseable/category-checked; s/ms & dpi/dppx are absolute.
+        [InlineData("<time>", "calc(1s + 2s)", true)]
+        [InlineData("<time>", "calc(1s + 1px)", false)]     // mixed time+length → type-invalid calc
+        [InlineData("<resolution>", "calc(2dppx * 2)", true)]
+        public void InitialValueCalc_CategoryAndIndependence(string syntax, string initial, bool valid)
         {
             var reg = Register($"syntax: \"{syntax}\"; inherits: false; initial-value: {initial};");
             Assert.Equal(valid, reg is not null);
+        }
+
+        // The category subset-test also gates set values (Accepts), not just initial-values.
+        [Theory]
+        [InlineData("<length-percentage>", "calc(50%)", true)]
+        [InlineData("<length>", "calc(50%)", false)]
+        [InlineData("<length>", "calc(45deg)", false)]
+        public void Accepts_CalcCategory(string syntax, string value, bool expected)
+        {
+            var reg = Register($"syntax: \"{syntax}\"; inherits: false; initial-value: {InitialFor(syntax)};");
+            Assert.NotNull(reg);
+            Assert.Equal(expected, reg!.Accepts(value, ValueParser));
+        }
+
+        // An <image> property whose initial-value is a well-formed extended image function registers, even
+        // though the function paints nothing when consumed (issue #229 gap 3).
+        [Fact]
+        public void ImageProperty_ExtendedFunctionInitial_Registers()
+        {
+            Assert.NotNull(Register("syntax: \"<image>\"; inherits: false; initial-value: image-set(\"a.png\" 1x, \"b.png\" 2x);"));
+            Assert.NotNull(Register("syntax: \"<image>\"; inherits: false; initial-value: element(#hero);"));
+            Assert.Null(Register("syntax: \"<image>\"; inherits: false; initial-value: image-set(banana);"));
         }
 
         [Fact]

@@ -66,6 +66,11 @@ namespace PeachPDF.Html.Core
                 // The universal syntax accepts any value and may omit initial-value.
                 return new RegisteredProperty(rule.Name, syntax, hasInitial ? rawInitial!.Trim() : null, inherits);
 
+            // The syntax string itself must be well-formed (CSS Properties & Values API §3): every component
+            // is a supported <data-type> or an ident literal. A syntax naming an unsupported/unknown type
+            // (e.g. "<bogus>") is not a valid syntax string, so the whole @property rule is invalid and ignored.
+            if (!IsValidSyntaxString(syntax)) return null;
+
             // A typed syntax REQUIRES an initial-value that matches it, else the whole rule is invalid.
             // The initial-value is additionally held to the §3 computational-independence rule
             // (forInitialValue: true), which rejects a calc() built from font/viewport-relative or
@@ -168,52 +173,55 @@ namespace PeachPDF.Html.Core
         {
             if (value.Length == 0) return false;
 
-            // A calc()-family expression is valid wherever a numeric data type is (length/number/percentage/…).
-            // When validating an initial-value (forInitialValue), it additionally has to be computationally
-            // independent (CSS Properties & Values API §3): a calc() built from font/viewport-relative or
-            // percentage terms (e.g. calc(1em + 2px)) is rejected there, though it is fine at computed-value time.
-            bool NumericOk(string v, Func<string, bool> check)
+            // A calc()-family expression is valid for a numeric data type when its resolved type-checking
+            // category is within `allowed` (the same subset test CalcValueConverter uses), so e.g. calc(50%)
+            // matches <length-percentage>/<percentage> but not <length>. When validating an initial-value
+            // (forInitialValue) it must additionally be computationally independent (CSS Properties & Values
+            // API §3): a calc() with a font/viewport-relative length (e.g. calc(1em + 2px)) is rejected there,
+            // though it is fine at computed-value time. Percentages ARE computationally independent (they
+            // compute to themselves), so it's the category test, not independence, that gates them per type.
+            bool NumericOk(string v, CalcCategory allowed, Func<string, bool> check)
             {
-                if (CssValueParser.IsCalcFunction(v))
-                    return !forInitialValue || CalcIsComputationallyIndependent(v);
-                return check(v);
+                if (!CssValueParser.IsCalcFunction(v)) return check(v);
+                return CalcMatchesCategory(v, allowed) && (!forInitialValue || CalcIsComputationallyIndependent(v));
             }
 
             switch (type)
             {
                 case "<length>":
-                    return NumericOk(value, v => CssValueParser.GetCssTokens(v).ToLength() != null);
+                    return NumericOk(value, CalcCategory.Length, v => CssValueParser.GetCssTokens(v).ToLength() != null);
                 case "<percentage>":
-                    return NumericOk(value, v => CssValueParser.GetCssTokens(v).ToPercent() != null);
+                    return NumericOk(value, CalcCategory.Percentage, v => CssValueParser.GetCssTokens(v).ToPercent() != null);
                 case "<length-percentage>":
-                    return NumericOk(value, v => CssValueParser.GetCssTokens(v).ToDistance() != null);
+                    return NumericOk(value, CalcCategory.LengthPercentage, v => CssValueParser.GetCssTokens(v).ToDistance() != null);
                 case "<number>":
-                    return NumericOk(value, v => CssValueParser.GetCssTokens(v).ToSingle() != null);
+                    return NumericOk(value, CalcCategory.Number, v => CssValueParser.GetCssTokens(v).ToSingle() != null);
                 case "<integer>":
-                    return NumericOk(value, v => CssValueParser.GetCssTokens(v).ToInteger() != null);
+                    return NumericOk(value, CalcCategory.Number, v => CssValueParser.GetCssTokens(v).ToInteger() != null);
                 case "<angle>":
-                    return NumericOk(value, v => CssValueParser.GetCssTokens(v).ToAngle() != null);
+                    return NumericOk(value, CalcCategory.Angle, v => CssValueParser.GetCssTokens(v).ToAngle() != null);
                 case "<ratio>":
                     // <ratio> = <number [0,∞]> [ / <number [0,∞]> ]? (CSS Values 4 §11) — notably NOT `auto`,
                     // so `@property { syntax: "<ratio>"; initial-value: auto }` is invalid and the rule drops.
-                    return NumericOk(value, v => AspectRatioGrammar.TryParseRatio(CssValueParser.GetCssTokens(v), out _));
+                    // A whole-value calc() here resolves to a Number (a single-number ratio).
+                    return NumericOk(value, CalcCategory.Number, v => AspectRatioGrammar.TryParseRatio(CssValueParser.GetCssTokens(v), out _));
                 case "<color>":
                     return valueParser.IsColorValid(value);
                 case "<url>":
                     // A single url() token (CSS Values 4 §4.5).
                     return CssValueParser.GetCssTokens(value).ToUri() != null;
                 case "<image>":
-                    // url() or a supported gradient (CSS Images 3 §2). image-set()/cross-fade()/element()
-                    // aren't supported by the engine, so they fall back to the initial-value like any other
-                    // unrenderable value rather than registering.
-                    return valueParser.ParseImage(value) != null;
+                    // url() or a supported gradient (CSS Images 3 §2), plus the syntactically-valid-but-not-
+                    // rendered image functions image-set()/cross-fade()/element() (CSS Images 4 §2) — accepted
+                    // for registration (a valid <image> per spec) though they paint nothing when consumed.
+                    return valueParser.ParseImage(value) != null || valueParser.IsExtendedImageFunction(value);
                 case "<time>":
-                    // A literal <time> dimension only — the calc engine models no time units, so a calc()
-                    // time value can't be validated (or evaluated) and isn't accepted here.
-                    return CssValueParser.GetCssTokens(value).ToTime() != null;
+                    // A literal <time> dimension (s/ms) or a <time>-category calc() (CalcParser now models
+                    // time units); s/ms are absolute, so a time calc() is always computationally independent.
+                    return NumericOk(value, CalcCategory.Time, v => CssValueParser.GetCssTokens(v).ToTime() != null);
                 case "<resolution>":
-                    // A literal <resolution> dimension only (dpi/dppx/dpcm) — same rationale as <time>.
-                    return CssValueParser.GetCssTokens(value).ToResolution() != null;
+                    // A literal <resolution> dimension (dpi/dpcm/dppx) or a <resolution>-category calc().
+                    return NumericOk(value, CalcCategory.Resolution, v => CssValueParser.GetCssTokens(v).ToResolution() != null);
                 case "<transform-function>":
                     // Exactly one transform function, validated (name + argument arity/types) through the
                     // shared Layer-A transform grammar. FunctionValueConverter's OnlyOrDefault rejects a list.
@@ -228,20 +236,73 @@ namespace PeachPDF.Html.Core
                 case "<string>":
                     return value.Length >= 2 && value[0] is '"' or '\'' && value[^1] == value[0];
                 default:
-                    // A bare ident literal in the syntax (e.g. `auto`) is a <custom-ident> and matches that
-                    // keyword case-sensitively (CSS Syntax 3 — idents are case-sensitive). Every standard
-                    // syntax data type above is now validated; a genuinely non-standard/future <foo> type we
-                    // don't model still degrades to "accept" rather than wrongly reject.
-                    if (type.StartsWith("<", StringComparison.Ordinal)) return true;
+                    // A bare ident literal in the syntax (e.g. `auto`) is matched case-sensitively (CSS Syntax
+                    // 3 — idents are case-sensitive). Every supported <data-type> has an explicit case above,
+                    // and FromRule's IsValidSyntaxString rejects any unknown <foo> before a property is ever
+                    // registered, so the only values reaching here are ident literals.
                     return string.Equals(type, value, StringComparison.Ordinal);
             }
         }
 
+        /// <summary>The supported <c>syntax</c> component data types (CSS Properties &amp; Values API §3), plus
+        /// <c>&lt;ratio&gt;</c> (a PeachPDF extension). A <c>syntax</c> naming any other <c>&lt;foo&gt;</c> is invalid.</summary>
+        private static readonly HashSet<string> KnownDataTypes = new(StringComparer.Ordinal)
+        {
+            "<length>", "<number>", "<integer>", "<percentage>", "<length-percentage>", "<color>", "<angle>",
+            "<ratio>", "<image>", "<url>", "<time>", "<resolution>", "<transform-function>", "<transform-list>",
+            "<custom-ident>", "<string>"
+        };
+
+        /// <summary>
+        /// Whether <paramref name="syntax"/> is a well-formed syntax string: every top-level <c>|</c> component
+        /// (after stripping a trailing <c>+</c>/<c>#</c> multiplier) is either a supported <c>&lt;data-type&gt;</c>
+        /// or an ident literal. The universal <c>*</c> is handled by the caller before this runs.
+        /// </summary>
+        private static bool IsValidSyntaxString(string syntax)
+        {
+            foreach (var rawComponent in syntax.Split('|'))
+            {
+                var component = rawComponent.Trim();
+                if (component.EndsWith("+", StringComparison.Ordinal) || component.EndsWith("#", StringComparison.Ordinal))
+                    component = component[..^1].Trim();
+
+                if (component.Length == 0) return false;
+
+                if (component.StartsWith("<", StringComparison.Ordinal))
+                {
+                    if (!KnownDataTypes.Contains(component)) return false;
+                }
+                else if (!IsIdent(component))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Whether a calc()-family <paramref name="value"/> parses and type-checks to a category within
+        /// <paramref name="allowed"/> — the same subset test <see cref="CalcValueConverter"/> applies, so a
+        /// calc()'s resolved kind (length / percentage / number / angle / time / resolution) must match the
+        /// declared syntax type (e.g. <c>calc(50%)</c> matches <c>&lt;length-percentage&gt;</c> but not <c>&lt;length&gt;</c>).
+        /// </summary>
+        private static bool CalcMatchesCategory(string value, CalcCategory allowed)
+        {
+            var tokens = CssValueParser.GetCssTokens(value);
+            if (tokens is not [FunctionToken fn] || !CalcParser.IsCalcFamily(fn.Data)) return false;
+            var node = CalcParser.Parse(fn);
+            if (node is null) return false;
+            var category = CalcTypeChecker.Check(node);
+            return category is not null && (category.Value & ~allowed) == 0;
+        }
+
         /// <summary>
         /// Whether a calc()-family <paramref name="value"/> is computationally independent (CSS Properties &amp;
-        /// Values API §3): it may not depend on element context, so every leaf must be a plain number, an angle,
-        /// or an <em>absolute</em> length — font-relative (em/ex/ch/rem), viewport-relative, or percentage terms
-        /// are rejected. A non-calc value is trivially independent (its own type check handles it).
+        /// Values API §3): it may not depend on element context. Numbers, angles, times, resolutions, and
+        /// percentages are all independent (they compute to themselves without layout context); only
+        /// font-relative (em/ex/ch/rem) and viewport-relative lengths are not. A non-calc value is trivially
+        /// independent (its own type check handles it).
         /// </summary>
         private static bool CalcIsComputationallyIndependent(string value)
         {
@@ -253,10 +314,11 @@ namespace PeachPDF.Html.Core
 
         private static bool IsComputationallyIndependent(CalcNode node) => node switch
         {
-            NumberCalcNode or AngleCalcNode => true,
+            // A percentage computes to itself (it's preserved to used-value time), so it's independent; the
+            // <length> vs <length-percentage> gating is handled by the category test in CalcMatchesCategory.
+            NumberCalcNode or AngleCalcNode or TimeCalcNode or ResolutionCalcNode or PercentageCalcNode => true,
             // Viewport/ch units never reach the tree (CalcParser doesn't admit them); em/ex/rem do, and are relative.
             DimensionCalcNode dimension => new Length(0f, dimension.Unit).IsAbsolute,
-            PercentageCalcNode => false,
             UnaryCalcNode unary => IsComputationallyIndependent(unary.Operand),
             BinaryCalcNode binary => IsComputationallyIndependent(binary.Left) && IsComputationallyIndependent(binary.Right),
             CallCalcNode call => call.Arguments.All(IsComputationallyIndependent),
