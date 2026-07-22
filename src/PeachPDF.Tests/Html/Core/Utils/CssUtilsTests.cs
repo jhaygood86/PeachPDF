@@ -5,6 +5,7 @@ using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore.Drawing;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Tests.Html.Core.Utils
@@ -319,6 +320,131 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var width = CssUtils.WhiteSpace(graphics, box);
 
             Assert.True(width > 0);
+        }
+
+        // Every property whose setter stores its value verbatim and whose getter returns it unchanged — the
+        // round trip pins the full data-driven dispatch (both _propertySetters and _propertyGetters) in one
+        // place, so an entry that maps to the wrong box field, or a stale getter/setter after the switch→table
+        // refactor, fails loudly. Each row runs against a fresh box, so properties never interact. Excludes
+        // properties with a normalizing/parsing setter or getter (font-family, font-size, the *-image parsers)
+        // and the shorthands, which have their own dedicated tests above. The em-stripping NoEms properties
+        // (text-indent/word-spacing/letter-spacing) are included but with px values, which pass through unchanged.
+        public static IEnumerable<object[]> DirectRoundTripProperties() => new object[][]
+        {
+            ["border-bottom-width", "2px"], ["border-left-width", "3px"], ["border-right-width", "4px"], ["border-top-width", "5px"],
+            ["border-bottom-style", "dashed"], ["border-left-style", "dotted"], ["border-right-style", "double"], ["border-top-style", "groove"],
+            ["border-bottom-color", "rgb(1, 2, 3)"], ["border-left-color", "rgb(4, 5, 6)"], ["border-right-color", "rgb(7, 8, 9)"], ["border-top-color", "rgb(10, 11, 12)"],
+            ["border-spacing", "3px"], ["border-collapse", "collapse"], ["box-sizing", "border-box"],
+            ["border-top-left-radius", "1px"], ["border-top-right-radius", "2px"], ["border-bottom-right-radius", "3px"], ["border-bottom-left-radius", "4px"],
+            ["transform", "rotate(10deg)"], ["transform-origin", "left top"], ["opacity", "0.5"],
+            ["counter-increment", "c 1"], ["counter-reset", "c 0"], ["counter-set", "c 2"], ["string-set", "none"],
+            ["page", "cover"], ["-peachpdf-pdf-tag-type", "BlockQuote"],
+            ["margin-bottom", "5px"], ["margin-left", "6px"], ["margin-right", "7px"], ["margin-top", "8px"],
+            ["padding-bottom", "5px"], ["padding-left", "6px"], ["padding-right", "7px"], ["padding-top", "8px"],
+            ["break-after", "avoid"], ["break-before", "avoid"], ["break-inside", "avoid"],
+            ["left", "10px"], ["top", "11px"], ["right", "12px"], ["bottom", "13px"],
+            ["width", "100px"], ["max-width", "200px"], ["min-width", "50px"], ["height", "120px"], ["max-height", "240px"], ["min-height", "60px"],
+            ["background-color", "rgb(4, 5, 6)"], ["background-position", "center"], ["background-size", "cover"], ["background-repeat", "no-repeat"],
+            ["background-origin", "border-box"], ["background-clip", "padding-box"], ["background-attachment", "fixed"],
+            ["color", "rgb(7, 8, 9)"], ["content", "normal"], ["display", "block"], ["direction", "rtl"], ["empty-cells", "hide"],
+            ["clear", "both"], ["position", "absolute"], ["line-height", "1.5"], ["vertical-align", "middle"], ["text-indent", "20px"],
+            ["text-align", "center"], ["text-decoration", "underline"], ["text-decoration-color", "rgb(1, 2, 3)"], ["text-decoration-line", "underline"], ["text-decoration-style", "solid"],
+            ["text-transform", "uppercase"], ["white-space", "nowrap"], ["word-break", "break-all"], ["visibility", "hidden"], ["word-spacing", "2px"], ["letter-spacing", "1px"],
+            ["font-style", "italic"], ["font-variant", "small-caps"], ["font-weight", "bold"], ["font-stretch", "condensed"],
+            ["list-style-position", "inside"], ["list-style-type", "square"], ["overflow", "hidden"], ["z-index", "5"],
+            ["flex-direction", "column"], ["flex-wrap", "wrap"], ["justify-content", "center"], ["align-items", "stretch"], ["align-content", "center"],
+            ["flex-grow", "2"], ["flex-shrink", "0"], ["flex-basis", "auto"], ["align-self", "center"], ["order", "3"],
+            ["row-gap", "5px"], ["column-gap", "8px"], ["column-count", "3"], ["column-width", "120px"], ["column-fill", "auto"], ["column-span", "all"],
+            ["column-rule-width", "2px"], ["column-rule-style", "solid"], ["column-rule-color", "rgb(1, 2, 3)"],
+            ["float", "left"],
+        };
+
+        [Theory]
+        [MemberData(nameof(DirectRoundTripProperties))]
+        public async Task SetThenGetPropertyValue_RoundTripsVerbatim(string name, string value)
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, name, value);
+
+            Assert.Equal(value, CssUtils.GetPropertyValue(box, name));
+        }
+
+        // Every remaining setter name: shorthands, the value-validated/-transformed ones, the *-image parsers,
+        // and the accepted-but-inert properties. This drives the dispatch arms the round trip can't (they don't
+        // store verbatim) and asserts they neither throw nor leave the property engine in a bad state.
+        [Theory]
+        [InlineData("border", "2px solid rgb(1, 2, 3)")]
+        [InlineData("border-bottom", "1px dashed red")]
+        [InlineData("border-left", "1px dashed red")]
+        [InlineData("border-right", "1px dashed red")]
+        [InlineData("border-top", "1px dashed red")]
+        [InlineData("border-width", "1px 2px")]
+        [InlineData("border-style", "solid dashed")]
+        [InlineData("border-color", "red blue")]
+        [InlineData("border-radius", "4px")]
+        [InlineData("margin", "1px 2px 3px 4px")]
+        [InlineData("padding", "5px 10px")]
+        [InlineData("page-break-after", "always")]
+        [InlineData("page-break-before", "always")]
+        [InlineData("page-break-inside", "avoid")]
+        [InlineData("orphans", "3")]
+        [InlineData("widows", "2")]
+        [InlineData("hyphens", "auto")]
+        [InlineData("background-image", "none")]
+        [InlineData("font-family", "Arial")]
+        [InlineData("font-size", "16px")]
+        [InlineData("list-style", "square inside")]
+        [InlineData("list-style-image", "none")]
+        [InlineData("flex", "1 1 auto")]
+        [InlineData("flex-flow", "column wrap")]
+        [InlineData("gap", "10px 20px")]
+        [InlineData("columns", "2 100px")]
+        [InlineData("column-rule", "2px solid red")]
+        [InlineData("unicode-bidi", "isolate")]
+        [InlineData("overflow-wrap", "break-word")]
+        [InlineData("not-a-real-property", "whatever")]
+        public async Task SetPropertyValue_HandledOrUnknownName_DoesNotThrow(string name, string value)
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            var ex = Record.Exception(() => CssUtils.SetPropertyValue(parser, box, name, value));
+
+            Assert.Null(ex);
+            // A follow-up read must also be well-behaved (never throws), whether or not the name has a getter.
+            Assert.Null(Record.Exception(() => CssUtils.GetPropertyValue(box, name)));
+        }
+
+        // The legacy page-break-* aliases map "always" to "page" on both the -after and -before axes; the plain
+        // break-* properties do not transform (asserted by the round-trip theory, which feeds them "avoid").
+        [Theory]
+        [InlineData("page-break-after", "break-after")]
+        [InlineData("page-break-before", "break-before")]
+        public async Task SetPropertyValue_PageBreakAlways_MapsToPage(string setName, string getName)
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, setName, "always");
+
+            Assert.Equal("page", CssUtils.GetPropertyValue(box, getName));
+        }
+
+        // The false side of each validation guard: an invalid value must be ignored, leaving the prior value.
+        [Theory]
+        [InlineData("width", "not-a-length", "40px")]
+        [InlineData("border-top-width", "banana", "3px")]
+        [InlineData("border-top-style", "not-a-style", "solid")]
+        [InlineData("box-sizing", "weird-box", "border-box")]
+        [InlineData("column-count", "0", "2")]
+        [InlineData("column-span", "sometimes", "all")]
+        public async Task SetPropertyValue_InvalidValue_IsRejected(string name, string invalid, string valid)
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+            CssUtils.SetPropertyValue(parser, box, name, valid);
+
+            CssUtils.SetPropertyValue(parser, box, name, invalid);
+
+            Assert.Equal(valid, CssUtils.GetPropertyValue(box, name));
         }
 
         // --- Helpers ---

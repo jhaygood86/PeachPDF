@@ -15,6 +15,7 @@ using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -53,126 +54,132 @@ namespace PeachPDF.Html.Core.Utils
         /// <param name="cssBox">the CSS box to get it's property value</param>
         /// <param name="propName">the name of the CSS property</param>
         /// <returns>the value of the property, null if no such property exists</returns>
-        public static string? GetPropertyValue(CssBox cssBox, string propName)
-        {
-            return propName switch
+        public static string? GetPropertyValue(CssBox cssBox, string propName) =>
+            _propertyGetters.TryGetValue(propName, out var getter) ? getter(cssBox) : null;
+
+        /// <summary>
+        /// Maps a CSS property name to the getter for its stored <see cref="CssBox"/> value. An unlisted
+        /// name resolves to <c>null</c> (the switch's old <c>_ =&gt; null</c> default). <c>background-image</c>
+        /// and <c>list-style-image</c> are intentionally absent: they are parsed into structured fields, not
+        /// retrievable as a raw string, so they returned <c>null</c> here before too.
+        /// </summary>
+        private static readonly FrozenDictionary<string, Func<CssBox, string?>> _propertyGetters =
+            new Dictionary<string, Func<CssBox, string?>>
             {
-                "border-bottom-width" => cssBox.BorderBottomWidth,
-                "border-left-width" => cssBox.BorderLeftWidth,
-                "border-right-width" => cssBox.BorderRightWidth,
-                "border-top-width" => cssBox.BorderTopWidth,
-                "border-bottom-style" => cssBox.BorderBottomStyle,
-                "border-left-style" => cssBox.BorderLeftStyle,
-                "border-right-style" => cssBox.BorderRightStyle,
-                "border-top-style" => cssBox.BorderTopStyle,
-                "border-bottom-color" => cssBox.BorderBottomColor,
-                "border-left-color" => cssBox.BorderLeftColor,
-                "border-right-color" => cssBox.BorderRightColor,
-                "border-top-color" => cssBox.BorderTopColor,
-                "border-spacing" => cssBox.BorderSpacing,
-                "border-collapse" => cssBox.BorderCollapse,
-                "break-after" => cssBox.BreakAfter,
-                "break-before" => cssBox.BreakBefore,
-                "break-inside" => cssBox.BreakInside,
-                "orphans" => cssBox.Orphans,
-                "widows" => cssBox.Widows,
-                "hyphens" => cssBox.Hyphens,
-                "border-top-left-radius" => cssBox.BorderTopLeftRadius,
-                "border-top-right-radius" => cssBox.BorderTopRightRadius,
-                "border-bottom-right-radius" => cssBox.BorderBottomRightRadius,
-                "border-bottom-left-radius" => cssBox.BorderBottomLeftRadius,
-                "counter-increment" => cssBox.CounterIncrement,
-                "counter-reset" => cssBox.CounterReset,
-                "counter-set" => cssBox.CounterSet,
-                "string-set" => cssBox.StringSet,
-                "page" => cssBox.PageName,
-                "-peachpdf-pdf-tag-type" => cssBox.PdfTagType,
-                "margin-bottom" => cssBox.MarginBottom,
-                "margin-left" => cssBox.MarginLeft,
-                "margin-right" => cssBox.MarginRight,
-                "margin-top" => cssBox.MarginTop,
-                "padding-bottom" => cssBox.PaddingBottom,
-                "padding-left" => cssBox.PaddingLeft,
-                "padding-right" => cssBox.PaddingRight,
-                "padding-top" => cssBox.PaddingTop,
-                "page-break-after" => cssBox.BreakAfter,
-                "page-break-before" => cssBox.BreakBefore,
-                "page-break-inside" => cssBox.BreakInside,
-                "left" => cssBox.Left,
-                "top" => cssBox.Top,
-                "right" => cssBox.Right,
-                "bottom" => cssBox.Bottom,
-                "width" => cssBox.Width,
-                "max-width" => cssBox.MaxWidth,
-                "min-width" => cssBox.MinWidth,
-                "height" => cssBox.Height,
-                "max-height" => cssBox.MaxHeight,
-                "min-height" => cssBox.MinHeight,
-                "transform" => cssBox.Transform,
-                "transform-origin" => cssBox.TransformOrigin,
-                "opacity" => cssBox.Opacity,
-                "background-color" => cssBox.BackgroundColor,
-                "background-image" => null,
-                "background-position" => cssBox.BackgroundPosition,
-                "background-size" => cssBox.BackgroundSize,
-                "background-repeat" => cssBox.BackgroundRepeat,
-                "background-origin" => cssBox.BackgroundOrigin,
-                "background-clip" => cssBox.BackgroundClip,
-                "content" => cssBox.Content,
-                "color" => cssBox.Color,
-                "display" => cssBox.Display,
-                "direction" => cssBox.Direction,
-                "empty-cells" => cssBox.EmptyCells,
-                "float" => cssBox.Float,
-                "clear" => cssBox.Clear,
-                "position" => cssBox.Position,
-                "line-height" => cssBox.LineHeight,
-                "vertical-align" => cssBox.VerticalAlign,
-                "text-indent" => cssBox.TextIndent,
-                "text-align" => cssBox.TextAlign,
-                "text-decoration" => cssBox.TextDecoration,
-                "text-decoration-color" => cssBox.TextDecorationColor,
-                "text-decoration-line" => cssBox.TextDecorationLine,
-                "text-decoration-style" => cssBox.TextDecorationStyle,
-                "text-transform" => cssBox.TextTransform,
-                "white-space" => cssBox.WhiteSpace,
-                "word-break" => cssBox.WordBreak,
-                "visibility" => cssBox.Visibility,
-                "word-spacing" => cssBox.WordSpacing,
-                "letter-spacing" => cssBox.LetterSpacing,
-                "font-family" => cssBox.FontFamily,
-                "font-size" => cssBox.FontSize,
-                "font-style" => cssBox.FontStyle,
-                "font-variant" => cssBox.FontVariant,
-                "font-weight" => cssBox.FontWeight,
-                "font-stretch" => cssBox.FontStretch,
-                "list-style-position" => cssBox.ListStylePosition,
-                "list-style-image" => null,
-                "list-style-type" => cssBox.ListStyleType,
-                "overflow" => cssBox.Overflow,
-                "z-index" => cssBox.ZIndex,
-                "flex-direction"  => cssBox.FlexDirection,
-                "flex-wrap"       => cssBox.FlexWrap,
-                "justify-content" => cssBox.JustifyContent,
-                "align-items"     => cssBox.AlignItems,
-                "align-content"   => cssBox.AlignContent,
-                "flex-grow"       => cssBox.FlexGrow,
-                "flex-shrink"     => cssBox.FlexShrink,
-                "flex-basis"      => cssBox.FlexBasis,
-                "align-self"      => cssBox.AlignSelf,
-                "order"           => cssBox.Order,
-                "row-gap"         => cssBox.FlexRowGap,
-                "column-gap"      => cssBox.FlexColumnGap,
-                "column-count"      => cssBox.ColumnCount,
-                "column-width"      => cssBox.ColumnWidth,
-                "column-fill"       => cssBox.ColumnFill,
-                "column-span"       => cssBox.ColumnSpan,
-                "column-rule-width" => cssBox.ColumnRuleWidth,
-                "column-rule-style" => cssBox.ColumnRuleStyle,
-                "column-rule-color" => cssBox.ColumnRuleColor,
-                _ => null
-            };
-        }
+                ["border-bottom-width"] = b => b.BorderBottomWidth,
+                ["border-left-width"] = b => b.BorderLeftWidth,
+                ["border-right-width"] = b => b.BorderRightWidth,
+                ["border-top-width"] = b => b.BorderTopWidth,
+                ["border-bottom-style"] = b => b.BorderBottomStyle,
+                ["border-left-style"] = b => b.BorderLeftStyle,
+                ["border-right-style"] = b => b.BorderRightStyle,
+                ["border-top-style"] = b => b.BorderTopStyle,
+                ["border-bottom-color"] = b => b.BorderBottomColor,
+                ["border-left-color"] = b => b.BorderLeftColor,
+                ["border-right-color"] = b => b.BorderRightColor,
+                ["border-top-color"] = b => b.BorderTopColor,
+                ["border-spacing"] = b => b.BorderSpacing,
+                ["border-collapse"] = b => b.BorderCollapse,
+                ["box-sizing"] = b => b.BoxSizing,
+                ["break-after"] = b => b.BreakAfter,
+                ["break-before"] = b => b.BreakBefore,
+                ["break-inside"] = b => b.BreakInside,
+                ["orphans"] = b => b.Orphans,
+                ["widows"] = b => b.Widows,
+                ["hyphens"] = b => b.Hyphens,
+                ["border-top-left-radius"] = b => b.BorderTopLeftRadius,
+                ["border-top-right-radius"] = b => b.BorderTopRightRadius,
+                ["border-bottom-right-radius"] = b => b.BorderBottomRightRadius,
+                ["border-bottom-left-radius"] = b => b.BorderBottomLeftRadius,
+                ["counter-increment"] = b => b.CounterIncrement,
+                ["counter-reset"] = b => b.CounterReset,
+                ["counter-set"] = b => b.CounterSet,
+                ["string-set"] = b => b.StringSet,
+                ["page"] = b => b.PageName,
+                ["-peachpdf-pdf-tag-type"] = b => b.PdfTagType,
+                ["margin-bottom"] = b => b.MarginBottom,
+                ["margin-left"] = b => b.MarginLeft,
+                ["margin-right"] = b => b.MarginRight,
+                ["margin-top"] = b => b.MarginTop,
+                ["padding-bottom"] = b => b.PaddingBottom,
+                ["padding-left"] = b => b.PaddingLeft,
+                ["padding-right"] = b => b.PaddingRight,
+                ["padding-top"] = b => b.PaddingTop,
+                ["page-break-after"] = b => b.BreakAfter,
+                ["page-break-before"] = b => b.BreakBefore,
+                ["page-break-inside"] = b => b.BreakInside,
+                ["left"] = b => b.Left,
+                ["top"] = b => b.Top,
+                ["right"] = b => b.Right,
+                ["bottom"] = b => b.Bottom,
+                ["width"] = b => b.Width,
+                ["max-width"] = b => b.MaxWidth,
+                ["min-width"] = b => b.MinWidth,
+                ["height"] = b => b.Height,
+                ["max-height"] = b => b.MaxHeight,
+                ["min-height"] = b => b.MinHeight,
+                ["transform"] = b => b.Transform,
+                ["transform-origin"] = b => b.TransformOrigin,
+                ["opacity"] = b => b.Opacity,
+                ["background-color"] = b => b.BackgroundColor,
+                ["background-position"] = b => b.BackgroundPosition,
+                ["background-size"] = b => b.BackgroundSize,
+                ["background-repeat"] = b => b.BackgroundRepeat,
+                ["background-origin"] = b => b.BackgroundOrigin,
+                ["background-clip"] = b => b.BackgroundClip,
+                ["background-attachment"] = b => b.BackgroundAttachment,
+                ["content"] = b => b.Content,
+                ["color"] = b => b.Color,
+                ["display"] = b => b.Display,
+                ["direction"] = b => b.Direction,
+                ["empty-cells"] = b => b.EmptyCells,
+                ["float"] = b => b.Float,
+                ["clear"] = b => b.Clear,
+                ["position"] = b => b.Position,
+                ["line-height"] = b => b.LineHeight,
+                ["vertical-align"] = b => b.VerticalAlign,
+                ["text-indent"] = b => b.TextIndent,
+                ["text-align"] = b => b.TextAlign,
+                ["text-decoration"] = b => b.TextDecoration,
+                ["text-decoration-color"] = b => b.TextDecorationColor,
+                ["text-decoration-line"] = b => b.TextDecorationLine,
+                ["text-decoration-style"] = b => b.TextDecorationStyle,
+                ["text-transform"] = b => b.TextTransform,
+                ["white-space"] = b => b.WhiteSpace,
+                ["word-break"] = b => b.WordBreak,
+                ["visibility"] = b => b.Visibility,
+                ["word-spacing"] = b => b.WordSpacing,
+                ["letter-spacing"] = b => b.LetterSpacing,
+                ["font-family"] = b => b.FontFamily,
+                ["font-size"] = b => b.FontSize,
+                ["font-style"] = b => b.FontStyle,
+                ["font-variant"] = b => b.FontVariant,
+                ["font-weight"] = b => b.FontWeight,
+                ["font-stretch"] = b => b.FontStretch,
+                ["list-style-position"] = b => b.ListStylePosition,
+                ["list-style-type"] = b => b.ListStyleType,
+                ["overflow"] = b => b.Overflow,
+                ["z-index"] = b => b.ZIndex,
+                ["flex-direction"] = b => b.FlexDirection,
+                ["flex-wrap"] = b => b.FlexWrap,
+                ["justify-content"] = b => b.JustifyContent,
+                ["align-items"] = b => b.AlignItems,
+                ["align-content"] = b => b.AlignContent,
+                ["flex-grow"] = b => b.FlexGrow,
+                ["flex-shrink"] = b => b.FlexShrink,
+                ["flex-basis"] = b => b.FlexBasis,
+                ["align-self"] = b => b.AlignSelf,
+                ["order"] = b => b.Order,
+                ["row-gap"] = b => b.FlexRowGap,
+                ["column-gap"] = b => b.FlexColumnGap,
+                ["column-count"] = b => b.ColumnCount,
+                ["column-width"] = b => b.ColumnWidth,
+                ["column-fill"] = b => b.ColumnFill,
+                ["column-span"] = b => b.ColumnSpan,
+                ["column-rule-width"] = b => b.ColumnRuleWidth,
+                ["column-rule-style"] = b => b.ColumnRuleStyle,
+                ["column-rule-color"] = b => b.ColumnRuleColor,
+            }.ToFrozenDictionary(StringComparer.Ordinal);
 
         private static readonly string[] _knownPropertyNames =
         [
@@ -248,551 +255,165 @@ namespace PeachPDF.Html.Core.Utils
         /// <param name="value">the value to set</param>
         public static void SetPropertyValue(CssValueParser valueParser, CssBox cssBox, string propName, string value)
         {
-            switch (propName)
+            if (_propertySetters.TryGetValue(propName, out var setter))
             {
-                case "border":
-                    SetBorderPropertyValue(valueParser, cssBox, value, null);
-                    break;
-                case "border-bottom":
-                    SetBorderPropertyValue(valueParser, cssBox, value, "bottom");
-                    break;
-                case "border-left":
-                    SetBorderPropertyValue(valueParser, cssBox, value, "left");
-                    break;
-                case "border-right":
-                    SetBorderPropertyValue(valueParser, cssBox, value, "right");
-                    break;
-                case "border-top":
-                    SetBorderPropertyValue(valueParser, cssBox, value, "top");
-                    break;
-                case "border-width":
-                    SetBorderChildPropertyValue(valueParser, cssBox, "width", value);
-                    break;
-                case "border-style":
-                    SetBorderChildPropertyValue(valueParser, cssBox, "style", value);
-                    break;
-                case "border-color":
-                    SetBorderChildPropertyValue(valueParser, cssBox, "color", value);
-                    break;
-                case "border-bottom-width":
-                    if (IsValidLengthProperty(value))
-                    {
-                        cssBox.BorderBottomWidth = value;
-                    }
-
-                    break;
-                case "border-left-width":
-                    if (IsValidLengthProperty(value))
-                    {
-                        cssBox.BorderLeftWidth = value;
-                    }
-
-                    break;
-                case "border-right-width":
-                    if (IsValidLengthProperty(value))
-                    {
-                        cssBox.BorderRightWidth = value;
-                    }
-
-                    break;
-                case "border-top-width":
-                    if (IsValidLengthProperty(value))
-                    {
-                        cssBox.BorderTopWidth = value;
-                    }
-
-                    break;
-                case "border-bottom-style":
-                    if (IsValidBorderStyleProperty(value))
-                    {
-                        cssBox.BorderBottomStyle = value;
-                    }
-
-                    break;
-                case "border-left-style":
-                    if (IsValidBorderStyleProperty(value))
-                    {
-                        cssBox.BorderLeftStyle = value;
-                    }
-
-                    break;
-                case "border-right-style":
-                    if (IsValidBorderStyleProperty(value))
-                    {
-                        cssBox.BorderRightStyle = value;
-                    }
-
-                    break;
-                case "border-top-style":
-                    if (IsValidBorderStyleProperty(value))
-                    {
-                        cssBox.BorderTopStyle = value;
-                    }
-
-                    break;
-                case "border-bottom-color":
-                    if (IsValidColorProperty(valueParser, value))
-                    {
-                        cssBox.BorderBottomColor = value;
-                    }
-
-                    break;
-                case "border-left-color":
-                    if (IsValidColorProperty(valueParser, value))
-                    {
-                        cssBox.BorderLeftColor = value;
-                    }
-
-                    break;
-                case "border-right-color":
-                    if (IsValidColorProperty(valueParser, value))
-                    {
-                        cssBox.BorderRightColor = value;
-                    }
-
-                    break;
-                case "border-top-color":
-                    if (IsValidColorProperty(valueParser, value))
-                    {
-                        cssBox.BorderTopColor = value;
-                    }
-
-                    break;
-                case "border-spacing":
-                    cssBox.BorderSpacing = value;
-                    break;
-                case "border-collapse":
-                    cssBox.BorderCollapse = value;
-                    break;
-                case "box-sizing":
-                    if (IsValidBoxSizing(value))
-                    {
-                        cssBox.BoxSizing = value;
-                    }
-
-                    break;
-                case "border-radius":
-                    cssBox.BorderRadius = value;
-                    break;
-                case "transform":
-                    cssBox.Transform = value;
-                    break;
-                case "transform-origin":
-                    cssBox.TransformOrigin = value;
-                    break;
-                case "opacity":
-                    cssBox.Opacity = value;
-                    break;
-                case "border-top-left-radius":
-                    cssBox.BorderTopLeftRadius = value;
-                    break;
-                case "border-top-right-radius":
-                    cssBox.BorderTopRightRadius = value;
-                    break;
-                case "border-bottom-right-radius":
-                    cssBox.BorderBottomRightRadius = value;
-                    break;
-                case "border-bottom-left-radius":
-                    cssBox.BorderBottomLeftRadius = value;
-                    break;
-                case "counter-increment":
-                    cssBox.CounterIncrement = value;
-                    break;
-                case "counter-reset":
-                    cssBox.CounterReset = value;
-                    break;
-                case "counter-set":
-                    cssBox.CounterSet = value;
-                    break;
-                case "string-set":
-                    cssBox.StringSet = value;
-                    break;
-                case "page":
-                    cssBox.PageName = value;
-                    break;
-                case "-peachpdf-pdf-tag-type":
-                    cssBox.PdfTagType = value;
-                    break;
-                case "margin":
-                    SetMultiDirectionProperty(valueParser, cssBox, "margin", value);
-                    break;
-                case "margin-bottom":
-                    cssBox.MarginBottom = value;
-                    break;
-                case "margin-left":
-                    cssBox.MarginLeft = value;
-                    break;
-                case "margin-right":
-                    cssBox.MarginRight = value;
-                    break;
-                case "margin-top":
-                    cssBox.MarginTop = value;
-                    break;
-                case "padding":
-                    SetMultiDirectionProperty(valueParser, cssBox, "padding", value);
-                    break;
-                case "padding-bottom":
-                    cssBox.PaddingBottom = value;
-                    break;
-                case "padding-left":
-                    cssBox.PaddingLeft = value;
-                    break;
-                case "padding-right":
-                    cssBox.PaddingRight = value;
-                    break;
-                case "padding-top":
-                    cssBox.PaddingTop = value;
-                    break;
-                case "break-after":
-                case "page-break-after":
-                    if (value is CssConstants.Always && propName is "page-break-after")
-                    {
-                        value = CssConstants.Page;
-                    }
-
-                    cssBox.BreakAfter = value;
-                    break;
-                case "page-break-before":
-                case "break-before":
-                    if (value is CssConstants.Always && propName is "page-break-before")
-                    {
-                        value = CssConstants.Page;
-                    }
-
-                    cssBox.BreakBefore = value;
-                    break;
-                case "page-break-inside":
-                case "break-inside":
-                    cssBox.BreakInside = value;
-                    break;
-                case "orphans":
-                    if (int.TryParse(value, out var orphans) && orphans >= 1)
-                    {
-                        cssBox.Orphans = value;
-                    }
-
-                    break;
-                case "widows":
-                    if (int.TryParse(value, out var widows) && widows >= 1)
-                    {
-                        cssBox.Widows = value;
-                    }
-
-                    break;
-                case "hyphens":
-                    if (value is CssConstants.None or "manual" or CssConstants.Auto)
-                    {
-                        cssBox.Hyphens = value;
-                    }
-
-                    break;
-                case "left":
-                    cssBox.Left = value;
-                    break;
-                case "top":
-                    cssBox.Top = value;
-                    break;
-                case "right":
-                    cssBox.Right = value;
-                    break;
-                case "bottom":
-                    cssBox.Bottom = value;
-                    break;
-                case "width":
-                    if (IsValidLengthProperty(value))
-                    {
-                        cssBox.Width = value;
-                    }
-
-                    break;
-                case "max-width":
-                    if (IsValidLengthProperty(value))
-                    {
-                        cssBox.MaxWidth = value;
-                    }
-
-                    break;
-                case "min-width":
-                    if (IsValidLengthProperty(value))
-                    {
-                        cssBox.MinWidth = value;
-                    }
-
-                    break;
-                case "height":
-                    if (IsValidLengthProperty(value))
-                    {
-                        cssBox.Height = value;
-                    }
-
-                    break;
-                case "max-height":
-                    if (IsValidLengthProperty(value))
-                    {
-                        cssBox.MaxHeight = value;
-                    }
-
-                    break;
-                case "min-height":
-                    if (IsValidLengthProperty(value))
-                    {
-                        cssBox.MinHeight = value;
-                    }
-
-                    break;
-                case "background-color":
-                    if (IsValidColorProperty(valueParser, value))
-                    {
-                        cssBox.BackgroundColor = value;
-                    }
-
-                    break;
-                case "background-image":
-                    cssBox.BackgroundImages = valueParser.ParseImages(value);
-                    break;
-                case "background-position":
-                    cssBox.BackgroundPosition = value;
-                    break;
-                case "background-size":
-                    cssBox.BackgroundSize = value;
-                    break;
-                case "background-repeat":
-                    cssBox.BackgroundRepeat = value;
-                    break;
-                case "color":
-                    if (IsValidColorProperty(valueParser, value))
-                    {
-                        cssBox.Color = value;
-                    }
-
-                    break;
-                case "content":
-                    cssBox.Content = value;
-                    break;
-                case "display":
-                    cssBox.Display = value;
-                    break;
-                case "direction":
-                    cssBox.Direction = value;
-                    break;
-                case "empty-cells":
-                    cssBox.EmptyCells = value;
-                    break;
-                case "float":
-                    cssBox.Float = value;
-                    break;
-                case "clear":
-                    cssBox.Clear = value;
-                    break;
-                case "position":
-                    cssBox.Position = value;
-                    break;
-                case "line-height":
-                    // line-height's real grammar (Converters.LineHeightConverter: length | percentage |
-                    // <number> | normal) is wider than IsValidLengthProperty's (length | percentage |
-                    // auto) - a bare unitless multiplier like "1.4" is valid CSS here but is not a
-                    // <length>, so it must not be rejected the way it correctly would be for e.g. "width".
-                    if (IsValidLengthProperty(value) || value == CssConstants.Normal ||
-                        double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _))
-                    {
-                        cssBox.LineHeight = value;
-                    }
-
-                    break;
-                case "vertical-align":
-                    cssBox.VerticalAlign = value;
-                    break;
-                case "text-indent":
-                    cssBox.TextIndent = value;
-                    break;
-                case "text-align":
-                    cssBox.TextAlign = value;
-                    break;
-                case "text-decoration":
-                    cssBox.TextDecoration = value;
-                    break;
-                case "text-decoration-color":
-                    cssBox.TextDecorationColor = value;
-                    break;
-                case "text-decoration-line":
-                    cssBox.TextDecorationLine = value;
-                    break;
-                case "text-decoration-style":
-                    cssBox.TextDecorationStyle = value;
-                    break;
-                case "text-transform":
-                    cssBox.TextTransform = value;
-                    break;
-                case "white-space":
-                    cssBox.WhiteSpace = value;
-                    break;
-                case "word-break":
-                    cssBox.WordBreak = value;
-                    break;
-                case "visibility":
-                    cssBox.Visibility = value;
-                    break;
-                case "word-spacing":
-                    cssBox.WordSpacing = value;
-                    break;
-                case "letter-spacing":
-                    cssBox.LetterSpacing = value;
-                    break;
-                case "font-family":
-                    cssBox.FontFamily = valueParser.GetFontFamilyByName(value);
-                    cssBox.FontFamilyList = value;
-                    break;
-                case "font-size":
-                    cssBox.FontSize = value;
-                    break;
-                case "font-style":
-                    cssBox.FontStyle = value;
-                    break;
-                case "font-variant":
-                    cssBox.FontVariant = value;
-                    break;
-                case "font-weight":
-                    cssBox.FontWeight = value;
-                    break;
-                case "font-stretch":
-                    cssBox.FontStretch = value;
-                    break;
-                case "list-style":
-                    SetListStyle(valueParser, cssBox, value);
-                    break;
-                case "list-style-position":
-                    cssBox.ListStylePosition = value;
-                    break;
-                case "list-style-image":
-                    cssBox.ListStyleImage = valueParser.ParseImage(value);
-                    break;
-                case "list-style-type":
-                    cssBox.ListStyleType = value;
-                    break;
-                case "overflow":
-                    cssBox.Overflow = value;
-                    break;
-                case "z-index":
-                    if (value is CssConstants.Auto || int.TryParse(value, out _))
-                    {
-                        cssBox.ZIndex = value;
-                    }
-
-                    break;
-                case "background-origin":
-                    cssBox.BackgroundOrigin = value;
-                    break;
-                case "background-clip":
-                    cssBox.BackgroundClip = value;
-                    break;
-                case "background-attachment":
-                    cssBox.BackgroundAttachment = value;
-                    break;
-                case "flex-direction":
-                    cssBox.FlexDirection = value;
-                    break;
-                case "flex-wrap":
-                    cssBox.FlexWrap = value;
-                    break;
-                case "justify-content":
-                    cssBox.JustifyContent = value;
-                    break;
-                case "align-items":
-                    cssBox.AlignItems = value;
-                    break;
-                case "align-content":
-                    cssBox.AlignContent = value;
-                    break;
-                case "flex-grow":
-                    cssBox.FlexGrow = value;
-                    break;
-                case "flex-shrink":
-                    cssBox.FlexShrink = value;
-                    break;
-                case "flex-basis":
-                    cssBox.FlexBasis = value;
-                    break;
-                case "align-self":
-                    cssBox.AlignSelf = value;
-                    break;
-                case "order":
-                    cssBox.Order = value;
-                    break;
-                case "flex":
-                    SetFlexShorthand(cssBox, value);
-                    break;
-                case "flex-flow":
-                    SetFlexFlowShorthand(cssBox, value);
-                    break;
-                case "gap":
-                    SetFlexGapShorthand(cssBox, value);
-                    break;
-                case "row-gap":
-                    cssBox.FlexRowGap = value;
-                    break;
-                case "column-gap":
-                    cssBox.FlexColumnGap = value;
-                    break;
-                case "column-count":
-                    if (value is CssConstants.Auto || (int.TryParse(value, out var columnCount) && columnCount > 0))
-                    {
-                        cssBox.ColumnCount = value;
-                    }
-
-                    break;
-                case "column-width":
-                    if (value is CssConstants.Auto || CssValueParser.IsValidLength(value))
-                    {
-                        cssBox.ColumnWidth = value;
-                    }
-
-                    break;
-                case "columns":
-                    SetColumnsShorthand(cssBox, value);
-                    break;
-                case "column-fill":
-                    if (value is CssConstants.Auto or "balance")
-                    {
-                        cssBox.ColumnFill = value;
-                    }
-
-                    break;
-                case "column-span":
-                    if (value is CssConstants.None or "all")
-                    {
-                        cssBox.ColumnSpan = value;
-                    }
-
-                    break;
-                case "column-rule":
-                    SetColumnRuleShorthand(valueParser, cssBox, value);
-                    break;
-                case "column-rule-width":
-                    if (IsValidLengthProperty(value))
-                    {
-                        cssBox.ColumnRuleWidth = value;
-                    }
-
-                    break;
-                case "column-rule-style":
-                    if (IsValidBorderStyleProperty(value))
-                    {
-                        cssBox.ColumnRuleStyle = value;
-                    }
-
-                    break;
-                case "column-rule-color":
-                    if (IsValidColorProperty(valueParser, value))
-                    {
-                        cssBox.ColumnRuleColor = value;
-                    }
-
-                    break;
-                case "unicode-bidi":
-                case "overflow-wrap":
-                    break;
+                setter(valueParser, cssBox, value);
             }
         }
+
+        /// <summary>
+        /// Maps a CSS property name to the action that assigns its parsed value onto a <see cref="CssBox"/>,
+        /// preserving each property's validation guard and shorthand expansion. An unlisted name is a no-op
+        /// (the switch's old empty default). Replaces a 134-case switch with a single dictionary lookup so the
+        /// dispatch method's cyclomatic complexity — and its CRAP score — stays flat as properties are added.
+        /// </summary>
+        private static readonly FrozenDictionary<string, Action<CssValueParser, CssBox, string>> _propertySetters =
+            new Dictionary<string, Action<CssValueParser, CssBox, string>>
+            {
+                ["border"] = (p, b, v) => SetBorderPropertyValue(p, b, v, null),
+                ["border-bottom"] = (p, b, v) => SetBorderPropertyValue(p, b, v, "bottom"),
+                ["border-left"] = (p, b, v) => SetBorderPropertyValue(p, b, v, "left"),
+                ["border-right"] = (p, b, v) => SetBorderPropertyValue(p, b, v, "right"),
+                ["border-top"] = (p, b, v) => SetBorderPropertyValue(p, b, v, "top"),
+                ["border-width"] = (p, b, v) => SetBorderChildPropertyValue(p, b, "width", v),
+                ["border-style"] = (p, b, v) => SetBorderChildPropertyValue(p, b, "style", v),
+                ["border-color"] = (p, b, v) => SetBorderChildPropertyValue(p, b, "color", v),
+                ["border-bottom-width"] = (_, b, v) => { if (IsValidLengthProperty(v)) b.BorderBottomWidth = v; },
+                ["border-left-width"] = (_, b, v) => { if (IsValidLengthProperty(v)) b.BorderLeftWidth = v; },
+                ["border-right-width"] = (_, b, v) => { if (IsValidLengthProperty(v)) b.BorderRightWidth = v; },
+                ["border-top-width"] = (_, b, v) => { if (IsValidLengthProperty(v)) b.BorderTopWidth = v; },
+                ["border-bottom-style"] = (_, b, v) => { if (IsValidBorderStyleProperty(v)) b.BorderBottomStyle = v; },
+                ["border-left-style"] = (_, b, v) => { if (IsValidBorderStyleProperty(v)) b.BorderLeftStyle = v; },
+                ["border-right-style"] = (_, b, v) => { if (IsValidBorderStyleProperty(v)) b.BorderRightStyle = v; },
+                ["border-top-style"] = (_, b, v) => { if (IsValidBorderStyleProperty(v)) b.BorderTopStyle = v; },
+                ["border-bottom-color"] = (p, b, v) => { if (IsValidColorProperty(p, v)) b.BorderBottomColor = v; },
+                ["border-left-color"] = (p, b, v) => { if (IsValidColorProperty(p, v)) b.BorderLeftColor = v; },
+                ["border-right-color"] = (p, b, v) => { if (IsValidColorProperty(p, v)) b.BorderRightColor = v; },
+                ["border-top-color"] = (p, b, v) => { if (IsValidColorProperty(p, v)) b.BorderTopColor = v; },
+                ["border-spacing"] = (_, b, v) => b.BorderSpacing = v,
+                ["border-collapse"] = (_, b, v) => b.BorderCollapse = v,
+                ["box-sizing"] = (_, b, v) => { if (IsValidBoxSizing(v)) b.BoxSizing = v; },
+                ["border-radius"] = (_, b, v) => b.BorderRadius = v,
+                ["transform"] = (_, b, v) => b.Transform = v,
+                ["transform-origin"] = (_, b, v) => b.TransformOrigin = v,
+                ["opacity"] = (_, b, v) => b.Opacity = v,
+                ["border-top-left-radius"] = (_, b, v) => b.BorderTopLeftRadius = v,
+                ["border-top-right-radius"] = (_, b, v) => b.BorderTopRightRadius = v,
+                ["border-bottom-right-radius"] = (_, b, v) => b.BorderBottomRightRadius = v,
+                ["border-bottom-left-radius"] = (_, b, v) => b.BorderBottomLeftRadius = v,
+                ["counter-increment"] = (_, b, v) => b.CounterIncrement = v,
+                ["counter-reset"] = (_, b, v) => b.CounterReset = v,
+                ["counter-set"] = (_, b, v) => b.CounterSet = v,
+                ["string-set"] = (_, b, v) => b.StringSet = v,
+                ["page"] = (_, b, v) => b.PageName = v,
+                ["-peachpdf-pdf-tag-type"] = (_, b, v) => b.PdfTagType = v,
+                ["margin"] = (p, b, v) => SetMultiDirectionProperty(p, b, "margin", v),
+                ["margin-bottom"] = (_, b, v) => b.MarginBottom = v,
+                ["margin-left"] = (_, b, v) => b.MarginLeft = v,
+                ["margin-right"] = (_, b, v) => b.MarginRight = v,
+                ["margin-top"] = (_, b, v) => b.MarginTop = v,
+                ["padding"] = (p, b, v) => SetMultiDirectionProperty(p, b, "padding", v),
+                ["padding-bottom"] = (_, b, v) => b.PaddingBottom = v,
+                ["padding-left"] = (_, b, v) => b.PaddingLeft = v,
+                ["padding-right"] = (_, b, v) => b.PaddingRight = v,
+                ["padding-top"] = (_, b, v) => b.PaddingTop = v,
+                // page-break-* is the legacy alias of break-*; on the -after/-before axis "always" maps to "page".
+                ["break-after"] = (_, b, v) => b.BreakAfter = v,
+                ["page-break-after"] = (_, b, v) => b.BreakAfter = v is CssConstants.Always ? CssConstants.Page : v,
+                ["break-before"] = (_, b, v) => b.BreakBefore = v,
+                ["page-break-before"] = (_, b, v) => b.BreakBefore = v is CssConstants.Always ? CssConstants.Page : v,
+                ["break-inside"] = (_, b, v) => b.BreakInside = v,
+                ["page-break-inside"] = (_, b, v) => b.BreakInside = v,
+                ["orphans"] = (_, b, v) => { if (int.TryParse(v, out var orphans) && orphans >= 1) b.Orphans = v; },
+                ["widows"] = (_, b, v) => { if (int.TryParse(v, out var widows) && widows >= 1) b.Widows = v; },
+                ["hyphens"] = (_, b, v) => { if (v is CssConstants.None or "manual" or CssConstants.Auto) b.Hyphens = v; },
+                ["left"] = (_, b, v) => b.Left = v,
+                ["top"] = (_, b, v) => b.Top = v,
+                ["right"] = (_, b, v) => b.Right = v,
+                ["bottom"] = (_, b, v) => b.Bottom = v,
+                ["width"] = (_, b, v) => { if (IsValidLengthProperty(v)) b.Width = v; },
+                ["max-width"] = (_, b, v) => { if (IsValidLengthProperty(v)) b.MaxWidth = v; },
+                ["min-width"] = (_, b, v) => { if (IsValidLengthProperty(v)) b.MinWidth = v; },
+                ["height"] = (_, b, v) => { if (IsValidLengthProperty(v)) b.Height = v; },
+                ["max-height"] = (_, b, v) => { if (IsValidLengthProperty(v)) b.MaxHeight = v; },
+                ["min-height"] = (_, b, v) => { if (IsValidLengthProperty(v)) b.MinHeight = v; },
+                ["background-color"] = (p, b, v) => { if (IsValidColorProperty(p, v)) b.BackgroundColor = v; },
+                ["background-image"] = (p, b, v) => b.BackgroundImages = p.ParseImages(v),
+                ["background-position"] = (_, b, v) => b.BackgroundPosition = v,
+                ["background-size"] = (_, b, v) => b.BackgroundSize = v,
+                ["background-repeat"] = (_, b, v) => b.BackgroundRepeat = v,
+                ["color"] = (p, b, v) => { if (IsValidColorProperty(p, v)) b.Color = v; },
+                ["content"] = (_, b, v) => b.Content = v,
+                ["display"] = (_, b, v) => b.Display = v,
+                ["direction"] = (_, b, v) => b.Direction = v,
+                ["empty-cells"] = (_, b, v) => b.EmptyCells = v,
+                ["float"] = (_, b, v) => b.Float = v,
+                ["clear"] = (_, b, v) => b.Clear = v,
+                ["position"] = (_, b, v) => b.Position = v,
+                // line-height's grammar (length | percentage | <number> | normal) is wider than
+                // IsValidLengthProperty's, so a bare unitless multiplier like "1.4" must also be accepted.
+                ["line-height"] = (p, b, v) =>
+                {
+                    if (IsValidLengthProperty(v) || v == CssConstants.Normal ||
+                        double.TryParse(v, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _))
+                        b.LineHeight = v;
+                },
+                ["vertical-align"] = (_, b, v) => b.VerticalAlign = v,
+                ["text-indent"] = (_, b, v) => b.TextIndent = v,
+                ["text-align"] = (_, b, v) => b.TextAlign = v,
+                ["text-decoration"] = (_, b, v) => b.TextDecoration = v,
+                ["text-decoration-color"] = (_, b, v) => b.TextDecorationColor = v,
+                ["text-decoration-line"] = (_, b, v) => b.TextDecorationLine = v,
+                ["text-decoration-style"] = (_, b, v) => b.TextDecorationStyle = v,
+                ["text-transform"] = (_, b, v) => b.TextTransform = v,
+                ["white-space"] = (_, b, v) => b.WhiteSpace = v,
+                ["word-break"] = (_, b, v) => b.WordBreak = v,
+                ["visibility"] = (_, b, v) => b.Visibility = v,
+                ["word-spacing"] = (_, b, v) => b.WordSpacing = v,
+                ["letter-spacing"] = (_, b, v) => b.LetterSpacing = v,
+                ["font-family"] = (p, b, v) => { b.FontFamily = p.GetFontFamilyByName(v); b.FontFamilyList = v; },
+                ["font-size"] = (_, b, v) => b.FontSize = v,
+                ["font-style"] = (_, b, v) => b.FontStyle = v,
+                ["font-variant"] = (_, b, v) => b.FontVariant = v,
+                ["font-weight"] = (_, b, v) => b.FontWeight = v,
+                ["font-stretch"] = (_, b, v) => b.FontStretch = v,
+                ["list-style"] = (p, b, v) => SetListStyle(p, b, v),
+                ["list-style-position"] = (_, b, v) => b.ListStylePosition = v,
+                ["list-style-image"] = (p, b, v) => b.ListStyleImage = p.ParseImage(v),
+                ["list-style-type"] = (_, b, v) => b.ListStyleType = v,
+                ["overflow"] = (_, b, v) => b.Overflow = v,
+                ["z-index"] = (p, b, v) => { if (v is CssConstants.Auto || int.TryParse(v, out _)) b.ZIndex = v; },
+                ["background-origin"] = (_, b, v) => b.BackgroundOrigin = v,
+                ["background-clip"] = (_, b, v) => b.BackgroundClip = v,
+                ["background-attachment"] = (_, b, v) => b.BackgroundAttachment = v,
+                ["flex-direction"] = (_, b, v) => b.FlexDirection = v,
+                ["flex-wrap"] = (_, b, v) => b.FlexWrap = v,
+                ["justify-content"] = (_, b, v) => b.JustifyContent = v,
+                ["align-items"] = (_, b, v) => b.AlignItems = v,
+                ["align-content"] = (_, b, v) => b.AlignContent = v,
+                ["flex-grow"] = (_, b, v) => b.FlexGrow = v,
+                ["flex-shrink"] = (_, b, v) => b.FlexShrink = v,
+                ["flex-basis"] = (_, b, v) => b.FlexBasis = v,
+                ["align-self"] = (_, b, v) => b.AlignSelf = v,
+                ["order"] = (_, b, v) => b.Order = v,
+                ["flex"] = (_, b, v) => SetFlexShorthand(b, v),
+                ["flex-flow"] = (_, b, v) => SetFlexFlowShorthand(b, v),
+                ["gap"] = (_, b, v) => SetFlexGapShorthand(b, v),
+                ["row-gap"] = (_, b, v) => b.FlexRowGap = v,
+                ["column-gap"] = (_, b, v) => b.FlexColumnGap = v,
+                ["column-count"] = (_, b, v) => { if (v is CssConstants.Auto || (int.TryParse(v, out var columnCount) && columnCount > 0)) b.ColumnCount = v; },
+                ["column-width"] = (_, b, v) => { if (v is CssConstants.Auto || CssValueParser.IsValidLength(v)) b.ColumnWidth = v; },
+                ["columns"] = (_, b, v) => SetColumnsShorthand(b, v),
+                ["column-fill"] = (_, b, v) => { if (v is CssConstants.Auto or "balance") b.ColumnFill = v; },
+                ["column-span"] = (_, b, v) => { if (v is CssConstants.None or "all") b.ColumnSpan = v; },
+                ["column-rule"] = (p, b, v) => SetColumnRuleShorthand(p, b, v),
+                ["column-rule-width"] = (_, b, v) => { if (IsValidLengthProperty(v)) b.ColumnRuleWidth = v; },
+                ["column-rule-style"] = (_, b, v) => { if (IsValidBorderStyleProperty(v)) b.ColumnRuleStyle = v; },
+                ["column-rule-color"] = (p, b, v) => { if (IsValidColorProperty(p, v)) b.ColumnRuleColor = v; },
+                // Parsed and accepted but intentionally not applied (no layout effect yet).
+                ["unicode-bidi"] = (_, _, _) => { },
+                ["overflow-wrap"] = (_, _, _) => { },
+            }.ToFrozenDictionary(StringComparer.Ordinal);
 
         private static void SetFlexShorthand(CssBox cssBox, string value)
         {
