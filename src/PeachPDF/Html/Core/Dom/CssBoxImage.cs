@@ -98,14 +98,42 @@ namespace PeachPDF.Html.Core.Dom
 
             if (r is { Width: > 0, Height: > 0 })
             {
+                // object-fit / object-position: reshape the destination rect (and clip on overflow)
+                // from the content's intrinsic size. `fill` (and the no-known-intrinsic-size case)
+                // returns `r` unchanged, so the default stretch-to-fill behavior is preserved exactly.
+                double naturalWidth = 0, naturalHeight = 0;
                 if (_svgDocument is not null)
                 {
-                    SvgRenderer.RenderInto(g, _svgDocument, r);
+                    var (svgWidth, svgHeight) = SvgIntrinsicSize.Resolve(_svgDocument);
+                    naturalWidth = svgWidth ?? 0;
+                    naturalHeight = svgHeight ?? 0;
+                }
+                else if (_imageWord.Image is not null)
+                {
+                    naturalWidth = _imageWord.Image.Width;
+                    naturalHeight = _imageWord.Image.Height;
+                }
+
+                // Intrinsic pixels -> layout points, to match `r`.
+                naturalWidth *= PeachPDF.CSS.Length.PointsPerPx;
+                naturalHeight *= PeachPDF.CSS.Length.PointsPerPx;
+
+                var (dest, needsClip) = ObjectFitResolver.Compute(r, naturalWidth, naturalHeight, ObjectFit, ObjectPosition, this);
+
+                if (needsClip)
+                    g.PushClip(r);
+
+                if (_svgDocument is not null)
+                {
+                    SvgRenderer.RenderInto(g, _svgDocument, dest);
                 }
                 else if (_imageWord.Image != null)
                 {
-                    g.DrawImage(_imageWord.Image, r);
+                    g.DrawImage(_imageWord.Image, dest);
                 }
+
+                if (needsClip)
+                    g.PopClip();
             }
 
             if (clipped)

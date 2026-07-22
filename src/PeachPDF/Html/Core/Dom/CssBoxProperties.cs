@@ -405,6 +405,10 @@ namespace PeachPDF.Html.Core.Dom
 
         public string BackgroundAttachment { get; set; } = CssConstants.Scroll;
 
+        public string ObjectFit { get; set; } = CssConstants.Fill;
+
+        public string ObjectPosition { get; set; } = "50% 50%";
+
         public string Color
         {
             get => _color;
@@ -1620,6 +1624,8 @@ namespace PeachPDF.Html.Core.Dom
             BackgroundOrigin = p.BackgroundOrigin;
             BackgroundClip = p.BackgroundClip;
             BackgroundAttachment = p.BackgroundAttachment;
+            ObjectFit = p.ObjectFit;
+            ObjectPosition = p.ObjectPosition;
             _borderTopWidth = p._borderTopWidth;
             _borderRightWidth = p._borderRightWidth;
             _borderBottomWidth = p._borderBottomWidth;
