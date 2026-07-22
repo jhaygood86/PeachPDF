@@ -382,7 +382,7 @@ namespace PeachPDF.Tests.CSS
             var concrete = (BoxShadowProperty)property;
             Assert.False(concrete.IsInherited);
             Assert.True(concrete.HasValue);
-            Assert.Equal("none", concrete.Value);
+            Assert.Equal("NONE", concrete.Value);
             Assert.Equal("NONE", concrete.Original);
         }
 
@@ -397,7 +397,7 @@ namespace PeachPDF.Tests.CSS
             var concrete = (BoxShadowProperty)property;
             Assert.False(concrete.IsInherited);
             Assert.True(concrete.HasValue);
-            Assert.Equal("60px -16px rgb(0, 128, 128)", concrete.Value);
+            Assert.Equal("60px -16px teal", concrete.Value);
             Assert.Equal("60px -16px teal", concrete.Original);
         }
 
@@ -412,7 +412,7 @@ namespace PeachPDF.Tests.CSS
             var concrete = (BoxShadowProperty)property;
             Assert.False(concrete.IsInherited);
             Assert.True(concrete.HasValue);
-            Assert.Equal("10px 5px 5px rgb(0, 0, 0)", concrete.Value);
+            Assert.Equal("10px 5px 5px black", concrete.Value);
             Assert.Equal("10px 5px 5px black", concrete.Original);
         }
 
@@ -427,7 +427,7 @@ namespace PeachPDF.Tests.CSS
             var concrete = (BoxShadowProperty)property;
             Assert.False(concrete.IsInherited);
             Assert.True(concrete.HasValue);
-            Assert.Equal("3px 3px rgb(255, 0, 0), -1em 0 0.4em rgb(128, 128, 0)", concrete.Value);
+            Assert.Equal("3px 3px red, -1em 0 0.4em olive", concrete.Value);
             Assert.Equal("3px 3px red, -1em 0 0.4em olive", concrete.Original);
         }
 
@@ -442,7 +442,7 @@ namespace PeachPDF.Tests.CSS
             var concrete = (BoxShadowProperty)property;
             Assert.False(concrete.IsInherited);
             Assert.True(concrete.HasValue);
-            Assert.Equal("inset 5em 1em rgb(255, 215, 0)", concrete.Value);
+            Assert.Equal("inset 5em 1em gold", concrete.Value);
             Assert.Equal("inset 5em 1em gold", concrete.Original);
         }
 
@@ -457,7 +457,7 @@ namespace PeachPDF.Tests.CSS
             var concrete = (BoxShadowProperty)property;
             Assert.False(concrete.IsInherited);
             Assert.True(concrete.HasValue);
-            Assert.Equal("0 0 1em rgb(255, 215, 0)", concrete.Value);
+            Assert.Equal("0 0 1em gold", concrete.Value);
             Assert.Equal("0 0 1em gold", concrete.Original);
         }
 
@@ -472,7 +472,7 @@ namespace PeachPDF.Tests.CSS
             var concrete = (BoxShadowProperty)property;
             Assert.False(concrete.IsInherited);
             Assert.True(concrete.HasValue);
-            Assert.Equal("inset 0 0 1em rgb(255, 215, 0)", concrete.Value);
+            Assert.Equal("inset 0 0 1em gold", concrete.Value);
             Assert.Equal("inset 0 0 1em gold", concrete.Original);
         }
 
@@ -487,7 +487,7 @@ namespace PeachPDF.Tests.CSS
             var concrete = (BoxShadowProperty)property;
             Assert.False(concrete.IsInherited);
             Assert.True(concrete.HasValue);
-            Assert.Equal("inset 0 0 1em rgb(255, 215, 0), 0 0 1em rgb(255, 0, 0)", concrete.Value);
+            Assert.Equal("inset 0 0 1em gold, 0 0 1em red", concrete.Value);
             Assert.Equal("inset 0 0 1em gold, 0 0 1em red", concrete.Original);
         }
 
@@ -502,7 +502,7 @@ namespace PeachPDF.Tests.CSS
             var concrete = (BoxShadowProperty)property;
             Assert.False(concrete.IsInherited);
             Assert.True(concrete.HasValue);
-            Assert.Equal("5px 4px rgb(0, 0, 0)", concrete.Value);
+            Assert.Equal("5px 4px #000", concrete.Value);
             Assert.Equal("5px 4px #000", concrete.Original);
         }
 
@@ -517,7 +517,7 @@ namespace PeachPDF.Tests.CSS
             var concrete = (BoxShadowProperty)property;
             Assert.False(concrete.IsInherited);
             Assert.True(concrete.HasValue);
-            Assert.Equal("5px 4px 2px rgb(0, 0, 0)", concrete.Value);
+            Assert.Equal("5px 4px 2px #000", concrete.Value);
             Assert.Equal("5px 4px 2px #000", concrete.Original);
         }
 
@@ -1085,7 +1085,7 @@ namespace PeachPDF.Tests.CSS
         [Fact]
         public void CssQuoteStringsMultipleLegal()
         {
-            var snippet = "quotes : '\"' '\"' '`' '´' ";
+            var snippet = "quotes : '\"' '\"' '`' 'ï¿½' ";
             var property = ParseDeclaration(snippet);
             Assert.Equal("quotes", property.Name);
             Assert.False(property.IsImportant);
@@ -1093,8 +1093,8 @@ namespace PeachPDF.Tests.CSS
             var concrete = (QuotesProperty)property;
             Assert.False(concrete.IsInherited);
             Assert.True(concrete.HasValue);
-            Assert.Equal("\"\\\"\" \"\\\"\" \"`\" \"´\"", concrete.Value);
-            Assert.Equal("\"\\\"\" \"\\\"\" \"`\" \"´\"", concrete.Original);
+            Assert.Equal("\"\\\"\" \"\\\"\" \"`\" \"ï¿½\"", concrete.Value);
+            Assert.Equal("\"\\\"\" \"\\\"\" \"`\" \"ï¿½\"", concrete.Original);
         }
 
         [Fact]

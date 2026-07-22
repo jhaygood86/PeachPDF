@@ -302,6 +302,7 @@ namespace PeachPDF.Html.Core
             { "transform", CssConstants.None },
             { "clip-path", CssConstants.None },
             { "aspect-ratio", CssConstants.Auto },
+            { "box-shadow", CssConstants.None },
             { "transform-origin", "50% 50% 0" },
             { "opacity", "1" },
             { "vertical-align", "baseline" },
