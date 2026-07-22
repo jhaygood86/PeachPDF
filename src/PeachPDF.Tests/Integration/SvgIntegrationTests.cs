@@ -1353,6 +1353,15 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task InlineSvg_CamelCaseAttributeNameSelector_Matches()
+        {
+            // MimeKit preserves camelCase SVG attribute names (viewBox/gradientUnits/data-*) for inline
+            // <svg>, so a case-sensitive attribute-name selector matches inline just like standalone.
+            var html = InlineSvgDoc("rect[data-Kind] { fill: #00ff00; }", """<rect data-Kind="Hi" x="10" y="10" width="80" height="80"/>""");
+            Assert.Contains(Green, await GetPdfText(html));
+        }
+
+        [Fact]
         public async Task InlineSvg_MisCasedTypeSelector_DoesNotMatch()
         {
             // "RECT" must NOT match <rect> (case-sensitive); the presentation fill (blue) stands.

@@ -89,6 +89,13 @@ namespace PeachPDF.Html.Core.Parse
                 .SelectMany(s => s.Rules.OfType<PageRule>())
                 .ToList();
 
+            // The cascade (CascadeApplyStyles) still recurses into an inline <svg>'s descendants on
+            // purpose - inline SVG participates in the document cascade, and its shape boxes need their
+            // custom properties (--x) populated for var() to resolve. Likewise CorrectTextBoxes only
+            // strips whitespace-only text boxes / parses words and never reparents element boxes, so it
+            // can't corrupt the structure SvgTreeBuilder reads. The *restructuring* passes below
+            // (block/inline/anonymous-table normalization) DO reparent boxes, so each guards against
+            // descending into a CssBoxSvg - see their `if (box is CssBoxSvg) return;` and issue #159.
             CascadeApplyStyles(cssValueParser, root, cssData, media);
 
             EnsureListItemMarkers(cssValueParser, root, cssData, media);
