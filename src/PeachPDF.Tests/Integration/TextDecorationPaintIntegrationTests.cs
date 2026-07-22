@@ -82,6 +82,32 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task CombinedLines_UnderlineOverline_DrawBothAtTheirOwnPositions()
+        {
+            // text-decoration-line: underline overline is a single longhand value carrying two keywords
+            // (CSS Text Decoration 3 §2.2). PaintDecoration must draw a line for EACH keyword. (The prior
+            // implementation switched on the whole string, so a combined value matched no case and drew a
+            // single stray line at y=0 — this asserts both lines now paint at their proper positions.)
+            var (root, _) = await BuildAndLayout(Wrap(
+                "<span id='s' style='text-decoration:underline overline'>text</span>"));
+            var s = FindById(root, "s")!;
+
+            var g = new TestRecordingGraphics();
+            await s.Paint(g);
+
+            var lines = g.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToList();
+            Assert.Equal(2, lines.Count);
+
+            var rect = s.Rectangles.Values.Single();
+            // Overline sits at the rectangle top; underline sits below it — the two must differ, and neither
+            // may be the bogus y=0 the old whole-string switch produced.
+            Assert.Contains(lines, l => System.Math.Abs(l.Y1 - rect.Top) <= 1);
+            Assert.Contains(lines, l => l.Y1 > rect.Top && l.Y1 <= rect.Bottom);
+            Assert.All(lines, l => Assert.True(l.Y1 > 0, "no decoration line should be drawn at y=0"));
+            Assert.Equal(2, lines.Select(l => System.Math.Round(l.Y1, 2)).Distinct().Count());
+        }
+
+        [Fact]
         public async Task TextDecorationColor_OverridesElementColor()
         {
             var (root, _) = await BuildAndLayout(Wrap(

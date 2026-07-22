@@ -52,58 +52,6 @@ namespace PeachPDF.Tests.Html.Core.Utils
 
             Assert.Null(CssUtils.GetPropertyValue(box, "not-a-real-property"));
         }
-
-        [Fact]
-        public async Task SetPropertyValue_BorderShorthand_SetsWidthStyleAndColor()
-        {
-            var (box, parser) = await FindDivBoxAndParser("");
-
-            CssUtils.SetPropertyValue(parser, box, "border", "2px solid rgb(1, 2, 3)");
-
-            Assert.Equal("2px", box.BorderTopWidth);
-            Assert.Equal("solid", box.BorderTopStyle);
-            Assert.Equal(box.BorderTopColor, box.BorderBottomColor);
-        }
-
-        [Fact]
-        public async Task SetPropertyValue_BorderWidthShorthand_SplitsFourDirections()
-        {
-            var (box, parser) = await FindDivBoxAndParser("");
-
-            CssUtils.SetPropertyValue(parser, box, "border-width", "1px 2px 3px 4px");
-
-            Assert.Equal("1px", box.BorderTopWidth);
-            Assert.Equal("2px", box.BorderRightWidth);
-            Assert.Equal("3px", box.BorderBottomWidth);
-            Assert.Equal("4px", box.BorderLeftWidth);
-        }
-
-        [Fact]
-        public async Task SetPropertyValue_MarginShorthand_SplitsFourDirections()
-        {
-            var (box, parser) = await FindDivBoxAndParser("");
-
-            CssUtils.SetPropertyValue(parser, box, "margin", "1px 2px 3px 4px");
-
-            Assert.Equal("1px", box.MarginTop);
-            Assert.Equal("2px", box.MarginRight);
-            Assert.Equal("3px", box.MarginBottom);
-            Assert.Equal("4px", box.MarginLeft);
-        }
-
-        [Fact]
-        public async Task SetPropertyValue_PaddingShorthand_TwoValues_SetsOpposingSides()
-        {
-            var (box, parser) = await FindDivBoxAndParser("");
-
-            CssUtils.SetPropertyValue(parser, box, "padding", "5px 10px");
-
-            Assert.Equal("5px", box.PaddingTop);
-            Assert.Equal("10px", box.PaddingRight);
-            Assert.Equal("5px", box.PaddingBottom);
-            Assert.Equal("10px", box.PaddingRight);
-        }
-
         [Fact]
         public async Task SetPropertyValue_InvalidWidth_IsIgnored()
         {
@@ -113,97 +61,6 @@ namespace PeachPDF.Tests.Html.Core.Utils
 
             Assert.Equal("50px", box.Width);
         }
-
-        [Fact]
-        public async Task SetPropertyValue_ListStyleShorthand_SetsTypeAndPosition()
-        {
-            var (box, parser) = await FindDivBoxAndParser("");
-
-            CssUtils.SetPropertyValue(parser, box, "list-style", "square inside");
-
-            Assert.Equal("square", box.ListStyleType);
-            Assert.Equal("inside", box.ListStylePosition);
-        }
-
-        [Fact]
-        public async Task SetPropertyValue_FlexShorthand_None_SetsFixedValues()
-        {
-            var (box, parser) = await FindDivBoxAndParser("");
-
-            CssUtils.SetPropertyValue(parser, box, "flex", "none");
-
-            Assert.Equal("0", box.FlexGrow);
-            Assert.Equal("0", box.FlexShrink);
-            Assert.Equal("auto", box.FlexBasis);
-        }
-
-        [Fact]
-        public async Task SetPropertyValue_FlexShorthand_SingleNumber_SetsGrowAndDefaults()
-        {
-            var (box, parser) = await FindDivBoxAndParser("");
-
-            CssUtils.SetPropertyValue(parser, box, "flex", "2");
-
-            Assert.Equal("2", box.FlexGrow);
-            Assert.Equal("1", box.FlexShrink);
-            Assert.Equal("0", box.FlexBasis);
-        }
-
-        [Fact]
-        public async Task SetPropertyValue_FlexFlowShorthand_SetsDirectionAndWrap()
-        {
-            var (box, parser) = await FindDivBoxAndParser("");
-
-            CssUtils.SetPropertyValue(parser, box, "flex-flow", "column wrap");
-
-            Assert.Equal("column", box.FlexDirection);
-            Assert.Equal("wrap", box.FlexWrap);
-        }
-
-        [Fact]
-        public async Task SetPropertyValue_GapShorthand_SingleValue_AppliesToBoth()
-        {
-            var (box, parser) = await FindDivBoxAndParser("");
-
-            CssUtils.SetPropertyValue(parser, box, "gap", "10px");
-
-            Assert.Equal("10px", box.FlexRowGap);
-            Assert.Equal("10px", box.FlexColumnGap);
-        }
-
-        [Fact]
-        public async Task SetPropertyValue_GapShorthand_TwoValues_SetsRowAndColumn()
-        {
-            var (box, parser) = await FindDivBoxAndParser("");
-
-            CssUtils.SetPropertyValue(parser, box, "gap", "10px 20px");
-
-            Assert.Equal("10px", box.FlexRowGap);
-            Assert.Equal("20px", box.FlexColumnGap);
-        }
-
-        [Fact]
-        public async Task SetPropertyValue_ColumnsShorthand_CountAndWidth_SetsBothLonghands()
-        {
-            var (box, parser) = await FindDivBoxAndParser("");
-
-            CssUtils.SetPropertyValue(parser, box, "columns", "2 100px");
-
-            Assert.Equal("2", box.ColumnCount);
-            Assert.Equal("100px", box.ColumnWidth);
-        }
-
-        [Fact]
-        public async Task SetPropertyValue_ColumnsShorthand_Auto_LeavesLonghandsAtDefault()
-        {
-            var (box, parser) = await FindDivBoxAndParser("");
-
-            CssUtils.SetPropertyValue(parser, box, "columns", "auto");
-
-            Assert.Equal("auto", box.ColumnCount);
-            Assert.Equal("auto", box.ColumnWidth);
-        }
-
         [Fact]
         public async Task SetPropertyValue_ColumnFill_AcceptsAutoAndBalance()
         {
@@ -227,19 +84,6 @@ namespace PeachPDF.Tests.Html.Core.Utils
             CssUtils.SetPropertyValue(parser, box, "column-span", "none");
             Assert.Equal("none", box.ColumnSpan);
         }
-
-        [Fact]
-        public async Task SetPropertyValue_ColumnRuleShorthand_SetsWidthStyleAndColor()
-        {
-            var (box, parser) = await FindDivBoxAndParser("");
-
-            CssUtils.SetPropertyValue(parser, box, "column-rule", "2px solid black");
-
-            Assert.Equal("2px", box.ColumnRuleWidth);
-            Assert.Equal("solid", box.ColumnRuleStyle);
-            Assert.Equal("black", box.ColumnRuleColor);
-        }
-
         [Fact]
         public async Task SetPropertyValue_ZIndex_AutoOrInteger_IsAccepted()
         {
@@ -348,7 +192,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             ["background-origin", "border-box"], ["background-clip", "padding-box"], ["background-attachment", "fixed"],
             ["color", "rgb(7, 8, 9)"], ["content", "normal"], ["display", "block"], ["direction", "rtl"], ["empty-cells", "hide"],
             ["clear", "both"], ["position", "absolute"], ["line-height", "1.5"], ["vertical-align", "middle"], ["text-indent", "20px"],
-            ["text-align", "center"], ["text-decoration", "underline"], ["text-decoration-color", "rgb(1, 2, 3)"], ["text-decoration-line", "underline"], ["text-decoration-style", "solid"],
+            ["text-align", "center"], ["text-decoration-color", "rgb(1, 2, 3)"], ["text-decoration-line", "underline"], ["text-decoration-style", "solid"],
             ["text-transform", "uppercase"], ["white-space", "nowrap"], ["word-break", "break-all"], ["visibility", "hidden"], ["word-spacing", "2px"], ["letter-spacing", "1px"],
             ["font-style", "italic"], ["font-variant", "small-caps"], ["font-weight", "bold"], ["font-stretch", "condensed"],
             ["list-style-position", "inside"], ["list-style-type", "square"], ["overflow", "hidden"], ["z-index", "5"],
@@ -370,21 +214,12 @@ namespace PeachPDF.Tests.Html.Core.Utils
             Assert.Equal(value, CssUtils.GetPropertyValue(box, name));
         }
 
-        // Every remaining setter name: shorthands, the value-validated/-transformed ones, the *-image parsers,
-        // and the accepted-but-inert properties. This drives the dispatch arms the round trip can't (they don't
-        // store verbatim) and asserts they neither throw nor leave the property engine in a bad state.
+        // Every remaining setter name: the value-validated/-transformed ones, the *-image parsers, and the
+        // accepted-but-inert properties. This drives the dispatch arms the round trip can't (they don't store
+        // verbatim) and asserts they neither throw nor leave the property engine in a bad state. Shorthand
+        // names are deliberately absent — Layer B (CssUtils) no longer knows any shorthand; see
+        // SetPropertyValue_ShorthandName_IsIgnoredByLayerB and the Layer-A expansion end-to-end tests.
         [Theory]
-        [InlineData("border", "2px solid rgb(1, 2, 3)")]
-        [InlineData("border-bottom", "1px dashed red")]
-        [InlineData("border-left", "1px dashed red")]
-        [InlineData("border-right", "1px dashed red")]
-        [InlineData("border-top", "1px dashed red")]
-        [InlineData("border-width", "1px 2px")]
-        [InlineData("border-style", "solid dashed")]
-        [InlineData("border-color", "red blue")]
-        [InlineData("border-radius", "4px")]
-        [InlineData("margin", "1px 2px 3px 4px")]
-        [InlineData("padding", "5px 10px")]
         [InlineData("page-break-after", "always")]
         [InlineData("page-break-before", "always")]
         [InlineData("page-break-inside", "avoid")]
@@ -394,13 +229,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [InlineData("background-image", "none")]
         [InlineData("font-family", "Arial")]
         [InlineData("font-size", "16px")]
-        [InlineData("list-style", "square inside")]
         [InlineData("list-style-image", "none")]
-        [InlineData("flex", "1 1 auto")]
-        [InlineData("flex-flow", "column wrap")]
-        [InlineData("gap", "10px 20px")]
-        [InlineData("columns", "2 100px")]
-        [InlineData("column-rule", "2px solid red")]
         [InlineData("unicode-bidi", "isolate")]
         [InlineData("overflow-wrap", "break-word")]
         [InlineData("not-a-real-property", "whatever")]
@@ -413,6 +242,69 @@ namespace PeachPDF.Tests.Html.Core.Utils
             Assert.Null(ex);
             // A follow-up read must also be well-behaved (never throws), whether or not the name has a getter.
             Assert.Null(Record.Exception(() => CssUtils.GetPropertyValue(box, name)));
+        }
+
+        // Layer B (CssUtils) is longhand-only: CSS-OM (Layer A) expands every shorthand before Layer B ever
+        // sees a property name, so handing Layer B a shorthand directly must be an inert no-op — it must NOT
+        // expand into the longhands. Here we set a longhand, then fire the shorthand that would (if Layer B
+        // still knew it) overwrite that longhand, and assert the longhand is untouched.
+        [Theory]
+        [InlineData("margin", "99px", "margin-top")]
+        [InlineData("padding", "99px", "padding-top")]
+        [InlineData("border-width", "99px", "border-top-width")]
+        [InlineData("border", "99px solid red", "border-top-width")]
+        [InlineData("border-top", "99px solid red", "border-top-width")]
+        [InlineData("border-style", "dashed", "border-top-style")]
+        [InlineData("border-color", "rgb(9, 9, 9)", "border-top-color")]
+        [InlineData("flex", "9 9 90px", "flex-grow")]
+        [InlineData("flex-flow", "column wrap", "flex-direction")]
+        [InlineData("columns", "9 90px", "column-count")]
+        [InlineData("column-rule", "9px solid red", "column-rule-width")]
+        [InlineData("gap", "90px", "row-gap")]
+        [InlineData("list-style", "square inside", "list-style-type")]
+        [InlineData("border-radius", "90px", "border-top-left-radius")]
+        public async Task SetPropertyValue_ShorthandName_IsIgnoredByLayerB(string shorthand, string shorthandValue, string longhand)
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+            // Seed the longhand with a value its own validator accepts, so a stray shorthand expansion would
+            // be visible. Different longhand types demand different sentinel shapes.
+            var seed = longhand switch
+            {
+                "border-top-style" => "dotted",
+                "border-top-color" => "rgb(1, 1, 1)",
+                "column-count" => "3",
+                "flex-grow" => "5",
+                "flex-direction" => "row-reverse",
+                "list-style-type" => "square",
+                _ => "7px", // the length-valued longhands
+            };
+            CssUtils.SetPropertyValue(parser, box, longhand, seed);
+
+            CssUtils.SetPropertyValue(parser, box, shorthand, shorthandValue);
+
+            // The shorthand did nothing, so the longhand still holds the seed — never the shorthand's value.
+            Assert.Equal(seed, CssUtils.GetPropertyValue(box, longhand));
+        }
+
+        // End-to-end complement: shorthands DO still fully expand — through Layer A (CSS-OM), the only layer
+        // that now knows shorthand grammar. Author CSS carrying a shorthand must populate every longhand box
+        // field. This guards the Layer-B shorthand removal against silently breaking shorthand expansion.
+        [Fact]
+        public async Task Shorthand_InAuthorCss_ExpandsToLonghands_ViaLayerA()
+        {
+            var box = await FindDivBox("margin: 1px 2px 3px 4px; flex: 2 3 40px; border-top: 5px dashed black");
+
+            Assert.Equal("1px", CssUtils.GetPropertyValue(box, "margin-top"));
+            Assert.Equal("2px", CssUtils.GetPropertyValue(box, "margin-right"));
+            Assert.Equal("3px", CssUtils.GetPropertyValue(box, "margin-bottom"));
+            Assert.Equal("4px", CssUtils.GetPropertyValue(box, "margin-left"));
+
+            Assert.Equal("2", CssUtils.GetPropertyValue(box, "flex-grow"));
+            Assert.Equal("3", CssUtils.GetPropertyValue(box, "flex-shrink"));
+            Assert.Equal("40px", CssUtils.GetPropertyValue(box, "flex-basis"));
+
+            Assert.Equal("5px", CssUtils.GetPropertyValue(box, "border-top-width"));
+            Assert.Equal("dashed", CssUtils.GetPropertyValue(box, "border-top-style"));
         }
 
         // The legacy page-break-* aliases map "always" to "page" on both the -after and -before axes; the plain

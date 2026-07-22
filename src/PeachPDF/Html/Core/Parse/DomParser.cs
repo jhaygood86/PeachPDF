@@ -477,9 +477,22 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="media">The media type to apply styles to</param>
         private static void CascadeApplyStyles(CssValueParser valueParser, CssBox box, CssData cssData, string media)
         {
-            // 1. Set CSS spec initial values
-            foreach (var style in CssDefaults.InitialValues)
-                CssUtils.SetPropertyValue(valueParser, box, style.Key, style.Value);
+            // 1. Defaulting (CSS Cascade & Inheritance 4 §2.1): every property starts at its initial value,
+            //    drawn from the single initial-value store. The cascade phases below then override, and the
+            //    inherited properties are overwritten from the parent in step 2 — matching the spec's
+            //    "specified value = cascaded value, else inherited (if inherited) else initial".
+            //
+            //    Exception — an anonymous box (no source element) is not laid out from the element tree: its
+            //    display is assigned structurally by box generation (CSS Display 3 §1.1 "the box tree";
+            //    CSS2 §9.2.1.1 anonymous block boxes; §17.2.1 anonymous table objects; CSS Flexbox §4 anonymous
+            //    flex items), NOT by cascading display's initial value. So don't overwrite an element-less
+            //    box's structural display with the 'inline' initial.
+            foreach (var (name, initial) in CssDefaults.InitialValues)
+            {
+                if (initial is null) continue;
+                if (name == PropertyNames.Display && box.HtmlTag is null) continue;
+                CssUtils.SetPropertyValue(valueParser, box, name, initial);
+            }
 
             // 2. Inherit inheritable properties from parent
             box.InheritStyle();
@@ -585,23 +598,6 @@ namespace PeachPDF.Html.Core.Parse
 
             // Correct current color
             CssUtils.ApplyCurrentColor(box, valueParser);
-
-            // cascade text decoration only to boxes that actually have text so it will be handled correctly.
-            if (box.TextDecoration != string.Empty && box.Text == null)
-            {
-                foreach (var childBox in box.Boxes)
-                {
-                    childBox.TextDecoration = box.TextDecoration;
-                    childBox.TextDecorationLine = box.TextDecorationLine;
-                    childBox.TextDecorationStyle = box.TextDecorationStyle;
-                    childBox.TextDecorationColor = box.TextDecorationColor;
-                }
-
-                box.TextDecoration = string.Empty;
-                box.TextDecorationLine = string.Empty;
-                box.TextDecorationStyle = string.Empty;
-                box.TextDecorationColor = string.Empty;
-            }
 
             if (!box.FirstLineProcessed)
             {

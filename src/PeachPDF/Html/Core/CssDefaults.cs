@@ -41,7 +41,8 @@ namespace PeachPDF.Html.Core
             section, search,
             noframes,
             ol, p, ul, center,
-            dir, menu, pre   { display: block }
+            dir, menu, pre,
+            hr               { display: block }
             li              { display: list-item }
             head            { display: none }
             table           { display: table }
@@ -176,47 +177,6 @@ namespace PeachPDF.Html.Core
             a[href]         { -peachpdf-pdf-tag-type: Link }
         """;
 
-        public static Dictionary<string, string> InitialValues = new()
-        {
-            { PropertyNames.BackgroundAttachment, CssConstants.Scroll },
-            { PropertyNames.BackgroundClip, CssConstants.BorderBox },
-            { PropertyNames.BackgroundColor, CssConstants.Transparent },
-            { PropertyNames.BackgroundImage, CssConstants.None },
-            { PropertyNames.BackgroundOrigin, CssConstants.PaddingBox },
-            { PropertyNames.BackgroundPosition, "0% 0%"},
-            { "background-repeat", CssConstants.Repeat },
-            { "background-size", $"{CssConstants.Auto} {CssConstants.Auto}"},
-            { "border-bottom-color", CssConstants.CurrentColor },
-            { "border-bottom-style", CssConstants.None },
-            { "border-bottom-width", CssConstants.Medium },
-            { "border-left-color", CssConstants.CurrentColor },
-            { "border-left-style", CssConstants.None },
-            { "border-left-width", CssConstants.Medium },
-            { "border-right-color", CssConstants.CurrentColor },
-            { "border-right-style", CssConstants.None },
-            { "border-right-width", CssConstants.Medium },
-            { "border-top-color", CssConstants.CurrentColor },
-            { "border-top-style", CssConstants.None },
-            { "border-top-width", CssConstants.Medium },
-            { "box-sizing", CssConstants.ContentBox },
-            { "content", CssConstants.Normal },
-            { "counter-increment", CssConstants.None },
-            { "counter-reset", CssConstants.None },
-            { "counter-set", CssConstants.None },
-            { "string-set", CssConstants.None },
-            { "font-stretch", CssConstants.Normal },
-            { "font-style", CssConstants.Normal },
-            { "font-variant", CssConstants.Normal },
-            { "font-weight", CssConstants.Normal },
-            { "line-height", CssConstants.Normal },
-            { "list-style-image", CssConstants.None },
-            { "list-style-position", CssConstants.Outside },
-            { "text-decoration-color", CssConstants.CurrentColor },
-            { "text-decoration-style", CssConstants.Solid },
-            { "z-index", CssConstants.Auto },
-            { PropertyNames.PdfTagType, CssConstants.Auto }
-        };
-
         /// <summary>
         /// CSS properties that are inherited from a parent element (per CSS spec and PeachPDF's InheritStyle implementation).
         /// </summary>
@@ -241,8 +201,12 @@ namespace PeachPDF.Html.Core
         }.ToFrozenSet(System.StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
-        /// Comprehensive CSS spec initial values for every property handled by PeachPDF.
-        /// Used only for resolving the <c>initial</c>, <c>unset</c>, and <c>revert</c> global keywords.
+        /// The single, authoritative store of CSS spec initial values for every property PeachPDF handles.
+        /// Exposed read-only as <see cref="InitialValues"/> and read via <see cref="GetInitialValue"/>. It is
+        /// the one source used both to seed every box's defaults at the start of the cascade
+        /// (<see cref="Parse.DomParser.CascadeApplyStyles"/>, per CSS Cascade &amp; Inheritance 4 §2.1
+        /// "Defaulting") and to resolve the <c>initial</c>/<c>unset</c>/<c>revert</c> keywords — so the two can
+        /// never disagree, and there is no second copy to drift.
         /// </summary>
         private static readonly FrozenDictionary<string, string?> _allInitialValues = new Dictionary<string, string?>(System.StringComparer.OrdinalIgnoreCase)
         {
@@ -294,7 +258,9 @@ namespace PeachPDF.Html.Core
             { "display", CssConstants.Inline },
             { "empty-cells", "show" },
             { "float", CssConstants.None },
-            { "font-family", "serif" },
+            // The initial font-family is UA-defined (CSS Fonts 4 §2.2); PeachPDF's UA default is the
+            // platform-resolved default font, matching what an unset family falls back to at font realization.
+            { "font-family", CssConstants.DefaultFont },
             { "font-size", CssConstants.Medium },
             { "font-stretch", CssConstants.Normal },
             { "font-style", CssConstants.Normal },
@@ -327,7 +293,6 @@ namespace PeachPDF.Html.Core
             { "right", CssConstants.Auto },
             { "string-set", CssConstants.None },
             { "text-align", "left" },
-            { "text-decoration", CssConstants.None },
             { "text-decoration-color", CssConstants.CurrentColor },
             { "text-decoration-line", CssConstants.None },
             { "text-decoration-style", CssConstants.Solid },
@@ -352,5 +317,8 @@ namespace PeachPDF.Html.Core
         /// </summary>
         public static string? GetInitialValue(string propertyName) =>
             _allInitialValues.TryGetValue(propertyName, out var v) ? v : null;
+
+        /// <summary>The single initial-value store, exposed read-only so the cascade can seed every box from it.</summary>
+        public static IReadOnlyDictionary<string, string?> InitialValues => _allInitialValues;
     }
 }

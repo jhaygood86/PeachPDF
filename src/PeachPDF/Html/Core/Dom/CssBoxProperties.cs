@@ -205,39 +205,6 @@ namespace PeachPDF.Html.Core.Dom
         public string BorderCollapse { get; set; } = "separate";
         public string BoxSizing { get; set; } = CssConstants.ContentBox;
 
-        public string BorderRadius
-        {
-            set
-            {
-                var slash = value.IndexOf('/');
-                var hGroup = (slash >= 0 ? value[..slash] : value).Trim();
-                var vGroup = slash >= 0 ? value[(slash + 1)..].Trim() : hGroup;
-
-                var h = ExpandRadiusShorthand(hGroup);
-                var v = ExpandRadiusShorthand(vGroup);
-
-                // Store each corner as "hValue vValue" so the computed properties
-                // can extract both axes independently.
-                BorderTopLeftRadius = $"{h[0]} {v[0]}";
-                BorderTopRightRadius = $"{h[1]} {v[1]}";
-                BorderBottomRightRadius = $"{h[2]} {v[2]}";
-                BorderBottomLeftRadius = $"{h[3]} {v[3]}";
-            }
-        }
-
-        // Expands a 1–4 value group into [TL, TR, BR, BL] per CSS shorthand rules.
-        private static string[] ExpandRadiusShorthand(string group)
-        {
-            var tokens = group.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-            return tokens.Length switch
-            {
-                1 => [tokens[0], tokens[0], tokens[0], tokens[0]],
-                2 => [tokens[0], tokens[1], tokens[0], tokens[1]],
-                3 => [tokens[0], tokens[1], tokens[2], tokens[1]],
-                4 => [tokens[0], tokens[1], tokens[2], tokens[3]],
-                _ => ["0", "0", "0", "0"]
-            };
-        }
 
         private string _transform = CssConstants.None;
         public string Transform
@@ -496,7 +463,6 @@ namespace PeachPDF.Html.Core.Dom
 
         public string TextAlign { get; set; } = string.Empty;
 
-        public string TextDecoration { get; set; } = string.Empty;
 
         public string TextDecorationLine { get; set; } = string.Empty;
 
@@ -1662,7 +1628,6 @@ namespace PeachPDF.Html.Core.Dom
             _paddingRight = p._paddingRight;
             _paddingTop = p._paddingTop;
             _right = p._right;
-            TextDecoration = p.TextDecoration;
             TextDecorationLine = p.TextDecorationLine;
             TextDecorationStyle = p.TextDecorationStyle;
             TextDecorationColor = p.TextDecorationColor;
