@@ -321,14 +321,44 @@ namespace PeachPDF.CSS
         private Token ColorLiteral()
         {
             var current = GetNext();
-            while (current.IsHex())
+
+            // '#' not followed by a name code point or a valid escape is a plain delimiter (CSS Syntax §4.3.4).
+            if (!current.IsName() && !IsValidEscape(current))
             {
-                StringBuffer.Append(current);
-                current = GetNext();
+                Back();
+                return NewDelimiter(Symbols.Num);
             }
 
             Back();
-            return NewColor(FlushBuffer());
+
+            // A '#' always begins a <hash-token>, consuming a whole <name> (CSS Syntax §4.3.4). Classify it as
+            // a color literal only when the name is entirely hex digits (e.g. "#f00"); otherwise keep it as an
+            // id hash-token (e.g. "#hero" — an id-selector inside element()), instead of truncating at the
+            // first non-hex character (which turned "#hero" into an empty color plus a stray "hero" ident).
+            var allHex = true;
+
+            while (true)
+            {
+                current = GetNext();
+
+                if (current.IsName())
+                {
+                    allHex = allHex && current.IsHex();
+                    StringBuffer.Append(current);
+                }
+                else if (IsValidEscape(current))
+                {
+                    current = GetNext();
+                    StringBuffer.Append(ConsumeEscape(current));
+                    allHex = false;
+                }
+                else
+                {
+                    Back();
+                    var text = FlushBuffer();
+                    return allHex ? NewColor(text) : NewHash(text);
+                }
+            }
         }
 
         private Token HashStart()

@@ -211,10 +211,11 @@ namespace PeachPDF.Html.Core
                     // A single url() token (CSS Values 4 §4.5).
                     return CssValueParser.GetCssTokens(value).ToUri() != null;
                 case "<image>":
-                    // url() or a supported gradient (CSS Images 3 §2), plus the syntactically-valid-but-not-
-                    // rendered image functions image-set()/cross-fade()/element() (CSS Images 4 §2) — accepted
-                    // for registration (a valid <image> per spec) though they paint nothing when consumed.
-                    return valueParser.ParseImage(value) != null || valueParser.IsExtendedImageFunction(value);
+                    // Validate through the shared Layer-A <image> grammar (Converters.ImageSourceConverter):
+                    // url(), gradients, and the syntactically-valid-but-not-rendered image functions
+                    // image-set()/cross-fade()/element() (CSS Images 4 §2) — the same grammar background-image
+                    // and friends use, so registration and property parsing agree.
+                    return Converters.ImageSourceConverter.Convert(CssValueParser.GetCssTokens(value)) is not null;
                 case "<time>":
                     // A literal <time> dimension (s/ms) or a <time>-category calc() (CalcParser now models
                     // time units); s/ms are absolute, so a time calc() is always computationally independent.
@@ -263,8 +264,8 @@ namespace PeachPDF.Html.Core
             foreach (var rawComponent in syntax.Split('|'))
             {
                 var component = rawComponent.Trim();
-                if (component.EndsWith("+", StringComparison.Ordinal) || component.EndsWith("#", StringComparison.Ordinal))
-                    component = component[..^1].Trim();
+                var hasMultiplier = component.EndsWith("+", StringComparison.Ordinal) || component.EndsWith("#", StringComparison.Ordinal);
+                if (hasMultiplier) component = component[..^1].Trim();
 
                 if (component.Length == 0) return false;
 
@@ -272,7 +273,8 @@ namespace PeachPDF.Html.Core
                 {
                     if (!KnownDataTypes.Contains(component)) return false;
                 }
-                else if (!IsIdent(component))
+                // A `+`/`#` multiplier applies only to a <data-type>, never an ident literal (§3), so `auto+` is invalid.
+                else if (hasMultiplier || !IsIdent(component))
                 {
                     return false;
                 }

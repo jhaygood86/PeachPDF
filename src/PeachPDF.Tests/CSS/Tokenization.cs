@@ -53,6 +53,29 @@ namespace PeachPDF.Tests.CSS
             Assert.Equal(url, token.Data);
         }
 
+        // In a value context, '#' begins a <hash-token> (CSS Syntax §4.3.4): an all-hex name is a color
+        // literal, any other name stays an id hash-token (e.g. the '#id' inside element()). Previously a
+        // non-hex hash was truncated at the first non-hex char into an empty color + a stray ident.
+        [Fact]
+        public void ValueContextHash()
+        {
+            static void Check(string input, TokenType expectedType, string expectedData)
+            {
+                var lexer = new Lexer(new TextSource(input)) { IsInValue = true };
+                var token = lexer.Get();
+                Assert.Equal(expectedType, token.Type);
+                Assert.Equal(expectedData, token.Data);
+                Assert.Equal(TokenType.EndOfFile, lexer.Get().Type); // whole name is one token, no trailing ident
+            }
+
+            Check("#f00", TokenType.Color, "f00");
+            Check("#abc123", TokenType.Color, "abc123");
+            Check("#deadbeef", TokenType.Color, "deadbeef");
+            Check("#hero", TokenType.Hash, "hero");
+            Check("#top", TokenType.Hash, "top");
+            Check("#f00bar", TokenType.Hash, "f00bar");
+        }
+
         [Fact]
         public void LexerOnlyCarriageReturn()
         {

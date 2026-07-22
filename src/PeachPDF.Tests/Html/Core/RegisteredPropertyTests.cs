@@ -155,6 +155,7 @@ namespace PeachPDF.Tests.Html.Core
         [InlineData("<time>", "5", false)]
         [InlineData("<resolution>", "96dpi", true)]
         [InlineData("<resolution>", "2dppx", true)]
+        [InlineData("<resolution>", "2x", true)]              // `x` is the dppx alias (CSS Values 4 §7.4)
         [InlineData("<resolution>", "calc(2dppx * 2)", true)] // <resolution> calc() (issue #229 gap 2)
         [InlineData("<resolution>", "5", false)]
         [InlineData("<transform-function>", "rotate(45deg)", true)]

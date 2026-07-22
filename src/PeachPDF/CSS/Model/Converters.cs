@@ -425,7 +425,21 @@ namespace PeachPDF.CSS
             ColorConverter.WithCurrentColor().Option(Color.Black));
 
         public static readonly IValueConverter MultipleShadowConverter = ShadowConverter.FromList().OrNone();
-        public static readonly IValueConverter ImageSourceConverter = UrlConverter.Or(GradientConverter);
+
+        // The image functions PeachPDF validates but does not render (CSS Images 4). Composed into
+        // ImageSourceConverter so every <image> property (background-image, list-style-image, cursor,
+        // content, and @property syntax:"<image>") accepts them syntactically; the render path
+        // (CssValueParser.ParseImage → CssImagePainter) still handles only url()/gradients, so they paint
+        // nothing (an unchanged engine-wide gap). See ExtendedImageConverters.cs.
+        public static readonly IValueConverter ImageSetImageConverter =
+            Construct(() => new FunctionValueConverter(FunctionNames.ImageSet, new ImageSetConverter()));
+        public static readonly IValueConverter CrossFadeImageConverter =
+            Construct(() => new FunctionValueConverter(FunctionNames.CrossFade, new CrossFadeConverter()));
+        public static readonly IValueConverter ElementImageConverter =
+            Construct(() => new FunctionValueConverter(FunctionNames.Element, new ElementImageConverter()));
+
+        public static readonly IValueConverter ImageSourceConverter = UrlConverter.Or(GradientConverter)
+            .Or(ImageSetImageConverter).Or(CrossFadeImageConverter).Or(ElementImageConverter);
         public static readonly IValueConverter OptionalImageSourceConverter = ImageSourceConverter.OrNone();
         public static readonly IValueConverter MultipleImageSourceConverter = OptionalImageSourceConverter.FromList();
         public static readonly IValueConverter BorderRadiusShorthandConverter = new BorderRadiusConverter();
