@@ -263,8 +263,21 @@ namespace PeachPDF.Html.Core.Parse
             // reassigns PageSize after SetHtml, so recomputing these bases later would break
             // base-vs-per-page identity for percentage margins. Captured unconditionally (not only
             // when a base rule exists): per-page rules can appear without one.
+            // The em/ex basis is the base @page context's own font-size when a base @page rule sets one
+            // (css-page-3 §7.1 / issue #162), falling back to the root element's font otherwise — preserving
+            // the documented root-based convention for the common case where no @page { font-size } exists.
+            // rem stays root-based. The base font-size is the last non-empty one declared on a base @page rule
+            // (document order = cascade order for equal specificity).
+            var basePageFontSize = cssData.EnumerateRulesRecursive().OfType<PageRule>()
+                .Where(r => r.Selector == null && r.Style is { } st && st.FontSize.Length > 0)
+                .Select(r => r.Style.FontSize)
+                .LastOrDefault();
+            var emPt = string.IsNullOrEmpty(basePageFontSize)
+                ? root.GetEmHeight() / pixelsPerPoint
+                : MarginBoxRenderer.ResolveFontSizePt(basePageFontSize);
+
             var lengthContext = new PageLengthContext(
-                root.GetEmHeight() / pixelsPerPoint,
+                emPt,
                 root.GetRemHeight() / pixelsPerPoint,
                 htmlContainer.PageSize.Width / pixelsPerPoint);
             htmlContainer.PageLengthContext = lengthContext;

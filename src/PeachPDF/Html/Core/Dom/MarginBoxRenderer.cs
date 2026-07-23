@@ -418,11 +418,18 @@ namespace PeachPDF.Html.Core.Dom
         internal static double ResolveFontSizePt(StyleDeclaration style, StyleDeclaration? pageStyle)
         {
             var sizeStr = FirstNonEmpty(style.FontSize, pageStyle?.FontSize);
-            return string.IsNullOrEmpty(sizeStr)
-                ? CssConstants.FontSize
-                : DomParser.ParseLengthToPdfPoints(sizeStr)
-                  ?? FontSizeResolver.Resolve(sizeStr, CssConstants.FontSize, CssConstants.FontSize);
+            return string.IsNullOrEmpty(sizeStr) ? CssConstants.FontSize : ResolveFontSizePt(sizeStr);
         }
+
+        /// <summary>
+        /// Resolves a <c>font-size</c> declaration string to true PDF points for a page/margin context that
+        /// has no real inheritance chain (an absolute length directly; otherwise a keyword or relative unit
+        /// against the CSS initial for both the parent and root basis). Reused to derive the <c>em</c>/<c>ex</c>
+        /// basis of a <c>@page</c> context's own <c>font-size</c> (issue #162).
+        /// </summary>
+        internal static double ResolveFontSizePt(string sizeStr) =>
+            DomParser.ParseLengthToPdfPoints(sizeStr)
+            ?? FontSizeResolver.Resolve(sizeStr, CssConstants.FontSize, CssConstants.FontSize);
 
         internal static XFont BuildFont(StyleDeclaration style, StyleDeclaration? pageStyle, RAdapter adapter)
         {
