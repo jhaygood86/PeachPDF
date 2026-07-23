@@ -748,6 +748,37 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(100, b.ActualBoxSizingWidth, 2.0);
         }
 
+        // ─── grid / grid-template mega-shorthands (#264) ─────────────────────────
+
+        [Fact]
+        public async Task GridTemplateShorthand_AreasForm_ExpandsAndLaysOut()
+        {
+            // The `grid-template` mega-shorthand (#264) expands to grid-template-areas/-rows/-columns; the
+            // areas form here builds a 2-row × 2-col grid (row 1 = "a a", row 2 = "b c") with explicit row
+            // sizes and 1fr 1fr columns, and items placed by grid-area land in the right cells — proving the
+            // parse-time expansion actually feeds the layout engine (incl. the synthesized rows track list).
+            var html = Wrap(@"
+                <div id='container' style=""display:grid; width:200pt;
+                     grid-template: 'a a' 30pt 'b c' 40pt / 1fr 1fr;"">
+                    <div id='a' style=""grid-area:a;""></div>
+                    <div id='c' style=""grid-area:c;""></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            var c = FindById(root, "c")!;
+            // 'a' spans row 1 (30pt tall) across both columns (200pt wide) at the origin.
+            Assert.Equal(200, a.ActualBoxSizingWidth, 2.0);
+            Assert.Equal(30, a.ActualBoxSizingHeight, 2.0);
+            Assert.Equal(container.ClientLeft, a.Location.X, 2.0);
+            Assert.Equal(container.ClientTop, a.Location.Y, 2.0);
+            // 'c' is row 2 (40pt tall), column 2 (100pt wide), at (left + 100, top + 30).
+            Assert.Equal(100, c.ActualBoxSizingWidth, 2.0);
+            Assert.Equal(40, c.ActualBoxSizingHeight, 2.0);
+            Assert.Equal(container.ClientLeft + 100, c.Location.X, 2.0);
+            Assert.Equal(container.ClientTop + 30, c.Location.Y, 2.0);
+        }
+
         // ─── grid-area / grid-column named shorthand copy rule (#261) ─────────────
 
         [Fact]

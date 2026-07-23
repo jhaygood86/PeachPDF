@@ -125,6 +125,8 @@ namespace PeachPDF.CSS
         public static readonly string FontWeight = "font-weight";
         public static readonly string Font = "font";
         public static readonly string Gap = "gap";
+        public static readonly string Grid = "grid";
+        public static readonly string GridTemplate = "grid-template";
         public static readonly string GridTemplateColumns = "grid-template-columns";
         public static readonly string GridTemplateRows = "grid-template-rows";
         public static readonly string GridTemplateAreas = "grid-template-areas";
