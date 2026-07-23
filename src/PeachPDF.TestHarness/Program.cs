@@ -2026,6 +2026,23 @@ var svgHtml = "<!DOCTYPE html><html><head>" + SvgShowcaseCss + "</head><body>" +
             """<svg viewBox="0 0 100 100" width="80" height="80"><defs><linearGradient id="gs1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c0392b"/><stop offset="1" stop-color="#2980b9"/></linearGradient></defs><rect x="10" y="12" width="80" height="34" rx="8" fill="none" stroke="url(#gs1)" stroke-width="6"/><ellipse cx="50" cy="72" rx="38" ry="20" fill="none" stroke="url(#gs1)" stroke-width="6"/></svg>""",
             "stroke=\"url(#gradient)\" on a rounded rect and an ellipse - a gradient stroke sharing a page with solid strokes")
     ) +
+    // A transparent (fades-to-alpha-0) gradient stroke realizes a PDF soft mask; that mask must be
+    // torn down after the stroke so it doesn't bleed onto later paint - an opaque gradient stroke or
+    // a gradient stroke in a following panel - which would otherwise be masked away (issue #135).
+    Row(
+        SvgSwatch("transparent gradient stroke beside opaque",
+            """<svg viewBox="0 0 210 90" width="150" height="64"><defs><linearGradient id="gtr" gradientUnits="userSpaceOnUse" x1="10" y1="0" x2="90" y2="0"><stop offset="0" stop-color="#ff0080"/><stop offset="1" stop-color="#0080ff" stop-opacity="0"/></linearGradient><linearGradient id="gop" gradientUnits="userSpaceOnUse" x1="120" y1="0" x2="200" y2="0"><stop offset="0" stop-color="#00b050"/><stop offset="1" stop-color="#c08000"/></linearGradient></defs><rect x="10" y="15" width="80" height="60" fill="none" stroke="url(#gtr)" stroke-width="10"/><rect x="120" y="15" width="80" height="60" fill="none" stroke="url(#gop)" stroke-width="10"/></svg>""",
+            "left fades to transparent; the opaque green-gold frame must stay fully visible"),
+        SvgSwatch("gradient stroke inside padded wrapper",
+            """<div style="padding:8px 6px"><svg viewBox="0 0 100 100" width="64" height="64"><defs><linearGradient id="gp" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8e44ad"/><stop offset="1" stop-color="#16a085" stop-opacity="0.2"/></linearGradient></defs><rect x="14" y="14" width="72" height="72" rx="10" fill="none" stroke="url(#gp)" stroke-width="9"/></svg></div>""",
+            "wrapper padding no longer drops the stroke"),
+        SvgSwatch("gradient stroke inside rounded bordered wrapper",
+            """<div style="border-radius:12px;border:2px solid #333;padding:6px"><svg viewBox="0 0 100 100" width="60" height="60"><defs><linearGradient id="gb" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e67e22"/><stop offset="1" stop-color="#2980b9" stop-opacity="0.2"/></linearGradient></defs><rect x="14" y="14" width="72" height="72" rx="10" fill="none" stroke="url(#gb)" stroke-width="9"/></svg></div>""",
+            "border-radius + border wrapper no longer drops the stroke"),
+        SvgSwatch("two gradient-stroked panels in a row",
+            """<svg viewBox="0 0 100 100" width="40" height="64"><defs><linearGradient id="ga" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c0392b"/><stop offset="1" stop-color="#c0392b" stop-opacity="0"/></linearGradient></defs><circle cx="50" cy="50" r="34" fill="none" stroke="url(#ga)" stroke-width="10"/></svg><svg viewBox="0 0 100 100" width="40" height="64"><defs><linearGradient id="gc" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#27ae60"/><stop offset="1" stop-color="#2980b9"/></linearGradient></defs><circle cx="50" cy="50" r="34" fill="none" stroke="url(#gc)" stroke-width="10"/></svg>""",
+            "a transparent gradient ring never masks a later one on the same page")
+    ) +
 
     "<h2>5 — Group Opacity &amp; Transforms</h2>" +
     Row(
