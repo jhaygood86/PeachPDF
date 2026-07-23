@@ -91,7 +91,8 @@ namespace PeachPDF.Html.Core.Dom
 
             // ── Explicit tracks + grid-auto-flow. Row flow (default) fixes the column count and grows rows;
             // column flow fixes the row count and grows columns. Implicit tracks cycle grid-auto-columns/rows.
-            var explicitColDefs = ExpandTemplate(_gridBox.GridTemplateColumns);
+            // A column template's repeat(auto-fill|auto-fit, …) is resolved to a concrete count here.
+            var (explicitColDefs, autoFitRange) = ResolveColumnTemplate(_gridBox.GridTemplateColumns, contentWidth, columnGap);
             var explicitRowDefs = ExpandTemplate(_gridBox.GridTemplateRows);
             var autoColDefs = ExpandTrackSizes(_gridBox.GridAutoColumns);
             var autoRowDefs = ExpandTrackSizes(_gridBox.GridAutoRows);
@@ -111,7 +112,23 @@ namespace PeachPDF.Html.Core.Dom
 
             // ── Column tracks: explicit sizes, then implicit columns cycling grid-auto-columns.
             var colDefs = BuildTrackDefs(explicitColDefs, autoColDefs, colCount);
-            var columns = SizeColumnTracks(colDefs, contentWidth, columnGap);
+
+            // auto-fit collapses any repeated column that ended up with no items in it.
+            var collapsed = new bool[colCount];
+            if (autoFitRange is var (rangeStart, rangeLen) && rangeLen > 0)
+            {
+                var usedCol = new bool[colCount];
+                foreach (var p in placements)
+                    for (var c = p.ColStart; c < p.ColStart + p.ColSpan && c < colCount; c++)
+                        usedCol[c] = true;
+                for (var c = rangeStart; c < rangeStart + rangeLen && c < colCount; c++)
+                    if (!usedCol[c]) collapsed[c] = true;
+            }
+
+            // Intrinsic (min/max-content) contributions for auto/min-content/max-content/fit-content columns.
+            var colIntrinsic = await MeasureColumnIntrinsics(g, placements, colDefs, colCount);
+
+            var columns = SizeColumnTracks(colDefs, contentWidth, columnGap, collapsed, colIntrinsic);
             PositionTracks(columns, _gridBox.ClientLeft, contentWidth, columnGap, _gridBox.JustifyContent);
 
             // ── Row tracks: explicit sizes, then implicit rows cycling grid-auto-rows; auto rows are sized
@@ -362,13 +379,14 @@ namespace PeachPDF.Html.Core.Dom
         // ─── Track sizing ─────────────────────────────────────────────────────────
 
         /// <summary>
-        /// Sizes the explicit column tracks against the container's definite content width (CSS Grid §11):
-        /// resolve each track's base and growth-limit, then either distribute the free space to <c>fr</c>
-        /// tracks (§11.7) or, when there is no flex, maximize the intrinsic (auto) tracks toward their
-        /// growth limits. Intrinsic min/max-content contributions from items land in Stage 7; until then an
-        /// <c>auto</c>/intrinsic track has a zero base and shares leftover space.
+        /// Sizes the column tracks against the container's definite content width (CSS Grid §11): resolve
+        /// each track's base and growth-limit (auto/min-content/max-content/fit-content taking their base
+        /// from the measured item content in <paramref name="intrinsic"/>), then either distribute the free
+        /// space to <c>fr</c> tracks (§11.7) or, when there is no flex, grow the intrinsic tracks to share
+        /// the remainder. Collapsed (empty <c>auto-fit</c>) tracks are forced to zero and drop their gap.
         /// </summary>
-        private Track[] SizeColumnTracks(IReadOnlyList<GridTrackSize> defs, double contentWidth, double gap)
+        private Track[] SizeColumnTracks(IReadOnlyList<GridTrackSize> defs, double contentWidth, double gap,
+            bool[] collapsed, double[] intrinsic)
         {
             var n = defs.Count;
             var tracks = defs.Select(d => new Track { Def = d }).ToArray();
@@ -377,9 +395,13 @@ namespace PeachPDF.Html.Core.Dom
             var flexes = new double[n];
 
             for (var i = 0; i < n; i++)
-                InitTrack(defs[i], contentWidth, out bases[i], out limits[i], out flexes[i]);
+            {
+                if (collapsed[i]) { bases[i] = 0; limits[i] = 0; flexes[i] = 0; continue; }
+                InitTrack(defs[i], contentWidth, intrinsic[i], out bases[i], out limits[i], out flexes[i]);
+            }
 
-            var totalGap = n > 1 ? gap * (n - 1) : 0;
+            var nonCollapsed = collapsed.Count(c => !c);
+            var totalGap = nonCollapsed > 1 ? gap * (nonCollapsed - 1) : 0;
             var totalFlex = flexes.Sum();
 
             if (totalFlex > 0)
@@ -404,7 +426,7 @@ namespace PeachPDF.Html.Core.Dom
                 for (var i = 0; i < n; i++) { tracks[i].Size = bases[i]; baseTotal += bases[i]; }
 
                 var free = Math.Max(0, contentWidth - baseTotal - totalGap);
-                var growable = Enumerable.Range(0, n).Where(i => double.IsPositiveInfinity(limits[i])).ToArray();
+                var growable = Enumerable.Range(0, n).Where(i => !collapsed[i] && double.IsPositiveInfinity(limits[i])).ToArray();
                 if (growable.Length > 0 && free > 0)
                 {
                     var share = free / growable.Length;
@@ -416,8 +438,10 @@ namespace PeachPDF.Html.Core.Dom
             return tracks;
         }
 
-        /// <summary>Resolves a track's base size, growth limit, and flex factor (CSS Grid §11.4).</summary>
-        private void InitTrack(GridTrackSize def, double contentBase, out double baseSize, out double limit, out double flex)
+        /// <summary>Resolves a track's base size, growth limit, and flex factor (CSS Grid §11.4).
+        /// <paramref name="intrinsic"/> is the measured max-content contribution for an intrinsic track.</summary>
+        private void InitTrack(GridTrackSize def, double contentBase, double intrinsic,
+            out double baseSize, out double limit, out double flex)
         {
             baseSize = 0;
             limit = double.PositiveInfinity;
@@ -433,24 +457,55 @@ namespace PeachPDF.Html.Core.Dom
                     flex = def.Flex;
                     break;
                 case GridTrackKind.Minmax:
-                    baseSize = IsFixed(def.Min) ? ResolveFixedLength(def.Min, contentBase) : 0;
+                    baseSize = IsFixed(def.Min) ? ResolveFixedLength(def.Min, contentBase) : intrinsic;
                     if (def.Max.Kind == GridTrackKind.Flex)
                         flex = def.Max.Flex;
                     else
-                        limit = IsFixed(def.Max) ? ResolveFixedLength(def.Max, contentBase) : double.PositiveInfinity;
+                        limit = IsFixed(def.Max) ? ResolveFixedLength(def.Max, contentBase) : intrinsic;
                     if (!double.IsPositiveInfinity(limit) && limit < baseSize) limit = baseSize;
                     break;
                 case GridTrackKind.FitContent:
-                    // fit-content(L): a fixed upper cap; intrinsic base lands in Stage 7.
-                    limit = ResolveFixedLength(def, contentBase);
+                    // fit-content(L) = clamp(max-content, min-content, L): the measured content, capped at L.
+                    baseSize = limit = Math.Min(intrinsic, ResolveFixedLength(def, contentBase));
                     break;
                 case GridTrackKind.Auto:
-                case GridTrackKind.MinContent:
                 case GridTrackKind.MaxContent:
-                    // Intrinsic — real min/max-content contributions arrive in Stage 7.
+                    baseSize = limit = intrinsic;   // content-sized (a definite floor; fr can still grow it)
+                    break;
+                case GridTrackKind.MinContent:
+                    baseSize = limit = intrinsic;
                     break;
             }
         }
+
+        /// <summary>Measures each intrinsic (auto/min-content/max-content/fit-content) column's max-content
+        /// contribution: the widest single-column item placed in it (outer, incl. margin/border/padding).</summary>
+        private async ValueTask<double[]> MeasureColumnIntrinsics(
+            RGraphics g, List<Placement> placements, IReadOnlyList<GridTrackSize> colDefs, int colCount)
+        {
+            var intrinsic = new double[colCount];
+            var needed = colDefs.Any(IsIntrinsic);
+            if (!needed) return intrinsic;
+
+            foreach (var p in placements.Where(p => p.ColSpan == 1 && IsIntrinsic(colDefs[p.ColStart])))
+            {
+                // An explicit item width is its content contribution; otherwise measure its max-content.
+                var content = CssValueParser.IsValidLength(p.Box.Width)
+                    ? CssValueParser.ParseLength(p.Box.Width, 0, p.Box)
+                    : await CssLayoutEngine.GetMaxContentWidth(g, p.Box);
+                var outer = content + p.Box.ActualMarginLeft + p.Box.ActualMarginRight
+                    + p.Box.ActualPaddingLeft + p.Box.ActualPaddingRight
+                    + p.Box.ActualBorderLeftWidth + p.Box.ActualBorderRightWidth;
+                intrinsic[p.ColStart] = Math.Max(intrinsic[p.ColStart], outer);
+            }
+
+            return intrinsic;
+        }
+
+        private static bool IsIntrinsic(GridTrackSize def) =>
+            def.Kind is GridTrackKind.Auto or GridTrackKind.MinContent or GridTrackKind.MaxContent
+                or GridTrackKind.FitContent
+            || (def.Kind == GridTrackKind.Minmax && (IsIntrinsic(def.Min) || IsIntrinsic(def.Max)));
 
         /// <summary>
         /// The CSS Grid §11.7 "find the size of an fr" loop: distributes <paramref name="spaceToFill"/>
@@ -623,26 +678,29 @@ namespace PeachPDF.Html.Core.Dom
             var n = tracks.Length;
             if (n == 0) return;
 
-            var used = tracks.Sum(t => t.Size) + (n > 1 ? gap * (n - 1) : 0);
+            // A zero-size track (a collapsed auto-fit column, or an empty row) drops its adjoining gap.
+            var gapCount = Math.Max(0, tracks.Count(t => t.Size > 0.01) - 1);
+            var used = tracks.Sum(t => t.Size) + gap * gapCount;
             var free = containerSize - used;
 
             double offset = 0;
             double between = gap;
 
-            if (free > 0.01 && n > 0)
+            if (free > 0.01 && gapCount >= 0)
             {
                 if (value.Isi(CssConstants.Center)) offset = free / 2;
                 else if (value.Isi(CssConstants.End) || value.Isi(CssConstants.FlexEnd) || value.Isi("right")) offset = free;
-                else if (value.Isi(CssConstants.SpaceBetween)) between = gap + (n > 1 ? free / (n - 1) : 0);
-                else if (value.Isi(CssConstants.SpaceAround)) { between = gap + free / n; offset = free / n / 2; }
-                else if (value.Isi(CssConstants.SpaceEvenly)) { between = gap + free / (n + 1); offset = free / (n + 1); }
+                else if (value.Isi(CssConstants.SpaceBetween) && gapCount > 0) between = gap + free / gapCount;
+                else if (value.Isi(CssConstants.SpaceAround)) { between = gap + free / (gapCount + 1); offset = free / (gapCount + 1) / 2; }
+                else if (value.Isi(CssConstants.SpaceEvenly)) { between = gap + free / (gapCount + 2); offset = free / (gapCount + 2); }
             }
 
             var pos = start + offset;
             foreach (var t in tracks)
             {
                 t.Position = pos;
-                pos += t.Size + between;
+                pos += t.Size;
+                if (t.Size > 0.01) pos += between;
             }
         }
 
@@ -666,6 +724,64 @@ namespace PeachPDF.Html.Core.Dom
             // The auto-repeat (auto-fill/auto-fit) section is resolved in Stage 7.
             return template?.Tracks.ToList() ?? [];
         }
+
+        /// <summary>
+        /// Resolves a <c>grid-template-columns</c> value into concrete track definitions, expanding a
+        /// <c>repeat(auto-fill|auto-fit, …)</c> section to the number of repetitions that fit the container
+        /// width (CSS Grid §7.2.3.2). Returns the tracks and, for <c>auto-fit</c>, the [start, length) index
+        /// range of the repeated tracks so empty ones can be collapsed after placement.
+        /// </summary>
+        private (List<GridTrackSize> Defs, (int Start, int Length)? AutoFitRange) ResolveColumnTemplate(
+            string value, double contentWidth, double gap)
+        {
+            if (string.IsNullOrEmpty(value) || value.Isi(CssConstants.None))
+                return ([], null);
+
+            var template = GridTrackListGrammar.TryParse(CssValueParser.GetCssTokens(value));
+            if (template is null)
+                return ([], null);
+            if (template.AutoRepeat == GridAutoRepeatKind.None)
+                return (template.Tracks.ToList(), null);
+
+            var fixedDefs = template.Tracks;
+            var repeated = template.AutoRepeatTracks;
+
+            double FloorSum(IEnumerable<GridTrackSize> ts) => ts.Sum(FloorSize);
+
+            var repFloor = FloorSum(repeated) + (repeated.Count > 1 ? gap * (repeated.Count - 1) : 0);
+            int count;
+            if (repFloor <= 0)
+            {
+                count = 1; // no definite repeated size → a single repetition (spec's fallback)
+            }
+            else
+            {
+                var available = contentWidth - FloorSum(fixedDefs);
+                var perRepetition = repFloor + gap * repeated.Count;
+                count = Math.Max(1, (int)Math.Floor((available + gap) / perRepetition));
+            }
+
+            var defs = new List<GridTrackSize>();
+            defs.AddRange(fixedDefs.Take(template.AutoRepeatInsertIndex));
+            var rangeStart = defs.Count;
+            for (var r = 0; r < count; r++) defs.AddRange(repeated);
+            var rangeLen = count * repeated.Count;
+            defs.AddRange(fixedDefs.Skip(template.AutoRepeatInsertIndex));
+
+            var autoFitRange = template.AutoRepeat == GridAutoRepeatKind.AutoFit
+                ? ((int, int)?)(rangeStart, rangeLen)
+                : null;
+            return (defs, autoFitRange);
+        }
+
+        /// <summary>The definite floor size of a track for auto-fill/auto-fit repetition counting: a length/
+        /// percentage resolves directly, a minmax() uses its min, and flex/intrinsic tracks contribute 0.</summary>
+        private double FloorSize(GridTrackSize def) => def.Kind switch
+        {
+            GridTrackKind.Length or GridTrackKind.Percent => ResolveFixedLength(def, 0),
+            GridTrackKind.Minmax => FloorSize(def.Min),
+            _ => 0
+        };
 
         /// <summary>Parses a <c>grid-auto-columns</c>/<c>grid-auto-rows</c> value into its track-size list
         /// (default a single <c>auto</c> track), used to size implicit tracks.</summary>

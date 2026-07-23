@@ -419,6 +419,73 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(container.ClientTop + 40, a.Location.Y, 1.5);
         }
 
+        // ─── Stage 7: auto-fill/auto-fit + fit-content + intrinsic ───────────────
+
+        [Fact]
+        public async Task RepeatAutoFill_CreatesAsManyTracksAsFit()
+        {
+            // 620pt container, repeat(auto-fill, 100pt) with 20pt gap: (620+20)/(100+20)=5 tracks.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:620pt; column-gap:20pt; grid-template-columns:repeat(auto-fill, 100pt);'>
+                    <div class='item' style='height:10pt;'></div>
+                    <div class='item' style='height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var items = FindAllByClass(root, "item");
+            // Two items, each in a 100pt track; the second sits one track+gap to the right.
+            Assert.Equal(100, items[0].ActualBoxSizingWidth, 1.0);
+            Assert.Equal(100, items[1].ActualBoxSizingWidth, 1.0);
+            Assert.Equal(items[0].Location.X + 120, items[1].Location.X, 1.0);
+        }
+
+        [Fact]
+        public async Task RepeatAutoFillMinmax_TracksExpandToFill()
+        {
+            // The Tailwind responsive-card idiom: repeat(auto-fill, minmax(200pt, 1fr)) in 640pt (20pt gap):
+            // (640+20)/(200+20)=3 tracks, each 1fr → (640-40)/3=200pt.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:640pt; column-gap:20pt; grid-template-columns:repeat(auto-fill, minmax(200pt, 1fr));'>
+                    <div class='item' style='height:10pt;'></div>
+                    <div class='item' style='height:10pt;'></div>
+                    <div class='item' style='height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var items = FindAllByClass(root, "item");
+            Assert.Equal(3, items.Count);
+            foreach (var item in items)
+                Assert.Equal(200, item.ActualBoxSizingWidth, 1.5);
+        }
+
+        [Fact]
+        public async Task AutoFit_CollapsesEmptyTracks_PopulatedTracksFillWidth()
+        {
+            // repeat(auto-fit, minmax(100pt,1fr)) in 640pt yields room for several tracks, but with one item
+            // the empty tracks collapse and the single populated track fills the whole width.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:640pt; grid-template-columns:repeat(auto-fit, minmax(100pt, 1fr));'>
+                    <div id='a' style='height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            Assert.Equal(640, a.ActualBoxSizingWidth, 2.0);
+        }
+
+        [Fact]
+        public async Task AutoColumn_SizesToContent()
+        {
+            // An auto column takes its width from its content; the fr column absorbs the rest.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:300pt; grid-template-columns:auto 1fr;'>
+                    <div id='a' style='height:10pt; width:60pt;'></div>
+                    <div id='b' style='height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            Assert.Equal(60, a.ActualBoxSizingWidth, 2.0);
+            Assert.Equal(240, b.ActualBoxSizingWidth, 2.0);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>
