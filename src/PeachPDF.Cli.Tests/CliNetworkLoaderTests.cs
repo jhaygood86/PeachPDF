@@ -18,6 +18,8 @@ public class CliNetworkLoaderTests
 
             Assert.NotNull(response);
             Assert.NotNull(response!.ResourceStream);
+            // Release the file handle before the finally deletes it (Windows won't delete an open file).
+            response.ResourceStream!.Dispose();
         }
         finally
         {
