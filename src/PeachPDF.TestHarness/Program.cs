@@ -1470,6 +1470,17 @@ var flexHtml = "<!DOCTYPE html><html><head>" + FlexCss + "</head><body>" +
             FItem("C center", "#27ae60", "width:50px;height:28px;align-self:center;"))
     ) +
 
+    FSection("7b — column cross-axis alignment (align-items / align-self)",
+        FContainer("column, align-items:center", "flex-direction:column;align-items:center;width:200px;gap:4px;",
+            FItem("centered", "#e74c3c") + FItem("also centered", "#3498db")) +
+        FContainer("column, align-items:flex-end", "flex-direction:column;align-items:flex-end;width:200px;gap:4px;",
+            FItem("right", "#e74c3c") + FItem("also right", "#3498db")) +
+        FContainer("column, center + one self:flex-start", "flex-direction:column;align-items:center;width:200px;gap:4px;",
+            FItem("centered", "#e74c3c") + FItem("self-start", "#27ae60", "align-self:flex-start;")) +
+        FContainer("column, align-items:stretch (default → full width)", "flex-direction:column;align-items:stretch;width:200px;gap:4px;",
+            FItem("full width", "#3498db"))
+    ) +
+
     FSection("8 — order",
         FContainer("DOM order: A B C (order: 3 1 2)", "gap:4px;",
             FItem("A order:3", "#e74c3c", "order:3;width:50px;") +
