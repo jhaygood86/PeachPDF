@@ -199,6 +199,69 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(72.0, container.MarginTop, 3);
         }
 
+        // ─── Issue #162: @page em/ex margins resolve against the @page context's own font-size ───
+
+        [Fact]
+        public async Task BaseRule_EmMargin_ResolvesAgainstPageFontSize()
+        {
+            // A base @page rule that sets its own font-size makes em/ex margins resolve against THAT font
+            // (css-page-3 §7.1), not the root font: font-size:30pt => 2em = 60pt.
+            var container = await BuildAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { font-size: 30pt; margin-top: 2em; }
+                body { margin: 0; }
+                </style></head><body><p>content</p></body></html>
+                """);
+
+            Assert.Equal(60.0, container.MarginTop, 3);   // ppp = 1: layout units == pt
+        }
+
+        [Fact]
+        public async Task FirstPage_EmMargin_ResolvesAgainstOwnPageFontSize()
+        {
+            // A per-page rule with its own font-size re-bases its em/ex margins on it: :first font-size:40pt
+            // => margin-top:2em = 80pt.
+            var container = await BuildAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 50pt; }
+                @page :first { font-size: 40pt; margin-top: 2em; }
+                body { margin: 0; }
+                </style></head><body><p>content</p></body></html>
+                """);
+
+            Assert.Equal(80.0, container.PageGeometry.GetPage(0).MarginTopPt, 3);
+        }
+
+        [Fact]
+        public async Task FirstPage_EmMargin_InheritsBasePageFontSize()
+        {
+            // A per-page rule that does NOT set its own font-size inherits the base @page font for its em
+            // basis: base font-size:30pt, :first margin-top:2em => 60pt (not the root font).
+            var container = await BuildAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { font-size: 30pt; margin: 60pt 50pt; }
+                @page :first { margin-top: 2em; }
+                body { margin: 0; }
+                </style></head><body><p>content</p></body></html>
+                """);
+
+            Assert.Equal(60.0, container.PageGeometry.GetPage(0).MarginTopPt, 3);
+        }
+
+        [Fact]
+        public async Task BaseRule_EmMargin_NoPageFontSize_StaysRootBased()
+        {
+            // Regression: with no @page font-size, em margins keep resolving against the root font.
+            var container = await BuildAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin-top: 2em; }
+                body { margin: 0; }
+                </style></head><body><p>content</p></body></html>
+                """);
+
+            Assert.Equal(2 * container.Root!.GetEmHeight(), container.MarginTop, 3);
+        }
+
         /// <summary>
         /// Parse-only harness: PageSize carries the raw sheet BEFORE SetHtml so parse-time relative
         /// units (%/em against the captured PageLengthContext) resolve against a real width — same

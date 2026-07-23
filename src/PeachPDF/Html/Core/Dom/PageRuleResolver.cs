@@ -149,6 +149,14 @@ namespace PeachPDF.Html.Core.Dom
         {
             if (rule == null) return (baseL, baseT, baseR, baseB);
             var s = rule.Style;
+
+            // Re-base the em/ex length basis on the winning page rule's own font-size when it sets one
+            // (css-page-3 §7.1 / issue #162); otherwise keep the captured context, whose EmPt already carries
+            // the base @page font (or the root font). rem and 100% are unaffected.
+            var ctx = context;
+            if (context is { } c0 && s is { } fs && fs.FontSize.Length > 0)
+                ctx = c0 with { EmPt = MarginBoxRenderer.ResolveFontSizePt(fs.FontSize) };
+
             return (
                 Resolve(s.MarginLeft)   ?? baseL,
                 Resolve(s.MarginTop)    ?? baseT,
@@ -156,7 +164,7 @@ namespace PeachPDF.Html.Core.Dom
                 Resolve(s.MarginBottom) ?? baseB
             );
 
-            double? Resolve(string value) => context is { } c
+            double? Resolve(string value) => ctx is { } c
                 ? DomParser.ParseLengthToPdfPoints(value, c)
                 : DomParser.ParseLengthToPdfPoints(value);
         }

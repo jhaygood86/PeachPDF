@@ -468,6 +468,51 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task InlineSvg_TransparentGradientStroke_DoesNotMaskFollowingOpaqueGradientStroke()
+        {
+            // A transparent (varying-alpha) gradient stroke realizes a /Luminosity soft mask, emitted
+            // as an "/GSn gs" ExtGState in the content stream. If that stroke's paint is not bracketed
+            // by q/Q, the soft mask leaks into the persistent graphics state and masks out any following
+            // paint that emits no soft mask of its own - e.g. a subsequent OPAQUE gradient stroke, which
+            // produces no alpha ExtGState - so the opaque stroke silently disappears (issue #135). The
+            // masked graphics state must be restored (Q) before the next stroke is painted.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 260 90" width="260" height="90" style="overflow:visible">
+                  <defs>
+                    <linearGradient id="trans" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="100" y2="0">
+                      <stop offset="0" stop-color="#ff0080" stop-opacity="1"/>
+                      <stop offset="1" stop-color="#0080ff" stop-opacity="0"/>
+                    </linearGradient>
+                    <linearGradient id="solid" gradientUnits="userSpaceOnUse" x1="150" y1="0" x2="240" y2="0">
+                      <stop offset="0" stop-color="#00c000"/><stop offset="1" stop-color="#c08000"/>
+                    </linearGradient>
+                  </defs>
+                  <rect x="10" y="15" width="90" height="60" fill="none" stroke="url(#trans)" stroke-width="10"/>
+                  <rect x="150" y="15" width="90" height="60" fill="none" stroke="url(#solid)" stroke-width="10"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            // The transparent stroke really does emit a luminosity soft mask (otherwise this test would
+            // be vacuous - there would be nothing to leak).
+            Assert.Contains("/SMask", pdfText);
+
+            // Both strokes select a real shading pattern for stroking (/Pattern CS + SCN).
+            var strokePatterns = Regex.Matches(pdfText, @"/Pattern CS\r?\n\S+ SCN");
+            Assert.True(strokePatterns.Count >= 2, $"expected two pattern strokes, found {strokePatterns.Count}");
+
+            // Between the first (transparent) stroke's pattern selection and the second (opaque) one, the
+            // first stroke must be painted (S) AND its soft-masked graphics state restored (Q). Without
+            // the q/Q bracket the region has the S but no Q, and the opaque stroke inherits the leaked mask.
+            var between = pdfText[strokePatterns[0].Index..strokePatterns[1].Index];
+            Assert.Matches(@"\r?\nS\r?\n", between);
+            Assert.Matches(@"\r?\nQ\r?\n", between);
+        }
+
+        [Fact]
         public async Task InlineSvg_RadialGradientFocalPoint_OffsetsFromCenter()
         {
             var html = """

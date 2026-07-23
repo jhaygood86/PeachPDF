@@ -45,10 +45,30 @@ namespace PeachPDF.Tests.CSS
         [InlineData("repeat(0, 100px)")]           // repeat count must be >= 1
         [InlineData("repeat(auto-fill)")]          // repeat needs a track body
         [InlineData("-1fr")]                        // negative flex
-        [InlineData("[line] 100px")]                // named lines are out of scope
+        [InlineData("repeat(2, [x] 1fr)")]          // named lines inside repeat() are out of v1 scope
+        [InlineData("[unclosed 100px")]             // an unclosed [ is invalid
         public void InvalidTrackLists_ReturnNull(string value)
         {
             Assert.Null(Parse(value));
+        }
+
+        [Theory]
+        [InlineData("[sidebar-start] 200px [sidebar-end] 1fr")]
+        [InlineData("[a b] 100px [c]")]
+        [InlineData("[start] repeat(3, 100px) [end]")]
+        public void NamedLines_Parse(string value)
+        {
+            Assert.NotNull(Parse(value));
+        }
+
+        [Fact]
+        public void NamedLines_RecordSortedLineNumbers()
+        {
+            // [a] 100px [b] 100px [a] — 'a' labels lines 1 and 3, 'b' labels line 2.
+            var template = Parse("[a] 100px [b] 100px [a]");
+            Assert.NotNull(template);
+            Assert.Equal(new[] { 1, 3 }, template.LineNames["a"]);
+            Assert.Equal(new[] { 2 }, template.LineNames["b"]);
         }
 
         [Fact]

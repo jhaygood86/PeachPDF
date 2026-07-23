@@ -133,9 +133,152 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(45, gc.ActualHeight, 1.5);    // 50% of the stretched item height
         }
 
-        private static async Task<CssBox> LayoutDiv(string style)
+        [Fact]
+        public async Task IndefinitePercentHeight_WithAspectRatio_SizedByRatio()
         {
-            var html = $"<!DOCTYPE html><html><head></head><body><div id=\"el\" style=\"{style}\">x</div></body></html>";
+            // A percentage height against an indefinite (auto-height) containing block behaves as automatic
+            // (CSS Box Sizing 4 §5), so the aspect ratio sizes the height from the definite width instead of
+            // the percentage collapsing to auto. #wrapper is auto-height (indefinite), so #parent's
+            // height:50% is indefinite; width 200pt + aspect-ratio 2 => 100pt tall, and a child's height:40%
+            // resolves against that ratio-derived height => 40pt.
+            var container = await LayoutContainer("""
+                <!DOCTYPE html><html><head><style>
+                  #parent { width: 200pt; height: 50%; aspect-ratio: 2; position: relative; }
+                  #child { height: 40%; width: 20pt; }
+                </style></head><body>
+                <div id="wrapper"><div id="parent"><div id="child"></div></div></div>
+                </body></html>
+                """);
+
+            var parent = FindById(container.Root!, "parent")!;
+            var child = FindById(container.Root!, "child")!;
+            Assert.Equal(100, parent.ActualHeight, 1);   // ratio-derived, not collapsed to auto
+            Assert.Equal(40, child.ActualHeight, 1);      // 40% of the ratio-derived parent height
+        }
+
+        [Fact]
+        public async Task IndefinitePercentHeight_WithoutAspectRatio_StaysAuto()
+        {
+            // Contrast to the above: the same indefinite percentage height with NO aspect-ratio stays
+            // automatic (content-driven), so the box does not take the 100pt a ratio would give.
+            var container = await LayoutContainer("""
+                <!DOCTYPE html><html><head><style>
+                  #parent { width: 200pt; height: 50%; position: relative; }
+                </style></head><body>
+                <div id="wrapper"><div id="parent">x</div></div>
+                </body></html>
+                """);
+
+            var parent = FindById(container.Root!, "parent")!;
+            Assert.True(parent.ActualHeight < 100, $"expected content-driven height, got {parent.ActualHeight}");
+        }
+
+        [Fact]
+        public async Task DefiniteHeight_AutoWidth_AbsPos_WidthFromRatio()
+        {
+            // An absolutely-positioned box (shrink-to-fit width) with a definite height and aspect-ratio and
+            // no explicit width takes its width from the height via the ratio: height 100pt, ratio 2 => 200pt.
+            var container = await LayoutContainer("""
+                <!DOCTYPE html><html><head><style>
+                  #rel { position: relative; width: 400pt; height: 300pt; }
+                  #abs { position: absolute; height: 100pt; aspect-ratio: 2; }
+                </style></head><body>
+                <div id="rel"><div id="abs"></div></div>
+                </body></html>
+                """);
+            var abs = FindById(container.Root!, "abs")!;
+            Assert.Equal(200, abs.ActualWidth, 1);
+            Assert.Equal(100, abs.ActualHeight, 1);
+        }
+
+        [Fact]
+        public async Task DefiniteHeight_AutoWidth_AbsPos_BorderBox_RatioMapsBorderBox()
+        {
+            // With border-box, height:100pt IS the border-box height, so the ratio maps border-box height to
+            // border-box width directly: 100 * 2 = 200pt border-box width (padding is inside, not added on).
+            var container = await LayoutContainer("""
+                <!DOCTYPE html><html><head><style>
+                  #rel { position: relative; width: 400pt; height: 300pt; }
+                  #abs { position: absolute; box-sizing: border-box; height: 100pt; padding: 10pt; aspect-ratio: 2; }
+                </style></head><body>
+                <div id="rel"><div id="abs"></div></div>
+                </body></html>
+                """);
+            var abs = FindById(container.Root!, "abs")!;
+            Assert.Equal(200, abs.ActualWidth, 1);
+        }
+
+        [Fact]
+        public async Task DefiniteHeight_AutoWidth_NormalBlock_FillsAndDoesNotUseRatio()
+        {
+            // A normal-flow block's auto inline size is stretch-fit, which wins over the ratio (CSS Box
+            // Sizing 4 §5.1) — so a block with a definite height + aspect-ratio still fills its 400pt
+            // containing block, NOT the 200pt the ratio would give a shrink-to-fit box.
+            var container = await LayoutContainer("""
+                <!DOCTYPE html><html><head><style>
+                  #wrap { width: 400pt; }
+                  #block { height: 100pt; aspect-ratio: 2; }
+                </style></head><body>
+                <div id="wrap"><div id="block"></div></div>
+                </body></html>
+                """);
+            var block = FindById(container.Root!, "block")!;
+            Assert.Equal(400, block.ActualWidth, 1);   // filled, not ratio-derived
+            Assert.Equal(100, block.ActualHeight, 1);  // its own definite height is unaffected
+        }
+
+        // ─── min/max clamping of the ratio-derived dimension (issue #219 gap 2, partial) ───
+
+        [Fact]
+        public async Task RatioDerivedHeight_ClampedByMaxHeight()
+        {
+            // width 200pt, aspect-ratio 2 => 100pt ratio height, clamped down by max-height:60pt.
+            var box = await LayoutDiv("width: 200pt; aspect-ratio: 2; max-height: 60pt");
+            Assert.Equal(60, box.ActualHeight, 1);
+        }
+
+        [Fact]
+        public async Task RatioDerivedHeight_GrownByMinHeight()
+        {
+            // width 200pt, aspect-ratio 2 => 100pt ratio height, grown by min-height:150pt.
+            var box = await LayoutDiv("width: 200pt; aspect-ratio: 2; min-height: 150pt");
+            Assert.Equal(150, box.ActualHeight, 1);
+        }
+
+        [Fact]
+        public async Task RatioDerivedWidth_ClampedByMaxWidth()
+        {
+            // An abspos height→width box: height 100pt, aspect-ratio 2 => 200pt ratio width, clamped by
+            // max-width:120pt.
+            var container = await LayoutContainer("""
+                <!DOCTYPE html><html><head><style>
+                  #rel { position: relative; width: 400pt; height: 300pt; }
+                  #abs { position: absolute; height: 100pt; aspect-ratio: 2; max-width: 120pt; }
+                </style></head><body>
+                <div id="rel"><div id="abs"></div></div>
+                </body></html>
+                """);
+            Assert.Equal(120, FindById(container.Root!, "abs")!.ActualWidth, 1);
+        }
+
+        [Fact]
+        public async Task RatioDerivedWidth_GrownByMinWidth()
+        {
+            // An abspos height→width box: height 50pt, aspect-ratio 2 => 100pt ratio width, grown by
+            // min-width:150pt.
+            var container = await LayoutContainer("""
+                <!DOCTYPE html><html><head><style>
+                  #rel { position: relative; width: 400pt; height: 300pt; }
+                  #abs { position: absolute; height: 50pt; aspect-ratio: 2; min-width: 150pt; }
+                </style></head><body>
+                <div id="rel"><div id="abs"></div></div>
+                </body></html>
+                """);
+            Assert.Equal(150, FindById(container.Root!, "abs")!.ActualWidth, 1);
+        }
+
+        private static async Task<HtmlContainerInt> LayoutContainer(string html)
+        {
             var adapter = new PdfSharpAdapter();
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
@@ -149,6 +292,13 @@ namespace PeachPDF.Tests.Integration
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
+            return container;
+        }
+
+        private static async Task<CssBox> LayoutDiv(string style)
+        {
+            var html = $"<!DOCTYPE html><html><head></head><body><div id=\"el\" style=\"{style}\">x</div></body></html>";
+            var container = await LayoutContainer(html);
             return FindById(container.Root!, "el")!;
         }
 

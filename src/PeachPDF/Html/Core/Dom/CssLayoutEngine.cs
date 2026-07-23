@@ -66,6 +66,16 @@ namespace PeachPDF.Html.Core.Dom
             var hasImageTagHeight = TryResolveAbsolute(height, out var heightUnits);
             var scaleImageHeight = false;
 
+            // The element's natural (intrinsic) width/height ratio, if it has one, combined with any CSS
+            // `aspect-ratio` into the effective ratio used to size the missing axis (CSS Box Sizing 4 §5): a
+            // bare `<ratio>` overrides the natural ratio, `auto <ratio>` prefers the natural ratio and falls
+            // back to the specified one, and `auto`/no `aspect-ratio` uses the natural ratio alone. Null when
+            // there is neither a natural ratio nor a usable specified one (the pre-existing behavior).
+            double? intrinsicRatio = intrinsicWidth is > 0 && intrinsicHeight is > 0
+                ? intrinsicWidth.Value / intrinsicHeight.Value
+                : null;
+            var effectiveRatio = ResolveReplacedRatio(word.OwnerBox.AspectRatio, intrinsicRatio);
+
             if (hasImageTagWidth)
             {
                 word.Width = widthUnits;
@@ -139,21 +149,18 @@ namespace PeachPDF.Html.Core.Dom
                 word.Height = word.Width > 0 ? word.Width * 1.14f : 22.8f * Length.PointsPerPx;
             }
 
-            if (intrinsicWidth is > 0 && intrinsicHeight is > 0)
+            if (effectiveRatio is > 0)
             {
-                // If only the width was set in the html tag, ratio the height.
+                // If only the width was set (or width was resolved from a percentage / clamped), ratio the
+                // height from it via the effective width/height ratio.
                 if ((hasImageTagWidth && !hasImageTagHeight) || scaleImageHeight)
                 {
-                    // Divide the given tag width with the actual image width, to get the ratio.
-                    var ratio = word.Width / intrinsicWidth.Value;
-                    word.Height = intrinsicHeight.Value * ratio;
+                    word.Height = word.Width / effectiveRatio.Value;
                 }
-                // If only the height was set in the html tag, ratio the width.
+                // If only the height was set, ratio the width from it.
                 else if (hasImageTagHeight && !hasImageTagWidth)
                 {
-                    // Divide the given tag height with the actual image height, to get the ratio.
-                    var ratio = word.Height / intrinsicHeight.Value;
-                    word.Width = intrinsicWidth.Value * ratio;
+                    word.Width = word.Height * effectiveRatio.Value;
                 }
             }
 
@@ -174,7 +181,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (maxHeightVal > -1 && word.Height > maxHeightVal)
                 {
-                    if (intrinsicWidth is > 0 && intrinsicHeight is > 0 && word.Height > 0)
+                    if (effectiveRatio is > 0 && word.Height > 0)
                     {
                         word.Width *= maxHeightVal / word.Height;
                     }
@@ -197,7 +204,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (minHeightVal > -1 && word.Height < minHeightVal)
                 {
-                    if (intrinsicWidth is > 0 && intrinsicHeight is > 0 && word.Height > 0)
+                    if (effectiveRatio is > 0 && word.Height > 0)
                     {
                         word.Width *= minHeightVal / word.Height;
                     }
@@ -206,6 +213,26 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             word.Height += word.OwnerBox.ActualBorderBottomWidth + word.OwnerBox.ActualBorderTopWidth + word.OwnerBox.ActualPaddingTop + word.OwnerBox.ActualPaddingBottom;
+        }
+
+        /// <summary>
+        /// Resolves the effective width/height ratio for a replaced element from its CSS <c>aspect-ratio</c>
+        /// and its natural (intrinsic) ratio, per CSS Box Sizing 4 §5. A bare <c>&lt;ratio&gt;</c> overrides the
+        /// natural ratio; <c>auto &lt;ratio&gt;</c> prefers the natural ratio and falls back to the specified one
+        /// when the element has none; <c>auto</c>, an absent property, or a zero-term ratio use the natural
+        /// ratio alone. Returns null when neither a natural nor a usable specified ratio exists.
+        /// </summary>
+        private static double? ResolveReplacedRatio(string aspectRatio, double? intrinsicRatio)
+        {
+            if (string.IsNullOrEmpty(aspectRatio) || aspectRatio == CssConstants.Auto)
+                return intrinsicRatio;
+
+            if (!AspectRatioGrammar.TryParse(CssValueParser.GetCssTokens(aspectRatio), out var ratio, out var hasAuto)
+                || ratio is not (> 0))
+                return intrinsicRatio; // bare `auto`, or a zero-term ratio: natural ratio only
+
+            // `auto <ratio>` prefers the natural ratio; a bare `<ratio>` overrides it.
+            return hasAuto ? intrinsicRatio ?? ratio.Value : ratio.Value;
         }
 
         /// <summary>
@@ -559,6 +586,13 @@ namespace PeachPDF.Html.Core.Dom
                     // CSS 2.1 §10.3.7 (a used width is never negative).
                     width = Math.Max(0, absCb.Size.Width - left - right - box.ActualMarginLeft - box.ActualMarginRight - box.ActualBoxSizeIncludedWidth);
                 }
+                else if (TryGetAspectRatioWidth(box, out var ratioWidth))
+                {
+                    // CSS Box Sizing 4 §5.1: an absolutely-positioned box with a preferred aspect ratio, a
+                    // definite height and an auto (shrink-to-fit) width takes its width from the height via the
+                    // ratio, rather than from its content (fit-content).
+                    width = ratioWidth;
+                }
                 else
                 {
                     width = await GetFitContentWidth(g, box, absCb.Size.Width);
@@ -626,10 +660,18 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (!heightCb.IsHeightCalculated && box.Height.EndsWith('%'))
                 {
-                    return null;
+                    // An indefinite percentage height behaves as automatic (CSS Box Sizing 4 §5): a
+                    // preferred aspect ratio sizes the height from the (definite) width if there is one;
+                    // otherwise the height stays auto.
+                    if (!TryGetAspectRatioHeight(box, out height))
+                    {
+                        return null;
+                    }
                 }
-
-                height = CssValueParser.ParseLength(box.Height, heightCb.Size.Height, box) + box.ActualBoxSizeIncludedHeight;
+                else
+                {
+                    height = CssValueParser.ParseLength(box.Height, heightCb.Size.Height, box) + box.ActualBoxSizeIncludedHeight;
+                }
             }
             else if (box.Position is CssConstants.Absolute
                      && box.Top != CssConstants.Auto && box.Bottom != CssConstants.Auto
@@ -684,6 +726,47 @@ namespace PeachPDF.Html.Core.Dom
             if (!AspectRatioGrammar.TryParse(tokens, out var ratio) || ratio is not (> 0)) return false;
 
             height = box.Size.Width / ratio.Value + box.ActualBoxSizeIncludedHeight;
+            return true;
+        }
+
+        /// <summary>
+        /// True when the box has a definite used height: a non-percentage length, or a percentage resolved
+        /// against a height-calculated containing block. A percentage against an indefinite (auto-height)
+        /// containing block is NOT definite — CSS Box Sizing 4 §5 treats it as automatic.
+        /// </summary>
+        internal static bool HasDefiniteHeight(CssBox box)
+        {
+            if (!CssValueParser.IsValidLength(box.Height)) return false;
+            if (box.Height.EndsWith('%')) return PercentageBase(box).IsHeightCalculated;
+            return true;
+        }
+
+        /// <summary>
+        /// Computes a box's box-sizing-box width from its <c>aspect-ratio</c> and its definite used height —
+        /// the height→width counterpart of <see cref="TryGetAspectRatioHeight"/>. Applies only where the width
+        /// would otherwise be shrink-to-fit (an absolutely-positioned auto-width box): a normal-flow block's
+        /// auto inline size is stretch-fit, which wins over the ratio (CSS Box Sizing 4 §5.1), so the caller
+        /// must not use this on a stretch-fit box. The returned width is the box-sizing box's width (matching
+        /// <see cref="GetBoxWidth"/>'s explicit-width branch), so the caller adds <c>ActualBoxSizeIncludedWidth</c>
+        /// to reach the border-box edge — for both <c>content-box</c> (dividing/multiplying on the content box)
+        /// and <c>border-box</c> (the included term is 0, so the ratio maps border-box height to border-box width).
+        /// </summary>
+        internal static bool TryGetAspectRatioWidth(CssBox box, out double width)
+        {
+            width = 0;
+
+            if (string.IsNullOrEmpty(box.AspectRatio) || box.AspectRatio == CssConstants.Auto) return false;
+            // Only when the box has no explicit width (an auto/absent width the ratio can determine).
+            if (box.Width != CssConstants.Auto && !string.IsNullOrEmpty(box.Width)) return false;
+            if (!HasDefiniteHeight(box)) return false;
+
+            var tokens = CssValueParser.GetCssTokens(box.AspectRatio);
+            if (!AspectRatioGrammar.TryParse(tokens, out var ratio) || ratio is not (> 0)) return false;
+
+            var boxSizingHeight = CssValueParser.ParseLength(box.Height, PercentageBase(box).Size.Height, box);
+            if (boxSizingHeight <= 0) return false;
+
+            width = boxSizingHeight * ratio.Value;
             return true;
         }
 
@@ -744,10 +827,13 @@ namespace PeachPDF.Html.Core.Dom
             var isRootWithPageHeight = box == box.ContainingBlock && box.HtmlContainer is not null;
             var isDefiniteHeight = CssValueParser.IsValidLength(box.Height) &&
                 (box.ContainingBlock.IsHeightCalculated || !box.Height.EndsWith('%'));
-            // An aspect-ratio with a definite width and an auto height yields a definite (ratio-derived)
+            // An aspect-ratio with a definite width and no definite height yields a definite (ratio-derived)
             // height too, so a percentage-height descendant resolves against it — this is what lets the
-            // Charts.css bars take their height from the ratio-sized tbody.
-            var isRatioHeight = !CssValueParser.IsValidLength(box.Height) && TryGetAspectRatioHeight(box, out _);
+            // Charts.css bars take their height from the ratio-sized tbody. "No definite height" is exactly
+            // !isDefiniteHeight, which covers both an auto height and an *indefinite* percentage height
+            // (a `%` whose containing block isn't itself height-calculated — CSS Box Sizing 4 §5 treats
+            // that as automatic, so the ratio applies there too).
+            var isRatioHeight = !isDefiniteHeight && TryGetAspectRatioHeight(box, out _);
             box.IsHeightCalculated = isRootWithPageHeight || isDefiniteHeight || isRatioHeight;
 
             // Apply max-height constraint. Unlike min-height/explicit-height above (which only ever

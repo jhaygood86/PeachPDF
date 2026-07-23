@@ -816,8 +816,16 @@ namespace PeachPDF.Html.Core.Parse
             if (nextIdentIdx >= 0)
                 stopOffset = 1; // first group is a modifier group
 
-            // Direction keyword or angle (may follow the "in" clause in the same first group)
-            var dirIdents = nextIdentIdx >= 0 ? firstIdents.Skip(nextIdentIdx).ToList() : firstIdents;
+            // Direction keyword or angle. The direction and the "in <color-interpolation-method>" clause
+            // combine with || (CSS Images 4), so they may appear in either order in the first group - take
+            // the direction from the group with the "in ..." slice removed rather than assuming it trails
+            // the clause (otherwise "to right in oklab" would drop its direction and fall back to 180deg).
+            IEnumerable<Token> directionTokens = firstGroup;
+            if (nextIdentIdx >= 0 &&
+                ColorInterpolationMethodGrammar.TryExtractInterpolationMethod(firstGroup, out var directionRemainder, out _))
+                directionTokens = directionRemainder;
+
+            var dirIdents = directionTokens.Where(t => t.Type == TokenType.Ident).Select(t => t.Data.ToLowerInvariant()).ToList();
             if (dirIdents.Count > 0 && dirIdents[0] == "to")
             {
                 // keyword direction: "to right", "to bottom left", etc.
@@ -826,7 +834,7 @@ namespace PeachPDF.Html.Core.Parse
             }
             else
             {
-                var angle = firstGroup.ToAngle();
+                var angle = directionTokens.ToAngle();
                 if (angle.HasValue)
                 {
                     angleRad = angle.Value.ToRadian();
@@ -1417,10 +1425,6 @@ namespace PeachPDF.Html.Core.Parse
             _ => GradientColorSpace.Srgb,
         };
 
-        private static bool IsPolarColorSpace(GradientColorSpace cs) =>
-            cs is GradientColorSpace.Hsl or GradientColorSpace.Hwb
-                or GradientColorSpace.Lch or GradientColorSpace.Oklch;
-
         private static HueInterpolationMethod ParseHueMethod(List<string> idents, int startIdx)
         {
             for (int i = startIdx; i + 1 < idents.Count; i++)
@@ -1443,13 +1447,14 @@ namespace PeachPDF.Html.Core.Parse
             TryParseInColorSpace(List<string> idents)
         {
             int inIdx = idents.IndexOf("in");
-            if (inIdx < 0 || inIdx + 1 >= idents.Count)
+            if (inIdx < 0 || inIdx + 1 >= idents.Count ||
+                !ColorInterpolationMethodGrammar.IsColorSpace(idents[inIdx + 1]))
                 return (GradientColorSpace.Srgb, HueInterpolationMethod.Shorter, -1);
 
             var cs = ParseColorSpaceName(idents[inIdx + 1]);
             var hue = HueInterpolationMethod.Shorter;
             int nextIdx = inIdx + 2;
-            if (IsPolarColorSpace(cs))
+            if (ColorInterpolationMethodGrammar.IsPolarColorSpace(idents[inIdx + 1]))
             {
                 hue = ParseHueMethod(idents, nextIdx);
                 // consume up to 2 extra idents for hue method ("shorter hue" etc.)

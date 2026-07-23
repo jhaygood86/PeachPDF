@@ -1470,6 +1470,17 @@ var flexHtml = "<!DOCTYPE html><html><head>" + FlexCss + "</head><body>" +
             FItem("C center", "#27ae60", "width:50px;height:28px;align-self:center;"))
     ) +
 
+    FSection("7b — column cross-axis alignment (align-items / align-self)",
+        FContainer("column, align-items:center", "flex-direction:column;align-items:center;width:200px;gap:4px;",
+            FItem("centered", "#e74c3c") + FItem("also centered", "#3498db")) +
+        FContainer("column, align-items:flex-end", "flex-direction:column;align-items:flex-end;width:200px;gap:4px;",
+            FItem("right", "#e74c3c") + FItem("also right", "#3498db")) +
+        FContainer("column, center + one self:flex-start", "flex-direction:column;align-items:center;width:200px;gap:4px;",
+            FItem("centered", "#e74c3c") + FItem("self-start", "#27ae60", "align-self:flex-start;")) +
+        FContainer("column, align-items:stretch (default → full width)", "flex-direction:column;align-items:stretch;width:200px;gap:4px;",
+            FItem("full width", "#3498db"))
+    ) +
+
     FSection("8 — order",
         FContainer("DOM order: A B C (order: 3 1 2)", "gap:4px;",
             FItem("A order:3", "#e74c3c", "order:3;width:50px;") +
@@ -2025,6 +2036,23 @@ var svgHtml = "<!DOCTYPE html><html><head>" + SvgShowcaseCss + "</head><body>" +
         SvgSwatch("gradient stroke (rounded rect + ellipse)",
             """<svg viewBox="0 0 100 100" width="80" height="80"><defs><linearGradient id="gs1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c0392b"/><stop offset="1" stop-color="#2980b9"/></linearGradient></defs><rect x="10" y="12" width="80" height="34" rx="8" fill="none" stroke="url(#gs1)" stroke-width="6"/><ellipse cx="50" cy="72" rx="38" ry="20" fill="none" stroke="url(#gs1)" stroke-width="6"/></svg>""",
             "stroke=\"url(#gradient)\" on a rounded rect and an ellipse - a gradient stroke sharing a page with solid strokes")
+    ) +
+    // A transparent (fades-to-alpha-0) gradient stroke realizes a PDF soft mask; that mask must be
+    // torn down after the stroke so it doesn't bleed onto later paint - an opaque gradient stroke or
+    // a gradient stroke in a following panel - which would otherwise be masked away (issue #135).
+    Row(
+        SvgSwatch("transparent gradient stroke beside opaque",
+            """<svg viewBox="0 0 210 90" width="150" height="64"><defs><linearGradient id="gtr" gradientUnits="userSpaceOnUse" x1="10" y1="0" x2="90" y2="0"><stop offset="0" stop-color="#ff0080"/><stop offset="1" stop-color="#0080ff" stop-opacity="0"/></linearGradient><linearGradient id="gop" gradientUnits="userSpaceOnUse" x1="120" y1="0" x2="200" y2="0"><stop offset="0" stop-color="#00b050"/><stop offset="1" stop-color="#c08000"/></linearGradient></defs><rect x="10" y="15" width="80" height="60" fill="none" stroke="url(#gtr)" stroke-width="10"/><rect x="120" y="15" width="80" height="60" fill="none" stroke="url(#gop)" stroke-width="10"/></svg>""",
+            "left fades to transparent; the opaque green-gold frame must stay fully visible"),
+        SvgSwatch("gradient stroke inside padded wrapper",
+            """<div style="padding:8px 6px"><svg viewBox="0 0 100 100" width="64" height="64"><defs><linearGradient id="gp" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8e44ad"/><stop offset="1" stop-color="#16a085" stop-opacity="0.2"/></linearGradient></defs><rect x="14" y="14" width="72" height="72" rx="10" fill="none" stroke="url(#gp)" stroke-width="9"/></svg></div>""",
+            "wrapper padding no longer drops the stroke"),
+        SvgSwatch("gradient stroke inside rounded bordered wrapper",
+            """<div style="border-radius:12px;border:2px solid #333;padding:6px"><svg viewBox="0 0 100 100" width="60" height="60"><defs><linearGradient id="gb" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e67e22"/><stop offset="1" stop-color="#2980b9" stop-opacity="0.2"/></linearGradient></defs><rect x="14" y="14" width="72" height="72" rx="10" fill="none" stroke="url(#gb)" stroke-width="9"/></svg></div>""",
+            "border-radius + border wrapper no longer drops the stroke"),
+        SvgSwatch("two gradient-stroked panels in a row",
+            """<svg viewBox="0 0 100 100" width="40" height="64"><defs><linearGradient id="ga" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c0392b"/><stop offset="1" stop-color="#c0392b" stop-opacity="0"/></linearGradient></defs><circle cx="50" cy="50" r="34" fill="none" stroke="url(#ga)" stroke-width="10"/></svg><svg viewBox="0 0 100 100" width="40" height="64"><defs><linearGradient id="gc" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#27ae60"/><stop offset="1" stop-color="#2980b9"/></linearGradient></defs><circle cx="50" cy="50" r="34" fill="none" stroke="url(#gc)" stroke-width="10"/></svg>""",
+            "a transparent gradient ring never masks a later one on the same page")
     ) +
 
     "<h2>5 — Group Opacity &amp; Transforms</h2>" +
@@ -3812,16 +3840,21 @@ await SaveShowcaseAsync("clip_path", "Backgrounds & Borders", "clip-path basic s
     "CSS clip-path with basic shapes: polygon(), inset(), circle(), and ellipse() clip an element (here a gradient fill) to a shape resolved against its border-box. A shared basic-shape grammar validates the value at parse time and the resolved region is pushed as a PDF clip path.",
     clipPathHtml, pdfConfig);
 
-// aspect-ratio: a box with a definite width and an auto height takes its height from the width via the
-// ratio, and the ratio-derived height is definite, so a percentage-height child resolves against it.
-var aspectRatioHtml = """
+// aspect-ratio: sizes the axis whose length is otherwise automatic (CSS Box Sizing 4 §5), in either
+// direction and on both normal boxes and replaced elements (a 2:1 image below).
+const string AspectRatioSvg2x1 =
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='100' viewBox='0 0 200 100' preserveAspectRatio='none'%3E%3Crect width='200' height='100' fill='%231971c2'/%3E%3Crect x='3' y='3' width='194' height='94' fill='none' stroke='%23fff' stroke-width='4'/%3E%3C/svg%3E";
+
+var aspectRatioHtml = $$"""
     <html>
     <head>
     <style>
-        body { font-family: sans-serif; margin: 40px; }
+        body { font-family: sans-serif; margin: 40px; color: #212529; }
         h1 { font-size: 20pt; }
-        .row { display: flex; gap: 20px; align-items: flex-start; margin-top: 16px; }
-        .cell { text-align: center; font-size: 10pt; color: #555; }
+        h2 { font-size: 13pt; margin: 26px 0 6px; border-bottom: 1px solid #adb5bd; padding-bottom: 3px; }
+        p { margin: 4px 0; }
+        .row { display: flex; gap: 20px; align-items: flex-start; margin-top: 12px; }
+        .cell { text-align: center; font-size: 9pt; color: #555; }
         .box { width: 130px; background: #e9ecef; border: 1px solid #adb5bd; color: #495057;
                font-size: 11pt; display: flex; align-items: center; justify-content: center; }
         .r-16-9 { aspect-ratio: 16 / 9; }
@@ -3829,25 +3862,59 @@ var aspectRatioHtml = """
         .r-3-4 { aspect-ratio: 3 / 4; }
         .fill { width: 130px; aspect-ratio: 2; background: #dee2e6; }
         .fill > .bar { height: 60%; width: 40px; background: #1971c2; margin: 0 auto; }
+        .rel { position: relative; width: 320px; height: 96px; background: #f1f3f5; border: 1px solid #ced4da; }
+        .abs { position: absolute; top: 8px; left: 8px; height: 64px; aspect-ratio: 3 / 1;
+               background: #e8590c; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 10pt; }
+        .stretch-parent { width: 320px; border: 1px dashed #ced4da; padding: 8px; margin-top: 10px; }
+        .stretch { height: 40px; aspect-ratio: 3 / 1; background: #2b8a3e; color: #fff;
+                   display: flex; align-items: center; justify-content: center; font-size: 10pt; }
+        .auto-parent { width: 300px; border: 1px dashed #ced4da; padding: 10px; }
+        .pct { width: 200px; height: 50%; aspect-ratio: 4 / 1; background: #7048e8; color: #fff;
+               display: flex; align-items: center; justify-content: center; font-size: 10pt; }
+        .lbl { margin-top: 4px; }
     </style>
     </head>
     <body>
         <h1>aspect-ratio</h1>
-        <p>Each box below is 130px wide with an auto height taken from its <code>aspect-ratio</code>.</p>
+
+        <h2>Definite width &rarr; height</h2>
+        <p>Each box is 130px wide with an auto height taken from its <code>aspect-ratio</code>.</p>
         <div class="row">
             <div class="cell"><div class="box r-16-9">16 / 9</div>16 / 9</div>
             <div class="cell"><div class="box r-1-1">1 / 1</div>1 / 1</div>
             <div class="cell"><div class="box r-3-4">3 / 4</div>3 / 4</div>
         </div>
-        <p style="margin-top:20px">The ratio-derived height is definite, so a percentage-height child
+        <p style="margin-top:14px">The ratio-derived height is definite, so a percentage-height child
         resolves against it — the blue bar is <code>height: 60%</code> of the <code>aspect-ratio: 2</code> box:</p>
         <div class="fill"><div class="bar"></div></div>
+
+        <h2>Definite height &rarr; width</h2>
+        <p>An absolutely-positioned box (<code>height: 64px; aspect-ratio: 3 / 1</code>) takes its width
+        (192px) from the height. A normal-flow block instead fills its container — stretch-fit wins over the ratio.</p>
+        <div class="row">
+            <div class="rel"><div class="abs">abspos &rarr; 192px wide</div></div>
+        </div>
+        <div class="stretch-parent"><div class="stretch">normal block fills 320px (not 120px)</div></div>
+
+        <h2>Replaced elements</h2>
+        <p>A 2:1 image at <code>width: 130px</code>: a bare <code>&lt;ratio&gt;</code> overrides its natural
+        ratio, <code>auto &lt;ratio&gt;</code> keeps the natural one, and no value uses the natural 2:1.</p>
+        <div class="row">
+            <div class="cell"><img src="{{AspectRatioSvg2x1}}" style="width:130px; aspect-ratio: 1 / 1"><div class="lbl">1 / 1 (square)</div></div>
+            <div class="cell"><img src="{{AspectRatioSvg2x1}}" style="width:130px; aspect-ratio: auto 1 / 1"><div class="lbl">auto 1 / 1 (natural)</div></div>
+            <div class="cell"><img src="{{AspectRatioSvg2x1}}" style="width:130px"><div class="lbl">no ratio (natural 2:1)</div></div>
+        </div>
+
+        <h2>Indefinite percentage height</h2>
+        <p>Inside an auto-height parent, <code>height: 50%</code> is indefinite, so the ratio sizes the
+        height (200px wide, <code>aspect-ratio: 4 / 1</code> &rarr; 50px tall) instead of collapsing to auto.</p>
+        <div class="auto-parent"><div class="pct">width 200px, ratio 4/1</div></div>
     </body>
     </html>
     """;
 
 await SaveShowcaseAsync("aspect_ratio", "Layout", "aspect-ratio",
-    "CSS aspect-ratio: a box with a definite width and auto height takes its height from the width via the ratio. The ratio-derived height is definite, so a percentage-height child resolves against it — the basis for pure-CSS charts sizing their bars from a ratio-sized container.",
+    "CSS aspect-ratio in both directions: width→height (with a percentage-height child resolving against the ratio-derived height) and height→width for shrink-to-fit boxes, replaced-element natural ratio vs. a specified/auto ratio, and indefinite-percentage-height sizing.",
     aspectRatioHtml, pdfConfig);
 
 // ── Charts.css showcase ─────────────────────────────────────────────────────
@@ -4408,6 +4475,73 @@ await SaveShowcaseAsync("css_grid", "Layout", "CSS Grid",
     "dense auto-placement backfilling a hole, and the responsive `repeat(auto-fill, minmax(150pt, 1fr))` " +
     "card idiom — all laid out by PeachPDF's own grid track-sizing and placement engine.",
     gridHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
+// ─── CSS Grid: grid-template-areas + named lines (#261) ─────────────────────
+
+// The classic "holy grail" page layout expressed with grid-template-areas: each region places itself
+// with `grid-area: <name>` (the §8.3.1 custom-ident copy rule fills the whole named area), and a second
+// grid demonstrates named lines `[name]` referenced from grid-column.
+var gridAreasHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+      body { font: 12pt Arial, sans-serif; color: #222; margin: 24pt; }
+      h1 { font-size: 20pt; margin: 0 0 4pt; }
+      h2 { font-size: 13pt; margin: 20pt 0 8pt; color: #4a5568; }
+      .note { color: #718096; font-size: 10pt; margin: 0 0 8pt; }
+
+      .page {
+        display: grid;
+        grid-template-columns: 120pt 1fr 120pt;
+        grid-template-rows: 44pt 220pt 40pt;
+        grid-template-areas:
+          "header header header"
+          "nav    main   aside"
+          "footer footer footer";
+        gap: 8pt;
+      }
+      .page > div { color: #fff; padding: 8pt; border-radius: 4pt; font-size: 10pt; }
+      .page .header { grid-area: header; background: #2d3748; }
+      .page .nav    { grid-area: nav;    background: #4a90d9; }
+      .page .main   { grid-area: main;   background: #4caf72; }
+      .page .aside  { grid-area: aside;  background: #e07b53; }
+      .page .footer { grid-area: footer; background: #718096; }
+
+      .named { display: grid; grid-template-columns: [full-start] 100pt [main-start] 1fr [main-end] 100pt [full-end]; gap: 8pt; margin-top: 8pt; }
+      .named > div { color: #fff; padding: 8pt; border-radius: 4pt; font-size: 10pt; }
+      .named .banner { grid-column: full-start / full-end; background: #2d3748; }
+      .named .body   { grid-column: main-start / main-end; background: #4a90d9; }
+    </style>
+    </head>
+    <body>
+      <h1>grid-template-areas &amp; named lines</h1>
+
+      <h2>"Holy grail" layout &mdash; every region placed by <code>grid-area: &lt;name&gt;</code></h2>
+      <p class="note">The ASCII-art template names each area; each child fills its area via the
+      custom-ident copy rule.</p>
+      <div class="page">
+        <div class="header">header</div>
+        <div class="nav">nav</div>
+        <div class="main">main content</div>
+        <div class="aside">aside</div>
+        <div class="footer">footer</div>
+      </div>
+
+      <h2>Named lines &mdash; <code>grid-column: main-start / main-end</code></h2>
+      <div class="named">
+        <div class="banner">spans [full-start] to [full-end]</div>
+        <div class="body">spans the named [main-start]&hellip;[main-end] lines</div>
+      </div>
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("css_grid_areas", "Layout", "CSS Grid Template Areas",
+    "CSS `grid-template-areas`: a classic \"holy grail\" page layout where each region places itself with " +
+    "`grid-area: <name>`, plus named grid lines (`[main-start]`) referenced from `grid-column` — the named " +
+    "placement model of PeachPDF's grid engine.",
+    gridAreasHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // The manifest that drives the website's /showcase page (see docs/showcase.html and
 // .github/workflows/pages.yml). Field names are camelCased for Liquid (site.data.showcases).

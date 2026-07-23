@@ -1,7 +1,9 @@
 using PeachPDF;
 using PeachPDF.PdfSharpCore;
+using System.Globalization;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -187,6 +189,36 @@ namespace PeachPDF.Tests.Integration
             Assert.Contains("/ShadingType", pdfText);
         }
 
+        [Fact]
+        public async Task LinearGradient_DirectionBeforeInterpolationMethod_KeepsBothDirectionAndSpace()
+        {
+            // The direction and "in <space>" combine with || (CSS Images 4), so "to right in oklab" - the
+            // direction-first order - must keep BOTH: interpolate in oklab (a stitching function) AND run
+            // left-to-right, not fall back to the default top-to-bottom axis.
+            var pdfText = await GetPdfText(GradientHtml("background-image: linear-gradient(to right in oklab, red, blue);"));
+
+            Assert.Contains("/FunctionType 3", pdfText);
+
+            var (x0, y0, x1, y1) = FirstShadingCoords(pdfText);
+            Assert.Equal(y0, y1, 3);        // horizontal axis (left-to-right), not the default vertical
+            Assert.True(x1 > x0);           // pointing right
+
+            // Sanity: the same gradient without a direction defaults to a vertical axis, proving the
+            // assertion above is discriminating and the direction is what's being kept.
+            var defaultAxis = await GetPdfText(GradientHtml("background-image: linear-gradient(in oklab, red, blue);"));
+            var (dx0, dy0, dx1, dy1) = FirstShadingCoords(defaultAxis);
+            Assert.Equal(dx0, dx1, 3);      // vertical axis
+            Assert.NotEqual(dy0, dy1, 3);
+        }
+
+        private static (double X0, double Y0, double X1, double Y1) FirstShadingCoords(string pdfText)
+        {
+            var m = Regex.Match(pdfText, @"/Coords\s*\[\s*([\d.eE+-]+)\s+([\d.eE+-]+)\s+([\d.eE+-]+)\s+([\d.eE+-]+)\s*\]");
+            Assert.True(m.Success, "expected an axial shading /Coords array");
+            double P(int i) => double.Parse(m.Groups[i].Value, CultureInfo.InvariantCulture);
+            return (P(1), P(2), P(3), P(4));
+        }
+
         // ── Regression: plain gradient still works ────────────────────────────
 
         [Fact]
@@ -195,6 +227,28 @@ namespace PeachPDF.Tests.Integration
             var pdfText = await GetPdfText(GradientHtml("background-image: linear-gradient(to right, red, blue);"));
 
             Assert.Contains("/ShadingType", pdfText);
+        }
+
+        // ── Invalid interpolation prelude is dropped at parse time (issue #245) ─
+
+        [Fact]
+        public async Task LinearGradient_InvalidInterpolationPrelude_IsDroppedNotPainted()
+        {
+            // An unvalidated "in <garbage>" prelude used to be accepted and silently rendered in sRGB.
+            // It must now be dropped at parse time, so no gradient (no shading) is painted at all.
+            var pdfText = await GetPdfText(GradientHtml("background-image: linear-gradient(in nonsense garbage, red, blue);"));
+
+            Assert.DoesNotContain("/ShadingType", pdfText);
+        }
+
+        [Fact]
+        public async Task LinearGradient_UnsupportedWideGamutSpace_IsDropped()
+        {
+            // prophoto-rgb is valid CSS but unsupported by PeachPDF's interpolation math, so it is rejected
+            // rather than approximated (a documented accepted gap) - the declaration is dropped, not painted.
+            var pdfText = await GetPdfText(GradientHtml("background-image: linear-gradient(in prophoto-rgb, red, blue);"));
+
+            Assert.DoesNotContain("/ShadingType", pdfText);
         }
     }
 }
