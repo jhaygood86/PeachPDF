@@ -4108,6 +4108,144 @@ await SaveShowcaseAsync("charts_css", "Charts & Data Viz", "Charts.css",
     "exercising @property, aspect-ratio, clip-path, box-shadow, logical properties, and conic/linear gradients together.",
     chartsHtml, pdfConfig);
 
+// ── object-fit / object-position on a replaced <img> ──────────────────────────────────
+var objectFitImg = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAAAwCAIAAABhdOiYAAABrElEQVR4nO2aO04CURSGDxOWYWOnC7CkcQU0IolBGisM4oMoIWgIEgTjI0iwRzBRXINuwwW4D47Flefg/BVzpvi/6s65d5J/vpybzNxMTJNJCSSxnvN05Kl6op6qp6O/gWhsWl9cEPunHsEbbz7XAh7fC7ZDKAhAQQAKAlAQgIIAFASgIAAFASgIEN/cKMH3d+uQq6W8/RPwjcIOAlAQgIIAFASIWweYUn09nb1spZtWSWaJhKB6v+AvXryVROR+txF6nDnst1ijf+QGsXlc8ey9bBdNxFxQ8yUvYzULU5PiybBikGyMpaDb3qGI+NXM4mYLw8uQMvmw32IRx0zQXS8nqH0cbk3+42rlmZbBDgJQEICCABQEMBNUzD6LiCo+bHJrOju1lWdaBjsIYCnoPNsV1ERutp26DimTD+MOKu13RERV/ZomxcdU3SDZGPstVs48uYHO44rmX/OROO6oZNqeam1wPFtspZtRODOPhCBHde9h7j8o6zyOiMSILhQEoCAABQHi3wfF4BWJrs1BTGhsfQ0CZtlBAAoCUBCAggAUBKAgAAUBKAhAQYBfzx35oNDJUOwAAAAASUVORK5CYII=";
+static string FitCell(string img, string fit) =>
+    "<div class=\"cell\">" +
+    $"<div class=\"frame\"><img src=\"{img}\" style=\"width:120px;height:120px;object-fit:{fit}\"></div>" +
+    $"<div class=\"lbl\">object-fit: {fit}</div></div>";
+static string PosCell(string img, string pos) =>
+    "<div class=\"cell\">" +
+    $"<div class=\"frame\"><img src=\"{img}\" style=\"width:120px;height:120px;object-fit:cover;object-position:{pos}\"></div>" +
+    $"<div class=\"lbl\">object-position: {pos}</div></div>";
+var objectFitHtml =
+    "<html><head><style>" +
+    "body { font-family: sans-serif; margin: 24px; color: #1a1a1a; }" +
+    "h2 { font-size: 20px; margin: 0 0 4px; } h3 { font-size: 14px; margin: 20px 0 10px; }" +
+    ".note { color: #555; font-size: 12px; margin: 0 0 4px; }" +
+    ".row { display: flex; flex-wrap: wrap; gap: 14px; }" +
+    ".cell { font-size: 11px; color: #555; }" +
+    ".frame { width: 120px; height: 120px; border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden; background: #f1f5f9; }" +
+    ".lbl { margin-top: 6px; font-family: monospace; }" +
+    "</style></head><body>" +
+    "<h2>object-fit &amp; object-position</h2>" +
+    "<p class=\"note\">The same 2:1 image placed in a 120&times;120 box. Corner markers (red/green/yellow/white) and the center dot make the fit and crop obvious.</p>" +
+    "<h3>object-fit</h3>" +
+    "<div class=\"row\">" +
+    FitCell(objectFitImg, "fill") + FitCell(objectFitImg, "contain") + FitCell(objectFitImg, "cover") +
+    FitCell(objectFitImg, "none") + FitCell(objectFitImg, "scale-down") +
+    "</div>" +
+    "<h3>object-position (with object-fit: cover)</h3>" +
+    "<div class=\"row\">" +
+    PosCell(objectFitImg, "left") + PosCell(objectFitImg, "center") + PosCell(objectFitImg, "right") +
+    PosCell(objectFitImg, "top") + PosCell(objectFitImg, "bottom") +
+    "</div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("object_fit", "Images & Replaced Content", "object-fit & object-position",
+    "The CSS object-fit (fill/contain/cover/none/scale-down) and object-position properties applied to a " +
+    "replaced <img>: the same 2:1 image sized/cropped/positioned inside a fixed square box, with corner " +
+    "markers making each fit and crop obvious.",
+    objectFitHtml, pdfConfig);
+
+// ── Modern CSS colors: oklch/oklab/lab/lch palette + color-mix() opacity ──────────────
+var modernColorHtml =
+    "<html><head><style>" +
+    "body { font-family: sans-serif; margin: 24px; color: #1a1a1a; }" +
+    "h2 { font-size: 20px; margin: 0 0 4px; } h3 { font-size: 14px; margin: 20px 0 8px; }" +
+    ".note { color: #555; font-size: 12px; margin: 0 0 12px; }" +
+    ".row { display: flex; flex-wrap: wrap; gap: 10px; }" +
+    ".swatch { width: 96px; height: 72px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.25);" +
+    "  display: flex; align-items: flex-end; }" +
+    ".swatch span { font-size: 10px; color: #fff; padding: 4px 6px; }" +
+    // A two-tone backdrop so a semi-transparent color-mix result visibly composites over it.
+    ".checker { background: repeating-conic-gradient(#ddd 0% 25%, #fff 0% 50%) 0 / 24px 24px; padding: 10px; border-radius: 10px; }" +
+    "</style></head><body>" +
+    "<h2>Modern CSS Colors</h2>" +
+    "<p class=\"note\">A tailwind-style palette authored entirely in <code>oklch()</code>, plus " +
+    "<code>oklab()/lab()/lch()/hsl()/hwb()</code> and <code>color-mix()</code> opacity modifiers — all resolved to real PDF colors.</p>" +
+
+    "<h3>oklch() palette (constant lightness &amp; chroma, hue sweep)</h3>" +
+    "<div class=\"row\">" +
+    string.Concat(Enumerable.Range(0, 8).Select(i =>
+    {
+        var hue = 30 + i * 45;
+        return $"<div class=\"swatch\" style=\"background: oklch(0.68 0.17 {hue})\"><span>{hue}&deg;</span></div>";
+    })) +
+    "</div>" +
+
+    "<h3>Other color spaces</h3>" +
+    "<div class=\"row\">" +
+    "<div class=\"swatch\" style=\"background: oklab(0.62 0.22 0.13)\"><span>oklab</span></div>" +
+    "<div class=\"swatch\" style=\"background: lab(55 70 -40)\"><span>lab</span></div>" +
+    "<div class=\"swatch\" style=\"background: lch(65 90 130)\"><span>lch</span></div>" +
+    "<div class=\"swatch\" style=\"background: hsl(280 70% 55%)\"><span>hsl</span></div>" +
+    "<div class=\"swatch\" style=\"background: hwb(200 10% 10%)\"><span>hwb</span></div>" +
+    "</div>" +
+
+    "<h3>color-mix() opacity modifiers (over a checkerboard)</h3>" +
+    "<div class=\"checker\"><div class=\"row\">" +
+    string.Concat(new[] { 100, 75, 50, 25 }.Select(p =>
+        $"<div class=\"swatch\" style=\"background: color-mix(in oklab, oklch(0.62 0.2 265) {p}%, transparent)\"><span>{p}%</span></div>")) +
+    "</div></div>" +
+
+    "<h3>color-mix() blends</h3>" +
+    "<div class=\"row\">" +
+    "<div class=\"swatch\" style=\"background: color-mix(in oklch, oklch(0.7 0.2 30), oklch(0.7 0.2 260))\"><span>oklch mix</span></div>" +
+    "<div class=\"swatch\" style=\"background: color-mix(in srgb, crimson, royalblue)\"><span>srgb mix</span></div>" +
+    "<div class=\"swatch\" style=\"background: color-mix(in oklab, gold 60%, black)\"><span>+black</span></div>" +
+    "</div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("modern_colors", "Color", "Modern CSS Colors (oklch, color-mix)",
+    "A wide-gamut palette authored in oklch() with oklab()/lab()/lch()/hsl()/hwb() companions, plus " +
+    "color-mix() opacity modifiers and blends composited over a checkerboard — the CSS Color 4/5 function " +
+    "set most utility frameworks (e.g. Tailwind v4) emit, resolved to real PDF colors.",
+    modernColorHtml, pdfConfig);
+
+// ── @layer cascade layers: layer order beats specificity; unlayered beats layered ─────
+var cascadeLayerHtml =
+    "<html><head><style>" +
+    "body { font-family: sans-serif; margin: 24px; color: #1a1a1a; }" +
+    "h2 { font-size: 20px; margin: 0 0 4px; } .note { color: #555; font-size: 12px; margin: 0 0 16px; }" +
+    ".card { width: 150px; padding: 16px; border-radius: 10px; color: #fff; font-size: 13px; margin: 0 12px 12px 0;" +
+    "  display: inline-block; vertical-align: top; box-shadow: 0 1px 3px rgba(0,0,0,.25); }" +
+    ".card b { display: block; font-size: 15px; margin-bottom: 6px; }" +
+    // Declare the layer order up front, exactly like a utility framework does.
+    "@layer base, components, utilities;" +
+    // A high-specificity rule in an EARLIER layer...
+    "@layer base { #c1.card, #c2.card, #c3.card { background: #64748b; } }" +
+    // ...loses to a low-specificity rule in a LATER layer.
+    "@layer utilities { .card { background: oklch(0.55 0.17 250); } }" +
+    // components sits between base and utilities.
+    "@layer components { .card { background: #16a34a; } }" +
+    // An UNLAYERED rule beats every layer, regardless of specificity (no !important needed).
+    ".unlayered { background: #db2777; }" +
+    // !important REVERSES layer order: among !important declarations the EARLIER layer (base) wins.
+    "@layer base { #c4 { background: #dc2626 !important; } }" +
+    "@layer utilities { #c4 { background: #2563eb !important; } }" +
+    // revert-layer reveals the lower layer's value: utilities reverts, so base's green shows through.
+    "@layer base { #c5 { background: #16a34a; } }" +
+    "@layer utilities { #c5 { background: revert-layer; } }" +
+    "</style></head><body>" +
+    "<h2>@layer cascade layers</h2>" +
+    "<p class=\"note\">Layer order (declared <code>base, components, utilities</code>) decides the winner ahead of " +
+    "specificity: the <code>utilities</code> rule wins over a higher-specificity <code>base</code> rule; an unlayered rule wins over all layers. " +
+    "For <code>!important</code> the layer order <b>reverses</b>, and <code>revert-layer</code> reveals a lower layer.</p>" +
+    "<div class=\"card\" id=\"c1\"><b>utilities wins</b>base #id rule loses to the later utilities layer &rarr; blue.</div>" +
+    "<div class=\"card\" id=\"c2\"><b>order matters</b>components is later than base but earlier than utilities.</div>" +
+    "<div class=\"card unlayered\" id=\"c3\"><b>unlayered wins</b>An unlayered rule outranks every layer &rarr; pink.</div>" +
+    "<div class=\"card\" id=\"c4\"><b>!important reverses</b>Among <code>!important</code> rules the earlier base layer wins &rarr; red.</div>" +
+    "<div class=\"card\" id=\"c5\"><b>revert-layer</b>utilities does <code>revert-layer</code>, revealing base &rarr; green.</div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("cascade_layers", "Selectors & Cascade", "@layer Cascade Layers",
+    "CSS cascade layers: an @layer order declaration makes a later layer's low-specificity rule win over an " +
+    "earlier layer's high-specificity (#id) rule, and an unlayered rule beat every layer; for !important the " +
+    "layer order reverses (earlier layer wins), and revert-layer reveals a lower layer — the layering model " +
+    "utility frameworks like Tailwind v4 rely on.",
+    cascadeLayerHtml, pdfConfig);
+
 // The manifest that drives the website's /showcase page (see docs/showcase.html and
 // .github/workflows/pages.yml). Field names are camelCased for Liquid (site.data.showcases).
 var manifestJson = JsonSerializer.Serialize(showcaseManifest,

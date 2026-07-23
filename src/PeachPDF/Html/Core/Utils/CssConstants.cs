@@ -46,6 +46,8 @@ namespace PeachPDF.Html.Core.Utils
         public const string Center = "center";
         public const string Collapse = "collapse";
         public const string Condensed = "condensed";
+        public const string Contain = "contain";
+        public const string Cover = "cover";
         public const string SemiCondensed = "semi-condensed";
         public const string ExtraCondensed = "extra-condensed";
         public const string UltraCondensed = "ultra-condensed";
@@ -62,6 +64,7 @@ namespace PeachPDF.Html.Core.Utils
         public const string DecimalLeadingZero = "decimal-leading-zero";
         public const string Disc = "disc";
         public const string Fantasy = "fantasy";
+        public const string Fill = "fill";
         public const string Fixed = "fixed";
         public const string Hide = "hide";
         public const string Inherit = "inherit";
@@ -116,6 +119,7 @@ namespace PeachPDF.Html.Core.Utils
         public const string Right = "right";
         public const string Rtl = "rtl";
         public const string SansSerif = "sans-serif";
+        public const string ScaleDown = "scale-down";
         public const string Scroll = "scroll";
         public const string Serif = "serif";
         public const string Show = "show";

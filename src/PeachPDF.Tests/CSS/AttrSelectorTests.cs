@@ -95,6 +95,19 @@ namespace PeachPDF.Tests.CSS
             Assert.Equal(2, list.Count());
         }
 
+        [Fact]
+        public async Task BareAttributePresenceSelector_ResolvesToAttrAvailableSelector()
+        {
+            // A `[attr]` with no combinator/value falls through the factory's dispatch to the presence
+            // selector (the switch `_` arm) - the one branch the combinator theory above doesn't cover.
+            var sheet = await new StylesheetParser().ParseAsync(
+                "[type] { background-color: #101010 } .sample-class[type] { background-color: #121212 }");
+
+            var list = GetAttributeStyleRules<AttrAvailableSelector>(sheet);
+
+            Assert.Equal(2, list.Count());
+        }
+
         private async Task<Stylesheet> GetAttributeStylesheetAsync(string combinator)
         {
             var css = @"[type" + combinator + "='button'] { background-color: #101010 } .sample-class[type"

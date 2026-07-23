@@ -102,6 +102,7 @@ namespace PeachPDF.Html.Core.Utils
         //        public const string U = "U";
         //        public const string UL = "UL";
         //        public const string VAR = "VAR";
+        public const string Video = "video";
 
         //        public const string abbr = "abbr";
         //        public const string accept = "accept";

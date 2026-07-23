@@ -85,8 +85,8 @@ namespace PeachPDF.Html.Core.Parse
             await CascadeApplyStyleFonts(cssData, htmlContainer.Adapter);
 
             CascadeApplyPageStyles(htmlContainer, root, cssData);
-            htmlContainer.PageRules = cssData.Stylesheets
-                .SelectMany(s => s.Rules.OfType<PageRule>())
+            htmlContainer.PageRules = cssData.EnumerateRulesRecursive()
+                .OfType<PageRule>()
                 .ToList();
 
             // Collect @property registrations before the cascade runs — InheritStyle (step 2) and var()
@@ -132,7 +132,10 @@ namespace PeachPDF.Html.Core.Parse
         {
             foreach (var stylesheet in cssData.Stylesheets)
             {
-                foreach (var fontRule in stylesheet.FontfaceSetRules)
+                // Descend into @layer/@media/@supports/@container so an @font-face nested in a layer is
+                // still collected; per-stylesheet so each rule's src url() still resolves against this
+                // sheet's own BaseUri.
+                foreach (var fontRule in CssData.FlattenRules(stylesheet.Rules).OfType<IFontFaceRule>())
                 {
                     var fontFamilyName = CssValueParser.GetFontFaceFamilyName(fontRule.Family);
                     var fontFaceCandidates = CssValueParser.GetFontFacePropertyValue(fontRule.Source);
@@ -279,44 +282,39 @@ namespace PeachPDF.Html.Core.Parse
                 return pt.HasValue ? pt.Value * pixelsPerPoint : null;
             }
 
-            foreach (var style in cssData.Stylesheets)
+            // Descend into @layer/@media/@supports/@container so a base @page nested in a layer applies.
+            foreach (var pageRule in cssData.EnumerateRulesRecursive().OfType<PageRule>())
             {
-                foreach (var pageRuleInterface in style.PageRules)
+                // Only base @page rules (no selector) affect global margins and size
+                if (pageRule.Selector != null)
+                    continue;
+
+                if (pageRule.Style.MarginLeft.Length > 0 && ParseMarginLength(pageRule.Style.MarginLeft) is { } left)
                 {
-                    if (pageRuleInterface is not PageRule pageRule)
-                        continue;
+                    htmlContainer.MarginLeft = left;
+                }
 
-                    // Only base @page rules (no selector) affect global margins and size
-                    if (pageRule.Selector != null)
-                        continue;
+                if (pageRule.Style.MarginTop.Length > 0 && ParseMarginLength(pageRule.Style.MarginTop) is { } top)
+                {
+                    htmlContainer.MarginTop = top;
+                }
 
-                    if (pageRule.Style.MarginLeft.Length > 0 && ParseMarginLength(pageRule.Style.MarginLeft) is { } left)
-                    {
-                        htmlContainer.MarginLeft = left;
-                    }
+                if (pageRule.Style.MarginBottom.Length > 0 && ParseMarginLength(pageRule.Style.MarginBottom) is { } bottom)
+                {
+                    htmlContainer.MarginBottom = bottom;
+                }
 
-                    if (pageRule.Style.MarginTop.Length > 0 && ParseMarginLength(pageRule.Style.MarginTop) is { } top)
-                    {
-                        htmlContainer.MarginTop = top;
-                    }
+                if (pageRule.Style.MarginRight.Length > 0 && ParseMarginLength(pageRule.Style.MarginRight) is { } right)
+                {
+                    htmlContainer.MarginRight = right;
+                }
 
-                    if (pageRule.Style.MarginBottom.Length > 0 && ParseMarginLength(pageRule.Style.MarginBottom) is { } bottom)
-                    {
-                        htmlContainer.MarginBottom = bottom;
-                    }
-
-                    if (pageRule.Style.MarginRight.Length > 0 && ParseMarginLength(pageRule.Style.MarginRight) is { } right)
-                    {
-                        htmlContainer.MarginRight = right;
-                    }
-
-                    if (pageRule.Style.Size.Length > 0)
-                    {
-                        // CssPageSize is documented/consumed as true PDF points (PdfGenerator.AddPdfPages
-                        // assigns it straight to orgPageSize), not internal pixel space - unlike the
-                        // margins above, this one deliberately stays unscaled.
-                        htmlContainer.CssPageSize = ParsePageSizeToPdfPoints(pageRule.Style.Size, lengthContext);
-                    }
+                if (pageRule.Style.Size.Length > 0)
+                {
+                    // CssPageSize is documented/consumed as true PDF points (PdfGenerator.AddPdfPages
+                    // assigns it straight to orgPageSize), not internal pixel space - unlike the
+                    // margins above, this one deliberately stays unscaled.
+                    htmlContainer.CssPageSize = ParsePageSizeToPdfPoints(pageRule.Style.Size, lengthContext);
                 }
             }
         }
@@ -514,7 +512,10 @@ namespace PeachPDF.Html.Core.Parse
             // order) - materialize each origin once so both the normal and important passes below
             // reuse the same matched/sorted list instead of re-querying CssData twice per origin.
             var uaRules = cssData.GetUserAgentStyleRules(media, box).ToList();
-            var authorRules = cssData.GetAuthorStyleRules(media, box).ToList();
+            // Author rules come in BOTH the normal-declaration order and the reversed !important layer
+            // order (CSS Cascade 5 §6.4.2), matched once; each rule carries its @layer rank so the
+            // author passes below can band rules by layer for revert-layer.
+            var (authorNormal, authorImportant) = cssData.GetAuthorStyleRulesForCascade(media, box);
 
             // Inline style is parsed up front - parsing is pure text -> rule with no cascade side
             // effects, so hoisting it here (ahead of TranslateAttributes, which still runs at its
@@ -532,9 +533,13 @@ namespace PeachPDF.Html.Core.Parse
             // back when a later phase's declaration is literally revert/revert-layer (see
             // AssignCssBlock/AssignCustomPropertyDeclaration), which is rare - so each is only
             // captured when something that will actually consult it uses one of those keywords.
-            var authorUsesRevert = RulesUseRevertKeyword(authorRules);
+            var authorUsesRevert = RulesUseRevertKeyword(authorNormal);
             var uaUsesRevert = RulesUseRevertKeyword(uaRules);
             var inlineUsesRevert = inlineRule is not null && RulesUseRevertKeyword([inlineRule]);
+
+            // revert-layer only needs the per-layer banding (and its snapshots) when the document
+            // actually declares cascade layers and an author rule uses the keyword.
+            var captureLayerBands = cssData.HasCascadeLayers && RulesUseRevertLayerKeyword(authorNormal);
 
             // Cascade precedence (lowest to highest, i.e. applied in this order so "last write wins"
             // naturally produces the correct winner): UA-normal, Author-normal (inline-normal wins
@@ -545,14 +550,15 @@ namespace PeachPDF.Html.Core.Parse
             // tested) "revert = state right before this phase" model uniformly across all six phases,
             // rather than a stricter, more formally origin-pure model.
 
-            // 3. UA normal
-            AssignCssBlocks(valueParser, box, uaRules, importantPass: false, null, null, pendingVarProperties);
+            // 3. UA normal (no cascade layers in the UA sheet, so revert-layer target == revert target)
+            AssignCssBlocks(valueParser, box, uaRules, importantPass: false, null, null, null, null, pendingVarProperties);
             var needsUaSnapshot = authorUsesRevert;
             var uaSnapshot = needsUaSnapshot ? CssUtils.SnapshotProperties(box) : null;
             var uaCustomSnapshot = needsUaSnapshot ? CssUtils.SnapshotCustomProperties(box) : null;
 
-            // 4. Author normal
-            AssignCssBlocks(valueParser, box, authorRules, importantPass: false, uaSnapshot, uaCustomSnapshot, pendingVarProperties);
+            // 4. Author normal — applied in ascending layer-rank bands so revert-layer can roll back to
+            // the state before each layer (= all lower-priority layers + prior origins).
+            ApplyAuthorRulesInLayerBands(valueParser, box, authorNormal, importantPass: false, uaSnapshot, uaCustomSnapshot, captureLayerBands, pendingVarProperties);
             var needsAuthorNormalSnapshot = inlineUsesRevert || authorUsesRevert;
             var authorNormalSnapshot = needsAuthorNormalSnapshot ? CssUtils.SnapshotProperties(box) : null;
             var authorNormalCustomSnapshot = needsAuthorNormalSnapshot ? CssUtils.SnapshotCustomProperties(box) : null;
@@ -568,7 +574,7 @@ namespace PeachPDF.Html.Core.Parse
             var inlineNormalCustomSnapshot = authorNormalCustomSnapshot;
             if (inlineRule is not null)
             {
-                AssignCssBlock(valueParser, box, inlineRule, importantPass: false, authorNormalSnapshot, authorNormalCustomSnapshot, pendingVarProperties);
+                AssignCssBlock(valueParser, box, inlineRule, importantPass: false, authorNormalSnapshot, authorNormalSnapshot, authorNormalCustomSnapshot, authorNormalCustomSnapshot, pendingVarProperties);
                 var needsInlineNormalSnapshot = authorUsesRevert;
                 inlineNormalSnapshot = needsInlineNormalSnapshot ? CssUtils.SnapshotProperties(box) : null;
                 inlineNormalCustomSnapshot = needsInlineNormalSnapshot ? CssUtils.SnapshotCustomProperties(box) : null;
@@ -581,7 +587,9 @@ namespace PeachPDF.Html.Core.Parse
             // The built-in UA stylesheet has no !important rules, so this combination (revert inside
             // an author-!important declaration, interacting with a preceding inline-normal value) is
             // untested territory in real usage; documenting it here rather than resolving it silently.
-            AssignCssBlocks(valueParser, box, authorRules, importantPass: true, inlineNormalSnapshot, inlineNormalCustomSnapshot, pendingVarProperties);
+            // Applied in DESCENDING layer-rank bands (unlayered first/loses, earliest layer last/wins),
+            // so revert-layer in an !important declaration reveals the lower-priority !important layers.
+            ApplyAuthorRulesInLayerBands(valueParser, box, authorImportant, importantPass: true, inlineNormalSnapshot, inlineNormalCustomSnapshot, captureLayerBands, pendingVarProperties);
             var needsAuthorImportantSnapshot = inlineUsesRevert || uaUsesRevert;
             var authorImportantSnapshot = needsAuthorImportantSnapshot ? CssUtils.SnapshotProperties(box) : null;
             var authorImportantCustomSnapshot = needsAuthorImportantSnapshot ? CssUtils.SnapshotCustomProperties(box) : null;
@@ -591,7 +599,7 @@ namespace PeachPDF.Html.Core.Parse
             var afterInlineImportantCustomSnapshot = authorImportantCustomSnapshot;
             if (inlineRule is not null)
             {
-                AssignCssBlock(valueParser, box, inlineRule, importantPass: true, authorImportantSnapshot, authorImportantCustomSnapshot, pendingVarProperties);
+                AssignCssBlock(valueParser, box, inlineRule, importantPass: true, authorImportantSnapshot, authorImportantSnapshot, authorImportantCustomSnapshot, authorImportantCustomSnapshot, pendingVarProperties);
                 var needsAfterInlineImportantSnapshot = uaUsesRevert;
                 afterInlineImportantSnapshot = needsAfterInlineImportantSnapshot ? CssUtils.SnapshotProperties(box) : null;
                 afterInlineImportantCustomSnapshot = needsAfterInlineImportantSnapshot ? CssUtils.SnapshotCustomProperties(box) : null;
@@ -599,7 +607,7 @@ namespace PeachPDF.Html.Core.Parse
 
             // 8. UA !important - applied globally last so it wins over everything else, per spec's
             // origin reversal for the !important tier.
-            AssignCssBlocks(valueParser, box, uaRules, importantPass: true, afterInlineImportantSnapshot, afterInlineImportantCustomSnapshot, pendingVarProperties);
+            AssignCssBlocks(valueParser, box, uaRules, importantPass: true, afterInlineImportantSnapshot, afterInlineImportantSnapshot, afterInlineImportantCustomSnapshot, afterInlineImportantCustomSnapshot, pendingVarProperties);
 
             // 9. Resolve var() references now that every custom property's final cascaded value is known
             ResolveDeferredVarProperties(valueParser, box, pendingVarProperties);
@@ -676,10 +684,10 @@ namespace PeachPDF.Html.Core.Parse
             shadowBox.InheritStyle(box);
 
             var pendingVarProperties = new Dictionary<string, string>();
-            AssignCssBlocks(valueParser, shadowBox, firstLineUaRules, importantPass: false, null, null, pendingVarProperties);
-            AssignCssBlocks(valueParser, shadowBox, firstLineAuthorRules, importantPass: false, null, null, pendingVarProperties);
-            AssignCssBlocks(valueParser, shadowBox, firstLineAuthorRules, importantPass: true, null, null, pendingVarProperties);
-            AssignCssBlocks(valueParser, shadowBox, firstLineUaRules, importantPass: true, null, null, pendingVarProperties);
+            AssignCssBlocks(valueParser, shadowBox, firstLineUaRules, importantPass: false, null, null, null, null, pendingVarProperties);
+            AssignCssBlocks(valueParser, shadowBox, firstLineAuthorRules, importantPass: false, null, null, null, null, pendingVarProperties);
+            AssignCssBlocks(valueParser, shadowBox, firstLineAuthorRules, importantPass: true, null, null, null, null, pendingVarProperties);
+            AssignCssBlocks(valueParser, shadowBox, firstLineUaRules, importantPass: true, null, null, null, null, pendingVarProperties);
             ResolveDeferredVarProperties(valueParser, shadowBox, pendingVarProperties);
             CssUtils.ApplyCurrentColor(shadowBox, valueParser);
 
@@ -875,11 +883,51 @@ namespace PeachPDF.Html.Core.Parse
             IEnumerable<IStyleRule> rules,
             bool importantPass,
             IReadOnlyDictionary<string, string?>? revertTarget,
+            IReadOnlyDictionary<string, string?>? revertLayerTarget,
             IReadOnlyDictionary<string, string>? customPropertyRevertTarget,
+            IReadOnlyDictionary<string, string>? customPropertyRevertLayerTarget,
             Dictionary<string, string> pendingVarProperties)
         {
             foreach (var rule in rules)
-                AssignCssBlock(valueParser, box, rule, importantPass, revertTarget, customPropertyRevertTarget, pendingVarProperties);
+                AssignCssBlock(valueParser, box, rule, importantPass, revertTarget, revertLayerTarget, customPropertyRevertTarget, customPropertyRevertLayerTarget, pendingVarProperties);
+        }
+
+        /// <summary>
+        /// Applies the author cascade for one importance pass, banding rules by <c>@layer</c> rank so
+        /// <c>revert-layer</c> can roll a property back to the value it had before the current layer
+        /// began — i.e. the winning value from all lower-priority layers of the author origin plus the
+        /// prior origins (CSS Cascade 5 §6.1). Because the normal pass applies ascending rank and the
+        /// <c>!important</c> pass applies descending rank, "the box state captured just before this
+        /// rule's rank band" is the correct <c>revert-layer</c> target in both. <paramref name="revertTarget"/>
+        /// (the prior-origin snapshot, for plain <c>revert</c>) is unchanged across the whole pass. The
+        /// per-band snapshots are only taken when <paramref name="captureLayerBands"/> is set (layers
+        /// exist and some rule uses <c>revert-layer</c>); otherwise this is a plain in-order apply.
+        /// </summary>
+        private static void ApplyAuthorRulesInLayerBands(
+            CssValueParser valueParser,
+            CssBox box,
+            IReadOnlyList<CssData.LayeredStyleRule> rules,
+            bool importantPass,
+            IReadOnlyDictionary<string, string?>? revertTarget,
+            IReadOnlyDictionary<string, string>? customPropertyRevertTarget,
+            bool captureLayerBands,
+            Dictionary<string, string> pendingVarProperties)
+        {
+            var revertLayerTarget = revertTarget;
+            var customPropertyRevertLayerTarget = customPropertyRevertTarget;
+            int? currentBandRank = null;
+
+            foreach (var layered in rules)
+            {
+                if (captureLayerBands && layered.LayerRank != currentBandRank)
+                {
+                    currentBandRank = layered.LayerRank;
+                    revertLayerTarget = CssUtils.SnapshotProperties(box);
+                    customPropertyRevertLayerTarget = CssUtils.SnapshotCustomProperties(box);
+                }
+
+                AssignCssBlock(valueParser, box, layered.Rule, importantPass, revertTarget, revertLayerTarget, customPropertyRevertTarget, customPropertyRevertLayerTarget, pendingVarProperties);
+            }
         }
 
         /// <summary>
@@ -894,6 +942,27 @@ namespace PeachPDF.Html.Core.Parse
                 foreach (var prop in rule.Style)
                 {
                     if (prop.Value is CssConstants.Revert or CssConstants.RevertLayer)
+                        return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool RulesUseRevertKeyword(IEnumerable<CssData.LayeredStyleRule> rules) =>
+            RulesUseRevertKeyword(rules.Select(r => r.Rule));
+
+        /// <summary>
+        /// Checks whether any declaration literally uses <c>revert-layer</c> specifically (not plain
+        /// <c>revert</c>), so the per-layer band snapshots are only taken when they can be consulted.
+        /// </summary>
+        private static bool RulesUseRevertLayerKeyword(IEnumerable<CssData.LayeredStyleRule> rules)
+        {
+            foreach (var layered in rules)
+            {
+                foreach (var prop in layered.Rule.Style)
+                {
+                    if (prop.Value is CssConstants.RevertLayer)
                         return true;
                 }
             }
@@ -918,8 +987,10 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="box">the css box to assign css to</param>
         /// <param name="stylesheetRule">the stylesheet rule to assign</param>
         /// <param name="importantPass">true to apply only <c>!important</c> declarations, false to apply only normal ones</param>
-        /// <param name="revertTarget">Property snapshot representing the prior cascade origin, used for revert/revert-layer</param>
-        /// <param name="customPropertyRevertTarget">Case-sensitive custom-property snapshot for revert/revert-layer</param>
+        /// <param name="revertTarget">Property snapshot representing the prior cascade origin, used for <c>revert</c></param>
+        /// <param name="revertLayerTarget">Property snapshot representing the state before the current cascade layer (lower-priority layers + prior origins), used for <c>revert-layer</c>; equals <paramref name="revertTarget"/> outside layered author content</param>
+        /// <param name="customPropertyRevertTarget">Case-sensitive custom-property snapshot for <c>revert</c></param>
+        /// <param name="customPropertyRevertLayerTarget">Case-sensitive custom-property snapshot for <c>revert-layer</c></param>
         /// <param name="pendingVarProperties">Accumulates regular declarations whose value contains var(...), keyed by property name</param>
         private static void AssignCssBlock(
             CssValueParser valueParser,
@@ -927,7 +998,9 @@ namespace PeachPDF.Html.Core.Parse
             IStyleRule stylesheetRule,
             bool importantPass,
             IReadOnlyDictionary<string, string?>? revertTarget,
+            IReadOnlyDictionary<string, string?>? revertLayerTarget,
             IReadOnlyDictionary<string, string>? customPropertyRevertTarget,
+            IReadOnlyDictionary<string, string>? customPropertyRevertLayerTarget,
             Dictionary<string, string> pendingVarProperties)
         {
             foreach (var prop in stylesheetRule.Style)
@@ -937,7 +1010,7 @@ namespace PeachPDF.Html.Core.Parse
 
                 if (PropertyFactory.IsCustomPropertyName(prop.Name))
                 {
-                    AssignCustomPropertyDeclaration(box, prop, customPropertyRevertTarget);
+                    AssignCustomPropertyDeclaration(box, prop, customPropertyRevertTarget, customPropertyRevertLayerTarget);
                     continue;
                 }
 
@@ -953,9 +1026,13 @@ namespace PeachPDF.Html.Core.Parse
                         => CssUtils.GetPropertyValue(box.ParentBox, prop.Name),
                     CssConstants.Unset
                         => CssDefaults.GetInitialValue(prop.Name),
-                    CssConstants.Revert or CssConstants.RevertLayer
+                    CssConstants.Revert
                         => revertTarget is not null && revertTarget.TryGetValue(prop.Name, out var rv)
                             ? rv
+                            : CssDefaults.GetInitialValue(prop.Name),
+                    CssConstants.RevertLayer
+                        => revertLayerTarget is not null && revertLayerTarget.TryGetValue(prop.Name, out var rvl)
+                            ? rvl
                             : CssDefaults.GetInitialValue(prop.Name),
                     _ => prop.Value
                 };
@@ -987,7 +1064,8 @@ namespace PeachPDF.Html.Core.Parse
         private static void AssignCustomPropertyDeclaration(
             CssBox box,
             IProperty prop,
-            IReadOnlyDictionary<string, string>? customPropertyRevertTarget)
+            IReadOnlyDictionary<string, string>? customPropertyRevertTarget,
+            IReadOnlyDictionary<string, string>? customPropertyRevertLayerTarget)
         {
             var rawValue = prop.Value switch
             {
@@ -1006,10 +1084,15 @@ namespace PeachPDF.Html.Core.Parse
                         : null,
                 CssConstants.Initial
                     => null, // guaranteed-invalid value => property becomes absent
-                CssConstants.Revert or CssConstants.RevertLayer
+                CssConstants.Revert
                     => customPropertyRevertTarget != null &&
                        customPropertyRevertTarget.TryGetValue(prop.Name, out var rv)
                         ? rv
+                        : null,
+                CssConstants.RevertLayer
+                    => customPropertyRevertLayerTarget != null &&
+                       customPropertyRevertLayerTarget.TryGetValue(prop.Name, out var rvl)
+                        ? rvl
                         : null,
                 _ => prop.Value
             };

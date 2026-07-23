@@ -18,7 +18,7 @@ namespace PeachPDF.Html.Core.Dom
     /// success/failure resolution pattern, since (like SVG) an object's children are always parsed
     /// eagerly by <see cref="Parse.HtmlParser"/> before it's known whether they're needed.
     /// </summary>
-    internal sealed class CssBoxObject : CssBox
+    internal class CssBoxObject : CssBox
     {
         private CssRectImage? _imageWord;
         private ImageLoadHandler? _imageLoadHandler;
@@ -93,17 +93,8 @@ namespace PeachPDF.Html.Core.Dom
             r.X = Math.Floor(r.X);
             r.Y = Math.Floor(r.Y);
 
-            if (r is { Width: > 0, Height: > 0 })
-            {
-                if (_svgDocument is not null)
-                {
-                    SvgRenderer.RenderInto(g, _svgDocument, r);
-                }
-                else if (_imageWord.Image != null)
-                {
-                    g.DrawImage(_imageWord.Image, r);
-                }
-            }
+            // object-fit / object-position honored via the shared replaced-content renderer.
+            ReplacedContentRenderer.Paint(g, r, _imageWord.Image, _svgDocument, this);
 
             if (clipped)
                 g.PopClip();
@@ -123,29 +114,15 @@ namespace PeachPDF.Html.Core.Dom
                 return;
             _resolved = true;
 
-            var data = GetAttribute("data", null);
-            if (string.IsNullOrEmpty(data))
-            {
-                _isReplaced = false;
-                return;
-            }
-
-            var type = GetAttribute("type", null);
-            if (!string.IsNullOrEmpty(type) && !type.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
-            {
-                _isReplaced = false;
-                return;
-            }
-
-            if (DataUriUtils.TryDecodeDataUri(data, out var mimeType, out _)
-                && !mimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            var source = ResolveReplacedSource();
+            if (string.IsNullOrEmpty(source))
             {
                 _isReplaced = false;
                 return;
             }
 
             _imageLoadHandler = new ImageLoadHandler(HtmlContainer!);
-            await _imageLoadHandler.LoadImage(data);
+            await _imageLoadHandler.LoadImage(source);
 
             if (_imageLoadHandler.Image is null && _imageLoadHandler.SvgDocument is null)
             {
@@ -162,6 +139,30 @@ namespace PeachPDF.Html.Core.Dom
             // are no longer relevant and must not be laid out/painted (see CssBoxSvg.EnsureDocument
             // for why clearing here, rather than never creating them, is the correct timing).
             Boxes.Clear();
+        }
+
+        /// <summary>
+        /// Returns the URL of the resource to render as replaced content, or <c>null</c> to fall back to
+        /// the element's DOM children. The <c>&lt;object&gt;</c> implementation resolves <c>data</c> and,
+        /// per the HTML replacement algorithm, declines (returns null) when the <c>type</c> attribute or a
+        /// <c>data:</c> URI's own MIME header already says the resource isn't an image. Overridden by
+        /// <see cref="CssBoxVideo"/> to resolve the <c>poster</c> instead.
+        /// </summary>
+        protected virtual string? ResolveReplacedSource()
+        {
+            var data = GetAttribute("data", null);
+            if (string.IsNullOrEmpty(data))
+                return null;
+
+            var type = GetAttribute("type", null);
+            if (!string.IsNullOrEmpty(type) && !type.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            if (DataUriUtils.TryDecodeDataUri(data, out var mimeType, out _)
+                && !mimeType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            return data;
         }
 
         public override void Dispose()
