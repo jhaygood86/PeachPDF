@@ -134,6 +134,20 @@ namespace PeachPDF.Html.Core.Dom
                     }
             }
 
+            // Phase 4b: shrink non-stretch column items to their fit-content cross (width) size.
+            // A column item's cross axis is width, and a blockified auto-width block fills the whole
+            // container during layout, so without this every item reports ActualBoxSizingWidth == container
+            // width — making align-items/align-self center/flex-end/flex-start have nothing to offset against
+            // and stretch a no-op (issue #133). Row items get correct fit-content cross sizing for free
+            // because their cross axis is height, which block layout already shrink-wraps. Only non-stretch,
+            // auto-width items are shrunk, so the default (stretch) behavior is unchanged.
+            if (!_isRow)
+            {
+                foreach (var line in lines)
+                    foreach (var item in line.Items)
+                        await ShrinkColumnItemToContentWidth(g, item, containerCrossSize, mainSize);
+            }
+
             // Phase 5: line cross sizes; for single-line, respect container cross size if set
             foreach (var line in lines)
             {
@@ -403,6 +417,58 @@ namespace PeachPDF.Html.Core.Dom
 
             if (_isRow) item.Box.Width  = saved;
             else        item.Box.Height = saved;
+        }
+
+        // ─── Phase 4b: column cross-axis (width) shrink-to-fit ────────────────────
+
+        /// <summary>
+        /// For a column-direction flex item whose resolved alignment is not <c>stretch</c> and whose width is
+        /// auto, re-lays the item out at its fit-content (max-content, capped at the container cross size)
+        /// width, so <c>ActualBoxSizingWidth</c> reflects the content width instead of the
+        /// container-fill width a blockified auto-width block produces. This is what lets the existing
+        /// cross-axis positioning (<see cref="ComputeCrossOffsets"/>/<see cref="AssignLocations"/>) actually
+        /// center / end-align / start-align the item (CSS Flexbox 1 §7.5 hypothetical cross size, §8.3). A
+        /// stretch item (or the default, since <c>align-items</c> defaults to <c>normal</c> ≡ stretch) is left
+        /// full-width, and a definite-width item is left at its width.
+        /// </summary>
+        private async ValueTask ShrinkColumnItemToContentWidth(RGraphics g, FlexItem item, double containerCrossSize, double mainSize)
+        {
+            var box = item.Box;
+
+            // Resolve the item's effective cross-axis alignment (same idiom as ComputeCrossOffsets).
+            var align = box.AlignSelf is "auto" or "" ? _flexBox.AlignItems : box.AlignSelf;
+            if (align is CssConstants.Stretch or "normal") return;
+
+            // Only auto-width items shrink; a definite width is already the item's cross size.
+            if (CssValueParser.IsValidLength(box.Width)) return;
+
+            // Available cross size: the container's inner width (0 when unknown → no cap).
+            double available = containerCrossSize > 0 ? containerCrossSize : double.MaxValue;
+            double fitOuter = await CssLayoutEngine.GetFitContentWidth(g, box, available);
+
+            // Clamp by the cross-axis min/max-width (outer sizes), min winning over max per CSS 2.1 §10.4.
+            double crossPaddingBorder = box.ActualPaddingLeft + box.ActualPaddingRight
+                                        + box.ActualBorderLeftWidth + box.ActualBorderRightWidth;
+            if (CssValueParser.IsValidLength(box.MaxWidth))
+                fitOuter = Math.Min(fitOuter, CssValueParser.ParseLength(box.MaxWidth, containerCrossSize, box) + crossPaddingBorder);
+            if (box.MinWidth != "0" && CssValueParser.IsValidLength(box.MinWidth))
+                fitOuter = Math.Max(fitOuter, CssValueParser.ParseLength(box.MinWidth, containerCrossSize, box) + crossPaddingBorder);
+
+            // Nothing to do if it already matches (e.g. content wider than the container → full width).
+            if (Math.Abs(fitOuter - box.ActualBoxSizingWidth) <= 0.5) return;
+
+            // Re-lay out at the fit-content width, locking the main-axis height to its resolved size —
+            // mirroring the column stretch re-layout branch in ComputeCrossOffsets.
+            var savedWidth = box.Width;
+            var savedHeight = box.Height;
+            box.Width = FormatLayoutUnits(Math.Max(0, fitOuter - crossPaddingBorder));
+            box.Height = FormatLayoutUnits(Math.Max(0, item.FinalMainSize - MainPaddingBorder(box)));
+            box.Location = new RPoint(_flexBox.ClientLeft, _flexBox.ClientTop);
+            box.ActualBottom = box.Location.Y;
+            box.RectanglesReset();
+            await PerformLayoutBlockified(g, box);
+            box.Width = savedWidth;
+            box.Height = savedHeight;
         }
 
         // ─── Phase 5: cross sizes ─────────────────────────────────────────────────

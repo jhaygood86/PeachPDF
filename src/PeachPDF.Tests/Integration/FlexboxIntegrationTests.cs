@@ -946,6 +946,121 @@ namespace PeachPDF.Tests.Integration
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
+        // ─── Column cross-axis (horizontal) alignment — issue #133 ────────────────
+
+        [Fact]
+        public async Task Column_AlignItemsCenter_ShrinkWrapsAndCentersItem()
+        {
+            var html = Wrap(@"
+                <div id='c' style='display:flex; flex-direction:column; width:300px; align-items:center;'>
+                    <div id='chip'>Hi</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var c = FindById(root, "c")!;
+            var chip = FindById(root, "chip")!;
+
+            // Shrink-wrapped to content, not stretched to the full container width.
+            Assert.True(chip.ActualWidth < c.ActualWidth - 1,
+                $"expected shrink-wrap; chip={chip.ActualWidth} container={c.ActualWidth}");
+            // Centered: equal gaps on both sides, and a real (non-zero) left gap.
+            var leftGap = chip.Location.X - c.Location.X;
+            var rightGap = (c.Location.X + c.ActualWidth) - (chip.Location.X + chip.ActualWidth);
+            Assert.Equal(leftGap, rightGap, 1.0);
+            Assert.True(leftGap > 1, $"expected a centered left gap, got {leftGap}");
+        }
+
+        [Fact]
+        public async Task Column_AlignItemsFlexEnd_ShrinkWrapsAndRightAligns()
+        {
+            var html = Wrap(@"
+                <div id='c' style='display:flex; flex-direction:column; width:300px; align-items:flex-end;'>
+                    <div id='chip'>End</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var c = FindById(root, "c")!;
+            var chip = FindById(root, "chip")!;
+
+            Assert.True(chip.ActualWidth < c.ActualWidth - 1, "expected shrink-wrap");
+            // Right edge aligns to the container's right edge; not at the left edge.
+            Assert.Equal(c.Location.X + c.ActualWidth, chip.Location.X + chip.ActualWidth, 1.0);
+            Assert.True(chip.Location.X > c.Location.X + 1, "expected right-alignment, not left edge");
+        }
+
+        [Fact]
+        public async Task Column_AlignSelf_OverridesContainerAlignItems()
+        {
+            var html = Wrap(@"
+                <div id='c' style='display:flex; flex-direction:column; width:300px; align-items:center;'>
+                    <div id='a' style='align-self:flex-end;'>A</div>
+                    <div id='b'>B</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var c = FindById(root, "c")!;
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            // 'a' aligns to the right edge (its own align-self:flex-end wins over the container's center).
+            Assert.Equal(c.Location.X + c.ActualWidth, a.Location.X + a.ActualWidth, 1.0);
+            // 'b' inherits the container's center.
+            var bLeft = b.Location.X - c.Location.X;
+            var bRight = (c.Location.X + c.ActualWidth) - (b.Location.X + b.ActualWidth);
+            Assert.Equal(bLeft, bRight, 1.0);
+            Assert.True(bLeft > 1, "expected 'b' centered");
+        }
+
+        [Fact]
+        public async Task Column_DefaultAlign_StretchesItemsFullWidth_Regression()
+        {
+            // No align-items => default 'normal' (≡ stretch): items keep the full container width and the
+            // left edge (unchanged behavior). Guards against the fix over-shrinking the common default.
+            var html = Wrap(@"
+                <div id='c' style='display:flex; flex-direction:column; width:300px;'>
+                    <div id='chip'>Full</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var c = FindById(root, "c")!;
+            var chip = FindById(root, "chip")!;
+
+            Assert.Equal(c.ActualWidth, chip.ActualWidth, 1.0);
+            Assert.Equal(c.Location.X, chip.Location.X, 1.0);
+        }
+
+        [Fact]
+        public async Task Column_AlignItemsStretch_ExplicitlyFullWidth_Regression()
+        {
+            var html = Wrap(@"
+                <div id='c' style='display:flex; flex-direction:column; width:300px; align-items:stretch;'>
+                    <div id='chip'>Full</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var c = FindById(root, "c")!;
+            var chip = FindById(root, "chip")!;
+
+            Assert.Equal(c.ActualWidth, chip.ActualWidth, 1.0);
+            Assert.Equal(c.Location.X, chip.Location.X, 1.0);
+        }
+
+        [Fact]
+        public async Task Column_AlignItemsCenter_ReplacedItem_Centers()
+        {
+            // The #131 cover case: a fixed-size replaced item (96x48 SVG => 72x36pt) centers horizontally
+            // on a column-flex container instead of sitting at the left edge.
+            const string svg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='48'%3E%3Crect width='96' height='48' fill='red'/%3E%3C/svg%3E";
+            var html = Wrap($@"
+                <div id='c' style='display:flex; flex-direction:column; width:300px; align-items:center;'>
+                    <img id='img' src=""{svg}"" />
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var c = FindById(root, "c")!;
+            var img = FindById(root, "img")!;
+
+            Assert.True(img.ActualWidth < c.ActualWidth - 1, $"expected intrinsic width; img={img.ActualWidth}");
+            var leftGap = img.Location.X - c.Location.X;
+            var rightGap = (c.Location.X + c.ActualWidth) - (img.Location.X + img.ActualWidth);
+            Assert.Equal(leftGap, rightGap, 1.0);
+            Assert.True(leftGap > 1, $"expected centered image, left gap {leftGap}");
+        }
+
         private static string Wrap(string body) =>
             $"<!DOCTYPE html><html><head></head><body>{body}</body></html>";
 
