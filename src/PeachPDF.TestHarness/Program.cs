@@ -4309,6 +4309,79 @@ await SaveShowcaseAsync("css_nesting", "Selectors & Cascade", "CSS Nesting",
     "two-level-deep nested combinator (`& + .tag`), resolved against the parent exactly like `:is(.card)`.",
     nestingHtml, pdfConfig);
 
+// ─── CSS Grid layout showcase ──────────────────────────────────────────────
+
+// Exercises the grid engine (issue #232): fixed + fr tracks, item spanning, dense auto-placement
+// backfilling a hole, and the Tailwind responsive-card idiom
+// repeat(auto-fill, minmax(...)). Each section is a self-contained grid.
+var gridHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+      body { font: 12pt Arial, sans-serif; color: #222; margin: 24pt; }
+      h1 { font-size: 20pt; margin: 0 0 4pt; }
+      h2 { font-size: 13pt; margin: 20pt 0 8pt; color: #4a5568; }
+      .note { color: #718096; font-size: 10pt; margin: 0 0 8pt; }
+      .cell { background: #4a90d9; color: #fff; padding: 10pt; border-radius: 4pt; font-size: 10pt; }
+      .cell.b { background: #e07b53; }
+      .cell.c { background: #4caf72; }
+
+      .fixed-fr { display: grid; grid-template-columns: 120pt 1fr 1fr; gap: 10pt; }
+
+      .spanning { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8pt; margin-top: 8pt; }
+      .spanning .wide { grid-column: span 2; }
+      .spanning .tall { grid-row: span 2; }
+
+      .dense { display: grid; grid-auto-flow: row dense; grid-template-columns: repeat(3, 1fr); gap: 8pt; }
+      .dense .lead { grid-column: 2 / 4; }
+
+      .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150pt, 1fr)); gap: 12pt; }
+      .cards .cell { min-height: 40pt; }
+    </style>
+    </head>
+    <body>
+      <h1>CSS Grid</h1>
+      <p class="note">A real grid track-sizing and placement engine — no browser engine involved.</p>
+
+      <h2>Fixed + flexible tracks &mdash; <code>grid-template-columns: 120pt 1fr 1fr</code></h2>
+      <div class="fixed-fr">
+        <div class="cell">120pt</div><div class="cell b">1fr</div><div class="cell c">1fr</div>
+      </div>
+
+      <h2>Spanning &mdash; <code>grid-column: span 2</code> / <code>grid-row: span 2</code></h2>
+      <div class="spanning">
+        <div class="cell wide">span 2 columns</div>
+        <div class="cell b tall">span 2 rows</div>
+        <div class="cell c">c</div>
+        <div class="cell">d</div>
+        <div class="cell">e</div>
+        <div class="cell c">f</div>
+      </div>
+
+      <h2>Dense auto-placement &mdash; a 1-wide item backfills the hole before the wide item</h2>
+      <div class="dense">
+        <div class="cell b lead">grid-column: 2 / 4</div>
+        <div class="cell">backfills col 1</div>
+        <div class="cell c">next</div>
+        <div class="cell">next</div>
+      </div>
+
+      <h2>Responsive cards &mdash; <code>repeat(auto-fill, minmax(150pt, 1fr))</code></h2>
+      <div class="cards">
+        <div class="cell">card 1</div><div class="cell b">card 2</div><div class="cell c">card 3</div>
+        <div class="cell b">card 4</div><div class="cell c">card 5</div><div class="cell">card 6</div>
+      </div>
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("css_grid", "Layout", "CSS Grid",
+    "CSS Grid layout: fixed and `fr` tracks, item spanning (`grid-column: span 2`, `grid-row: span 2`), " +
+    "dense auto-placement backfilling a hole, and the responsive `repeat(auto-fill, minmax(150pt, 1fr))` " +
+    "card idiom — all laid out by PeachPDF's own grid track-sizing and placement engine.",
+    gridHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // The manifest that drives the website's /showcase page (see docs/showcase.html and
 // .github/workflows/pages.yml). Field names are camelCased for Liquid (site.data.showcases).
 var manifestJson = JsonSerializer.Serialize(showcaseManifest,
