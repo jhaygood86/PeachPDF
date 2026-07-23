@@ -342,24 +342,54 @@ namespace PeachPDF.Html.Core.Parse
             if (parts.Length == 0)
                 return null;
 
+            // Classify every token in one pass. Per css-page-3 §7.1 the grammar is
+            // <length>{1,2} | auto | [ <page-size> || [ portrait | landscape ] ]; a value that does
+            // not match it is invalid as a whole and must be dropped (CSS Syntax §9), not partially
+            // honored - so any token that is present but not a valid component invalidates the whole
+            // declaration (issue #163), rather than being silently skipped.
             XSize? namedSize = null;
             bool? landscape = null;
+            double? firstLength = null, secondLength = null;
+            var invalid = false;
 
             foreach (var part in parts)
             {
                 if (part.Equals("portrait", StringComparison.OrdinalIgnoreCase))
                 {
+                    if (landscape.HasValue) invalid = true;
                     landscape = false;
                 }
                 else if (part.Equals("landscape", StringComparison.OrdinalIgnoreCase))
                 {
+                    if (landscape.HasValue) invalid = true;
                     landscape = true;
                 }
                 else if (NamedPageSizes.TryGetValue(part, out var known))
                 {
+                    if (namedSize.HasValue) invalid = true;
                     namedSize = known;
                 }
+                else
+                {
+                    // "size: 0" parses as a length (the shared grammar accepts unitless zero), but a
+                    // degenerate zero/negative page dimension is rejected as it always was - and now
+                    // rejects the whole declaration rather than squaring the other dimension. A token
+                    // that isn't a <length> at all (%/vw/ch/garbage) returns null here → also invalid.
+                    var pt = ParseSizeDimensionToPdfPoints(part, context);
+                    if (pt is not > 0) invalid = true;
+                    else if (firstLength == null) firstLength = pt;
+                    else if (secondLength == null) secondLength = pt;
+                    else invalid = true; // more than two lengths
+                }
             }
+
+            // A length can't combine with a named size or an orientation keyword (the <length>{1,2}
+            // branch is mutually exclusive with the [ <page-size> || orientation ] branch).
+            if (firstLength.HasValue && (namedSize.HasValue || landscape.HasValue))
+                invalid = true;
+
+            if (invalid)
+                return null;
 
             if (namedSize.HasValue)
             {
@@ -371,27 +401,13 @@ namespace PeachPDF.Html.Core.Parse
                 return size;
             }
 
-            // landscape/portrait keyword alone — caller will handle orientation after we return null
-            if (landscape.HasValue)
-                return null;
+            if (firstLength.HasValue)
+                return new XSize(firstLength.Value, secondLength ?? firstLength.Value);
 
-            // Try parsing explicit length values
-            double? width = null, height = null;
-            foreach (var part in parts)
-            {
-                var pt = ParseSizeDimensionToPdfPoints(part, context);
-                // "size: 0" now parses as a length (the shared grammar accepts unitless zero),
-                // but a degenerate zero page dimension stays rejected as it always was.
-                if (pt is > 0)
-                {
-                    if (width == null) width = pt;
-                    else if (height == null) { height = pt; break; }
-                }
-            }
-
-            if (width.HasValue)
-                return new XSize(width.Value, height ?? width.Value);
-
+            // Reached for an orientation keyword alone — no explicit size, so the configured page size
+            // is kept. (`auto` and any other unrecognized single token fall into the invalid branch
+            // above and also return null here, which is the same "keep the configured size" outcome
+            // `auto` calls for.)
             return null;
         }
 
