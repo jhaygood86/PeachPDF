@@ -164,6 +164,17 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task ZeroTermRatio_FallsBackToNaturalRatio()
+        {
+            // A zero-term aspect-ratio (1/0) is valid but yields no usable ratio, so the element keeps its
+            // 2:1 natural ratio: width 72pt => height 36pt.
+            var (root, _) = await BuildAndLayout(Wrap($"<img id='img' style='width:72pt; aspect-ratio:1/0' src=\"{Svg96X48}\" />"));
+            var img = FindById(root, "img")!;
+            Assert.Equal(72.0, img.Words[0].Width, 1);
+            Assert.Equal(36.0, img.Words[0].Height, 1);
+        }
+
+        [Fact]
         public async Task CssRatio_MinHeightRescalesWidthByTheCssRatio()
         {
             // A bare CSS ratio (1/1) makes width 72pt => height 72pt; min-height:100pt then grows the height
