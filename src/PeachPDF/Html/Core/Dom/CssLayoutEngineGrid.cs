@@ -948,6 +948,9 @@ namespace PeachPDF.Html.Core.Dom
         /// since <see cref="AlignmentOffset"/> maps baseline to start). Each baseline item is shifted down by
         /// the difference between the row's maximum baseline offset and its own, so every baseline item in the
         /// row rests on a common baseline. Items with no discoverable baseline stay start-aligned.
+        /// Accepted gap (#280): this shifts within the already-sized row but does not grow the row to the
+        /// baseline group's max-ascent + max-descent, so an item with a disproportionately large descent
+        /// below its baseline could overflow — standard text with a normal line-height always fits.
         /// </summary>
         private void AlignRowBaselines(List<Placement> placements)
         {
