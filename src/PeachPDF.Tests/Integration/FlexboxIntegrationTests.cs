@@ -1041,6 +1041,46 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task Column_NonStretch_MinWidth_GrowsShrunkItem()
+        {
+            // min-width raises the fit-content cross size: 'Hi' shrink-wraps small, but min-width:120px
+            // (=90pt) grows it back up while it stays centered (still narrower than the 225pt container).
+            var html = Wrap(@"
+                <div id='c' style='display:flex; flex-direction:column; width:300px; align-items:center;'>
+                    <div id='chip' style='min-width:120px;'>Hi</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var c = FindById(root, "c")!;
+            var chip = FindById(root, "chip")!;
+
+            Assert.Equal(90.0, chip.ActualWidth, 1.0);   // 120px = 90pt
+            Assert.True(chip.ActualWidth < c.ActualWidth - 1, "still narrower than the container");
+            var leftGap = chip.Location.X - c.Location.X;
+            var rightGap = (c.Location.X + c.ActualWidth) - (chip.Location.X + chip.ActualWidth);
+            Assert.Equal(leftGap, rightGap, 1.0);
+        }
+
+        [Fact]
+        public async Task Column_NonStretch_MaxWidth_CapsShrunkItem()
+        {
+            // max-width caps the fit-content cross size: long content would be wide, but max-width:80px
+            // (=60pt) caps it, and it stays centered.
+            var html = Wrap(@"
+                <div id='c' style='display:flex; flex-direction:column; width:300px; align-items:center;'>
+                    <div id='chip' style='max-width:80px;'>A much longer label than fits</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var c = FindById(root, "c")!;
+            var chip = FindById(root, "chip")!;
+
+            Assert.Equal(60.0, chip.ActualWidth, 1.0);   // 80px = 60pt
+            var leftGap = chip.Location.X - c.Location.X;
+            var rightGap = (c.Location.X + c.ActualWidth) - (chip.Location.X + chip.ActualWidth);
+            Assert.Equal(leftGap, rightGap, 1.0);
+            Assert.True(leftGap > 1, "expected centered");
+        }
+
+        [Fact]
         public async Task Column_AlignItemsCenter_ReplacedItem_Centers()
         {
             // The #131 cover case: a fixed-size replaced item (96x48 SVG => 72x36pt) centers horizontally
