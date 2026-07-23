@@ -128,7 +128,8 @@ namespace PeachPDF.Html.Core.Dom
             // Intrinsic (min/max-content) contributions for auto/min-content/max-content/fit-content columns.
             var colIntrinsic = await MeasureColumnIntrinsics(g, placements, colDefs, colCount);
 
-            var columns = SizeColumnTracks(colDefs, contentWidth, columnGap, collapsed, colIntrinsic);
+            var stretchColumns = IsStretch(_gridBox.JustifyContent);
+            var columns = SizeColumnTracks(colDefs, contentWidth, columnGap, collapsed, colIntrinsic, stretchColumns);
             PositionTracks(columns, _gridBox.ClientLeft, contentWidth, columnGap, _gridBox.JustifyContent);
 
             // ── Row tracks: explicit sizes, then implicit rows cycling grid-auto-rows; auto rows are sized
@@ -282,9 +283,13 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 else if (r.MajorStart >= 0)
                 {
-                    // Definite major, auto minor: first free minor position on that major line.
+                    // Definite major, auto minor: first free minor position on that major line. If the line
+                    // is already full (no in-range position fits), place at the start (overflow) rather than
+                    // looping forever — the minor axis has a fixed track count and cannot grow.
                     var minor = 0;
-                    while (!Fits(r.MajorStart, minor, r.MajorSpan, r.MinorSpan)) minor++;
+                    while (minor + r.MinorSpan <= fixedCount && !Fits(r.MajorStart, minor, r.MajorSpan, r.MinorSpan))
+                        minor++;
+                    if (minor + r.MinorSpan > fixedCount) minor = 0;
                     Commit(r.box, r.MajorStart, minor, r.MajorSpan, r.MinorSpan);
                 }
                 else
@@ -386,7 +391,7 @@ namespace PeachPDF.Html.Core.Dom
         /// the remainder. Collapsed (empty <c>auto-fit</c>) tracks are forced to zero and drop their gap.
         /// </summary>
         private Track[] SizeColumnTracks(IReadOnlyList<GridTrackSize> defs, double contentWidth, double gap,
-            bool[] collapsed, double[] intrinsic)
+            bool[] collapsed, double[] intrinsic, bool stretchTracks)
         {
             var n = defs.Count;
             var tracks = defs.Select(d => new Track { Def = d }).ToArray();
@@ -426,7 +431,11 @@ namespace PeachPDF.Html.Core.Dom
                 for (var i = 0; i < n; i++) { tracks[i].Size = bases[i]; baseTotal += bases[i]; }
 
                 var free = Math.Max(0, contentWidth - baseTotal - totalGap);
-                var growable = Enumerable.Range(0, n).Where(i => !collapsed[i] && double.IsPositiveInfinity(limits[i])).ToArray();
+                // Grow the unbounded (auto) tracks to fill only under a normal/stretch content-distribution;
+                // an explicit justify-content leaves the free space for PositionTracks to distribute.
+                var growable = stretchTracks
+                    ? Enumerable.Range(0, n).Where(i => !collapsed[i] && double.IsPositiveInfinity(limits[i])).ToArray()
+                    : [];
                 if (growable.Length > 0 && free > 0)
                 {
                     var share = free / growable.Length;
@@ -465,15 +474,19 @@ namespace PeachPDF.Html.Core.Dom
                     if (!double.IsPositiveInfinity(limit) && limit < baseSize) limit = baseSize;
                     break;
                 case GridTrackKind.FitContent:
-                    // fit-content(L) = clamp(max-content, min-content, L): the measured content, capped at L.
-                    baseSize = limit = Math.Min(intrinsic, ResolveFixedLength(def, contentBase));
+                    // fit-content(L) = clamp(max-content, min-content, L): the measured content, capped at L
+                    // (def.Value holds the L argument string).
+                    baseSize = limit = Math.Min(intrinsic, CssValueParser.ParseLength(def.Value, contentBase, _gridBox));
                     break;
                 case GridTrackKind.Auto:
-                case GridTrackKind.MaxContent:
-                    baseSize = limit = intrinsic;   // content-sized (a definite floor; fr can still grow it)
+                    // Content is the floor; an unbounded limit lets a normal/stretch content-distribution
+                    // grow the track to share leftover space.
+                    baseSize = intrinsic;
+                    limit = double.PositiveInfinity;
                     break;
+                case GridTrackKind.MaxContent:
                 case GridTrackKind.MinContent:
-                    baseSize = limit = intrinsic;
+                    baseSize = limit = intrinsic;   // content-sized, does not stretch
                     break;
             }
         }
@@ -757,7 +770,9 @@ namespace PeachPDF.Html.Core.Dom
             else
             {
                 var available = contentWidth - FloorSum(fixedDefs);
-                var perRepetition = repFloor + gap * repeated.Count;
+                // repFloor already includes the group's internal gaps, so one more repetition costs the
+                // group's floor plus a single separating gap (not one gap per repeated track).
+                var perRepetition = repFloor + gap;
                 count = Math.Max(1, (int)Math.Floor((available + gap) / perRepetition));
             }
 

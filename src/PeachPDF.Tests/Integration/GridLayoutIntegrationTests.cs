@@ -486,6 +486,164 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(240, b.ActualBoxSizingWidth, 2.0);
         }
 
+        // ─── Additional coverage: sizing edges + property parsing ────────────────
+
+        [Fact]
+        public async Task DefiniteHeight_RowsResolveAgainstIt_AndPercentRowWorks()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:100pt; height:200pt; grid-template-columns:100pt; grid-template-rows:25% 75%;'>
+                    <div id='a'></div>
+                    <div id='b'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            Assert.Equal(50, a.ActualBoxSizingHeight, 1.5);
+            Assert.Equal(150, b.ActualBoxSizingHeight, 1.5);
+        }
+
+        [Fact]
+        public async Task RowSpanningItem_GrowsAutoRowToFitTallContent()
+        {
+            // Auto rows (no grid-auto-rows) so the span can grow them; a's 70pt content exceeds its two
+            // spanned rows' natural size, so the last spanned row grows and pushes row 3 down.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:100pt; grid-template-columns:100pt;'>
+                    <div id='a' style='grid-row:span 2; height:70pt;'></div>
+                    <div id='b' style='grid-row:3;'>b</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            Assert.True(b.Location.Y >= a.Location.Y + 70 - 1, $"b should sit below the grown span, a.Y={a.Location.Y} b.Y={b.Location.Y}");
+        }
+
+        [Fact]
+        public async Task EmptyGrid_ProducesNoError()
+        {
+            var box = await FindByTagAsync("<div style='display:grid; width:100pt; grid-template-columns:50pt 50pt;'></div>", "div");
+            Assert.Equal("grid", box.Display);
+        }
+
+        [Fact]
+        public async Task MinContentColumn_SizesToLongestWord()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:400pt; grid-template-columns:min-content 1fr;'>
+                    <div id='a' style='font:12pt Arial;'>Hi</div>
+                    <div id='b' style='height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            // The min-content column is narrow (just fits "Hi"); the 1fr column takes the rest.
+            Assert.True(a.ActualBoxSizingWidth < 80, $"min-content column should be narrow, was {a.ActualBoxSizingWidth}");
+            Assert.True(b.ActualBoxSizingWidth > 300, $"1fr column should take the remainder, was {b.ActualBoxSizingWidth}");
+        }
+
+        [Fact]
+        public async Task FitContentColumn_CapsAtArgument()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:400pt; grid-template-columns:fit-content(50pt) 1fr;'>
+                    <div id='a' style='width:200pt; height:10pt;'></div>
+                    <div id='b' style='height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var b = FindById(root, "b")!;
+            // The item wants 200pt but fit-content(50pt) caps the track at 50pt, so the 1fr column (b)
+            // starts at the content-left + 50pt.
+            Assert.Equal(container.ClientLeft + 50, b.Location.X, 2.0);
+        }
+
+        [Fact]
+        public async Task PlaceContentAndPlaceSelf_Parse()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; place-content:center; width:300pt; grid-template-columns:100pt;'>
+                    <div id='a' style='place-self:end; width:40pt; height:20pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            // place-content:center centers the single 100pt track (offset 100); place-self:end right-aligns
+            // the 40pt item in that track (+60).
+            var container = FindById(root, "container")!;
+            Assert.Equal(container.ClientLeft + 100 + 60, a.Location.X, 2.0);
+        }
+
+        [Fact]
+        public async Task GridAutoColumns_SizesImplicitColumn_InColumnFlow()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; grid-auto-flow:column; grid-template-rows:20pt; grid-auto-columns:70pt; width:400pt;'>
+                    <div id='a' style='height:20pt;'></div>
+                    <div id='b' style='height:20pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            // Column flow with no explicit columns: each item makes an implicit 70pt column.
+            Assert.Equal(70, a.ActualBoxSizingWidth, 2.0);
+            Assert.Equal(70, b.ActualBoxSizingWidth, 2.0);
+            Assert.Equal(a.Location.X + 70, b.Location.X, 2.0);
+        }
+
+        // ─── Post-review regression coverage ─────────────────────────────────────
+
+        [Fact]
+        public async Task AutoAutoColumns_StretchToFillContainer_ByDefault()
+        {
+            // Two auto columns with the default justify-content (normal → stretch) share the container.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:400pt; grid-template-columns:auto auto;'>
+                    <div id='a' style='height:10pt;'>A</div>
+                    <div id='b' style='height:10pt;'>B</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            Assert.Equal(200, a.ActualBoxSizingWidth, 3.0);
+            Assert.Equal(200, b.ActualBoxSizingWidth, 3.0);
+        }
+
+        [Fact]
+        public async Task MultiTrackAutoFill_CountsRepetitionsCorrectly()
+        {
+            // repeat(auto-fill, 30pt 30pt 30pt) with 10pt gap in 720pt: (720+10)/(90+10)=7 -> but the
+            // repeated group's own internal gaps are already counted, so the real fit is 6 repetitions
+            // (18 tracks). Two items land in the first two tracks, one track+gap apart.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:720pt; column-gap:10pt; grid-template-columns:repeat(auto-fill, 30pt 30pt 30pt);'>
+                    <div id='a' style='height:10pt;'></div>
+                    <div id='b' style='height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            Assert.Equal(30, a.ActualBoxSizingWidth, 1.0);
+            Assert.Equal(a.Location.X + 40, b.Location.X, 1.0);
+        }
+
+        [Fact]
+        public async Task DefiniteRow_MoreItemsThanColumns_DoesNotHang()
+        {
+            // Three items all locked to row 1 of a 2-column grid: the third cannot fit the full row, but
+            // placement must terminate (previously an infinite loop) rather than hang.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:200pt; grid-template-columns:100pt 100pt;'>
+                    <div id='a' style='grid-row:1; height:10pt;'></div>
+                    <div id='b' style='grid-row:1; height:10pt;'></div>
+                    <div id='c' style='grid-row:1; height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            // The key assertion is that BuildAndLayout returned at all (no hang); all three items exist.
+            Assert.NotNull(FindById(root, "a"));
+            Assert.NotNull(FindById(root, "b"));
+            Assert.NotNull(FindById(root, "c"));
+        }
+
         // ─── Pagination ──────────────────────────────────────────────────────────
 
         [Fact]
