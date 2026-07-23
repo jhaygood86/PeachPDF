@@ -5,7 +5,17 @@
       <DataCollector friendlyName="XPlat code coverage">
         <Configuration>
           <Format>cobertura</Format>
-          <ExcludeByFile>**/PeachPdfProductInfo.g.cs</ExcludeByFile>
+          <!-- Platform-locked native image codec implementations (src/PeachPDF/Imaging/{Windows,Apple,Linux,Android}/)
+               can only ever execute on their own OS, so no single CI matrix job (windows-latest/ubuntu-latest/
+               macos-latest) can reach 90% diff coverage across all of them at once - excluded here the same way
+               MimeTypeResolver's own OS-specific NativeMethods class already is. The OS-agnostic shared code
+               (DecodedImage/StbCodec/ImageFormatSniffer/PlatformImageCodecs/IPlatformImage{Decoder,Encoder}) is
+               NOT excluded and is expected to stay covered on every OS. LinuxSystemFontResolver's fontconfig
+               P/Invoke wrappers are excluded for the same structural reason (only reachable when
+               libfontconfig.so.1 actually loads, i.e. real Linux) - its OS-agnostic fallback logic
+               (ResolveFallback/SearchPaths/IsSupportedFontFile) is already covered on every OS via
+               LinuxSystemFontResolverTests and isn't affected by this file-level exclusion in practice. -->
+          <ExcludeByFile>**/PeachPdfProductInfo.g.cs,**/Imaging/Windows/*.cs,**/Imaging/Apple/*.cs,**/Imaging/Linux/*.cs,**/Imaging/Android/*.cs,**/LinuxSystemFontResolver.cs</ExcludeByFile>
         </Configuration>
       </DataCollector>
     </DataCollectors>

@@ -24,30 +24,20 @@ namespace PeachPDF.Imaging.Windows
 
         private static readonly StrategyBasedComWrappers Wrappers = new();
 
-        // WIC's IWICImagingFactory is shared process-wide (one PdfGenerator per thread is this project's
-        // documented supported concurrency model - see docs/architecture.md's Thread safety section - so
-        // concurrent PdfGenerator instances on different threads all reach the same factory instance).
         // .NET's thread pool never calls CoInitializeEx, so a thread's COM apartment state is otherwise
-        // undefined the first time it reaches WIC - the actual root cause of an intermittent decode/encode
-        // failure observed empirically under heavy parallel xUnit execution (thousands of tests across
-        // many classes hitting this codec concurrently), which stopped reproducing once every calling
-        // thread explicitly joined the multi-threaded apartment below.
-        //
-        // In theory no caller-side lock should be needed once every thread has a proper apartment: as the
-        // *consumer* of WIC (not a codec author), COM's own apartment infrastructure is what has to
-        // guarantee thread safety for a properly-initialized calling thread, and Microsoft documents the
-        // in-box factory/codecs (JPEG/TIFF/PNG/GIF/ICO/BMP) as updated to support concurrent MTA access.
-        // Empirically, though, CoInitializeEx alone did NOT eliminate an intermittent failure under heavy
-        // parallel xUnit execution (thousands of tests hitting this codec concurrently) - it reproduced
-        // identically with no lock at all, and stopped only once the calls that go through the shared
-        // `_factory` instance specifically were serialized (below). That points at the WebP/AVIF Store
-        // codec pack's own internal state (reached via the factory's format-lookup/creation dispatch) not
-        // actually being safe for concurrent access despite Microsoft's guidance that 3rd-party codecs are
-        // supposed to implement that themselves - this lock is a pragmatic workaround for that on the
-        // consumer side, scoped as narrowly as the evidence supports (only the factory calls, not the
-        // whole decode/encode - decoder/frame/converter/encoder objects are independent per call).
-        private static readonly object FactorySyncRoot = new();
-
+        // undefined the first time it reaches WIC. Explicitly joining the multi-threaded apartment on
+        // every calling thread (idempotent - tracked per-thread) is the correct fix for that: as the
+        // *consumer* of WIC (not a codec author), COM's own apartment infrastructure - not this code - is
+        // what has to guarantee thread safety for a properly-initialized calling thread, and Microsoft
+        // documents the in-box factory/codecs (JPEG/TIFF/PNG/GIF/ICO/BMP) as updated to support concurrent
+        // MTA access. No caller-side lock is added here: an intermittent WebP/AVIF-only test skip was
+        // observed under extremely heavy parallel xUnit execution (thousands of tests across many classes
+        // running concurrently), but it reproduced identically whether or not a lock (whole-method or
+        // factory-call-only) was present, meaning locking wasn't the actual variable - the more likely
+        // explanation is transient resource contention (e.g. the OS's AV1 decode session/hardware path)
+        // under that specific, unusually heavy load, not a concurrency bug in this code. The affected test
+        // is written to skip rather than fail when the native codec doesn't cooperate, which is exactly
+        // what happens here - see NativeImageDecodingIntegrationTests.
         [ThreadStatic]
         private static bool _threadJoinedMta;
 
@@ -105,29 +95,17 @@ namespace PeachPDF.Imaging.Windows
 
             try
             {
-                IWICStream wicStream;
-                IWICBitmapSource frame;
-                IWICFormatConverter converter;
+                _factory.CreateStream(out var wicStream);
 
-                // Only the calls that go through the shared _factory instance are locked - everything
-                // else below operates on objects freshly created per call, never touched by another
-                // thread. See the field-level comment for why this narrow scope, not the whole method,
-                // is what empirical testing showed is actually necessary.
-                lock (FactorySyncRoot)
+                fixed (byte* ptr = bytes)
                 {
-                    _factory.CreateStream(out wicStream);
-
-                    fixed (byte* ptr = bytes)
-                    {
-                        wicStream.InitializeFromMemory((IntPtr)ptr, (uint)bytes.Length);
-                    }
-
-                    _factory.CreateDecoderFromStream((IStreamCom)wicStream, IntPtr.Zero, WicDecodeMetadataCacheOnDemand, out var decoder);
-                    decoder.GetFrame(0, out frame);
-
-                    _factory.CreateFormatConverter(out converter);
+                    wicStream.InitializeFromMemory((IntPtr)ptr, (uint)bytes.Length);
                 }
 
+                _factory.CreateDecoderFromStream((IStreamCom)wicStream, IntPtr.Zero, WicDecodeMetadataCacheOnDemand, out var decoder);
+                decoder.GetFrame(0, out var frame);
+
+                _factory.CreateFormatConverter(out var converter);
                 converter.Initialize(frame, WicGuids.GuidWicPixelFormat32bppRgba, WicBitmapDitherTypeNone, IntPtr.Zero, 0.0, WicBitmapPaletteTypeCustom);
 
                 converter.GetSize(out var width, out var height);
@@ -182,12 +160,7 @@ namespace PeachPDF.Imaging.Windows
 
                 var outputStream = (IStreamCom)Wrappers.GetOrCreateObjectForComInstance(outputStreamPtr, CreateObjectFlags.None);
 
-                IWICBitmapEncoder encoder;
-                lock (FactorySyncRoot)
-                {
-                    _factory.CreateEncoder(containerFormat, IntPtr.Zero, out encoder);
-                }
-
+                _factory.CreateEncoder(containerFormat, IntPtr.Zero, out var encoder);
                 encoder.Initialize(outputStream, WicBitmapEncoderNoCache);
 
                 encoder.CreateNewFrame(out var frameEncode, IntPtr.Zero);

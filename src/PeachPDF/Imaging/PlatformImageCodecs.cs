@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using PeachPDF.Imaging.Android;
 using PeachPDF.Imaging.Apple;
 using PeachPDF.Imaging.Linux;
@@ -14,6 +15,10 @@ namespace PeachPDF.Imaging
     /// </summary>
     internal static class PlatformImageCodecs
     {
+        // Only one branch is ever reachable on a given OS, so no single CI matrix job can exercise all of
+        // them - excluded from coverage for the same reason the platform codec implementations themselves
+        // are (see coverlet.runsettings).
+        [ExcludeFromCodeCoverage]
         static PlatformImageCodecs()
         {
             if (OperatingSystem.IsWindows())
