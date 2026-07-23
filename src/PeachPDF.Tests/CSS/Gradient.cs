@@ -387,6 +387,63 @@ namespace PeachPDF.Tests.CSS
             var property = ParseDeclaration($"background-image: {gradient}");
             Assert.False(((BackgroundImageProperty)property).HasValue);
         }
+
+        [Theory]
+        // A gradient's "in <color-interpolation-method>" prelude (CSS Images 4 §3.1) is now validated at
+        // parse time (issue #245) instead of accepting any comma group that merely contains an "in" ident.
+        // Every space PeachPDF supports - alone, with a polar hue method, and combined with a direction/
+        // shape in either order - must stay accepted, across linear/radial/conic.
+        [InlineData("linear-gradient(in srgb, red, blue)")]
+        [InlineData("linear-gradient(in srgb-linear, red, blue)")]
+        [InlineData("linear-gradient(in display-p3, red, blue)")]
+        [InlineData("linear-gradient(in lab, red, blue)")]
+        [InlineData("linear-gradient(in oklab, red, blue)")]
+        [InlineData("linear-gradient(in xyz, red, blue)")]
+        [InlineData("linear-gradient(in xyz-d50, red, blue)")]
+        [InlineData("linear-gradient(in hsl, red, blue)")]
+        [InlineData("linear-gradient(in hwb, red, blue)")]
+        [InlineData("linear-gradient(in lch, red, blue)")]
+        [InlineData("linear-gradient(in oklch, red, blue)")]
+        [InlineData("linear-gradient(in oklch shorter hue, red, blue)")]
+        [InlineData("linear-gradient(in oklch longer hue, red, blue)")]
+        [InlineData("linear-gradient(in hsl increasing hue, red, blue)")]
+        [InlineData("linear-gradient(in oklab to right, red, blue)")]
+        [InlineData("linear-gradient(to right in oklab, red, blue)")]
+        [InlineData("linear-gradient(45deg in oklch longer hue, red, blue)")]
+        [InlineData("radial-gradient(in oklch, red, blue)")]
+        [InlineData("radial-gradient(in oklab circle at center, red, blue)")]
+        [InlineData("conic-gradient(in oklab, red, blue)")]
+        [InlineData("conic-gradient(in oklch from 45deg, red, blue)")]
+        [InlineData("conic-gradient(from 45deg in oklch longer hue, red, blue)")]
+        public void BackgroundImageGradientInterpolationMethodAccepted(string gradient)
+        {
+            var property = ParseDeclaration($"background-image: {gradient}");
+            Assert.IsType<BackgroundImageProperty>(property);
+            var backgroundImage = (BackgroundImageProperty)property;
+            Assert.True(backgroundImage.HasValue);
+            Assert.False(backgroundImage.IsInitial);
+        }
+
+        [Theory]
+        // A malformed or unsupported "in <color-interpolation-method>" prelude must now be DROPPED at parse
+        // time (HasValue == false), instead of being accepted unvalidated and silently ignored (issue #245).
+        [InlineData("linear-gradient(in nonsense garbage, red, blue)")]  // the issue's example
+        [InlineData("linear-gradient(in, red, blue)")]                   // "in" with no color space
+        [InlineData("linear-gradient(in oklab longer hue, red, blue)")]  // hue method on a rectangular space
+        [InlineData("linear-gradient(in oklch longer, red, blue)")]      // hue direction without the "hue" keyword
+        [InlineData("linear-gradient(in oklab to bogus, red, blue)")]    // the direction half is invalid
+        [InlineData("linear-gradient(in a98-rgb, red, blue)")]           // valid CSS space, unsupported here
+        [InlineData("linear-gradient(in prophoto-rgb, red, blue)")]
+        [InlineData("linear-gradient(in rec2020, red, blue)")]
+        [InlineData("radial-gradient(in bogus, red, blue)")]
+        [InlineData("radial-gradient(in oklab nonsense, red, blue)")]    // in <space> then an invalid shape
+        [InlineData("conic-gradient(in bogus, red, blue)")]
+        [InlineData("conic-gradient(in oklab from red, red, blue)")]     // in <space> then an invalid from-angle
+        public void BackgroundImageGradientInterpolationMethodRejected(string gradient)
+        {
+            var property = ParseDeclaration($"background-image: {gradient}");
+            Assert.False(((BackgroundImageProperty)property).HasValue);
+        }
     }
 }
 

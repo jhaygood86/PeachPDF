@@ -195,13 +195,14 @@ namespace PeachPDF.CSS
 
         protected override IPropertyValue ConvertFirstArgument(IEnumerable<Token> value)
         {
-            // "in <colorspace> [<direction>]" — accept the whole first group as a modifier
-            foreach (var t in value)
-            {
-                if (t.Type == TokenType.Ident &&
-                    string.Equals(t.Data, "in", System.StringComparison.OrdinalIgnoreCase))
-                    return CreatePlaceholder(value);
-            }
+            // "[ <angle> | to <side-or-corner> ] || <color-interpolation-method>" (CSS Images 4). Validate
+            // any "in <colorspace> [<hue-method>]" prelude, then validate what remains as the direction.
+            if (!ColorInterpolationMethodGrammar.TryExtractInterpolationMethod(value, out var remainder, out var hasIn))
+                return null;
+
+            if (hasIn)
+                return remainder.Count == 0 || _converter.Convert(remainder) != null ? CreatePlaceholder(value) : null;
+
             return _converter.Convert(value);
         }
     }
@@ -230,14 +231,19 @@ namespace PeachPDF.CSS
 
         protected override IPropertyValue ConvertFirstArgument(IEnumerable<Token> value)
         {
-            // "in <colorspace> [...]" — accept the whole first group as a modifier (as linear/radial do).
-            foreach (var t in value)
-            {
-                if (t.Type == TokenType.Ident &&
-                    string.Equals(t.Data, "in", System.StringComparison.OrdinalIgnoreCase))
-                    return CreatePlaceholder(value);
-            }
+            // "[ from <angle> ]? [ at <position> ]? || <color-interpolation-method>" — validate any
+            // "in <colorspace> [<hue-method>]" prelude, then validate what remains as from/at.
+            if (!ColorInterpolationMethodGrammar.TryExtractInterpolationMethod(value, out var remainder, out var hasIn))
+                return null;
 
+            if (!hasIn)
+                return ConvertPrelude(value);
+
+            return remainder.Count == 0 || ConvertPrelude(remainder) != null ? CreatePlaceholder(value) : null;
+        }
+
+        private IPropertyValue ConvertPrelude(IEnumerable<Token> value)
+        {
             // If the first non-whitespace token is an ident that is not a prelude keyword, this comma
             // group is a color stop, not a prelude — return null so it flows to stop validation.
             Token first = null;
@@ -302,14 +308,19 @@ namespace PeachPDF.CSS
 
         protected override IPropertyValue ConvertFirstArgument(IEnumerable<Token> value)
         {
-            // "in <colorspace> [...]" — accept the whole first group as a modifier
-            foreach (var t in value)
-            {
-                if (t.Type == TokenType.Ident &&
-                    string.Equals(t.Data, "in", System.StringComparison.OrdinalIgnoreCase))
-                    return CreatePlaceholder(value);
-            }
+            // "[ <ending-shape> || <size> ]? [ at <position> ]? || <color-interpolation-method>" — validate
+            // any "in <colorspace> [<hue-method>]" prelude, then validate what remains as shape/size/position.
+            if (!ColorInterpolationMethodGrammar.TryExtractInterpolationMethod(value, out var remainder, out var hasIn))
+                return null;
 
+            if (!hasIn)
+                return ConvertShape(value);
+
+            return remainder.Count == 0 || ConvertShape(remainder) != null ? CreatePlaceholder(value) : null;
+        }
+
+        private IPropertyValue ConvertShape(IEnumerable<Token> value)
+        {
             // If the first non-whitespace token is an ident that is not a known gradient
             // shape/size keyword, it must be a CSS color name (e.g. "red" in "red 0 8px").
             // In that case, this comma group is a color stop, not a shape/size modifier.
