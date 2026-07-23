@@ -53,6 +53,109 @@ namespace PeachPDF.Tests.Integration
                 $"Container should be at least 60pt tall, was {container.ActualBoxSizingHeight}");
         }
 
+        // ─── Stage 2: fixed track sizing + row-major placement ───────────────────
+
+        [Fact]
+        public async Task TwoFixedColumns_ItemsTakeTrackWidths_AndSitSideBySide()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:300pt; grid-template-columns:100pt 200pt;'>
+                    <div id='a' style='height:20pt;'></div>
+                    <div id='b' style='height:20pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            // a fills the 100pt track, b the 200pt track; both on the same row.
+            Assert.Equal(100, a.ActualBoxSizingWidth, 1.0);
+            Assert.Equal(200, b.ActualBoxSizingWidth, 1.0);
+            Assert.Equal(a.Location.Y, b.Location.Y, 1.0);
+            // b starts one track-width to the right of a.
+            Assert.Equal(a.Location.X + 100, b.Location.X, 1.0);
+        }
+
+        [Fact]
+        public async Task RepeatFixedColumns_ExpandsToEqualTracks()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:300pt; grid-template-columns:repeat(3, 100pt);'>
+                    <div class='item' style='height:10pt;'></div>
+                    <div class='item' style='height:10pt;'></div>
+                    <div class='item' style='height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var items = FindAllByClass(root, "item");
+            Assert.Equal(3, items.Count);
+            foreach (var item in items)
+                Assert.Equal(100, item.ActualBoxSizingWidth, 1.0);
+            Assert.Equal(items[0].Location.X + 100, items[1].Location.X, 1.0);
+            Assert.Equal(items[1].Location.X + 100, items[2].Location.X, 1.0);
+        }
+
+        [Fact]
+        public async Task MoreItemsThanColumns_WrapToNextRow()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:200pt; grid-template-columns:100pt 100pt;'>
+                    <div id='a' style='height:20pt;'></div>
+                    <div id='b' style='height:20pt;'></div>
+                    <div id='c' style='height:20pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            var c = FindById(root, "c")!;
+            // a,b on row 0; c wraps to row 1, first column (same X as a, below it).
+            Assert.Equal(a.Location.Y, b.Location.Y, 1.0);
+            Assert.Equal(a.Location.X, c.Location.X, 1.0);
+            Assert.True(c.Location.Y > a.Location.Y, "third item should wrap to the next row");
+        }
+
+        [Fact]
+        public async Task PercentageColumns_ResolveAgainstContainerWidth()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:200pt; grid-template-columns:25% 75%;'>
+                    <div id='a' style='height:10pt;'></div>
+                    <div id='b' style='height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            Assert.Equal(50, a.ActualBoxSizingWidth, 1.0);
+            Assert.Equal(150, b.ActualBoxSizingWidth, 1.0);
+        }
+
+        [Fact]
+        public async Task ColumnGap_SpacesTracksApart()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:220pt; grid-template-columns:100pt 100pt; column-gap:20pt;'>
+                    <div id='a' style='height:10pt;'></div>
+                    <div id='b' style='height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            Assert.Equal(20, b.Location.X - a.ActualRight, 1.0);
+        }
+
+        [Fact]
+        public async Task ExplicitRowHeights_AreUsed()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:100pt; grid-template-columns:100pt; grid-template-rows:40pt 60pt;'>
+                    <div id='a'>A</div>
+                    <div id='b'>B</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            Assert.Equal(40, a.ActualBoxSizingHeight, 1.0);
+            Assert.Equal(60, b.ActualBoxSizingHeight, 1.0);
+            Assert.Equal(a.Location.Y + 40, b.Location.Y, 1.0);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>

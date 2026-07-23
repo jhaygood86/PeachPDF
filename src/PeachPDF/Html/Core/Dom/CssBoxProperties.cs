@@ -1433,6 +1433,22 @@ namespace PeachPDF.Html.Core.Dom
         public string FlexRowGap    { get; set; } = "0";
         public string FlexColumnGap { get; set; } = "0";
 
+        // Grid container properties (CSS Grid Layout Module Level 1/2). row-gap/column-gap are shared with
+        // flex (FlexRowGap/FlexColumnGap above); align/justify-content/items and align-self are shared too.
+        public string GridTemplateColumns { get; set; } = CssConstants.None;
+        public string GridTemplateRows    { get; set; } = CssConstants.None;
+        public string GridAutoColumns     { get; set; } = CssConstants.Auto;
+        public string GridAutoRows        { get; set; } = CssConstants.Auto;
+        public string GridAutoFlow        { get; set; } = CssConstants.Row;
+        public string JustifyItems        { get; set; } = CssConstants.Normal;
+        public string JustifySelf         { get; set; } = CssConstants.Auto;
+
+        // Grid item placement properties (line-based).
+        public string GridColumnStart { get; set; } = CssConstants.Auto;
+        public string GridColumnEnd   { get; set; } = CssConstants.Auto;
+        public string GridRowStart    { get; set; } = CssConstants.Auto;
+        public string GridRowEnd      { get; set; } = CssConstants.Auto;
+
         // Multi-column layout container properties. column-gap itself is shared with flex/grid (the
         // same CSS property, see FlexColumnGap above); these are the multicol-only ones.
         public string ColumnCount     { get; set; } = CssConstants.Auto;
