@@ -70,7 +70,12 @@ namespace PeachPDF.CSS
         public IReadOnlyDictionary<string, IReadOnlyList<int>> LineNames { get; init; }
             = new Dictionary<string, IReadOnlyList<int>>();
 
-        public bool IsNone => Tracks.Count == 0 && AutoRepeat == GridAutoRepeatKind.None;
+        /// <summary>The <c>subgrid</c> keyword (CSS Grid Layout Module Level 2 §9): this axis adopts the parent
+        /// grid's tracks instead of defining its own. A subgrid template carries no <see cref="Tracks"/> — only
+        /// any explicit <c>[name]</c> line names declared after the keyword (in <see cref="LineNames"/>).</summary>
+        public bool IsSubgrid { get; init; }
+
+        public bool IsNone => !IsSubgrid && Tracks.Count == 0 && AutoRepeat == GridAutoRepeatKind.None;
     }
 
     /// <summary>
@@ -93,6 +98,13 @@ namespace PeachPDF.CSS
         {
             var toks = tokens.Where(t => t.Type != TokenType.Whitespace).ToArray();
             if (toks.Length == 0) return null;
+
+            // subgrid (CSS Grid Level 2 §9): the axis adopts the parent grid's tracks. The keyword may be
+            // followed by an optional <line-name-list> ([name] groups only; repeat() of line names is a v1
+            // deferral, mirroring the "named lines inside repeat()" restriction below). No <track-size> is
+            // allowed after subgrid.
+            if (toks[0].Type == TokenType.Ident && toks[0].Data.Isi(Keywords.Subgrid))
+                return TryParseSubgrid(toks);
 
             var fixedTracks = new List<GridTrackSize>();
             var autoRepeat = GridAutoRepeatKind.None;
@@ -158,6 +170,46 @@ namespace PeachPDF.CSS
                 AutoRepeat = autoRepeat,
                 AutoRepeatTracks = autoRepeatTracks,
                 AutoRepeatInsertIndex = autoRepeatIndex < 0 ? 0 : autoRepeatIndex,
+                LineNames = lineNames.ToDictionary(
+                    kv => kv.Key,
+                    kv => (IReadOnlyList<int>)kv.Value.ToList())
+            };
+        }
+
+        /// <summary>
+        /// Parses a <c>subgrid [ &lt;line-name-list&gt; ]?</c> value (the leading <c>subgrid</c> ident already
+        /// matched by the caller). The optional line-name list is a run of <c>[name …]</c> bracket groups, one
+        /// group per grid line (line 1 is before the first adopted track); each group's names are recorded at
+        /// that 1-based line index. Anything else after <c>subgrid</c> (a track size, an unclosed/ill-formed
+        /// bracket, a non-ident inside <c>[ ]</c>) is invalid.
+        /// </summary>
+        private static GridTemplate TryParseSubgrid(Token[] toks)
+        {
+            var lineNames = new Dictionary<string, SortedSet<int>>();
+            var lineIndex = 1;
+            var i = 1; // skip the subgrid ident
+
+            while (i < toks.Length)
+            {
+                if (toks[i].Type != TokenType.SquareBracketOpen) return null; // only [name] groups may follow
+                i++;
+                while (i < toks.Length && toks[i].Type != TokenType.SquareBracketClose)
+                {
+                    if (toks[i].Type != TokenType.Ident) return null;
+                    var name = toks[i].Data;
+                    if (!lineNames.TryGetValue(name, out var set))
+                        lineNames[name] = set = new SortedSet<int>();
+                    set.Add(lineIndex);
+                    i++;
+                }
+                if (i >= toks.Length) return null; // unclosed [
+                i++; // consume ]
+                lineIndex++;
+            }
+
+            return new GridTemplate
+            {
+                IsSubgrid = true,
                 LineNames = lineNames.ToDictionary(
                     kv => kv.Key,
                     kv => (IReadOnlyList<int>)kv.Value.ToList())

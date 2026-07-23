@@ -842,6 +842,177 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(200, m.ActualBoxSizingWidth, 2.0);
         }
 
+        // ─── Stage: subgrid (CSS Grid Level 2 §9) ────────────────────────────────
+
+        [Fact]
+        public async Task ColumnSubgrid_ItemsAlignToParentColumns()
+        {
+            // A subgrid spanning all three parent columns lays its own items out on the parent column lines.
+            var html = Wrap(@"
+                <div id='parent' style='display:grid; width:300pt; grid-template-columns:100pt 100pt 100pt;'>
+                    <div id='sub' style='grid-column:1 / 4; display:grid; grid-template-columns:subgrid;'>
+                        <div id='a' style='height:10pt;'></div>
+                        <div id='b' style='height:10pt;'></div>
+                        <div id='c' style='height:10pt;'></div>
+                    </div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            var c = FindById(root, "c")!;
+            // Each adopted column is 100pt wide, and the items sit one per parent column.
+            Assert.Equal(100, a.ActualBoxSizingWidth, 1.0);
+            Assert.Equal(100, b.ActualBoxSizingWidth, 1.0);
+            Assert.Equal(100, c.ActualBoxSizingWidth, 1.0);
+            Assert.Equal(100, b.Location.X - a.Location.X, 1.0);
+            Assert.Equal(100, c.Location.X - b.Location.X, 1.0);
+            Assert.Equal(a.Location.Y, b.Location.Y, 1.0);
+        }
+
+        [Fact]
+        public async Task RowSubgrid_DefiniteRows_ItemsAlignToParentRows()
+        {
+            // A subgrid spanning two explicit parent rows adopts their heights for its own items.
+            var html = Wrap(@"
+                <div id='parent' style='display:grid; width:200pt; grid-template-columns:200pt; grid-template-rows:40pt 60pt;'>
+                    <div id='sub' style='grid-row:1 / 3; display:grid; grid-template-rows:subgrid;'>
+                        <div id='r0' style='width:20pt;'>x</div>
+                        <div id='r1' style='width:20pt;'>y</div>
+                    </div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var r0 = FindById(root, "r0")!;
+            var r1 = FindById(root, "r1")!;
+            // r0 sits in the 40pt row, r1 in the following 60pt row — 40pt below.
+            Assert.Equal(40, r1.Location.Y - r0.Location.Y, 1.0);
+        }
+
+        [Fact]
+        public async Task RowSubgrid_AutoRows_CardBandsAlignAcrossSubgrids()
+        {
+            // Two row-subgrid cards over the parent's auto rows: each row sizes to the tallest content across
+            // both cards, so the header band and the body band line up across the two cards.
+            var html = Wrap(@"
+                <div id='parent' style='display:grid; width:300pt; grid-template-columns:150pt 150pt;'>
+                    <div id='c1' style='grid-column:1; grid-row:1 / 3; display:grid; grid-template-rows:subgrid;'>
+                        <div id='h1' style='height:20pt;'>h1</div>
+                        <div id='b1' style='height:40pt;'>b1</div>
+                    </div>
+                    <div id='c2' style='grid-column:2; grid-row:1 / 3; display:grid; grid-template-rows:subgrid;'>
+                        <div id='h2' style='height:50pt;'>h2</div>
+                        <div id='b2' style='height:30pt;'>b2</div>
+                    </div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var h1 = FindById(root, "h1")!;
+            var h2 = FindById(root, "h2")!;
+            var b1 = FindById(root, "b1")!;
+            var b2 = FindById(root, "b2")!;
+            // Header band top aligns across cards; body band top aligns across cards.
+            Assert.Equal(h1.Location.Y, h2.Location.Y, 1.0);
+            Assert.Equal(b1.Location.Y, b2.Location.Y, 1.0);
+            // Row 0 sized to the tallest header (50pt), so both bodies start 50pt below the headers.
+            Assert.Equal(50, b1.Location.Y - h1.Location.Y, 1.0);
+        }
+
+        [Fact]
+        public async Task BothAxesSubgrid_ItemsAlignToParentCells()
+        {
+            // A subgrid on BOTH axes spanning a 2x2 parent grid: its four items land on the parent's cells.
+            var html = Wrap(@"
+                <div id='parent' style='display:grid; width:200pt; grid-template-columns:100pt 100pt; grid-template-rows:30pt 30pt;'>
+                    <div id='sub' style='grid-column:1 / 3; grid-row:1 / 3; display:grid; grid-template-columns:subgrid; grid-template-rows:subgrid;'>
+                        <div id='q0'></div><div id='q1'></div><div id='q2'></div><div id='q3'></div>
+                    </div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var q0 = FindById(root, "q0")!;
+            var q1 = FindById(root, "q1")!;
+            var q2 = FindById(root, "q2")!;
+            var q3 = FindById(root, "q3")!;
+            Assert.Equal(100, q1.Location.X - q0.Location.X, 1.0);
+            Assert.Equal(30, q2.Location.Y - q0.Location.Y, 1.0);
+            Assert.Equal(100, q3.Location.X - q2.Location.X, 1.0);
+            Assert.Equal(30, q3.Location.Y - q1.Location.Y, 1.0);
+        }
+
+        [Fact]
+        public async Task ColumnSubgrid_SpanningMultipleParentRows_AlignsColumns()
+        {
+            // A column-only subgrid that also spans two parent rows (exercises the multi-row measurement path):
+            // its items still align to the parent columns.
+            var html = Wrap(@"
+                <div id='parent' style='display:grid; width:200pt; grid-template-columns:100pt 100pt;'>
+                    <div id='sub' style='grid-column:1 / 3; grid-row:1 / 3; display:grid; grid-template-columns:subgrid;'>
+                        <div id='a' style='height:20pt;'></div>
+                        <div id='b' style='height:20pt;'></div>
+                    </div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            Assert.Equal(100, b.Location.X - a.Location.X, 1.0);
+            Assert.Equal(a.Location.Y, b.Location.Y, 1.0);
+        }
+
+        [Fact]
+        public async Task ColumnSubgrid_UnderSpaceBetween_InteriorLinesAlign()
+        {
+            // The parent distributes free space with justify-content:space-between (100pt between each 100pt
+            // track in a 500pt grid → columns at 0/200/400). A subgrid spanning all three must reproduce those
+            // exact line positions, not a raw-gap reconstruction — so its interior items land at 200 and 400.
+            var html = Wrap(@"
+                <div id='parent' style='display:grid; width:500pt; grid-template-columns:100pt 100pt 100pt; justify-content:space-between;'>
+                    <div id='sub' style='grid-column:1 / 4; display:grid; grid-template-columns:subgrid;'>
+                        <div id='a' style='height:10pt;'></div>
+                        <div id='b' style='height:10pt;'></div>
+                        <div id='c' style='height:10pt;'></div>
+                    </div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            var c = FindById(root, "c")!;
+            Assert.Equal(200, b.Location.X - a.Location.X, 1.0);
+            Assert.Equal(200, c.Location.X - b.Location.X, 1.0);
+        }
+
+        [Fact]
+        public async Task Subgrid_WithNoParentGrid_BehavesAsAutoGrid()
+        {
+            // A subgrid whose container is not a grid item has no tracks to adopt: it falls back to an ordinary
+            // implicit auto grid (spec §9) rather than throwing.
+            var html = Wrap(@"
+                <div id='g' style='display:grid; width:200pt; grid-template-columns:subgrid;'>
+                    <div id='a' style='height:10pt;'>a</div>
+                    <div id='b' style='height:10pt;'>b</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            // One implicit column, row flow → the two items stack.
+            Assert.Equal(a.Location.X, b.Location.X, 1.0);
+            Assert.True(b.Location.Y > a.Location.Y);
+        }
+
+        [Fact]
+        public async Task GridTemplateColumns_Var_ResolvesAndLaysOut()
+        {
+            // A var()-resolved grid-template-columns value resolves into the typed CssProperty<GridTemplate>
+            // and the engine reads it — two 100pt columns.
+            var html = Wrap(@"
+                <div id='g' style='--cols:100pt 100pt; display:grid; width:200pt; grid-template-columns:var(--cols);'>
+                    <div id='a' style='height:10pt;'></div>
+                    <div id='b' style='height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            Assert.Equal(100, a.ActualBoxSizingWidth, 1.0);
+            Assert.Equal(100, b.ActualBoxSizingWidth, 1.0);
+            Assert.Equal(100, b.Location.X - a.Location.X, 1.0);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>

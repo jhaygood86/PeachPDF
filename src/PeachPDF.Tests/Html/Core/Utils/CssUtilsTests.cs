@@ -1,4 +1,5 @@
 using PeachPDF.Adapters;
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
@@ -61,6 +62,47 @@ namespace PeachPDF.Tests.Html.Core.Utils
 
             Assert.Equal("50px", box.Width);
         }
+        [Fact]
+        public async Task SetPropertyValue_GridTemplateColumns_ParsesTrackListIntoTypedValue()
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, "grid-template-columns", "100pt 200pt");
+
+            Assert.False(box.GridTemplateColumns.IsGlobalValue);
+            Assert.False(box.GridTemplateColumns.IsUnresolved);
+            Assert.NotNull(box.GridTemplateColumns.Value);
+            Assert.Equal(2, box.GridTemplateColumns.Value!.Tracks.Count);
+            Assert.Equal("100pt 200pt", box.GridTemplateColumns.ToString());
+        }
+
+        [Fact]
+        public async Task SetPropertyValue_GridTemplateColumns_GlobalKeyword_BecomesGlobalValue()
+        {
+            // The string setter's global-keyword branch (a CSS-wide keyword reaching the setter directly).
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, "grid-template-rows", "inherit");
+
+            Assert.True(box.GridTemplateRows.IsGlobalValue);
+            Assert.Equal(CssGlobalKeyword.Inherit, box.GridTemplateRows.GlobalValue);
+            Assert.Null(box.GridTemplateRows.Value);
+        }
+
+        [Fact]
+        public async Task SetPropertyValue_GridTemplateColumns_VarValue_StaysUnresolved()
+        {
+            // The string setter's var() guard: a value still containing var() must NOT be parsed into a
+            // template — it stays unresolved (no Value) until resolution replaces it.
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, "grid-template-columns", "var(--cols)");
+
+            Assert.True(box.GridTemplateColumns.IsUnresolved);
+            Assert.False(box.GridTemplateColumns.IsGlobalValue);
+            Assert.Null(box.GridTemplateColumns.Value);
+        }
+
         [Fact]
         public async Task SetPropertyValue_ColumnFill_AcceptsAutoAndBalance()
         {

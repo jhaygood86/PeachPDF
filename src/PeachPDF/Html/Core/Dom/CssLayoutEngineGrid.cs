@@ -13,14 +13,47 @@ using System.Threading.Tasks;
 namespace PeachPDF.Html.Core.Dom
 {
     /// <summary>
+    /// The parent-grid track geometry threaded into a <c>subgrid</c> grid item so it lays its own items out
+    /// against the parent's tracks (CSS Grid Level 2 §9). Set transiently on <see cref="CssBoxProperties.SubgridContext"/>
+    /// by the parent engine immediately before laying the child out, then cleared. Sizes (not absolute
+    /// positions) are adopted so the parent's cell translation lands the child's tracks on the parent lines.
+    /// </summary>
+    internal sealed class GridSubgridContext
+    {
+        /// <summary>The parent's spanned column-track sizes the child adopts; null ⇒ columns are not
+        /// subgridded (the child sizes its own columns).</summary>
+        public IReadOnlyList<double>? ColumnSizes { get; set; }
+
+        /// <summary>Each adopted column track's start position <b>relative to the first spanned track</b>, so the
+        /// child reproduces the parent's exact line positions (including any <c>justify-content</c> space
+        /// distribution) once the parent translates its cell into place.</summary>
+        public IReadOnlyList<double>? ColumnOffsets { get; set; }
+
+        /// <summary>The number of subgridded row tracks (= the item's row span in the parent).</summary>
+        public int RowCount { get; set; }
+
+        /// <summary>The parent's spanned row-track sizes the child adopts; null ⇒ <b>report mode</b> — the child
+        /// self-sizes its rows and writes them to <see cref="ReportedRowSizes"/> for the parent to consume.</summary>
+        public IReadOnlyList<double>? RowSizes { get; set; }
+
+        /// <summary>Each adopted row track's start position relative to the first spanned row (see
+        /// <see cref="ColumnOffsets"/>).</summary>
+        public IReadOnlyList<double>? RowOffsets { get; set; }
+
+        /// <summary>Report-mode output: the child's self-sized per-subrow heights (one per adopted row).</summary>
+        public double[]? ReportedRowSizes { get; set; }
+    }
+
+    /// <summary>
     /// Lays out a CSS Grid container (<c>display: grid</c> / <c>inline-grid</c>,
     /// <see href="https://www.w3.org/TR/css-grid-2/">CSS Grid Layout Module Level 1/2</see>).
     ///
-    /// v1 scope (issue #232): explicit and auto track sizing (lengths, %, <c>fr</c>, <c>auto</c>,
+    /// Scope: explicit and auto track sizing (lengths, %, <c>fr</c>, <c>auto</c>,
     /// <c>min-content</c>/<c>max-content</c>, <c>minmax()</c>, <c>fit-content()</c>, <c>repeat()</c>
     /// including <c>auto-fill</c>/<c>auto-fit</c>), line-based placement with spans, named lines and
-    /// <c>grid-template-areas</c>, auto-placement (<c>grid-auto-flow</c>), implicit tracks, gaps, and
-    /// box/content alignment. Subgrid, masonry, baseline alignment, and the <c>grid</c>/<c>grid-template</c>
+    /// <c>grid-template-areas</c>, auto-placement (<c>grid-auto-flow</c>), implicit tracks, gaps,
+    /// box/content alignment, and subgrid (Level 2 §9, on either or both axes, via
+    /// <see cref="GridSubgridContext"/>). Masonry, baseline alignment, and the <c>grid</c>/<c>grid-template</c>
     /// shorthands are out of scope — see docs/html-css-support.md.
     ///
     /// The engine mirrors <see cref="CssLayoutEngineFlex"/>: it resolves the container's content width via
@@ -89,11 +122,38 @@ namespace PeachPDF.Html.Core.Dom
             var columnGap = ParseGap(_gridBox.FlexColumnGap, contentWidth);
             var rowGap = ParseGap(_gridBox.FlexRowGap, contentWidth);
 
+            // The templates were parsed once at cascade time (CssProperty<GridTemplate>); read them directly.
+            var colTemplate = _gridBox.GridTemplateColumns.Value;
+            var rowTemplate = _gridBox.GridTemplateRows.Value;
+
+            // ── Subgrid (CSS Grid Level 2 §9): a grid item whose column/row template is `subgrid` adopts the
+            // parent grid's tracks along that axis. The parent threads the spanned track geometry in through
+            // _gridBox.SubgridContext; with no parent grid (context null / no column sizes) `subgrid` behaves
+            // as `none` (falls through to the normal implicit-auto-grid path).
+            var subgrid = _gridBox.SubgridContext;
+            var colSubgrid = colTemplate?.IsSubgrid == true && subgrid?.ColumnSizes is not null;
+            var rowSubgrid = rowTemplate?.IsSubgrid == true && subgrid is not null;
+
             // ── Explicit tracks + grid-auto-flow. Row flow (default) fixes the column count and grows rows;
             // column flow fixes the row count and grows columns. Implicit tracks cycle grid-auto-columns/rows.
-            // A column template's repeat(auto-fill|auto-fit, …) is resolved to a concrete count here.
-            var (explicitColDefs, autoFitRange) = ResolveColumnTemplate(_gridBox.GridTemplateColumns, contentWidth, columnGap);
-            var explicitRowDefs = ExpandTemplate(_gridBox.GridTemplateRows);
+            // A column template's repeat(auto-fill|auto-fit, …) is resolved to a concrete count here. A
+            // subgridded axis uses one auto placeholder per adopted track so the count/placement logic is
+            // unchanged; the real (adopted) sizes replace the tracks after placement.
+            List<GridTrackSize> explicitColDefs;
+            (int Start, int Length)? autoFitRange;
+            if (colSubgrid && subgrid?.ColumnSizes is { } adoptedColumns)
+            {
+                explicitColDefs = Enumerable.Repeat(GridTrackSize.Auto, adoptedColumns.Count).ToList();
+                autoFitRange = null;
+            }
+            else
+            {
+                (explicitColDefs, autoFitRange) = ResolveColumnTemplate(colTemplate, contentWidth, columnGap);
+            }
+
+            var explicitRowDefs = rowSubgrid && subgrid is not null
+                ? Enumerable.Repeat(GridTrackSize.Auto, subgrid.RowCount).ToList()
+                : ExpandTemplate(rowTemplate);
             var autoColDefs = ExpandTrackSizes(_gridBox.GridAutoColumns);
             var autoRowDefs = ExpandTrackSizes(_gridBox.GridAutoRows);
 
@@ -103,8 +163,8 @@ namespace PeachPDF.Html.Core.Dom
 
             // Per-axis named-line tables: [name] from the templates, plus name-start/name-end lines each
             // grid-template-areas area contributes.
-            var colLineNames = BuildLineNames(_gridBox.GridTemplateColumns);
-            var rowLineNames = BuildLineNames(_gridBox.GridTemplateRows);
+            var colLineNames = BuildLineNames(colTemplate);
+            var rowLineNames = BuildLineNames(rowTemplate);
 
             var areas = string.IsNullOrEmpty(_gridBox.GridTemplateAreas) || _gridBox.GridTemplateAreas.Isi(CssConstants.None)
                 ? null
@@ -133,64 +193,89 @@ namespace PeachPDF.Html.Core.Dom
             var rowCount = Math.Max(1, Math.Max(explicitRowDefs.Count,
                 placements.Count == 0 ? 0 : placements.Max(p => p.RowStart + p.RowSpan)));
 
-            // ── Column tracks: explicit sizes, then implicit columns cycling grid-auto-columns.
-            var colDefs = BuildTrackDefs(explicitColDefs, autoColDefs, colCount);
-
-            // auto-fit collapses any repeated column that ended up with no items in it.
-            var collapsed = new bool[colCount];
-            if (autoFitRange is var (rangeStart, rangeLen) && rangeLen > 0)
+            // ── Column tracks. A subgridded column axis adopts the parent's spanned track sizes directly
+            // (positioned from this grid's own client origin so the parent's cell translation lands them on the
+            // parent lines); otherwise size them normally.
+            Track[] columns;
+            if (colSubgrid && subgrid is { ColumnSizes: { } adoptedColumnSizes, ColumnOffsets: { } adoptedColumnOffsets })
             {
-                var usedCol = new bool[colCount];
-                foreach (var p in placements)
-                    for (var c = p.ColStart; c < p.ColStart + p.ColSpan && c < colCount; c++)
-                        usedCol[c] = true;
-                for (var c = rangeStart; c < rangeStart + rangeLen && c < colCount; c++)
-                    if (!usedCol[c]) collapsed[c] = true;
+                columns = BuildAdoptedTracks(adoptedColumnSizes, adoptedColumnOffsets, _gridBox.ClientLeft, colCount);
             }
-
-            // Intrinsic (min/max-content) contributions for auto/min-content/max-content/fit-content columns.
-            var colIntrinsic = await MeasureColumnIntrinsics(g, placements, colDefs, colCount);
-
-            var stretchColumns = IsStretch(_gridBox.JustifyContent);
-            var columns = SizeColumnTracks(colDefs, contentWidth, columnGap, collapsed, colIntrinsic, stretchColumns);
-            PositionTracks(columns, _gridBox.ClientLeft, contentWidth, columnGap, _gridBox.JustifyContent);
-
-            // ── Row tracks: explicit sizes, then implicit rows cycling grid-auto-rows; auto rows are sized
-            // to the tallest item they contain (measured at the item's column-span width).
-            var rowDefs = BuildTrackDefs(explicitRowDefs, autoRowDefs, rowCount);
-            var rows = new Track[rowCount];
-            for (var r = 0; r < rowCount; r++)
-                rows[r] = new Track { Def = rowDefs[r], Size = ResolveFixedRow(rowDefs[r], hasDefiniteHeight) };
-
-            // Single-row items size their auto row directly.
-            foreach (var p in placements.Where(p => p.RowSpan == 1 && !IsFixed(rows[p.RowStart].Def)))
+            else
             {
-                var natural = await MeasureItemHeight(g, p.Box, ColumnSpanWidth(columns, p.ColStart, p.ColSpan, columnGap));
-                rows[p.RowStart].Size = Math.Max(rows[p.RowStart].Size, natural);
-            }
+                var colDefs = BuildTrackDefs(explicitColDefs, autoColDefs, colCount);
 
-            // Row-spanning items grow the last auto row they cover if their content exceeds the spanned rows.
-            foreach (var p in placements.Where(p => p.RowSpan > 1))
-            {
-                var natural = await MeasureItemHeight(g, p.Box, ColumnSpanWidth(columns, p.ColStart, p.ColSpan, columnGap));
-                var spanned = 0.0;
-                for (var r = p.RowStart; r < p.RowStart + p.RowSpan; r++) spanned += rows[r].Size;
-                spanned += rowGap * (p.RowSpan - 1);
-                if (natural > spanned)
+                // auto-fit collapses any repeated column that ended up with no items in it.
+                var collapsed = new bool[colCount];
+                if (autoFitRange is var (rangeStart, rangeLen) && rangeLen > 0)
                 {
-                    var lastAuto = -1;
-                    for (var r = p.RowStart; r < p.RowStart + p.RowSpan; r++)
-                        if (!IsFixed(rows[r].Def)) lastAuto = r;
-                    if (lastAuto >= 0) rows[lastAuto].Size += natural - spanned;
+                    var usedCol = new bool[colCount];
+                    foreach (var p in placements)
+                        for (var c = p.ColStart; c < p.ColStart + p.ColSpan && c < colCount; c++)
+                            usedCol[c] = true;
+                    for (var c = rangeStart; c < rangeStart + rangeLen && c < colCount; c++)
+                        if (!usedCol[c]) collapsed[c] = true;
                 }
+
+                // Intrinsic (min/max-content) contributions for auto/min-content/max-content/fit-content columns.
+                var colIntrinsic = await MeasureColumnIntrinsics(g, placements, colDefs, colCount);
+
+                var stretchColumns = IsStretch(_gridBox.JustifyContent);
+                columns = SizeColumnTracks(colDefs, contentWidth, columnGap, collapsed, colIntrinsic, stretchColumns);
+                PositionTracks(columns, _gridBox.ClientLeft, contentWidth, columnGap, _gridBox.JustifyContent);
             }
 
-            var rowContainerSize = hasDefiniteHeight ? _gridBox.ClientBottom - _gridBox.ClientTop
-                : rows.Sum(t => t.Size) + (rowCount > 1 ? rowGap * (rowCount - 1) : 0);
-            PositionTracks(rows, _gridBox.ClientTop, rowContainerSize, rowGap, _gridBox.AlignContent);
+            // ── Row tracks. A subgridded row axis adopts the parent's spanned row sizes; otherwise size the
+            // explicit/implicit rows to their tallest item (measured at the item's column-span width).
+            Track[] rows;
+            if (rowSubgrid && subgrid is { RowSizes: { } adoptedRowSizes, RowOffsets: { } adoptedRowOffsets })
+            {
+                rows = BuildAdoptedTracks(adoptedRowSizes, adoptedRowOffsets, _gridBox.ClientTop, rowCount);
+            }
+            else
+            {
+                var rowDefs = BuildTrackDefs(explicitRowDefs, autoRowDefs, rowCount);
+                rows = new Track[rowCount];
+                for (var r = 0; r < rowCount; r++)
+                    rows[r] = new Track { Def = rowDefs[r], Size = ResolveFixedRow(rowDefs[r], hasDefiniteHeight) };
+
+                // Subgrid children are measured separately (below) since their per-row content must feed the
+                // parent tracks; skip them in the normal item-height passes.
+                var normalItems = placements.Where(p => !IsSubgridItem(p.Box)).ToList();
+
+                // Single-row items size their auto row directly.
+                foreach (var p in normalItems.Where(p => p.RowSpan == 1 && !IsFixed(rows[p.RowStart].Def)))
+                {
+                    var natural = await MeasureItemHeight(g, p.Box, ColumnSpanWidth(columns, p.ColStart, p.ColSpan, columnGap));
+                    rows[p.RowStart].Size = Math.Max(rows[p.RowStart].Size, natural);
+                }
+
+                // Row-spanning items grow the last auto row they cover if their content exceeds the spanned rows.
+                foreach (var p in normalItems.Where(p => p.RowSpan > 1))
+                {
+                    var natural = await MeasureItemHeight(g, p.Box, ColumnSpanWidth(columns, p.ColStart, p.ColSpan, columnGap));
+                    GrowSpannedAutoRows(rows, p, natural, rowGap);
+                }
+
+                // Subgrid children: a col-only subgrid is measured as one item (with adopted columns); a
+                // row-subgrid child reports its own per-subrow heights, which grow the parent's spanned auto rows
+                // so the shared tracks size to fit every subgrid.
+                foreach (var p in placements.Where(p => IsSubgridItem(p.Box)))
+                    await MeasureSubgridItem(g, p, columns, rows, columnGap, rowGap);
+
+                var rowContainerSize = hasDefiniteHeight ? _gridBox.ClientBottom - _gridBox.ClientTop
+                    : rows.Sum(t => t.Size) + (rowCount > 1 ? rowGap * (rowCount - 1) : 0);
+                PositionTracks(rows, _gridBox.ClientTop, rowContainerSize, rowGap, _gridBox.AlignContent);
+
+                // Report mode: this grid is itself a row-subgrid being measured by its parent — hand back the
+                // per-subrow sizes it just computed (one per adopted row) so the parent can grow its tracks.
+                if (rowSubgrid && subgrid is not null)
+                    subgrid.ReportedRowSizes = rows.Take(subgrid.RowCount).Select(t => t.Size).ToArray();
+            }
 
             // ── Place each item into its (possibly spanned) cell, aligned per justify-self/align-self
-            // (defaulting to justify-items/align-items, then to stretch).
+            // (defaulting to justify-items/align-items, then to stretch). A subgrid child is given the adopted
+            // track geometry for its subgridded axes so its own items snap to the parent lines.
             foreach (var p in placements)
             {
                 var cellX = columns[p.ColStart].Position;
@@ -199,7 +284,17 @@ namespace PeachPDF.Html.Core.Dom
                 var cellHeight = RowSpanHeight(rows, p.RowStart, p.RowSpan, rowGap);
                 var justify = ResolveSelfAlignment(p.Box.JustifySelf, _gridBox.JustifyItems);
                 var align = ResolveSelfAlignment(p.Box.AlignSelf, _gridBox.AlignItems);
-                await PlaceItemInCell(g, p.Box, cellX, cellY, cellWidth, cellHeight, justify, align);
+
+                var context = BuildChildSubgridContext(p, columns, rows, adoptRows: true);
+                p.Box.SubgridContext = context;
+                try
+                {
+                    await PlaceItemInCell(g, p.Box, cellX, cellY, cellWidth, cellHeight, justify, align);
+                }
+                finally
+                {
+                    p.Box.SubgridContext = null;
+                }
             }
 
             // ── Container size when auto.
@@ -557,7 +652,10 @@ namespace PeachPDF.Html.Core.Dom
             var needed = colDefs.Any(IsIntrinsic);
             if (!needed) return intrinsic;
 
-            foreach (var p in placements.Where(p => p.ColSpan == 1 && IsIntrinsic(colDefs[p.ColStart])))
+            // A subgrid item is skipped: measuring it here (with no SubgridContext) would lay it out as an
+            // ordinary grid and feed a bogus max-content into an auto parent column. Its contribution to the
+            // parent's column sizing is the (accepted) column-axis gap, #276.
+            foreach (var p in placements.Where(p => p.ColSpan == 1 && IsIntrinsic(colDefs[p.ColStart]) && !IsSubgridItem(p.Box)))
             {
                 // An explicit item width is its content contribution; otherwise measure its max-content.
                 var content = CssValueParser.IsValidLength(p.Box.Width)
@@ -784,17 +882,166 @@ namespace PeachPDF.Html.Core.Dom
             + box.ActualPaddingTop + box.ActualPaddingBottom
             + box.ActualBorderTopWidth + box.ActualBorderBottomWidth;
 
+        // ─── Subgrid (CSS Grid Level 2 §9) ─────────────────────────────────────────
+
+        /// <summary>Whether a grid item is a subgrid on at least one axis — a nested grid whose
+        /// <c>grid-template-columns</c> and/or <c>grid-template-rows</c> is <c>subgrid</c>.</summary>
+        private static bool IsSubgridItem(CssBox box) =>
+            (box.Display == CssConstants.Grid || box.Display == CssConstants.InlineGrid)
+            && (ChildColSubgrid(box) || ChildRowSubgrid(box));
+
+        private static bool ChildColSubgrid(CssBox box) => box.GridTemplateColumns.Value?.IsSubgrid == true;
+        private static bool ChildRowSubgrid(CssBox box) => box.GridTemplateRows.Value?.IsSubgrid == true;
+
+        /// <summary>The used sizes of the tracks a placement spans (clamped to the built track array).</summary>
+        private static List<double> SpannedSizes(Track[] tracks, int start, int span)
+        {
+            var sizes = new List<double>(span);
+            for (var i = start; i < start + span && i < tracks.Length; i++)
+                sizes.Add(tracks[i].Size);
+            return sizes;
+        }
+
+        /// <summary>Each spanned track's start position relative to the first spanned track — this captures the
+        /// parent's exact line positions (uniform gaps, or the wider spacing a <c>space-*</c> content-alignment
+        /// produces) so the adopted tracks reproduce them, not just a raw-gap reconstruction.</summary>
+        private static List<double> SpannedOffsets(Track[] tracks, int start, int span)
+        {
+            var offsets = new List<double>(span);
+            var origin = start < tracks.Length ? tracks[start].Position : 0;
+            for (var i = start; i < start + span && i < tracks.Length; i++)
+                offsets.Add(tracks[i].Position - origin);
+            return offsets;
+        }
+
+        /// <summary>Builds <paramref name="totalCount"/> tracks: the first <paramref name="sizes"/>.Count use the
+        /// adopted parent sizes at their adopted relative <paramref name="offsets"/> (measured from
+        /// <paramref name="start"/>), reproducing the parent's line positions exactly once the parent translates
+        /// the child's cell into place; any extra tracks beyond the adopted count are zero-width and abut the
+        /// last adopted track (overflow).</summary>
+        private static Track[] BuildAdoptedTracks(IReadOnlyList<double> sizes, IReadOnlyList<double> offsets, double start, int totalCount)
+        {
+            var tracks = new Track[totalCount];
+            var overflowPos = start + (sizes.Count > 0 ? offsets[^1] + sizes[^1] : 0);
+            for (var i = 0; i < totalCount; i++)
+            {
+                if (i < sizes.Count)
+                    tracks[i] = new Track { Def = GridTrackSize.Auto, Size = sizes[i], Position = start + offsets[i] };
+                else
+                    tracks[i] = new Track { Def = GridTrackSize.Auto, Size = 0, Position = overflowPos };
+            }
+            return tracks;
+        }
+
+        /// <summary>Builds the <see cref="GridSubgridContext"/> handed to a subgrid child — the parent track
+        /// geometry it adopts for each subgridded axis. Returns null for a non-subgrid item (no-op). When
+        /// <paramref name="adoptRows"/> is false the row sizes are omitted (report/measure mode: the child
+        /// self-sizes its rows and reports them back).</summary>
+        private static GridSubgridContext? BuildChildSubgridContext(
+            Placement p, Track[] columns, Track[] rows, bool adoptRows)
+        {
+            if (!IsSubgridItem(p.Box)) return null;
+
+            var context = new GridSubgridContext();
+            if (ChildColSubgrid(p.Box))
+            {
+                context.ColumnSizes = SpannedSizes(columns, p.ColStart, p.ColSpan);
+                context.ColumnOffsets = SpannedOffsets(columns, p.ColStart, p.ColSpan);
+            }
+            if (ChildRowSubgrid(p.Box))
+            {
+                context.RowCount = p.RowSpan;
+                if (adoptRows)
+                {
+                    context.RowSizes = SpannedSizes(rows, p.RowStart, p.RowSpan);
+                    context.RowOffsets = SpannedOffsets(rows, p.RowStart, p.RowSpan);
+                }
+            }
+            return context;
+        }
+
+        /// <summary>Grows the last auto row a placement spans by the amount its content exceeds the spanned
+        /// rows + gaps (a no-op if it already fits, or if every spanned row is fixed).</summary>
+        private static void GrowSpannedAutoRows(Track[] rows, Placement p, double natural, double rowGap)
+        {
+            var spanned = 0.0;
+            for (var r = p.RowStart; r < p.RowStart + p.RowSpan && r < rows.Length; r++) spanned += rows[r].Size;
+            spanned += rowGap * (p.RowSpan - 1);
+            if (natural <= spanned) return;
+
+            var lastAuto = -1;
+            for (var r = p.RowStart; r < p.RowStart + p.RowSpan && r < rows.Length; r++)
+                if (!IsFixed(rows[r].Def)) lastAuto = r;
+            if (lastAuto >= 0) rows[lastAuto].Size += natural - spanned;
+        }
+
+        /// <summary>
+        /// Measures a subgrid item's contribution to this (parent) grid's row tracks. A row-subgrid child is laid
+        /// out in <b>report mode</b> (adopted columns, self-sized rows) so its per-subrow heights can grow the
+        /// parent's spanned auto rows one-for-one — this is what makes every subgrid's rows share a common,
+        /// content-fitting size. A column-only subgrid is measured as an ordinary item (with adopted columns).
+        /// </summary>
+        private async ValueTask MeasureSubgridItem(RGraphics g, Placement p, Track[] columns, Track[] rows,
+            double columnGap, double rowGap)
+        {
+            var box = p.Box;
+            var columnWidth = ColumnSpanWidth(columns, p.ColStart, p.ColSpan, columnGap);
+
+            if (ChildRowSubgrid(box))
+            {
+                var context = new GridSubgridContext { RowCount = p.RowSpan };
+                if (ChildColSubgrid(box))
+                {
+                    context.ColumnSizes = SpannedSizes(columns, p.ColStart, p.ColSpan);
+                    context.ColumnOffsets = SpannedOffsets(columns, p.ColStart, p.ColSpan);
+                }
+
+                box.SubgridContext = context;
+                try { await MeasureItemHeight(g, box, columnWidth); }
+                finally { box.SubgridContext = null; }
+
+                var reported = context.ReportedRowSizes;
+                if (reported is null) return;
+                for (var k = 0; k < p.RowSpan && p.RowStart + k < rows.Length && k < reported.Length; k++)
+                {
+                    var r = p.RowStart + k;
+                    if (!IsFixed(rows[r].Def))
+                        rows[r].Size = Math.Max(rows[r].Size, reported[k]);
+                }
+            }
+            else
+            {
+                // Column-only subgrid: adopt columns while measuring so the reported height is correct.
+                var context = new GridSubgridContext
+                {
+                    ColumnSizes = SpannedSizes(columns, p.ColStart, p.ColSpan),
+                    ColumnOffsets = SpannedOffsets(columns, p.ColStart, p.ColSpan)
+                };
+                box.SubgridContext = context;
+                double natural;
+                try { natural = await MeasureItemHeight(g, box, columnWidth); }
+                finally { box.SubgridContext = null; }
+
+                if (p.RowSpan == 1)
+                {
+                    if (!IsFixed(rows[p.RowStart].Def))
+                        rows[p.RowStart].Size = Math.Max(rows[p.RowStart].Size, natural);
+                }
+                else
+                {
+                    GrowSpannedAutoRows(rows, p, natural, rowGap);
+                }
+            }
+        }
+
         // ─── Value helpers ──────────────────────────────────────────────────────────
 
         /// <summary>Extracts the <c>[name]</c> named lines declared in a track template into a mutable
         /// name → sorted 1-based line-number table (into which <c>grid-template-areas</c> merges its implicit
         /// area lines).</summary>
-        private static Dictionary<string, List<int>> BuildLineNames(string value)
+        private static Dictionary<string, List<int>> BuildLineNames(GridTemplate? template)
         {
             var table = new Dictionary<string, List<int>>();
-            if (string.IsNullOrEmpty(value) || value.Isi(CssConstants.None))
-                return table;
-            var template = GridTrackListGrammar.TryParse(CssValueParser.GetCssTokens(value));
             if (template?.LineNames is { Count: > 0 } names)
                 foreach (var (name, lines) in names)
                     table[name] = lines.ToList();
@@ -810,28 +1057,21 @@ namespace PeachPDF.Html.Core.Dom
             if (idx < 0) lines.Insert(~idx, line);
         }
 
-        private List<GridTrackSize> ExpandTemplate(string value)
+        private static List<GridTrackSize> ExpandTemplate(GridTemplate? template)
         {
-            if (string.IsNullOrEmpty(value) || value.Isi(CssConstants.None))
-                return [];
-            var template = GridTrackListGrammar.TryParse(CssValueParser.GetCssTokens(value));
             // The auto-repeat (auto-fill/auto-fit) section is resolved in Stage 7.
             return template?.Tracks.ToList() ?? [];
         }
 
         /// <summary>
-        /// Resolves a <c>grid-template-columns</c> value into concrete track definitions, expanding a
+        /// Resolves a <c>grid-template-columns</c> template into concrete track definitions, expanding a
         /// <c>repeat(auto-fill|auto-fit, …)</c> section to the number of repetitions that fit the container
         /// width (CSS Grid §7.2.3.2). Returns the tracks and, for <c>auto-fit</c>, the [start, length) index
         /// range of the repeated tracks so empty ones can be collapsed after placement.
         /// </summary>
         private (List<GridTrackSize> Defs, (int Start, int Length)? AutoFitRange) ResolveColumnTemplate(
-            string value, double contentWidth, double gap)
+            GridTemplate? template, double contentWidth, double gap)
         {
-            if (string.IsNullOrEmpty(value) || value.Isi(CssConstants.None))
-                return ([], null);
-
-            var template = GridTrackListGrammar.TryParse(CssValueParser.GetCssTokens(value));
             if (template is null)
                 return ([], null);
             if (template.AutoRepeat == GridAutoRepeatKind.None)

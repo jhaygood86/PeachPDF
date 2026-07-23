@@ -143,7 +143,7 @@ namespace PeachPDF.Tests.Integration
                     yield return descendant;
         }
 
-        private static List<string> CollectWords(CssBox box) =>
+        private static List<string?> CollectWords(CssBox box) =>
             EnumerateBoxes(box).SelectMany(b => b.Words.Select(w => w.Text)).ToList();
 
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildAndLayout(string html)

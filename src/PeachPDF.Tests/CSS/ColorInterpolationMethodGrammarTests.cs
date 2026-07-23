@@ -17,7 +17,7 @@ namespace PeachPDF.Tests.CSS
     /// </summary>
     public class ColorInterpolationMethodGrammarTests : CssConstructionFunctions
     {
-        private static (bool Ok, bool HasIn, string Remainder) Extract(string value)
+        private static (bool Ok, bool HasIn, string? Remainder) Extract(string value)
         {
             var ok = ColorInterpolationMethodGrammar.TryExtractInterpolationMethod(
                 CssValueParser.GetCssTokens(value), out var remainder, out var hasIn);

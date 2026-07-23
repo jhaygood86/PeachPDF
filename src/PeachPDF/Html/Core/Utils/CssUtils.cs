@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
@@ -176,8 +177,8 @@ namespace PeachPDF.Html.Core.Utils
                 ["order"] = b => b.Order,
                 ["row-gap"] = b => b.FlexRowGap,
                 ["column-gap"] = b => b.FlexColumnGap,
-                ["grid-template-columns"] = b => b.GridTemplateColumns,
-                ["grid-template-rows"] = b => b.GridTemplateRows,
+                ["grid-template-columns"] = b => b.GridTemplateColumns.ToString(),
+                ["grid-template-rows"] = b => b.GridTemplateRows.ToString(),
                 ["grid-template-areas"] = b => b.GridTemplateAreas,
                 ["grid-auto-columns"] = b => b.GridAutoColumns,
                 ["grid-auto-rows"] = b => b.GridAutoRows,
@@ -280,6 +281,54 @@ namespace PeachPDF.Html.Core.Utils
             {
                 setter(valueParser, cssBox, value);
             }
+        }
+
+        /// <summary>
+        /// Assigns a property's already-parsed, strongly-typed value straight onto a <see cref="CssBox"/> from
+        /// its Layer A <see cref="ITypedPropertyValue{T}"/> carrier, without re-parsing the authored string.
+        /// Returns false when <paramref name="propName"/> has no typed setter, or when
+        /// <paramref name="declaredValue"/> is not the matching typed carrier (e.g. a global-keyword value) — the
+        /// caller then falls back to the string setter. The per-name handler knows the concrete <c>T</c>.
+        /// </summary>
+        public static bool TrySetTypedPropertyValue(CssBox cssBox, string propName, IPropertyValue declaredValue)
+        {
+            return declaredValue is not null
+                   && _typedPropertySetters.TryGetValue(propName, out var setter)
+                   && setter(cssBox, declaredValue);
+        }
+
+        private static readonly FrozenDictionary<string, Func<CssBox, IPropertyValue, bool>> _typedPropertySetters =
+            new Dictionary<string, Func<CssBox, IPropertyValue, bool>>
+            {
+                ["grid-template-columns"] = (b, dv) =>
+                {
+                    if (!dv.TryGetValue<GridTemplate>(out var t)) return false;
+                    b.GridTemplateColumns = t;
+                    return true;
+                },
+                ["grid-template-rows"] = (b, dv) =>
+                {
+                    if (!dv.TryGetValue<GridTemplate>(out var t)) return false;
+                    b.GridTemplateRows = t;
+                    return true;
+                },
+            }.ToFrozenDictionary(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Builds a <see cref="CssProperty{T}"/> from an authored string for the string-based cascade paths
+        /// (initial seed, resolved global keyword, inherited copy, var()-resolved string): a CSS-wide keyword
+        /// becomes a global value, a string still containing <c>var(</c> stays unresolved (never parsed into a
+        /// bogus template), otherwise the track list is parsed. The typed cascade path
+        /// (<see cref="TrySetTypedPropertyValue"/>) bypasses this and reuses Layer A's parse.
+        /// </summary>
+        private static CssProperty<GridTemplate> BuildGridTemplate(string value)
+        {
+            if (CssGlobalKeywords.TryParse(value, out var keyword))
+                return CssProperty<GridTemplate>.Global(keyword);
+            if (value.Contains("var(", StringComparison.OrdinalIgnoreCase))
+                return CssProperty<GridTemplate>.Unresolved(value);
+            var template = GridTrackListGrammar.TryParse(CssValueParser.GetCssTokens(value));
+            return CssProperty<GridTemplate>.FromValue(value, template);
         }
 
         /// <summary>
@@ -411,8 +460,8 @@ namespace PeachPDF.Html.Core.Utils
                 ["order"] = (_, b, v) => b.Order = v,
                 ["row-gap"] = (_, b, v) => b.FlexRowGap = v,
                 ["column-gap"] = (_, b, v) => b.FlexColumnGap = v,
-                ["grid-template-columns"] = (_, b, v) => b.GridTemplateColumns = v,
-                ["grid-template-rows"] = (_, b, v) => b.GridTemplateRows = v,
+                ["grid-template-columns"] = (_, b, v) => b.GridTemplateColumns = BuildGridTemplate(v),
+                ["grid-template-rows"] = (_, b, v) => b.GridTemplateRows = BuildGridTemplate(v),
                 ["grid-template-areas"] = (_, b, v) => b.GridTemplateAreas = v,
                 ["grid-auto-columns"] = (_, b, v) => b.GridAutoColumns = v,
                 ["grid-auto-rows"] = (_, b, v) => b.GridAutoRows = v,
