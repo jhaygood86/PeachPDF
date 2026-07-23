@@ -29,6 +29,7 @@ namespace PeachPDF.CSS
             return Data(current);
         }
 
+
         internal void RaiseErrorOccurred(ParseError error, TextPosition position)
         {
             var handler = Error;

@@ -1,5 +1,6 @@
 #nullable disable
 
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
@@ -7,6 +8,9 @@ namespace PeachPDF.CSS
 {
     internal sealed class MarginStyleRule : Rule, IStyleRule
     {
+        // @page margin boxes don't participate in CSS Nesting.
+        public IReadOnlyList<IStyleRule> NestedRules => [];
+
         public MarginStyleRule(StylesheetParser parser) : base(RuleType.Style, parser)
         {
             AppendChild(new StyleDeclaration(this));

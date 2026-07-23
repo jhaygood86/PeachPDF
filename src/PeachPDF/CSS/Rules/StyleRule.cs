@@ -1,5 +1,6 @@
 #nullable disable
 
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
@@ -7,11 +8,20 @@ namespace PeachPDF.CSS
 {
     internal sealed class StyleRule : Rule, IStyleRule
     {
+        // CSS Nesting: rules written inside this rule's block, resolved to absolute selectors against
+        // this parent. Kept in a dedicated list (not Children) so Selector/Style lookups and ToCss are
+        // unaffected. Populated by StylesheetComposer.FillDeclarations.
+        private readonly List<IStyleRule> _nestedRules = [];
+
         public StyleRule(StylesheetParser parser) : base(RuleType.Style, parser)
         {
             AppendChild(AllSelector.Create());
             AppendChild(new StyleDeclaration(this));
         }
+
+        public IReadOnlyList<IStyleRule> NestedRules => _nestedRules;
+
+        public void AddNestedRule(IStyleRule rule) => _nestedRules.Add(rule);
 
         public override void ToCss(TextWriter writer, IStyleFormatter formatter)
         {

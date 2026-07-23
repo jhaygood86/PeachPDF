@@ -4246,6 +4246,47 @@ await SaveShowcaseAsync("cascade_layers", "Selectors & Cascade", "@layer Cascade
     "utility frameworks like Tailwind v4 rely on.",
     cascadeLayerHtml, pdfConfig);
 
+// ── CSS Nesting: nested style rules and the & nesting selector ────────────────────────
+var nestingHtml =
+    "<html><head><style>" +
+    "body { font-family: sans-serif; margin: 24px; color: #1a1a1a; }" +
+    "h2 { font-size: 20px; margin: 0 0 4px; } .note { color: #555; font-size: 12px; margin: 0 0 16px; }" +
+    // One rule per card, authored with nesting — the whole card's look comes from nested rules and `&`.
+    ".card {" +
+    "  display: block; max-width: 420px; margin: 0 0 14px; padding: 16px;" +
+    "  border-radius: 10px; border: 1px solid #cbd5e1; background: #f8fafc;" +
+    "  & .title { font-size: 15px; font-weight: 700; color: #0f172a; margin-bottom: 6px; }" + // & .title == .card .title
+    "  .body { font-size: 13px; color: #475569; }" +                                          // implicit descendant
+    "  &.accent { background: oklch(0.95 0.03 250); border-color: #2563eb; }" +                // &.accent == .card.accent
+    "  > .tag {" +                                                                             // > .tag == .card > .tag
+    "    display: inline-block; margin-top: 10px; padding: 2px 8px; border-radius: 999px;" +
+    "    font-size: 11px; background: #2563eb; color: #fff;" +
+    "    & + .tag { margin-left: 6px; }" +                                                     // nested combinator, 2 levels deep
+    "  }" +
+    "}" +
+    "</style></head><body>" +
+    "<h2>CSS Nesting</h2>" +
+    "<p class=\"note\">Each card is styled entirely by <b>nested rules</b>: <code>&amp; .title</code>, an implicit-descendant " +
+    "<code>.body</code>, a compound <code>&amp;.accent</code>, a child <code>&gt; .tag</code>, and a two-level-deep " +
+    "<code>&amp; + .tag</code> — the shape Tailwind v4 emits for modern browser targets.</p>" +
+    "<div class=\"card\">" +
+    "<div class=\"title\">Plain card</div>" +
+    "<div class=\"body\">Title, body, and pill tags all come from selectors nested under <code>.card</code>.</div>" +
+    "<span class=\"tag\">alpha</span><span class=\"tag\">beta</span>" +
+    "</div>" +
+    "<div class=\"card accent\">" +
+    "<div class=\"title\">Accent card</div>" +
+    "<div class=\"body\">This one adds the <code>.accent</code> class, so <code>&amp;.accent</code> tints it blue.</div>" +
+    "<span class=\"tag\">one</span><span class=\"tag\">two</span>" +
+    "</div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("css_nesting", "Selectors & Cascade", "CSS Nesting",
+    "CSS Nesting: a card styled entirely by rules nested inside `.card` — the `&` nesting selector " +
+    "(`&.accent`), an implicit-descendant nested selector (`.body`), a child combinator (`> .tag`), and a " +
+    "two-level-deep nested combinator (`& + .tag`), resolved against the parent exactly like `:is(.card)`.",
+    nestingHtml, pdfConfig);
+
 // The manifest that drives the website's /showcase page (see docs/showcase.html and
 // .github/workflows/pages.yml). Field names are camelCased for Liquid (site.data.showcases).
 var manifestJson = JsonSerializer.Serialize(showcaseManifest,
