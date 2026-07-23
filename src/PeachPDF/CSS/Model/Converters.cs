@@ -462,6 +462,25 @@ namespace PeachPDF.CSS
             IntegerConverter.Required(),
             IntegerConverter.StartsWithDelimiter().Required());
 
+        // A single grid <grid-line> (auto | <integer> | span <integer>), validated by GridLineGrammar.
+        public static readonly IValueConverter GridLineConverter = new GridLineValueConverter();
+
+        // grid-column / grid-row: <grid-line> [ / <grid-line> ]?  (the omitted end resolves to auto).
+        public static readonly IValueConverter GridColumnConverter = WithOrder(
+            GridLineConverter.Required().For(PropertyNames.GridColumnStart),
+            GridLineConverter.StartsWithDelimiter().Option().For(PropertyNames.GridColumnEnd));
+
+        public static readonly IValueConverter GridRowConverter = WithOrder(
+            GridLineConverter.Required().For(PropertyNames.GridRowStart),
+            GridLineConverter.StartsWithDelimiter().Option().For(PropertyNames.GridRowEnd));
+
+        // grid-area: <grid-line> [ / <grid-line> ]{0,3}  →  row-start / col-start / row-end / col-end.
+        public static readonly IValueConverter GridAreaConverter = WithOrder(
+            GridLineConverter.Required().For(PropertyNames.GridRowStart),
+            GridLineConverter.StartsWithDelimiter().Option().For(PropertyNames.GridColumnStart),
+            GridLineConverter.StartsWithDelimiter().Option().For(PropertyNames.GridRowEnd),
+            GridLineConverter.StartsWithDelimiter().Option().For(PropertyNames.GridColumnEnd));
+
         public static readonly IValueConverter ShadowConverter = WithAny(
             Assign(Keywords.Inset, true).Option(false),
             LengthConverter.Many(2, 4).Required(),

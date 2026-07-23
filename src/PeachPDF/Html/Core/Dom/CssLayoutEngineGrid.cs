@@ -98,15 +98,15 @@ namespace PeachPDF.Html.Core.Dom
             var columns = SizeColumnTracks(colDefs, contentWidth, columnGap);
             AssignPositions(columns, _gridBox.ClientLeft, columnGap);
 
-            // ── Row-major auto placement (explicit placement + spanning arrive in Stage 4).
-            var rowCount = (int)Math.Ceiling(items.Count / (double)colCount);
-            var placements = new (int Col, int Row)[items.Count];
-            for (var k = 0; k < items.Count; k++)
-                placements[k] = (k % colCount, k / colCount);
+            // ── Placement: explicit line-based placement + spans, then row-major auto-placement of the rest
+            // (grid-auto-flow: column and dense arrive in Stage 5). Implicit rows are created as needed.
+            var rowDefs = ExpandTemplate(_gridBox.GridTemplateRows);
+            var placements = PlaceItems(items, colCount, rowDefs.Count);
+            var rowCount = placements.Count == 0 ? 0 : placements.Max(p => p.RowStart + p.RowSpan);
+            rowCount = Math.Max(rowCount, 1);
 
             // ── Row tracks: explicit grid-template-rows sizes where present, otherwise auto rows sized to
-            // the tallest item they contain (measured at the item's column width).
-            var rowDefs = ExpandTemplate(_gridBox.GridTemplateRows);
+            // the tallest item they contain (measured at the item's column-span width).
             var rows = new Track[rowCount];
             for (var r = 0; r < rowCount; r++)
             {
@@ -114,25 +114,40 @@ namespace PeachPDF.Html.Core.Dom
                 rows[r] = new Track { Def = def, Size = ResolveFixedRow(def, hasDefiniteHeight) };
             }
 
-            for (var k = 0; k < items.Count; k++)
+            // Single-row items size their auto row directly.
+            foreach (var p in placements.Where(p => p.RowSpan == 1 && !IsFixed(rows[p.RowStart].Def)))
             {
-                var (col, row) = placements[k];
-                if (!IsFixed(rows[row].Def))
+                var natural = await MeasureItemHeight(g, p.Box, ColumnSpanWidth(columns, p.ColStart, p.ColSpan, columnGap));
+                rows[p.RowStart].Size = Math.Max(rows[p.RowStart].Size, natural);
+            }
+
+            // Row-spanning items grow the last auto row they cover if their content exceeds the spanned rows.
+            foreach (var p in placements.Where(p => p.RowSpan > 1))
+            {
+                var natural = await MeasureItemHeight(g, p.Box, ColumnSpanWidth(columns, p.ColStart, p.ColSpan, columnGap));
+                var spanned = 0.0;
+                for (var r = p.RowStart; r < p.RowStart + p.RowSpan; r++) spanned += rows[r].Size;
+                spanned += rowGap * (p.RowSpan - 1);
+                if (natural > spanned)
                 {
-                    var natural = await MeasureItemHeight(g, items[k], columns[col].Size);
-                    rows[row].Size = Math.Max(rows[row].Size, natural);
+                    var lastAuto = -1;
+                    for (var r = p.RowStart; r < p.RowStart + p.RowSpan; r++)
+                        if (!IsFixed(rows[r].Def)) lastAuto = r;
+                    if (lastAuto >= 0) rows[lastAuto].Size += natural - spanned;
                 }
             }
 
             AssignPositions(rows, _gridBox.ClientTop, rowGap);
 
-            // ── Place each item into its cell (stretch to the cell by default — justify/align-self default
-            // to stretch; explicit alignment lands in Stage 6).
-            for (var k = 0; k < items.Count; k++)
+            // ── Place each item into its (possibly spanned) cell (stretch to the cell by default —
+            // justify/align-self default to stretch; explicit alignment lands in Stage 6).
+            foreach (var p in placements)
             {
-                var (col, row) = placements[k];
-                await PlaceItemInCell(g, items[k], columns[col].Position, rows[row].Position,
-                    columns[col].Size, rows[row].Size);
+                var cellX = columns[p.ColStart].Position;
+                var cellWidth = ColumnSpanWidth(columns, p.ColStart, p.ColSpan, columnGap);
+                var cellY = rows[p.RowStart].Position;
+                var cellHeight = RowSpanHeight(rows, p.RowStart, p.RowSpan, rowGap);
+                await PlaceItemInCell(g, p.Box, cellX, cellY, cellWidth, cellHeight);
             }
 
             // ── Container size when auto.
@@ -149,6 +164,182 @@ namespace PeachPDF.Html.Core.Dom
                 var contentRight = columns[^1].Position + columns[^1].Size;
                 _gridBox.ActualRight = contentRight + _gridBox.ActualPaddingRight + _gridBox.ActualBorderRightWidth;
             }
+        }
+
+        // ─── Placement ──────────────────────────────────────────────────────────────
+
+        /// <summary>A resolved grid item placement in 0-based track coordinates (end exclusive via span).</summary>
+        private sealed class Placement
+        {
+            public required CssBox Box { get; init; }
+            public int ColStart { get; set; }
+            public int ColSpan { get; set; } = 1;
+            public int RowStart { get; set; }
+            public int RowSpan { get; set; } = 1;
+        }
+
+        /// <summary>
+        /// Resolves every item's grid position (CSS Grid §8): explicit line-based placement and spans first,
+        /// then row-major auto-placement of the remaining items into the first free cell, creating implicit
+        /// rows as needed. Columns are fixed to the explicit track count (implicit columns are out of scope).
+        /// </summary>
+        private List<Placement> PlaceItems(List<CssBox> items, int colCount, int explicitRowCount)
+        {
+            var placements = new List<Placement>(items.Count);
+            var occupancy = new List<bool[]>();
+
+            bool Occupied(int r, int c)
+            {
+                if (c < 0 || c >= colCount) return true;
+                return r < occupancy.Count && occupancy[r][c];
+            }
+
+            void Ensure(int r)
+            {
+                while (occupancy.Count <= r) occupancy.Add(new bool[colCount]);
+            }
+
+            void Mark(Placement p)
+            {
+                for (var r = p.RowStart; r < p.RowStart + p.RowSpan; r++)
+                {
+                    Ensure(r);
+                    for (var c = p.ColStart; c < p.ColStart + p.ColSpan && c < colCount; c++)
+                        occupancy[r][c] = true;
+                }
+            }
+
+            bool Fits(int r, int c, int rowSpan, int colSpan)
+            {
+                if (c < 0 || c + colSpan > colCount) return false;
+                for (var rr = r; rr < r + rowSpan; rr++)
+                    for (var cc = c; cc < c + colSpan; cc++)
+                        if (Occupied(rr, cc)) return false;
+                return true;
+            }
+
+            // Resolve each item's axis placement (auto column start when null).
+            var resolved = items.Select(box =>
+            {
+                var (colStart, colSpan) = ResolveAxis(box.GridColumnStart, box.GridColumnEnd, colCount);
+                var (rowStart, rowSpan) = ResolveAxis(box.GridRowStart, box.GridRowEnd, Math.Max(explicitRowCount, 1));
+                return new
+                {
+                    Box = box,
+                    ColStart = colStart, ColSpan = Math.Min(colSpan, colCount),
+                    RowStart = rowStart, RowSpan = rowSpan
+                };
+            }).ToList();
+
+            // Pass 1: items with a definite column AND row.
+            foreach (var r in resolved.Where(x => x.ColStart >= 0 && x.RowStart >= 0))
+            {
+                var p = new Placement { Box = r.Box, ColStart = ClampCol(r.ColStart, r.ColSpan, colCount), ColSpan = r.ColSpan, RowStart = r.RowStart, RowSpan = r.RowSpan };
+                Mark(p);
+                placements.Add(p);
+            }
+
+            // Pass 2: auto-flow (row) for the rest, in DOM order, using a forward cursor.
+            var cursorR = 0;
+            var cursorC = 0;
+            foreach (var r in resolved.Where(x => x.ColStart < 0 || x.RowStart < 0))
+            {
+                Placement p;
+                if (r.ColStart >= 0)
+                {
+                    // Definite column, auto row: find the first row (from the top) where it fits.
+                    var col = ClampCol(r.ColStart, r.ColSpan, colCount);
+                    var row = 0;
+                    while (!Fits(row, col, r.RowSpan, r.ColSpan)) row++;
+                    p = new Placement { Box = r.Box, ColStart = col, ColSpan = r.ColSpan, RowStart = row, RowSpan = r.RowSpan };
+                }
+                else if (r.RowStart >= 0)
+                {
+                    // Definite row, auto column: first free column in that row.
+                    var col = 0;
+                    while (!Fits(r.RowStart, col, r.RowSpan, r.ColSpan)) col++;
+                    p = new Placement { Box = r.Box, ColStart = col, ColSpan = r.ColSpan, RowStart = r.RowStart, RowSpan = r.RowSpan };
+                }
+                else
+                {
+                    // Fully auto: advance the cursor to the first free cell that fits the span.
+                    while (true)
+                    {
+                        if (cursorC + r.ColSpan > colCount) { cursorC = 0; cursorR++; continue; }
+                        if (Fits(cursorR, cursorC, r.RowSpan, r.ColSpan)) break;
+                        cursorC++;
+                    }
+                    p = new Placement { Box = r.Box, ColStart = cursorC, ColSpan = r.ColSpan, RowStart = cursorR, RowSpan = r.RowSpan };
+                    cursorC += r.ColSpan;
+                }
+
+                Mark(p);
+                placements.Add(p);
+            }
+
+            // Restore DOM order so callers/tests see items in source order.
+            return placements.OrderBy(p => items.IndexOf(p.Box)).ToList();
+        }
+
+        private static int ClampCol(int colStart, int colSpan, int colCount) =>
+            Math.Max(0, Math.Min(colStart, Math.Max(0, colCount - colSpan)));
+
+        /// <summary>
+        /// Resolves one axis (<c>grid-column</c> or <c>grid-row</c>) into a 0-based start line and span.
+        /// A start of -1 means "auto — assign during placement". Line numbers are 1-based in CSS; negative
+        /// numbers count from the explicit end edge.
+        /// </summary>
+        private static (int Start, int Span) ResolveAxis(string startValue, string endValue, int explicitCount)
+        {
+            var start = GridLineGrammar.TryParse(CssValueParser.GetCssTokens(startValue)) ?? GridLine.Auto;
+            var end = GridLineGrammar.TryParse(CssValueParser.GetCssTokens(endValue)) ?? GridLine.Auto;
+
+            int? startLine = LineNumber(start, explicitCount);
+            int? endLine = LineNumber(end, explicitCount);
+
+            var span = 1;
+            if (start.IsSpan) span = Math.Max(1, start.Value);
+            else if (end.IsSpan) span = Math.Max(1, end.Value);
+
+            if (startLine.HasValue && endLine.HasValue)
+            {
+                var a = Math.Min(startLine.Value, endLine.Value);
+                var b = Math.Max(startLine.Value, endLine.Value);
+                if (b == a) b = a + 1;
+                return (a - 1, b - a);
+            }
+
+            if (startLine.HasValue)
+                return (startLine.Value - 1, span);
+
+            if (endLine.HasValue)
+            {
+                var s = endLine.Value - 1 - span;
+                return s < 0 ? (-1, span) : (s, span);
+            }
+
+            return (-1, span); // auto position
+        }
+
+        /// <summary>The 1-based line number for a non-span, non-auto grid-line, resolving negatives from the
+        /// explicit end edge; null for <c>auto</c> or a <c>span</c>.</summary>
+        private static int? LineNumber(GridLine line, int explicitCount)
+        {
+            if (line.IsAuto || line.IsSpan) return null;
+            if (line.Value < 0) return explicitCount + 1 + line.Value + 1; // -1 == last edge
+            return line.Value;
+        }
+
+        private static double ColumnSpanWidth(Track[] columns, int start, int span, double gap)
+        {
+            var last = Math.Min(start + span - 1, columns.Length - 1);
+            return columns[last].Position + columns[last].Size - columns[start].Position;
+        }
+
+        private static double RowSpanHeight(Track[] rows, int start, int span, double gap)
+        {
+            var last = Math.Min(start + span - 1, rows.Length - 1);
+            return rows[last].Position + rows[last].Size - rows[start].Position;
         }
 
         // ─── Track sizing ─────────────────────────────────────────────────────────

@@ -222,6 +222,85 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(140, b.ActualBoxSizingWidth, 1.0);
         }
 
+        // ─── Stage 4: explicit placement + spanning ──────────────────────────────
+
+        [Fact]
+        public async Task GridColumnSpan_MakesItemSpanTwoTracks()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:300pt; grid-template-columns:100pt 100pt 100pt;'>
+                    <div id='a' style='grid-column:1 / 3; height:10pt;'></div>
+                    <div id='b' style='height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            // a spans columns 1-2 (200pt); b auto-places into column 3.
+            Assert.Equal(200, a.ActualBoxSizingWidth, 1.0);
+            Assert.Equal(100, b.ActualBoxSizingWidth, 1.0);
+            Assert.Equal(a.Location.X + 200, b.Location.X, 1.0);
+            Assert.Equal(a.Location.Y, b.Location.Y, 1.0);
+        }
+
+        [Fact]
+        public async Task SpanKeyword_SpansMultipleTracks()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:300pt; grid-template-columns:repeat(3, 100pt);'>
+                    <div id='a' style='grid-column:span 2; height:10pt;'></div>
+                    <div id='b' style='height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            Assert.Equal(200, a.ActualBoxSizingWidth, 1.0);
+            Assert.Equal(100, b.ActualBoxSizingWidth, 1.0);
+        }
+
+        [Fact]
+        public async Task ExplicitColumnStart_PlacesItemInThatTrack()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:300pt; grid-template-columns:repeat(3, 100pt);'>
+                    <div id='a' style='grid-column-start:3; height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            // Placed in the third column: X offset 200pt from the container content-left.
+            Assert.Equal(container.ClientLeft + 200, a.Location.X, 1.0);
+            Assert.Equal(100, a.ActualBoxSizingWidth, 1.0);
+        }
+
+        [Fact]
+        public async Task ExplicitRowPlacement_PositionsItemOnThatRow()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:100pt; grid-template-columns:100pt; grid-template-rows:40pt 60pt;'>
+                    <div id='a' style='grid-row:2;'>A</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            // On the second row: Y offset by the first (40pt) row.
+            Assert.Equal(container.ClientTop + 40, a.Location.Y, 1.0);
+            Assert.Equal(60, a.ActualBoxSizingHeight, 1.0);
+        }
+
+        [Fact]
+        public async Task GridArea_SpansRowsAndColumns()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:200pt; grid-template-columns:100pt 100pt; grid-template-rows:50pt 50pt;'>
+                    <div id='a' style='grid-area:1 / 1 / 3 / 3;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            // Spans both columns (200pt) and both rows (100pt).
+            Assert.Equal(200, a.ActualBoxSizingWidth, 1.0);
+            Assert.Equal(100, a.ActualBoxSizingHeight, 1.0);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>
