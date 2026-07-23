@@ -559,6 +559,13 @@ namespace PeachPDF.Html.Core.Dom
                     // CSS 2.1 §10.3.7 (a used width is never negative).
                     width = Math.Max(0, absCb.Size.Width - left - right - box.ActualMarginLeft - box.ActualMarginRight - box.ActualBoxSizeIncludedWidth);
                 }
+                else if (TryGetAspectRatioWidth(box, out var ratioWidth))
+                {
+                    // CSS Box Sizing 4 §5.1: an absolutely-positioned box with a preferred aspect ratio, a
+                    // definite height and an auto (shrink-to-fit) width takes its width from the height via the
+                    // ratio, rather than from its content (fit-content).
+                    width = ratioWidth;
+                }
                 else
                 {
                     width = await GetFitContentWidth(g, box, absCb.Size.Width);
@@ -692,6 +699,47 @@ namespace PeachPDF.Html.Core.Dom
             if (!AspectRatioGrammar.TryParse(tokens, out var ratio) || ratio is not (> 0)) return false;
 
             height = box.Size.Width / ratio.Value + box.ActualBoxSizeIncludedHeight;
+            return true;
+        }
+
+        /// <summary>
+        /// True when the box has a definite used height: a non-percentage length, or a percentage resolved
+        /// against a height-calculated containing block. A percentage against an indefinite (auto-height)
+        /// containing block is NOT definite — CSS Box Sizing 4 §5 treats it as automatic.
+        /// </summary>
+        internal static bool HasDefiniteHeight(CssBox box)
+        {
+            if (!CssValueParser.IsValidLength(box.Height)) return false;
+            if (box.Height.EndsWith('%')) return PercentageBase(box).IsHeightCalculated;
+            return true;
+        }
+
+        /// <summary>
+        /// Computes a box's box-sizing-box width from its <c>aspect-ratio</c> and its definite used height —
+        /// the height→width counterpart of <see cref="TryGetAspectRatioHeight"/>. Applies only where the width
+        /// would otherwise be shrink-to-fit (an absolutely-positioned auto-width box): a normal-flow block's
+        /// auto inline size is stretch-fit, which wins over the ratio (CSS Box Sizing 4 §5.1), so the caller
+        /// must not use this on a stretch-fit box. The returned width is the box-sizing box's width (matching
+        /// <see cref="GetBoxWidth"/>'s explicit-width branch), so the caller adds <c>ActualBoxSizeIncludedWidth</c>
+        /// to reach the border-box edge — for both <c>content-box</c> (dividing/multiplying on the content box)
+        /// and <c>border-box</c> (the included term is 0, so the ratio maps border-box height to border-box width).
+        /// </summary>
+        internal static bool TryGetAspectRatioWidth(CssBox box, out double width)
+        {
+            width = 0;
+
+            if (string.IsNullOrEmpty(box.AspectRatio) || box.AspectRatio == CssConstants.Auto) return false;
+            // Only when the box has no explicit width (an auto/absent width the ratio can determine).
+            if (box.Width != CssConstants.Auto && !string.IsNullOrEmpty(box.Width)) return false;
+            if (!HasDefiniteHeight(box)) return false;
+
+            var tokens = CssValueParser.GetCssTokens(box.AspectRatio);
+            if (!AspectRatioGrammar.TryParse(tokens, out var ratio) || ratio is not (> 0)) return false;
+
+            var boxSizingHeight = CssValueParser.ParseLength(box.Height, PercentageBase(box).Size.Height, box);
+            if (boxSizingHeight <= 0) return false;
+
+            width = boxSizingHeight * ratio.Value;
             return true;
         }
 

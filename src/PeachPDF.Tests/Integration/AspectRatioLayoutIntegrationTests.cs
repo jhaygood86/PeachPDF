@@ -173,6 +173,60 @@ namespace PeachPDF.Tests.Integration
             Assert.True(parent.ActualHeight < 100, $"expected content-driven height, got {parent.ActualHeight}");
         }
 
+        [Fact]
+        public async Task DefiniteHeight_AutoWidth_AbsPos_WidthFromRatio()
+        {
+            // An absolutely-positioned box (shrink-to-fit width) with a definite height and aspect-ratio and
+            // no explicit width takes its width from the height via the ratio: height 100pt, ratio 2 => 200pt.
+            var container = await LayoutContainer("""
+                <!DOCTYPE html><html><head><style>
+                  #rel { position: relative; width: 400pt; height: 300pt; }
+                  #abs { position: absolute; height: 100pt; aspect-ratio: 2; }
+                </style></head><body>
+                <div id="rel"><div id="abs"></div></div>
+                </body></html>
+                """);
+            var abs = FindById(container.Root!, "abs")!;
+            Assert.Equal(200, abs.ActualWidth, 1);
+            Assert.Equal(100, abs.ActualHeight, 1);
+        }
+
+        [Fact]
+        public async Task DefiniteHeight_AutoWidth_AbsPos_BorderBox_RatioMapsBorderBox()
+        {
+            // With border-box, height:100pt IS the border-box height, so the ratio maps border-box height to
+            // border-box width directly: 100 * 2 = 200pt border-box width (padding is inside, not added on).
+            var container = await LayoutContainer("""
+                <!DOCTYPE html><html><head><style>
+                  #rel { position: relative; width: 400pt; height: 300pt; }
+                  #abs { position: absolute; box-sizing: border-box; height: 100pt; padding: 10pt; aspect-ratio: 2; }
+                </style></head><body>
+                <div id="rel"><div id="abs"></div></div>
+                </body></html>
+                """);
+            var abs = FindById(container.Root!, "abs")!;
+            Assert.Equal(200, abs.ActualWidth, 1);
+        }
+
+        [Fact]
+        public async Task DefiniteHeight_AutoWidth_NormalBlock_FillsAndDoesNotUseRatio()
+        {
+            // A normal-flow block's auto inline size is stretch-fit, which wins over the ratio (CSS Box
+            // Sizing 4 §5.1) — so a block with a definite height + aspect-ratio still fills its 400pt
+            // containing block, NOT the 200pt the ratio would give a shrink-to-fit box.
+            var container = await LayoutContainer("""
+                <!DOCTYPE html><html><head><style>
+                  #wrap { width: 400pt; }
+                  #block { height: 100pt; aspect-ratio: 2; }
+                </style></head><body>
+                <div id="wrap"><div id="block"></div></div>
+                </body></html>
+                """);
+            var block = FindById(container.Root!, "block")!;
+            Assert.Equal(400, block.ActualWidth, 1);   // filled, not ratio-derived
+            Assert.Equal(100, block.ActualHeight, 1);  // its own definite height is unaffected
+        }
+
         private static async Task<HtmlContainerInt> LayoutContainer(string html)
         {
             var adapter = new PdfSharpAdapter();
