@@ -193,12 +193,14 @@ namespace PeachPDF.Svg
     }
 
     /// <summary>
-    /// An <c>&lt;image&gt;</c> element. Only a <c>data:</c> URI <c>href</c> is resolved (into either
-    /// <see cref="Image"/> for a raster payload or <see cref="NestedDocument"/> for an embedded
-    /// <c>image/svg+xml</c> payload, mutually exclusive) - <see cref="SvgTreeBuilder.Build"/> is
-    /// synchronous, so a network/file-path href (which needs the existing async image-loading
-    /// pipeline) is a documented v1 gap; both properties stay null and the element simply renders
-    /// nothing, same as any other unresolvable reference elsewhere in this builder.
+    /// An <c>&lt;image&gt;</c> element, resolved into either <see cref="Image"/> for a raster payload
+    /// or <see cref="NestedDocument"/> for an embedded <c>image/svg+xml</c> payload (mutually
+    /// exclusive). A <c>data:</c> URI <c>href</c> is decoded in-memory during the synchronous
+    /// <see cref="SvgTreeBuilder.Build"/>; a network URL or file-path href is fetched ahead of the
+    /// build by <see cref="SvgTreeBuilder.PrefetchImageResourcesAsync"/> (the same async pipeline HTML
+    /// <c>&lt;img&gt;</c> uses) and handed to the builder as a resolved map. An unresolvable href (no
+    /// configured loader, missing resource, malformed payload) leaves both properties null and the
+    /// element simply renders nothing.
     /// </summary>
     internal sealed class SvgImageElement : SvgElement
     {

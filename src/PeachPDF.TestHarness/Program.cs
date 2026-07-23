@@ -2044,7 +2044,7 @@ var svgHtml = "<!DOCTYPE html><html><head>" + SvgShowcaseCss + "</head><body>" +
     ) +
 
     "<h2>6 — clipPath + use</h2>" +
-    "<p class=\"intro\">clip-path references a &lt;clipPath&gt; that itself contains a &lt;use&gt; of a shape defined once in &lt;defs&gt; — the same pattern used by the peach illustrations below. A clip shape's own <code>transform</code> (directly, via <code>&lt;use transform&gt;</code>, or via a wrapping <code>&lt;g&gt;</code>) is applied to the clip geometry, so one shape can be reused at several positions.</p>" +
+    "<p class=\"intro\">clip-path references a &lt;clipPath&gt; that itself contains a &lt;use&gt; of a shape defined once in &lt;defs&gt; — the same pattern used by the peach illustrations below. A clip shape's own <code>transform</code> (directly, via <code>&lt;use transform&gt;</code>, or via a wrapping <code>&lt;g&gt;</code>) is applied to the clip geometry, so one shape can be reused at several positions. With <code>clipPathUnits=\"objectBoundingBox\"</code> the 0..1 clip geometry auto-scales to the referencing element's own bounding box.</p>" +
     Row(
         SvgSwatch("gradient clipped to a circle",
             """<svg viewBox="0 0 100 100" width="80" height="80"><defs><circle id="clipCircle1" cx="50" cy="50" r="35"/><linearGradient id="lg3" gradientUnits="userSpaceOnUse" x1="10" y1="10" x2="90" y2="90"><stop offset="0" stop-color="#ff9a9e"/><stop offset="1" stop-color="#fecfef"/></linearGradient><clipPath id="clip1"><use xlink:href="#clipCircle1"/></clipPath></defs><g clip-path="url(#clip1)"><polygon points="0,0 100,0 100,100 0,100" fill="url(#lg3)"/></g></svg>""",
@@ -2057,10 +2057,15 @@ var svgHtml = "<!DOCTYPE html><html><head>" + SvgShowcaseCss + "</head><body>" +
             "use xlink:href=\"#dot\" x=.. y=.."),
         SvgSwatch("one clip shape reused at 4 positions",
             """<svg viewBox="0 0 100 100" width="80" height="80"><defs><rect id="clipTile" x="0" y="0" width="34" height="34" rx="7"/><linearGradient id="lgReuse" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="100" y2="100"><stop offset="0" stop-color="#43e97b"/><stop offset="1" stop-color="#38f9d7"/></linearGradient><clipPath id="clipReuse"><use xlink:href="#clipTile" transform="translate(8,8)"/><use xlink:href="#clipTile" transform="translate(58,8)"/><use xlink:href="#clipTile" transform="translate(8,58)"/><use xlink:href="#clipTile" transform="translate(58,58)"/></clipPath></defs><g clip-path="url(#clipReuse)"><polygon points="0,0 100,0 100,100 0,100" fill="url(#lgReuse)"/></g></svg>""",
-            "clipPath > use transform=\"translate(..)\" ×4"),
+            "clipPath > use transform=\"translate(..)\" ×4")
+    ) +
+    Row(
         SvgSwatch("clip + group opacity combined",
             """<svg viewBox="0 0 100 100" width="80" height="80"><defs><circle id="clipCircle2" cx="50" cy="50" r="35"/><clipPath id="clip3"><use xlink:href="#clipCircle2"/></clipPath></defs><polygon points="0,0 100,0 100,100 0,100" fill="#34495e"/><g clip-path="url(#clip3)" opacity="0.8"><polygon points="0,0 100,0 100,100 0,100" fill="#e74c3c"/></g></svg>""",
-            "g clip-path=\"url(#clip3)\" opacity=\"0.8\"")
+            "g clip-path=\"url(#clip3)\" opacity=\"0.8\""),
+        SvgSwatch("objectBoundingBox: clip auto-scales to the element",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><defs><clipPath id="obbDiamond" clipPathUnits="objectBoundingBox"><polygon points="0.5,0 1,0.5 0.5,1 0,0.5"/></clipPath><linearGradient id="lgObb" gradientUnits="userSpaceOnUse" x1="10" y1="10" x2="90" y2="90"><stop offset="0" stop-color="#8e2de2"/><stop offset="1" stop-color="#4a00e0"/></linearGradient></defs><rect x="15" y="15" width="70" height="70" fill="url(#lgObb)" clip-path="url(#obbDiamond)"/></svg>""",
+            "clipPathUnits=\"objectBoundingBox\" (0..1 diamond)")
     ) +
 
     "<h2>7 — Basic Shapes: rect, ellipse, line &amp; polyline</h2>" +

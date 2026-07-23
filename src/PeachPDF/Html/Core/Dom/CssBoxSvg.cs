@@ -16,6 +16,7 @@ using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Svg;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Dom
@@ -33,6 +34,7 @@ namespace PeachPDF.Html.Core.Dom
     {
         private readonly CssRectSvg _svgWord;
         private SvgDocument? _document;
+        private IReadOnlyDictionary<string, SvgTreeBuilder.SvgImageResource>? _prefetchedImages;
 
         public CssBoxSvg(CssBox? parent, HtmlTag tag)
             : base(parent, tag)
@@ -45,10 +47,16 @@ namespace PeachPDF.Html.Core.Dom
         /// Assigns the word its width and height
         /// </summary>
         /// <param name="g">the device to use</param>
-        internal override ValueTask MeasureWordsSize(RGraphics g)
+        internal override async ValueTask MeasureWordsSize(RGraphics g)
         {
             if (!_wordsSizeMeasured)
             {
+                // Fetch any network/file <image> hrefs through the async resource pipeline before the
+                // synchronous SvgTreeBuilder runs (in EnsureDocument). This is the first async touch
+                // point for this box and runs before paint/link-collection, whose EnsureDocument calls
+                // then reuse the already-built _document. A null base override resolves relative hrefs
+                // against the host document base, correct for inline SVG.
+                _prefetchedImages = await SvgTreeBuilder.PrefetchImageResourcesAsync(new CssBoxSvgSourceNode(this), HtmlContainer!);
                 EnsureDocument();
                 MeasureWordSpacing(g);
                 _wordsSizeMeasured = true;
@@ -56,8 +64,6 @@ namespace PeachPDF.Html.Core.Dom
 
             var (intrinsicWidth, intrinsicHeight) = SvgIntrinsicSize.Resolve(_document);
             CssLayoutEngine.MeasureIntrinsicSize(_svgWord, intrinsicWidth, intrinsicHeight);
-
-            return ValueTask.CompletedTask;
         }
 
         /// <summary>
@@ -102,7 +108,7 @@ namespace PeachPDF.Html.Core.Dom
             if (_document is not null)
                 return;
 
-            _document = SvgTreeBuilder.Build(new CssBoxSvgSourceNode(this), HtmlContainer!.Adapter, ActualColor);
+            _document = SvgTreeBuilder.Build(new CssBoxSvgSourceNode(this), HtmlContainer!.Adapter, ActualColor, _prefetchedImages);
 
             // The parser builds a real (generic) CssBox for every SVG child element so
             // SvgTreeBuilder can read tag names/attributes off them - but once the scene graph above
