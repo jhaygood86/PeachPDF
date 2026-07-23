@@ -32,5 +32,14 @@ namespace PeachPDF.Svg
         /// tracked individually. Per-child <c>clip-rule</c> overrides are not supported.
         /// </summary>
         public RFillMode ClipRule { get; init; } = RFillMode.Nonzero;
+
+        /// <summary>
+        /// <c>clipPathUnits</c> ([SVG 1.1 §14.3.5](https://www.w3.org/TR/SVG11/masking.html#ClipPathElement)).
+        /// <see langword="true"/> (the default, <c>userSpaceOnUse</c>): the child geometry is in the user
+        /// coordinate system in place when the clipPath is referenced. <see langword="false"/>
+        /// (<c>objectBoundingBox</c>): the geometry's coordinates are fractions of the referencing
+        /// element's bounding box, so a <c>0..1</c> shape scales/translates to cover that element.
+        /// </summary>
+        public bool ClipPathUnitsUserSpaceOnUse { get; init; } = true;
     }
 }

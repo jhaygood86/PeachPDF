@@ -359,7 +359,18 @@ namespace PeachPDF.Svg
 
             if (element.ClipPathRef is { } clipRef && document.ClipPaths.TryGetValue(clipRef, out var clipDefinition))
             {
-                clipPath = BuildClipPath(g, clipDefinition);
+                // objectBoundingBox: map the clipPath's 0..1 child geometry onto the referencing
+                // element's bounding box (SVG 1.1 §14.3.5). The clip is built in the element's local space
+                // (element.Transform is already pushed above), the same space GetBoundingBox reports, so
+                // the mapping is RMatrix(w, 0, 0, h, x, y). A missing/zero bbox falls back to no mapping.
+                RMatrix? unitsMatrix = null;
+                if (!clipDefinition.ClipPathUnitsUserSpaceOnUse &&
+                    SvgGeometryBounds.GetBoundingBox(element) is { Width: > 0, Height: > 0 } bbox)
+                {
+                    unitsMatrix = new RMatrix(bbox.Width, 0, 0, bbox.Height, bbox.X, bbox.Y);
+                }
+
+                clipPath = BuildClipPath(g, clipDefinition, unitsMatrix);
 
                 if (clipPath is not null)
                 {
@@ -1155,14 +1166,17 @@ namespace PeachPDF.Svg
             return graphicsPath;
         }
 
-        private static RGraphicsPath? BuildClipPath(RGraphics g, SvgClipPath clipPath)
+        private static RGraphicsPath? BuildClipPath(RGraphics g, SvgClipPath clipPath, RMatrix? unitsMatrix)
         {
             var path = g.GetGraphicsPath();
             path.FillMode = clipPath.ClipRule;
             var any = false;
 
+            // unitsMatrix is the objectBoundingBox mapping (0..1 -> referencing element's bbox), or null
+            // for userSpaceOnUse. It enters as the ambient matrix so it composes as the OUTER transform of
+            // every clip shape (after each shape's own transform), reusing the existing transform baking.
             foreach (var shape in clipPath.Shapes)
-                any |= AppendClipShapeGeometry(g, path, shape, null);
+                any |= AppendClipShapeGeometry(g, path, shape, unitsMatrix);
 
             if (any)
                 return path;
