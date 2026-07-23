@@ -36,6 +36,10 @@ For more usage examples — rendering self-contained MHTML files, fetching HTML 
 
 A `PdfGenerator` instance is not thread-safe. Use a **separate instance per thread** — e.g. one per web request or one per item in a parallel batch — which is safe and is the intended way to generate PDFs concurrently. See [Thread safety](usage-examples.md#thread-safety) in Usage Examples for the full explanation and code samples.
 
+## Trimming and Native AOT
+
+PeachPDF is built to be **trimming-safe and [Native AOT](https://learn.microsoft.com/dotnet/core/deploying/native-aot/)-compatible**: the library sets `IsTrimmable` and `IsAotCompatible`, so it compiles cleanly under the trim and AOT analyzers and publishes as a fully native, self-contained executable with no runtime code generation. You can reference it from a `PublishTrimmed` or `PublishAot` application and generate PDFs from the native binary without any additional configuration. All platform interop uses source-generated `LibraryImport` marshalling rather than reflection-based `DllImport`, so nothing PeachPDF calls is stripped by the trimmer.
+
 ## Guides
 
 - **[Architecture](architecture.md)** — how PeachPDF converts HTML to PDF: the HTML parser, DOM model, CSS parser, layout engine, painting layer, and PDF renderer.

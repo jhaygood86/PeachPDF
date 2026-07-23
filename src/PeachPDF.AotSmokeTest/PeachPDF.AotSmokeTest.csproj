@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Verification-only harness (not shipped, not a unit-test project): renders HTML to a PDF and is
+    published with NativeAOT to prove the PeachPDF library actually AOT-compiles and runs. Single-TFM
+    net10.0 (AOT publishes one framework/RID at a time) — overrides the net8.0;net10.0 default from
+    src/Directory.Build.props.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks></TargetFrameworks>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <PublishAot>true</PublishAot>
+    <IsPackable>false</IsPackable>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PeachPDF\PeachPDF.csproj" />
+  </ItemGroup>
+
+</Project>

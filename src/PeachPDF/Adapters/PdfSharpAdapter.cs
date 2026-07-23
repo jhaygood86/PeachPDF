@@ -172,8 +172,8 @@ namespace PeachPDF.Adapters
 
         protected override RColor GetColorInt(string colorName)
         {
-            return System.Enum.TryParse(typeof(KnownColor), colorName, true, out var knownColor)
-                ? Utils.Convert(Color.FromKnownColor((KnownColor)knownColor))
+            return Enum.TryParse<KnownColor>(colorName, true, out var knownColor)
+                ? Utils.Convert(Color.FromKnownColor(knownColor))
                 : RColor.Empty;
         }
 

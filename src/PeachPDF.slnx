@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="PeachPDF.AotSmokeTest/PeachPDF.AotSmokeTest.csproj" />
+  <Project Path="PeachPDF.TestHarness/PeachPDF.TestHarness.csproj" />
+  <Project Path="PeachPDF.Tests/PeachPDF.Tests.csproj" />
+  <Project Path="PeachPDF/PeachPDF.csproj" />
+</Solution>

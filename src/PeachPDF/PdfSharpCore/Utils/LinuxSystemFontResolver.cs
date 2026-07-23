@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -12,6 +13,10 @@ using System.Text.RegularExpressions;
 
 namespace PeachPDF.PdfSharpCore.Utils
 {
+    // Linux-only fontconfig interop (and its file-system fallback). Excluded from code coverage like the
+    // other platform-specific native lookups (see MimeTypeResolver.NativeMethods/TryGetFrom*): its lines
+    // only execute on Linux, so counting them would fail the diff-coverage gate on the Windows/macOS CI legs.
+    [ExcludeFromCodeCoverage]
     internal static partial class LinuxSystemFontResolver
     {
         const string libfontconfig = "libfontconfig.so.1";
@@ -20,18 +25,18 @@ namespace PeachPDF.PdfSharpCore.Utils
         private static partial Regex ConfDirRegex();
 
 
-        [DllImport(libfontconfig)] private static extern IntPtr FcInitLoadConfigAndFonts();
+        [LibraryImport(libfontconfig)] private static partial IntPtr FcInitLoadConfigAndFonts();
 
         static readonly Lazy<IntPtr> fcConfig = new Lazy<IntPtr>(FcInitLoadConfigAndFonts);
 
 
-        [DllImport(libfontconfig)] public static extern FcPatternHandle FcPatternCreate();
-        [DllImport(libfontconfig)] public static extern int FcPatternGetString(IntPtr p, [MarshalAs(UnmanagedType.LPStr)] string obj, int n, ref IntPtr s);
-        [DllImport(libfontconfig)] public static extern void FcPatternDestroy(IntPtr pattern);
+        [LibraryImport(libfontconfig)] public static partial FcPatternHandle FcPatternCreate();
+        [LibraryImport(libfontconfig)] public static partial int FcPatternGetString(IntPtr p, [MarshalAs(UnmanagedType.LPStr)] string obj, int n, ref IntPtr s);
+        [LibraryImport(libfontconfig)] public static partial void FcPatternDestroy(IntPtr pattern);
 
         internal class FcPatternHandle : SafeHandle
         {
-            FcPatternHandle() : base(IntPtr.Zero, true) { }
+            public FcPatternHandle() : base(IntPtr.Zero, true) { }
 
             public override bool IsInvalid => this.handle == IntPtr.Zero;
 
@@ -43,13 +48,13 @@ namespace PeachPDF.PdfSharpCore.Utils
         }
 
 
-        [DllImport(libfontconfig)] public static extern FcObjectSetHandle FcObjectSetCreate();
-        [DllImport(libfontconfig)] public static extern int FcObjectSetAdd(FcObjectSetHandle os, [MarshalAs(UnmanagedType.LPStr)] string obj);
-        [DllImport(libfontconfig)] public static extern void FcObjectSetDestroy(IntPtr os);
+        [LibraryImport(libfontconfig)] public static partial FcObjectSetHandle FcObjectSetCreate();
+        [LibraryImport(libfontconfig)] public static partial int FcObjectSetAdd(FcObjectSetHandle os, [MarshalAs(UnmanagedType.LPStr)] string obj);
+        [LibraryImport(libfontconfig)] public static partial void FcObjectSetDestroy(IntPtr os);
 
         internal class FcObjectSetHandle : SafeHandle
         {
-            FcObjectSetHandle() : base(IntPtr.Zero, true) { }
+            public FcObjectSetHandle() : base(IntPtr.Zero, true) { }
 
             public override bool IsInvalid => this.handle == IntPtr.Zero;
 
@@ -70,17 +75,17 @@ namespace PeachPDF.PdfSharpCore.Utils
         }
 
 
-        [DllImport(libfontconfig)] public static extern FcFontSetHandle FcFontList(IntPtr config, FcPatternHandle pattern, FcObjectSetHandle os);
-        [DllImport(libfontconfig)] public static extern void FcFontSetDestroy(IntPtr fs);
+        [LibraryImport(libfontconfig)] public static partial FcFontSetHandle FcFontList(IntPtr config, FcPatternHandle pattern, FcObjectSetHandle os);
+        [LibraryImport(libfontconfig)] public static partial void FcFontSetDestroy(IntPtr fs);
 
         // Generic-family alias resolution (the managed equivalent of the `fc-match serif` CLI command):
         // build a pattern requesting the generic family name, let fontconfig apply the user/system config's
         // own substitution rules (exactly what maps "serif"/"sans-serif"/etc. to a real installed family on
         // this distro), then read back the resolved family from the matched pattern.
-        [DllImport(libfontconfig)] private static extern int FcPatternAddString(FcPatternHandle pattern, [MarshalAs(UnmanagedType.LPStr)] string obj, [MarshalAs(UnmanagedType.LPStr)] string value);
-        [DllImport(libfontconfig)] private static extern void FcConfigSubstitute(IntPtr config, FcPatternHandle pattern, int kind);
-        [DllImport(libfontconfig)] private static extern void FcDefaultSubstitute(FcPatternHandle pattern);
-        [DllImport(libfontconfig)] private static extern FcPatternHandle FcFontMatch(IntPtr config, FcPatternHandle pattern, ref int result);
+        [LibraryImport(libfontconfig)] private static partial int FcPatternAddString(FcPatternHandle pattern, [MarshalAs(UnmanagedType.LPStr)] string obj, [MarshalAs(UnmanagedType.LPStr)] string value);
+        [LibraryImport(libfontconfig)] private static partial void FcConfigSubstitute(IntPtr config, FcPatternHandle pattern, int kind);
+        [LibraryImport(libfontconfig)] private static partial void FcDefaultSubstitute(FcPatternHandle pattern);
+        [LibraryImport(libfontconfig)] private static partial FcPatternHandle FcFontMatch(IntPtr config, FcPatternHandle pattern, ref int result);
 
         private const int FcMatchPattern = 0;
 
@@ -93,7 +98,7 @@ namespace PeachPDF.PdfSharpCore.Utils
 
         internal class FcFontSetHandle : SafeHandle
         {
-            FcFontSetHandle() : base(IntPtr.Zero, true) { }
+            public FcFontSetHandle() : base(IntPtr.Zero, true) { }
 
             public override bool IsInvalid => this.handle == IntPtr.Zero;
 
@@ -105,7 +110,15 @@ namespace PeachPDF.PdfSharpCore.Utils
 
             public FcFontSet Read()
             {
-                return Marshal.PtrToStructure<FcFontSet>(this.handle);
+                // Read the blittable { int nfont; int sfont; IntPtr fonts; } fields directly rather than
+                // via Marshal.PtrToStructure<T> (which is annotated [RequiresDynamicCode] and warns under
+                // AOT). fonts is IntPtr-aligned, so it sits at offset 8 on both 32- and 64-bit.
+                return new FcFontSet
+                {
+                    nfont = Marshal.ReadInt32(this.handle, 0),
+                    sfont = Marshal.ReadInt32(this.handle, 4),
+                    fonts = Marshal.ReadIntPtr(this.handle, 8),
+                };
             }
         }
 
@@ -131,7 +144,7 @@ namespace PeachPDF.PdfSharpCore.Utils
                 var fset = fs.Read();
                 for (int index = 0; index < fset.nfont; index++)
                 {
-                    var font = Marshal.ReadIntPtr(fset.fonts, index * Marshal.SizeOf<IntPtr>());
+                    var font = Marshal.ReadIntPtr(fset.fonts, index * IntPtr.Size);
                     var family = GetString(font, "family");
                     var style = GetString(font, "style");
                     var file = GetString(font, "file");

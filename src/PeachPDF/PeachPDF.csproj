@@ -25,6 +25,9 @@
 		<RunCodeAnalysis>false</RunCodeAnalysis>
 		<IsTrimmable>true</IsTrimmable>
 		<EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+		<IsAotCompatible>true</IsAotCompatible>
+		<!-- The LibraryImport source generator emits unsafe marshalling code (SYSLIB1062). No hand-written unsafe blocks exist in this project. -->
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 	</PropertyGroup>
 	<ItemGroup>
 		<PackageReference Include="DefaultDocumentation" Version="1.2.5" PrivateAssets="all" IncludeAssets="build" />
