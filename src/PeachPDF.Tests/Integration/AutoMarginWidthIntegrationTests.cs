@@ -89,6 +89,32 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task AutoWidth_MinWidthReWidensPastMaxWidth_CentersOnMinWidth()
+        {
+            // Degenerate min-width > max-width: min wins (CSS 2.1 §10.4), so the used width is 300pt,
+            // not the clamped 200pt — the auto margins must center on 300pt: (400 - 300)/2 = 50pt.
+            var html = Wrap("<div id='c' style='max-width:200pt; min-width:300pt; margin:0 auto'>x</div>");
+            var (root, _) = await BuildAndLayout(html);
+            var box = FindById(root, "c")!;
+
+            Assert.InRange(box.ActualWidth, 299.5, 300.5);
+            Assert.InRange(box.Location.X, 49.5, 50.5);
+        }
+
+        [Fact]
+        public async Task AutoWidth_MinWidthExceedsContainingBlock_MarginsCollapseToZero()
+        {
+            // A min-width wider than the containing block overflows: no free space, auto margins 0,
+            // box pinned at the containing-block left edge.
+            var html = Wrap("<div id='c' style='min-width:600pt; margin:0 auto'>x</div>");
+            var (root, _) = await BuildAndLayout(html);
+            var box = FindById(root, "c")!;
+
+            Assert.InRange(box.ActualWidth, 599.5, 600.5);
+            Assert.InRange(box.Location.X, -0.5, 0.5);
+        }
+
+        [Fact]
         public async Task AutoWidth_MarginZero_LeftAligns_Fills()
         {
             // Sanity: plain margin:0 (no auto) fills and left-aligns, matching the auto-margin fill.

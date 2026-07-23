@@ -447,16 +447,26 @@ namespace PeachPDF.Html.Core.Dom
 
             if (box.Width == CssConstants.Auto || string.IsNullOrEmpty(box.Width))
             {
-                // An auto width fills the containing block (its auto margins are 0), unless max-width
-                // clamps the used width below the fill width — then the box is definite and centers.
-                var fillContentWidth = containingWidth - box.ActualBoxSizeIncludedWidth;
+                // An auto width fills the containing block, so its auto margins are 0. `max-width` can
+                // clamp the used width below the fill width — and `min-width` can then re-widen it (min
+                // wins, CSS 2.1 §10.4) — making the box definite, after which the leftover space is
+                // split to center it. Mirror GetBoxWidth's own max-then-min clamp so the two agree: a
+                // filling box lands on `remaining == 0` and still returns 0.
+                var usedContentWidth = containingWidth - box.ActualBoxSizeIncludedWidth;
 
-                if (!CssValueParser.IsValidLength(box.MaxWidth)) return 0;
+                if (CssValueParser.IsValidLength(box.MaxWidth))
+                {
+                    usedContentWidth = Math.Min(usedContentWidth,
+                        CssValueParser.ParseLength(box.MaxWidth, containingWidth, box));
+                }
 
-                var maxContentWidth = CssValueParser.ParseLength(box.MaxWidth, containingWidth, box);
-                if (maxContentWidth >= fillContentWidth) return 0;
+                if (box.MinWidth != "0" && CssValueParser.IsValidLength(box.MinWidth))
+                {
+                    usedContentWidth = Math.Max(usedContentWidth,
+                        CssValueParser.ParseLength(box.MinWidth, containingWidth, box));
+                }
 
-                var clampedRemaining = containingWidth - (maxContentWidth + box.ActualBoxSizeIncludedWidth);
+                var clampedRemaining = containingWidth - (usedContentWidth + box.ActualBoxSizeIncludedWidth);
                 return clampedRemaining > 0 ? clampedRemaining / 2 : 0;
             }
 
