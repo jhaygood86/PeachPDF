@@ -350,6 +350,19 @@ namespace PeachPDF.CSS
 
         public static readonly IValueConverter AlignSelfConverter = AlignItemsConverter.OrAuto();
 
+        // justify-items / justify-self share align-items/align-self's value grammar for the keywords the
+        // grid engine honors (start/end/center/stretch/normal; baseline falls back to start at layout).
+        public static readonly IValueConverter JustifyItemsConverter = AlignItemsConverter;
+        public static readonly IValueConverter JustifySelfConverter = AlignSelfConverter;
+
+        // place-items / place-content / place-self: <align> <justify>? — one value applies to both axes.
+        public static readonly IValueConverter PlaceItemsConverter =
+            AlignItemsConverter.Periodic(PropertyNames.AlignItems, PropertyNames.JustifyItems);
+        public static readonly IValueConverter PlaceContentConverter =
+            JustifyContentConverter.Periodic(PropertyNames.AlignContent, PropertyNames.JustifyContent);
+        public static readonly IValueConverter PlaceSelfConverter =
+            AlignSelfConverter.Periodic(PropertyNames.AlignSelf, PropertyNames.JustifySelf);
+
         #region Specific
 
         public static readonly IValueConverter OptionalIntegerConverter = IntegerConverter.OrAuto();
@@ -461,6 +474,25 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter RatioConverter = WithOrder(
             IntegerConverter.Required(),
             IntegerConverter.StartsWithDelimiter().Required());
+
+        // A single grid <grid-line> (auto | <integer> | span <integer>), validated by GridLineGrammar.
+        public static readonly IValueConverter GridLineConverter = new GridLineValueConverter();
+
+        // grid-column / grid-row: <grid-line> [ / <grid-line> ]?  (the omitted end resolves to auto).
+        public static readonly IValueConverter GridColumnConverter = WithOrder(
+            GridLineConverter.Required().For(PropertyNames.GridColumnStart),
+            GridLineConverter.StartsWithDelimiter().Option().For(PropertyNames.GridColumnEnd));
+
+        public static readonly IValueConverter GridRowConverter = WithOrder(
+            GridLineConverter.Required().For(PropertyNames.GridRowStart),
+            GridLineConverter.StartsWithDelimiter().Option().For(PropertyNames.GridRowEnd));
+
+        // grid-area: <grid-line> [ / <grid-line> ]{0,3}  →  row-start / col-start / row-end / col-end.
+        public static readonly IValueConverter GridAreaConverter = WithOrder(
+            GridLineConverter.Required().For(PropertyNames.GridRowStart),
+            GridLineConverter.StartsWithDelimiter().Option().For(PropertyNames.GridColumnStart),
+            GridLineConverter.StartsWithDelimiter().Option().For(PropertyNames.GridRowEnd),
+            GridLineConverter.StartsWithDelimiter().Option().For(PropertyNames.GridColumnEnd));
 
         public static readonly IValueConverter ShadowConverter = WithAny(
             Assign(Keywords.Inset, true).Option(false),

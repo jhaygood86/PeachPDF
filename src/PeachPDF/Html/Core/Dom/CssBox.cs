@@ -287,7 +287,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// is the box "Display" is "Inline", is this is an inline box and not block.
         /// </summary>
-        public bool IsInline => Display is CssConstants.Inline or CssConstants.InlineBlock or CssConstants.InlineTable or CssConstants.InlineFlex;
+        public bool IsInline => Display is CssConstants.Inline or CssConstants.InlineBlock or CssConstants.InlineTable or CssConstants.InlineFlex or CssConstants.InlineGrid;
 
         /// <summary>
         /// is the box "Display" is "Block", is this is a block box and not inline.
@@ -1342,10 +1342,10 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
-            if (IsBlock || Display == CssConstants.ListItem || Display == CssConstants.Table || Display == CssConstants.InlineTable || Display == CssConstants.TableCell || Display == CssConstants.Flex || Display == CssConstants.InlineFlex)
+            if (IsBlock || Display == CssConstants.ListItem || Display == CssConstants.Table || Display == CssConstants.InlineTable || Display == CssConstants.TableCell || Display == CssConstants.Flex || Display == CssConstants.InlineFlex || Display == CssConstants.Grid || Display == CssConstants.InlineGrid)
             {
-                // Because their width and height are set by CssTable or CssLayoutEngineFlex
-                if (Display != CssConstants.TableCell && Display != CssConstants.Table && Display != CssConstants.Flex && Display != CssConstants.InlineFlex)
+                // Because their width and height are set by CssTable, CssLayoutEngineFlex or CssLayoutEngineGrid
+                if (Display != CssConstants.TableCell && Display != CssConstants.Table && Display != CssConstants.Flex && Display != CssConstants.InlineFlex && Display != CssConstants.Grid && Display != CssConstants.InlineGrid)
                 {
                     var width = await CssLayoutEngine.GetBoxWidth(g, this);
                     ActualRight = Location.X + width + ActualBoxSizeIncludedWidth;
@@ -1548,6 +1548,11 @@ namespace PeachPDF.Html.Core.Dom
                 if (Display is CssConstants.Flex or CssConstants.InlineFlex)
                 {
                     await CssLayoutEngineFlex.PerformLayout(g, this);
+                    await LayoutOutOfFlowChildren(g);
+                }
+                else if (Display is CssConstants.Grid or CssConstants.InlineGrid)
+                {
+                    await CssLayoutEngineGrid.PerformLayout(g, this);
                     await LayoutOutOfFlowChildren(g);
                 }
                 else if (Display is CssConstants.Table or CssConstants.InlineTable)

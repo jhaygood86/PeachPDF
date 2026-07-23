@@ -185,6 +185,34 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.ColumnGap, () => new ColumnGapProperty(), true);
             AddLonghand(PropertyNames.ColumnSpan, () => new ColumnSpanProperty());
 
+            AddLonghand(PropertyNames.GridTemplateColumns, () => new GridTemplateColumnsProperty());
+            AddLonghand(PropertyNames.GridTemplateRows, () => new GridTemplateRowsProperty());
+            AddLonghand(PropertyNames.GridColumnStart, () => new GridColumnStartProperty());
+            AddLonghand(PropertyNames.GridColumnEnd, () => new GridColumnEndProperty());
+            AddLonghand(PropertyNames.GridRowStart, () => new GridRowStartProperty());
+            AddLonghand(PropertyNames.GridRowEnd, () => new GridRowEndProperty());
+
+            AddShorthand(PropertyNames.GridColumn, () => new GridColumnProperty(),
+                PropertyNames.GridColumnStart, PropertyNames.GridColumnEnd);
+            AddShorthand(PropertyNames.GridRow, () => new GridRowProperty(),
+                PropertyNames.GridRowStart, PropertyNames.GridRowEnd);
+            AddShorthand(PropertyNames.GridArea, () => new GridAreaProperty(),
+                PropertyNames.GridRowStart, PropertyNames.GridColumnStart,
+                PropertyNames.GridRowEnd, PropertyNames.GridColumnEnd);
+
+            AddLonghand(PropertyNames.GridAutoFlow, () => new GridAutoFlowProperty());
+            AddLonghand(PropertyNames.GridAutoColumns, () => new GridAutoColumnsProperty());
+            AddLonghand(PropertyNames.GridAutoRows, () => new GridAutoRowsProperty());
+
+            AddLonghand(PropertyNames.JustifyItems, () => new JustifyItemsProperty());
+            AddLonghand(PropertyNames.JustifySelf, () => new JustifySelfProperty());
+            AddShorthand(PropertyNames.PlaceItems, () => new PlaceItemsProperty(),
+                PropertyNames.AlignItems, PropertyNames.JustifyItems);
+            AddShorthand(PropertyNames.PlaceContent, () => new PlaceContentProperty(),
+                PropertyNames.AlignContent, PropertyNames.JustifyContent);
+            AddShorthand(PropertyNames.PlaceSelf, () => new PlaceSelfProperty(),
+                PropertyNames.AlignSelf, PropertyNames.JustifySelf);
+
             AddShorthand(PropertyNames.ColumnRule, () => new ColumnRuleProperty(),
                 PropertyNames.ColumnRuleWidth,
                 PropertyNames.ColumnRuleStyle,
