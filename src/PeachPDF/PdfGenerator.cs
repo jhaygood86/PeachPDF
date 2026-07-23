@@ -113,7 +113,7 @@ namespace PeachPDF
         public async Task<PeachPdfCssContent> ParseStyleSheet(string stylesheet, bool combineWithDefault = true)
         {
             var cssData = await CssData.Parse(_pdfSharpAdapter, stylesheet, combineWithDefault);
-            return new PeachPdfCssContent(cssData);
+            return new PeachPdfCssContent(cssData, _pdfSharpAdapter);
         }
 
         /// <summary>
@@ -250,11 +250,12 @@ namespace PeachPDF
             // layout the HTML with the page width restriction to know how many pages are required
             await container.PerformLayout(measure);
 
-            ApplyDocumentMetadata(document.PdfDocument, container.DocumentMetadata);
+            ApplyDocumentMetadata(document.PdfDocument, container.DocumentMetadata, config.Metadata);
 
             // Wired unconditionally (independent of tagged-PDF output) - a document's own /Lang is
             // useful metadata regardless, and DocumentLanguage is already resolved by SetContent
-            // (either from <html lang> or PdfGenerateConfig.DefaultLanguage).
+            // (the document's own <html lang> takes priority, else PdfGenerateConfig.DefaultLanguage -
+            // so an explicit DefaultLanguage still reaches /Lang when the document declares none).
             if (!string.IsNullOrEmpty(container.HtmlContainerInt.DocumentLanguage))
             {
                 document.PdfDocument.Language = container.HtmlContainerInt.DocumentLanguage;
@@ -436,18 +437,28 @@ namespace PeachPDF
             return chosen;
         }
 
-        private static void ApplyDocumentMetadata(PdfDocument pdfDocument, HtmlDocumentMetadata? metadata)
+        private static void ApplyDocumentMetadata(PdfDocument pdfDocument, HtmlDocumentMetadata? metadata, PdfDocumentMetadata? overrides)
         {
             var info = pdfDocument.Info;
             info.Producer = PeachPdfProductInfo.Generator;
-            info.Creator  = metadata?.Generator ?? PeachPdfProductInfo.Generator;
+            info.Creator  = overrides?.Creator ?? metadata?.Generator ?? PeachPdfProductInfo.Generator;
 
-            if (metadata is null) return;
-            if (!string.IsNullOrEmpty(metadata.Title))    info.Title    = metadata.Title;
-            if (!string.IsNullOrEmpty(metadata.Author))   info.Author   = metadata.Author;
-            if (!string.IsNullOrEmpty(metadata.Subject))  info.Subject  = metadata.Subject;
-            if (!string.IsNullOrEmpty(metadata.Keywords)) info.Keywords = metadata.Keywords;
-            if (metadata.Date.HasValue)                   info.CreationDate = metadata.Date.Value;
+            // A non-null field on the caller-supplied overrides wins over the HTML-extracted value; a
+            // null field falls back to the HTML metadata exactly as before (byte-identical when no
+            // overrides are supplied).
+            if (!string.IsNullOrEmpty(overrides?.Title))         info.Title    = overrides.Title;
+            else if (!string.IsNullOrEmpty(metadata?.Title))     info.Title    = metadata.Title;
+
+            if (!string.IsNullOrEmpty(overrides?.Author))        info.Author   = overrides.Author;
+            else if (!string.IsNullOrEmpty(metadata?.Author))    info.Author   = metadata.Author;
+
+            if (!string.IsNullOrEmpty(overrides?.Subject))       info.Subject  = overrides.Subject;
+            else if (!string.IsNullOrEmpty(metadata?.Subject))   info.Subject  = metadata.Subject;
+
+            if (!string.IsNullOrEmpty(overrides?.Keywords))      info.Keywords = overrides.Keywords;
+            else if (!string.IsNullOrEmpty(metadata?.Keywords))  info.Keywords = metadata.Keywords;
+
+            if (metadata?.Date.HasValue == true)                 info.CreationDate = metadata.Date.Value;
         }
 
         internal static async Task SetContent(HtmlContainer container, PdfGenerateConfig config, string html, PeachPdfCssContent? cssData, XSize orgPageSize)
@@ -456,6 +467,12 @@ namespace PeachPDF
             container.MarginLeft = config.MarginLeft;
             container.MarginRight = config.MarginRight;
             container.MarginTop = config.MarginTop;
+
+            // Must be set before SetHtml below, which generates the DOM/CSS tree (DomParser) - both feed
+            // into that generation: Media selects which @media rules match, IgnoreAuthorStyleSheets gates
+            // whether the document's own <style>/<link> author sheets are collected at all.
+            container.HtmlContainerInt.Media = string.IsNullOrEmpty(config.Media) ? "print" : config.Media;
+            container.HtmlContainerInt.IgnoreAuthorStyleSheets = config.IgnoreAuthorStyleSheets;
 
             // Parse-time @page relative units (% / em, base rule and the captured PageLengthContext
             // alike) resolve against PageSize as it stands during SetHtml — carry the physical sheet

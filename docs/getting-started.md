@@ -38,7 +38,7 @@ A `PdfGenerator` instance is not thread-safe. Use a **separate instance per thre
 
 ## Trimming and Native AOT
 
-PeachPDF is built to be **trimming-safe and [Native AOT](https://learn.microsoft.com/dotnet/core/deploying/native-aot/)-compatible**: the library sets `IsTrimmable` and `IsAotCompatible`, so it compiles cleanly under the trim and AOT analyzers and publishes as a fully native, self-contained executable with no runtime code generation. You can reference it from a `PublishTrimmed` or `PublishAot` application and generate PDFs from the native binary without any additional configuration. All platform interop uses source-generated `LibraryImport` marshalling rather than reflection-based `DllImport`, so nothing PeachPDF calls is stripped by the trimmer.
+PeachPDF is built to be **trimming-safe and [Native AOT](https://learn.microsoft.com/dotnet/core/deploying/native-aot/)-compatible**: the library sets `IsTrimmable` and `IsAotCompatible`, so it compiles cleanly under the trim and AOT analyzers and publishes as a fully native, self-contained executable with no runtime code generation. You can reference it from a `PublishTrimmed` or `PublishAot` application and generate PDFs from the native binary without any additional configuration. All platform interop uses source-generated `LibraryImport` marshalling rather than reflection-based `DllImport`, so nothing PeachPDF calls is stripped by the trimmer. The standalone [`peachpdf` command-line tool](cli.md) is itself published this way — a fully native, self-contained binary per platform.
 
 ## Guides
 
@@ -47,5 +47,6 @@ PeachPDF is built to be **trimming-safe and [Native AOT](https://learn.microsoft
 - **[Supported SVG Features](supported-svg-features.md)** — the full compatibility matrix for inline and standalone SVG, rendered as real vector PDF content rather than rasterized bitmaps.
 - **[How PeachPDF Is Tested](testing.md)** — the automated test suite, the CI matrix, the diff-coverage gate, and the two-renderer rasterization checks that verify output actually renders correctly.
 - **[Usage Examples](usage-examples.md)** — copy-pasteable examples: local HTML strings, MHTML files, HTTP fetching, shared CSS contexts, saving to disk, fonts, tagged PDF (PDF/UA) output, and returning PDFs from ASP.NET Core (controllers and Minimal APIs) and Azure Functions.
+- **[Command-Line Tool](cli.md)** — the standalone `peachpdf` CLI (a self-contained Native AOT binary) for rendering HTML to PDF from the shell, without writing any code.
 - **[Feature Showcase](showcase.html)** — real PDFs rendered by the current release at site build time, each paired with the exact HTML source it was generated from.
 - **[API Reference](api/index.md)** — generated reference for every public type and member, always in sync with the latest source.

@@ -5,7 +5,7 @@
       <DataCollector friendlyName="XPlat code coverage">
         <Configuration>
           <Format>cobertura</Format>
-          <ExcludeByFile>**/PeachPdfProductInfo.g.cs</ExcludeByFile>
+          <ExcludeByFile>**/PeachPdfProductInfo.g.cs,**/PeachPDF.Cli/Program.cs</ExcludeByFile>
         </Configuration>
       </DataCollector>
     </DataCollectors>

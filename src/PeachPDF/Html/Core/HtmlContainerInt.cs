@@ -360,6 +360,20 @@ namespace PeachPDF.Html.Core
         internal string? DocumentLanguage { get; set; }
 
         /// <summary>
+        /// The CSS media type the cascade matches <c>@media</c> rules against (see
+        /// <see cref="PdfGenerateConfig.Media"/>). Defaults to <c>"print"</c>; set by
+        /// <c>PdfGenerator.SetContent</c> before the DOM/CSS tree is generated.
+        /// </summary>
+        internal string Media { get; set; } = "print";
+
+        /// <summary>
+        /// When true, the document's own author style sheets (<c>&lt;style&gt;</c>/<c>&lt;link&gt;</c>) are
+        /// not collected during CSS parsing (see <see cref="PdfGenerateConfig.IgnoreAuthorStyleSheets"/>).
+        /// Set by <c>PdfGenerator.SetContent</c> before the DOM/CSS tree is generated.
+        /// </summary>
+        internal bool IgnoreAuthorStyleSheets { get; set; }
+
+        /// <summary>
         /// Orchestrates tagged-PDF structure-tree/MCID bookkeeping during painting. Set by
         /// <c>PdfGenerator</c> before the page-render loop only when
         /// <c>PdfGenerateConfig.EnableTaggedPdf</c> is set; null (the default) means tagging is

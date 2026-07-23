@@ -101,7 +101,8 @@ namespace PeachPDF.Tests.CSS
             // A `[attr]` with no combinator/value falls through the factory's dispatch to the presence
             // selector (the switch `_` arm) - the one branch the combinator theory above doesn't cover.
             var sheet = await new StylesheetParser().ParseAsync(
-                "[type] { background-color: #101010 } .sample-class[type] { background-color: #121212 }");
+                "[type] { background-color: #101010 } .sample-class[type] { background-color: #121212 }",
+                TestContext.Current.CancellationToken);
 
             var list = GetAttributeStyleRules<AttrAvailableSelector>(sheet);
 

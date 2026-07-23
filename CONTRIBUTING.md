@@ -17,6 +17,12 @@ dotnet test PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0
 
 `PeachPDF.Tests` multi-targets net8.0 and net10.0. A bare `dotnet test` (no `--framework`) builds and runs the full suite (3000+ tests) twice in one invocation, which roughly doubles local build/test time — always pass `--framework net8.0` for routine local runs. Only add an explicit net10.0 run if you suspect a net10.0-specific issue.
 
+The `peachpdf` command-line tool has its own test project, `PeachPDF.Cli.Tests` (net10.0-only, since the CLI is net10.0-only):
+
+```
+dotnet test PeachPDF.Cli.Tests/PeachPDF.Cli.Tests.csproj
+```
+
 To run a subset of tests:
 
 ```

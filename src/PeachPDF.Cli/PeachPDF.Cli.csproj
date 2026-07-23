@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The peachpdf command-line tool. Single-TFM net10.0 (NativeAOT publishes one framework/RID at a
+    time), overriding the net8.0;net10.0 default from src/Directory.Build.props. PublishAot only takes
+    effect on `dotnet publish -r <rid>`; plain `dotnet build`/`dotnet run` stay non-AOT. This project
+    also serves as the library's AOT smoke test - a successful `dotnet publish -p:PublishAot=true`
+    proves the whole render pipeline AOT-compiles and runs.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!--
+      The published native binary is renamed to 'peachpdf' by the release packaging step. AssemblyName
+      is left as the default (PeachPDF.Cli): naming the assembly 'peachpdf' collides case-insensitively
+      with the referenced 'PeachPDF' library and breaks project-reference restore.
+    -->
+    <TargetFrameworks></TargetFrameworks>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsAotCompatible>true</IsAotCompatible>
+    <PublishAot>true</PublishAot>
+    <IsPackable>false</IsPackable>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <InvariantTimezone>true</InvariantTimezone>
+    <!--
+      NativeAOT already links a single self-contained native executable (no side-by-side runtime files
+      - PeachPDF is pure managed, and InvariantGlobalization/InvariantTimezone drop the ICU/tz data
+      dependencies). Strip debug symbols to a separate file (not shipped) so the binary itself is a lean
+      single file, and keep the referenced library's XML docs out of the publish output.
+    -->
+    <StripSymbols>true</StripSymbols>
+    <AllowedReferenceRelatedFileExtensions>none</AllowedReferenceRelatedFileExtensions>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PeachPDF\PeachPDF.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PeachPDF.Cli.Tests" />
+  </ItemGroup>
+
+  <!-- Embed the license and acknowledgements so the self-contained binary carries them for the license/credits options. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\LICENSE" LogicalName="PeachPDF.Cli.LICENSE" />
+    <EmbeddedResource Include="..\..\THIRD-PARTY-LICENSES.md" LogicalName="PeachPDF.Cli.THIRD-PARTY-LICENSES.md" />
+  </ItemGroup>
+
+</Project>

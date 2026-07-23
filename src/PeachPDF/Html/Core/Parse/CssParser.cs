@@ -72,7 +72,11 @@ namespace PeachPDF.Html.Core.Parse
         /// <returns>the CSS data with parsed CSS objects (never null)</returns>
         public async Task<CssData> ParseStyleSheet(string stylesheet, bool combineWithDefault)
         {
-            var cssData = combineWithDefault ? await _adapter.GetDefaultCssData() : new CssData();
+            // Clone the adapter's shared, cached default (user-agent) CssData before merging so that
+            // adding the caller's rules here - or later via PeachPdfCssContent.AddStyleSheet - never
+            // mutates the shared instance (which would leak those rules into other renders). This
+            // mirrors the render path's clone-on-write (DomParser.CloneCssData).
+            var cssData = combineWithDefault ? (await _adapter.GetDefaultCssData()).Clone() : new CssData();
 
             if (!string.IsNullOrEmpty(stylesheet))
             {
