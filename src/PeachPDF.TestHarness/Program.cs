@@ -2070,6 +2070,17 @@ var svgHtml = "<!DOCTYPE html><html><head>" + SvgShowcaseCss + "</head><body>" +
             """<svg viewBox="0 0 100 100" width="80" height="80"><defs><circle id="dot2" cx="50" cy="50" r="15" fill="#9b59b6"/></defs><use xlink:href="#dot2" transform="scale(0.6)"/><use xlink:href="#dot2" transform="translate(40,20) scale(0.8)"/></svg>""",
             "two &lt;use&gt; of the same &lt;circle&gt;, each transformed")
     ) +
+    Row(
+        SvgSwatch("group opacity over overlapping text",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><g opacity="0.5"><text x="6" y="58" font-size="42" fill="#e74c3c">AV</text><text x="24" y="74" font-size="42" fill="#2980b9">VA</text></g></svg>""",
+            "g opacity=\"0.5\" over two overlapping &lt;text&gt; runs — no double-darkening at the overlap"),
+        SvgSwatch("use opacity of a container",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><defs><g id="pair"><rect x="12" y="12" width="52" height="52" fill="#e67e22"/><rect x="36" y="36" width="52" height="52" fill="#8e44ad"/></g></defs><use xlink:href="#pair" opacity="0.5"/></svg>""",
+            "use opacity=\"0.5\" of a &lt;g&gt; of overlapping rects — composited once"),
+        SvgSwatch("nested svg opacity",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><svg x="8" y="8" width="84" height="84" opacity="0.5"><circle cx="34" cy="34" r="28" fill="#16a085"/><circle cx="58" cy="58" r="28" fill="#c0392b"/></svg></svg>""",
+            "nested &lt;svg opacity=\"0.5\"&gt; with overlapping circles")
+    ) +
 
     "<h2>6 — clipPath + use</h2>" +
     "<p class=\"intro\">clip-path references a &lt;clipPath&gt; that itself contains a &lt;use&gt; of a shape defined once in &lt;defs&gt; — the same pattern used by the peach illustrations below. A clip shape's own <code>transform</code> (directly, via <code>&lt;use transform&gt;</code>, or via a wrapping <code>&lt;g&gt;</code>) is applied to the clip geometry, so one shape can be reused at several positions. With <code>clipPathUnits=\"objectBoundingBox\"</code> the 0..1 clip geometry auto-scales to the referencing element's own bounding box.</p>" +
