@@ -381,7 +381,7 @@ namespace PeachPDF.Svg
 
             if (element.MaskRef is { } maskRef && document.Masks.TryGetValue(maskRef, out var mask))
                 RenderMaskedElementContent(g, document, element, mask, opacity, viewport);
-            else if (element.Opacity < 1.0 && element is SvgGroupElement or SvgNestedSvgElement)
+            else if (element.Opacity < 1.0 && NeedsContainerOpacityGroup(element))
                 // A container's own opacity needs an isolated transparency-group composite - see
                 // RenderContainerOpacityGroup - rather than the plain per-shape alpha multiply the
                 // "else" branch below uses for everything else, so overlapping children don't
@@ -397,12 +397,29 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>
-        /// Renders a container element's (<c>&lt;g&gt;</c>/<c>&lt;a&gt;</c>/nested <c>&lt;svg&gt;</c>)
-        /// children into an offscreen tile at full local alpha, then composites that tile onto
-        /// <paramref name="g"/> as a single flattened result at <paramref name="element"/>'s own
-        /// <see cref="SvgElement.Opacity"/> - the same isolated-transparency-group technique
-        /// <c>CssBox</c> uses for CSS <c>opacity</c> (see <c>CssBox.PaintWithOpacity</c>), applied here
-        /// to fix the double-blend limitation this renderer previously had for SVG group opacity.
+        /// Which elements need the isolated-transparency-group composite for their own <c>opacity</c>:
+        /// containers whose children can overlap. A <c>&lt;g&gt;</c>/<c>&lt;a&gt;</c>
+        /// (<see cref="SvgAnchorElement"/> derives from <see cref="SvgGroupElement"/>) or nested
+        /// <c>&lt;svg&gt;</c> always qualifies; a <c>&lt;use&gt;</c> qualifies only when it references a
+        /// container (<c>&lt;g&gt;</c>/<c>&lt;symbol&gt;</c>/nested <c>&lt;svg&gt;</c>), since a
+        /// <c>&lt;use&gt;</c> of a single shape/text/image has no overlapping sub-content and the plain
+        /// per-shape alpha multiply is already correct (and cheaper - no tile) for it.
+        /// </summary>
+        private static bool NeedsContainerOpacityGroup(SvgElement element) => element switch
+        {
+            SvgGroupElement or SvgNestedSvgElement => true,
+            SvgUseElement { Target: SvgGroupElement or SvgSymbolElement or SvgNestedSvgElement } => true,
+            _ => false,
+        };
+
+        /// <summary>
+        /// Renders a container element's (<c>&lt;g&gt;</c>/<c>&lt;a&gt;</c>/nested <c>&lt;svg&gt;</c>, or a
+        /// <c>&lt;use&gt;</c> of one - see <see cref="NeedsContainerOpacityGroup"/>) children into an
+        /// offscreen tile at full local alpha, then composites that tile onto <paramref name="g"/> as a
+        /// single flattened result at <paramref name="element"/>'s own <see cref="SvgElement.Opacity"/> -
+        /// the same isolated-transparency-group technique <c>CssBox</c> uses for CSS <c>opacity</c> (see
+        /// <c>CssBox.PaintWithOpacity</c>), applied here to fix the double-blend limitation this renderer
+        /// previously had for SVG group opacity.
         /// </summary>
         private static void RenderContainerOpacityGroup(RGraphics g, SvgDocument document, SvgElement element, double inheritedOpacity, (double Width, double Height) viewport)
         {
@@ -417,16 +434,16 @@ namespace PeachPDF.Svg
             // "paint at raw coordinates, let the same ambient transform re-apply at placement time" is
             // the only way the numbers stay meaningful.
             //
-            // The bounding box (with the same -10%/+20% margin SvgMask's own default region uses, as a
-            // stroke-width/curve-control-point safety margin) comes from the same SvgGeometryBounds this
-            // renderer already uses for objectBoundingBox gradients/masks - an approximation (it doesn't
-            // account for descendants' own nested `transform`), acceptable here for the same reason it's
-            // acceptable there.
-            if (SvgGeometryBounds.GetBoundingBox(element) is not { } bbox || bbox.Width <= 0 || bbox.Height <= 0)
+            // The bounding box is the element's own local-space extent (the same space the placement rect
+            // is interpreted in), with the same -10%/+20% margin SvgMask's own default region uses as a
+            // stroke-width/curve-control-point safety margin. GetOpacityGroupBounds extends the geometry-
+            // only SvgGeometryBounds to also bound <text>/<image>/nested-<svg>/<use> content, so a group
+            // whose only content is those types (previously unboundable) still gets an isolated composite
+            // instead of falling back to a double-blend-prone per-shape alpha multiply.
+            if (GetOpacityGroupBounds(g, element, viewport) is not { } bbox || bbox.Width <= 0 || bbox.Height <= 0)
             {
-                // No boundable content (e.g. a group of only <text>, or an empty group) - fall back to
-                // the older, double-blend-prone but still-translucent per-shape alpha multiply rather
-                // than rendering nothing.
+                // Truly empty / zero-area content: nothing paints, so there is nothing to double-blend -
+                // a direct render is a harmless no-op.
                 RenderElementSwitch(g, document, element, inheritedOpacity * element.Opacity, viewport);
                 return;
             }
@@ -439,6 +456,9 @@ namespace PeachPDF.Svg
             var tile = g.CreateTile(width, height);
             if (tile is not { } t)
             {
+                // No page/document context (a measure-only pass - CreateTile returns null there) - keep
+                // the graceful direct fallback rather than throwing. Tested by
+                // Opacity_SvgGroupOpacity_NoPageContext_FallsBackToDirectRender.
                 RenderElementSwitch(g, document, element, inheritedOpacity * element.Opacity, viewport);
                 return;
             }
@@ -455,6 +475,130 @@ namespace PeachPDF.Svg
             t.Graphics.Dispose();
 
             g.DrawImageWithOpacity(t.Image, new RRect(x, y, width, height), element.Opacity);
+        }
+
+        /// <summary>
+        /// Local-space bounds for sizing an opacity-group tile. Extends the geometry-only
+        /// <see cref="SvgGeometryBounds.GetBoundingBox"/> to cover the element types it intentionally
+        /// leaves unbounded - <c>&lt;text&gt;</c> (needs font measurement), <c>&lt;image&gt;</c> and
+        /// nested <c>&lt;svg&gt;</c> (exact from their own <c>x</c>/<c>y</c>/<c>width</c>/<c>height</c>),
+        /// and <c>&lt;use&gt;</c> (mirroring <see cref="RenderElementSwitch"/>'s use handling) - so a
+        /// container whose only content is those types is still boundable and gets a proper isolated
+        /// composite. Kept renderer-local (not folded into <see cref="SvgGeometryBounds"/>) so
+        /// <c>objectBoundingBox</c> gradient/mask/clip resolution, which relies on those types reporting
+        /// <c>null</c> there, is unaffected.
+        /// </summary>
+        private static RRect? GetOpacityGroupBounds(RGraphics g, SvgElement element, (double Width, double Height) viewport) => element switch
+        {
+            SvgTextElement text => MeasureTextBounds(g, text),
+            SvgImageElement { Width: > 0, Height: > 0 } image => new RRect(image.X, image.Y, image.Width, image.Height),
+            SvgNestedSvgElement { Width: > 0, Height: > 0 } nestedSvg => new RRect(nestedSvg.X, nestedSvg.Y, nestedSvg.Width, nestedSvg.Height),
+            SvgUseElement { Target: SvgSymbolElement } use => new RRect(use.X, use.Y, use.Width ?? viewport.Width, use.Height ?? viewport.Height),
+            SvgUseElement { Target: SvgNestedSvgElement nestedTarget } use => new RRect(use.X, use.Y, use.Width ?? nestedTarget.Width, use.Height ?? nestedTarget.Height),
+            SvgUseElement { Target: { } target } use => OffsetBounds(GetOpacityGroupBounds(g, target, viewport), use.X, use.Y),
+            SvgGroupElement group => UnionOpacityGroupBounds(g, group.Children, viewport),
+            _ => SvgGeometryBounds.GetBoundingBox(element),
+        };
+
+        private static RRect? OffsetBounds(RRect? rect, double dx, double dy) =>
+            rect is { } r ? new RRect(r.X + dx, r.Y + dy, r.Width, r.Height) : null;
+
+        private static RRect? UnionOpacityGroupBounds(RGraphics g, IEnumerable<SvgElement> elements, (double Width, double Height) viewport)
+        {
+            RRect? result = null;
+
+            foreach (var element in elements)
+            {
+                if (GetOpacityGroupBounds(g, element, viewport) is not { } b)
+                    continue;
+
+                result = result is { } r ? UnionRects(r, b) : b;
+            }
+
+            return result;
+        }
+
+        private static RRect UnionRects(RRect a, RRect b)
+        {
+            var minX = Math.Min(a.X, b.X);
+            var minY = Math.Min(a.Y, b.Y);
+            var maxX = Math.Max(a.X + a.Width, b.X + b.Width);
+            var maxY = Math.Max(a.Y + a.Height, b.Y + b.Height);
+            return new RRect(minX, minY, maxX - minX, maxY - minY);
+        }
+
+        /// <summary>
+        /// Local-space bounds of a <c>&lt;text&gt;</c> and its <c>&lt;tspan&gt;</c> descendants, computed
+        /// with the exact same cursor/anchor/measurement math <see cref="RenderTextRun"/> paints with
+        /// (threaded <c>cursorX</c>/<c>cursorY</c>, <c>HasOwnX</c>/<c>HasOwnY</c>, <c>Dx</c>/<c>Dy</c>,
+        /// <c>MeasureString</c>, <c>TextAnchor</c>, and <c>drawY = y - Ascent</c>) so
+        /// the tile region and the painted glyphs can't drift. A per-glyph <c>rotate</c> is bounded by
+        /// its rotated corners; the tile's own -10%/+20% margin absorbs any slack.
+        /// </summary>
+        private static RRect? MeasureTextBounds(RGraphics g, SvgTextElement text)
+        {
+            RRect? result = null;
+            double cursorX = text.X, cursorY = text.Y;
+            AccumulateTextRunBounds(g, text, ref cursorX, ref cursorY, ref result);
+            return result;
+        }
+
+        private static void AccumulateTextRunBounds(RGraphics g, SvgTextElement run, ref double cursorX, ref double cursorY, ref RRect? bounds)
+        {
+            if (run.HasOwnX) cursorX = run.X;
+            if (run.HasOwnY) cursorY = run.Y;
+
+            var x = cursorX + run.Dx;
+            var y = cursorY + run.Dy;
+
+            if (run.Text.Length > 0 && run.Font is { } font)
+            {
+                var size = g.MeasureString(run.Text, font);
+
+                var drawX = run.TextAnchor switch
+                {
+                    SvgTextAnchor.Middle => x - size.Width / 2,
+                    SvgTextAnchor.End => x - size.Width,
+                    _ => x,
+                };
+                var drawY = y - font.Ascent;
+
+                var runBounds = new RRect(drawX, drawY, size.Width, size.Height);
+                if (run.RotateDegrees != 0)
+                    runBounds = RotateRectBounds(runBounds, run.RotateDegrees, x, y);
+
+                bounds = bounds is { } b ? UnionRects(b, runBounds) : runBounds;
+
+                cursorX = x + size.Width;
+                cursorY = y;
+            }
+
+            foreach (var span in run.Spans)
+                AccumulateTextRunBounds(g, span, ref cursorX, ref cursorY, ref bounds);
+        }
+
+        /// <summary>Axis-aligned envelope of <paramref name="rect"/> rotated <paramref name="degrees"/> about (<paramref name="pivotX"/>, <paramref name="pivotY"/>) - matches the pivot <see cref="RenderTextRun"/> rotates its glyphs around.</summary>
+        private static RRect RotateRectBounds(RRect rect, double degrees, double pivotX, double pivotY)
+        {
+            var radians = degrees * (Math.PI / 180.0);
+            var cos = Math.Cos(radians);
+            var sin = Math.Sin(radians);
+
+            double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+
+            foreach (var (cx, cy) in new[] { (rect.X, rect.Y), (rect.Right, rect.Y), (rect.X, rect.Bottom), (rect.Right, rect.Bottom) })
+            {
+                var dx = cx - pivotX;
+                var dy = cy - pivotY;
+                var rx = pivotX + dx * cos - dy * sin;
+                var ry = pivotY + dx * sin + dy * cos;
+                minX = Math.Min(minX, rx);
+                minY = Math.Min(minY, ry);
+                maxX = Math.Max(maxX, rx);
+                maxY = Math.Max(maxY, ry);
+            }
+
+            return new RRect(minX, minY, maxX - minX, maxY - minY);
         }
 
         /// <summary>

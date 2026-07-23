@@ -982,13 +982,13 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task InlineSvg_GroupOpacity_NoBoundableContent_FallsBackToPerShapeAlpha()
+        public async Task InlineSvg_GroupOpacity_TextOnlyContent_RendersIsolatedTransparencyGroup()
         {
-            // SvgGeometryBounds.GetBoundingBox doesn't handle <text> (only geometry elements), so a
-            // <g opacity> containing only text has no boundable content to size a tile from -
-            // RenderContainerOpacityGroup falls back to the older per-shape alpha multiply rather than
-            // rendering nothing. Assert the text still renders, translucently, via that fallback (no
-            // isolated-group Form XObject is expected here, just the plain fill-alpha path).
+            // A <g opacity> whose only content is <text> is now bounded in local space
+            // (SvgRenderer.MeasureTextBounds, mirroring RenderTextRun's cursor/anchor/measure math), so
+            // it gets a proper isolated-group composite instead of the old double-blend-prone per-shape
+            // alpha multiply. A single <text> has no self-overlap, so this asserts the group path is
+            // taken (a Form XObject + exactly one group /ca 0.5), not the darker per-shape 0.5019608.
             var html = """
                 <!DOCTYPE html><html><body>
                 <svg viewBox="0 0 100 100" width="100" height="100">
@@ -1001,11 +1001,210 @@ namespace PeachPDF.Tests.Integration
 
             var pdfText = await GetPdfText(html);
 
-            // The per-shape alpha-multiply fallback quantizes opacity through a byte alpha channel
-            // (RColor.A is 0-255 - see SvgRenderer.ApplyOpacity), so 0.5 comes out as 128/255 (~0.502),
-            // unlike the isolated-group path's exact double alpha - assert on that quantized value
-            // rather than an exact "0.5".
-            Assert.Contains("/ca 0.5019608", pdfText);
+            Assert.Contains("/Subtype /Form", pdfText);
+            Assert.Contains("/S /Transparency", pdfText);
+            var alphaMatches = Regex.Matches(pdfText, @"/ca 0\.5\b");
+            Assert.Single(alphaMatches);
+            Assert.DoesNotContain("/ca 0.5019608", pdfText);
+        }
+
+        [Fact]
+        public async Task InlineSvg_GroupOpacity_OverlappingText_DoNotDoubleBlend()
+        {
+            // Regression for the text-only-group double-blend residual (issue #157): two overlapping
+            // <text> runs under a <g opacity> must composite once as an isolated group, not each carry
+            // their own per-run /ca. Before the local-space text-bounds fix, the group was unboundable
+            // and fell back to the per-shape alpha multiply, double-darkening where the runs overlap.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <g opacity="0.5">
+                    <text x="10" y="50" font-size="30" fill="#ff0000">AAA</text>
+                    <text x="10" y="60" font-size="30" fill="#0000ff">WWW</text>
+                  </g>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("/S /Transparency", pdfText);
+            var alphaMatches = Regex.Matches(pdfText, @"/ca 0\.5\b");
+            Assert.Single(alphaMatches);                                       // one group composite, not per-run
+            Assert.Matches(new Regex(@"cm /GS\d+ gs /Fm\d+ Do"), pdfText);     // structural adjacency (CLAUDE.md §Testing)
+        }
+
+        [Fact]
+        public async Task InlineSvg_UseOpacity_ContainerTarget_DoNotDoubleBlend()
+        {
+            // Regression for the <use opacity> → container residual (issue #157): a <use opacity>
+            // referencing a <g> of overlapping shapes must composite the whole target once as an
+            // isolated group. A <use> is neither <g> nor nested <svg>, so it previously never entered
+            // the group path and its target's overlapping shapes double-darkened via per-shape alpha.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <defs>
+                    <g id="pair">
+                      <rect x="10" y="10" width="50" height="50" fill="#ff0000"/>
+                      <rect x="30" y="30" width="50" height="50" fill="#0000ff"/>
+                    </g>
+                  </defs>
+                  <use xlink:href="#pair" opacity="0.5"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("/S /Transparency", pdfText);
+            var alphaMatches = Regex.Matches(pdfText, @"/ca 0\.5\b");
+            Assert.Single(alphaMatches);
+            Assert.Matches(new Regex(@"cm /GS\d+ gs /Fm\d+ Do"), pdfText);
+        }
+
+        [Fact]
+        public async Task InlineSvg_NestedSvgOpacity_RendersIsolatedTransparencyGroup()
+        {
+            // A nested <svg opacity> is bounded from its own x/y/width/height (SvgNestedSvgElement isn't
+            // in SvgGeometryBounds), so it too now composites once as an isolated group.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <svg x="10" y="10" width="70" height="70" opacity="0.5">
+                    <rect x="0" y="0" width="50" height="50" fill="#ff0000"/>
+                    <rect x="20" y="20" width="50" height="50" fill="#0000ff"/>
+                  </svg>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("/S /Transparency", pdfText);
+            var alphaMatches = Regex.Matches(pdfText, @"/ca 0\.5\b");
+            Assert.Single(alphaMatches);
+        }
+
+        [Fact]
+        public async Task InlineSvg_GroupOpacity_ImageOnlyContent_RendersIsolatedTransparencyGroup()
+        {
+            // An <image> is bounded from its own x/y/width/height, so an <image>-only <g opacity> is a
+            // proper isolated group rather than the old per-shape-alpha fallback.
+            const string pngBase64 =
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+            var html = $"""
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <g opacity="0.5">
+                    <image href="data:image/png;base64,{pngBase64}" x="10" y="10" width="50" height="50"/>
+                  </g>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("/S /Transparency", pdfText);
+            Assert.Matches(new Regex(@"/ca 0\.5\b"), pdfText);
+        }
+
+        [Fact]
+        public async Task InlineSvg_UseOpacity_SymbolTarget_RendersIsolatedTransparencyGroup()
+        {
+            // A <use opacity> of a <symbol> establishes a viewport sized by the use's width/height; its
+            // bounds come from that rect, so it composites once as an isolated group.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <defs>
+                    <symbol id="sym" viewBox="0 0 100 100">
+                      <rect x="10" y="10" width="50" height="50" fill="#ff0000"/>
+                      <rect x="30" y="30" width="50" height="50" fill="#0000ff"/>
+                    </symbol>
+                  </defs>
+                  <use xlink:href="#sym" x="5" y="5" width="80" height="80" opacity="0.5"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("/S /Transparency", pdfText);
+            var alphaMatches = Regex.Matches(pdfText, @"/ca 0\.5\b");
+            Assert.Single(alphaMatches);
+        }
+
+        [Fact]
+        public async Task InlineSvg_UseOpacity_NestedSvgTarget_RendersIsolatedTransparencyGroup()
+        {
+            // A <use opacity> whose target is a nested <svg> is bounded from the target's own size
+            // (or the use's width/height override) - also an isolated group.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <defs>
+                    <svg id="inner" x="0" y="0" width="70" height="70">
+                      <rect x="0" y="0" width="50" height="50" fill="#ff0000"/>
+                      <rect x="20" y="20" width="50" height="50" fill="#0000ff"/>
+                    </svg>
+                  </defs>
+                  <use xlink:href="#inner" x="10" y="10" opacity="0.5"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("/S /Transparency", pdfText);
+            var alphaMatches = Regex.Matches(pdfText, @"/ca 0\.5\b");
+            Assert.Single(alphaMatches);
+        }
+
+        [Fact]
+        public async Task InlineSvg_GroupOpacity_AnchoredText_WithUnboundableSibling_RendersIsolatedGroup()
+        {
+            // Exercises the text-anchor middle/end bounds branches and the union's skip-null-bounds path
+            // (a zero-size <rect> child reports no bounds and is skipped): a <g opacity> with anchored
+            // text plus an unboundable sibling still bounds to the text and composites once.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <g opacity="0.5">
+                    <rect x="0" y="0" width="0" height="0" fill="#00ff00"/>
+                    <text x="50" y="40" font-size="20" text-anchor="middle" fill="#ff0000">Mid</text>
+                    <text x="90" y="70" font-size="20" text-anchor="end" fill="#0000ff">End</text>
+                  </g>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("/S /Transparency", pdfText);
+            var alphaMatches = Regex.Matches(pdfText, @"/ca 0\.5\b");
+            Assert.Single(alphaMatches);
+        }
+
+        [Fact]
+        public async Task InlineSvg_GroupOpacity_RotatedText_RendersIsolatedTransparencyGroup()
+        {
+            // A per-glyph rotate on the text is bounded by its rotated corners (RotateRectBounds), so a
+            // rotated-text-only <g opacity> is still boundable and composites once.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <g opacity="0.5">
+                    <text x="20" y="50" font-size="20" rotate="30" fill="#ff0000">Rot</text>
+                  </g>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("/S /Transparency", pdfText);
+            Assert.Matches(new Regex(@"/ca 0\.5\b"), pdfText);
         }
 
         [Fact]
