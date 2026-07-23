@@ -291,13 +291,12 @@ namespace PeachPDF.Html.Core
                         IndexRules(layerRule.Rules, isUserAgent, enclosingMedia, qualified, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order);
                         break;
 
-                    // @supports / @container: PeachPDF can't evaluate the condition, so (matching the
-                    // @media-feature convention) treat it as met and index the inner rules in place.
-                    // Deliberately scoped to these two — @keyframes/@document/etc. are grouping rules
-                    // too but must not have their contents applied as document style rules.
-                    case IGroupingRule groupingRule when rule is ISupportsRule or IContainerRule:
-                        IndexRules(groupingRule.Rules, isUserAgent, enclosingMedia, currentLayer, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order);
-                        break;
+                    // @supports / @container: PeachPDF cannot evaluate the condition (Layer B has no
+                    // supports/container-query engine), so the whole block is IGNORED — its inner rules
+                    // are not indexed and therefore never apply. This is deliberately conservative: rather
+                    // than apply rules whose guard we can't test (which can apply a `not`-guarded fallback
+                    // and its enhanced counterpart at once), we drop them. Tracked at #283 (@supports) /
+                    // #284 (@container). @keyframes/@document/etc. are likewise not indexed.
                 }
             }
         }
@@ -307,10 +306,12 @@ namespace PeachPDF.Html.Core
 
         /// <summary>
         /// Enumerates every rule in every stylesheet, descending into the grouping at-rules whose
-        /// contents participate directly in the document (<c>@layer</c>/<c>@media</c>/<c>@supports</c>/
-        /// <c>@container</c>) so an <c>@font-face</c>/<c>@property</c>/<c>@page</c> nested inside one is
-        /// still found. Source order is preserved (a grouping rule's children are yielded at the grouping
-        /// rule's own position), so last-declared-wins collection stays correct.
+        /// contents participate directly in the document (<c>@layer</c>/<c>@media</c>) so an
+        /// <c>@font-face</c>/<c>@property</c>/<c>@page</c> nested inside one is still found.
+        /// <c>@supports</c>/<c>@container</c> are NOT descended — their condition can't be evaluated, so
+        /// the whole block (including any nested at-rules) is ignored, matching <see cref="IndexRules"/>.
+        /// Source order is preserved (a grouping rule's children are yielded at the grouping rule's own
+        /// position), so last-declared-wins collection stays correct.
         /// </summary>
         internal IEnumerable<IRule> EnumerateRulesRecursive()
         {
@@ -337,40 +338,9 @@ namespace PeachPDF.Html.Core
                         foreach (var child in FlattenRules(mediaRule.Rules))
                             yield return child;
                         break;
-                    case IGroupingRule groupingRule when rule is ISupportsRule or IContainerRule:
-                        foreach (var child in FlattenRules(groupingRule.Rules))
-                            yield return child;
-                        break;
+                    // @supports/@container are intentionally not descended — their block is ignored.
                 }
             }
-        }
-
-        /// <summary>
-        /// True if every level of a rule's enclosing <c>@media</c> chain matches <paramref name="media"/>
-        /// (nesting is conjunctive - all levels must match), or if the rule isn't nested in any
-        /// <c>@media</c> block at all.
-        /// </summary>
-        private static bool EnclosingMediaMatches(MediaList[]? enclosingMedia, string media)
-        {
-            if (enclosingMedia is null) return true;
-
-            foreach (var mediaList in enclosingMedia)
-            {
-                var anyMatches = false;
-                foreach (var medium in mediaList)
-                {
-                    var typeMatches = medium.Type == media || medium.Type == "all";
-                    if (medium.IsInverse ? !typeMatches : typeMatches)
-                    {
-                        anyMatches = true;
-                        break;
-                    }
-                }
-
-                if (!anyMatches) return false;
-            }
-
-            return true;
         }
 
         /// <summary>
@@ -463,13 +433,13 @@ namespace PeachPDF.Html.Core
             return await parser.ParseStyleSheet(stylesheet, combineWithDefault);
         }
 
-        internal IEnumerable<IStyleRule> GetStyleRules(string media, ICssDomNode node) =>
+        internal IEnumerable<IStyleRule> GetStyleRules(MediaQueryContext media, ICssDomNode node) =>
             GetStyleRulesByOrigin(media, node, userAgentOnly: null);
 
-        internal IEnumerable<IStyleRule> GetUserAgentStyleRules(string media, ICssDomNode node) =>
+        internal IEnumerable<IStyleRule> GetUserAgentStyleRules(MediaQueryContext media, ICssDomNode node) =>
             GetStyleRulesByOrigin(media, node, userAgentOnly: true);
 
-        internal IEnumerable<IStyleRule> GetAuthorStyleRules(string media, ICssDomNode node) =>
+        internal IEnumerable<IStyleRule> GetAuthorStyleRules(MediaQueryContext media, ICssDomNode node) =>
             GetStyleRulesByOrigin(media, node, userAgentOnly: false);
 
         /// <summary>
@@ -482,7 +452,7 @@ namespace PeachPDF.Html.Core
         /// pass to re-match against, so this is the only way its declarations are ever gathered at all.
         /// See <c>DomParser.ResolveFirstLineStyle</c>, its only caller.
         /// </summary>
-        internal IEnumerable<IStyleRule> GetFirstLineStyleRules(string media, CssBox box, bool userAgentOnly) =>
+        internal IEnumerable<IStyleRule> GetFirstLineStyleRules(MediaQueryContext media, CssBox box, bool userAgentOnly) =>
             GetStyleRulesByOrigin(media, box, userAgentOnly, firstLineOnly: true);
 
         /// <summary>
@@ -500,7 +470,7 @@ namespace PeachPDF.Html.Core
         /// <c>revert-layer</c>. Only the HTML cascade (<c>DomParser.CascadeApplyStyles</c>) needs this;
         /// UA/first-line/SVG paths keep <see cref="GetStyleRulesByOrigin"/>.
         /// </summary>
-        internal (List<LayeredStyleRule> Normal, List<LayeredStyleRule> Important) GetAuthorStyleRulesForCascade(string media, ICssDomNode node)
+        internal (List<LayeredStyleRule> Normal, List<LayeredStyleRule> Important) GetAuthorStyleRulesForCascade(MediaQueryContext media, ICssDomNode node)
         {
             var matched = GatherMatchedRules(media, node, userAgentOnly: false, firstLineOnly: false);
 
@@ -524,7 +494,7 @@ namespace PeachPDF.Html.Core
             return (normal, important);
         }
 
-        private IEnumerable<IStyleRule> GetStyleRulesByOrigin(string media, ICssDomNode node, bool? userAgentOnly, bool firstLineOnly = false)
+        private IEnumerable<IStyleRule> GetStyleRulesByOrigin(MediaQueryContext media, ICssDomNode node, bool? userAgentOnly, bool firstLineOnly = false)
         {
             var matched = GatherMatchedRules(media, node, userAgentOnly, firstLineOnly);
 
@@ -555,7 +525,7 @@ namespace PeachPDF.Html.Core
         /// apply their own cascade ordering. Extracted so the normal and <c>!important</c> author
         /// orderings can share one matching pass (see <see cref="GetAuthorStyleRulesForCascade"/>).
         /// </summary>
-        private List<IndexedRule> GatherMatchedRules(string media, ICssDomNode node, bool? userAgentOnly, bool firstLineOnly)
+        private List<IndexedRule> GatherMatchedRules(MediaQueryContext media, ICssDomNode node, bool? userAgentOnly, bool firstLineOnly)
         {
             EnsureIndex();
 
@@ -568,7 +538,7 @@ namespace PeachPDF.Html.Core
             void Collect(IndexedRule indexed)
             {
                 if (userAgentOnly.HasValue && indexed.IsUserAgent != userAgentOnly.Value) return;
-                if (!EnclosingMediaMatches(indexed.EnclosingMedia, media)) return;
+                if (!MediaQueryMatcher.Matches(indexed.EnclosingMedia, media)) return;
                 // firstLineOnly is HTML-cascade-only (DomParser.ResolveFirstLineStyle), always a CssBox.
                 var isMatch = firstLineOnly
                     ? MatchesAsFirstLineSelector(indexed.Rule.Selector, (CssBox)node)

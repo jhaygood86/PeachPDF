@@ -195,7 +195,7 @@ namespace PeachPDF.Svg
             var result = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 
             // Materialize once so both passes reuse the same matched/sorted list instead of re-querying.
-            var rules = cssData.GetAuthorStyleRules(media, node).ToList();
+            var rules = cssData.GetAuthorStyleRules(MediaQueryContext.TypeOnly(media), node).ToList();
 
             ApplyPass(importantPass: false);
             ApplyPass(importantPass: true);
@@ -297,7 +297,7 @@ namespace PeachPDF.Svg
 
             if (cssData is not null)
             {
-                foreach (var rule in cssData.GetAuthorStyleRules(media, node))
+                foreach (var rule in cssData.GetAuthorStyleRules(MediaQueryContext.TypeOnly(media), node))
                     foreach (var property in rule.Style)
                         if (property.Name.StartsWith("--", StringComparison.Ordinal))
                             (own ??= new Dictionary<string, string>())[property.Name] = property.Value;

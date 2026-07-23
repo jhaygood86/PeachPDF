@@ -73,6 +73,13 @@ namespace PeachPDF
         public string Media { get; set; } = "print";
 
         /// <summary>
+        /// The color scheme reported to <c>@media (prefers-color-scheme: ...)</c> queries.
+        /// Defaults to <see cref="PdfColorScheme.Light"/>; set to <see cref="PdfColorScheme.Dark"/>
+        /// to render the document's dark-mode styles.
+        /// </summary>
+        public PdfColorScheme PreferredColorScheme { get; set; } = PdfColorScheme.Light;
+
+        /// <summary>
         /// When set to <c>true</c>, the document's own author style sheets (its <c>&lt;style&gt;</c>
         /// elements and <c>&lt;link rel="stylesheet"&gt;</c> references) are ignored — only the user-agent
         /// default styles and any caller-supplied stylesheet (the <c>cssData</c> argument) are applied.

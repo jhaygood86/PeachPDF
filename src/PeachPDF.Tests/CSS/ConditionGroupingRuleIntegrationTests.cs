@@ -7,43 +7,47 @@ using PeachPDF.PdfSharpCore.Drawing;
 namespace PeachPDF.Tests.CSS;
 
 /// <summary>
-/// <c>@supports</c> and <c>@container</c> inner-rule application. Both parse into grouping rules, but
-/// their contents were previously never indexed (only <c>@media</c> was recursed), so any rule wrapped
-/// in them was silently dropped. PeachPDF can't evaluate the condition, so — matching the existing
-/// <c>@media</c>-feature convention — the condition is treated as met and the inner rules apply.
+/// <c>@supports</c> and <c>@container</c> block handling. PeachPDF has no supports/container-query engine
+/// in the render layer, so it cannot evaluate their conditions. Rather than apply rules guarded by a
+/// condition it can't test (which would apply a <c>not</c>-guarded fallback and its enhanced counterpart
+/// at once), PeachPDF <b>ignores the whole block</b> — the inner rules are never indexed and never apply.
+/// A top-level rule for the same element still applies normally, proving it's specifically the wrapped
+/// rules that are dropped. Tracked at #283 (<c>@supports</c>) / #284 (<c>@container</c>).
 /// </summary>
 public class ConditionGroupingRuleIntegrationTests
 {
+    private const string Blue = "rgb(0, 0, 255)";
+
     [Fact]
-    public async Task Supports_InnerRules_AreApplied()
+    public async Task Supports_InnerRules_AreIgnored()
     {
+        // The top-level rule sets red; the @supports-wrapped rule tries to override to blue but is ignored.
         var html = Html(
-            "@supports (display: flex) { p { color: #0000ff; } }",
+            "p { color: #ff0000; } @supports (display: flex) { p { color: #0000ff; } }",
             "<p>text</p>");
         var box = await FindBoxByTag(html, "p");
-        Assert.Equal("rgb(0, 0, 255)", box.Color);
+        Assert.Equal("rgb(255, 0, 0)", box.Color);
     }
 
     [Fact]
-    public async Task Supports_InnerRules_Apply_EvenWhenConditionIsUnverifiable()
+    public async Task SupportsNot_InnerRules_AreIgnored()
     {
-        // The condition queries a feature PeachPDF doesn't implement (grid); it is treated as met and
-        // the inner rule still applies — the documented "condition treated as met" behavior.
+        // A `not`-guarded block is dropped just the same — we don't evaluate the condition either way.
         var html = Html(
-            "@supports (display: grid) { p { color: #0000ff; } }",
+            "@supports not (display: flex) { p { color: #0000ff; } }",
             "<p>text</p>");
         var box = await FindBoxByTag(html, "p");
-        Assert.Equal("rgb(0, 0, 255)", box.Color);
+        Assert.NotEqual(Blue, box.Color);
     }
 
     [Fact]
-    public async Task Container_InnerRules_AreApplied()
+    public async Task Container_InnerRules_AreIgnored()
     {
         var html = Html(
             "@container (min-width: 100px) { p { color: #0000ff; } }",
             "<p>text</p>");
         var box = await FindBoxByTag(html, "p");
-        Assert.Equal("rgb(0, 0, 255)", box.Color);
+        Assert.NotEqual(Blue, box.Color);
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────
