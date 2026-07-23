@@ -285,11 +285,13 @@ namespace PeachPDF.CSS
         {
             track = null;
 
-            // minmax(<inflexible-breadth>, <track-breadth>) and fit-content(<length-percentage>).
+            // minmax(<inflexible-breadth>, <track-breadth>), fit-content(<length-percentage>), and a
+            // math function (calc()/min()/max()/clamp()) that resolves to a <length-percentage>.
             if (token is FunctionToken fn)
             {
                 if (fn.Data.Isi(FunctionNames.Minmax)) return TryParseMinmax(fn, out track);
                 if (fn.Data.Isi(FunctionNames.FitContent)) return TryParseFitContent(fn, out track);
+                if (IsLengthPercentageCalc(fn)) { track = GridTrackSize.Length(fn.ToValue()); return true; }
                 return false;
             }
 
@@ -300,6 +302,15 @@ namespace PeachPDF.CSS
         private static bool TryParseBreadth(Token token, out GridTrackSize track)
         {
             track = null;
+
+            // A math function (calc()/min()/max()/clamp()) computes to a <length-percentage> at used-value
+            // time; keep its reconstructed text (Layer B ParseLength evaluates it). This lets a calc() be a
+            // track breadth anywhere a length/percentage is allowed — bare, and inside minmax()/repeat().
+            if (token is FunctionToken calc && IsLengthPercentageCalc(calc))
+            {
+                track = GridTrackSize.Length(calc.ToValue());
+                return true;
+            }
 
             if (token.Type == TokenType.Ident)
             {
@@ -362,9 +373,27 @@ namespace PeachPDF.CSS
                 return true;
             }
             if (t is NumberToken { Value: 0f }) { track = GridTrackSize.FitContentTo("0"); return true; }
+            if (t is FunctionToken calc && IsLengthPercentageCalc(calc))
+            {
+                track = GridTrackSize.FitContentTo(calc.ToValue());
+                return true;
+            }
 
             return false;
         }
+
+        /// <summary>
+        /// Whether <paramref name="fn"/> is a math function (<c>calc()</c>/<c>min()</c>/<c>max()</c>/
+        /// <c>clamp()</c>) that resolves to a <c>&lt;length-percentage&gt;</c>. Validated at parse time
+        /// (mirroring <see cref="BasicShapeGrammar"/>'s calc handling) so a wrong-category math function
+        /// (e.g. an angle) drops the whole track list rather than silently resolving to 0 during layout;
+        /// its reconstructed text is resolved by Layer B <c>ParseLength</c>.
+        /// </summary>
+        private static bool IsLengthPercentageCalc(FunctionToken fn) =>
+            CalcParser.IsCalcFamily(fn.Data)
+            && CalcParser.Parse(fn) is { } node
+            && CalcTypeChecker.Check(node) is CalcCategory.Length or CalcCategory.Percentage
+                or CalcCategory.LengthPercentage;
 
         private static bool IsIdent(Token token, string keyword) =>
             token.Type == TokenType.Ident && token.Data.Isi(keyword);

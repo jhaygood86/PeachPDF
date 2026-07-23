@@ -52,9 +52,9 @@ namespace PeachPDF.Html.Core.Dom
     /// <c>min-content</c>/<c>max-content</c>, <c>minmax()</c>, <c>fit-content()</c>, <c>repeat()</c>
     /// including <c>auto-fill</c>/<c>auto-fit</c>), line-based placement with spans, named lines and
     /// <c>grid-template-areas</c>, auto-placement (<c>grid-auto-flow</c>), implicit tracks, gaps,
-    /// box/content alignment, and subgrid (Level 2 §9, on either or both axes, via
-    /// <see cref="GridSubgridContext"/>). Masonry, baseline alignment, and the <c>grid</c>/<c>grid-template</c>
-    /// shorthands are out of scope — see docs/html-css-support.md.
+    /// box/content alignment (including block-axis <c>baseline</c> item alignment), and subgrid (Level 2 §9,
+    /// on either or both axes, via <see cref="GridSubgridContext"/>). Masonry and inline-axis (justify)
+    /// baseline alignment are out of scope — see docs/html-css-support.md.
     ///
     /// The engine mirrors <see cref="CssLayoutEngineFlex"/>: it resolves the container's content width via
     /// <see cref="CssLayoutEngine.GetBoxWidth"/>, lays each item out at a provisional origin, then translates
@@ -218,10 +218,12 @@ namespace PeachPDF.Html.Core.Dom
                 }
 
                 // Intrinsic (min/max-content) contributions for auto/min-content/max-content/fit-content columns.
-                var colIntrinsic = await MeasureColumnIntrinsics(g, placements, colDefs, colCount);
+                var (colMinContent, colMaxContent) =
+                    await MeasureColumnIntrinsics(g, placements, colDefs, colCount, contentWidth, columnGap);
 
                 var stretchColumns = IsStretch(_gridBox.JustifyContent);
-                columns = SizeColumnTracks(colDefs, contentWidth, columnGap, collapsed, colIntrinsic, stretchColumns);
+                columns = SizeColumnTracks(colDefs, contentWidth, columnGap, collapsed,
+                    colMinContent, colMaxContent, stretchColumns);
                 PositionTracks(columns, _gridBox.ClientLeft, contentWidth, columnGap, _gridBox.JustifyContent);
             }
 
@@ -234,7 +236,13 @@ namespace PeachPDF.Html.Core.Dom
             }
             else
             {
-                var rowDefs = BuildTrackDefs(explicitRowDefs, autoRowDefs, rowCount);
+                // A percentage row track resolves only against a definite container height; against an
+                // indefinite height it behaves as `auto` (content-sized) per §7.2.1 — so demote percentage
+                // rows to auto here rather than seeding them to 0 and leaving them fixed (which collapsed
+                // them). Definite height keeps percentage rows resolving normally.
+                var effectiveRowDefs = hasDefiniteHeight ? explicitRowDefs : explicitRowDefs.Select(PercentToAuto).ToList();
+                var effectiveAutoRowDefs = hasDefiniteHeight ? autoRowDefs : autoRowDefs.Select(PercentToAuto).ToList();
+                var rowDefs = BuildTrackDefs(effectiveRowDefs, effectiveAutoRowDefs, rowCount);
                 rows = new Track[rowCount];
                 for (var r = 0; r < rowCount; r++)
                     rows[r] = new Track { Def = rowDefs[r], Size = ResolveFixedRow(rowDefs[r], hasDefiniteHeight) };
@@ -297,6 +305,11 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
+            // ── Baseline row alignment (CSS Box Alignment §9.3): items in the same row whose used
+            // block-axis alignment is `baseline` were placed start-aligned above; shift each down so all
+            // baseline items in the row share a common first baseline.
+            AlignRowBaselines(placements);
+
             // ── Container size when auto.
             var gridHeight = rows.Sum(t => t.Size) + (rowCount > 1 ? rowGap * (rowCount - 1) : 0);
             if (!hasDefiniteHeight)
@@ -327,26 +340,52 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// Resolves every item's grid position (CSS Grid §8): explicit line-based placement and spans first,
-        /// then auto-placement of the remaining items into the first free cell. The <b>minor</b> axis (the
-        /// one with a fixed track count, <paramref name="fixedCount"/>) is columns for row flow and rows for
-        /// column flow; the <b>major</b> axis grows implicitly. <c>dense</c> restarts the search from the
-        /// origin for each auto item; sparse advances a forward cursor.
+        /// then auto-placement of the remaining items into the first free cell. The <b>minor</b> axis is
+        /// columns for row flow and rows for column flow; the <b>major</b> axis grows implicitly. The minor
+        /// axis starts at the explicit track count (<paramref name="fixedCount"/>) but grows implicit tracks
+        /// to fit an item explicitly placed past it or whose span exceeds it (§8.3/§8.5); auto-placement then
+        /// flows within that grid. <c>dense</c> restarts the search from the origin for each auto item;
+        /// sparse advances a forward cursor.
         /// </summary>
         private List<Placement> PlaceItems(List<CssBox> items, bool isColumnFlow, bool dense, int fixedCount,
             IReadOnlyDictionary<string, List<int>> colLineNames, IReadOnlyDictionary<string, List<int>> rowLineNames)
         {
             var placements = new List<Placement>(items.Count);
+
+            // Map each item to (minorStart, minorSpan, majorStart, majorSpan). Line numbers (incl. negatives)
+            // resolve against the explicit track count (fixedCount); spans are kept unclamped so the implicit
+            // grid can grow to hold them.
+            var resolved = items.Select(box =>
+            {
+                var (colStart, colSpan) = ResolveAxis(box.GridColumnStart, box.GridColumnEnd, fixedCount, colLineNames);
+                var (rowStart, rowSpan) = ResolveAxis(box.GridRowStart, box.GridRowEnd, fixedCount, rowLineNames);
+                return isColumnFlow
+                    ? new { box, MinorStart = rowStart, MinorSpan = Math.Max(1, rowSpan), MajorStart = colStart, MajorSpan = colSpan }
+                    : new { box, MinorStart = colStart, MinorSpan = Math.Max(1, colSpan), MajorStart = rowStart, MajorSpan = rowSpan };
+            }).ToList();
+
+            // The minor track count grows beyond the explicit count for an item explicitly placed past the
+            // grid (e.g. grid-column: 5 in a 3-column grid) or whose span alone is wider than the grid — both
+            // generate implicit minor tracks rather than being clamped into range (which would overlap
+            // another item). colCount/rowCount in Layout already grow from the placement extent to match.
+            var minorCount = fixedCount;
+            foreach (var r in resolved)
+            {
+                minorCount = Math.Max(minorCount, r.MinorSpan);
+                if (r.MinorStart >= 0) minorCount = Math.Max(minorCount, r.MinorStart + r.MinorSpan);
+            }
+
             var occupancy = new List<bool[]>(); // [major][minor]
 
             bool Occupied(int major, int minor)
             {
-                if (minor < 0 || minor >= fixedCount) return true;
+                if (minor < 0 || minor >= minorCount) return true;
                 return major < occupancy.Count && occupancy[major][minor];
             }
 
             bool Fits(int major, int minor, int majorSpan, int minorSpan)
             {
-                if (minor < 0 || minor + minorSpan > fixedCount) return false;
+                if (minor < 0 || minor + minorSpan > minorCount) return false;
                 for (var m = major; m < major + majorSpan; m++)
                     for (var n = minor; n < minor + minorSpan; n++)
                         if (Occupied(m, n)) return false;
@@ -357,22 +396,11 @@ namespace PeachPDF.Html.Core.Dom
             {
                 for (var m = major; m < major + majorSpan; m++)
                 {
-                    while (occupancy.Count <= m) occupancy.Add(new bool[fixedCount]);
-                    for (var n = minor; n < minor + minorSpan && n < fixedCount; n++)
+                    while (occupancy.Count <= m) occupancy.Add(new bool[minorCount]);
+                    for (var n = minor; n < minor + minorSpan && n < minorCount; n++)
                         occupancy[m][n] = true;
                 }
             }
-
-            // Map each item to (minorStart, minorSpan, majorStart, majorSpan). The minor axis is the fixed
-            // one: columns for row flow, rows for column flow.
-            var resolved = items.Select(box =>
-            {
-                var (colStart, colSpan) = ResolveAxis(box.GridColumnStart, box.GridColumnEnd, fixedCount, colLineNames);
-                var (rowStart, rowSpan) = ResolveAxis(box.GridRowStart, box.GridRowEnd, fixedCount, rowLineNames);
-                return isColumnFlow
-                    ? new { box, MinorStart = rowStart, MinorSpan = Math.Min(rowSpan, fixedCount), MajorStart = colStart, MajorSpan = colSpan }
-                    : new { box, MinorStart = colStart, MinorSpan = Math.Min(colSpan, fixedCount), MajorStart = rowStart, MajorSpan = rowSpan };
-            }).ToList();
 
             void Commit(CssBox box, int major, int minor, int majorSpan, int minorSpan)
             {
@@ -385,7 +413,7 @@ namespace PeachPDF.Html.Core.Dom
 
             // Pass 1: items definite on both axes.
             foreach (var r in resolved.Where(x => x.MinorStart >= 0 && x.MajorStart >= 0))
-                Commit(r.box, r.MajorStart, ClampMinor(r.MinorStart, r.MinorSpan, fixedCount), r.MajorSpan, r.MinorSpan);
+                Commit(r.box, r.MajorStart, ClampMinor(r.MinorStart, r.MinorSpan, minorCount), r.MajorSpan, r.MinorSpan);
 
             // Pass 2: the rest, in DOM order.
             var cursorMajor = 0;
@@ -395,7 +423,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (r.MinorStart >= 0)
                 {
                     // Definite minor, auto major: first major line (from the top) where it fits.
-                    var minor = ClampMinor(r.MinorStart, r.MinorSpan, fixedCount);
+                    var minor = ClampMinor(r.MinorStart, r.MinorSpan, minorCount);
                     var major = 0;
                     while (!Fits(major, minor, r.MajorSpan, r.MinorSpan)) major++;
                     Commit(r.box, major, minor, r.MajorSpan, r.MinorSpan);
@@ -404,11 +432,11 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     // Definite major, auto minor: first free minor position on that major line. If the line
                     // is already full (no in-range position fits), place at the start (overflow) rather than
-                    // looping forever — the minor axis has a fixed track count and cannot grow.
+                    // looping forever — the minor axis cannot grow to hold an auto-placed item here.
                     var minor = 0;
-                    while (minor + r.MinorSpan <= fixedCount && !Fits(r.MajorStart, minor, r.MajorSpan, r.MinorSpan))
+                    while (minor + r.MinorSpan <= minorCount && !Fits(r.MajorStart, minor, r.MajorSpan, r.MinorSpan))
                         minor++;
-                    if (minor + r.MinorSpan > fixedCount) minor = 0;
+                    if (minor + r.MinorSpan > minorCount) minor = 0;
                     Commit(r.box, r.MajorStart, minor, r.MajorSpan, r.MinorSpan);
                 }
                 else
@@ -416,7 +444,7 @@ namespace PeachPDF.Html.Core.Dom
                     // Fully auto. dense restarts from origin each time; sparse keeps a forward cursor.
                     var startMajor = dense ? 0 : cursorMajor;
                     var startMinor = dense ? 0 : cursorMinor;
-                    var (major, minor) = FindFreeCell(Fits, startMajor, startMinor, r.MajorSpan, r.MinorSpan, fixedCount);
+                    var (major, minor) = FindFreeCell(Fits, startMajor, startMinor, r.MajorSpan, r.MinorSpan, minorCount);
                     Commit(r.box, major, minor, r.MajorSpan, r.MinorSpan);
                     if (!dense) { cursorMajor = major; cursorMinor = minor + r.MinorSpan; }
                 }
@@ -427,13 +455,13 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         private static (int Major, int Minor) FindFreeCell(
-            Func<int, int, int, int, bool> fits, int startMajor, int startMinor, int majorSpan, int minorSpan, int fixedCount)
+            Func<int, int, int, int, bool> fits, int startMajor, int startMinor, int majorSpan, int minorSpan, int minorCount)
         {
             var major = startMajor;
             var minor = startMinor;
             while (true)
             {
-                if (minor + minorSpan > fixedCount) { minor = 0; major++; continue; }
+                if (minor + minorSpan > minorCount) { minor = 0; major++; continue; }
                 if (fits(major, minor, majorSpan, minorSpan)) return (major, minor);
                 minor++;
             }
@@ -538,12 +566,13 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Sizes the column tracks against the container's definite content width (CSS Grid §11): resolve
         /// each track's base and growth-limit (auto/min-content/max-content/fit-content taking their base
-        /// from the measured item content in <paramref name="intrinsic"/>), then either distribute the free
+        /// from the measured item content in <paramref name="minContent"/>/<paramref name="maxContent"/>),
+        /// then either distribute the free
         /// space to <c>fr</c> tracks (§11.7) or, when there is no flex, grow the intrinsic tracks to share
         /// the remainder. Collapsed (empty <c>auto-fit</c>) tracks are forced to zero and drop their gap.
         /// </summary>
         private Track[] SizeColumnTracks(IReadOnlyList<GridTrackSize> defs, double contentWidth, double gap,
-            bool[] collapsed, double[] intrinsic, bool stretchTracks)
+            bool[] collapsed, double[] minContent, double[] maxContent, bool stretchTracks)
         {
             var n = defs.Count;
             var tracks = defs.Select(d => new Track { Def = d }).ToArray();
@@ -554,7 +583,7 @@ namespace PeachPDF.Html.Core.Dom
             for (var i = 0; i < n; i++)
             {
                 if (collapsed[i]) { bases[i] = 0; limits[i] = 0; flexes[i] = 0; continue; }
-                InitTrack(defs[i], contentWidth, intrinsic[i], out bases[i], out limits[i], out flexes[i]);
+                InitTrack(defs[i], contentWidth, minContent[i], maxContent[i], out bases[i], out limits[i], out flexes[i]);
             }
 
             var nonCollapsed = collapsed.Count(c => !c);
@@ -600,8 +629,11 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>Resolves a track's base size, growth limit, and flex factor (CSS Grid §11.4).
-        /// <paramref name="intrinsic"/> is the measured max-content contribution for an intrinsic track.</summary>
-        private void InitTrack(GridTrackSize def, double contentBase, double intrinsic,
+        /// <paramref name="minContent"/>/<paramref name="maxContent"/> are the measured min-content and
+        /// max-content contributions for an intrinsic track — a min-content/<c>fit-content</c> track and the
+        /// intrinsic sides of a <c>minmax()</c> now size to the appropriate one, so a min-content track is no
+        /// longer over-sized to its max-content width (§11.5).</summary>
+        private void InitTrack(GridTrackSize def, double contentBase, double minContent, double maxContent,
             out double baseSize, out double limit, out double flex)
         {
             baseSize = 0;
@@ -618,56 +650,131 @@ namespace PeachPDF.Html.Core.Dom
                     flex = def.Flex;
                     break;
                 case GridTrackKind.Minmax:
-                    baseSize = IsFixed(def.Min) ? ResolveFixedLength(def.Min, contentBase) : intrinsic;
+                    // The min track-sizing function feeds the base; the max function feeds the growth limit.
+                    // An intrinsic min uses min-content (auto/min-content) or max-content (max-content);
+                    // an intrinsic max uses max-content (auto/max-content) or min-content (min-content).
+                    baseSize = IsFixed(def.Min)
+                        ? ResolveFixedLength(def.Min, contentBase)
+                        : IntrinsicMin(def.Min, minContent, maxContent);
                     if (def.Max.Kind == GridTrackKind.Flex)
                         flex = def.Max.Flex;
                     else
-                        limit = IsFixed(def.Max) ? ResolveFixedLength(def.Max, contentBase) : intrinsic;
+                        limit = IsFixed(def.Max)
+                            ? ResolveFixedLength(def.Max, contentBase)
+                            : IntrinsicMax(def.Max, minContent, maxContent);
                     if (!double.IsPositiveInfinity(limit) && limit < baseSize) limit = baseSize;
                     break;
                 case GridTrackKind.FitContent:
-                    // fit-content(L) = clamp(max-content, min-content, L): the measured content, capped at L
-                    // (def.Value holds the L argument string).
-                    baseSize = limit = Math.Min(intrinsic, CssValueParser.ParseLength(def.Value, contentBase, _gridBox));
+                    // fit-content(L): the measured max-content, capped at L (def.Value holds the L argument);
+                    // content wider than L overflows the track, matching browser cap behavior.
+                    baseSize = limit = Math.Min(maxContent, CssValueParser.ParseLength(def.Value, contentBase, _gridBox));
                     break;
                 case GridTrackKind.Auto:
-                    // Content is the floor; an unbounded limit lets a normal/stretch content-distribution
+                    // Max-content is the floor; an unbounded limit lets a normal/stretch content-distribution
                     // grow the track to share leftover space.
-                    baseSize = intrinsic;
+                    baseSize = maxContent;
                     limit = double.PositiveInfinity;
                     break;
                 case GridTrackKind.MaxContent:
+                    baseSize = limit = maxContent;   // content-sized, does not stretch
+                    break;
                 case GridTrackKind.MinContent:
-                    baseSize = limit = intrinsic;   // content-sized, does not stretch
+                    baseSize = limit = minContent;   // narrowest unbreakable content, does not stretch
                     break;
             }
         }
 
-        /// <summary>Measures each intrinsic (auto/min-content/max-content/fit-content) column's max-content
-        /// contribution: the widest single-column item placed in it (outer, incl. margin/border/padding).</summary>
-        private async ValueTask<double[]> MeasureColumnIntrinsics(
-            RGraphics g, List<Placement> placements, IReadOnlyList<GridTrackSize> colDefs, int colCount)
-        {
-            var intrinsic = new double[colCount];
-            var needed = colDefs.Any(IsIntrinsic);
-            if (!needed) return intrinsic;
+        /// <summary>The base-side intrinsic size of a <c>minmax()</c> min breadth: min-content for
+        /// <c>auto</c>/<c>min-content</c>, max-content for <c>max-content</c>.</summary>
+        private static double IntrinsicMin(GridTrackSize min, double minContent, double maxContent) =>
+            min.Kind == GridTrackKind.MaxContent ? maxContent : minContent;
 
+        /// <summary>The limit-side intrinsic size of a <c>minmax()</c> max breadth: max-content for
+        /// <c>auto</c>/<c>max-content</c>, min-content for <c>min-content</c>.</summary>
+        private static double IntrinsicMax(GridTrackSize max, double minContent, double maxContent) =>
+            max.Kind == GridTrackKind.MinContent ? minContent : maxContent;
+
+        /// <summary>Measures each intrinsic (auto/min-content/max-content/fit-content) column's min-content and
+        /// max-content contributions (outer, incl. margin/border/padding). Single-column items contribute
+        /// directly; a multi-column item distributes the part of its contribution the spanned tracks don't
+        /// already cover across the intrinsic tracks it spans (CSS Grid §11.5, simplified), so a spanned
+        /// intrinsic column no longer collapses to zero.</summary>
+        private async ValueTask<(double[] MinContent, double[] MaxContent)> MeasureColumnIntrinsics(
+            RGraphics g, List<Placement> placements, IReadOnlyList<GridTrackSize> colDefs, int colCount,
+            double contentWidth, double gap)
+        {
+            var min = new double[colCount];
+            var max = new double[colCount];
+            if (!colDefs.Any(IsIntrinsic)) return (min, max);
+
+            // Single-column items contribute directly to their column.
             // A subgrid item is skipped: measuring it here (with no SubgridContext) would lay it out as an
-            // ordinary grid and feed a bogus max-content into an auto parent column. Its contribution to the
+            // ordinary grid and feed a bogus contribution into an auto parent column. Its contribution to the
             // parent's column sizing is the (accepted) column-axis gap, #276.
             foreach (var p in placements.Where(p => p.ColSpan == 1 && IsIntrinsic(colDefs[p.ColStart]) && !IsSubgridItem(p.Box)))
             {
-                // An explicit item width is its content contribution; otherwise measure its max-content.
-                var content = CssValueParser.IsValidLength(p.Box.Width)
-                    ? CssValueParser.ParseLength(p.Box.Width, 0, p.Box)
-                    : await CssLayoutEngine.GetMaxContentWidth(g, p.Box);
-                var outer = content + p.Box.ActualMarginLeft + p.Box.ActualMarginRight
-                    + p.Box.ActualPaddingLeft + p.Box.ActualPaddingRight
-                    + p.Box.ActualBorderLeftWidth + p.Box.ActualBorderRightWidth;
-                intrinsic[p.ColStart] = Math.Max(intrinsic[p.ColStart], outer);
+                var (mn, mx) = await MeasureItemContribution(g, p.Box);
+                min[p.ColStart] = Math.Max(min[p.ColStart], mn);
+                max[p.ColStart] = Math.Max(max[p.ColStart], mx);
             }
 
-            return intrinsic;
+            // Spanning items: distribute the contribution the spanned tracks don't already cover across the
+            // intrinsic columns they span. Single-column contributions are settled first (loop above) so the
+            // "already covered" term reflects them.
+            foreach (var p in placements.Where(p => p.ColSpan > 1 && !IsSubgridItem(p.Box)))
+            {
+                var lastCol = Math.Min(p.ColStart + p.ColSpan, colCount);
+                var intrinsicCols = new List<int>();
+                for (var c = p.ColStart; c < lastCol; c++)
+                    if (IsIntrinsic(colDefs[c])) intrinsicCols.Add(c);
+                if (intrinsicCols.Count == 0) continue;
+
+                var (mn, mx) = await MeasureItemContribution(g, p.Box);
+                DistributeSpanContribution(min, colDefs, p, lastCol, intrinsicCols, mn, contentWidth, gap);
+                DistributeSpanContribution(max, colDefs, p, lastCol, intrinsicCols, mx, contentWidth, gap);
+            }
+
+            return (min, max);
+        }
+
+        /// <summary>An item's outer min-content and max-content width contributions (content width, plus its
+        /// own margin/border/padding). An explicit width supplies both.</summary>
+        private static async ValueTask<(double Min, double Max)> MeasureItemContribution(RGraphics g, CssBox box)
+        {
+            double minContent, maxContent;
+            if (CssValueParser.IsValidLength(box.Width))
+            {
+                minContent = maxContent = CssValueParser.ParseLength(box.Width, 0, box);
+            }
+            else
+            {
+                minContent = await CssLayoutEngine.GetMinContentWidth(g, box);
+                maxContent = await CssLayoutEngine.GetMaxContentWidth(g, box);
+            }
+
+            var outerExtra = box.ActualMarginLeft + box.ActualMarginRight
+                + box.ActualPaddingLeft + box.ActualPaddingRight
+                + box.ActualBorderLeftWidth + box.ActualBorderRightWidth;
+            return (minContent + outerExtra, maxContent + outerExtra);
+        }
+
+        /// <summary>Adds a spanning item's uncovered contribution equally to the intrinsic columns it spans:
+        /// the part of <paramref name="contribution"/> not already met by the span's fixed-track sizes, its
+        /// interior gaps, and the spanned columns' current contributions is shared across
+        /// <paramref name="intrinsicCols"/> (§11.5.1, simplified — no per-span-count ordering or growth-limit
+        /// distinction).</summary>
+        private void DistributeSpanContribution(double[] arr, IReadOnlyList<GridTrackSize> colDefs, Placement p,
+            int lastCol, List<int> intrinsicCols, double contribution, double contentWidth, double gap)
+        {
+            double covered = gap * (p.ColSpan - 1);
+            for (var c = p.ColStart; c < lastCol; c++)
+                covered += IsFixed(colDefs[c]) ? ResolveFixedLength(colDefs[c], contentWidth) : arr[c];
+
+            var extra = contribution - covered;
+            if (extra <= 0) return;
+
+            var share = extra / intrinsicCols.Count;
+            foreach (var c in intrinsicCols) arr[c] += share;
         }
 
         private static bool IsIntrinsic(GridTrackSize def) =>
@@ -734,6 +841,12 @@ namespace PeachPDF.Html.Core.Dom
                 return CssValueParser.ParseLength(def.Value, _gridBox.ClientBottom - _gridBox.ClientTop, _gridBox);
             return 0;
         }
+
+        /// <summary>Maps a top-level <c>&lt;percentage&gt;</c> row track to <c>auto</c> (used when the container
+        /// height is indefinite, so the percentage behaves as auto per §7.2.1); every other track is returned
+        /// unchanged.</summary>
+        private static GridTrackSize PercentToAuto(GridTrackSize def) =>
+            def.Kind == GridTrackKind.Percent ? GridTrackSize.Auto : def;
 
         /// <summary>Whether a track has a fixed used size known before content measurement (a length, or a
         /// percentage against a definite base).</summary>
@@ -823,8 +936,52 @@ namespace PeachPDF.Html.Core.Dom
         private static bool IsStretch(string value) =>
             value.Isi(CssConstants.Stretch) || value.Isi(CssConstants.Normal);
 
+        /// <summary>Whether a used alignment value is a baseline alignment (<c>baseline</c> /
+        /// <c>first baseline</c> / <c>last baseline</c> — all treated as first-baseline here).</summary>
+        private static bool IsBaselineAlign(string value) =>
+            !string.IsNullOrEmpty(value)
+            && value.IndexOf(CssConstants.Baseline, StringComparison.OrdinalIgnoreCase) >= 0;
+
+        /// <summary>
+        /// Aligns the first baselines of the single-row items in each row whose used <c>align-items</c>/
+        /// <c>align-self</c> is <c>baseline</c> (they were placed start-aligned by <see cref="PlaceItemInCell"/>,
+        /// since <see cref="AlignmentOffset"/> maps baseline to start). Each baseline item is shifted down by
+        /// the difference between the row's maximum baseline offset and its own, so every baseline item in the
+        /// row rests on a common baseline. Items with no discoverable baseline stay start-aligned.
+        /// Accepted gap (#280): this shifts within the already-sized row but does not grow the row to the
+        /// baseline group's max-ascent + max-descent, so an item with a disproportionately large descent
+        /// below its baseline could overflow — standard text with a normal line-height always fits.
+        /// </summary>
+        private void AlignRowBaselines(List<Placement> placements)
+        {
+            var baselineItems = placements.Where(p =>
+                p.RowSpan == 1 && IsBaselineAlign(ResolveSelfAlignment(p.Box.AlignSelf, _gridBox.AlignItems)));
+
+            foreach (var row in baselineItems.GroupBy(p => p.RowStart))
+            {
+                var offsets = new List<(CssBox Box, double Offset)>();
+                var maxBaseline = 0.0;
+                foreach (var p in row)
+                {
+                    var offset = BaselineAlignment.GetItemBaselineOffset(p.Box);
+                    if (offset is null) continue;   // no line-box content — stays start-aligned
+                    offsets.Add((p.Box, offset.Value));
+                    maxBaseline = Math.Max(maxBaseline, offset.Value);
+                }
+
+                if (offsets.Count < 2) continue;   // a lone baseline item already sits on its own baseline
+
+                foreach (var (box, offset) in offsets)
+                {
+                    var dy = maxBaseline - offset;
+                    if (dy > 0.01) box.OffsetTop(dy);
+                }
+            }
+        }
+
         /// <summary>The start offset of an item within its cell for a start/end/center alignment (a stretched
-        /// or start-aligned item is at 0). Baseline falls back to start.</summary>
+        /// or start-aligned item is at 0). Baseline is placed at start here, then <see cref="AlignRowBaselines"/>
+        /// applies the block-axis baseline shift as a post-pass; inline-axis (justify) baseline stays start.</summary>
         private static double AlignmentOffset(string value, double cellSize, double itemSize)
         {
             var free = cellSize - itemSize;
