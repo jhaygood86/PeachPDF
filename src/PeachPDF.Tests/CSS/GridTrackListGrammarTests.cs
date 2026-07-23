@@ -156,6 +156,37 @@ namespace PeachPDF.Tests.CSS
         }
 
         [Theory]
+        [InlineData("calc(10px + 20px)")]                       // bare calc() track size
+        [InlineData("calc(50% - 10px)")]                        // length-percentage calc
+        [InlineData("minmax(calc(10px + 10px), 1fr)")]          // calc() as a minmax() min breadth
+        [InlineData("minmax(100px, calc(200px + 10%))")]        // calc() as a minmax() max breadth
+        [InlineData("fit-content(calc(50px + 10px))")]          // calc() as a fit-content() argument
+        [InlineData("repeat(2, calc(40px + 10px))")]            // calc() inside repeat()
+        [InlineData("min(100px, 200px) 1fr")]                   // a min()/max()/clamp() math function
+        public void CalcTrackSizes_Parse(string value)
+        {
+            Assert.NotNull(Parse(value));
+        }
+
+        [Fact]
+        public void BareCalcTrack_IsStoredAsLength()
+        {
+            var template = Parse("calc(10px + 20px) 1fr");
+            Assert.NotNull(template);
+            Assert.Equal(GridTrackKind.Length, template.Tracks[0].Kind);
+            Assert.Contains("calc", template.Tracks[0].Value);
+        }
+
+        [Theory]
+        [InlineData("calc(10deg + 5deg)")]                      // an angle-category calc is not a track size
+        [InlineData("minmax(calc(90deg), 1fr)")]                // a wrong-category calc inside minmax()
+        [InlineData("fit-content(calc(1s))")]                   // a time-category calc argument
+        public void WrongCategoryCalc_ReturnsNull(string value)
+        {
+            Assert.Null(Parse(value));
+        }
+
+        [Theory]
         [InlineData("100px", 1)]
         [InlineData("100px 200px auto", 3)]
         public void TrackSizeList_ParsesForAutoColumns(string value, int expected)

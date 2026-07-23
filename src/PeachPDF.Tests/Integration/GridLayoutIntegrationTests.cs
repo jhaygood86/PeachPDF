@@ -1013,6 +1013,182 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(100, b.Location.X - a.Location.X, 1.0);
         }
 
+        // ─── Issue #265: sizing/placement gap fixes ──────────────────────────────
+
+        [Fact]
+        public async Task Gap4_CalcInsideMinmax_ResolvesFloor()
+        {
+            // minmax(calc(40pt + 20pt), 100pt): the calc()-resolved 60pt is the used base (the engine has no
+            // maximize-tracks step, so with an fr present the track stays at its base and 1fr takes the rest).
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:300pt; grid-template-columns:minmax(calc(40pt + 20pt), 100pt) 1fr;'>
+                    <div id='a' style='height:10pt;'></div>
+                    <div id='b' style='height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            Assert.Equal(60, a.ActualBoxSizingWidth, 1.0);    // the calc()-resolved minmax floor
+            Assert.Equal(240, b.ActualBoxSizingWidth, 1.0);   // 1fr absorbs the remainder
+        }
+
+        [Fact]
+        public async Task Gap4_CalcBareAndInRepeatAndFitContent_ResolveTrackWidths()
+        {
+            // A bare calc() column, a repeat(2, calc()) pair, and a fit-content(calc()) column all resolve.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:500pt;
+                     grid-template-columns:calc(30pt + 20pt) repeat(2, calc(25pt * 2)) fit-content(calc(60pt + 20pt)) 1fr;'>
+                    <div id='a' style='height:10pt;'></div>
+                    <div id='b' style='height:10pt;'></div>
+                    <div id='c' style='height:10pt;'></div>
+                    <div id='d' style='width:200pt; height:10pt;'></div>
+                    <div id='e' style='height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            var c = FindById(root, "c")!;
+            var d = FindById(root, "d")!;
+            var e = FindById(root, "e")!;
+            Assert.Equal(50, a.ActualBoxSizingWidth, 1.0);        // calc(30pt + 20pt)
+            Assert.Equal(50, b.Location.X - a.Location.X, 1.0);   // first repeat(2, calc(25pt*2)) track
+            Assert.Equal(50, c.Location.X - b.Location.X, 1.0);   // second repeat track
+            // d wants 200pt but fit-content(calc(60pt+20pt)) caps the track at 80pt (d overflows it), so the
+            // following 1fr column (e) starts exactly 80pt after d.
+            Assert.Equal(80, e.Location.X - d.Location.X, 1.5);
+        }
+
+        [Fact]
+        public async Task Gap7_MinContentColumn_UsesMinContentNotMaxContent()
+        {
+            // The min-content column sizes to its longest word, not its whole (max-content) line — so a
+            // multi-word item's min-content column is far narrower than its unwrapped width.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:400pt; grid-template-columns:min-content max-content;'>
+                    <div id='a' style='font:12pt Arial;'>aaaa bb</div>
+                    <div id='b' style='font:12pt Arial;'>aaaa bb</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;   // min-content: widest word "aaaa"
+            var b = FindById(root, "b")!;   // max-content: the whole "aaaa bb" line
+            Assert.True(a.ActualBoxSizingWidth < b.ActualBoxSizingWidth - 5,
+                $"min-content ({a.ActualBoxSizingWidth}) should be narrower than max-content ({b.ActualBoxSizingWidth})");
+        }
+
+        [Fact]
+        public async Task Gap7_MinmaxIntrinsicBreadths_UseMinAndMaxContent()
+        {
+            // minmax(min-content, max-content): the base is the min-content (longest word) and the growth
+            // limit is the max-content (whole line). With a second fr column absorbing the leftover, the
+            // track stays at its min-content base — narrower than the same content's max-content track.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:400pt;
+                     grid-template-columns:minmax(min-content, max-content) 1fr;'>
+                    <div id='a' style='font:12pt Arial;'>aaaa bb cc</div>
+                    <div id='b' style='height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            // The minmax base is min-content ("aaaa"), so the track is far narrower than the ~full line.
+            Assert.True(a.ActualBoxSizingWidth < 45,
+                $"minmax(min-content, max-content) base should be the min-content width, was {a.ActualBoxSizingWidth}");
+        }
+
+        [Fact]
+        public async Task Gap5_SpanningItemGrowsSpannedAutoColumns_NeitherCollapsesToZero()
+        {
+            // A single item spans two auto columns; each auto column would otherwise get nothing (only
+            // single-span items contributed before). The item's content is now distributed across both, so
+            // both columns are non-zero and the second item (in column 1) sits well past the container left.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:400pt; grid-template-columns:auto auto 1fr;'>
+                    <div id='a' style='grid-column:1 / 3; width:120pt; height:10pt;'></div>
+                    <div id='b' style='grid-row:2; grid-column:1; height:10pt;'></div>
+                    <div id='c' style='grid-row:2; grid-column:2; height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var b = FindById(root, "b")!;   // in column 1 (index 0)
+            var c = FindById(root, "c")!;   // in column 2 (index 1)
+            // Column 1 got a real (non-zero) width, so column 2's item is offset from the container left.
+            Assert.True(c.Location.X - container.ClientLeft > 40,
+                $"spanned auto column 1 should be non-zero (col-2 item at {c.Location.X - container.ClientLeft}pt)");
+            Assert.Equal(container.ClientLeft, b.Location.X, 1.0);
+        }
+
+        [Fact]
+        public async Task Gap3_PercentageRow_IndefiniteHeight_ContentSizesInsteadOfCollapsing()
+        {
+            // With no definite container height, a percentage row behaves as auto (content-sized) rather than
+            // collapsing to zero — so the item keeps its own content height and the grid is that tall.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:100pt; grid-template-columns:100pt; grid-template-rows:50%;'>
+                    <div id='a' style='height:40pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            Assert.Equal(40, a.ActualBoxSizingHeight, 1.0);
+            Assert.True(FindById(root, "container")!.ActualBoxSizingHeight >= 40 - 1,
+                "the indefinite-height percentage row should content-size, not collapse to 0");
+        }
+
+        [Fact]
+        public async Task Gap6_ExplicitLinePastExplicitGrid_GeneratesImplicitColumn_NoOverlap()
+        {
+            // grid-column:5 in a 3-column grid generates implicit columns 4 and 5 instead of clamping the
+            // item into the last explicit column (which would overlap the auto-placed first item).
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:500pt; grid-template-columns:repeat(3, 100pt); grid-auto-columns:100pt;'>
+                    <div id='a' style='height:10pt;'></div>
+                    <div id='b' style='grid-column:5; height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;   // auto-placed into column 1 (index 0)
+            var b = FindById(root, "b")!;   // explicit column 5 (index 4) → an implicit track
+            Assert.Equal(container.ClientLeft, a.Location.X, 1.0);
+            Assert.Equal(container.ClientLeft + 400, b.Location.X, 1.5);   // 4 tracks of 100pt to the left
+            Assert.True(b.Location.X - a.Location.X > 100, "the two items must not overlap");
+        }
+
+        [Fact]
+        public async Task Gap1_AlignItemsBaseline_AlignsFirstBaselinesAcrossRow()
+        {
+            // Two items in the same row with different font sizes and align-items:baseline: the smaller-font
+            // item is pushed down so its text baseline lines up with the larger-font item's baseline (its
+            // top edge sits below the taller item's top). Without baseline it would be top-aligned.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:400pt; align-items:baseline;
+                     grid-template-columns:1fr 1fr;'>
+                    <div id='big' style='font:36pt Arial;'>Ag</div>
+                    <div id='small' style='font:12pt Arial;'>Ag</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var big = FindById(root, "big")!;
+            var small = FindById(root, "small")!;
+            // The smaller item is shifted down (its baseline is lower from its own top), so its top edge is
+            // below the big item's top edge — proving baselines were aligned rather than tops.
+            Assert.True(small.Location.Y > big.Location.Y + 3,
+                $"small item should be shifted down for baseline alignment (big.Y={big.Location.Y}, small.Y={small.Location.Y})");
+        }
+
+        [Fact]
+        public async Task Gap1_DefaultAlignment_NoBaselineShift()
+        {
+            // The same two items without align-items:baseline are top-aligned (stretch default) — the small
+            // item is NOT shifted down, guarding against an unconditional baseline shift.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:400pt; grid-template-columns:1fr 1fr;'>
+                    <div id='big' style='font:36pt Arial;'>Ag</div>
+                    <div id='small' style='font:12pt Arial;'>Ag</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var big = FindById(root, "big")!;
+            var small = FindById(root, "small")!;
+            Assert.Equal(big.Location.Y, small.Location.Y, 1.0);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>

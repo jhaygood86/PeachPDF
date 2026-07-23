@@ -625,7 +625,7 @@ namespace PeachPDF.Html.Core.Dom
                     var itemAlign = item.Box.AlignSelf is "auto" or "" ? _flexBox.AlignItems : item.Box.AlignSelf;
                     if (itemAlign != CssConstants.Baseline) continue;
 
-                    var offset = GetItemBaselineOffset(item.Box);
+                    var offset = BaselineAlignment.GetItemBaselineOffset(item.Box);
                     if (offset is null) continue;
 
                     baselineOffsets ??= [];
@@ -709,43 +709,6 @@ namespace PeachPDF.Html.Core.Dom
                         break;
                 }
             }
-        }
-
-        /// <summary>
-        /// Finds the first line box within <paramref name="box"/>'s subtree, in document order
-        /// (depth-first, skipping out-of-flow and display:none descendants), per CSS Flexbox
-        /// §8.5's "first in-flow child" baseline search.
-        /// </summary>
-        private static CssLineBox? FindFirstLineBox(CssBox box)
-        {
-            if (box.LineBoxes.Count > 0)
-                return box.LineBoxes[0];
-
-            foreach (var child in box.Boxes)
-            {
-                if (child.Display == CssConstants.None || child.IsOutOfFlow) continue;
-
-                var found = FindFirstLineBox(child);
-                if (found != null) return found;
-            }
-
-            return null;
-        }
-
-        /// <summary>
-        /// Computes a flex item's baseline offset from its own cross-start (top) edge — the
-        /// first font baseline of its content, per CSS Flexbox §8.5. Returns null if the item
-        /// has no line-box content anywhere, in which case it falls back to flex-start.
-        /// </summary>
-        private static double? GetItemBaselineOffset(CssBox box)
-        {
-            var lineBox = FindFirstLineBox(box);
-            if (lineBox == null) return null;
-
-            var word = CssBox.FirstWordOccurence(lineBox.OwnerBox, lineBox);
-            if (word == null) return null;
-
-            return (word.Top - box.Location.Y) + word.OwnerBox.ActualFont.Ascent;
         }
 
         // ─── Phase 9: final locations ─────────────────────────────────────────────
