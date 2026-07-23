@@ -417,10 +417,14 @@ namespace PeachPDF.Html.Core.Dom
             return null;
         }
 
-        /// <summary>The Nth (1-based) line number in a sorted list, clamped to the last (v1: no synthesis of
-        /// implicit lines beyond the named ones).</summary>
-        private static int NthClamp(List<int> lines, int nth) =>
-            lines[Math.Min(Math.Max(1, nth), lines.Count) - 1];
+        /// <summary>The Nth line number among a sorted list of same-named lines: 1-based from the start for a
+        /// positive index, or counting back from the end for a negative one (<c>-1</c> = the last), clamped to
+        /// the list (v1: no synthesis of implicit lines beyond the named ones).</summary>
+        private static int NthClamp(List<int> lines, int nth)
+        {
+            var index = nth < 0 ? lines.Count + nth : nth - 1;   // -1 → last; 1 → first
+            return lines[Math.Min(Math.Max(0, index), lines.Count - 1)];
+        }
 
         private static double ColumnSpanWidth(Track[] columns, int start, int span, double gap)
         {

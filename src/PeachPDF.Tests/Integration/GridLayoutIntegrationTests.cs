@@ -678,6 +678,20 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task NamedNthLine_NegativeCountsFromLastMatchingLine()
+        {
+            // 'c' labels lines 1, 2, 3, 4 (three 100pt columns). 'c 1' is the first c (line 1) and 'c -1'
+            // is the last (line 4), so the item spans all three columns = 300pt.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:300pt; grid-template-columns:[c] 100pt [c] 100pt [c] 100pt [c];'>
+                    <div id='a' style='grid-column-start:c 1; grid-column-end:c -1; height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            Assert.Equal(300, a.ActualBoxSizingWidth, 2.0);
+        }
+
+        [Fact]
         public async Task NamedLineRange_SpansBetweenTwoNamedLines()
         {
             var html = Wrap(@"

@@ -50,7 +50,12 @@ namespace PeachPDF.CSS
 
                 var normalized = new string[colCount];
                 for (var c = 0; c < colCount; c++)
-                    normalized[c] = IsEmptyCell(cells[c]) ? null : cells[c];
+                {
+                    if (IsEmptyCell(cells[c])) { normalized[c] = null; continue; }
+                    // A named cell is a <custom-ident> — a null token (a mixed "a.b" is invalid, not a name).
+                    if (cells[c].Contains('.')) return null;
+                    normalized[c] = cells[c];
+                }
                 rows.Add(normalized);
             }
 

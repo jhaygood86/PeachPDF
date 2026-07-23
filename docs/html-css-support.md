@@ -472,7 +472,7 @@ CSS Grid Layout (`display: grid` / `inline-grid`) is supported, including explic
 | `place-items` / `place-content` / `place-self` | [place-items](https://developer.mozilla.org/en-US/docs/Web/CSS/place-items) | Shorthands for the align/justify pair (one value applies to both axes) |
 | `gap` / `row-gap` / `column-gap` | [gap](https://developer.mozilla.org/en-US/docs/Web/CSS/gap) | Full support on grid containers (the same property family as flexbox's `gap`) |
 
-The grid engine is fixed to a left-to-right, top-to-bottom writing mode. The following are **not** supported: named lines *inside* `repeat()` and `span <name>`; subgrid; masonry; the `grid` and `grid-template` mega-shorthands; and baseline content-alignment (it falls back to `start`). Percentage row tracks against an indefinite container height are treated as `auto`, and `auto`/`fr` row tracks do not stretch to fill a definite container height.
+The grid engine is fixed to a left-to-right, top-to-bottom writing mode. The following are **not** supported: named lines *inside* `repeat()` and `span <name>` (and a named line declared *after* an `auto-fill`/`auto-fit` repeat is positioned as if the repeat expanded to a single track); subgrid; masonry; the `grid` and `grid-template` mega-shorthands; and baseline content-alignment (it falls back to `start`). Percentage row tracks against an indefinite container height are treated as `auto`, and `auto`/`fr` row tracks do not stretch to fill a definite container height.
 
 ### Multi-column Layout
 

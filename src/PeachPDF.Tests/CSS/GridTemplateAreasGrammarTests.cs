@@ -52,6 +52,7 @@ namespace PeachPDF.Tests.CSS
         [InlineData("\"a b a\"")]                // 'a' occupies cols 0 and 2 with b between → not rectangular
         [InlineData("100px")]                    // not a string list
         [InlineData("\"\"")]                     // an empty string row
+        [InlineData("\"a.b c\"")]                // a cell mixing a name and a dot is not a valid cell token
         [InlineData("")]
         public void Invalid_ReturnsNull(string value)
         {
