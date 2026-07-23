@@ -3829,16 +3829,21 @@ await SaveShowcaseAsync("clip_path", "Backgrounds & Borders", "clip-path basic s
     "CSS clip-path with basic shapes: polygon(), inset(), circle(), and ellipse() clip an element (here a gradient fill) to a shape resolved against its border-box. A shared basic-shape grammar validates the value at parse time and the resolved region is pushed as a PDF clip path.",
     clipPathHtml, pdfConfig);
 
-// aspect-ratio: a box with a definite width and an auto height takes its height from the width via the
-// ratio, and the ratio-derived height is definite, so a percentage-height child resolves against it.
-var aspectRatioHtml = """
+// aspect-ratio: sizes the axis whose length is otherwise automatic (CSS Box Sizing 4 §5), in either
+// direction and on both normal boxes and replaced elements (a 2:1 image below).
+const string AspectRatioSvg2x1 =
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='100' viewBox='0 0 200 100' preserveAspectRatio='none'%3E%3Crect width='200' height='100' fill='%231971c2'/%3E%3Crect x='3' y='3' width='194' height='94' fill='none' stroke='%23fff' stroke-width='4'/%3E%3C/svg%3E";
+
+var aspectRatioHtml = $$"""
     <html>
     <head>
     <style>
-        body { font-family: sans-serif; margin: 40px; }
+        body { font-family: sans-serif; margin: 40px; color: #212529; }
         h1 { font-size: 20pt; }
-        .row { display: flex; gap: 20px; align-items: flex-start; margin-top: 16px; }
-        .cell { text-align: center; font-size: 10pt; color: #555; }
+        h2 { font-size: 13pt; margin: 26px 0 6px; border-bottom: 1px solid #adb5bd; padding-bottom: 3px; }
+        p { margin: 4px 0; }
+        .row { display: flex; gap: 20px; align-items: flex-start; margin-top: 12px; }
+        .cell { text-align: center; font-size: 9pt; color: #555; }
         .box { width: 130px; background: #e9ecef; border: 1px solid #adb5bd; color: #495057;
                font-size: 11pt; display: flex; align-items: center; justify-content: center; }
         .r-16-9 { aspect-ratio: 16 / 9; }
@@ -3846,25 +3851,59 @@ var aspectRatioHtml = """
         .r-3-4 { aspect-ratio: 3 / 4; }
         .fill { width: 130px; aspect-ratio: 2; background: #dee2e6; }
         .fill > .bar { height: 60%; width: 40px; background: #1971c2; margin: 0 auto; }
+        .rel { position: relative; width: 320px; height: 96px; background: #f1f3f5; border: 1px solid #ced4da; }
+        .abs { position: absolute; top: 8px; left: 8px; height: 64px; aspect-ratio: 3 / 1;
+               background: #e8590c; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 10pt; }
+        .stretch-parent { width: 320px; border: 1px dashed #ced4da; padding: 8px; margin-top: 10px; }
+        .stretch { height: 40px; aspect-ratio: 3 / 1; background: #2b8a3e; color: #fff;
+                   display: flex; align-items: center; justify-content: center; font-size: 10pt; }
+        .auto-parent { width: 300px; border: 1px dashed #ced4da; padding: 10px; }
+        .pct { width: 200px; height: 50%; aspect-ratio: 4 / 1; background: #7048e8; color: #fff;
+               display: flex; align-items: center; justify-content: center; font-size: 10pt; }
+        .lbl { margin-top: 4px; }
     </style>
     </head>
     <body>
         <h1>aspect-ratio</h1>
-        <p>Each box below is 130px wide with an auto height taken from its <code>aspect-ratio</code>.</p>
+
+        <h2>Definite width &rarr; height</h2>
+        <p>Each box is 130px wide with an auto height taken from its <code>aspect-ratio</code>.</p>
         <div class="row">
             <div class="cell"><div class="box r-16-9">16 / 9</div>16 / 9</div>
             <div class="cell"><div class="box r-1-1">1 / 1</div>1 / 1</div>
             <div class="cell"><div class="box r-3-4">3 / 4</div>3 / 4</div>
         </div>
-        <p style="margin-top:20px">The ratio-derived height is definite, so a percentage-height child
+        <p style="margin-top:14px">The ratio-derived height is definite, so a percentage-height child
         resolves against it — the blue bar is <code>height: 60%</code> of the <code>aspect-ratio: 2</code> box:</p>
         <div class="fill"><div class="bar"></div></div>
+
+        <h2>Definite height &rarr; width</h2>
+        <p>An absolutely-positioned box (<code>height: 64px; aspect-ratio: 3 / 1</code>) takes its width
+        (192px) from the height. A normal-flow block instead fills its container — stretch-fit wins over the ratio.</p>
+        <div class="row">
+            <div class="rel"><div class="abs">abspos &rarr; 192px wide</div></div>
+        </div>
+        <div class="stretch-parent"><div class="stretch">normal block fills 320px (not 120px)</div></div>
+
+        <h2>Replaced elements</h2>
+        <p>A 2:1 image at <code>width: 130px</code>: a bare <code>&lt;ratio&gt;</code> overrides its natural
+        ratio, <code>auto &lt;ratio&gt;</code> keeps the natural one, and no value uses the natural 2:1.</p>
+        <div class="row">
+            <div class="cell"><img src="{{AspectRatioSvg2x1}}" style="width:130px; aspect-ratio: 1 / 1"><div class="lbl">1 / 1 (square)</div></div>
+            <div class="cell"><img src="{{AspectRatioSvg2x1}}" style="width:130px; aspect-ratio: auto 1 / 1"><div class="lbl">auto 1 / 1 (natural)</div></div>
+            <div class="cell"><img src="{{AspectRatioSvg2x1}}" style="width:130px"><div class="lbl">no ratio (natural 2:1)</div></div>
+        </div>
+
+        <h2>Indefinite percentage height</h2>
+        <p>Inside an auto-height parent, <code>height: 50%</code> is indefinite, so the ratio sizes the
+        height (200px wide, <code>aspect-ratio: 4 / 1</code> &rarr; 50px tall) instead of collapsing to auto.</p>
+        <div class="auto-parent"><div class="pct">width 200px, ratio 4/1</div></div>
     </body>
     </html>
     """;
 
 await SaveShowcaseAsync("aspect_ratio", "Layout", "aspect-ratio",
-    "CSS aspect-ratio: a box with a definite width and auto height takes its height from the width via the ratio. The ratio-derived height is definite, so a percentage-height child resolves against it — the basis for pure-CSS charts sizing their bars from a ratio-sized container.",
+    "CSS aspect-ratio in both directions: width→height (with a percentage-height child resolving against the ratio-derived height) and height→width for shrink-to-fit boxes, replaced-element natural ratio vs. a specified/auto ratio, and indefinite-percentage-height sizing.",
     aspectRatioHtml, pdfConfig);
 
 // ── Charts.css showcase ─────────────────────────────────────────────────────

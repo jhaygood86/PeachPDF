@@ -55,6 +55,32 @@ namespace PeachPDF.Tests.CSS
             Assert.False(TryParse(value, out _));
         }
 
+        // ─── hasAuto: distinguishing `auto <ratio>` (natural-ratio fallback) from a bare `<ratio>` ───
+
+        private static bool TryParse(string value, out double? ratio, out bool hasAuto) =>
+            AspectRatioGrammar.TryParse(CssValueParser.GetCssTokens(value), out ratio, out hasAuto);
+
+        [Theory]
+        [InlineData("2", 2.0, false)]              // bare ratio: overrides any natural ratio
+        [InlineData("16 / 9", 16.0 / 9.0, false)]
+        [InlineData("auto 16 / 9", 16.0 / 9.0, true)]  // auto <ratio>: prefer natural, fall back to 16/9
+        [InlineData("16 / 9 auto", 16.0 / 9.0, true)]  // the `||` allows either order
+        public void HasAuto_DistinguishesAutoRatioFromBareRatio(string value, double expected, bool expectedAuto)
+        {
+            Assert.True(TryParse(value, out var ratio, out var hasAuto));
+            Assert.NotNull(ratio);
+            Assert.Equal(expected, ratio!.Value, 5);
+            Assert.Equal(expectedAuto, hasAuto);
+        }
+
+        [Fact]
+        public void HasAuto_BareAuto_HasAutoTrueAndNullRatio()
+        {
+            Assert.True(TryParse("auto", out var ratio, out var hasAuto));
+            Assert.Null(ratio);
+            Assert.True(hasAuto);
+        }
+
         [Theory]
         [InlineData("aspect-ratio: 16 / 9", true)]
         [InlineData("aspect-ratio: auto", true)]
