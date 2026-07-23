@@ -4181,18 +4181,28 @@ var cascadeLayerHtml =
     "@layer components { .card { background: #16a34a; } }" +
     // An UNLAYERED rule beats every layer, regardless of specificity (no !important needed).
     ".unlayered { background: #db2777; }" +
+    // !important REVERSES layer order: among !important declarations the EARLIER layer (base) wins.
+    "@layer base { #c4 { background: #dc2626 !important; } }" +
+    "@layer utilities { #c4 { background: #2563eb !important; } }" +
+    // revert-layer reveals the lower layer's value: utilities reverts, so base's green shows through.
+    "@layer base { #c5 { background: #16a34a; } }" +
+    "@layer utilities { #c5 { background: revert-layer; } }" +
     "</style></head><body>" +
     "<h2>@layer cascade layers</h2>" +
     "<p class=\"note\">Layer order (declared <code>base, components, utilities</code>) decides the winner ahead of " +
-    "specificity: the <code>utilities</code> rule wins over a higher-specificity <code>base</code> rule; an unlayered rule wins over all layers.</p>" +
+    "specificity: the <code>utilities</code> rule wins over a higher-specificity <code>base</code> rule; an unlayered rule wins over all layers. " +
+    "For <code>!important</code> the layer order <b>reverses</b>, and <code>revert-layer</code> reveals a lower layer.</p>" +
     "<div class=\"card\" id=\"c1\"><b>utilities wins</b>base #id rule loses to the later utilities layer &rarr; blue.</div>" +
     "<div class=\"card\" id=\"c2\"><b>order matters</b>components is later than base but earlier than utilities.</div>" +
     "<div class=\"card unlayered\" id=\"c3\"><b>unlayered wins</b>An unlayered rule outranks every layer &rarr; pink.</div>" +
+    "<div class=\"card\" id=\"c4\"><b>!important reverses</b>Among <code>!important</code> rules the earlier base layer wins &rarr; red.</div>" +
+    "<div class=\"card\" id=\"c5\"><b>revert-layer</b>utilities does <code>revert-layer</code>, revealing base &rarr; green.</div>" +
     "</body></html>";
 
 await SaveShowcaseAsync("cascade_layers", "Selectors & Cascade", "@layer Cascade Layers",
     "CSS cascade layers: an @layer order declaration makes a later layer's low-specificity rule win over an " +
-    "earlier layer's high-specificity (#id) rule, and an unlayered rule beat every layer — the layering model " +
+    "earlier layer's high-specificity (#id) rule, and an unlayered rule beat every layer; for !important the " +
+    "layer order reverses (earlier layer wins), and revert-layer reveals a lower layer — the layering model " +
     "utility frameworks like Tailwind v4 rely on.",
     cascadeLayerHtml, pdfConfig);
 

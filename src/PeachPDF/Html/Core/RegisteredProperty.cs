@@ -93,7 +93,9 @@ namespace PeachPDF.Html.Core
         public static Dictionary<string, RegisteredProperty> BuildRegistry(CssData cssData, CssValueParser valueParser)
         {
             var registry = new Dictionary<string, RegisteredProperty>(StringComparer.Ordinal);
-            foreach (var propertyRule in cssData.Stylesheets.SelectMany(s => s.Rules.OfType<PropertyRule>()))
+            // EnumerateRulesRecursive descends into @layer/@media/@supports/@container so an @property
+            // nested inside a cascade layer is still registered.
+            foreach (var propertyRule in cssData.EnumerateRulesRecursive().OfType<PropertyRule>())
             {
                 var registered = FromRule(propertyRule, valueParser);
                 if (registered is not null)
