@@ -179,6 +179,19 @@ namespace PeachPDF.Html.Core.Utils
         public const string ColumnReverse = "column-reverse";
         public const string WrapReverse   = "wrap-reverse";
 
+        public const string Grid       = "grid";
+        public const string InlineGrid = "inline-grid";
+        public const string Row        = "row";
+        public const string Dense      = "dense";
+        public const string Span       = "span";
+        public const string MinContent = "min-content";
+        public const string MaxContent = "max-content";
+        public const string FitContent = "fit-content";
+        public const string AutoFill   = "auto-fill";
+        public const string AutoFit    = "auto-fit";
+        public const string Start      = "start";
+        public const string End        = "end";
+
         /// <summary>
         /// Centimeters
         /// </summary>

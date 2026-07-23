@@ -667,6 +667,7 @@ namespace PeachPDF.Html.Core.Parse
             {
                 CssConstants.Inline or CssConstants.InlineBlock => CssConstants.Block,
                 CssConstants.InlineFlex => CssConstants.Flex,
+                CssConstants.InlineGrid => CssConstants.Grid,
                 CssConstants.InlineTable => CssConstants.Table,
                 _ => box.Display
             };
@@ -818,7 +819,7 @@ namespace PeachPDF.Html.Core.Parse
             box.Display is CssConstants.Block or CssConstants.Table or CssConstants.TableRow
                 or CssConstants.TableRowGroup or CssConstants.TableCell or CssConstants.ListItem
                 or CssConstants.Flex or CssConstants.InlineBlock or CssConstants.InlineTable
-                or CssConstants.InlineFlex;
+                or CssConstants.InlineFlex or CssConstants.Grid or CssConstants.InlineGrid;
 
         /// <summary>
         /// Splits <paramref name="textBox"/>'s text at the CSS1 §1.2 "first letter" boundary (skipping

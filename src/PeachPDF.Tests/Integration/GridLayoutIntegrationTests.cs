@@ -1,0 +1,127 @@
+using PeachPDF.Adapters;
+using PeachPDF.Html.Core;
+using PeachPDF.Html.Core.Dom;
+using PeachPDF.PdfSharpCore.Drawing;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace PeachPDF.Tests.Integration
+{
+    /// <summary>
+    /// Integration tests for the CSS Grid layout engine (issue #232), built stage by stage on the same
+    /// <c>HtmlContainerInt</c> + <c>PdfSharpAdapter</c> harness as <see cref="FlexboxIntegrationTests"/>:
+    /// build, <c>PerformLayout</c>, walk the box tree, and assert <c>Location</c>/<c>ActualRight</c>/
+    /// <c>ActualBottom</c> geometry.
+    /// </summary>
+    public class GridLayoutIntegrationTests
+    {
+        // ─── Stage 1: dispatch + trivial grid ────────────────────────────────────
+
+        [Fact]
+        public async Task DisplayGrid_PropertyApplied_ToBox()
+        {
+            var box = await FindByTagAsync("<div style='display:grid'></div>", "div");
+            Assert.Equal("grid", box.Display);
+        }
+
+        [Fact]
+        public async Task InlineGrid_IsInline_ForParent()
+        {
+            var box = await FindByTagAsync("<div style='display:inline-grid'></div>", "div");
+            Assert.True(box.IsInline);
+        }
+
+        [Fact]
+        public async Task Grid_NoTemplate_StacksItemsVertically_AndContainerFits()
+        {
+            // With no grid-template yet (Stage 1), items lay out as a single implicit column: each below
+            // the previous, and the container grows to hold them all.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:100pt;'>
+                    <div class='item' style='height:20pt;'>A</div>
+                    <div class='item' style='height:20pt;'>B</div>
+                    <div class='item' style='height:20pt;'>C</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var items = FindAllByClass(root, "item");
+            Assert.Equal(3, items.Count);
+            Assert.True(items[0].Location.Y < items[1].Location.Y, "A should be above B");
+            Assert.True(items[1].Location.Y < items[2].Location.Y, "B should be above C");
+            Assert.True(container.ActualBoxSizingHeight >= 58,
+                $"Container should be at least 60pt tall, was {container.ActualBoxSizingHeight}");
+        }
+
+        // ─── Helpers ─────────────────────────────────────────────────────────────
+
+        private static string Wrap(string body) =>
+            $"<!DOCTYPE html><html><head></head><body>{body}</body></html>";
+
+        private async Task<CssBox> FindByTagAsync(string fragment, string tag)
+        {
+            var (root, _) = await BuildAndLayout(Wrap(fragment));
+            return FindByTag(root, tag)!;
+        }
+
+        private static async Task<(CssBox root, HtmlContainerInt container)> BuildAndLayout(string html)
+        {
+            var adapter = new PdfSharpAdapter();
+            adapter.PixelsPerPoint = 1.0;
+            var container = new HtmlContainerInt(adapter);
+            await container.SetHtml(html, null);
+
+            var size = new XSize(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            container.MaxSize  = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+
+            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
+            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            await container.PerformLayout(graphics);
+
+            Assert.NotNull(container.Root);
+            return (container.Root!, container);
+        }
+
+        private static CssBox? FindByTag(CssBox box, string tag)
+        {
+            if (box.HtmlTag?.Name.Equals(tag, System.StringComparison.OrdinalIgnoreCase) == true)
+                return box;
+            foreach (var child in box.Boxes)
+            {
+                var found = FindByTag(child, tag);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+        private static CssBox? FindById(CssBox box, string id)
+        {
+            var val = box.HtmlTag?.TryGetAttribute("id", "");
+            if (val != null && val.Equals(id, System.StringComparison.OrdinalIgnoreCase))
+                return box;
+            foreach (var child in box.Boxes)
+            {
+                var found = FindById(child, id);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+        private static List<CssBox> FindAllByClass(CssBox box, string className)
+        {
+            var results = new List<CssBox>();
+            FindAllByClassRecursive(box, className, results);
+            return results;
+        }
+
+        private static void FindAllByClassRecursive(CssBox box, string className, List<CssBox> results)
+        {
+            var val = box.HtmlTag?.TryGetAttribute("class", "");
+            if (val != null && val.Split(' ').Contains(className, System.StringComparer.OrdinalIgnoreCase))
+                results.Add(box);
+            foreach (var child in box.Boxes)
+                FindAllByClassRecursive(child, className, results);
+        }
+    }
+}
