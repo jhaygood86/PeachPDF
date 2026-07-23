@@ -391,12 +391,14 @@ namespace PeachPDF.Html.Core.Dom
                 return 0;
             }
 
-            var width = boxWidth ?? box.Size.Width;
-            var containingWidth = box.ContainingBlock.Size.Width;
-            var remainingWidth = containingWidth - width;
+            // The table layout engine passes the resolved table width explicitly (only tables reach
+            // here with a non-null boxWidth) so a `margin: … auto` table centers against that width.
+            if (boxWidth is not null)
+            {
+                return (box.ContainingBlock.Size.Width - boxWidth.Value) / 2;
+            }
 
-            return remainingWidth / 2;
-
+            return ResolveAutoHorizontalMargin(box);
         }
 
         public static double GetActualMarginRight(CssBox box, double? boxWidth = null)
@@ -419,12 +421,49 @@ namespace PeachPDF.Html.Core.Dom
                 return 0;
             }
 
-            var width = boxWidth ?? box.Size.Width;
+            // The table layout engine passes the resolved table width explicitly (only tables reach
+            // here with a non-null boxWidth) so a `margin: … auto` table centers against that width.
+            if (boxWidth is not null)
+            {
+                return (box.ContainingBlock.Size.Width - boxWidth.Value) / 2;
+            }
+
+            return ResolveAutoHorizontalMargin(box);
+        }
+
+        /// <summary>
+        /// The used value of a horizontal <c>margin: auto</c> when <b>both</b> the left and right
+        /// margins are <c>auto</c> on a non-table in-flow block (CSS 2.1 §10.3.3). Auto margins center
+        /// the box only when its used width is <b>definite</b> and leaves free space in the containing
+        /// block. An <c>auto</c> width <b>fills</b> the containing block, so its auto margins resolve to
+        /// <c>0</c> (not centering) — this is what a <c>max-width</c>d, <c>margin: 0 auto</c> responsive
+        /// wrapper needs: it fills the page when the page is narrower than the <c>max-width</c>, and
+        /// only starts centering once the page grows past the <c>max-width</c> (which clamps the used
+        /// width, making it definite again).
+        /// </summary>
+        private static double ResolveAutoHorizontalMargin(CssBox box)
+        {
             var containingWidth = box.ContainingBlock.Size.Width;
-            var remainingWidth = containingWidth - width;
 
-            return remainingWidth / 2;
+            if (box.Width == CssConstants.Auto || string.IsNullOrEmpty(box.Width))
+            {
+                // An auto width fills the containing block (its auto margins are 0), unless max-width
+                // clamps the used width below the fill width — then the box is definite and centers.
+                var fillContentWidth = containingWidth - box.ActualBoxSizeIncludedWidth;
 
+                if (!CssValueParser.IsValidLength(box.MaxWidth)) return 0;
+
+                var maxContentWidth = CssValueParser.ParseLength(box.MaxWidth, containingWidth, box);
+                if (maxContentWidth >= fillContentWidth) return 0;
+
+                var clampedRemaining = containingWidth - (maxContentWidth + box.ActualBoxSizeIncludedWidth);
+                return clampedRemaining > 0 ? clampedRemaining / 2 : 0;
+            }
+
+            // Definite width: split the genuine free space, accounting for the box's own
+            // border/padding (ActualBoxSizingWidth is the used border-box width, already min/max-clamped).
+            var remaining = containingWidth - box.ActualBoxSizingWidth;
+            return remaining > 0 ? remaining / 2 : 0;
         }
 
         /// <summary>
