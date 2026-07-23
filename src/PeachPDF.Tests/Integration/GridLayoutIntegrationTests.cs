@@ -486,6 +486,23 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(240, b.ActualBoxSizingWidth, 2.0);
         }
 
+        // ─── Pagination ──────────────────────────────────────────────────────────
+
+        [Fact]
+        public async Task GridTallerThanPage_PaginatesWithoutError()
+        {
+            // A grid whose rows exceed one A4 page must render across pages without throwing.
+            var rows = string.Concat(Enumerable.Range(0, 40)
+                .Select(i => $"<div class='item' style='height:40pt;'>row {i}</div>"));
+            var html = Wrap($@"
+                <div style='display:grid; grid-template-columns:1fr 1fr;'>{rows}</div>");
+            var (root, container) = await BuildAndLayout(html);
+            var items = FindAllByClass(root, "item");
+            Assert.Equal(40, items.Count);
+            // The grid extends well past a single A4 page (842pt) in total height.
+            Assert.True(container.ActualSize.Height > 842, $"grid should span multiple pages, was {container.ActualSize.Height}");
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>

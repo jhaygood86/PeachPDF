@@ -391,7 +391,7 @@ Regenerating the pattern set (`tools/Update-HyphenationPatterns.ps1`) re-checks 
 
 | Property | MDN Reference | Notes |
 |----------|--------------|-------|
-| `display` | [display](https://developer.mozilla.org/en-US/docs/Web/CSS/display) | `block`, `inline`, `inline-block`, `none`, `flex`, `inline-flex`, `table`, `table-row`, `table-cell`, `table-header-group`, `table-footer-group`, `table-row-group`, `table-column`, `table-column-group`, `table-caption`, `list-item`. `grid` is not supported |
+| `display` | [display](https://developer.mozilla.org/en-US/docs/Web/CSS/display) | `block`, `inline`, `inline-block`, `none`, `flex`, `inline-flex`, `grid`, `inline-grid`, `table`, `table-row`, `table-cell`, `table-header-group`, `table-footer-group`, `table-row-group`, `table-column`, `table-column-group`, `table-caption`, `list-item` |
 | `position` | [position](https://developer.mozilla.org/en-US/docs/Web/CSS/position) | `static`, `relative`, `absolute`, `fixed` (renders ignoring page margins), `sticky` (treated as `relative` in PDF output since there is no scroll) |
 | `float` | [float](https://developer.mozilla.org/en-US/docs/Web/CSS/float) | `left`, `right`, `none` |
 | `clear` | [clear](https://developer.mozilla.org/en-US/docs/Web/CSS/clear) | `left`, `right`, `both`, `none` |
@@ -453,6 +453,26 @@ CSS Flexbox Level 1 (`display: flex` / `inline-flex`) is supported, including mu
 | `flex` | [flex](https://developer.mozilla.org/en-US/docs/Web/CSS/flex) | Shorthand for `flex-grow`, `flex-shrink`, `flex-basis`, including the `none` and `auto` keywords |
 | `gap` / `row-gap` / `column-gap` | [gap](https://developer.mozilla.org/en-US/docs/Web/CSS/gap) | Full support on flex containers |
 | `margin` auto values | [margin](https://developer.mozilla.org/en-US/docs/Web/CSS/margin) | `auto` on a main-axis margin absorbs free space on that line (e.g. `margin-left: auto` to push a flex item to the end) |
+
+### Grid
+
+CSS Grid Layout (`display: grid` / `inline-grid`) is supported, including explicit and implicit track sizing, line-based placement with spans, auto-placement, and box/content alignment. Track sizes may be lengths, percentages, `fr` flexible lengths, `auto`, `min-content`/`max-content`, `minmax()`, `fit-content()`, and `repeat()` — including `repeat(auto-fill, …)` / `repeat(auto-fit, …)`, so the common responsive-card idiom `repeat(auto-fill, minmax(200px, 1fr))` works. `fr` tracks resolve via the standard flex-fraction algorithm (honoring `minmax()` floors); intrinsic (`auto`/content-sized) tracks size to their items' content.
+
+| Property | MDN Reference | Notes |
+|----------|--------------|-------|
+| `grid-template-columns` / `grid-template-rows` | [grid-template-columns](https://developer.mozilla.org/en-US/docs/Web/CSS/grid-template-columns) | `<track-list>`: lengths, `%`, `fr`, `auto`, `min-content`, `max-content`, `minmax()`, `fit-content()`, `repeat(<n>, …)`, and `repeat(auto-fill \| auto-fit, …)`. Named lines and `subgrid` are not supported |
+| `grid-auto-columns` / `grid-auto-rows` | [grid-auto-rows](https://developer.mozilla.org/en-US/docs/Web/CSS/grid-auto-rows) | Sizes implicitly-created tracks; a `<track-size>+` list cycled across the implicit tracks |
+| `grid-auto-flow` | [grid-auto-flow](https://developer.mozilla.org/en-US/docs/Web/CSS/grid-auto-flow) | `row`, `column`, and the `dense` packing keyword |
+| `grid-column` / `grid-row` | [grid-column](https://developer.mozilla.org/en-US/docs/Web/CSS/grid-column) | Shorthands for the `-start`/`-end` longhands (slash-separated) |
+| `grid-column-start` / `grid-column-end` / `grid-row-start` / `grid-row-end` | [grid-row-start](https://developer.mozilla.org/en-US/docs/Web/CSS/grid-row-start) | Line-based placement: `auto`, an integer line (negatives count from the end edge), or `span <n>`. Named lines are not supported |
+| `grid-area` | [grid-area](https://developer.mozilla.org/en-US/docs/Web/CSS/grid-area) | The line-based form (`<row-start> / <col-start> / <row-end> / <col-end>`); the single named-area form is not supported |
+| `justify-items` / `align-items` | [justify-items](https://developer.mozilla.org/en-US/docs/Web/CSS/justify-items) | Default alignment of items within their cell: `start`, `end`, `center`, `stretch` (default), `normal`. `baseline` falls back to `start` |
+| `justify-self` / `align-self` | [justify-self](https://developer.mozilla.org/en-US/docs/Web/CSS/justify-self) | A grid item's own cell alignment; `auto`/`normal` inherit the container's `*-items` value |
+| `justify-content` / `align-content` | [justify-content](https://developer.mozilla.org/en-US/docs/Web/CSS/justify-content) | Distributes leftover container space among the tracks: `start`, `end`, `center`, `space-between`, `space-around`, `space-evenly` |
+| `place-items` / `place-content` / `place-self` | [place-items](https://developer.mozilla.org/en-US/docs/Web/CSS/place-items) | Shorthands for the align/justify pair (one value applies to both axes) |
+| `gap` / `row-gap` / `column-gap` | [gap](https://developer.mozilla.org/en-US/docs/Web/CSS/gap) | Full support on grid containers (the same property family as flexbox's `gap`) |
+
+The grid engine is fixed to a left-to-right, top-to-bottom writing mode. The following are **not** supported: `grid-template-areas` and named grid lines; subgrid; masonry; the `grid` and `grid-template` mega-shorthands; and baseline content-alignment (it falls back to `start`). Percentage row tracks against an indefinite container height are treated as `auto`.
 
 ### Multi-column Layout
 
@@ -1002,7 +1022,7 @@ PeachPDF supports [`calc()`](https://developer.mozilla.org/en-US/docs/Web/CSS/ca
 | Divide-by-zero / invalid category mixes (`calc(10px + 5)`, `calc(1px * 1px)`, `calc(10px + 5deg)`) | Rejected | The whole declaration is treated as invalid, the same as any other malformed CSS value |
 | Time and resolution units (`s`, `dpi`) inside a math function | Not supported | PeachPDF doesn't support these unit categories at all, with or without a math function |
 | Viewport units (`vw`/`vh`/`vmin`/`vmax`) inside a math function | Not supported | PeachPDF has no viewport-unit support anywhere |
-| A math function inside CSS Grid track sizing | Not applicable | PeachPDF doesn't support CSS Grid |
+| A math function inside CSS Grid track sizing | Partial | A `calc()` length resolves inside a grid track size; a math function is not evaluated inside `minmax()`/`fit-content()`/`repeat()` arguments |
 
 Note: `background-position` and `background-size` are not listed in the table above because they're not part of the math-function-specific test matrix — both fully support `calc()` in their length/percentage values (e.g. `background-position: calc(50% - 10px) center`), resolved via the same length parser used everywhere else in this table.
 
@@ -1089,7 +1109,7 @@ A table assembled purely through CSS (`display: table` / `table-row` / `table-ce
 
 The following CSS features are not supported:
 
-- **Grid** — `display: grid` and all grid properties
+- **Grid: `grid-template-areas` and named lines, subgrid, masonry** — the core grid formatting model (tracks, placement, auto-flow, alignment) is supported; see [Grid](#grid). Named-area templates, named grid lines, `subgrid`, masonry, and the `grid`/`grid-template` mega-shorthands are not
 - **3D perspective** — the `perspective()` transform function, and the `perspective`/`perspective-origin`/`transform-style`/`backface-visibility` properties
 - **Transitions and animations** — `transition`, `animation`, `@keyframes`
 - **Filters and effects** — `filter`, `backdrop-filter`, `mix-blend-mode` (not parsed at all)
