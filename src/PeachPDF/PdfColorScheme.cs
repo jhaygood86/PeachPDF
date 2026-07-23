@@ -2,7 +2,7 @@ namespace PeachPDF
 {
     /// <summary>
     /// The color scheme the renderer reports to the CSS <c>prefers-color-scheme</c> media feature
-    /// (which drives, for example, Tailwind's <c>dark:</c> variants). A static PDF has no user/OS
+    /// (which drives, for example, dark-mode style variants). A static PDF has no user/OS
     /// preference, so this is chosen by the caller via
     /// <see cref="PdfGenerateConfig.PreferredColorScheme"/>; it defaults to <see cref="Light"/>.
     /// </summary>

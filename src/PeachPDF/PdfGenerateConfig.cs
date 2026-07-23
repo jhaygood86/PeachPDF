@@ -73,9 +73,9 @@ namespace PeachPDF
         public string Media { get; set; } = "print";
 
         /// <summary>
-        /// The color scheme reported to <c>@media (prefers-color-scheme: ...)</c> queries — for example,
-        /// Tailwind's <c>dark:</c> variants. Defaults to <see cref="PdfColorScheme.Light"/>; set to
-        /// <see cref="PdfColorScheme.Dark"/> to render the document's dark-mode styles.
+        /// The color scheme reported to <c>@media (prefers-color-scheme: ...)</c> queries.
+        /// Defaults to <see cref="PdfColorScheme.Light"/>; set to <see cref="PdfColorScheme.Dark"/>
+        /// to render the document's dark-mode styles.
         /// </summary>
         public PdfColorScheme PreferredColorScheme { get; set; } = PdfColorScheme.Light;
 

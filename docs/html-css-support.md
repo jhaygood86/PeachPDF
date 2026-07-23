@@ -736,7 +736,7 @@ PeachPDF renders to PDF, so only media queries that target the `print` medium (o
 | `min-width`/`max-width`/`width`, and `height` | Yes | Evaluated against the **page-box** dimensions. Range syntax (`width >= 48rem`) and `min-`/`max-` prefixes both supported |
 | `orientation`, `aspect-ratio` | Yes | Derived from the page-box width and height |
 | `resolution`, `device-pixel-ratio` | Yes | Evaluated against the CSS reference density of 96 dpi (1 dppx) |
-| `prefers-color-scheme` | Yes | Reports `light` by default; set `PdfGenerateConfig.PreferredColorScheme = PdfColorScheme.Dark` to render dark-mode styles (Tailwind's `dark:`) |
+| `prefers-color-scheme` | Yes | Reports `light` by default; set `PdfGenerateConfig.PreferredColorScheme = PdfColorScheme.Dark` to render dark-mode styles |
 | `color`, `color-index`, `monochrome`, `grid` | Yes | Fixed device characteristics: color output (8 bits/channel), not a color-index/monochrome device, not a grid/tty |
 | `hover`, `pointer`, `any-hover`, `any-pointer`, `update`, `scripting` | Yes | All report the static-document resting state (`none`) — a PDF cannot be hovered, pointed at, updated, or scripted |
 | `prefers-reduced-motion` | Yes | Reports `reduce` (a static PDF has no motion) |

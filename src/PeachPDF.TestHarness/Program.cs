@@ -4245,7 +4245,7 @@ var modernColorHtml =
     ".checker { background: repeating-conic-gradient(#ddd 0% 25%, #fff 0% 50%) 0 / 24px 24px; padding: 10px; border-radius: 10px; }" +
     "</style></head><body>" +
     "<h2>Modern CSS Colors</h2>" +
-    "<p class=\"note\">A tailwind-style palette authored entirely in <code>oklch()</code>, plus " +
+    "<p class=\"note\">A utility-framework-style palette authored entirely in <code>oklch()</code>, plus " +
     "<code>oklab()/lab()/lch()/hsl()/hwb()</code> and <code>color-mix()</code> opacity modifiers — all resolved to real PDF colors.</p>" +
 
     "<h3>oklch() palette (constant lightness &amp; chroma, hue sweep)</h3>" +
@@ -4283,7 +4283,7 @@ var modernColorHtml =
 await SaveShowcaseAsync("modern_colors", "Color", "Modern CSS Colors (oklch, color-mix)",
     "A wide-gamut palette authored in oklch() with oklab()/lab()/lch()/hsl()/hwb() companions, plus " +
     "color-mix() opacity modifiers and blends composited over a checkerboard — the CSS Color 4/5 function " +
-    "set most utility frameworks (e.g. Tailwind v4) emit, resolved to real PDF colors.",
+    "set modern utility frameworks emit, resolved to real PDF colors.",
     modernColorHtml, pdfConfig);
 
 // ── @layer cascade layers: layer order beats specificity; unlayered beats layered ─────
@@ -4326,7 +4326,7 @@ await SaveShowcaseAsync("cascade_layers", "Selectors & Cascade", "@layer Cascade
     "CSS cascade layers: an @layer order declaration makes a later layer's low-specificity rule win over an " +
     "earlier layer's high-specificity (#id) rule, and an unlayered rule beat every layer; for !important the " +
     "layer order reverses (earlier layer wins), and revert-layer reveals a lower layer — the layering model " +
-    "utility frameworks like Tailwind v4 rely on.",
+    "modern utility frameworks rely on.",
     cascadeLayerHtml, pdfConfig);
 
 // ── CSS Nesting: nested style rules and the & nesting selector ────────────────────────
@@ -4351,7 +4351,7 @@ var nestingHtml =
     "<h2>CSS Nesting</h2>" +
     "<p class=\"note\">Each card is styled entirely by <b>nested rules</b>: <code>&amp; .title</code>, an implicit-descendant " +
     "<code>.body</code>, a compound <code>&amp;.accent</code>, a child <code>&gt; .tag</code>, and a two-level-deep " +
-    "<code>&amp; + .tag</code> — the shape Tailwind v4 emits for modern browser targets.</p>" +
+    "<code>&amp; + .tag</code> — the shape modern utility frameworks emit for browser targets.</p>" +
     "<div class=\"card\">" +
     "<div class=\"title\">Plain card</div>" +
     "<div class=\"body\">Title, body, and pill tags all come from selectors nested under <code>.card</code>.</div>" +
@@ -4756,8 +4756,8 @@ await SaveShowcaseAsync("responsive_media_narrow", "Responsive Design", "Respons
 // Dark scheme (same HTML) via the new PreferredColorScheme config.
 await SaveShowcaseAsync("responsive_media_dark", "Responsive Design", "Dark Mode (prefers-color-scheme)",
     "The same page rendered with `PdfGenerateConfig.PreferredColorScheme = PdfColorScheme.Dark`, so the " +
-    "`@media (prefers-color-scheme: dark)` rules apply — the dark surface and light text render, Tailwind's " +
-    "`dark:` variants included.",
+    "`@media (prefers-color-scheme: dark)` rules apply — the dark surface and light text render, a " +
+    "utility framework's `dark:` variants included.",
     responsiveHtml, new PdfGenerateConfig
     {
         PageSize = PageSize.A4,
