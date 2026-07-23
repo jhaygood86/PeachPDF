@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -12,6 +13,10 @@ using System.Text.RegularExpressions;
 
 namespace PeachPDF.PdfSharpCore.Utils
 {
+    // Linux-only fontconfig interop (and its file-system fallback). Excluded from code coverage like the
+    // other platform-specific native lookups (see MimeTypeResolver.NativeMethods/TryGetFrom*): its lines
+    // only execute on Linux, so counting them would fail the diff-coverage gate on the Windows/macOS CI legs.
+    [ExcludeFromCodeCoverage]
     internal static partial class LinuxSystemFontResolver
     {
         const string libfontconfig = "libfontconfig.so.1";
