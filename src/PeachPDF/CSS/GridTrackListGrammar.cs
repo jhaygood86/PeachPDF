@@ -65,6 +65,11 @@ namespace PeachPDF.CSS
         /// <summary>The index into <see cref="Tracks"/> at which the auto-repeat section is inserted.</summary>
         public int AutoRepeatInsertIndex { get; init; }
 
+        /// <summary>Named lines declared with <c>[name]</c> in the top-level track list: name → the sorted,
+        /// deduped 1-based line numbers it labels (line 1 is before the first track). Empty when none.</summary>
+        public IReadOnlyDictionary<string, IReadOnlyList<int>> LineNames { get; init; }
+            = new Dictionary<string, IReadOnlyList<int>>();
+
         public bool IsNone => Tracks.Count == 0 && AutoRepeat == GridAutoRepeatKind.None;
     }
 
@@ -73,8 +78,9 @@ namespace PeachPDF.CSS
     /// <c>grid-template-rows</c>) and <c>&lt;track-size&gt;+</c> (<c>grid-auto-columns</c>/
     /// <c>grid-auto-rows</c>). Used by both Layer A (accept/reject at parse) and Layer B (compute used
     /// tracks during layout), so the grammar is defined once — the <see cref="AspectRatioGrammar"/>/
-    /// <see cref="BasicShapeGrammar"/> precedent. Named lines (<c>[name]</c>) and <c>grid-template-areas</c>
-    /// are out of v1 scope and rejected.
+    /// <see cref="BasicShapeGrammar"/> precedent. Top-level named lines (<c>[name]</c>) are collected into
+    /// <see cref="GridTemplate.LineNames"/>; named lines inside <c>repeat()</c> are out of scope and
+    /// rejected.
     /// </summary>
     internal static class GridTrackListGrammar
     {
@@ -92,10 +98,31 @@ namespace PeachPDF.CSS
             var autoRepeat = GridAutoRepeatKind.None;
             List<GridTrackSize> autoRepeatTracks = null;
             var autoRepeatIndex = -1;
+            var lineNames = new Dictionary<string, SortedSet<int>>();
 
             var i = 0;
             while (i < toks.Length)
             {
+                // [name …] — one or more named lines at the current line position (1-based; line 1 is before
+                // the first track). Whitespace is already stripped, so the bracket group is contiguous.
+                if (toks[i].Type == TokenType.SquareBracketOpen)
+                {
+                    var lineIndex = fixedTracks.Count + 1;
+                    i++;
+                    while (i < toks.Length && toks[i].Type != TokenType.SquareBracketClose)
+                    {
+                        if (toks[i].Type != TokenType.Ident) return null; // only idents inside [ ]
+                        var name = toks[i].Data;
+                        if (!lineNames.TryGetValue(name, out var set))
+                            lineNames[name] = set = new SortedSet<int>();
+                        set.Add(lineIndex);
+                        i++;
+                    }
+                    if (i >= toks.Length) return null; // unclosed [
+                    i++; // consume ]
+                    continue;
+                }
+
                 if (toks[i] is FunctionToken fn && fn.Data.Isi(FunctionNames.Repeat))
                 {
                     if (!TryParseRepeat(fn, out var repeatKind, out var repeatTracks)) return null;
@@ -130,7 +157,10 @@ namespace PeachPDF.CSS
                 Tracks = fixedTracks,
                 AutoRepeat = autoRepeat,
                 AutoRepeatTracks = autoRepeatTracks,
-                AutoRepeatInsertIndex = autoRepeatIndex < 0 ? 0 : autoRepeatIndex
+                AutoRepeatInsertIndex = autoRepeatIndex < 0 ? 0 : autoRepeatIndex,
+                LineNames = lineNames.ToDictionary(
+                    kv => kv.Key,
+                    kv => (IReadOnlyList<int>)kv.Value.ToList())
             };
         }
 

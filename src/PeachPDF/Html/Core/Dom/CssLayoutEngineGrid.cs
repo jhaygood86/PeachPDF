@@ -18,10 +18,10 @@ namespace PeachPDF.Html.Core.Dom
     ///
     /// v1 scope (issue #232): explicit and auto track sizing (lengths, %, <c>fr</c>, <c>auto</c>,
     /// <c>min-content</c>/<c>max-content</c>, <c>minmax()</c>, <c>fit-content()</c>, <c>repeat()</c>
-    /// including <c>auto-fill</c>/<c>auto-fit</c>), line-based placement with spans, auto-placement
-    /// (<c>grid-auto-flow</c>), implicit tracks, gaps, and box/content alignment. Named lines,
-    /// <c>grid-template-areas</c>, subgrid, masonry, baseline alignment, and the <c>grid</c>/
-    /// <c>grid-template</c> shorthands are out of scope — see docs/html-css-support.md.
+    /// including <c>auto-fill</c>/<c>auto-fit</c>), line-based placement with spans, named lines and
+    /// <c>grid-template-areas</c>, auto-placement (<c>grid-auto-flow</c>), implicit tracks, gaps, and
+    /// box/content alignment. Subgrid, masonry, baseline alignment, and the <c>grid</c>/<c>grid-template</c>
+    /// shorthands are out of scope — see docs/html-css-support.md.
     ///
     /// The engine mirrors <see cref="CssLayoutEngineFlex"/>: it resolves the container's content width via
     /// <see cref="CssLayoutEngine.GetBoxWidth"/>, lays each item out at a provisional origin, then translates
@@ -101,10 +101,33 @@ namespace PeachPDF.Html.Core.Dom
             var isColumnFlow = flow.IndexOf(CssConstants.Column, StringComparison.OrdinalIgnoreCase) >= 0;
             var isDense = flow.IndexOf(CssConstants.Dense, StringComparison.OrdinalIgnoreCase) >= 0;
 
+            // Per-axis named-line tables: [name] from the templates, plus name-start/name-end lines each
+            // grid-template-areas area contributes.
+            var colLineNames = BuildLineNames(_gridBox.GridTemplateColumns);
+            var rowLineNames = BuildLineNames(_gridBox.GridTemplateRows);
+
+            var areas = string.IsNullOrEmpty(_gridBox.GridTemplateAreas) || _gridBox.GridTemplateAreas.Isi(CssConstants.None)
+                ? null
+                : GridTemplateAreasGrammar.TryParse(CssValueParser.GetCssTokens(_gridBox.GridTemplateAreas));
+            if (areas is not null)
+            {
+                foreach (var (name, b) in areas.Areas)
+                {
+                    AddLine(colLineNames, name + "-start", b.C1 + 1);
+                    AddLine(colLineNames, name + "-end", b.C2 + 2);
+                    AddLine(rowLineNames, name + "-start", b.R1 + 1);
+                    AddLine(rowLineNames, name + "-end", b.R2 + 2);
+                }
+                // The area grid establishes the explicit grid size; pad with auto tracks (areas never
+                // resize authored tracks). This drives fixedCount/colCount/rowCount below.
+                while (explicitColDefs.Count < areas.ColCount) explicitColDefs.Add(GridTrackSize.Auto);
+                while (explicitRowDefs.Count < areas.RowCount) explicitRowDefs.Add(GridTrackSize.Auto);
+            }
+
             // The fixed-axis (explicit) track count: columns for row flow, rows for column flow.
             var fixedCount = Math.Max(1, isColumnFlow ? explicitRowDefs.Count : explicitColDefs.Count);
 
-            var placements = PlaceItems(items, isColumnFlow, isDense, fixedCount);
+            var placements = PlaceItems(items, isColumnFlow, isDense, fixedCount, colLineNames, rowLineNames);
             var colCount = Math.Max(1, Math.Max(explicitColDefs.Count,
                 placements.Count == 0 ? 0 : placements.Max(p => p.ColStart + p.ColSpan)));
             var rowCount = Math.Max(1, Math.Max(explicitRowDefs.Count,
@@ -214,7 +237,8 @@ namespace PeachPDF.Html.Core.Dom
         /// column flow; the <b>major</b> axis grows implicitly. <c>dense</c> restarts the search from the
         /// origin for each auto item; sparse advances a forward cursor.
         /// </summary>
-        private List<Placement> PlaceItems(List<CssBox> items, bool isColumnFlow, bool dense, int fixedCount)
+        private List<Placement> PlaceItems(List<CssBox> items, bool isColumnFlow, bool dense, int fixedCount,
+            IReadOnlyDictionary<string, List<int>> colLineNames, IReadOnlyDictionary<string, List<int>> rowLineNames)
         {
             var placements = new List<Placement>(items.Count);
             var occupancy = new List<bool[]>(); // [major][minor]
@@ -248,8 +272,8 @@ namespace PeachPDF.Html.Core.Dom
             // one: columns for row flow, rows for column flow.
             var resolved = items.Select(box =>
             {
-                var (colStart, colSpan) = ResolveAxis(box.GridColumnStart, box.GridColumnEnd, fixedCount);
-                var (rowStart, rowSpan) = ResolveAxis(box.GridRowStart, box.GridRowEnd, fixedCount);
+                var (colStart, colSpan) = ResolveAxis(box.GridColumnStart, box.GridColumnEnd, fixedCount, colLineNames);
+                var (rowStart, rowSpan) = ResolveAxis(box.GridRowStart, box.GridRowEnd, fixedCount, rowLineNames);
                 return isColumnFlow
                     ? new { box, MinorStart = rowStart, MinorSpan = Math.Min(rowSpan, fixedCount), MajorStart = colStart, MajorSpan = colSpan }
                     : new { box, MinorStart = colStart, MinorSpan = Math.Min(colSpan, fixedCount), MajorStart = rowStart, MajorSpan = rowSpan };
@@ -328,13 +352,16 @@ namespace PeachPDF.Html.Core.Dom
         /// A start of -1 means "auto — assign during placement". Line numbers are 1-based in CSS; negative
         /// numbers count from the explicit end edge.
         /// </summary>
-        private static (int Start, int Span) ResolveAxis(string startValue, string endValue, int explicitCount)
+        private static (int Start, int Span) ResolveAxis(string startValue, string endValue, int explicitCount,
+            IReadOnlyDictionary<string, List<int>> lineNames)
         {
             var start = GridLineGrammar.TryParse(CssValueParser.GetCssTokens(startValue)) ?? GridLine.Auto;
             var end = GridLineGrammar.TryParse(CssValueParser.GetCssTokens(endValue)) ?? GridLine.Auto;
 
-            int? startLine = LineNumber(start, explicitCount);
-            int? endLine = LineNumber(end, explicitCount);
+            // A named-line reference resolves to a concrete line number against this axis's name table
+            // (honoring the §8.3.1 -start/-end suffix rule for area names) before numeric handling.
+            int? startLine = ResolveNamedEdge(start, lineNames, isStart: true) ?? LineNumber(start, explicitCount);
+            int? endLine = ResolveNamedEdge(end, lineNames, isStart: false) ?? LineNumber(end, explicitCount);
 
             var span = 1;
             if (start.IsSpan) span = Math.Max(1, start.Value);
@@ -364,9 +391,39 @@ namespace PeachPDF.Html.Core.Dom
         /// explicit end edge; null for <c>auto</c> or a <c>span</c>.</summary>
         private static int? LineNumber(GridLine line, int explicitCount)
         {
-            if (line.IsAuto || line.IsSpan) return null;
+            if (line.IsAuto || line.IsSpan || line.Name != null) return null;
             if (line.Value < 0) return explicitCount + 1 + line.Value + 1; // -1 == last edge
             return line.Value;
+        }
+
+        /// <summary>
+        /// Resolves a named-line reference (CSS Grid §8.3): the Nth (1-based, clamped) line labeled
+        /// <see cref="GridLine.Name"/>, or — when no such explicit line exists — the implicit
+        /// <c>name-start</c>/<c>name-end</c> line an <c>grid-template-areas</c> area produced, chosen by the
+        /// edge side (<paramref name="isStart"/>). Returns null when the line isn't named or the name is
+        /// unknown (falls through to auto).
+        /// </summary>
+        private static int? ResolveNamedEdge(GridLine line, IReadOnlyDictionary<string, List<int>> lineNames, bool isStart)
+        {
+            if (line.Name is null) return null;
+
+            if (lineNames.TryGetValue(line.Name, out var direct) && direct.Count > 0)
+                return NthClamp(direct, line.Value);
+
+            var suffixed = line.Name + (isStart ? "-start" : "-end");
+            if (lineNames.TryGetValue(suffixed, out var edge) && edge.Count > 0)
+                return NthClamp(edge, line.Value);
+
+            return null;
+        }
+
+        /// <summary>The Nth line number among a sorted list of same-named lines: 1-based from the start for a
+        /// positive index, or counting back from the end for a negative one (<c>-1</c> = the last), clamped to
+        /// the list (v1: no synthesis of implicit lines beyond the named ones).</summary>
+        private static int NthClamp(List<int> lines, int nth)
+        {
+            var index = nth < 0 ? lines.Count + nth : nth - 1;   // -1 → last; 1 → first
+            return lines[Math.Min(Math.Max(0, index), lines.Count - 1)];
         }
 
         private static double ColumnSpanWidth(Track[] columns, int start, int span, double gap)
@@ -728,6 +785,30 @@ namespace PeachPDF.Html.Core.Dom
             + box.ActualBorderTopWidth + box.ActualBorderBottomWidth;
 
         // ─── Value helpers ──────────────────────────────────────────────────────────
+
+        /// <summary>Extracts the <c>[name]</c> named lines declared in a track template into a mutable
+        /// name → sorted 1-based line-number table (into which <c>grid-template-areas</c> merges its implicit
+        /// area lines).</summary>
+        private static Dictionary<string, List<int>> BuildLineNames(string value)
+        {
+            var table = new Dictionary<string, List<int>>();
+            if (string.IsNullOrEmpty(value) || value.Isi(CssConstants.None))
+                return table;
+            var template = GridTrackListGrammar.TryParse(CssValueParser.GetCssTokens(value));
+            if (template?.LineNames is { Count: > 0 } names)
+                foreach (var (name, lines) in names)
+                    table[name] = lines.ToList();
+            return table;
+        }
+
+        /// <summary>Adds a 1-based line number to a name's entry, keeping the list sorted and deduped.</summary>
+        private static void AddLine(Dictionary<string, List<int>> table, string name, int line)
+        {
+            if (!table.TryGetValue(name, out var lines))
+                table[name] = lines = [];
+            var idx = lines.BinarySearch(line);
+            if (idx < 0) lines.Insert(~idx, line);
+        }
 
         private List<GridTrackSize> ExpandTemplate(string value)
         {
