@@ -359,6 +359,66 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(a.Location.Y, b.Location.Y, 1.0);
         }
 
+        // ─── Stage 6: alignment ──────────────────────────────────────────────────
+
+        [Fact]
+        public async Task JustifyItemsStart_ItemsUseContentWidth_NotStretched()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; justify-items:start; width:200pt; grid-template-columns:200pt;'>
+                    <div id='a' style='height:20pt; padding:0 10pt;'>X</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            // Not stretched to the 200pt track; sits at the track's left edge.
+            Assert.True(a.ActualBoxSizingWidth < 100, $"item should shrink to content, was {a.ActualBoxSizingWidth}");
+            Assert.Equal(container.ClientLeft, a.Location.X, 1.0);
+        }
+
+        [Fact]
+        public async Task JustifySelfEnd_PositionsItemAtCellEnd()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:200pt; grid-template-columns:200pt;'>
+                    <div id='a' style='justify-self:end; width:40pt; height:20pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            // 40pt item right-aligned in a 200pt track → starts at left+160.
+            Assert.Equal(container.ClientLeft + 160, a.Location.X, 1.5);
+        }
+
+        [Fact]
+        public async Task JustifyContentCenter_CentersTracksInContainer()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; justify-content:center; width:300pt; grid-template-columns:100pt;'>
+                    <div id='a' style='height:20pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            // Single 100pt track centered in 300pt → offset 100 from the content-left.
+            Assert.Equal(container.ClientLeft + 100, a.Location.X, 1.5);
+        }
+
+        [Fact]
+        public async Task PlaceItemsCenter_AppliesToBothAxes()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; place-items:center; width:200pt; grid-template-columns:200pt; grid-template-rows:100pt;'>
+                    <div id='a' style='width:40pt; height:20pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            // Centered horizontally (200-40)/2=80 and vertically (100-20)/2=40.
+            Assert.Equal(container.ClientLeft + 80, a.Location.X, 1.5);
+            Assert.Equal(container.ClientTop + 40, a.Location.Y, 1.5);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>

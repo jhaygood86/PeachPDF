@@ -204,6 +204,15 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.GridAutoColumns, () => new GridAutoColumnsProperty());
             AddLonghand(PropertyNames.GridAutoRows, () => new GridAutoRowsProperty());
 
+            AddLonghand(PropertyNames.JustifyItems, () => new JustifyItemsProperty());
+            AddLonghand(PropertyNames.JustifySelf, () => new JustifySelfProperty());
+            AddShorthand(PropertyNames.PlaceItems, () => new PlaceItemsProperty(),
+                PropertyNames.AlignItems, PropertyNames.JustifyItems);
+            AddShorthand(PropertyNames.PlaceContent, () => new PlaceContentProperty(),
+                PropertyNames.AlignContent, PropertyNames.JustifyContent);
+            AddShorthand(PropertyNames.PlaceSelf, () => new PlaceSelfProperty(),
+                PropertyNames.AlignSelf, PropertyNames.JustifySelf);
+
             AddShorthand(PropertyNames.ColumnRule, () => new ColumnRuleProperty(),
                 PropertyNames.ColumnRuleWidth,
                 PropertyNames.ColumnRuleStyle,

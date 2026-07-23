@@ -112,7 +112,7 @@ namespace PeachPDF.Html.Core.Dom
             // ── Column tracks: explicit sizes, then implicit columns cycling grid-auto-columns.
             var colDefs = BuildTrackDefs(explicitColDefs, autoColDefs, colCount);
             var columns = SizeColumnTracks(colDefs, contentWidth, columnGap);
-            AssignPositions(columns, _gridBox.ClientLeft, columnGap);
+            PositionTracks(columns, _gridBox.ClientLeft, contentWidth, columnGap, _gridBox.JustifyContent);
 
             // ── Row tracks: explicit sizes, then implicit rows cycling grid-auto-rows; auto rows are sized
             // to the tallest item they contain (measured at the item's column-span width).
@@ -144,17 +144,21 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
-            AssignPositions(rows, _gridBox.ClientTop, rowGap);
+            var rowContainerSize = hasDefiniteHeight ? _gridBox.ClientBottom - _gridBox.ClientTop
+                : rows.Sum(t => t.Size) + (rowCount > 1 ? rowGap * (rowCount - 1) : 0);
+            PositionTracks(rows, _gridBox.ClientTop, rowContainerSize, rowGap, _gridBox.AlignContent);
 
-            // ── Place each item into its (possibly spanned) cell (stretch to the cell by default —
-            // justify/align-self default to stretch; explicit alignment lands in Stage 6).
+            // ── Place each item into its (possibly spanned) cell, aligned per justify-self/align-self
+            // (defaulting to justify-items/align-items, then to stretch).
             foreach (var p in placements)
             {
                 var cellX = columns[p.ColStart].Position;
                 var cellWidth = ColumnSpanWidth(columns, p.ColStart, p.ColSpan, columnGap);
                 var cellY = rows[p.RowStart].Position;
                 var cellHeight = RowSpanHeight(rows, p.RowStart, p.RowSpan, rowGap);
-                await PlaceItemInCell(g, p.Box, cellX, cellY, cellWidth, cellHeight);
+                var justify = ResolveSelfAlignment(p.Box.JustifySelf, _gridBox.JustifyItems);
+                var align = ResolveSelfAlignment(p.Box.AlignSelf, _gridBox.AlignItems);
+                await PlaceItemInCell(g, p.Box, cellX, cellY, cellWidth, cellHeight, justify, align);
             }
 
             // ── Container size when auto.
@@ -488,15 +492,6 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        private static void AssignPositions(Track[] tracks, double start, double gap)
-        {
-            var pos = start;
-            foreach (var t in tracks)
-            {
-                t.Position = pos;
-                pos += t.Size + gap;
-            }
-        }
 
         private double ResolveFixedLength(GridTrackSize def, double contentBase) =>
             def.Kind switch
@@ -542,18 +537,31 @@ namespace PeachPDF.Html.Core.Dom
             return box.ActualBoxSizingHeight + box.ActualMarginTop + box.ActualMarginBottom;
         }
 
-        /// <summary>Sizes an item to its cell (stretch, the default) and translates it to the cell origin.</summary>
+        /// <summary>Sizes an item into its cell and translates it there, honoring the resolved
+        /// <paramref name="justify"/> (inline axis) and <paramref name="align"/> (block axis) — <c>stretch</c>
+        /// fills the cell (when the dimension is auto); <c>start</c>/<c>end</c>/<c>center</c> position the
+        /// intrinsically-sized item within the cell.</summary>
         private async ValueTask PlaceItemInCell(RGraphics g, CssBox box, double cellX, double cellY,
-            double cellWidth, double cellHeight)
+            double cellWidth, double cellHeight, string justify, string align)
         {
-            var stretchWidth = box.Width == CssConstants.Auto;
-            var stretchHeight = box.Height == CssConstants.Auto;
+            var autoWidth = box.Width == CssConstants.Auto;
+            var autoHeight = box.Height == CssConstants.Auto;
+            var stretchWidth = IsStretch(justify) && autoWidth;
+            var stretchHeight = IsStretch(align) && autoHeight;
 
             var savedWidth = box.Width;
             var savedHeight = box.Height;
 
-            if (stretchWidth)
-                box.Width = FormatLayoutUnits(Math.Max(0, cellWidth - HorizontalMarginBorderPadding(box)));
+            var cellContentWidth = Math.Max(0, cellWidth - HorizontalMarginBorderPadding(box));
+            if (autoWidth)
+            {
+                // An auto-width block would fill its containing block, so a grid item's width must be pinned:
+                // stretch → the cell's content width; otherwise its fit-content size clamped to the cell.
+                var used = stretchWidth
+                    ? cellContentWidth
+                    : await CssLayoutEngine.GetFitContentWidth(g, box, cellContentWidth);
+                box.Width = FormatLayoutUnits(used);
+            }
             if (stretchHeight)
                 box.Height = FormatLayoutUnits(Math.Max(0, cellHeight - VerticalMarginBorderPadding(box)));
 
@@ -562,16 +570,80 @@ namespace PeachPDF.Html.Core.Dom
             box.RectanglesReset();
             await PerformLayoutBlockified(g, box);
 
-            if (stretchWidth) box.Width = savedWidth;
+            if (autoWidth) box.Width = savedWidth;
             if (stretchHeight) box.Height = savedHeight;
 
-            // Translate the item's margin box so it sits at the cell origin.
-            var targetX = cellX + box.ActualMarginLeft;
-            var targetY = cellY + box.ActualMarginTop;
+            // Position the item's margin box within the cell along each axis per the alignment keyword.
+            var outerWidth = box.ActualBoxSizingWidth + box.ActualMarginLeft + box.ActualMarginRight;
+            var outerHeight = box.ActualBoxSizingHeight + box.ActualMarginTop + box.ActualMarginBottom;
+            var targetX = cellX + AlignmentOffset(justify, cellWidth, outerWidth) + box.ActualMarginLeft;
+            var targetY = cellY + AlignmentOffset(align, cellHeight, outerHeight) + box.ActualMarginTop;
+
             var dx = targetX - box.Location.X;
             var dy = targetY - box.Location.Y;
             if (Math.Abs(dx) > 0.01) box.OffsetLeft(dx);
             if (Math.Abs(dy) > 0.01) box.OffsetTop(dy);
+        }
+
+        /// <summary>Resolves a grid item's used self-alignment: <c>auto</c>/<c>normal</c> defer to the
+        /// container's <c>*-items</c> value, which itself defaults to <c>stretch</c>.</summary>
+        private static string ResolveSelfAlignment(string self, string items)
+        {
+            var value = self;
+            if (string.IsNullOrEmpty(value) || value.Isi(CssConstants.Auto) || value.Isi(CssConstants.Normal))
+                value = items;
+            if (string.IsNullOrEmpty(value) || value.Isi(CssConstants.Normal) || value.Isi(CssConstants.Auto))
+                value = CssConstants.Stretch;
+            return value;
+        }
+
+        private static bool IsStretch(string value) =>
+            value.Isi(CssConstants.Stretch) || value.Isi(CssConstants.Normal);
+
+        /// <summary>The start offset of an item within its cell for a start/end/center alignment (a stretched
+        /// or start-aligned item is at 0). Baseline falls back to start.</summary>
+        private static double AlignmentOffset(string value, double cellSize, double itemSize)
+        {
+            var free = cellSize - itemSize;
+            if (free <= 0) return 0;
+            if (value.Isi(CssConstants.Center)) return free / 2;
+            if (value.Isi(CssConstants.End) || value.Isi(CssConstants.FlexEnd) || value.Isi("self-end") || value.Isi("right"))
+                return free;
+            return 0; // start / flex-start / self-start / left / stretch / baseline
+        }
+
+        /// <summary>
+        /// Assigns each track's position, distributing any leftover container space per a content-alignment
+        /// value (<c>justify-content</c> for columns, <c>align-content</c> for rows): start/end/center and
+        /// the space-* distributions. <c>normal</c>/<c>stretch</c> pack at the start (auto-track stretch is a
+        /// v1 gap).
+        /// </summary>
+        private static void PositionTracks(Track[] tracks, double start, double containerSize, double gap, string value)
+        {
+            var n = tracks.Length;
+            if (n == 0) return;
+
+            var used = tracks.Sum(t => t.Size) + (n > 1 ? gap * (n - 1) : 0);
+            var free = containerSize - used;
+
+            double offset = 0;
+            double between = gap;
+
+            if (free > 0.01 && n > 0)
+            {
+                if (value.Isi(CssConstants.Center)) offset = free / 2;
+                else if (value.Isi(CssConstants.End) || value.Isi(CssConstants.FlexEnd) || value.Isi("right")) offset = free;
+                else if (value.Isi(CssConstants.SpaceBetween)) between = gap + (n > 1 ? free / (n - 1) : 0);
+                else if (value.Isi(CssConstants.SpaceAround)) { between = gap + free / n; offset = free / n / 2; }
+                else if (value.Isi(CssConstants.SpaceEvenly)) { between = gap + free / (n + 1); offset = free / (n + 1); }
+            }
+
+            var pos = start + offset;
+            foreach (var t in tracks)
+            {
+                t.Position = pos;
+                pos += t.Size + between;
+            }
         }
 
         private static double HorizontalMarginBorderPadding(CssBox box) =>
