@@ -4365,6 +4365,73 @@ await SaveShowcaseAsync("css_grid", "Layout", "CSS Grid",
     "card idiom — all laid out by PeachPDF's own grid track-sizing and placement engine.",
     gridHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// ─── CSS Grid: grid-template-areas + named lines (#261) ─────────────────────
+
+// The classic "holy grail" page layout expressed with grid-template-areas: each region places itself
+// with `grid-area: <name>` (the §8.3.1 custom-ident copy rule fills the whole named area), and a second
+// grid demonstrates named lines `[name]` referenced from grid-column.
+var gridAreasHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+      body { font: 12pt Arial, sans-serif; color: #222; margin: 24pt; }
+      h1 { font-size: 20pt; margin: 0 0 4pt; }
+      h2 { font-size: 13pt; margin: 20pt 0 8pt; color: #4a5568; }
+      .note { color: #718096; font-size: 10pt; margin: 0 0 8pt; }
+
+      .page {
+        display: grid;
+        grid-template-columns: 120pt 1fr 120pt;
+        grid-template-rows: 44pt 220pt 40pt;
+        grid-template-areas:
+          "header header header"
+          "nav    main   aside"
+          "footer footer footer";
+        gap: 8pt;
+      }
+      .page > div { color: #fff; padding: 8pt; border-radius: 4pt; font-size: 10pt; }
+      .page .header { grid-area: header; background: #2d3748; }
+      .page .nav    { grid-area: nav;    background: #4a90d9; }
+      .page .main   { grid-area: main;   background: #4caf72; }
+      .page .aside  { grid-area: aside;  background: #e07b53; }
+      .page .footer { grid-area: footer; background: #718096; }
+
+      .named { display: grid; grid-template-columns: [full-start] 100pt [main-start] 1fr [main-end] 100pt [full-end]; gap: 8pt; margin-top: 8pt; }
+      .named > div { color: #fff; padding: 8pt; border-radius: 4pt; font-size: 10pt; }
+      .named .banner { grid-column: full-start / full-end; background: #2d3748; }
+      .named .body   { grid-column: main-start / main-end; background: #4a90d9; }
+    </style>
+    </head>
+    <body>
+      <h1>grid-template-areas &amp; named lines</h1>
+
+      <h2>"Holy grail" layout &mdash; every region placed by <code>grid-area: &lt;name&gt;</code></h2>
+      <p class="note">The ASCII-art template names each area; each child fills its area via the
+      custom-ident copy rule.</p>
+      <div class="page">
+        <div class="header">header</div>
+        <div class="nav">nav</div>
+        <div class="main">main content</div>
+        <div class="aside">aside</div>
+        <div class="footer">footer</div>
+      </div>
+
+      <h2>Named lines &mdash; <code>grid-column: main-start / main-end</code></h2>
+      <div class="named">
+        <div class="banner">spans [full-start] to [full-end]</div>
+        <div class="body">spans the named [main-start]&hellip;[main-end] lines</div>
+      </div>
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("css_grid_areas", "Layout", "CSS Grid Template Areas",
+    "CSS `grid-template-areas`: a classic \"holy grail\" page layout where each region places itself with " +
+    "`grid-area: <name>`, plus named grid lines (`[main-start]`) referenced from `grid-column` — the named " +
+    "placement model of PeachPDF's grid engine.",
+    gridAreasHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // The manifest that drives the website's /showcase page (see docs/showcase.html and
 // .github/workflows/pages.yml). Field names are camelCased for Liquid (site.data.showcases).
 var manifestJson = JsonSerializer.Serialize(showcaseManifest,

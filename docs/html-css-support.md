@@ -456,23 +456,23 @@ CSS Flexbox Level 1 (`display: flex` / `inline-flex`) is supported, including mu
 
 ### Grid
 
-CSS Grid Layout (`display: grid` / `inline-grid`) is supported, including explicit and implicit track sizing, line-based placement with spans, auto-placement, and box/content alignment. Track sizes may be lengths, percentages, `fr` flexible lengths, `auto`, `min-content`/`max-content`, `minmax()`, `fit-content()`, and `repeat()` — including `repeat(auto-fill, …)` / `repeat(auto-fit, …)`, so the common responsive-card idiom `repeat(auto-fill, minmax(200px, 1fr))` works. `fr` tracks resolve via the standard flex-fraction algorithm (honoring `minmax()` floors); intrinsic (`auto`/content-sized) tracks size to their items' content.
+CSS Grid Layout (`display: grid` / `inline-grid`) is supported, including explicit and implicit track sizing, line-based placement with spans, named grid lines and `grid-template-areas`, auto-placement, and box/content alignment. Track sizes may be lengths, percentages, `fr` flexible lengths, `auto`, `min-content`/`max-content`, `minmax()`, `fit-content()`, and `repeat()` — including `repeat(auto-fill, …)` / `repeat(auto-fit, …)`, so the common responsive-card idiom `repeat(auto-fill, minmax(200px, 1fr))` works. `fr` tracks resolve via the standard flex-fraction algorithm (honoring `minmax()` floors); intrinsic (`auto`/content-sized) tracks size to their items' content.
 
 | Property | MDN Reference | Notes |
 |----------|--------------|-------|
-| `grid-template-columns` / `grid-template-rows` | [grid-template-columns](https://developer.mozilla.org/en-US/docs/Web/CSS/grid-template-columns) | `<track-list>`: lengths, `%`, `fr`, `auto`, `min-content`, `max-content`, `minmax()`, `fit-content()`, `repeat(<n>, …)`, and `repeat(auto-fill \| auto-fit, …)`. Named lines and `subgrid` are not supported |
+| `grid-template-columns` / `grid-template-rows` | [grid-template-columns](https://developer.mozilla.org/en-US/docs/Web/CSS/grid-template-columns) | `<track-list>`: lengths, `%`, `fr`, `auto`, `min-content`, `max-content`, `minmax()`, `fit-content()`, `repeat(<n>, …)`, `repeat(auto-fill \| auto-fit, …)`, and named lines `[name]` (outside `repeat()`). `subgrid` is not supported |
+| `grid-template-areas` | [grid-template-areas](https://developer.mozilla.org/en-US/docs/Web/CSS/grid-template-areas) | The ASCII-art named-area template (each area must be a single filled rectangle; `.`/`...` are empty cells). Each area contributes implicit `name-start`/`name-end` lines on both axes, and establishes the explicit row/column counts |
 | `grid-auto-columns` / `grid-auto-rows` | [grid-auto-rows](https://developer.mozilla.org/en-US/docs/Web/CSS/grid-auto-rows) | Sizes implicitly-created tracks; a `<track-size>+` list cycled across the implicit tracks |
 | `grid-auto-flow` | [grid-auto-flow](https://developer.mozilla.org/en-US/docs/Web/CSS/grid-auto-flow) | `row`, `column`, and the `dense` packing keyword |
-| `grid-column` / `grid-row` | [grid-column](https://developer.mozilla.org/en-US/docs/Web/CSS/grid-column) | Shorthands for the `-start`/`-end` longhands (slash-separated) |
-| `grid-column-start` / `grid-column-end` / `grid-row-start` / `grid-row-end` | [grid-row-start](https://developer.mozilla.org/en-US/docs/Web/CSS/grid-row-start) | Line-based placement: `auto`, an integer line (negatives count from the end edge), or `span <n>`. Named lines are not supported |
-| `grid-area` | [grid-area](https://developer.mozilla.org/en-US/docs/Web/CSS/grid-area) | The line-based form (`<row-start> / <col-start> / <row-end> / <col-end>`); the single named-area form is not supported |
+| `grid-column-start` / `grid-column-end` / `grid-row-start` / `grid-row-end` | [grid-row-start](https://developer.mozilla.org/en-US/docs/Web/CSS/grid-row-start) | Line-based placement: `auto`, an integer line (negatives count from the end edge), `span <n>`, a named line (a `[name]` line or an area's `name-start`/`name-end` edge), or `<name> <n>` for the Nth line with that name. `span <name>` is not supported |
+| `grid-column` / `grid-row` / `grid-area` | [grid-area](https://developer.mozilla.org/en-US/docs/Web/CSS/grid-area) | The slash-separated line forms plus the named forms — a bare area name (`grid-area: main`, `grid-column: main`) fills the whole named area via the custom-ident omitted-value copy rule |
 | `justify-items` / `align-items` | [justify-items](https://developer.mozilla.org/en-US/docs/Web/CSS/justify-items) | Default alignment of items within their cell: `start`, `end`, `center`, `stretch` (default), `normal`. `baseline` falls back to `start` |
 | `justify-self` / `align-self` | [justify-self](https://developer.mozilla.org/en-US/docs/Web/CSS/justify-self) | A grid item's own cell alignment; `auto`/`normal` inherit the container's `*-items` value |
 | `justify-content` / `align-content` | [justify-content](https://developer.mozilla.org/en-US/docs/Web/CSS/justify-content) | Distributes leftover container space among the tracks: `start`, `end`, `center`, `space-between`, `space-around`, `space-evenly` |
 | `place-items` / `place-content` / `place-self` | [place-items](https://developer.mozilla.org/en-US/docs/Web/CSS/place-items) | Shorthands for the align/justify pair (one value applies to both axes) |
 | `gap` / `row-gap` / `column-gap` | [gap](https://developer.mozilla.org/en-US/docs/Web/CSS/gap) | Full support on grid containers (the same property family as flexbox's `gap`) |
 
-The grid engine is fixed to a left-to-right, top-to-bottom writing mode. The following are **not** supported: `grid-template-areas` and named grid lines; subgrid; masonry; the `grid` and `grid-template` mega-shorthands; and baseline content-alignment (it falls back to `start`). Percentage row tracks against an indefinite container height are treated as `auto`.
+The grid engine is fixed to a left-to-right, top-to-bottom writing mode. The following are **not** supported: named lines *inside* `repeat()` and `span <name>`; subgrid; masonry; the `grid` and `grid-template` mega-shorthands; and baseline content-alignment (it falls back to `start`). Percentage row tracks against an indefinite container height are treated as `auto`, and `auto`/`fr` row tracks do not stretch to fill a definite container height.
 
 ### Multi-column Layout
 
@@ -1109,7 +1109,7 @@ A table assembled purely through CSS (`display: table` / `table-row` / `table-ce
 
 The following CSS features are not supported:
 
-- **Grid: `grid-template-areas` and named lines, subgrid, masonry** — the core grid formatting model (tracks, placement, auto-flow, alignment) is supported; see [Grid](#grid). Named-area templates, named grid lines, `subgrid`, masonry, and the `grid`/`grid-template` mega-shorthands are not
+- **Grid: subgrid, masonry, the `grid`/`grid-template` shorthands** — the core grid formatting model (tracks, placement, named lines, `grid-template-areas`, auto-flow, alignment) is supported; see [Grid](#grid). `subgrid`, masonry, the `grid`/`grid-template` mega-shorthands, named lines inside `repeat()`, and `span <name>` are not
 - **3D perspective** — the `perspective()` transform function, and the `perspective`/`perspective-origin`/`transform-style`/`backface-visibility` properties
 - **Transitions and animations** — `transition`, `animation`, `@keyframes`
 - **Filters and effects** — `filter`, `backdrop-filter`, `mix-blend-mode` (not parsed at all)

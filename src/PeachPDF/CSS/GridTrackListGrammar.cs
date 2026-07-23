@@ -78,8 +78,9 @@ namespace PeachPDF.CSS
     /// <c>grid-template-rows</c>) and <c>&lt;track-size&gt;+</c> (<c>grid-auto-columns</c>/
     /// <c>grid-auto-rows</c>). Used by both Layer A (accept/reject at parse) and Layer B (compute used
     /// tracks during layout), so the grammar is defined once — the <see cref="AspectRatioGrammar"/>/
-    /// <see cref="BasicShapeGrammar"/> precedent. Named lines (<c>[name]</c>) and <c>grid-template-areas</c>
-    /// are out of v1 scope and rejected.
+    /// <see cref="BasicShapeGrammar"/> precedent. Top-level named lines (<c>[name]</c>) are collected into
+    /// <see cref="GridTemplate.LineNames"/>; named lines inside <c>repeat()</c> are out of scope and
+    /// rejected.
     /// </summary>
     internal static class GridTrackListGrammar
     {

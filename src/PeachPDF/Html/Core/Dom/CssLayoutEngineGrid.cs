@@ -18,10 +18,10 @@ namespace PeachPDF.Html.Core.Dom
     ///
     /// v1 scope (issue #232): explicit and auto track sizing (lengths, %, <c>fr</c>, <c>auto</c>,
     /// <c>min-content</c>/<c>max-content</c>, <c>minmax()</c>, <c>fit-content()</c>, <c>repeat()</c>
-    /// including <c>auto-fill</c>/<c>auto-fit</c>), line-based placement with spans, auto-placement
-    /// (<c>grid-auto-flow</c>), implicit tracks, gaps, and box/content alignment. Named lines,
-    /// <c>grid-template-areas</c>, subgrid, masonry, baseline alignment, and the <c>grid</c>/
-    /// <c>grid-template</c> shorthands are out of scope — see docs/html-css-support.md.
+    /// including <c>auto-fill</c>/<c>auto-fit</c>), line-based placement with spans, named lines and
+    /// <c>grid-template-areas</c>, auto-placement (<c>grid-auto-flow</c>), implicit tracks, gaps, and
+    /// box/content alignment. Subgrid, masonry, baseline alignment, and the <c>grid</c>/<c>grid-template</c>
+    /// shorthands are out of scope — see docs/html-css-support.md.
     ///
     /// The engine mirrors <see cref="CssLayoutEngineFlex"/>: it resolves the container's content width via
     /// <see cref="CssLayoutEngine.GetBoxWidth"/>, lays each item out at a provisional origin, then translates
