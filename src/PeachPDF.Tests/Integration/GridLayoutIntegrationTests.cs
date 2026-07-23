@@ -734,6 +734,69 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(100, b.ActualBoxSizingWidth, 2.0);
         }
 
+        // ─── grid-area / grid-column named shorthand copy rule (#261) ─────────────
+
+        [Fact]
+        public async Task GridAreaNamedShorthand_FillsWholeArea()
+        {
+            // grid-area: main → all four edges resolve to the main area (the §8.3.1 custom-ident copy rule).
+            var html = Wrap(@"
+                <div id='container' style=""display:grid; width:300pt;
+                     grid-template-columns:100pt 100pt 100pt; grid-template-rows:60pt 100pt;
+                     grid-template-areas: 'header header header' 'nav main main';"">
+                    <div id='m' style=""grid-area:main;""></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var m = FindById(root, "m")!;
+            Assert.Equal(200, m.ActualBoxSizingWidth, 2.0);
+            Assert.Equal(100, m.ActualBoxSizingHeight, 2.0);
+            Assert.Equal(container.ClientLeft + 100, m.Location.X, 2.0);
+            Assert.Equal(container.ClientTop + 60, m.Location.Y, 2.0);
+        }
+
+        [Fact]
+        public async Task GridColumnNamedShorthand_SpansBothNamedEdges()
+        {
+            // grid-column: main → both column edges = main (copy rule) → spans main's columns.
+            var html = Wrap(@"
+                <div id='container' style=""display:grid; width:300pt;
+                     grid-template-columns:100pt 100pt 100pt; grid-template-rows:40pt;
+                     grid-template-areas: 'nav main main';"">
+                    <div id='m' style=""grid-column:main; height:10pt;""></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var m = FindById(root, "m")!;
+            Assert.Equal(200, m.ActualBoxSizingWidth, 2.0);
+        }
+
+        [Fact]
+        public async Task GridColumnNumberShorthand_LeavesEndAuto_SpanOne()
+        {
+            // A line NUMBER does not copy (unlike a custom-ident): grid-column: 2 is a span-1 placement.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:300pt; grid-template-columns:repeat(3, 100pt);'>
+                    <div id='m' style='grid-column:2; height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var m = FindById(root, "m")!;
+            Assert.Equal(100, m.ActualBoxSizingWidth, 2.0);           // span 1, not to the end
+            Assert.Equal(container.ClientLeft + 100, m.Location.X, 2.0); // column 2 (index 1)
+        }
+
+        [Fact]
+        public async Task GridColumnSlashShorthand_StillSpansExplicitLines()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:300pt; grid-template-columns:repeat(3, 100pt);'>
+                    <div id='m' style='grid-column:1 / 3; height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var m = FindById(root, "m")!;
+            Assert.Equal(200, m.ActualBoxSizingWidth, 2.0);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>
