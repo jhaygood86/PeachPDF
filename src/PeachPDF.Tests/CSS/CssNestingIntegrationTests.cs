@@ -170,6 +170,45 @@ public class CssNestingIntegrationTests
         Assert.Equal("rgb(0, 0, 255)", (await Box(html, "p")).Color);
     }
 
+    [Fact]
+    public async Task AmpersandInsideAttributeValue_IsPreserved_NotTreatedAsNestingSelector()
+    {
+        // A `&` inside an attribute-value string must NOT be substituted (it's data, not the nesting
+        // selector) and must NOT flip the rule to the replace branch — the rule must still be scoped
+        // under the parent. Here the only `&` is inside the string, so `.item` stays `:is(.card) .item`
+        // matching the `[data-state="on&off"]` element under .card.
+        var html = Html(
+            ".card { .item[data-state=\"on&off\"] { color: #0000ff; } }",
+            "<div class='card'><span class='item' id='m' data-state='on&off'>x</span>" +
+            "<span class='item' id='n' data-state='off'>y</span></div>" +
+            "<span class='item' id='outside' data-state='on&off'>z</span>");
+        Assert.Equal("rgb(0, 0, 255)", (await Box(html, "m")).Color);   // matches (under .card, value on&off)
+        Assert.NotEqual("rgb(0, 0, 255)", (await Box(html, "n")).Color); // wrong data-state
+        Assert.NotEqual("rgb(0, 0, 255)", (await Box(html, "outside")).Color); // not under .card (rule stays scoped)
+    }
+
+    [Fact]
+    public async Task RealAmpersand_WithAmpersandAlsoInsideAttributeValue()
+    {
+        // A real nesting `&` plus a `&` inside a string: only the real one is replaced (→ `&.on`
+        // compound), the in-string `&` is preserved.
+        var html = Html(
+            ".card { &[data-state=\"a&b\"] { color: #0000ff; } }",
+            "<div class='card' id='d' data-state='a&b'>x</div>");
+        Assert.Equal("rgb(0, 0, 255)", (await Box(html, "d")).Color);
+    }
+
+    [Fact]
+    public async Task EscapedQuoteInsideAttributeValue_DoesNotEndTheStringEarly()
+    {
+        // An escaped quote (\") inside the attribute-value string must not prematurely close the string
+        // during `&` substitution; the value `a"b` is preserved and the rule matches the right element.
+        var html = Html(
+            ".card { .item[data-x=\"a\\\"b\"] { color: #0000ff; } }",
+            "<div class='card'><span class='item' id='e' data-x='a\"b'>x</span></div>");
+        Assert.Equal("rgb(0, 0, 255)", (await Box(html, "e")).Color);
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────────
 
     private static string Html(string css, string body) =>

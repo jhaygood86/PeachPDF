@@ -840,7 +840,7 @@ namespace PeachPDF.CSS
         /// <summary>
         /// Looks ahead (bracket-aware) to classify the construct starting at <paramref name="token"/> as a
         /// nested style rule vs a declaration: the first top-level <c>{</c> means a nested rule (the stream
-        /// is left just after it and its position returned via <paramref name="bracePosition"/>); a
+        /// is left just after it and its source index returned via <paramref name="braceStart"/>); a
         /// top-level <c>;</c>/<c>}</c>/EOF means a declaration, in which case the lexer is rewound to the
         /// construct start and <paramref name="token"/> re-read so the unchanged declaration path re-lexes
         /// it in value mode (avoiding the <c>#</c> value-mode tokenization hazard a token buffer would hit).
@@ -936,9 +936,46 @@ namespace PeachPDF.CSS
             var trimmed = prelude.Trim();
             var parentIs = ":is(" + (string.IsNullOrEmpty(parentText) ? "*" : parentText) + ")";
 
-            return trimmed.Contains('&')
-                ? trimmed.Replace("&", parentIs)
-                : parentIs + " " + trimmed;
+            // Substitute `&` token-aware: only a `&` that is a real nesting selector is replaced, never a
+            // `&` inside a string/attribute value (e.g. `[data-x="a&b"]`), which must be preserved. This
+            // also decides the "has &" branch correctly, so a prelude whose only `&` is inside a string is
+            // still scoped under the parent (:is(parent) <prelude>) rather than mis-taking the replace path.
+            var sb = Pool.NewStringBuilder();
+            var hasNestingSelector = false;
+            var quote = '\0';
+
+            for (var i = 0; i < trimmed.Length; i++)
+            {
+                var c = trimmed[i];
+
+                if (quote != '\0')
+                {
+                    sb.Append(c);
+                    if (c == '\\' && i + 1 < trimmed.Length)
+                        sb.Append(trimmed[++i]);   // escaped char inside a string — copy verbatim
+                    else if (c == quote)
+                        quote = '\0';
+                    continue;
+                }
+
+                switch (c)
+                {
+                    case '"':
+                    case '\'':
+                        quote = c;
+                        sb.Append(c);
+                        break;
+                    case '&':
+                        hasNestingSelector = true;
+                        sb.Append(parentIs);
+                        break;
+                    default:
+                        sb.Append(c);
+                        break;
+                }
+            }
+
+            return hasNestingSelector ? sb.ToPool() : parentIs + " " + sb.ToPool();
         }
 
         public Property CreateDeclarationWith(Func<string, Property> createProperty, ref Token token)
