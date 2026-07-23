@@ -4587,6 +4587,105 @@ await SaveShowcaseAsync("css_grid_subgrid", "Layout", "CSS Grid Subgrid",
     "subgrid`) so title/body/footer bands line up across cards — the nested grid adopts its parent's tracks.",
     gridSubgridHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// ─── CSS Grid: intrinsic sizing, calc() tracks & baseline alignment (#265) ──────
+
+// Four sections exercise the #265 sizing/placement fixes. Track functions: a min-content column sizes to
+// its longest word (narrower than max-content), and a calc() breadth resolves inside minmax()/fit-content().
+// Spanning intrinsics: an item spanning two auto columns grows both so neither collapses. Implicit columns:
+// an item explicitly placed on a line past the explicit grid generates the implicit tracks it needs instead
+// of overlapping. Baseline: mixed-size labels in a row align on a common text baseline.
+var gridIntrinsicHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+      body { font: 12pt Arial, sans-serif; color: #222; margin: 24pt; }
+      h1 { font-size: 20pt; margin: 0 0 4pt; }
+      h2 { font-size: 13pt; margin: 20pt 0 8pt; color: #4a5568; }
+      .note { color: #718096; font-size: 10pt; margin: 0 0 8pt; }
+      .cell { color: #fff; padding: 6pt; border-radius: 4pt; font-size: 10pt; }
+
+      /* min-content / max-content + a calc() minmax floor and a calc() fit-content cap. */
+      .tracks { display: grid; grid-template-columns:
+                  min-content minmax(calc(30pt + 20pt), 80pt) fit-content(calc(60pt + 20pt)) 1fr; gap: 8pt; }
+      .tracks .a { background: #2d3748; }
+      .tracks .b { background: #4a90d9; }
+      .tracks .c { background: #b4690e; }
+      .tracks .d { background: #4caf72; }
+
+      /* A single item spanning two auto columns: both grow to share it, and the second row's cells land on
+         those same non-zero tracks. */
+      .spanned { display: grid; grid-template-columns: auto auto 1fr; gap: 8pt; }
+      .spanned .wide { grid-column: 1 / 3; background: #2d3748; }
+      .spanned .e { background: #4a90d9; }
+      .spanned .f { background: #4caf72; }
+      .spanned .g { background: #718096; }
+
+      /* An item explicitly placed on column 5 of a 3-column grid generates implicit columns 4 and 5. */
+      .implicit { display: grid; grid-template-columns: repeat(3, 60pt); grid-auto-columns: 60pt; gap: 8pt; }
+      .implicit .p { background: #4a90d9; }
+      .implicit .far { grid-column: 5; background: #b4690e; }
+
+      /* Baseline alignment: differently-sized labels share one baseline. */
+      .baseline { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8pt; align-items: baseline;
+                  background: #edf2f7; padding: 8pt; border-radius: 4pt; }
+      .baseline span { display: block; }
+      .baseline .big   { font-size: 30pt; color: #2d3748; }
+      .baseline .mid   { font-size: 18pt; color: #4a90d9; }
+      .baseline .small { font-size: 11pt; color: #4caf72; }
+    </style>
+    </head>
+    <body>
+      <h1>Intrinsic sizing, calc() tracks &amp; baseline</h1>
+
+      <h2>Track functions &mdash; min-content, calc() in minmax()/fit-content()</h2>
+      <p class="note"><code>min-content</code> fits the longest word; <code>minmax(calc(30pt + 20pt), 80pt)</code>
+      floors at a calc()-resolved 50pt; <code>fit-content(calc(60pt + 20pt))</code> caps at 80pt; <code>1fr</code>
+      takes the rest.</p>
+      <div class="tracks">
+        <div class="cell a">Antidisestablishmentarianism sample</div>
+        <div class="cell b">flex floor</div>
+        <div class="cell c">capped at eighty points; the rest overflows the fit-content track</div>
+        <div class="cell d">remainder</div>
+      </div>
+
+      <h2>Spanning item grows shared intrinsic columns</h2>
+      <p class="note">The dark bar spans both <code>auto</code> columns; each now takes a share of its width,
+      so the second row's cells sit on real, non-zero tracks instead of collapsing to the left edge.</p>
+      <div class="spanned">
+        <div class="cell wide">This bar spans columns 1&ndash;2</div>
+        <div class="cell g">1fr</div>
+        <div class="cell e">col 1</div>
+        <div class="cell f">col 2</div>
+        <div class="cell g">1fr</div>
+      </div>
+
+      <h2>Explicit line past the grid generates implicit columns</h2>
+      <p class="note">Three explicit 60pt columns; the orange cell is placed on <code>grid-column: 5</code>, so
+      implicit columns 4 and 5 are created and it no longer overlaps the blue auto-placed cell.</p>
+      <div class="implicit">
+        <div class="cell p">auto</div>
+        <div class="cell far">column&nbsp;5</div>
+      </div>
+
+      <h2>Baseline item alignment</h2>
+      <p class="note">With <code>align-items: baseline</code>, the three differently-sized labels rest on a
+      single shared text baseline.</p>
+      <div class="baseline">
+        <span class="big">Ag 30pt</span>
+        <span class="mid">Ag 18pt</span>
+        <span class="small">Ag 11pt</span>
+      </div>
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("css_grid_intrinsic", "Layout", "CSS Grid Intrinsic Sizing & Baseline",
+    "CSS Grid sizing/placement depth: `min-content` vs `max-content` tracks, `calc()` inside " +
+    "`minmax()`/`fit-content()`, a spanning item growing the shared intrinsic columns it covers, an explicit " +
+    "line past the grid generating implicit columns, and `align-items: baseline` sharing one text baseline.",
+    gridIntrinsicHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // The manifest that drives the website's /showcase page (see docs/showcase.html and
 // .github/workflows/pages.yml). Field names are camelCased for Liquid (site.data.showcases).
 var manifestJson = JsonSerializer.Serialize(showcaseManifest,
