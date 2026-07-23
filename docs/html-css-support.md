@@ -466,13 +466,15 @@ CSS Grid Layout (`display: grid` / `inline-grid`) is supported, including explic
 | `grid-auto-flow` | [grid-auto-flow](https://developer.mozilla.org/en-US/docs/Web/CSS/grid-auto-flow) | `row`, `column`, and the `dense` packing keyword |
 | `grid-column-start` / `grid-column-end` / `grid-row-start` / `grid-row-end` | [grid-row-start](https://developer.mozilla.org/en-US/docs/Web/CSS/grid-row-start) | Line-based placement: `auto`, an integer line (negatives count from the end edge), `span <n>`, a named line (a `[name]` line or an area's `name-start`/`name-end` edge), or `<name> <n>` for the Nth line with that name. `span <name>` is not supported |
 | `grid-column` / `grid-row` / `grid-area` | [grid-area](https://developer.mozilla.org/en-US/docs/Web/CSS/grid-area) | The slash-separated line forms plus the named forms — a bare area name (`grid-area: main`, `grid-column: main`) fills the whole named area via the custom-ident omitted-value copy rule |
+| `grid-template` | [grid-template](https://developer.mozilla.org/en-US/docs/Web/CSS/grid-template) | The §7.4 shorthand for `grid-template-rows`/`-columns`/`-areas`: `none`, the `<rows> / <columns>` form, and the ASCII-art areas form `[<line-names>? <string> <track-size>? <line-names>?]+ [/ <columns>]?` (a row with no explicit track size gets `auto`) |
+| `grid` | [grid](https://developer.mozilla.org/en-US/docs/Web/CSS/grid) | The §7.8 shorthand: a `<grid-template>`, or an auto-flow form (`<rows> / [auto-flow && dense?] <auto-columns>?` or `[auto-flow && dense?] <auto-rows>? / <columns>`). Every longhand it doesn't set is reset to its initial value |
 | `justify-items` / `align-items` | [justify-items](https://developer.mozilla.org/en-US/docs/Web/CSS/justify-items) | Default alignment of items within their cell: `start`, `end`, `center`, `stretch` (default), `normal`. `baseline` falls back to `start` |
 | `justify-self` / `align-self` | [justify-self](https://developer.mozilla.org/en-US/docs/Web/CSS/justify-self) | A grid item's own cell alignment; `auto`/`normal` inherit the container's `*-items` value |
 | `justify-content` / `align-content` | [justify-content](https://developer.mozilla.org/en-US/docs/Web/CSS/justify-content) | Distributes leftover container space among the tracks: `start`, `end`, `center`, `space-between`, `space-around`, `space-evenly` |
 | `place-items` / `place-content` / `place-self` | [place-items](https://developer.mozilla.org/en-US/docs/Web/CSS/place-items) | Shorthands for the align/justify pair (one value applies to both axes) |
 | `gap` / `row-gap` / `column-gap` | [gap](https://developer.mozilla.org/en-US/docs/Web/CSS/gap) | Full support on grid containers (the same property family as flexbox's `gap`) |
 
-The grid engine is fixed to a left-to-right, top-to-bottom writing mode. The following are **not** supported: named lines *inside* `repeat()` and `span <name>` (and a named line declared *after* an `auto-fill`/`auto-fit` repeat is positioned as if the repeat expanded to a single track); subgrid; masonry; the `grid` and `grid-template` mega-shorthands; and baseline content-alignment (it falls back to `start`). Percentage row tracks against an indefinite container height are treated as `auto`, and `auto`/`fr` row tracks do not stretch to fill a definite container height.
+The grid engine is fixed to a left-to-right, top-to-bottom writing mode. The following are **not** supported: named lines *inside* `repeat()` and `span <name>` (and a named line declared *after* an `auto-fill`/`auto-fit` repeat is positioned as if the repeat expanded to a single track); subgrid; masonry; and baseline content-alignment (it falls back to `start`). Percentage row tracks against an indefinite container height are treated as `auto`, and `auto`/`fr` row tracks do not stretch to fill a definite container height.
 
 ### Multi-column Layout
 
@@ -1109,7 +1111,7 @@ A table assembled purely through CSS (`display: table` / `table-row` / `table-ce
 
 The following CSS features are not supported:
 
-- **Grid: subgrid, masonry, the `grid`/`grid-template` shorthands** — the core grid formatting model (tracks, placement, named lines, `grid-template-areas`, auto-flow, alignment) is supported; see [Grid](#grid). `subgrid`, masonry, the `grid`/`grid-template` mega-shorthands, named lines inside `repeat()`, and `span <name>` are not
+- **Grid: subgrid, masonry** — the core grid formatting model (tracks, placement, named lines, `grid-template-areas`, auto-flow, alignment, and the `grid`/`grid-template` mega-shorthands) is supported; see [Grid](#grid). `subgrid`, masonry, named lines inside `repeat()`, and `span <name>` are not
 - **3D perspective** — the `perspective()` transform function, and the `perspective`/`perspective-origin`/`transform-style`/`backface-visibility` properties
 - **Transitions and animations** — `transition`, `animation`, `@keyframes`
 - **Filters and effects** — `filter`, `backdrop-filter`, `mix-blend-mode` (not parsed at all)

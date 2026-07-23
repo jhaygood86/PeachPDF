@@ -21,11 +21,13 @@ namespace PeachPDF.CSS
 
         private readonly Dictionary<string, ShorthandCreator> _shorthandsBuilder = new(StringComparer.OrdinalIgnoreCase);
 
-        // Logical shorthands (margin-block, inset, border-inline, …) parse and expand like any other, but are
-        // NOT used to reconstruct a shorthand when serializing a declaration block: they alias the same
-        // physical longhands as their physical counterparts (margin-top/-bottom/…), so letting the serializer
-        // collapse e.g. margin-top+margin-bottom into `margin-block` would change existing output. Excluded
-        // from GetShorthands (the serialization query) only; CreateShorthand/GetLonghands/IsShorthand still work.
+        // Shorthands that parse and expand like any other, but are NOT used to reconstruct a shorthand when
+        // serializing a declaration block. Two kinds live here: the logical box shorthands (margin-block,
+        // inset, border-inline, …), which alias the same physical longhands as their physical counterparts
+        // (margin-top/-bottom/…) so letting the serializer collapse e.g. margin-top+margin-bottom into
+        // `margin-block` would change existing output; and the grid mega-shorthands (grid, grid-template),
+        // whose multi-slash / areas grammar isn't worth reconstructing. Excluded from GetShorthands (the
+        // serialization query) only; CreateShorthand/GetLonghands/IsShorthand still work.
         private readonly HashSet<string> _logicalShorthands = new(StringComparer.OrdinalIgnoreCase);
 
         private readonly FrozenDictionary<string, LonghandCreator> _fonts;
@@ -204,6 +206,15 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.GridAutoFlow, () => new GridAutoFlowProperty());
             AddLonghand(PropertyNames.GridAutoColumns, () => new GridAutoColumnsProperty());
             AddLonghand(PropertyNames.GridAutoRows, () => new GridAutoRowsProperty());
+
+            // The grid mega-shorthands parse/expand like any other, but are excluded from serialization
+            // reconstruction (via _logicalShorthands) - reconstructing a `grid`/`grid-template` from its
+            // longhands is not worth the complexity and could change existing output.
+            AddLogicalShorthand(PropertyNames.GridTemplate, () => new GridTemplateProperty(),
+                PropertyNames.GridTemplateRows, PropertyNames.GridTemplateColumns, PropertyNames.GridTemplateAreas);
+            AddLogicalShorthand(PropertyNames.Grid, () => new GridProperty(),
+                PropertyNames.GridTemplateRows, PropertyNames.GridTemplateColumns, PropertyNames.GridTemplateAreas,
+                PropertyNames.GridAutoFlow, PropertyNames.GridAutoRows, PropertyNames.GridAutoColumns);
 
             AddLonghand(PropertyNames.JustifyItems, () => new JustifyItemsProperty());
             AddLonghand(PropertyNames.JustifySelf, () => new JustifySelfProperty());

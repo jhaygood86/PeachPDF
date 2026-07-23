@@ -489,6 +489,10 @@ namespace PeachPDF.CSS
 
         public static readonly IValueConverter GridAreaConverter = new GridAreaShorthandValueConverter();
 
+        public static readonly IValueConverter GridTemplateConverter = new GridTemplateShorthandValueConverter();
+
+        public static readonly IValueConverter GridConverter = new GridShorthandValueConverter();
+
         public static readonly IValueConverter ShadowConverter = WithAny(
             Assign(Keywords.Inset, true).Option(false),
             LengthConverter.Many(2, 4).Required(),
