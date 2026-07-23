@@ -1,24 +1,12 @@
 #nullable disable
 
 using System;
-using System.Collections.Generic;
 
 namespace PeachPDF.CSS
 {
     internal sealed class AttributeSelectorFactory
     {
         private static readonly Lazy<AttributeSelectorFactory> Lazy = new(() => new AttributeSelectorFactory());
-
-        private readonly Dictionary<string, Type> _types = new()
-        {
-            { Combinators.Exactly, typeof(AttrMatchSelector) },
-            { Combinators.InList, typeof(AttrListSelector) },
-            { Combinators.InToken, typeof(AttrHyphenSelector) },
-            { Combinators.Begins, typeof(AttrBeginsSelector) },
-            { Combinators.Ends, typeof(AttrEndsSelector) },
-            { Combinators.InText, typeof(AttrContainsSelector) },
-            { Combinators.Unlike, typeof(AttrNotMatchSelector) },
-        };
 
         private AttributeSelectorFactory()
         {
@@ -36,9 +24,20 @@ namespace PeachPDF.CSS
                 _ = AttributeSelectorFactory.FormMatch(prefix, match);
             }
 
-            return _types.TryGetValue(combinator, out var type)
-                ? (IAttrSelector)Activator.CreateInstance(type, name, value)
-                : new AttrAvailableSelector(name, value);
+            // A reflection-free dispatch (no Activator.CreateInstance) so the two-arg Attr*Selector
+            // constructors are statically reachable and survive trimming/AOT (IsTrimmable=true) - see
+            // upstream ExCSS commit c497ca7. Unknown combinators fall back to a presence selector.
+            return combinator switch
+            {
+                Combinators.Exactly => new AttrMatchSelector(name, value),
+                Combinators.InList => new AttrListSelector(name, value),
+                Combinators.InToken => new AttrHyphenSelector(name, value),
+                Combinators.Begins => new AttrBeginsSelector(name, value),
+                Combinators.Ends => new AttrEndsSelector(name, value),
+                Combinators.InText => new AttrContainsSelector(name, value),
+                Combinators.Unlike => new AttrNotMatchSelector(name, value),
+                _ => new AttrAvailableSelector(name, value),
+            };
         }
 
         private static string FormFront(string prefix, string match)
