@@ -626,10 +626,18 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (!heightCb.IsHeightCalculated && box.Height.EndsWith('%'))
                 {
-                    return null;
+                    // An indefinite percentage height behaves as automatic (CSS Box Sizing 4 §5): a
+                    // preferred aspect ratio sizes the height from the (definite) width if there is one;
+                    // otherwise the height stays auto.
+                    if (!TryGetAspectRatioHeight(box, out height))
+                    {
+                        return null;
+                    }
                 }
-
-                height = CssValueParser.ParseLength(box.Height, heightCb.Size.Height, box) + box.ActualBoxSizeIncludedHeight;
+                else
+                {
+                    height = CssValueParser.ParseLength(box.Height, heightCb.Size.Height, box) + box.ActualBoxSizeIncludedHeight;
+                }
             }
             else if (box.Position is CssConstants.Absolute
                      && box.Top != CssConstants.Auto && box.Bottom != CssConstants.Auto
@@ -744,10 +752,13 @@ namespace PeachPDF.Html.Core.Dom
             var isRootWithPageHeight = box == box.ContainingBlock && box.HtmlContainer is not null;
             var isDefiniteHeight = CssValueParser.IsValidLength(box.Height) &&
                 (box.ContainingBlock.IsHeightCalculated || !box.Height.EndsWith('%'));
-            // An aspect-ratio with a definite width and an auto height yields a definite (ratio-derived)
+            // An aspect-ratio with a definite width and no definite height yields a definite (ratio-derived)
             // height too, so a percentage-height descendant resolves against it — this is what lets the
-            // Charts.css bars take their height from the ratio-sized tbody.
-            var isRatioHeight = !CssValueParser.IsValidLength(box.Height) && TryGetAspectRatioHeight(box, out _);
+            // Charts.css bars take their height from the ratio-sized tbody. "No definite height" is exactly
+            // !isDefiniteHeight, which covers both an auto height and an *indefinite* percentage height
+            // (a `%` whose containing block isn't itself height-calculated — CSS Box Sizing 4 §5 treats
+            // that as automatic, so the ratio applies there too).
+            var isRatioHeight = !isDefiniteHeight && TryGetAspectRatioHeight(box, out _);
             box.IsHeightCalculated = isRootWithPageHeight || isDefiniteHeight || isRatioHeight;
 
             // Apply max-height constraint. Unlike min-height/explicit-height above (which only ever

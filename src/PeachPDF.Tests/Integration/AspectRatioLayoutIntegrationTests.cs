@@ -133,9 +133,48 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(45, gc.ActualHeight, 1.5);    // 50% of the stretched item height
         }
 
-        private static async Task<CssBox> LayoutDiv(string style)
+        [Fact]
+        public async Task IndefinitePercentHeight_WithAspectRatio_SizedByRatio()
         {
-            var html = $"<!DOCTYPE html><html><head></head><body><div id=\"el\" style=\"{style}\">x</div></body></html>";
+            // A percentage height against an indefinite (auto-height) containing block behaves as automatic
+            // (CSS Box Sizing 4 §5), so the aspect ratio sizes the height from the definite width instead of
+            // the percentage collapsing to auto. #wrapper is auto-height (indefinite), so #parent's
+            // height:50% is indefinite; width 200pt + aspect-ratio 2 => 100pt tall, and a child's height:40%
+            // resolves against that ratio-derived height => 40pt.
+            var container = await LayoutContainer("""
+                <!DOCTYPE html><html><head><style>
+                  #parent { width: 200pt; height: 50%; aspect-ratio: 2; position: relative; }
+                  #child { height: 40%; width: 20pt; }
+                </style></head><body>
+                <div id="wrapper"><div id="parent"><div id="child"></div></div></div>
+                </body></html>
+                """);
+
+            var parent = FindById(container.Root!, "parent")!;
+            var child = FindById(container.Root!, "child")!;
+            Assert.Equal(100, parent.ActualHeight, 1);   // ratio-derived, not collapsed to auto
+            Assert.Equal(40, child.ActualHeight, 1);      // 40% of the ratio-derived parent height
+        }
+
+        [Fact]
+        public async Task IndefinitePercentHeight_WithoutAspectRatio_StaysAuto()
+        {
+            // Contrast to the above: the same indefinite percentage height with NO aspect-ratio stays
+            // automatic (content-driven), so the box does not take the 100pt a ratio would give.
+            var container = await LayoutContainer("""
+                <!DOCTYPE html><html><head><style>
+                  #parent { width: 200pt; height: 50%; position: relative; }
+                </style></head><body>
+                <div id="wrapper"><div id="parent">x</div></div>
+                </body></html>
+                """);
+
+            var parent = FindById(container.Root!, "parent")!;
+            Assert.True(parent.ActualHeight < 100, $"expected content-driven height, got {parent.ActualHeight}");
+        }
+
+        private static async Task<HtmlContainerInt> LayoutContainer(string html)
+        {
             var adapter = new PdfSharpAdapter();
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
@@ -149,6 +188,13 @@ namespace PeachPDF.Tests.Integration
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
+            return container;
+        }
+
+        private static async Task<CssBox> LayoutDiv(string style)
+        {
+            var html = $"<!DOCTYPE html><html><head></head><body><div id=\"el\" style=\"{style}\">x</div></body></html>";
+            var container = await LayoutContainer(html);
             return FindById(container.Root!, "el")!;
         }
 
