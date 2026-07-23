@@ -1435,8 +1435,10 @@ namespace PeachPDF.Html.Core.Dom
 
         // Grid container properties (CSS Grid Layout Module Level 1/2). row-gap/column-gap are shared with
         // flex (FlexRowGap/FlexColumnGap above); align/justify-content/items and align-self are shared too.
-        public string GridTemplateColumns { get; set; } = CssConstants.None;
-        public string GridTemplateRows    { get; set; } = CssConstants.None;
+        // grid-template-columns/rows carry the parsed GridTemplate through the cascade (CssProperty<T>) so the
+        // layout engine reads the already-parsed value; the initial value is `none` (a null GridTemplate).
+        public CssProperty<GridTemplate> GridTemplateColumns { get; set; } = CssProperty<GridTemplate>.FromValue(CssConstants.None, null);
+        public CssProperty<GridTemplate> GridTemplateRows    { get; set; } = CssProperty<GridTemplate>.FromValue(CssConstants.None, null);
         public string GridTemplateAreas   { get; set; } = CssConstants.None;
         public string GridAutoColumns     { get; set; } = CssConstants.Auto;
         public string GridAutoRows        { get; set; } = CssConstants.Auto;
@@ -1449,6 +1451,11 @@ namespace PeachPDF.Html.Core.Dom
         public string GridColumnEnd   { get; set; } = CssConstants.Auto;
         public string GridRowStart    { get; set; } = CssConstants.Auto;
         public string GridRowEnd      { get; set; } = CssConstants.Auto;
+
+        /// <summary>Transient parent→child conduit set by <see cref="CssLayoutEngineGrid"/> immediately before
+        /// it lays out a <c>subgrid</c> grid item, so the child adopts the parent's spanned tracks (CSS Grid
+        /// Level 2 §9). Layout-only — not a cascaded property, cleared by the parent after the child lays out.</summary>
+        internal GridSubgridContext? SubgridContext { get; set; }
 
         // Multi-column layout container properties. column-gap itself is shared with flex/grid (the
         // same CSS property, see FlexColumnGap above); these are the multicol-only ones.

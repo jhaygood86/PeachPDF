@@ -1073,13 +1073,24 @@ namespace PeachPDF.Html.Core.Parse
                 {
                     // Overwrites any earlier pending entry for this name (last write wins).
                     pendingVarProperties[prop.Name] = value;
+                    continue;
                 }
-                else
+
+                // A later plain value supersedes an earlier deferred var() value for the same property.
+                pendingVarProperties.Remove(prop.Name);
+
+                // Typed fast-path: a non-global-keyword value carries its Layer A parse as a CssProperty<T>
+                // (e.g. grid-template-* -> GridTemplate); apply it straight to the box without re-parsing. A
+                // global keyword's `value` is the RESOLVED string (parent/initial/revert target) and its
+                // DeclaredValue is not a typed carrier, so it falls through to the string setter.
+                if (!CssGlobalKeywords.TryParse(prop.Value, out _)
+                    && prop is Property typedProp
+                    && CssUtils.TrySetTypedPropertyValue(box, prop.Name, typedProp.DeclaredValue))
                 {
-                    // A later plain value supersedes an earlier deferred var() value for the same property.
-                    pendingVarProperties.Remove(prop.Name);
-                    CssUtils.SetPropertyValue(valueParser, box, prop.Name, value);
+                    continue;
                 }
+
+                CssUtils.SetPropertyValue(valueParser, box, prop.Name, value);
             }
         }
 
@@ -1221,7 +1232,12 @@ namespace PeachPDF.Html.Core.Parse
             }
 
             if (reparsed is { HasValue: true } property)
-                CssUtils.SetPropertyValue(valueParser, box, name, property.Value);
+            {
+                // Reuse the reparsed declaration's typed Layer A value (the single parse of the resolved
+                // string) when the property carries one; otherwise apply its string value.
+                if (!CssUtils.TrySetTypedPropertyValue(box, name, property.DeclaredValue))
+                    CssUtils.SetPropertyValue(valueParser, box, name, property.Value);
+            }
         }
 
 

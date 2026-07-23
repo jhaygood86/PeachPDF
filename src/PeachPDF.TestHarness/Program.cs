@@ -4510,6 +4510,83 @@ await SaveShowcaseAsync("css_grid_areas", "Layout", "CSS Grid Template Areas",
     "placement model of PeachPDF's grid engine.",
     gridAreasHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// ─── CSS Grid: subgrid (#262) ───────────────────────────────────────────────
+
+// Two subgrid idioms (CSS Grid Level 2 §9). A "detail rows" grid subgrids the COLUMN axis: each row is a
+// nested grid spanning all parent columns with grid-template-columns:subgrid, so every row's cells line up
+// on the same column tracks even though the rows are independent elements. A "card deck" subgrids the ROW
+// axis: each card spans the same three parent rows with grid-template-rows:subgrid, so the title / body /
+// footer bands align across cards regardless of how much content each band holds.
+var gridSubgridHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+      body { font: 12pt Arial, sans-serif; color: #222; margin: 24pt; }
+      h1 { font-size: 20pt; margin: 0 0 4pt; }
+      h2 { font-size: 13pt; margin: 20pt 0 8pt; color: #4a5568; }
+      .note { color: #718096; font-size: 10pt; margin: 0 0 8pt; }
+      .cell { color: #fff; padding: 8pt; border-radius: 4pt; font-size: 10pt; }
+
+      /* Column subgrid: the outer grid defines the columns; each row adopts them. */
+      .rows { display: grid; grid-template-columns: 120pt 1fr 80pt; gap: 8pt; }
+      .row  { grid-column: 1 / 4; display: grid; grid-template-columns: subgrid; gap: 8pt; }
+      .row .k { background: #2d3748; }
+      .row .v { background: #4a90d9; }
+      .row .n { background: #4caf72; text-align: right; }
+
+      /* Row subgrid: each card spans the same three rows and adopts their heights. Its single column is 1fr
+         (own, not subgridded) so the body text wraps to the card width. */
+      .deck  { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12pt; }
+      .card  { grid-row: span 3; display: grid; grid-template-columns: 1fr; grid-template-rows: subgrid; gap: 6pt; }
+      .card .title  { background: #2d3748; }
+      .card .body   { background: #4a90d9; }
+      .card .footer { background: #718096; }
+    </style>
+    </head>
+    <body>
+      <h1>Subgrid</h1>
+
+      <h2>Column subgrid &mdash; independent rows share the parent's columns</h2>
+      <p class="note">Each <code>.row</code> is its own grid with <code>grid-template-columns: subgrid</code>;
+      its three cells align to the parent's <code>120pt 1fr 80pt</code> tracks.</p>
+      <div class="rows">
+        <div class="row"><div class="cell k">Item</div><div class="cell v">Wireless keyboard</div><div class="cell n">$49</div></div>
+        <div class="row"><div class="cell k">SKU</div><div class="cell v">A very long descriptive value that stretches the flexible middle column</div><div class="cell n">$7</div></div>
+        <div class="row"><div class="cell k">Total</div><div class="cell v">Two line items</div><div class="cell n">$56</div></div>
+      </div>
+
+      <h2>Row subgrid &mdash; card bands align across the deck</h2>
+      <p class="note">Every <code>.card</code> spans the same three parent rows with
+      <code>grid-template-rows: subgrid</code>, so the title, body and footer bands line up even though each
+      card's body is a different length.</p>
+      <div class="deck">
+        <div class="card">
+          <div class="cell title">Starter</div>
+          <div class="cell body">Everything you need to get going.</div>
+          <div class="cell footer">$0 / mo</div>
+        </div>
+        <div class="card">
+          <div class="cell title">Pro</div>
+          <div class="cell body">A longer description that wraps onto several lines so this card's body band is the tallest of the three, and the shared row grows to fit it.</div>
+          <div class="cell footer">$12 / mo</div>
+        </div>
+        <div class="card">
+          <div class="cell title">Team</div>
+          <div class="cell body">For groups.</div>
+          <div class="cell footer">$40 / mo</div>
+        </div>
+      </div>
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("css_grid_subgrid", "Layout", "CSS Grid Subgrid",
+    "CSS Grid Level 2 `subgrid`: independent rows adopting the parent's columns (`grid-template-columns: " +
+    "subgrid`) so their cells align, and a card deck adopting the parent's rows (`grid-template-rows: " +
+    "subgrid`) so title/body/footer bands line up across cards — the nested grid adopts its parent's tracks.",
+    gridSubgridHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // The manifest that drives the website's /showcase page (see docs/showcase.html and
 // .github/workflows/pages.yml). Field names are camelCased for Liquid (site.data.showcases).
 var manifestJson = JsonSerializer.Serialize(showcaseManifest,

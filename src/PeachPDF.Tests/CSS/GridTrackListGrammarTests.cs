@@ -120,6 +120,42 @@ namespace PeachPDF.Tests.CSS
         }
 
         [Theory]
+        [InlineData("subgrid")]
+        [InlineData("subgrid [a]")]
+        [InlineData("subgrid [a b] [c]")]
+        public void Subgrid_Parses(string value)
+        {
+            var template = Parse(value);
+            Assert.NotNull(template);
+            Assert.True(template.IsSubgrid);
+            Assert.False(template.IsNone);
+            Assert.Empty(template.Tracks);
+        }
+
+        [Fact]
+        public void Subgrid_RecordsLineNamesAtSequentialLines()
+        {
+            // subgrid [a] [b c] [a] — the line-name list positions 'a' at lines 1 and 3, 'b'/'c' at line 2.
+            var template = Parse("subgrid [a] [b c] [a]");
+            Assert.NotNull(template);
+            Assert.True(template.IsSubgrid);
+            Assert.Equal(new[] { 1, 3 }, template.LineNames["a"]);
+            Assert.Equal(new[] { 2 }, template.LineNames["b"]);
+            Assert.Equal(new[] { 2 }, template.LineNames["c"]);
+        }
+
+        [Theory]
+        [InlineData("subgrid 1fr")]                 // no track size may follow subgrid
+        [InlineData("1fr subgrid")]                 // subgrid must be the first token
+        [InlineData("subgrid 100px [a]")]           // a track size mixed into the line-name list
+        [InlineData("subgrid repeat(2, [a])")]      // repeat() in a subgrid line-name list is a v1 deferral
+        [InlineData("subgrid [unclosed")]           // an unclosed [ is invalid
+        public void Subgrid_InvalidForms_ReturnNull(string value)
+        {
+            Assert.Null(Parse(value));
+        }
+
+        [Theory]
         [InlineData("100px", 1)]
         [InlineData("100px 200px auto", 3)]
         public void TrackSizeList_ParsesForAutoColumns(string value, int expected)
