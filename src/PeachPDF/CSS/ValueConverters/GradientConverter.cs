@@ -22,7 +22,14 @@ namespace PeachPDF.CSS
             return properties.Guard<GradientValue>();
         }
 
-        private static IPropertyValue[] ToGradientStops(List<List<Token>> values, int offset)
+        /// <summary>
+        /// The converter used to validate a colour stop's position. Length/percentage for linear and
+        /// radial gradients (the default); overridden by <see cref="ConicGradientConverter"/>, whose
+        /// angular stops are positioned by an &lt;angle&gt; or &lt;percentage&gt; instead.
+        /// </summary>
+        protected virtual IValueConverter StopPositionConverter => LengthOrPercentConverter;
+
+        private IPropertyValue[] ToGradientStops(List<List<Token>> values, int offset)
         {
             var stops = new IPropertyValue[values.Count - offset];
 
@@ -36,7 +43,7 @@ namespace PeachPDF.CSS
             return stops;
         }
 
-        private static IPropertyValue ToGradientStop(List<Token> value)
+        private IPropertyValue ToGradientStop(List<Token> value)
         {
             var color = default(IPropertyValue);
             var firstPosition = default(IPropertyValue);
@@ -45,7 +52,7 @@ namespace PeachPDF.CSS
 
             if (items.Count != 0)
             {
-                firstPosition = LengthOrPercentConverter.Convert(items[items.Count - 1]);
+                firstPosition = StopPositionConverter.Convert(items[items.Count - 1]);
 
                 if (firstPosition != null) items.RemoveAt(items.Count - 1);
             }
@@ -56,9 +63,10 @@ namespace PeachPDF.CSS
             // first. Both are kept, in source order, so the value round-trips as authored - the render
             // layer (CssValueParser.ParseLinearGradient) reads the property's serialized value and already
             // expands two positions into two stops, so dropping one here collapsed the solid band it draws.
+            // (For conic gradients the same two-position shorthand applies, positioned by <angle>.)
             if (firstPosition != null && items.Count != 0)
             {
-                var earlier = LengthOrPercentConverter.Convert(items[items.Count - 1]);
+                var earlier = StopPositionConverter.Convert(items[items.Count - 1]);
 
                 if (earlier != null)
                 {
@@ -121,9 +129,10 @@ namespace PeachPDF.CSS
             }
         }
 
-        // Factory used by derived classes to return a placeholder IPropertyValue
-        // for "in <colorspace>" modifier groups that are otherwise unrecognized.
-        protected static IPropertyValue CreateInColorSpacePlaceholder(IEnumerable<Token> tokens)
+        // Factory used by derived classes to return an opaque placeholder IPropertyValue that echoes
+        // its tokens back as CssText - for a group whose grammar is accepted but not further modelled
+        // here (e.g. an "in <colorspace>" modifier, or a conic bare-0 / calc() angular stop position).
+        protected static IPropertyValue CreatePlaceholder(IEnumerable<Token> tokens)
             => new PlaceholderValue(tokens);
 
         private sealed class PlaceholderValue : IPropertyValue
@@ -191,27 +200,82 @@ namespace PeachPDF.CSS
             {
                 if (t.Type == TokenType.Ident &&
                     string.Equals(t.Data, "in", System.StringComparison.OrdinalIgnoreCase))
-                    return CreateInColorSpacePlaceholder(value);
+                    return CreatePlaceholder(value);
             }
             return _converter.Convert(value);
         }
     }
 
-    // Permissive validator for conic-gradient — actual parsing is in CssValueParser.ParseConicGradient
-    internal sealed class ConicGradientConverter : IValueConverter
+    // Validates conic-gradient() at parse time (mirroring RadialGradientConverter), so a malformed
+    // value is dropped per CSS Cascade §4.1 instead of silently painting nothing at render. The
+    // grammar matches CssValueParser.ParseConicGradient exactly.
+    internal sealed class ConicGradientConverter : GradientConverter
     {
-        public IPropertyValue Convert(IEnumerable<Token> value) => new PassThroughValue(value);
-        public IPropertyValue Construct(Property[] properties) => null;
+        private readonly IValueConverter _prelude;
 
-        private sealed class PassThroughValue : IPropertyValue
+        public ConicGradientConverter()
         {
-            public PassThroughValue(IEnumerable<Token> tokens)
+            // [ from <angle> ]? [ at <position> ]? — same combinator shape RadialGradientConverter
+            // uses for its own prelude, just with conic's from/at keywords.
+            _prelude = WithAny(
+                AngleConverter.StartsWithKeyword(Keywords.From).Option(),
+                PointConverter.StartsWithKeyword(Keywords.At).Option(Point.Center));
+        }
+
+        // A conic <angular-color-stop> is positioned by <angle> | <percentage>, with the same bare-0
+        // and calc()-family acceptance the renderer's TryParseConicAngle allows (AngleConverter already
+        // covers calc()-typed angles; a length such as 5px is correctly rejected).
+        protected override IValueConverter StopPositionConverter { get; } =
+            AngleConverter.Or(PercentConverter).Or(new ZeroOrCalcPositionConverter());
+
+        protected override IPropertyValue ConvertFirstArgument(IEnumerable<Token> value)
+        {
+            // "in <colorspace> [...]" — accept the whole first group as a modifier (as linear/radial do).
+            foreach (var t in value)
             {
-                Original = new TokenValue(tokens);
+                if (t.Type == TokenType.Ident &&
+                    string.Equals(t.Data, "in", System.StringComparison.OrdinalIgnoreCase))
+                    return CreatePlaceholder(value);
             }
-            public string CssText => Original.Text;
-            public TokenValue Original { get; }
-            public TokenValue ExtractFor(string name) => Original;
+
+            // If the first non-whitespace token is an ident that is not a prelude keyword, this comma
+            // group is a color stop, not a prelude — return null so it flows to stop validation.
+            Token first = null;
+            foreach (var t in value)
+            {
+                if (t.Type != TokenType.Whitespace) { first = t; break; }
+            }
+            if (first != null && first.Type == TokenType.Ident)
+            {
+                var id = first.Data;
+                if (!string.Equals(id, Keywords.From, System.StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(id, Keywords.At, System.StringComparison.OrdinalIgnoreCase))
+                    return null;
+            }
+
+            return _prelude.Convert(value);
+        }
+
+        // Accepts a bare `0` (the universal zero, which <angle> otherwise requires a unit for) or a
+        // single calc()-family function used as an angular stop position — matching the corresponding
+        // branches of CssValueParser.TryParseConicAngle, using the same primitives.
+        private sealed class ZeroOrCalcPositionConverter : IValueConverter
+        {
+            public IPropertyValue Convert(IEnumerable<Token> value)
+            {
+                var only = value.OnlyOrDefault();
+                if (only == null) return null;
+
+                if (only.Type == TokenType.Number && ((NumberToken)only).Value == 0f)
+                    return CreatePlaceholder(value);
+
+                if (only is FunctionToken function && CalcParser.IsCalcFamily(function.Data))
+                    return CreatePlaceholder(value);
+
+                return null;
+            }
+
+            public IPropertyValue Construct(Property[] properties) => null;
         }
     }
 
@@ -243,7 +307,7 @@ namespace PeachPDF.CSS
             {
                 if (t.Type == TokenType.Ident &&
                     string.Equals(t.Data, "in", System.StringComparison.OrdinalIgnoreCase))
-                    return CreateInColorSpacePlaceholder(value);
+                    return CreatePlaceholder(value);
             }
 
             // If the first non-whitespace token is an ident that is not a known gradient
