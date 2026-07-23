@@ -79,20 +79,42 @@ namespace PeachPDF.Tests.Integration
             Assert.Null(container.CssPageSize);
         }
 
-        [Fact]
-        public async Task Size_UnparseableToken_IsSkipped_ValidDimensionStillResolves()
+        [Theory]
+        // Issue #163: a `size` value with any token that isn't a valid component is invalid *as a
+        // whole* (CSS Syntax §9) and must be dropped, keeping the configured page size — not partially
+        // honored by squaring the one dimension that happened to parse.
+        [InlineData("nonsense 40mm")]  // an unparseable token beside a valid length
+        [InlineData("40em 50%")]       // the issue's example: `%` is not a <length> for `size`
+        [InlineData("40em 0")]         // a degenerate zero dimension
+        [InlineData("-5em 40mm")]      // a negative dimension
+        [InlineData("10em 20em 30em")] // more than two lengths
+        [InlineData("a4 40em")]        // a named size can't combine with a length
+        public async Task Size_InvalidToken_DropsWholeDeclaration(string size)
         {
-            // A token that is neither a named size, an orientation keyword, nor a parseable length is
-            // skipped; a following valid dimension still resolves (single dimension → square page).
+            var container = await BuildAsync($$"""
+                <!DOCTYPE html><html><head><style>
+                @page { size: {{size}}; }
+                </style></head><body><p>content</p></body></html>
+                """);
+
+            Assert.Null(container.CssPageSize);
+        }
+
+        [Fact]
+        public async Task Size_NamedWithOrientation_StillResolves()
+        {
+            // Regression guard: the valid [ <page-size> || orientation ] branch is unaffected.
             var container = await BuildAsync("""
                 <!DOCTYPE html><html><head><style>
-                @page { size: nonsense 40mm; }
+                @page { size: a4 landscape; }
                 </style></head><body><p>content</p></body></html>
                 """);
 
             Assert.NotNull(container.CssPageSize);
-            Assert.Equal(40 * 72.0 / 25.4, container.CssPageSize!.Value.Width, 3);
-            Assert.Equal(40 * 72.0 / 25.4, container.CssPageSize!.Value.Height, 3);
+            // A4 is 595.28 × 841.89pt portrait; `landscape` swaps to width > height.
+            Assert.True(container.CssPageSize!.Value.Width > container.CssPageSize!.Value.Height);
+            Assert.Equal(841.89, container.CssPageSize!.Value.Width, 2);
+            Assert.Equal(595.28, container.CssPageSize!.Value.Height, 2);
         }
 
         private static async Task<HtmlContainerInt> BuildAsync(string html)
