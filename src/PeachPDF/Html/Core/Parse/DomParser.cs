@@ -269,9 +269,9 @@ namespace PeachPDF.Html.Core.Parse
             // rem stays root-based. The base font-size is the last non-empty one declared on a base @page rule
             // (document order = cascade order for equal specificity).
             var basePageFontSize = cssData.EnumerateRulesRecursive().OfType<PageRule>()
-                .Where(r => r.Selector == null && r.Style is { } st && st.FontSize.Length > 0)
-                .Select(r => r.Style.FontSize)
-                .LastOrDefault();
+                .Where(r => r.Selector == null)
+                .Select(r => r.Style?.FontSize)
+                .LastOrDefault(fs => !string.IsNullOrEmpty(fs));
             var emPt = string.IsNullOrEmpty(basePageFontSize)
                 ? root.GetEmHeight() / pixelsPerPoint
                 : MarginBoxRenderer.ResolveFontSizePt(basePageFontSize);
