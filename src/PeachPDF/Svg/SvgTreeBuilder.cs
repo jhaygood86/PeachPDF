@@ -283,8 +283,12 @@ namespace PeachPDF.Svg
             if (depth + 1 > MaxImageNestingDepth)
                 return null;
 
+            // Cheap gate: skip parsing a payload with no <image> element. Match both the unprefixed
+            // "<image" and a namespace-prefixed "<svg:image" (whose local name is still "image", which
+            // CollectImageHrefs matches on) - the ":image" substring covers the latter without a parse.
             var text = Encoding.UTF8.GetString(bytes);
-            if (text.IndexOf("<image", StringComparison.OrdinalIgnoreCase) < 0)
+            if (text.IndexOf("<image", StringComparison.OrdinalIgnoreCase) < 0
+                && text.IndexOf(":image", StringComparison.OrdinalIgnoreCase) < 0)
                 return null;
 
             if (!TryParseSvgRoot(text, out var nestedRoot))

@@ -1303,6 +1303,31 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task InlineSvg_ImageWithNetworkSvgHref_NamespacePrefixedNestedImage_EmbedsLeafXObject()
+        {
+            // #251 gate robustness: the nested SVG writes its image element namespace-prefixed
+            // (<svg:image>) - its local name is still "image", so it must be prefetched. The cheap
+            // "<image"/":image" text gate has to catch the prefixed form too, matching CollectImageHrefs
+            // (which keys off the local name).
+            var scene = """<svg:svg xmlns:svg="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><svg:image x="0" y="0" width="100" height="100" href="https://example.test/leaf.png"/></svg:svg>""";
+
+            var loader = new InMemoryNetworkLoader(DocumentUri, primaryHtml: """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <image x="0" y="0" width="100" height="100" href="https://example.test/scene.svg"/>
+                </svg>
+                </body></html>
+                """);
+            loader.AddTextResource("https://example.test/scene.svg", scene, "image/svg+xml");
+            loader.AddResource("https://example.test/leaf.png", Convert.FromBase64String(PngBase64), "image/png");
+
+            var config = new PdfGenerateConfig { NetworkLoader = loader, PageSize = PageSize.A4 };
+            var doc = await new PdfGenerator().GeneratePdf(null, config);
+
+            Assert.Contains("/Subtype /Image", GetPdfText(doc));
+        }
+
+        [Fact]
         public async Task InlineSvg_ImageWithNetworkSvgHref_MalformedNestedPayload_RendersRestOfPage()
         {
             // #251 robustness: the fetched SVG payload contains an "<image" (so it passes the cheap
