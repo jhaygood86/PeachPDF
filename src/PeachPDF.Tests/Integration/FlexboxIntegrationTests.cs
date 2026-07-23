@@ -1081,6 +1081,27 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task Column_NonStretch_OverflowingItemWithCrossMargins_FitsWithinContainer()
+        {
+            // An overflowing non-stretch column item with horizontal margins is capped at the container's
+            // inner width MINUS its margins, so it stays inside the container rather than re-expanding to the
+            // full width and pushing the margins into overflow. Container 200px=150pt, margins 20px=15pt each
+            // => available 120pt.
+            var html = Wrap(@"
+                <div id='c' style='display:flex; flex-direction:column; width:200px; align-items:center;'>
+                    <div id='chip' style='margin:0 20px;'>A much longer label than fits the container</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var c = FindById(root, "c")!;
+            var chip = FindById(root, "chip")!;
+
+            Assert.Equal(120.0, chip.ActualWidth, 1.5);            // container 150pt − 2×15pt margins
+            Assert.True(chip.Location.X >= c.Location.X - 0.5, "stays within the container left edge");
+            Assert.True(chip.Location.X + chip.ActualWidth <= c.Location.X + c.ActualWidth + 0.5,
+                "stays within the container right edge");
+        }
+
+        [Fact]
         public async Task Column_AlignItemsCenter_ReplacedItem_Centers()
         {
             // The #131 cover case: a fixed-size replaced item (96x48 SVG => 72x36pt) centers horizontally

@@ -442,8 +442,13 @@ namespace PeachPDF.Html.Core.Dom
             // Only auto-width items shrink; a definite width is already the item's cross size.
             if (CssValueParser.IsValidLength(box.Width)) return;
 
-            // Available cross size: the container's inner width (0 when unknown → no cap).
-            double available = containerCrossSize > 0 ? containerCrossSize : double.MaxValue;
+            // Available cross size: the container's inner width minus the item's own cross margins (0 when
+            // the container cross size is unknown → no cap). Subtracting the margins keeps an overflowing item
+            // (content wider than the container) at the container-minus-margins width block layout already
+            // gave it, rather than re-expanding it to the full container width and pushing the margins into
+            // overflow.
+            double crossMargins = box.ActualMarginLeft + box.ActualMarginRight;
+            double available = containerCrossSize > 0 ? Math.Max(0, containerCrossSize - crossMargins) : double.MaxValue;
             double fitOuter = await CssLayoutEngine.GetFitContentWidth(g, box, available);
 
             // Clamp by the cross-axis min/max-width (outer sizes), min winning over max per CSS 2.1 §10.4.
