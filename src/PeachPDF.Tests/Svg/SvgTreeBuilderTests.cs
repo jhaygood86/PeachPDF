@@ -1001,11 +1001,105 @@ namespace PeachPDF.Tests.Svg
         }
 
         [Fact]
-        public void Image_NonDataUriHref_LeavesUnresolved()
+        public void Image_NonDataUriHref_WithoutPrefetch_LeavesUnresolved()
         {
-            // A network/file href is a documented v1 gap (SvgTreeBuilder.Build is synchronous) - the
-            // element still builds, it just renders nothing rather than throwing or blocking.
+            // The synchronous Build resolves a non-data: href only from a prefetched-resource map. With
+            // no map supplied (this direct build), the element still builds - it just renders nothing
+            // rather than throwing. The async prefetch (SvgTreeBuilder.PrefetchImageResourcesAsync) that
+            // populates that map runs in the callers; see SvgIntegrationTests for the end-to-end fetch.
             var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><image width="10" height="10" href="https://example.com/x.png"/></svg>""");
+
+            var image = Assert.IsType<SvgImageElement>(Assert.Single(document.Children));
+            Assert.Null(image.Image);
+            Assert.Null(image.NestedDocument);
+        }
+
+        [Fact]
+        public void Image_NonDataUriHref_WithPrefetchedRaster_ResolvesImage()
+        {
+            var prefetched = new System.Collections.Generic.Dictionary<string, SvgTreeBuilder.SvgImageResource>
+            {
+                ["https://example.com/x.png"] = new(MakePngBytes(), IsSvg: false),
+            };
+
+            var root = XDocument.Parse("""<svg xmlns="http://www.w3.org/2000/svg"><image width="10" height="10" href="https://example.com/x.png"/></svg>""").Root!;
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), Adapter, prefetchedImages: prefetched);
+
+            var image = Assert.IsType<SvgImageElement>(Assert.Single(document.Children));
+            Assert.NotNull(image.Image);
+            Assert.Null(image.NestedDocument);
+        }
+
+        [Fact]
+        public void Image_NonDataUriHref_WithPrefetchedSvg_ResolvesNestedDocument()
+        {
+            var innerSvg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="#00ff00"/></svg>""";
+            var prefetched = new System.Collections.Generic.Dictionary<string, SvgTreeBuilder.SvgImageResource>
+            {
+                ["https://example.com/inner.svg"] = new(System.Text.Encoding.UTF8.GetBytes(innerSvg), IsSvg: true),
+            };
+
+            var root = XDocument.Parse("""<svg xmlns="http://www.w3.org/2000/svg"><image width="10" height="10" href="https://example.com/inner.svg"/></svg>""").Root!;
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), Adapter, prefetchedImages: prefetched);
+
+            var image = Assert.IsType<SvgImageElement>(Assert.Single(document.Children));
+            Assert.Null(image.Image);
+            Assert.NotNull(image.NestedDocument);
+            var circle = Assert.IsType<SvgCircleElement>(Assert.Single(image.NestedDocument!.Children));
+            Assert.Equal(RColor.FromArgb(0x00, 0xff, 0x00), circle.Fill.Color);
+        }
+
+        [Fact]
+        public void Image_PrefetchedSvgWithStyle_ResolvesNestedDocument()
+        {
+            // A prefetched SVG payload carrying its own <style> (and a custom property) exercises the
+            // SVG-local CssData / var-context branch of BuildNestedSvgDocument, not just the bare case.
+            var innerSvg = """
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">
+                  <style>:root { --c: #00ff00; } circle { fill: var(--c); }</style>
+                  <circle cx="5" cy="5" r="5"/>
+                </svg>
+                """;
+            var prefetched = new System.Collections.Generic.Dictionary<string, SvgTreeBuilder.SvgImageResource>
+            {
+                ["https://example.com/styled.svg"] = new(System.Text.Encoding.UTF8.GetBytes(innerSvg), IsSvg: true),
+            };
+
+            var root = XDocument.Parse("""<svg xmlns="http://www.w3.org/2000/svg"><image width="10" height="10" href="https://example.com/styled.svg"/></svg>""").Root!;
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), Adapter, prefetchedImages: prefetched);
+
+            var image = Assert.IsType<SvgImageElement>(Assert.Single(document.Children));
+            Assert.NotNull(image.NestedDocument);
+            var circle = Assert.IsType<SvgCircleElement>(Assert.Single(image.NestedDocument!.Children));
+            Assert.Equal(RColor.FromArgb(0x00, 0xff, 0x00), circle.Fill.Color);
+        }
+
+        [Fact]
+        public void Image_PrefetchedMalformedSvg_LeavesUnresolvedRatherThanThrowing()
+        {
+            var prefetched = new System.Collections.Generic.Dictionary<string, SvgTreeBuilder.SvgImageResource>
+            {
+                ["https://example.com/broken.svg"] = new(System.Text.Encoding.UTF8.GetBytes("<svg><not-closed"), IsSvg: true),
+            };
+
+            var root = XDocument.Parse("""<svg xmlns="http://www.w3.org/2000/svg"><image width="10" height="10" href="https://example.com/broken.svg"/></svg>""").Root!;
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), Adapter, prefetchedImages: prefetched);
+
+            var image = Assert.IsType<SvgImageElement>(Assert.Single(document.Children));
+            Assert.Null(image.Image);
+            Assert.Null(image.NestedDocument);
+        }
+
+        [Fact]
+        public void Image_PrefetchedUndecodableRaster_LeavesUnresolvedRatherThanThrowing()
+        {
+            var prefetched = new System.Collections.Generic.Dictionary<string, SvgTreeBuilder.SvgImageResource>
+            {
+                ["https://example.com/junk.png"] = new(new byte[] { 1, 2, 3, 4 }, IsSvg: false),
+            };
+
+            var root = XDocument.Parse("""<svg xmlns="http://www.w3.org/2000/svg"><image width="10" height="10" href="https://example.com/junk.png"/></svg>""").Root!;
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), Adapter, prefetchedImages: prefetched);
 
             var image = Assert.IsType<SvgImageElement>(Assert.Single(document.Children));
             Assert.Null(image.Image);
