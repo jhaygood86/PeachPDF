@@ -513,6 +513,7 @@ namespace PeachPDF.Html.Core.Dom
                 HtmlConstants.Hr => new CssBoxHr(parent, tag),
                 HtmlConstants.Svg => new CssBoxSvg(parent, tag),
                 HtmlConstants.Object => new CssBoxObject(parent, tag),
+                HtmlConstants.Video => new CssBoxVideo(parent, tag),
                 _ => new CssBox(parent, tag)
             };
         }

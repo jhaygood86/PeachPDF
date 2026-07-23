@@ -4108,6 +4108,46 @@ await SaveShowcaseAsync("charts_css", "Charts & Data Viz", "Charts.css",
     "exercising @property, aspect-ratio, clip-path, box-shadow, logical properties, and conic/linear gradients together.",
     chartsHtml, pdfConfig);
 
+// ── object-fit / object-position on a replaced <img> ──────────────────────────────────
+var objectFitImg = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAAAwCAIAAABhdOiYAAABrElEQVR4nO2aO04CURSGDxOWYWOnC7CkcQU0IolBGisM4oMoIWgIEgTjI0iwRzBRXINuwwW4D47Flefg/BVzpvi/6s65d5J/vpybzNxMTJNJCSSxnvN05Kl6op6qp6O/gWhsWl9cEPunHsEbbz7XAh7fC7ZDKAhAQQAKAlAQgIIAFASgIAAFASgIEN/cKMH3d+uQq6W8/RPwjcIOAlAQgIIAFASIWweYUn09nb1spZtWSWaJhKB6v+AvXryVROR+txF6nDnst1ijf+QGsXlc8ey9bBdNxFxQ8yUvYzULU5PiybBikGyMpaDb3qGI+NXM4mYLw8uQMvmw32IRx0zQXS8nqH0cbk3+42rlmZbBDgJQEICCABQEMBNUzD6LiCo+bHJrOju1lWdaBjsIYCnoPNsV1ERutp26DimTD+MOKu13RERV/ZomxcdU3SDZGPstVs48uYHO44rmX/OROO6oZNqeam1wPFtspZtRODOPhCBHde9h7j8o6zyOiMSILhQEoCAABQHi3wfF4BWJrs1BTGhsfQ0CZtlBAAoCUBCAggAUBKAgAAUBKAhAQYBfzx35oNDJUOwAAAAASUVORK5CYII=";
+static string FitCell(string img, string fit) =>
+    "<div class=\"cell\">" +
+    $"<div class=\"frame\"><img src=\"{img}\" style=\"width:120px;height:120px;object-fit:{fit}\"></div>" +
+    $"<div class=\"lbl\">object-fit: {fit}</div></div>";
+static string PosCell(string img, string pos) =>
+    "<div class=\"cell\">" +
+    $"<div class=\"frame\"><img src=\"{img}\" style=\"width:120px;height:120px;object-fit:cover;object-position:{pos}\"></div>" +
+    $"<div class=\"lbl\">object-position: {pos}</div></div>";
+var objectFitHtml =
+    "<html><head><style>" +
+    "body { font-family: sans-serif; margin: 24px; color: #1a1a1a; }" +
+    "h2 { font-size: 20px; margin: 0 0 4px; } h3 { font-size: 14px; margin: 20px 0 10px; }" +
+    ".note { color: #555; font-size: 12px; margin: 0 0 4px; }" +
+    ".row { display: flex; flex-wrap: wrap; gap: 14px; }" +
+    ".cell { font-size: 11px; color: #555; }" +
+    ".frame { width: 120px; height: 120px; border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden; background: #f1f5f9; }" +
+    ".lbl { margin-top: 6px; font-family: monospace; }" +
+    "</style></head><body>" +
+    "<h2>object-fit &amp; object-position</h2>" +
+    "<p class=\"note\">The same 2:1 image placed in a 120&times;120 box. Corner markers (red/green/yellow/white) and the center dot make the fit and crop obvious.</p>" +
+    "<h3>object-fit</h3>" +
+    "<div class=\"row\">" +
+    FitCell(objectFitImg, "fill") + FitCell(objectFitImg, "contain") + FitCell(objectFitImg, "cover") +
+    FitCell(objectFitImg, "none") + FitCell(objectFitImg, "scale-down") +
+    "</div>" +
+    "<h3>object-position (with object-fit: cover)</h3>" +
+    "<div class=\"row\">" +
+    PosCell(objectFitImg, "left") + PosCell(objectFitImg, "center") + PosCell(objectFitImg, "right") +
+    PosCell(objectFitImg, "top") + PosCell(objectFitImg, "bottom") +
+    "</div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("object_fit", "Images & Replaced Content", "object-fit & object-position",
+    "The CSS object-fit (fill/contain/cover/none/scale-down) and object-position properties applied to a " +
+    "replaced <img>: the same 2:1 image sized/cropped/positioned inside a fixed square box, with corner " +
+    "markers making each fit and crop obvious.",
+    objectFitHtml, pdfConfig);
+
 // ── Modern CSS colors: oklch/oklab/lab/lch palette + color-mix() opacity ──────────────
 var modernColorHtml =
     "<html><head><style>" +
