@@ -1216,6 +1216,120 @@ namespace PeachPDF.Tests.Integration
             Assert.Contains("/Subtype /Image", GetPdfText(doc));
         }
 
+        [Fact]
+        public async Task InlineSvg_ImageWithNetworkSvgHref_ContainingNetworkImage_EmbedsLeafXObject()
+        {
+            // #251: the outer <image> references a fetched SVG whose OWN <image> references a network
+            // raster. The recursive prefetch must descend into the fetched SVG payload and fetch the
+            // doubly-nested leaf, embedding it as a real image XObject - impossible before the fix
+            // (the nested document's hrefs were never collected by the outer, single-level prefetch).
+            var scene = """
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+                  <image x="0" y="0" width="100" height="100" href="https://example.test/leaf.png"/>
+                </svg>
+                """;
+
+            var loader = new InMemoryNetworkLoader(DocumentUri, primaryHtml: """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <image x="0" y="0" width="100" height="100" href="https://example.test/scene.svg"/>
+                </svg>
+                </body></html>
+                """);
+            loader.AddTextResource("https://example.test/scene.svg", scene, "image/svg+xml");
+            loader.AddResource("https://example.test/leaf.png", Convert.FromBase64String(PngBase64), "image/png");
+
+            var config = new PdfGenerateConfig { NetworkLoader = loader, PageSize = PageSize.A4 };
+            var doc = await new PdfGenerator().GeneratePdf(null, config);
+
+            Assert.Contains("/Subtype /Image", GetPdfText(doc));
+        }
+
+        [Fact]
+        public async Task InlineSvg_ImageWithDataUriSvgHref_ContainingNetworkImage_EmbedsLeafXObject()
+        {
+            // #251, data:-outer variant: the outer <image> is a data:image/svg+xml payload whose own
+            // <image> references a network raster. The prefetch must decode the data: SVG, find the
+            // nested network href, and fetch it.
+            var scene = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><image x="0" y="0" width="100" height="100" href="https://example.test/leaf.png"/></svg>""";
+            var dataUri = "data:image/svg+xml;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(scene));
+
+            var loader = new InMemoryNetworkLoader(DocumentUri, primaryHtml: $"""
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <image x="0" y="0" width="100" height="100" href="{dataUri}"/>
+                </svg>
+                </body></html>
+                """);
+            loader.AddResource("https://example.test/leaf.png", Convert.FromBase64String(PngBase64), "image/png");
+
+            var config = new PdfGenerateConfig { NetworkLoader = loader, PageSize = PageSize.A4 };
+            var doc = await new PdfGenerator().GeneratePdf(null, config);
+
+            Assert.Contains("/Subtype /Image", GetPdfText(doc));
+        }
+
+        [Fact]
+        public async Task StandaloneSvgImg_DoublyNestedImage_RelativeHref_ResolvesAgainstInnerSvgLocation()
+        {
+            // #251 + base resolution: <img> loads /outer.svg, whose <image> references
+            // /nested/scene.svg (absolute), whose OWN <image> uses a RELATIVE href. That inner
+            // relative href must resolve against scene.svg's own location (/nested/leaf.png), NOT
+            // the document's or outer.svg's - proving the recursive prefetch threads each fetched
+            // URI as the base for the next level down.
+            var outer = """
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+                  <image x="0" y="0" width="100" height="100" href="https://example.test/nested/scene.svg"/>
+                </svg>
+                """;
+            var scene = """
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+                  <image x="0" y="0" width="100" height="100" href="leaf.png"/>
+                </svg>
+                """;
+
+            var loader = new InMemoryNetworkLoader(DocumentUri, primaryHtml: """
+                <!DOCTYPE html><html><body><img src="https://example.test/outer.svg" width="100" height="100"></body></html>
+                """);
+            loader.AddTextResource("https://example.test/outer.svg", outer, "image/svg+xml");
+            loader.AddTextResource("https://example.test/nested/scene.svg", scene, "image/svg+xml");
+            // Only served under /nested/ - a wrong base (document or outer.svg root) would miss it.
+            loader.AddResource("https://example.test/nested/leaf.png", Convert.FromBase64String(PngBase64), "image/png");
+
+            var config = new PdfGenerateConfig { NetworkLoader = loader, PageSize = PageSize.A4 };
+            var doc = await new PdfGenerator().GeneratePdf(null, config);
+
+            Assert.Contains("/Subtype /Image", GetPdfText(doc));
+        }
+
+        [Fact]
+        public async Task InlineSvg_ImageWithNetworkSvgHref_MalformedNestedPayload_RendersRestOfPage()
+        {
+            // #251 robustness: the fetched SVG payload contains an "<image" (so it passes the cheap
+            // recursion gate) but is malformed XML. The nested prefetch parse must fail softly - the
+            // outer <image> renders nothing and the rest of the page still paints, no abort.
+            var scene = """<svg xmlns="http://www.w3.org/2000/svg"><image href="https://example.test/leaf.png"</svg>""";
+
+            var loader = new InMemoryNetworkLoader(DocumentUri, primaryHtml: """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <image x="0" y="0" width="100" height="100" href="https://example.test/scene.svg"/>
+                  <rect x="0" y="0" width="10" height="10" fill="#000000"/>
+                </svg>
+                </body></html>
+                """);
+            loader.AddTextResource("https://example.test/scene.svg", scene, "image/svg+xml");
+            loader.AddResource("https://example.test/leaf.png", Convert.FromBase64String(PngBase64), "image/png");
+
+            var config = new PdfGenerateConfig { NetworkLoader = loader, PageSize = PageSize.A4, CompressContentStreams = false };
+            var pdfText = GetPdfText(await new PdfGenerator().GeneratePdf(null, config));
+
+            // The render completed and the sibling rect still painted; the malformed nested SVG (and
+            // therefore its leaf raster) simply rendered nothing.
+            Assert.Contains("\nf\n", pdfText);
+            Assert.DoesNotContain("/Subtype /Image", pdfText);
+        }
+
         /// <summary>
         /// Counts non-overlapping occurrences of <paramref name="operatorText"/> (e.g. <c>"Tj"</c>) in
         /// <paramref name="pdfText"/> - used instead of checking for literal readable text, since this

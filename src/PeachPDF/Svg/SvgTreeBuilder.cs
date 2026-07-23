@@ -70,13 +70,20 @@ namespace PeachPDF.Svg
             _prefetchedImages = prefetchedImages;
         }
 
+        /// <summary>Guards against a pathological/malicious nesting of <c>&lt;image&gt;</c>-referenced SVG documents.</summary>
+        private const int MaxImageNestingDepth = 8;
+
         /// <summary>
         /// A network/file <c>&lt;image&gt;</c> resource fetched by <see cref="PrefetchImageResourcesAsync"/>
         /// before the synchronous build runs: the raw response bytes plus whether they should be
         /// interpreted as an SVG document (detected from the href's <c>.svg</c> extension or a
         /// <c>Content-Type: image/svg+xml</c> response header) rather than a raster image.
+        /// <paramref name="NestedImages"/> carries the recursively-prefetched resources for an SVG
+        /// payload's own <c>&lt;image&gt;</c> hrefs (keyed by that nested document's raw hrefs, resolved
+        /// against its own base) - null for a raster resource or an SVG with no fetchable nested images
+        /// (issue #251).
         /// </summary>
-        internal readonly record struct SvgImageResource(byte[] Bytes, bool IsSvg);
+        internal readonly record struct SvgImageResource(byte[] Bytes, bool IsSvg, IReadOnlyDictionary<string, SvgImageResource>? NestedImages = null);
 
         /// <summary>
         /// The inheritable SVG presentation properties (fill/stroke/stroke-width/stroke-miterlimit/
@@ -170,9 +177,23 @@ namespace PeachPDF.Svg
         /// against the host document base).
         /// </param>
         /// <returns>A map of raw href → fetched resource, or null when nothing was fetched.</returns>
-        public static async ValueTask<IReadOnlyDictionary<string, SvgImageResource>?> PrefetchImageResourcesAsync(
-            ISvgSourceNode root, HtmlContainerInt container, RUri? baseUriOverride = null)
+        public static ValueTask<IReadOnlyDictionary<string, SvgImageResource>?> PrefetchImageResourcesAsync(
+            ISvgSourceNode root, HtmlContainerInt container, RUri? baseUriOverride = null) =>
+            PrefetchTreeAsync(root, container, baseUriOverride, depth: 0);
+
+        /// <summary>
+        /// Recursive worker for <see cref="PrefetchImageResourcesAsync"/>: fetches every non-<c>data:</c>
+        /// <c>&lt;image&gt;</c> href in <paramref name="root"/>'s tree and, for a fetched (or <c>data:</c>)
+        /// <c>image/svg+xml</c> payload, recurses into it so the nested document's own <c>&lt;image&gt;</c>
+        /// hrefs are prefetched too (issue #251) - keyed into a per-payload child map so relative hrefs in
+        /// different nested documents can't collide across their differing bases. Depth-guarded.
+        /// </summary>
+        private static async ValueTask<IReadOnlyDictionary<string, SvgImageResource>?> PrefetchTreeAsync(
+            ISvgSourceNode root, HtmlContainerInt container, RUri? baseUriOverride, int depth)
         {
+            if (depth > MaxImageNestingDepth)
+                return null;
+
             var hrefs = new HashSet<string>(StringComparer.Ordinal);
             CollectImageHrefs(root, hrefs);
 
@@ -180,49 +201,115 @@ namespace PeachPDF.Svg
 
             foreach (var href in hrefs)
             {
-                // data: URIs decode in-memory in BuildImage - no fetch needed.
-                if (DataUriUtils.TryDecodeDataUri(href, out _, out _))
-                    continue;
-
-                var uri = CommonUtils.ResolveAgainstDocumentBase(container, href, baseUriOverride);
-                if (uri is not { IsAbsoluteUri: true })
-                    continue;
-
-                try
-                {
-                    var response = await container.Adapter.GetResourceStream(uri);
-                    if (response?.ResourceStream is not { } stream)
-                        continue;
-
-                    byte[] bytes;
-                    await using (stream)
-                    {
-                        using var buffer = new MemoryStream();
-                        await stream.CopyToAsync(buffer);
-                        bytes = buffer.ToArray();
-                    }
-
-                    // Detect SVG the same way ImageLoadHandler does: the href's .svg extension or a
-                    // Content-Type: image/svg+xml response header.
-                    var srcHintsSvg = href.Split('?', '#')[0].EndsWith(".svg", StringComparison.OrdinalIgnoreCase);
-                    var contentTypeHintsSvg = response.ResponseHeaders?.TryGetValue("Content-Type", out var contentTypeValues) == true
-                        && contentTypeValues.Select(ContentType.Parse).Any(ct => ct.IsMimeType("image", "svg+xml"));
-
-                    (resources ??= new Dictionary<string, SvgImageResource>(StringComparer.Ordinal))[href] =
-                        new SvgImageResource(bytes, srcHintsSvg || contentTypeHintsSvg);
-                }
-                catch (Exception)
-                {
-                    // A transport failure (DNS/connection/TLS/timeout thrown by a user-supplied network
-                    // loader) or a malformed Content-Type header must not abort the whole render: this
-                    // <image> is skipped and left blank (the same outcome as a missing resource), while
-                    // the rest of the SVG - and any other prefetched images - still render. This is a
-                    // deliberate swallow; HtmlContainerInt.ReportError is [DoesNotReturn] (it always
-                    // throws HtmlRenderException), so it can't be used here without aborting.
-                }
+                if (await PrefetchImageAsync(href, container, baseUriOverride, depth) is { } resource)
+                    (resources ??= new Dictionary<string, SvgImageResource>(StringComparer.Ordinal))[href] = resource;
             }
 
             return resources;
+        }
+
+        /// <summary>
+        /// Fetches (or decodes) one <c>&lt;image&gt;</c> href into an <see cref="SvgImageResource"/>, or
+        /// returns null when nothing needs prefetching (a <c>data:</c> raster, an unresolvable/failed
+        /// fetch, or a <c>data:</c> SVG with no fetchable nested images). For an SVG payload, its own
+        /// nested <c>&lt;image&gt;</c> hrefs are recursively prefetched into the resource's child map.
+        /// </summary>
+        private static async ValueTask<SvgImageResource?> PrefetchImageAsync(
+            string href, HtmlContainerInt container, RUri? baseUriOverride, int depth)
+        {
+            // A data: payload decodes in-memory in BuildImage - it needs a prefetch entry only when it is
+            // an image/svg+xml document whose OWN nested <image>s must be fetched (issue #251).
+            if (DataUriUtils.TryDecodeDataUri(href, out var mimeType, out var dataBytes))
+            {
+                if (!mimeType.Equals("image/svg+xml", StringComparison.OrdinalIgnoreCase))
+                    return null;
+
+                // data: has no location, so nested relative hrefs resolve against the current base.
+                var nested = await PrefetchNestedSvgAsync(dataBytes, container, baseUriOverride, depth);
+                return nested is null ? null : new SvgImageResource(dataBytes, IsSvg: true, nested);
+            }
+
+            var uri = CommonUtils.ResolveAgainstDocumentBase(container, href, baseUriOverride);
+            if (uri is not { IsAbsoluteUri: true })
+                return null;
+
+            try
+            {
+                var response = await container.Adapter.GetResourceStream(uri);
+                if (response?.ResourceStream is not { } stream)
+                    return null;
+
+                byte[] bytes;
+                await using (stream)
+                {
+                    using var buffer = new MemoryStream();
+                    await stream.CopyToAsync(buffer);
+                    bytes = buffer.ToArray();
+                }
+
+                // Detect SVG the same way ImageLoadHandler does: the href's .svg extension or a
+                // Content-Type: image/svg+xml response header.
+                var srcHintsSvg = href.Split('?', '#')[0].EndsWith(".svg", StringComparison.OrdinalIgnoreCase);
+                var contentTypeHintsSvg = response.ResponseHeaders?.TryGetValue("Content-Type", out var contentTypeValues) == true
+                    && contentTypeValues.Select(ContentType.Parse).Any(ct => ct.IsMimeType("image", "svg+xml"));
+                var isSvg = srcHintsSvg || contentTypeHintsSvg;
+
+                // A fetched SVG's own nested <image>s resolve relative to the SVG's own URL.
+                var nested = isSvg ? await PrefetchNestedSvgAsync(bytes, container, uri, depth) : null;
+                return new SvgImageResource(bytes, isSvg, nested);
+            }
+            catch (Exception)
+            {
+                // A transport failure (DNS/connection/TLS/timeout thrown by a user-supplied network
+                // loader) or a malformed Content-Type header must not abort the whole render: this
+                // <image> is skipped and left blank (the same outcome as a missing resource), while
+                // the rest of the SVG - and any other prefetched images - still render. This is a
+                // deliberate swallow; HtmlContainerInt.ReportError is [DoesNotReturn] (it always
+                // throws HtmlRenderException), so it can't be used here without aborting.
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// If <paramref name="bytes"/> is an SVG document that itself contains an <c>&lt;image&gt;</c>,
+        /// parses it and recursively prefetches its nested <c>&lt;image&gt;</c> hrefs against
+        /// <paramref name="baseUriOverride"/>; returns the child map (or null when there is nothing to
+        /// fetch or the payload is malformed). The cheap <c>&lt;image</c> text scan keeps the common
+        /// image-less SVG payload from paying a parse.
+        /// </summary>
+        private static async ValueTask<IReadOnlyDictionary<string, SvgImageResource>?> PrefetchNestedSvgAsync(
+            byte[] bytes, HtmlContainerInt container, RUri? baseUriOverride, int depth)
+        {
+            if (depth + 1 > MaxImageNestingDepth)
+                return null;
+
+            var text = Encoding.UTF8.GetString(bytes);
+            if (text.IndexOf("<image", StringComparison.OrdinalIgnoreCase) < 0)
+                return null;
+
+            if (!TryParseSvgRoot(text, out var nestedRoot))
+                return null;
+
+            // Walking <image> hrefs only needs Name/GetAttribute, so a bare source node suffices.
+            return await PrefetchTreeAsync(new XElementSvgSourceNode(nestedRoot), container, baseUriOverride, depth + 1);
+        }
+
+        /// <summary>Parses raw SVG XML text into its root element, or returns false for malformed XML.</summary>
+        private static bool TryParseSvgRoot(string text, out System.Xml.Linq.XElement root)
+        {
+            root = null!;
+            try
+            {
+                var xdoc = System.Xml.Linq.XDocument.Parse(text);
+                if (xdoc.Root is null)
+                    return false;
+                root = xdoc.Root;
+                return true;
+            }
+            catch (System.Xml.XmlException)
+            {
+                return false;
+            }
         }
 
         private static void CollectImageHrefs(ISvgSourceNode node, HashSet<string> hrefs)
@@ -596,14 +683,16 @@ namespace PeachPDF.Svg
             if (DataUriUtils.TryDecodeDataUri(href, out var mimeType, out var bytes))
             {
                 if (mimeType.Equals("image/svg+xml", StringComparison.OrdinalIgnoreCase))
-                    image.NestedDocument = BuildNestedSvgDocument(bytes);
+                    // A data: SVG's own nested network <image>s were prefetched under this same href
+                    // (issue #251); pass that child map down, or null when it decodes purely in-memory.
+                    image.NestedDocument = BuildNestedSvgDocument(bytes, NestedImagesFor(href));
                 else
                     image.Image = DecodeRasterImage(bytes);
             }
             else if (href is not null && _prefetchedImages is not null && _prefetchedImages.TryGetValue(href, out var resource))
             {
                 if (resource.IsSvg)
-                    image.NestedDocument = BuildNestedSvgDocument(resource.Bytes);
+                    image.NestedDocument = BuildNestedSvgDocument(resource.Bytes, resource.NestedImages);
                 else
                     image.Image = DecodeRasterImage(resource.Bytes);
             }
@@ -617,35 +706,32 @@ namespace PeachPDF.Svg
         /// (built here), exactly like an <c>&lt;img&gt;</c>-referenced SVG. Returns null for malformed
         /// XML, in which case the image renders nothing.
         /// </summary>
-        private SvgDocument? BuildNestedSvgDocument(byte[] bytes)
+        private SvgDocument? BuildNestedSvgDocument(byte[] bytes, IReadOnlyDictionary<string, SvgImageResource>? nestedImages)
         {
-            try
-            {
-                var xdoc = System.Xml.Linq.XDocument.Parse(Encoding.UTF8.GetString(bytes));
-                if (xdoc.Root is null)
-                    return null;
+            if (!TryParseSvgRoot(Encoding.UTF8.GetString(bytes), out var nestedRoot))
+                return null;   // malformed embedded SVG - renders nothing
 
-                var nestedRoot = xdoc.Root;
-                var nestedCssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(nestedRoot));
+            var nestedCssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(nestedRoot));
 
-                var valueParser = new CssValueParser(_adapter);
-                var registered = nestedCssData is null ? null : RegisteredProperty.BuildRegistry(nestedCssData, valueParser);
-                var nestedVarContext = registered is { Count: > 0 }
-                    ? new CssVarResolver.VarContext(registered, valueParser)
-                    : null;
+            var valueParser = new CssValueParser(_adapter);
+            var registered = nestedCssData is null ? null : RegisteredProperty.BuildRegistry(nestedCssData, valueParser);
+            var nestedVarContext = registered is { Count: > 0 }
+                ? new CssVarResolver.VarContext(registered, valueParser)
+                : null;
 
-                if (nestedCssData is not null)
-                    SvgCssStyling.CascadeCustomProperties(nestedRoot, nestedCssData, "print", registered);
+            if (nestedCssData is not null)
+                SvgCssStyling.CascadeCustomProperties(nestedRoot, nestedCssData, "print", registered);
 
-                var nestedSource = new XElementSvgSourceNode(nestedRoot, nestedRoot, nestedCssData, "print", nestedVarContext);
-                return Build(nestedSource, _adapter, _contextColor);
-            }
-            catch (System.Xml.XmlException)
-            {
-                // Malformed embedded SVG - renders nothing.
-                return null;
-            }
+            var nestedSource = new XElementSvgSourceNode(nestedRoot, nestedRoot, nestedCssData, "print", nestedVarContext);
+            // Thread the recursively-prefetched child map so the nested document's own <image>s resolve.
+            return Build(nestedSource, _adapter, _contextColor, nestedImages);
         }
+
+        /// <summary>The recursively-prefetched nested-image map for <paramref name="href"/>, if any (issue #251).</summary>
+        private IReadOnlyDictionary<string, SvgImageResource>? NestedImagesFor(string? href) =>
+            href is not null && _prefetchedImages is not null && _prefetchedImages.TryGetValue(href, out var resource)
+                ? resource.NestedImages
+                : null;
 
         /// <summary>
         /// Decodes raster image bytes (from either a <c>data:</c> URI or a fetched resource) into an
