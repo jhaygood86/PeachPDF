@@ -187,6 +187,31 @@ namespace PeachPDF.Tests.CSS.PropertyTests
         }
 
         [Fact]
+        public void CssPerspectiveOriginVerticalKeywordThenLengthIllegal()
+        {
+            // "top 2px" is invalid (CSS Transforms 1 <position>): a length in the second (vertical)
+            // position forces the ordered two-value form, but "top" is a vertical-only keyword and cannot
+            // fill the horizontal position.
+            var snippet = "perspective-origin:  top 2px ";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("perspective-origin", property.Name);
+            Assert.IsType<PerspectiveOriginProperty>(property);
+            var concrete = (PerspectiveOriginProperty)property;
+            Assert.False(concrete.HasValue);
+        }
+
+        [Fact]
+        public void CssPerspectiveOriginLengthThenWrongAxisKeywordIllegal()
+        {
+            var snippet = "perspective-origin:  2px left ";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("perspective-origin", property.Name);
+            Assert.IsType<PerspectiveOriginProperty>(property);
+            var concrete = (PerspectiveOriginProperty)property;
+            Assert.False(concrete.HasValue);
+        }
+
+        [Fact]
         public void CssTransformStylePreserve3DLegal()
         {
             var snippet = "transform-style:  preserve-3d ";
@@ -257,17 +282,18 @@ namespace PeachPDF.Tests.CSS.PropertyTests
         }
 
         [Fact]
-        public void CssTransformOriginYOffsetXKeywordLegal()
+        public void CssTransformOriginLengthThenWrongAxisKeywordIllegal()
         {
+            // "2px left" is invalid (CSS Transforms 1): a length in the first (horizontal) position forces
+            // the ordered two-value form, but "left" is a horizontal-only keyword and cannot fill the
+            // vertical position. The keyword-only reorderable form forbids lengths, so it does not apply.
             var snippet = "transform-origin:  2px left";
             var property = ParseDeclaration(snippet);
             Assert.Equal("transform-origin", property.Name);
             Assert.False(property.IsImportant);
             Assert.IsType<TransformOriginProperty>(property);
             var concrete = (TransformOriginProperty)property;
-            Assert.False(concrete.IsInherited);
-            Assert.True(concrete.HasValue);
-            Assert.Equal("left 2px", concrete.Value); // Canonical order: x then y
+            Assert.False(concrete.HasValue);
         }
 
         [Fact]
@@ -327,17 +353,17 @@ namespace PeachPDF.Tests.CSS.PropertyTests
         }
 
         [Fact]
-        public void CssTransformOriginYXKeywordZLegal()
+        public void CssTransformOriginLengthThenWrongAxisKeywordWithZIllegal()
         {
+            // As above, invalid for the same reason; the trailing <length> z-offset cannot rescue an
+            // invalid horizontal/vertical pair.
             var snippet = "transform-origin:  2px left 10px ";
             var property = ParseDeclaration(snippet);
             Assert.Equal("transform-origin", property.Name);
             Assert.False(property.IsImportant);
             Assert.IsType<TransformOriginProperty>(property);
             var concrete = (TransformOriginProperty)property;
-            Assert.False(concrete.IsInherited);
-            Assert.True(concrete.HasValue);
-            Assert.Equal("left 2px 10px", concrete.Value); // Canonical order: x y z
+            Assert.False(concrete.HasValue);
         }
 
         [Fact]
