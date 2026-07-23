@@ -683,6 +683,10 @@ namespace PeachPDF.Svg
             {
                 Id = id,
                 ClipRule = SvgValueParsers.ParseFillRule(node.GetAttribute("clip-rule")),
+                // Default is userSpaceOnUse; objectBoundingBox maps 0..1 child geometry to the
+                // referencing element's bounding box (resolved at render time).
+                ClipPathUnitsUserSpaceOnUse =
+                    !string.Equals(node.GetAttribute("clipPathUnits"), "objectBoundingBox", StringComparison.OrdinalIgnoreCase),
             };
 
             foreach (var child in node.Children)
