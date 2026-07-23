@@ -170,11 +170,11 @@ namespace PeachPDF.Html.Core.Handlers
             await SetImageFromUrl(uri);
         }
 
-        private void LoadImageFromStream(Stream stream, bool isSvg)
+        private async ValueTask LoadImageFromStream(Stream stream, bool isSvg, RUri source)
         {
             if (isSvg)
             {
-                LoadSvgFromStream(stream);
+                await LoadSvgFromStream(stream, source);
                 return;
             }
 
@@ -194,7 +194,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// (<see cref="XElementSvgSourceNode"/>) rather than the HTML tokenizer, since a fetched SVG
         /// resource is expected to be a standalone, well-formed XML document.
         /// </summary>
-        private void LoadSvgFromStream(Stream stream)
+        private async ValueTask LoadSvgFromStream(Stream stream, RUri source)
         {
             try
             {
@@ -221,8 +221,14 @@ namespace PeachPDF.Html.Core.Handlers
                         SvgCssStyling.CascadeCustomProperties(root, cssData, "print", registered);
                     }
 
-                    var source = new XElementSvgSourceNode(root, root, cssData, "print", varContext);
-                    SvgDocument = SvgTreeBuilder.Build(source, _htmlContainer.Adapter);
+                    var sourceNode = new XElementSvgSourceNode(root, root, cssData, "print", varContext);
+
+                    // Fetch any network/file <image> hrefs, resolving relative ones against the SVG's own
+                    // URL (source), so <image href="foo.png"> inside a fetched x.svg loads from the SVG's
+                    // location — the same rule fetched stylesheets use for their own relative references.
+                    var prefetchedImages = await SvgTreeBuilder.PrefetchImageResourcesAsync(sourceNode, _htmlContainer, source);
+
+                    SvgDocument = SvgTreeBuilder.Build(sourceNode, _htmlContainer.Adapter, prefetchedImages: prefetchedImages);
                 }
             }
             catch (XmlException ex)
@@ -250,7 +256,7 @@ namespace PeachPDF.Html.Core.Handlers
 
                 if (_disposed is false)
                 {
-                    LoadImageFromStream(_imageStream, _srcHintsSvg || contentTypeHintsSvg);
+                    await LoadImageFromStream(_imageStream, _srcHintsSvg || contentTypeHintsSvg, source);
 
                     if (Image is not null)
                     {

@@ -1,8 +1,10 @@
+using PeachPDF.Network;
 using PeachPDF.PdfSharpCore;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -1046,10 +1048,11 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task InlineSvg_ImageWithNonDataUriHref_RendersNothingRatherThanThrowing()
+        public async Task InlineSvg_ImageWithNonDataUriHref_NoLoaderConfigured_RendersNothingRatherThanThrowing()
         {
-            // A network/file href is a documented v1 gap (SvgTreeBuilder.Build is synchronous) - the
-            // page must still render successfully, just without that image's content.
+            // The default network loader can't fetch an http URL (it returns null for non-data: URIs),
+            // so this <image> stays unresolved - the page must still render successfully, just without
+            // that image's content. (A configured loader DOES fetch it - see the tests below.)
             var html = """
                 <!DOCTYPE html><html><body>
                 <svg viewBox="0 0 100 100" width="100" height="100">
@@ -1063,6 +1066,154 @@ namespace PeachPDF.Tests.Integration
 
             Assert.DoesNotContain("/Subtype /Image", pdfText);
             Assert.Contains("\nf\n", pdfText);
+        }
+
+        // A real, loadable 1x1 pixel PNG (same constant used across the image integration tests).
+        private const string PngBase64 =
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+        private static readonly RUri DocumentUri = new("https://example.test/page.html");
+
+        private static string GetPdfText(PeachPdfDocument doc)
+        {
+            var ms = new MemoryStream();
+            doc.Save(ms);
+            return Encoding.Latin1.GetString(ms.ToArray());
+        }
+
+        [Fact]
+        public async Task InlineSvg_ImageWithNetworkRasterHref_EmbedsImageXObject()
+        {
+            var loader = new InMemoryNetworkLoader(DocumentUri, primaryHtml: """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <image x="10" y="10" width="80" height="80" href="https://example.test/pic.png"/>
+                </svg>
+                </body></html>
+                """);
+            loader.AddResource("https://example.test/pic.png", Convert.FromBase64String(PngBase64), "image/png");
+
+            var config = new PdfGenerateConfig { NetworkLoader = loader, PageSize = PageSize.A4 };
+            var doc = await new PdfGenerator().GeneratePdf(null, config);
+
+            // The fetched raster embeds as a real PDF image XObject - impossible before the fix.
+            Assert.Contains("/Subtype /Image", GetPdfText(doc));
+        }
+
+        [Fact]
+        public async Task InlineSvg_ImageWithNetworkSvgHref_RendersAsVectorNestedDocument()
+        {
+            var inner = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect x="0" y="0" width="10" height="10" fill="#000000"/></svg>""";
+
+            var loader = new InMemoryNetworkLoader(DocumentUri, primaryHtml: """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <image x="10" y="10" width="80" height="80" href="https://example.test/inner.svg"/>
+                </svg>
+                </body></html>
+                """);
+            loader.AddTextResource("https://example.test/inner.svg", inner, "image/svg+xml");
+
+            var config = new PdfGenerateConfig { NetworkLoader = loader, PageSize = PageSize.A4, CompressContentStreams = false };
+            var pdfText = GetPdfText(await new PdfGenerator().GeneratePdf(null, config));
+
+            // Painted as a real vector scene (fill operator present), never rasterized to an image XObject.
+            Assert.Contains("\nf\n", pdfText);
+            Assert.DoesNotContain("/Subtype /Image", pdfText);
+        }
+
+        [Fact]
+        public async Task InlineSvg_ImageWithSvgContentTypeButNoExtension_RendersAsVector()
+        {
+            var inner = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect x="0" y="0" width="10" height="10" fill="#000000"/></svg>""";
+
+            var loader = new InMemoryNetworkLoader(DocumentUri, primaryHtml: """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <image x="10" y="10" width="80" height="80" href="https://example.test/render"/>
+                </svg>
+                </body></html>
+                """);
+            // No .svg extension - SVG must be detected purely from the Content-Type response header.
+            loader.AddTextResource("https://example.test/render", inner, "image/svg+xml");
+
+            var config = new PdfGenerateConfig { NetworkLoader = loader, PageSize = PageSize.A4, CompressContentStreams = false };
+            var pdfText = GetPdfText(await new PdfGenerator().GeneratePdf(null, config));
+
+            Assert.Contains("\nf\n", pdfText);
+            Assert.DoesNotContain("/Subtype /Image", pdfText);
+        }
+
+        [Fact]
+        public async Task InlineSvg_ImageWithXlinkHrefNetworkRaster_EmbedsImageXObject()
+        {
+            var loader = new InMemoryNetworkLoader(DocumentUri, primaryHtml: """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100" xmlns:xlink="http://www.w3.org/1999/xlink">
+                  <image x="10" y="10" width="80" height="80" xlink:href="https://example.test/pic.png"/>
+                </svg>
+                </body></html>
+                """);
+            loader.AddResource("https://example.test/pic.png", Convert.FromBase64String(PngBase64), "image/png");
+
+            var config = new PdfGenerateConfig { NetworkLoader = loader, PageSize = PageSize.A4 };
+            var doc = await new PdfGenerator().GeneratePdf(null, config);
+
+            Assert.Contains("/Subtype /Image", GetPdfText(doc));
+        }
+
+        [Fact]
+        public async Task InlineSvg_ImageFetchThrows_RendersRestOfPageRatherThanAborting()
+        {
+            // A network loader that throws (transport failure, malformed header, etc.) must not abort
+            // the whole render - the <image> is skipped and the rest of the SVG still paints.
+            var loader = new ThrowingNetworkLoader(DocumentUri);
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <image x="10" y="10" width="80" height="80" href="https://example.test/boom.png"/>
+                  <rect x="0" y="0" width="10" height="10" fill="#000000"/>
+                </svg>
+                </body></html>
+                """;
+
+            var config = new PdfGenerateConfig { NetworkLoader = loader, PageSize = PageSize.A4, CompressContentStreams = false };
+            var pdfText = GetPdfText(await new PdfGenerator().GeneratePdf(html, config));
+
+            // The render completed and the rect still painted; the throwing image simply rendered nothing.
+            Assert.Contains("\nf\n", pdfText);
+            Assert.DoesNotContain("/Subtype /Image", pdfText);
+        }
+
+        private sealed class ThrowingNetworkLoader(RUri baseUri) : RNetworkLoader
+        {
+            public override RUri? BaseUri { get; } = baseUri;
+            public override Task<string> GetPrimaryContents() => Task.FromResult(string.Empty);
+            public override Task<RNetworkResponse?> GetResourceStream(RUri uri) =>
+                throw new HttpRequestException("simulated transport failure");
+        }
+
+        [Fact]
+        public async Task StandaloneSvgImg_ImageWithRelativeHref_ResolvesAgainstSvgLocation()
+        {
+            // The outer SVG lives at /assets/scene.svg and references pic.png relatively, so it must
+            // resolve against the SVG's OWN location (/assets/pic.png), not the document's.
+            var outerSvg = """
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+                  <image x="0" y="0" width="100" height="100" href="pic.png"/>
+                </svg>
+                """;
+
+            var loader = new InMemoryNetworkLoader(DocumentUri, primaryHtml: """
+                <!DOCTYPE html><html><body><img src="https://example.test/assets/scene.svg" width="100" height="100"></body></html>
+                """);
+            loader.AddTextResource("https://example.test/assets/scene.svg", outerSvg, "image/svg+xml");
+            loader.AddResource("https://example.test/assets/pic.png", Convert.FromBase64String(PngBase64), "image/png");
+
+            var config = new PdfGenerateConfig { NetworkLoader = loader, PageSize = PageSize.A4 };
+            var doc = await new PdfGenerator().GeneratePdf(null, config);
+
+            Assert.Contains("/Subtype /Image", GetPdfText(doc));
         }
 
         /// <summary>
