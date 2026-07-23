@@ -163,6 +163,18 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(36.0, img.Words[0].Height, 1);
         }
 
+        [Fact]
+        public async Task CssRatio_MinHeightRescalesWidthByTheCssRatio()
+        {
+            // A bare CSS ratio (1/1) makes width 72pt => height 72pt; min-height:100pt then grows the height
+            // and rescales the width by that same 1:1 ratio, so both become 100pt (the CSS ratio, not the
+            // 2:1 natural one, drives the rescale).
+            var (root, _) = await BuildAndLayout(Wrap($"<img id='img' style='width:72pt; aspect-ratio:1/1; min-height:100pt' src=\"{Svg96X48}\" />"));
+            var img = FindById(root, "img")!;
+            Assert.Equal(100.0, img.Words[0].Height, 1);
+            Assert.Equal(100.0, img.Words[0].Width, 1);
+        }
+
         private static string Wrap(string body) =>
             $"<!DOCTYPE html><html><head></head><body style='margin:0'>{body}</body></html>";
 

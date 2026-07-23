@@ -227,6 +227,56 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(100, block.ActualHeight, 1);  // its own definite height is unaffected
         }
 
+        // ─── min/max clamping of the ratio-derived dimension (issue #219 gap 2, partial) ───
+
+        [Fact]
+        public async Task RatioDerivedHeight_ClampedByMaxHeight()
+        {
+            // width 200pt, aspect-ratio 2 => 100pt ratio height, clamped down by max-height:60pt.
+            var box = await LayoutDiv("width: 200pt; aspect-ratio: 2; max-height: 60pt");
+            Assert.Equal(60, box.ActualHeight, 1);
+        }
+
+        [Fact]
+        public async Task RatioDerivedHeight_GrownByMinHeight()
+        {
+            // width 200pt, aspect-ratio 2 => 100pt ratio height, grown by min-height:150pt.
+            var box = await LayoutDiv("width: 200pt; aspect-ratio: 2; min-height: 150pt");
+            Assert.Equal(150, box.ActualHeight, 1);
+        }
+
+        [Fact]
+        public async Task RatioDerivedWidth_ClampedByMaxWidth()
+        {
+            // An abspos height→width box: height 100pt, aspect-ratio 2 => 200pt ratio width, clamped by
+            // max-width:120pt.
+            var container = await LayoutContainer("""
+                <!DOCTYPE html><html><head><style>
+                  #rel { position: relative; width: 400pt; height: 300pt; }
+                  #abs { position: absolute; height: 100pt; aspect-ratio: 2; max-width: 120pt; }
+                </style></head><body>
+                <div id="rel"><div id="abs"></div></div>
+                </body></html>
+                """);
+            Assert.Equal(120, FindById(container.Root!, "abs")!.ActualWidth, 1);
+        }
+
+        [Fact]
+        public async Task RatioDerivedWidth_GrownByMinWidth()
+        {
+            // An abspos height→width box: height 50pt, aspect-ratio 2 => 100pt ratio width, grown by
+            // min-width:150pt.
+            var container = await LayoutContainer("""
+                <!DOCTYPE html><html><head><style>
+                  #rel { position: relative; width: 400pt; height: 300pt; }
+                  #abs { position: absolute; height: 50pt; aspect-ratio: 2; min-width: 150pt; }
+                </style></head><body>
+                <div id="rel"><div id="abs"></div></div>
+                </body></html>
+                """);
+            Assert.Equal(150, FindById(container.Root!, "abs")!.ActualWidth, 1);
+        }
+
         private static async Task<HtmlContainerInt> LayoutContainer(string html)
         {
             var adapter = new PdfSharpAdapter();
