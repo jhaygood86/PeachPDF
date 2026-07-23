@@ -1050,6 +1050,53 @@ namespace PeachPDF.Tests.Svg
         }
 
         [Fact]
+        public void Image_NestedSvgWithOwnImage_ResolvesLeafViaRecursivePrefetchMap()
+        {
+            // Issue #251: an outer <image href="inner.svg"> whose inner SVG itself has an
+            // <image href="leaf.png"> - the leaf resolves from the outer resource's NestedImages child
+            // map (keyed by the inner document's own raw hrefs), threaded down by BuildNestedSvgDocument.
+            var innerSvg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><image width="10" height="10" href="https://example.com/leaf.png"/></svg>""";
+            var nestedMap = new System.Collections.Generic.Dictionary<string, SvgTreeBuilder.SvgImageResource>
+            {
+                ["https://example.com/leaf.png"] = new(MakePngBytes(), IsSvg: false),
+            };
+            var prefetched = new System.Collections.Generic.Dictionary<string, SvgTreeBuilder.SvgImageResource>
+            {
+                ["https://example.com/inner.svg"] = new(System.Text.Encoding.UTF8.GetBytes(innerSvg), IsSvg: true, nestedMap),
+            };
+
+            var root = XDocument.Parse("""<svg xmlns="http://www.w3.org/2000/svg"><image width="10" height="10" href="https://example.com/inner.svg"/></svg>""").Root!;
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), Adapter, prefetchedImages: prefetched);
+
+            var outer = Assert.IsType<SvgImageElement>(Assert.Single(document.Children));
+            Assert.NotNull(outer.NestedDocument);
+            var inner = Assert.IsType<SvgImageElement>(Assert.Single(outer.NestedDocument!.Children));
+            Assert.NotNull(inner.Image);          // leaf raster resolved through the nested map
+            Assert.Null(inner.NestedDocument);
+        }
+
+        [Fact]
+        public void Image_NestedSvg_WithoutNestedMap_LeafStaysUnresolved()
+        {
+            // The build-side contrast to the test above: when the outer SVG resource carries NO nested
+            // map (the pre-#251 shape), the inner document's own network <image> can't resolve.
+            var innerSvg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><image width="10" height="10" href="https://example.com/leaf.png"/></svg>""";
+            var prefetched = new System.Collections.Generic.Dictionary<string, SvgTreeBuilder.SvgImageResource>
+            {
+                ["https://example.com/inner.svg"] = new(System.Text.Encoding.UTF8.GetBytes(innerSvg), IsSvg: true),
+            };
+
+            var root = XDocument.Parse("""<svg xmlns="http://www.w3.org/2000/svg"><image width="10" height="10" href="https://example.com/inner.svg"/></svg>""").Root!;
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), Adapter, prefetchedImages: prefetched);
+
+            var outer = Assert.IsType<SvgImageElement>(Assert.Single(document.Children));
+            Assert.NotNull(outer.NestedDocument);
+            var inner = Assert.IsType<SvgImageElement>(Assert.Single(outer.NestedDocument!.Children));
+            Assert.Null(inner.Image);
+            Assert.Null(inner.NestedDocument);
+        }
+
+        [Fact]
         public void Image_PrefetchedSvgWithStyle_ResolvesNestedDocument()
         {
             // A prefetched SVG payload carrying its own <style> (and a custom property) exercises the
