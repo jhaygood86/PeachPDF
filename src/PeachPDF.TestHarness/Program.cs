@@ -4686,6 +4686,85 @@ await SaveShowcaseAsync("css_grid_intrinsic", "Layout", "CSS Grid Intrinsic Sizi
     "line past the grid generating implicit columns, and `align-items: baseline` sharing one text baseline.",
     gridIntrinsicHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// ── Responsive @media feature queries ──────────────────────────────────────
+// One mobile-first stylesheet rendered at three configurations. The @media feature
+// conditions are evaluated against the page box (and the configured color scheme),
+// so the SAME HTML lays out differently per page size / scheme.
+const string responsiveHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+      html, body { margin: 0; font-family: sans-serif; background: #ffffff; color: #1f2937; }
+      .wrap { padding: 28px; }
+      h1 { font-size: 20pt; margin: 0 0 6px; }
+      h1 code { background: #f3f4f6; padding: 2px 6px; border-radius: 5px; font-size: 15pt; }
+      .badge { display: inline-block; padding: 5px 12px; border-radius: 999px; font-size: 10pt; font-weight: bold; }
+      /* Mobile-first defaults: single column, amber "mobile" badge. */
+      .badge { background: #fde68a; color: #92400e; }
+      .badge::after { content: "mobile layout — width < 60rem"; }
+      .grid { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 18px; }
+      .card { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 18px; }
+      .card h2 { margin: 0 0 6px; font-size: 13pt; color: #1d4ed8; }
+      .card p { margin: 0; font-size: 10.5pt; line-height: 1.5; color: #475569; }
+      /* Wide pages: three columns, green "desktop" badge. */
+      @media (min-width: 60rem) {
+        .grid { grid-template-columns: 1fr 1fr 1fr; }
+        .badge { background: #bbf7d0; color: #166534; }
+        .badge::after { content: "desktop layout — width \2265 60rem"; }
+      }
+      /* Dark scheme (PdfGenerateConfig.PreferredColorScheme = Dark). */
+      @media (prefers-color-scheme: dark) {
+        html, body { background: #0b1220; color: #e5e7eb; }
+        h1 code { background: #1f2937; }
+        .card { background: #111827; border-color: #374151; }
+        .card h2 { color: #93c5fd; }
+        .card p { color: #9ca3af; }
+      }
+    </style>
+    </head>
+    <body>
+      <div class="wrap">
+        <h1>Responsive <code>@media</code></h1>
+        <span class="badge"></span>
+        <div class="grid">
+          <div class="card"><h2>Fast</h2><p>Pure .NET, no external process — the same engine at every page size.</p></div>
+          <div class="card"><h2>Responsive</h2><p>Breakpoints select by the page-box width, not all at once.</p></div>
+          <div class="card"><h2>Range syntax</h2><p>Both <code>min-width</code> and <code>width &gt;= 48rem</code> work.</p></div>
+          <div class="card"><h2>Dark mode</h2><p><code>prefers-color-scheme</code> is driven by config.</p></div>
+          <div class="card"><h2>Print-aware</h2><p>Static-document features report their resting state.</p></div>
+          <div class="card"><h2>Standards</h2><p>Media Queries 4 feature evaluation over the page box.</p></div>
+        </div>
+      </div>
+    </body>
+    </html>
+    """;
+
+// Wide (A4 landscape, 842pt ≈ 1123px ≥ 60rem) → three-column desktop layout.
+await SaveShowcaseAsync("responsive_media_wide", "Responsive Design", "Responsive @media (wide page)",
+    "A mobile-first stylesheet rendered on a wide (A4 landscape) page: the `@media (min-width: 60rem)` " +
+    "breakpoint matches the page-box width, so the grid becomes three columns and the badge flips to " +
+    "\"desktop\".",
+    responsiveHtml, new PdfGenerateConfig { PageSize = PageSize.A4, PageOrientation = PageOrientation.Landscape });
+
+// Narrow (A4 portrait, 595pt ≈ 793px < 60rem) → single-column mobile layout, SAME HTML.
+await SaveShowcaseAsync("responsive_media_narrow", "Responsive Design", "Responsive @media (narrow page)",
+    "The identical stylesheet rendered on a narrow (A4 portrait) page: the breakpoint does not match, so " +
+    "the grid stays a single column and the badge reads \"mobile\" — proof the width feature actually gates.",
+    responsiveHtml, new PdfGenerateConfig { PageSize = PageSize.A4, PageOrientation = PageOrientation.Portrait });
+
+// Dark scheme (same HTML) via the new PreferredColorScheme config.
+await SaveShowcaseAsync("responsive_media_dark", "Responsive Design", "Dark Mode (prefers-color-scheme)",
+    "The same page rendered with `PdfGenerateConfig.PreferredColorScheme = PdfColorScheme.Dark`, so the " +
+    "`@media (prefers-color-scheme: dark)` rules apply — the dark surface and light text render, Tailwind's " +
+    "`dark:` variants included.",
+    responsiveHtml, new PdfGenerateConfig
+    {
+        PageSize = PageSize.A4,
+        PageOrientation = PageOrientation.Landscape,
+        PreferredColorScheme = PdfColorScheme.Dark
+    });
+
 // The manifest that drives the website's /showcase page (see docs/showcase.html and
 // .github/workflows/pages.yml). Field names are camelCased for Liquid (site.data.showcases).
 var manifestJson = JsonSerializer.Serialize(showcaseManifest,

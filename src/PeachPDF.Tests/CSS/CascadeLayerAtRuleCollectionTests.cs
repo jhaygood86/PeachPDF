@@ -11,7 +11,7 @@ namespace PeachPDF.Tests.CSS;
 
 /// <summary>
 /// #237 gap 3: an <c>@font-face</c>/<c>@property</c>/<c>@page</c> rule nested inside an <c>@layer</c>
-/// block (or an <c>@media</c>/<c>@supports</c> inside a layer) must still be collected. Before this,
+/// block (or an <c>@media</c> inside a layer) must still be collected. Before this,
 /// the three collectors only scanned top-level rules, so wrapping them in a layer — the exact shape a
 /// utility framework emits — silently dropped them. <c>CssData.EnumerateRulesRecursive</c> now descends
 /// the grouping at-rules, and the collectors use it.

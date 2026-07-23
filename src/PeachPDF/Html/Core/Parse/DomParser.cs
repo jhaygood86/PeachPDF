@@ -84,7 +84,8 @@ namespace PeachPDF.Html.Core.Parse
                 (cssData, _) = await CascadeParseStyles(root, htmlContainer, cssData, cssDataChanged);
             }
 
-            var media = string.IsNullOrEmpty(htmlContainer.Media) ? "print" : htmlContainer.Media;
+            var mediaType = string.IsNullOrEmpty(htmlContainer.Media) ? "print" : htmlContainer.Media;
+            var media = MediaQueryContext.FromContainer(htmlContainer, mediaType);
 
             var cssValueParser = new CssValueParser(htmlContainer.Adapter);
 
@@ -516,7 +517,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="box">the box to apply the style to</param>
         /// <param name="cssData">the style data for the html</param>
         /// <param name="media">The media type to apply styles to</param>
-        private static void CascadeApplyStyles(CssValueParser valueParser, CssBox box, CssData cssData, string media)
+        private static void CascadeApplyStyles(CssValueParser valueParser, CssBox box, CssData cssData, MediaQueryContext media)
         {
             // 1. Defaulting (CSS Cascade & Inheritance 4 §2.1): every property starts at its initial value,
             //    drawn from the single initial-value store. The cascade phases below then override, and the
@@ -708,7 +709,7 @@ namespace PeachPDF.Html.Core.Parse
         /// same declaration-application machinery as the real cascade. No inline-style handling either -
         /// inline style can never carry a <c>::first-line</c> suffix, so it plays no part here.
         /// </summary>
-        private static void ResolveFirstLineStyle(CssValueParser valueParser, CssBox box, CssData cssData, string media)
+        private static void ResolveFirstLineStyle(CssValueParser valueParser, CssBox box, CssData cssData, MediaQueryContext media)
         {
             var firstLineUaRules = cssData.GetFirstLineStyleRules(media, box, userAgentOnly: true).ToList();
             var firstLineAuthorRules = cssData.GetFirstLineStyleRules(media, box, userAgentOnly: false).ToList();
@@ -744,7 +745,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <see cref="CorrectTextBoxes"/> (so the new box's content gets resolved by that same pass,
         /// same as every other marker box).
         /// </summary>
-        private static void EnsureListItemMarkers(CssValueParser valueParser, CssBox box, CssData cssData, string media)
+        private static void EnsureListItemMarkers(CssValueParser valueParser, CssBox box, CssData cssData, MediaQueryContext media)
         {
             if (box.Display == CssConstants.ListItem && !box.Boxes.Any(b => b.IsMarkerPseudoElement))
             {
@@ -778,7 +779,7 @@ namespace PeachPDF.Html.Core.Parse
         /// matched element - see <see cref="CssBox.MatchesFirstLetterSelector"/>'s doc comment for why
         /// that forces this into a separate, later pass instead.
         /// </summary>
-        private static void ApplyFirstLetterPseudoElements(CssValueParser valueParser, CssBox box, CssData cssData, string media)
+        private static void ApplyFirstLetterPseudoElements(CssValueParser valueParser, CssBox box, CssData cssData, MediaQueryContext media)
         {
             if (box.MatchesFirstLetterSelector && !box.FirstLetterProcessed)
             {
@@ -855,7 +856,7 @@ namespace PeachPDF.Html.Core.Parse
         /// declarations actually apply on top of that inherited baseline, the same as
         /// <see cref="EnsureListItemMarkers"/> does for its own synthesized marker box.
         /// </summary>
-        private static void SplitFirstLetter(CssValueParser valueParser, CssData cssData, string media, CssBox originatingBox, CssBox textBox)
+        private static void SplitFirstLetter(CssValueParser valueParser, CssData cssData, MediaQueryContext media, CssBox originatingBox, CssBox textBox)
         {
             var text = textBox.Text!;
             var idx = 0;

@@ -367,6 +367,13 @@ namespace PeachPDF.Html.Core
         internal string Media { get; set; } = "print";
 
         /// <summary>
+        /// The color scheme reported to <c>@media (prefers-color-scheme: ...)</c> queries (see
+        /// <see cref="PdfGenerateConfig.PreferredColorScheme"/>). Defaults to
+        /// <see cref="PdfColorScheme.Light"/>; set by <c>PdfGenerator.SetContent</c>.
+        /// </summary>
+        internal PdfColorScheme PreferredColorScheme { get; set; } = PdfColorScheme.Light;
+
+        /// <summary>
         /// When true, the document's own author style sheets (<c>&lt;style&gt;</c>/<c>&lt;link&gt;</c>) are
         /// not collected during CSS parsing (see <see cref="PdfGenerateConfig.IgnoreAuthorStyleSheets"/>).
         /// Set by <c>PdfGenerator.SetContent</c> before the DOM/CSS tree is generated.

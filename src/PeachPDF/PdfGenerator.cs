@@ -472,6 +472,7 @@ namespace PeachPDF
             // into that generation: Media selects which @media rules match, IgnoreAuthorStyleSheets gates
             // whether the document's own <style>/<link> author sheets are collected at all.
             container.HtmlContainerInt.Media = string.IsNullOrEmpty(config.Media) ? "print" : config.Media;
+            container.HtmlContainerInt.PreferredColorScheme = config.PreferredColorScheme;
             container.HtmlContainerInt.IgnoreAuthorStyleSheets = config.IgnoreAuthorStyleSheets;
 
             // Parse-time @page relative units (% / em, base rule and the captured PageLengthContext
