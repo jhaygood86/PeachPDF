@@ -301,6 +301,64 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(100, a.ActualBoxSizingHeight, 1.0);
         }
 
+        // ─── Stage 5: auto-placement (column/dense) + implicit tracks ────────────
+
+        [Fact]
+        public async Task GridAutoFlowColumn_FillsDownColumnsFirst()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; grid-auto-flow:column; width:200pt; grid-template-rows:20pt 20pt; grid-template-columns:100pt 100pt;'>
+                    <div id='a' style='height:20pt;'></div>
+                    <div id='b' style='height:20pt;'></div>
+                    <div id='c' style='height:20pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            var c = FindById(root, "c")!;
+            // Column flow: a top-left, b below a (same column), c top of the next column.
+            Assert.Equal(a.Location.X, b.Location.X, 1.0);
+            Assert.True(b.Location.Y > a.Location.Y, "b should be below a in column flow");
+            Assert.True(c.Location.X > a.Location.X, "c should start a new column");
+            Assert.Equal(a.Location.Y, c.Location.Y, 1.0);
+        }
+
+        [Fact]
+        public async Task GridAutoRows_SizesImplicitRows()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:100pt; grid-template-columns:100pt; grid-auto-rows:30pt;'>
+                    <div id='a'>A</div>
+                    <div id='b'>B</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            // Both rows are implicit and sized by grid-auto-rows: 30pt each.
+            Assert.Equal(30, a.ActualBoxSizingHeight, 1.0);
+            Assert.Equal(30, b.ActualBoxSizingHeight, 1.0);
+            Assert.Equal(a.Location.Y + 30, b.Location.Y, 1.0);
+        }
+
+        [Fact]
+        public async Task GridAutoFlowDense_BackfillsEarlierHoles()
+        {
+            // a spans 2 cols starting at col 2 (leaving col 1 of row 1 empty); a 1-wide item then
+            // dense-backfills that hole instead of flowing after a.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; grid-auto-flow:row dense; width:300pt; grid-template-columns:repeat(3, 100pt);'>
+                    <div id='a' style='grid-column:2 / 4; height:10pt;'></div>
+                    <div id='b' style='height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            // b backfills column 1 of the first row (same Y as a, at the container's left edge).
+            Assert.Equal(container.ClientLeft, b.Location.X, 1.0);
+            Assert.Equal(a.Location.Y, b.Location.Y, 1.0);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>

@@ -200,6 +200,10 @@ namespace PeachPDF.CSS
                 PropertyNames.GridRowStart, PropertyNames.GridColumnStart,
                 PropertyNames.GridRowEnd, PropertyNames.GridColumnEnd);
 
+            AddLonghand(PropertyNames.GridAutoFlow, () => new GridAutoFlowProperty());
+            AddLonghand(PropertyNames.GridAutoColumns, () => new GridAutoColumnsProperty());
+            AddLonghand(PropertyNames.GridAutoRows, () => new GridAutoRowsProperty());
+
             AddShorthand(PropertyNames.ColumnRule, () => new ColumnRuleProperty(),
                 PropertyNames.ColumnRuleWidth,
                 PropertyNames.ColumnRuleStyle,

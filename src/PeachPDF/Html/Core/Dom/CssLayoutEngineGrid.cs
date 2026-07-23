@@ -89,30 +89,37 @@ namespace PeachPDF.Html.Core.Dom
             var columnGap = ParseGap(_gridBox.FlexColumnGap, contentWidth);
             var rowGap = ParseGap(_gridBox.FlexRowGap, contentWidth);
 
-            // ── Explicit column tracks (v1 Stage 2: length/%/auto; fr and intrinsic sizes land in later
-            // stages, and default to auto here). No explicit template → a single implicit auto column.
-            var colDefs = ExpandTemplate(_gridBox.GridTemplateColumns);
-            if (colDefs.Count == 0) colDefs = [GridTrackSize.Auto];
-            var colCount = colDefs.Count;
+            // ── Explicit tracks + grid-auto-flow. Row flow (default) fixes the column count and grows rows;
+            // column flow fixes the row count and grows columns. Implicit tracks cycle grid-auto-columns/rows.
+            var explicitColDefs = ExpandTemplate(_gridBox.GridTemplateColumns);
+            var explicitRowDefs = ExpandTemplate(_gridBox.GridTemplateRows);
+            var autoColDefs = ExpandTrackSizes(_gridBox.GridAutoColumns);
+            var autoRowDefs = ExpandTrackSizes(_gridBox.GridAutoRows);
 
+            var flow = _gridBox.GridAutoFlow ?? CssConstants.Row;
+            var isColumnFlow = flow.IndexOf(CssConstants.Column, StringComparison.OrdinalIgnoreCase) >= 0;
+            var isDense = flow.IndexOf(CssConstants.Dense, StringComparison.OrdinalIgnoreCase) >= 0;
+
+            // The fixed-axis (explicit) track count: columns for row flow, rows for column flow.
+            var fixedCount = Math.Max(1, isColumnFlow ? explicitRowDefs.Count : explicitColDefs.Count);
+
+            var placements = PlaceItems(items, isColumnFlow, isDense, fixedCount);
+            var colCount = Math.Max(1, Math.Max(explicitColDefs.Count,
+                placements.Count == 0 ? 0 : placements.Max(p => p.ColStart + p.ColSpan)));
+            var rowCount = Math.Max(1, Math.Max(explicitRowDefs.Count,
+                placements.Count == 0 ? 0 : placements.Max(p => p.RowStart + p.RowSpan)));
+
+            // ── Column tracks: explicit sizes, then implicit columns cycling grid-auto-columns.
+            var colDefs = BuildTrackDefs(explicitColDefs, autoColDefs, colCount);
             var columns = SizeColumnTracks(colDefs, contentWidth, columnGap);
             AssignPositions(columns, _gridBox.ClientLeft, columnGap);
 
-            // ── Placement: explicit line-based placement + spans, then row-major auto-placement of the rest
-            // (grid-auto-flow: column and dense arrive in Stage 5). Implicit rows are created as needed.
-            var rowDefs = ExpandTemplate(_gridBox.GridTemplateRows);
-            var placements = PlaceItems(items, colCount, rowDefs.Count);
-            var rowCount = placements.Count == 0 ? 0 : placements.Max(p => p.RowStart + p.RowSpan);
-            rowCount = Math.Max(rowCount, 1);
-
-            // ── Row tracks: explicit grid-template-rows sizes where present, otherwise auto rows sized to
-            // the tallest item they contain (measured at the item's column-span width).
+            // ── Row tracks: explicit sizes, then implicit rows cycling grid-auto-rows; auto rows are sized
+            // to the tallest item they contain (measured at the item's column-span width).
+            var rowDefs = BuildTrackDefs(explicitRowDefs, autoRowDefs, rowCount);
             var rows = new Track[rowCount];
             for (var r = 0; r < rowCount; r++)
-            {
-                var def = r < rowDefs.Count ? rowDefs[r] : GridTrackSize.Auto;
-                rows[r] = new Track { Def = def, Size = ResolveFixedRow(def, hasDefiniteHeight) };
-            }
+                rows[r] = new Track { Def = rowDefs[r], Size = ResolveFixedRow(rowDefs[r], hasDefiniteHeight) };
 
             // Single-row items size their auto row directly.
             foreach (var p in placements.Where(p => p.RowSpan == 1 && !IsFixed(rows[p.RowStart].Def)))
@@ -180,109 +187,115 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// Resolves every item's grid position (CSS Grid §8): explicit line-based placement and spans first,
-        /// then row-major auto-placement of the remaining items into the first free cell, creating implicit
-        /// rows as needed. Columns are fixed to the explicit track count (implicit columns are out of scope).
+        /// then auto-placement of the remaining items into the first free cell. The <b>minor</b> axis (the
+        /// one with a fixed track count, <paramref name="fixedCount"/>) is columns for row flow and rows for
+        /// column flow; the <b>major</b> axis grows implicitly. <c>dense</c> restarts the search from the
+        /// origin for each auto item; sparse advances a forward cursor.
         /// </summary>
-        private List<Placement> PlaceItems(List<CssBox> items, int colCount, int explicitRowCount)
+        private List<Placement> PlaceItems(List<CssBox> items, bool isColumnFlow, bool dense, int fixedCount)
         {
             var placements = new List<Placement>(items.Count);
-            var occupancy = new List<bool[]>();
+            var occupancy = new List<bool[]>(); // [major][minor]
 
-            bool Occupied(int r, int c)
+            bool Occupied(int major, int minor)
             {
-                if (c < 0 || c >= colCount) return true;
-                return r < occupancy.Count && occupancy[r][c];
+                if (minor < 0 || minor >= fixedCount) return true;
+                return major < occupancy.Count && occupancy[major][minor];
             }
 
-            void Ensure(int r)
+            bool Fits(int major, int minor, int majorSpan, int minorSpan)
             {
-                while (occupancy.Count <= r) occupancy.Add(new bool[colCount]);
-            }
-
-            void Mark(Placement p)
-            {
-                for (var r = p.RowStart; r < p.RowStart + p.RowSpan; r++)
-                {
-                    Ensure(r);
-                    for (var c = p.ColStart; c < p.ColStart + p.ColSpan && c < colCount; c++)
-                        occupancy[r][c] = true;
-                }
-            }
-
-            bool Fits(int r, int c, int rowSpan, int colSpan)
-            {
-                if (c < 0 || c + colSpan > colCount) return false;
-                for (var rr = r; rr < r + rowSpan; rr++)
-                    for (var cc = c; cc < c + colSpan; cc++)
-                        if (Occupied(rr, cc)) return false;
+                if (minor < 0 || minor + minorSpan > fixedCount) return false;
+                for (var m = major; m < major + majorSpan; m++)
+                    for (var n = minor; n < minor + minorSpan; n++)
+                        if (Occupied(m, n)) return false;
                 return true;
             }
 
-            // Resolve each item's axis placement (auto column start when null).
+            void Mark(int major, int minor, int majorSpan, int minorSpan)
+            {
+                for (var m = major; m < major + majorSpan; m++)
+                {
+                    while (occupancy.Count <= m) occupancy.Add(new bool[fixedCount]);
+                    for (var n = minor; n < minor + minorSpan && n < fixedCount; n++)
+                        occupancy[m][n] = true;
+                }
+            }
+
+            // Map each item to (minorStart, minorSpan, majorStart, majorSpan). The minor axis is the fixed
+            // one: columns for row flow, rows for column flow.
             var resolved = items.Select(box =>
             {
-                var (colStart, colSpan) = ResolveAxis(box.GridColumnStart, box.GridColumnEnd, colCount);
-                var (rowStart, rowSpan) = ResolveAxis(box.GridRowStart, box.GridRowEnd, Math.Max(explicitRowCount, 1));
-                return new
-                {
-                    Box = box,
-                    ColStart = colStart, ColSpan = Math.Min(colSpan, colCount),
-                    RowStart = rowStart, RowSpan = rowSpan
-                };
+                var (colStart, colSpan) = ResolveAxis(box.GridColumnStart, box.GridColumnEnd, fixedCount);
+                var (rowStart, rowSpan) = ResolveAxis(box.GridRowStart, box.GridRowEnd, fixedCount);
+                return isColumnFlow
+                    ? new { box, MinorStart = rowStart, MinorSpan = Math.Min(rowSpan, fixedCount), MajorStart = colStart, MajorSpan = colSpan }
+                    : new { box, MinorStart = colStart, MinorSpan = Math.Min(colSpan, fixedCount), MajorStart = rowStart, MajorSpan = rowSpan };
             }).ToList();
 
-            // Pass 1: items with a definite column AND row.
-            foreach (var r in resolved.Where(x => x.ColStart >= 0 && x.RowStart >= 0))
+            void Commit(CssBox box, int major, int minor, int majorSpan, int minorSpan)
             {
-                var p = new Placement { Box = r.Box, ColStart = ClampCol(r.ColStart, r.ColSpan, colCount), ColSpan = r.ColSpan, RowStart = r.RowStart, RowSpan = r.RowSpan };
-                Mark(p);
+                Mark(major, minor, majorSpan, minorSpan);
+                var p = isColumnFlow
+                    ? new Placement { Box = box, ColStart = major, ColSpan = majorSpan, RowStart = minor, RowSpan = minorSpan }
+                    : new Placement { Box = box, ColStart = minor, ColSpan = minorSpan, RowStart = major, RowSpan = majorSpan };
                 placements.Add(p);
             }
 
-            // Pass 2: auto-flow (row) for the rest, in DOM order, using a forward cursor.
-            var cursorR = 0;
-            var cursorC = 0;
-            foreach (var r in resolved.Where(x => x.ColStart < 0 || x.RowStart < 0))
+            // Pass 1: items definite on both axes.
+            foreach (var r in resolved.Where(x => x.MinorStart >= 0 && x.MajorStart >= 0))
+                Commit(r.box, r.MajorStart, ClampMinor(r.MinorStart, r.MinorSpan, fixedCount), r.MajorSpan, r.MinorSpan);
+
+            // Pass 2: the rest, in DOM order.
+            var cursorMajor = 0;
+            var cursorMinor = 0;
+            foreach (var r in resolved.Where(x => x.MinorStart < 0 || x.MajorStart < 0))
             {
-                Placement p;
-                if (r.ColStart >= 0)
+                if (r.MinorStart >= 0)
                 {
-                    // Definite column, auto row: find the first row (from the top) where it fits.
-                    var col = ClampCol(r.ColStart, r.ColSpan, colCount);
-                    var row = 0;
-                    while (!Fits(row, col, r.RowSpan, r.ColSpan)) row++;
-                    p = new Placement { Box = r.Box, ColStart = col, ColSpan = r.ColSpan, RowStart = row, RowSpan = r.RowSpan };
+                    // Definite minor, auto major: first major line (from the top) where it fits.
+                    var minor = ClampMinor(r.MinorStart, r.MinorSpan, fixedCount);
+                    var major = 0;
+                    while (!Fits(major, minor, r.MajorSpan, r.MinorSpan)) major++;
+                    Commit(r.box, major, minor, r.MajorSpan, r.MinorSpan);
                 }
-                else if (r.RowStart >= 0)
+                else if (r.MajorStart >= 0)
                 {
-                    // Definite row, auto column: first free column in that row.
-                    var col = 0;
-                    while (!Fits(r.RowStart, col, r.RowSpan, r.ColSpan)) col++;
-                    p = new Placement { Box = r.Box, ColStart = col, ColSpan = r.ColSpan, RowStart = r.RowStart, RowSpan = r.RowSpan };
+                    // Definite major, auto minor: first free minor position on that major line.
+                    var minor = 0;
+                    while (!Fits(r.MajorStart, minor, r.MajorSpan, r.MinorSpan)) minor++;
+                    Commit(r.box, r.MajorStart, minor, r.MajorSpan, r.MinorSpan);
                 }
                 else
                 {
-                    // Fully auto: advance the cursor to the first free cell that fits the span.
-                    while (true)
-                    {
-                        if (cursorC + r.ColSpan > colCount) { cursorC = 0; cursorR++; continue; }
-                        if (Fits(cursorR, cursorC, r.RowSpan, r.ColSpan)) break;
-                        cursorC++;
-                    }
-                    p = new Placement { Box = r.Box, ColStart = cursorC, ColSpan = r.ColSpan, RowStart = cursorR, RowSpan = r.RowSpan };
-                    cursorC += r.ColSpan;
+                    // Fully auto. dense restarts from origin each time; sparse keeps a forward cursor.
+                    var startMajor = dense ? 0 : cursorMajor;
+                    var startMinor = dense ? 0 : cursorMinor;
+                    var (major, minor) = FindFreeCell(Fits, startMajor, startMinor, r.MajorSpan, r.MinorSpan, fixedCount);
+                    Commit(r.box, major, minor, r.MajorSpan, r.MinorSpan);
+                    if (!dense) { cursorMajor = major; cursorMinor = minor + r.MinorSpan; }
                 }
-
-                Mark(p);
-                placements.Add(p);
             }
 
             // Restore DOM order so callers/tests see items in source order.
             return placements.OrderBy(p => items.IndexOf(p.Box)).ToList();
         }
 
-        private static int ClampCol(int colStart, int colSpan, int colCount) =>
-            Math.Max(0, Math.Min(colStart, Math.Max(0, colCount - colSpan)));
+        private static (int Major, int Minor) FindFreeCell(
+            Func<int, int, int, int, bool> fits, int startMajor, int startMinor, int majorSpan, int minorSpan, int fixedCount)
+        {
+            var major = startMajor;
+            var minor = startMinor;
+            while (true)
+            {
+                if (minor + minorSpan > fixedCount) { minor = 0; major++; continue; }
+                if (fits(major, minor, majorSpan, minorSpan)) return (major, minor);
+                minor++;
+            }
+        }
+
+        private static int ClampMinor(int minorStart, int minorSpan, int fixedCount) =>
+            Math.Max(0, Math.Min(minorStart, Math.Max(0, fixedCount - minorSpan)));
 
         /// <summary>
         /// Resolves one axis (<c>grid-column</c> or <c>grid-row</c>) into a 0-based start line and span.
@@ -578,8 +591,31 @@ namespace PeachPDF.Html.Core.Dom
             if (string.IsNullOrEmpty(value) || value.Isi(CssConstants.None))
                 return [];
             var template = GridTrackListGrammar.TryParse(CssValueParser.GetCssTokens(value));
-            // Stage 2: fixed tracks only; the auto-repeat section is resolved in Stage 7.
+            // The auto-repeat (auto-fill/auto-fit) section is resolved in Stage 7.
             return template?.Tracks.ToList() ?? [];
+        }
+
+        /// <summary>Parses a <c>grid-auto-columns</c>/<c>grid-auto-rows</c> value into its track-size list
+        /// (default a single <c>auto</c> track), used to size implicit tracks.</summary>
+        private static List<GridTrackSize> ExpandTrackSizes(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return [GridTrackSize.Auto];
+            var list = GridTrackListGrammar.TryParseTrackSizeList(CssValueParser.GetCssTokens(value));
+            return list is { Count: > 0 } ? list.ToList() : [GridTrackSize.Auto];
+        }
+
+        /// <summary>Builds <paramref name="count"/> track definitions: the explicit tracks, then implicit
+        /// tracks cycling through <paramref name="autoDefs"/> (CSS Grid §7.5).</summary>
+        private static IReadOnlyList<GridTrackSize> BuildTrackDefs(
+            IReadOnlyList<GridTrackSize> explicitDefs, IReadOnlyList<GridTrackSize> autoDefs, int count)
+        {
+            var defs = new List<GridTrackSize>(count);
+            for (var i = 0; i < count; i++)
+            {
+                if (i < explicitDefs.Count) defs.Add(explicitDefs[i]);
+                else defs.Add(autoDefs[(i - explicitDefs.Count) % autoDefs.Count]);
+            }
+            return defs;
         }
 
         private double ParseGap(string value, double contentBase) =>
