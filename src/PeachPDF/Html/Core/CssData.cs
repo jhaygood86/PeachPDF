@@ -60,11 +60,16 @@ namespace PeachPDF.Html.Core
         // for specificity tie-breaking (see GetStyleRulesByOrigin). EnclosingMedia carries the
         // chain of @media conditions (outermost first) a rule was nested under, so media matching
         // no longer needs a separate unindexed scan.
-        // LayerRank encodes @layer cascade-layer precedence (CSS Cascade 5 §6.4.2): unlayered rules
-        // use int.MaxValue so they always outrank layered rules for normal declarations, and layered
-        // rules carry their layer's first-appearance order index (earlier layer = lower rank = lower
-        // priority). Applied ahead of specificity in the cascade sort (see GetStyleRulesByOrigin).
-        private readonly record struct IndexedRule(IStyleRule Rule, bool IsUserAgent, int DocumentOrder, MediaList[]? EnclosingMedia, int LayerRank);
+        // LayerName records which @layer cascade layer (CSS Cascade 5 §6.4.2) a rule belongs to
+        // (null = unlayered). The layer's numeric precedence rank is resolved lazily at sort time from
+        // _layerRanks - which is only known after the whole layer tree has been walked (a nested
+        // sub-layer's rank depends on where its parent first appeared), so it can't be baked in here.
+        private readonly record struct IndexedRule(IStyleRule Rule, bool IsUserAgent, int DocumentOrder, MediaList[]? EnclosingMedia, string? LayerName);
+
+        // A style rule paired with its resolved @layer rank, for the cascade's author passes (which
+        // need the rank both to reverse layer order for !important and to band rules by layer for
+        // revert-layer). Unlayered = UnlayeredRank.
+        internal readonly record struct LayeredStyleRule(IStyleRule Rule, int LayerRank);
 
         private const int UnlayeredRank = int.MaxValue;
 
@@ -72,6 +77,16 @@ namespace PeachPDF.Html.Core
         private Dictionary<string, List<IndexedRule>>? _classIndex;
         private Dictionary<string, List<IndexedRule>>? _idIndex;
         private List<IndexedRule>? _universalRules;
+
+        // Final @layer precedence ranks (qualified layer name -> rank; earlier/lower rank = lower
+        // priority for normal declarations), computed once after the layer tree is fully walked.
+        private Dictionary<string, int>? _layerRanks;
+
+        /// <summary>True when the document declares any <c>@layer</c> cascade layer.</summary>
+        internal bool HasCascadeLayers { get; private set; }
+
+        private int RankOf(string? layerName) =>
+            layerName is not null && _layerRanks!.TryGetValue(layerName, out var rank) ? rank : UnlayeredRank;
 
         private void EnsureIndex()
         {
@@ -82,19 +97,101 @@ namespace PeachPDF.Html.Core
             var idIndex = new Dictionary<string, List<IndexedRule>>(StringComparer.InvariantCultureIgnoreCase);
             var universal = new List<IndexedRule>();
             var keys = new List<(SelectorBucketKind Kind, string Key)>();
-            // Layer names are case-sensitive custom idents; first-appearance order = registration order.
-            var layerOrder = new Dictionary<string, int>(StringComparer.Ordinal);
+            var layerRegistry = new LayerRegistry();
             var order = 0;
 
             foreach (var stylesheet in Stylesheets)
             {
-                IndexRules(stylesheet.Rules, stylesheet.IsUserAgent, null, null, tagIndex, classIndex, idIndex, universal, keys, layerOrder, ref order);
+                IndexRules(stylesheet.Rules, stylesheet.IsUserAgent, null, null, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order);
             }
 
+            _layerRanks = layerRegistry.ComputeRanks();
+            HasCascadeLayers = _layerRanks.Count > 0;
             _tagIndex = tagIndex;
             _classIndex = classIndex;
             _idIndex = idIndex;
             _universalRules = universal;
+        }
+
+        /// <summary>
+        /// Builds the <c>@layer</c> tree while stylesheets are walked and, once complete, assigns each
+        /// layer a precedence rank that respects nesting (CSS Cascade 5 §6.4.2): a parent layer's whole
+        /// subtree is contiguous and its sub-layers are ordered by first appearance <em>within that
+        /// parent</em>, so <c>@layer a.b; @layer c; @layer a.d;</c> ranks as <c>a &lt; a.b &lt; a.d &lt; c</c>
+        /// rather than interleaving <c>c</c> between <c>a</c>'s sub-layers. A layer's own (direct) rules
+        /// carry the layer's own name and sort <em>before</em> its nested sub-layers (a shorter path is a
+        /// prefix of a longer one, and the prefix ranks lower/earlier).
+        /// </summary>
+        private sealed class LayerRegistry
+        {
+            // Qualified layer name -> its path of first-appearance indices from the root down (one entry
+            // per name segment). Lexicographic comparison of these paths yields the nested layer order.
+            private readonly Dictionary<string, List<int>> _pathKeys = new(StringComparer.Ordinal);
+            // Parent qualified name ("" = top level) -> next child index to hand out (first-appearance order).
+            private readonly Dictionary<string, int> _childCount = new(StringComparer.Ordinal);
+            private int _anonCounter;
+
+            /// <summary>Registers an anonymous <c>@layer { }</c> as a distinct node and returns its unique key.</summary>
+            public string RegisterAnonymous(string? parent)
+            {
+                // A leading space can't occur in a real custom-ident layer name, so this never collides.
+                var qualified = QualifyLayer(parent, " anon" + _anonCounter++);
+                Register(qualified);
+                return qualified;
+            }
+
+            /// <summary>
+            /// Registers a (possibly dotted) qualified layer name, first establishing each ancestor
+            /// prefix - <c>@layer a.b</c> implicitly declares <c>a</c> too (CSS Cascade 5 §6.2).
+            /// </summary>
+            public void Register(string qualified)
+            {
+                var segments = qualified.Split('.');
+                var parent = string.Empty;
+                var prefix = string.Empty;
+                List<int> path = [];
+
+                for (var i = 0; i < segments.Length; i++)
+                {
+                    prefix = i == 0 ? segments[0] : prefix + "." + segments[i];
+                    if (_pathKeys.TryGetValue(prefix, out var existing))
+                    {
+                        path = existing;
+                    }
+                    else
+                    {
+                        var idx = _childCount.TryGetValue(parent, out var count) ? count : 0;
+                        _childCount[parent] = idx + 1;
+                        path = [.. path, idx];
+                        _pathKeys[prefix] = path;
+                    }
+                    parent = prefix;
+                }
+            }
+
+            public Dictionary<string, int> ComputeRanks()
+            {
+                var names = _pathKeys.Keys.ToList();
+                names.Sort((a, b) => ComparePath(_pathKeys[a], _pathKeys[b]));
+                var ranks = new Dictionary<string, int>(StringComparer.Ordinal);
+                for (var i = 0; i < names.Count; i++)
+                    ranks[names[i]] = i;
+                return ranks;
+            }
+
+            private static int ComparePath(List<int> a, List<int> b)
+            {
+                var shared = Math.Min(a.Count, b.Count);
+                for (var i = 0; i < shared; i++)
+                {
+                    if (a[i] != b[i]) return a[i].CompareTo(b[i]);
+                }
+                // A prefix (a parent layer's own direct rules) sorts before its longer extensions (its
+                // nested sub-layers). This resolves sibling contiguity correctly (the #237 gap); the exact
+                // CSS Cascade 5 §6.2 treatment of a parent's direct rules interleaved with its own
+                // sub-layers is a documented simplification (see docs / the tracked follow-up).
+                return a.Count.CompareTo(b.Count);
+            }
         }
 
         /// <summary>
@@ -113,7 +210,7 @@ namespace PeachPDF.Html.Core
             Dictionary<string, List<IndexedRule>> idIndex,
             List<IndexedRule> universal,
             List<(SelectorBucketKind Kind, string Key)> keys,
-            Dictionary<string, int> layerOrder,
+            LayerRegistry layerRegistry,
             ref int order)
         {
             foreach (var rule in rules)
@@ -121,8 +218,7 @@ namespace PeachPDF.Html.Core
                 switch (rule)
                 {
                     case IStyleRule styleRule:
-                        var layerRank = currentLayer is null ? UnlayeredRank : layerOrder[currentLayer];
-                        var indexedRule = new IndexedRule(styleRule, isUserAgent, order++, enclosingMedia, layerRank);
+                        var indexedRule = new IndexedRule(styleRule, isUserAgent, order++, enclosingMedia, currentLayer);
 
                         keys.Clear();
                         CollectIndexKeys(styleRule.Selector, keys);
@@ -154,24 +250,25 @@ namespace PeachPDF.Html.Core
                         var nestedMedia = enclosingMedia is null
                             ? [mediaRule.Media]
                             : (MediaList[])[.. enclosingMedia, mediaRule.Media];
-                        IndexRules(mediaRule.Rules, isUserAgent, nestedMedia, currentLayer, tagIndex, classIndex, idIndex, universal, keys, layerOrder, ref order);
+                        IndexRules(mediaRule.Rules, isUserAgent, nestedMedia, currentLayer, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order);
                         break;
 
                     // @layer statement (`@layer a, b, c;`) only declares layer order — register each
                     // name so later block-form rules inherit the declared first-appearance order.
                     case LayerStatementRule layerStatement:
                         foreach (var name in layerStatement.Names)
-                            RegisterLayer(QualifyLayer(currentLayer, name), layerOrder);
+                            layerRegistry.Register(QualifyLayer(currentLayer, name));
                         break;
 
                     // @layer block (`@layer name { rules }`) — its rules belong to that layer.
                     case ILayerRule layerRule:
                         var qualified = string.IsNullOrEmpty(layerRule.Name)
                             // Each anonymous layer is its own distinct layer; give it a unique key.
-                            ? QualifyLayer(currentLayer, " anon" + layerOrder.Count)
+                            ? layerRegistry.RegisterAnonymous(currentLayer)
                             : QualifyLayer(currentLayer, layerRule.Name);
-                        RegisterLayer(qualified, layerOrder);
-                        IndexRules(layerRule.Rules, isUserAgent, enclosingMedia, qualified, tagIndex, classIndex, idIndex, universal, keys, layerOrder, ref order);
+                        if (!string.IsNullOrEmpty(layerRule.Name))
+                            layerRegistry.Register(qualified);
+                        IndexRules(layerRule.Rules, isUserAgent, enclosingMedia, qualified, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order);
                         break;
 
                     // @supports / @container: PeachPDF can't evaluate the condition, so (matching the
@@ -179,7 +276,7 @@ namespace PeachPDF.Html.Core
                     // Deliberately scoped to these two — @keyframes/@document/etc. are grouping rules
                     // too but must not have their contents applied as document style rules.
                     case IGroupingRule groupingRule when rule is ISupportsRule or IContainerRule:
-                        IndexRules(groupingRule.Rules, isUserAgent, enclosingMedia, currentLayer, tagIndex, classIndex, idIndex, universal, keys, layerOrder, ref order);
+                        IndexRules(groupingRule.Rules, isUserAgent, enclosingMedia, currentLayer, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order);
                         break;
                 }
             }
@@ -188,10 +285,44 @@ namespace PeachPDF.Html.Core
         private static string QualifyLayer(string? parent, string name) =>
             string.IsNullOrEmpty(parent) ? name : parent + "." + name;
 
-        private static void RegisterLayer(string qualifiedName, Dictionary<string, int> layerOrder)
+        /// <summary>
+        /// Enumerates every rule in every stylesheet, descending into the grouping at-rules whose
+        /// contents participate directly in the document (<c>@layer</c>/<c>@media</c>/<c>@supports</c>/
+        /// <c>@container</c>) so an <c>@font-face</c>/<c>@property</c>/<c>@page</c> nested inside one is
+        /// still found. Source order is preserved (a grouping rule's children are yielded at the grouping
+        /// rule's own position), so last-declared-wins collection stays correct.
+        /// </summary>
+        internal IEnumerable<IRule> EnumerateRulesRecursive()
         {
-            if (!layerOrder.ContainsKey(qualifiedName))
-                layerOrder[qualifiedName] = layerOrder.Count;
+            foreach (var stylesheet in Stylesheets)
+            {
+                foreach (var rule in FlattenRules(stylesheet.Rules))
+                    yield return rule;
+            }
+        }
+
+        internal static IEnumerable<IRule> FlattenRules(IEnumerable<IRule> rules)
+        {
+            foreach (var rule in rules)
+            {
+                yield return rule;
+
+                switch (rule)
+                {
+                    case ILayerRule layerRule:
+                        foreach (var child in FlattenRules(layerRule.Rules))
+                            yield return child;
+                        break;
+                    case IMediaRule mediaRule:
+                        foreach (var child in FlattenRules(mediaRule.Rules))
+                            yield return child;
+                        break;
+                    case IGroupingRule groupingRule when rule is ISupportsRule or IContainerRule:
+                        foreach (var child in FlattenRules(groupingRule.Rules))
+                            yield return child;
+                        break;
+                }
+            }
         }
 
         /// <summary>
@@ -334,7 +465,77 @@ namespace PeachPDF.Html.Core
         internal IEnumerable<IStyleRule> GetFirstLineStyleRules(string media, CssBox box, bool userAgentOnly) =>
             GetStyleRulesByOrigin(media, box, userAgentOnly, firstLineOnly: true);
 
+        /// <summary>
+        /// Author style rules for the HTML cascade, in BOTH the normal-declaration order and the
+        /// <c>!important</c> order, each rule paired with its resolved <c>@layer</c> rank. Candidate
+        /// matching runs once; the two orderings differ only in how layer rank participates:
+        /// <list type="bullet">
+        /// <item>Normal: ascending rank (unlayered = <see cref="UnlayeredRank"/> last, so it wins).</item>
+        /// <item>Important: descending rank (unlayered first/loses, earliest layer last/wins) — the
+        /// CSS Cascade 5 §6.4.2 layer-order reversal for <c>!important</c>. Specificity and source order
+        /// within a layer are NOT reversed.</item>
+        /// </list>
+        /// When the document declares no cascade layers the two lists are identical (byte-for-byte the
+        /// pre-<c>@layer</c> ordering). The per-rule rank also lets the cascade band rules by layer for
+        /// <c>revert-layer</c>. Only the HTML cascade (<c>DomParser.CascadeApplyStyles</c>) needs this;
+        /// UA/first-line/SVG paths keep <see cref="GetStyleRulesByOrigin"/>.
+        /// </summary>
+        internal (List<LayeredStyleRule> Normal, List<LayeredStyleRule> Important) GetAuthorStyleRulesForCascade(string media, ICssDomNode node)
+        {
+            var matched = GatherMatchedRules(media, node, userAgentOnly: false, firstLineOnly: false);
+
+            List<LayeredStyleRule> Sort(bool importantOrder)
+            {
+                var ordered = importantOrder
+                    ? matched.OrderByDescending(indexed => RankOf(indexed.LayerName))
+                    : matched.OrderBy(indexed => RankOf(indexed.LayerName));
+                return ordered
+                    .ThenBy(indexed => GetMatchedSpecificity(indexed.Rule.Selector, node))
+                    .ThenBy(indexed => indexed.DocumentOrder)
+                    .Select(indexed => new LayeredStyleRule(indexed.Rule, RankOf(indexed.LayerName)))
+                    .ToList();
+            }
+
+            var normal = Sort(importantOrder: false);
+            // With no layers every rank is UnlayeredRank, so the important order is identical - reuse the
+            // same list to skip the second sort (and keep the no-@layer path allocation-for-allocation
+            // the same as before this feature).
+            var important = HasCascadeLayers ? Sort(importantOrder: true) : normal;
+            return (normal, important);
+        }
+
         private IEnumerable<IStyleRule> GetStyleRulesByOrigin(string media, ICssDomNode node, bool? userAgentOnly, bool firstLineOnly = false)
+        {
+            var matched = GatherMatchedRules(media, node, userAgentOnly, firstLineOnly);
+
+            // Stable sort by specificity, tie-broken by DocumentOrder (true source order, including
+            // across the plain-rule/@media boundary, assigned once up front by IndexRules) - equal-
+            // specificity rules keep true document order for correct source-order tiebreaking.
+            // GetMatchedSpecificity's own ListSelector-alternative resolution calls the ordinary
+            // DoesSelectorMatch, which (like the main Collect filter above) can't correctly identify
+            // which alternative of a mixed list actually matched via ::first-line - firstLineOnly uses
+            // the selector's own overall specificity instead, a documented simplification for the rare
+            // case of multiple ::first-line rules of equal origin/importance whose relative order
+            // depends on a mixed-list specificity nuance.
+            // @layer cascade-layer precedence (CSS Cascade 5 §6.4.2) sorts ahead of specificity for
+            // normal declarations: a rule in a lower-ranked layer loses to any rule in a higher-ranked
+            // layer (or an unlayered rule) regardless of specificity. Within one layer, specificity
+            // then true document order break ties. (The !important layer-order reversal is handled by
+            // GetAuthorStyleRulesForCascade for the author passes; UA/first-line have no layers.)
+            return matched
+                .OrderBy(indexed => RankOf(indexed.LayerName))
+                .ThenBy(indexed => firstLineOnly ? indexed.Rule.Selector.Specificity : GetMatchedSpecificity(indexed.Rule.Selector, node))
+                .ThenBy(indexed => indexed.DocumentOrder)
+                .Select(indexed => indexed.Rule);
+        }
+
+        /// <summary>
+        /// Gathers the candidate rules matching <paramref name="node"/> (via the tag/class/id/universal
+        /// index buckets), filtered by origin and enclosing <c>@media</c>, deduped. Unsorted — callers
+        /// apply their own cascade ordering. Extracted so the normal and <c>!important</c> author
+        /// orderings can share one matching pass (see <see cref="GetAuthorStyleRulesForCascade"/>).
+        /// </summary>
+        private List<IndexedRule> GatherMatchedRules(string media, ICssDomNode node, bool? userAgentOnly, bool firstLineOnly)
         {
             EnsureIndex();
 
@@ -393,25 +594,7 @@ namespace PeachPDF.Html.Core
                 }
             }
 
-            // Stable sort by specificity, tie-broken by DocumentOrder (true source order, including
-            // across the plain-rule/@media boundary, assigned once up front by IndexRules) - equal-
-            // specificity rules keep true document order for correct source-order tiebreaking.
-            // GetMatchedSpecificity's own ListSelector-alternative resolution calls the ordinary
-            // DoesSelectorMatch, which (like the main Collect filter above) can't correctly identify
-            // which alternative of a mixed list actually matched via ::first-line - firstLineOnly uses
-            // the selector's own overall specificity instead, a documented simplification for the rare
-            // case of multiple ::first-line rules of equal origin/importance whose relative order
-            // depends on a mixed-list specificity nuance.
-            // @layer cascade-layer precedence (CSS Cascade 5 §6.4.2) sorts ahead of specificity for
-            // normal declarations: a rule in a lower-ranked layer loses to any rule in a higher-ranked
-            // layer (or an unlayered rule) regardless of specificity. Within one layer, specificity
-            // then true document order break ties. (The !important layer-order reversal is not modeled
-            // — see the accepted-gap note; default utility-framework output is layered but not important.)
-            return matched
-                .OrderBy(indexed => indexed.LayerRank)
-                .ThenBy(indexed => firstLineOnly ? indexed.Rule.Selector.Specificity : GetMatchedSpecificity(indexed.Rule.Selector, node))
-                .ThenBy(indexed => indexed.DocumentOrder)
-                .Select(indexed => indexed.Rule);
+            return matched;
         }
 
         /// <summary>

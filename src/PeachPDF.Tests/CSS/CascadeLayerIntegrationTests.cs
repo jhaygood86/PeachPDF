@@ -105,6 +105,124 @@ public class CascadeLayerIntegrationTests
         Assert.Equal("rgb(0, 0, 255)", box.Color);
     }
 
+    // ── #237 gap 1: !important layer-order reversal (CSS Cascade 5 §6.4.2) ────────
+
+    [Fact]
+    public async Task Important_EarlierLayer_Wins_OverLaterLayer()
+    {
+        // For NORMAL declarations the later layer wins; among !important declarations the layer order
+        // reverses, so the EARLIER layer (base) wins over the later one (utilities).
+        var html = Html(
+            "@layer base { p { color: #ff0000 !important; } } @layer utilities { p { color: #0000ff !important; } }",
+            "<p>text</p>");
+        var box = await FindBoxByTag(html, "p");
+        Assert.Equal("rgb(255, 0, 0)", box.Color);
+    }
+
+    [Fact]
+    public async Task Important_LayeredRule_Wins_OverUnlayeredImportant()
+    {
+        // An unlayered !important declaration LOSES to a layered !important one (the mirror of the
+        // normal-declaration rule where unlayered wins).
+        var html = Html(
+            "@layer base { p { color: #0000ff !important; } } p { color: #ff0000 !important; }",
+            "<p>text</p>");
+        var box = await FindBoxByTag(html, "p");
+        Assert.Equal("rgb(0, 0, 255)", box.Color);
+    }
+
+    [Fact]
+    public async Task Important_WithinOneLayer_HigherSpecificityStillWins()
+    {
+        // The layer reversal is about layer order only — within a single layer, specificity still
+        // decides among !important declarations (not reversed).
+        var html = Html(
+            "@layer base { p { color: #ff0000 !important; } p.hi { color: #0000ff !important; } }",
+            "<p class='hi'>text</p>");
+        var box = await FindBoxByTag(html, "p");
+        Assert.Equal("rgb(0, 0, 255)", box.Color);
+    }
+
+    // ── #237 gap 2: nested sub-layers stay contiguous within their parent's band ──
+
+    [Fact]
+    public async Task NestedSublayers_StayContiguous_WithinParentBand()
+    {
+        // a first appears (via a.b) before c, so a's WHOLE subtree {a.b, a.d} ranks below c — even
+        // though a.d is declared last of all. Under a flat first-appearance scheme a.d would wrongly
+        // outrank c; the correct tree order makes c (the later top-level layer) win.
+        var html = Html(
+            "@layer a.b { p { color: #ff0000; } } @layer c { p { color: #00ff00; } } @layer a.d { p { color: #0000ff; } }",
+            "<p>text</p>");
+        var box = await FindBoxByTag(html, "p");
+        Assert.Equal("rgb(0, 255, 0)", box.Color);
+    }
+
+    [Fact]
+    public async Task NestedSublayer_LaterWithinParent_Wins_OverEarlierSublayer()
+    {
+        // Within one parent (a), a later-declared sub-layer (a.d) beats an earlier one (a.b).
+        var html = Html(
+            "@layer a.b { p { color: #ff0000; } } @layer a.d { p { color: #0000ff; } }",
+            "<p>text</p>");
+        var box = await FindBoxByTag(html, "p");
+        Assert.Equal("rgb(0, 0, 255)", box.Color);
+    }
+
+    [Fact]
+    public async Task NestedSublayer_VsParentDirectRules_CharacterizesCurrentOrdering()
+    {
+        // Characterization (NOT a spec-authority assertion): when a layer has BOTH direct rules and a
+        // nested sub-layer, PeachPDF ranks the parent's own direct rules *before* (lower priority than)
+        // its nested sub-layers, so the sub-layer wins here. The exact CSS Cascade 5 §6.2 treatment of
+        // direct rules interleaved with their own sub-layers is a documented simplification (see the
+        // accepted-gap note / tracked follow-up); the unambiguous sibling-contiguity behavior is covered
+        // by NestedSublayers_StayContiguous_WithinParentBand above. This pins today's behavior so a
+        // future deliberate change to it is visible.
+        var html = Html(
+            "@layer a { p { color: #ff0000; } @layer b { p { color: #0000ff; } } }",
+            "<p>text</p>");
+        var box = await FindBoxByTag(html, "p");
+        Assert.Equal("rgb(0, 0, 255)", box.Color);
+    }
+
+    // ── #240: layer-aware revert-layer ───────────────────────────────────────────
+
+    [Fact]
+    public async Task RevertLayer_RollsBackToLowerLayer_NotToOrigin()
+    {
+        // revert-layer in the later layer reveals the earlier layer's value (blue), rather than rolling
+        // all the way back to the UA/origin default the way plain `revert` would.
+        var html = Html(
+            "@layer base { p { color: #0000ff; } } @layer top { p { color: revert-layer; } }",
+            "<p>text</p>");
+        var box = await FindBoxByTag(html, "p");
+        Assert.Equal("rgb(0, 0, 255)", box.Color);
+    }
+
+    [Fact]
+    public async Task Revert_StillRollsBackToOrigin_NotToLowerLayer()
+    {
+        // Regression guard: plain `revert` is unchanged — it rolls back past the whole author origin, so
+        // the earlier layer's blue is NOT revealed (the inherited/initial color applies instead).
+        var html = Html(
+            "@layer base { p { color: #0000ff; } } @layer top { p { color: revert; } }",
+            "<p>text</p>");
+        var box = await FindBoxByTag(html, "p");
+        Assert.NotEqual("rgb(0, 0, 255)", box.Color);
+    }
+
+    [Fact]
+    public async Task RevertLayer_OnCustomProperty_RollsBackToLowerLayer()
+    {
+        // revert-layer works for custom properties too: the consumer resolves to the lower layer's value.
+        var html = Html(
+            "@layer base { p { --c: #0000ff; } } @layer top { p { --c: revert-layer; } } p { color: var(--c); }",
+            "<p>text</p>");
+        var box = await FindBoxByTag(html, "p");
+        Assert.Equal("rgb(0, 0, 255)", box.Color);
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────────
 
     private static string Html(string css, string body) =>
