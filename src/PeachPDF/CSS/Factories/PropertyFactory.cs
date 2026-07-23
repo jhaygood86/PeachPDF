@@ -187,6 +187,7 @@ namespace PeachPDF.CSS
 
             AddLonghand(PropertyNames.GridTemplateColumns, () => new GridTemplateColumnsProperty());
             AddLonghand(PropertyNames.GridTemplateRows, () => new GridTemplateRowsProperty());
+            AddLonghand(PropertyNames.GridTemplateAreas, () => new GridTemplateAreasProperty());
             AddLonghand(PropertyNames.GridColumnStart, () => new GridColumnStartProperty());
             AddLonghand(PropertyNames.GridColumnEnd, () => new GridColumnEndProperty());
             AddLonghand(PropertyNames.GridRowStart, () => new GridRowStartProperty());

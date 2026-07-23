@@ -127,6 +127,7 @@ namespace PeachPDF.CSS
         public static readonly string Gap = "gap";
         public static readonly string GridTemplateColumns = "grid-template-columns";
         public static readonly string GridTemplateRows = "grid-template-rows";
+        public static readonly string GridTemplateAreas = "grid-template-areas";
         public static readonly string GridAutoColumns = "grid-auto-columns";
         public static readonly string GridAutoRows = "grid-auto-rows";
         public static readonly string GridAutoFlow = "grid-auto-flow";
