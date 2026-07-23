@@ -344,6 +344,49 @@ namespace PeachPDF.Tests.CSS
             var property = ParseDeclaration(snippet);
             Assert.Equal(valid, ((BackgroundImageProperty)property).HasValue);
         }
+
+        [Theory]
+        // conic-gradient() is now validated at parse time (issue #244) instead of accepting anything.
+        // Every form CssValueParser.ParseConicGradient renders must still be accepted here — these mirror
+        // the values in ConicGradientIntegrationTests / ColorSpaceGradientIntegrationTests.
+        [InlineData("conic-gradient(red, blue)")]
+        [InlineData("conic-gradient(red, yellow, blue)")]
+        [InlineData("conic-gradient(from 90deg, red, blue)")]
+        [InlineData("conic-gradient(at 25% 75%, red, green, blue)")]
+        [InlineData("conic-gradient(from 45deg at 30% 70%, red, blue)")]
+        [InlineData("conic-gradient(red 0deg, blue 180deg, green 360deg)")]
+        [InlineData("conic-gradient(red 0%, blue 50%, green 100%)")]
+        [InlineData("conic-gradient(red calc(1turn * 0.35), blue calc(1turn * 0.7), green 1turn)")]
+        // A non-angle-typed calc() position (percentage here) is also accepted, matching the renderer's
+        // TryParseConicAngle calc branch which resolves any calc()-family against a full turn.
+        [InlineData("conic-gradient(red calc(50%), blue)")]
+        [InlineData("conic-gradient(red 0 90deg, blue 90deg 180deg, green 180deg 360deg)")]
+        [InlineData("conic-gradient(rgba(255,0,0,0), red)")]
+        [InlineData("repeating-conic-gradient(red 0deg 30deg, blue 30deg 60deg)")]
+        [InlineData("repeating-conic-gradient(from 45deg, red 0deg, blue 60deg)")]
+        [InlineData("repeating-conic-gradient(#000 0 25%, #fff 25% 50%)")]
+        [InlineData("conic-gradient(in oklch, red, blue)")]
+        public void BackgroundImageConicGradientAccepted(string gradient)
+        {
+            var property = ParseDeclaration($"background-image: {gradient}");
+            Assert.IsType<BackgroundImageProperty>(property);
+            var backgroundImage = (BackgroundImageProperty)property;
+            Assert.True(backgroundImage.HasValue);
+            Assert.False(backgroundImage.IsInitial);
+        }
+
+        [Theory]
+        // Malformed conic gradients must now be DROPPED at parse time (HasValue == false) so a prior
+        // background-image (or the initial value) wins, per CSS Cascade §4.1 — the bug in issue #244.
+        [InlineData("conic-gradient(!!! 5px \"garbage\")")]          // the issue's example
+        [InlineData("conic-gradient(red 5px, blue)")]               // a <length> is not a valid angular position
+        [InlineData("conic-gradient(from red, blue, green)")]       // "from" prelude needs an <angle>, not a colour
+        [InlineData("conic-gradient(red 5, blue)")]                 // a bare non-zero number is not a valid position
+        public void BackgroundImageConicGradientRejected(string gradient)
+        {
+            var property = ParseDeclaration($"background-image: {gradient}");
+            Assert.False(((BackgroundImageProperty)property).HasValue);
+        }
     }
 }
 
