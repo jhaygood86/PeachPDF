@@ -102,6 +102,25 @@ namespace PeachPDF.Tests.Integration
 
         // Zero the body's UA-default 8px margin (as the invoice does with `body,html { margin:0 }`)
         // so the body content box is exactly the 400pt page and expected values read literally.
+        [Fact]
+        public async Task Table_MarginZeroAuto_BothMarginGetters_CenterAgainstResolvedWidth()
+        {
+            // A `margin: 0 auto` table is centered by CssLayoutEngineTable, which passes the resolved
+            // table width back into GetActualMarginLeft/Right explicitly (boxWidth). Both getters must
+            // then split the free space against that width (containingWidth - boxWidth) / 2.
+            var html = Wrap("<div id='wrap' style='width:200pt'>"
+                + "<table id='t' style='width:100pt; margin:0 auto'><tr><td>A</td></tr></table></div>");
+            var (root, _) = await BuildAndLayout(html);
+            var wrap = FindById(root, "wrap")!;
+            var table = FindById(root, "t")!;
+
+            var containing = wrap.ClientRight - wrap.ClientLeft; // 200pt content box
+            var expected = (containing - 100.0) / 2.0;          // 50pt each side
+
+            Assert.Equal(expected, CssLayoutEngine.GetActualMarginLeft(table, 100.0), 3);
+            Assert.Equal(expected, CssLayoutEngine.GetActualMarginRight(table, 100.0), 3);
+        }
+
         private static string Wrap(string body) =>
             $"<!DOCTYPE html><html><head><style>body,html{{margin:0}}</style></head><body>{body}</body></html>";
 
