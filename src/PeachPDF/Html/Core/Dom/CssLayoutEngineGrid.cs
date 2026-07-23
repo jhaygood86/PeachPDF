@@ -153,39 +153,135 @@ namespace PeachPDF.Html.Core.Dom
 
         // ─── Track sizing ─────────────────────────────────────────────────────────
 
-        /// <summary>Sizes the explicit column tracks against the container's content width. Fixed lengths
-        /// and percentages resolve directly; <c>auto</c> (and, until their stages, other non-fixed sizes)
-        /// share the leftover space equally.</summary>
+        /// <summary>
+        /// Sizes the explicit column tracks against the container's definite content width (CSS Grid §11):
+        /// resolve each track's base and growth-limit, then either distribute the free space to <c>fr</c>
+        /// tracks (§11.7) or, when there is no flex, maximize the intrinsic (auto) tracks toward their
+        /// growth limits. Intrinsic min/max-content contributions from items land in Stage 7; until then an
+        /// <c>auto</c>/intrinsic track has a zero base and shares leftover space.
+        /// </summary>
         private Track[] SizeColumnTracks(IReadOnlyList<GridTrackSize> defs, double contentWidth, double gap)
         {
+            var n = defs.Count;
             var tracks = defs.Select(d => new Track { Def = d }).ToArray();
+            var bases = new double[n];
+            var limits = new double[n];    // double.PositiveInfinity for an unbounded growth limit
+            var flexes = new double[n];
 
-            double fixedTotal = 0;
-            var autoCount = 0;
-            foreach (var t in tracks)
+            for (var i = 0; i < n; i++)
+                InitTrack(defs[i], contentWidth, out bases[i], out limits[i], out flexes[i]);
+
+            var totalGap = n > 1 ? gap * (n - 1) : 0;
+            var totalFlex = flexes.Sum();
+
+            if (totalFlex > 0)
             {
-                if (IsFixed(t.Def))
-                {
-                    t.Size = ResolveFixedLength(t.Def, contentWidth);
-                    fixedTotal += t.Size;
-                }
-                else
-                {
-                    autoCount++;
-                }
+                // fr tracks absorb the leftover after the non-flex tracks' bases and the gaps.
+                double nonFlexBase = 0;
+                for (var i = 0; i < n; i++)
+                    if (flexes[i] <= 0)
+                        nonFlexBase += bases[i];
+
+                var spaceToFill = Math.Max(0, contentWidth - nonFlexBase - totalGap);
+                var frSize = FindFlexFraction(bases, flexes, spaceToFill);
+
+                for (var i = 0; i < n; i++)
+                    tracks[i].Size = flexes[i] > 0 ? Math.Max(bases[i], flexes[i] * frSize) : bases[i];
             }
-
-            var totalGap = tracks.Length > 1 ? gap * (tracks.Length - 1) : 0;
-            var free = Math.Max(0, contentWidth - fixedTotal - totalGap);
-            if (autoCount > 0)
+            else
             {
-                var share = free / autoCount;
-                foreach (var t in tracks)
-                    if (!IsFixed(t.Def))
-                        t.Size = share;
+                // No flex: start each track at its base, then grow the intrinsic (unbounded-limit) tracks
+                // to share the remaining free space.
+                double baseTotal = 0;
+                for (var i = 0; i < n; i++) { tracks[i].Size = bases[i]; baseTotal += bases[i]; }
+
+                var free = Math.Max(0, contentWidth - baseTotal - totalGap);
+                var growable = Enumerable.Range(0, n).Where(i => double.IsPositiveInfinity(limits[i])).ToArray();
+                if (growable.Length > 0 && free > 0)
+                {
+                    var share = free / growable.Length;
+                    foreach (var i in growable)
+                        tracks[i].Size += share;
+                }
             }
 
             return tracks;
+        }
+
+        /// <summary>Resolves a track's base size, growth limit, and flex factor (CSS Grid §11.4).</summary>
+        private void InitTrack(GridTrackSize def, double contentBase, out double baseSize, out double limit, out double flex)
+        {
+            baseSize = 0;
+            limit = double.PositiveInfinity;
+            flex = 0;
+
+            switch (def.Kind)
+            {
+                case GridTrackKind.Length:
+                case GridTrackKind.Percent:
+                    baseSize = limit = ResolveFixedLength(def, contentBase);
+                    break;
+                case GridTrackKind.Flex:
+                    flex = def.Flex;
+                    break;
+                case GridTrackKind.Minmax:
+                    baseSize = IsFixed(def.Min) ? ResolveFixedLength(def.Min, contentBase) : 0;
+                    if (def.Max.Kind == GridTrackKind.Flex)
+                        flex = def.Max.Flex;
+                    else
+                        limit = IsFixed(def.Max) ? ResolveFixedLength(def.Max, contentBase) : double.PositiveInfinity;
+                    if (!double.IsPositiveInfinity(limit) && limit < baseSize) limit = baseSize;
+                    break;
+                case GridTrackKind.FitContent:
+                    // fit-content(L): a fixed upper cap; intrinsic base lands in Stage 7.
+                    limit = ResolveFixedLength(def, contentBase);
+                    break;
+                case GridTrackKind.Auto:
+                case GridTrackKind.MinContent:
+                case GridTrackKind.MaxContent:
+                    // Intrinsic — real min/max-content contributions arrive in Stage 7.
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// The CSS Grid §11.7 "find the size of an fr" loop: distributes <paramref name="spaceToFill"/>
+        /// across the flex tracks in proportion to their flex factors, freezing any flex track whose base
+        /// floor (e.g. the min of <c>minmax(100px, 1fr)</c>) exceeds its proportional share.
+        /// </summary>
+        private static double FindFlexFraction(double[] bases, double[] flexes, double spaceToFill)
+        {
+            var n = bases.Length;
+            var frozen = new bool[n];
+
+            while (true)
+            {
+                double remainingSpace = spaceToFill;
+                double remainingFlex = 0;
+                for (var i = 0; i < n; i++)
+                {
+                    if (flexes[i] <= 0) continue;
+                    if (frozen[i]) remainingSpace -= bases[i];
+                    else remainingFlex += flexes[i];
+                }
+
+                if (remainingFlex <= 0) return 0;
+
+                var frSize = Math.Max(0, remainingSpace) / remainingFlex;
+
+                var anyNewlyFrozen = false;
+                for (var i = 0; i < n; i++)
+                {
+                    if (flexes[i] <= 0 || frozen[i]) continue;
+                    if (bases[i] > flexes[i] * frSize)
+                    {
+                        frozen[i] = true;
+                        anyNewlyFrozen = true;
+                    }
+                }
+
+                if (!anyNewlyFrozen) return frSize;
+            }
         }
 
         private static void AssignPositions(Track[] tracks, double start, double gap)

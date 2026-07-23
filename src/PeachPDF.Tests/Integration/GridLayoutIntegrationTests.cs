@@ -156,6 +156,72 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(a.Location.Y + 40, b.Location.Y, 1.0);
         }
 
+        // ─── Stage 3: fr distribution + minmax ───────────────────────────────────
+
+        [Fact]
+        public async Task FrTracks_DistributeSpaceProportionally()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:300pt; grid-template-columns:1fr 2fr;'>
+                    <div id='a' style='height:10pt;'></div>
+                    <div id='b' style='height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            Assert.Equal(100, a.ActualBoxSizingWidth, 1.0);
+            Assert.Equal(200, b.ActualBoxSizingWidth, 1.0);
+        }
+
+        [Fact]
+        public async Task FixedAndFrTracks_FrAbsorbsRemainder()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:300pt; grid-template-columns:100pt 1fr;'>
+                    <div id='a' style='height:10pt;'></div>
+                    <div id='b' style='height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            Assert.Equal(100, a.ActualBoxSizingWidth, 1.0);
+            Assert.Equal(200, b.ActualBoxSizingWidth, 1.0);
+        }
+
+        [Fact]
+        public async Task Minmax_FloorIsRespected_WhenFractionWouldBeSmaller()
+        {
+            // Two minmax(120pt, 1fr) tracks in a 200pt container: the 1fr share (100pt) is below the
+            // 120pt floor, so each track is pinned to its 120pt minimum.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:200pt; grid-template-columns:minmax(120pt,1fr) minmax(120pt,1fr);'>
+                    <div id='a' style='height:10pt;'></div>
+                    <div id='b' style='height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            Assert.Equal(120, a.ActualBoxSizingWidth, 1.0);
+            Assert.Equal(120, b.ActualBoxSizingWidth, 1.0);
+        }
+
+        [Fact]
+        public async Task Minmax_ZeroFloorOneFr_BehavesLikeFr()
+        {
+            // The Tailwind grid-cols-2 idiom: repeat(2, minmax(0, 1fr)).
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:300pt; grid-template-columns:repeat(2, minmax(0, 1fr)); column-gap:20pt;'>
+                    <div id='a' style='height:10pt;'></div>
+                    <div id='b' style='height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            // (300 - 20 gap) / 2 = 140 each.
+            Assert.Equal(140, a.ActualBoxSizingWidth, 1.0);
+            Assert.Equal(140, b.ActualBoxSizingWidth, 1.0);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>
