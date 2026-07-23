@@ -1,7 +1,11 @@
-using System.Diagnostics;
 using System.Text;
 using PeachPDF;
+using PeachPDF.Adapters;
+using PeachPDF.Html.Adapters;
+using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.Html.Core;
 using PeachPDF.PdfSharpCore;
+using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 
@@ -107,25 +111,28 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task ManyNestedNormalFlowBoxes_RenderWithinASaneTimeBound()
+        public async Task ManyNestedNormalFlowBoxes_PaintWorkIsIndependentOfNestingDepth()
         {
-            // Regression guard for FlattenStackingContext's old O(depth) blowup: with no out-of-flow
-            // content anywhere, every box used to be independently re-painted once per ancestor level
-            // between it and the root. This document has real nesting depth (six wrapper levels) times
-            // real breadth (many repeated sections), so a regression back to the old behaviour would
-            // make this take dramatically longer than the generous bound below.
-            var html = BuildDeeplyNestedRepeatedSectionsHtml(sectionCount: 40, nestingDepth: 6);
+            // Deterministic (machine-speed-independent) regression guard for FlattenStackingContext's
+            // old O(depth) blowup: with no out-of-flow content anywhere, a single paint pass used to
+            // re-paint every box once per ancestor level between it and the root, so the total paint
+            // work scaled with nesting depth.
+            //
+            // The wrapper divs here are empty (no border/background/text), so they emit no draw
+            // operations of their own — painting the *same* section content at nesting depth 1 vs
+            // depth 8 must therefore emit the exact same number of draw operations. A regression back
+            // to per-ancestor repainting would multiply the deep count by roughly the nesting depth.
+            //
+            // This replaced an earlier wall-clock bound (`elapsed < 5000ms`), which flaked on slow or
+            // contended CI runners: a non-regressed render on a busy Windows agent could legitimately
+            // exceed the bound. Counting draw operations is exact and independent of how fast the
+            // machine is, while still catching the algorithmic regression the timing bound targeted.
+            const int sections = 40;
+            var shallow = await CountDrawOperationsAsync(BuildDeeplyNestedRepeatedSectionsHtml(sections, nestingDepth: 1));
+            var deep = await CountDrawOperationsAsync(BuildDeeplyNestedRepeatedSectionsHtml(sections, nestingDepth: 8));
 
-            var generator = new PdfGenerator();
-            var sw = Stopwatch.StartNew();
-            var document = await generator.GeneratePdf(html, PageSize.A4, margin: 20);
-            sw.Stop();
-
-            Assert.True(document.PageCount > 0);
-            Assert.True(sw.ElapsedMilliseconds < 5000,
-                $"rendering took {sw.ElapsedMilliseconds}ms - this should complete in well under a second; " +
-                "a multi-second time suggests FlattenStackingContext has regressed back to repainting every " +
-                "box once per ancestor level.");
+            Assert.True(shallow > 0, "the document should paint some content");
+            Assert.Equal(shallow, deep);
         }
 
         // ── Helpers ────────────────────────────────────────────────────────────
@@ -173,6 +180,38 @@ namespace PeachPDF.Tests.Integration
             return sb.ToString();
         }
 
+        /// <summary>
+        /// Lays out <paramref name="html"/> and paints the whole box tree once through a graphics
+        /// stub that counts every draw operation. Painting the root directly (with an all-encompassing
+        /// clip) exercises the exact <see cref="PeachPDF.Html.Core.Utils.DomUtils"/> stacking-flatten
+        /// path the regression lived in, so the returned count is the total paint work for the document.
+        /// </summary>
+        private static async Task<int> CountDrawOperationsAsync(string html)
+        {
+            var adapter = new PdfSharpAdapter();
+            var container = new HtmlContainerInt(adapter);
+            await container.SetHtml(html, null);
+
+            var size = new XSize(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+
+            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
+            using (var layoutGraphics = new GraphicsAdapter(adapter, measure, 1.0))
+            {
+                await container.PerformLayout(layoutGraphics);
+            }
+
+            var counter = new DrawCountingGraphics(adapter);
+            if (container.Root is not null)
+            {
+                container.Root.ResetPaint();
+                await container.Root.Paint(counter);
+            }
+
+            return counter.DrawOperations;
+        }
+
         private static bool PageHasContent(PdfPage page)
         {
             try
@@ -200,6 +239,68 @@ namespace PeachPDF.Tests.Integration
             {
                 return false;
             }
+        }
+
+        /// <summary>
+        /// An <see cref="RGraphics"/> stub that counts every draw call and no-ops everything else,
+        /// with an unbounded clip so no box is pruned as off-page. Mirrors the recording-graphics
+        /// pattern used elsewhere (e.g. <c>TaggedPdfPaintOrderTests</c>), including returning a real
+        /// (no-op) path from <see cref="GetGraphicsPath"/> so border/marker painting doesn't NRE.
+        /// </summary>
+        private sealed class DrawCountingGraphics : RGraphics
+        {
+            public int DrawOperations { get; private set; }
+
+            public DrawCountingGraphics(RAdapter adapter)
+                : base(adapter, new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
+
+            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl, double letterSpacing = 0) => DrawOperations++;
+            public override void DrawLine(RPen pen, double x1, double y1, double x2, double y2) => DrawOperations++;
+            public override void DrawRectangle(RPen pen, double x, double y, double width, double height) => DrawOperations++;
+            public override void DrawRectangle(RBrush brush, double x, double y, double width, double height) => DrawOperations++;
+            public override void DrawImage(RImage image, RRect destRect, RRect srcRect) => DrawOperations++;
+            public override void DrawImage(RImage image, RRect destRect) => DrawOperations++;
+            public override void DrawImageMasked(RImage image, RImage maskImage, RRect destRect) => DrawOperations++;
+            public override void DrawImageWithOpacity(RImage image, RRect destRect, double opacity) => DrawOperations++;
+            public override void DrawPath(RPen pen, RGraphicsPath path) => DrawOperations++;
+            public override void DrawPath(RBrush brush, RGraphicsPath path) => DrawOperations++;
+            public override void DrawPolygon(RBrush brush, RPoint[] points) => DrawOperations++;
+
+            public override void PushTransform(RMatrix matrix) { }
+            public override void PopTransform() { }
+            public override void PushClip(RRect rect) => _clipStack.Push(rect);
+            public override void PushClip(RGraphicsPath path) => _clipStack.Push(_clipStack.Peek());
+            public override void PopClip() { if (_clipStack.Count > 1) _clipStack.Pop(); }
+            public override void PushClipExclude(RRect rect) { }
+            public override object SetAntiAliasSmoothingMode() => new object();
+            public override void ReturnPreviousSmoothingMode(object? prevMode) { }
+            public override RGraphicsPath GetGraphicsPath() => new NoOpGraphicsPath();
+            public override (RGraphics Graphics, RImage Image)? CreateTile(double width, double height) => null;
+            public override void BeginMarkedContent(string structureType, int mcid) { }
+            public override void EndMarkedContent() { }
+            public override void BeginArtifact() { }
+            public override RSize MeasureString(string str, RFont font) => new(10, 12);
+            public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth)
+            {
+                charFit = str?.Length ?? 0;
+                charFitWidth = maxWidth;
+            }
+            public override void Dispose() { }
+        }
+
+        private sealed class NoOpGraphicsPath : RGraphicsPath
+        {
+            public override void Start(double x, double y) { }
+            public override void LineTo(double x, double y) { }
+            public override void ArcTo(double x, double y, double radiusX, double radiusY, Corner corner) { }
+            public override void AddMove(double x, double y) { }
+            public override void AddBezierTo(double x1, double y1, double x2, double y2, double x3, double y3) { }
+            public override void AddArc(double x, double y, double radiusX, double radiusY, double rotationAngle, bool isLargeArc, bool sweepClockwise) { }
+            public override void CloseFigure() { }
+            public override void Transform(RMatrix matrix) { }
+            public override void AddPath(RGraphicsPath path) { }
+            public override RFillMode FillMode { get; set; }
+            public override void Dispose() { }
         }
     }
 }
