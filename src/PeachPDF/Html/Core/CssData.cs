@@ -244,6 +244,13 @@ namespace PeachPDF.Html.Core
                                 list.Add(indexedRule);
                             }
                         }
+
+                        // CSS Nesting: a nested rule's selector is already resolved to an absolute
+                        // selector against its parent, so index it like any other rule - in the SAME
+                        // media/@layer context and right after the parent in document order (so it wins
+                        // ties by source order, matching its textual position after the parent).
+                        if (styleRule.NestedRules.Count > 0)
+                            IndexRules(styleRule.NestedRules, isUserAgent, enclosingMedia, currentLayer, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order);
                         break;
 
                     case IMediaRule mediaRule:

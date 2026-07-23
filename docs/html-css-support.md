@@ -582,6 +582,22 @@ CSS comments (`/* ... */`) are supported anywhere in a stylesheet, including bet
 | Adjacent sibling | `div + p` | Matches `p` immediately preceded by `div` at the same level |
 | General sibling | `div ~ p` | Matches `p` preceded by `div` anywhere at the same level |
 
+### Nesting
+
+[CSS Nesting](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_nesting) is supported: a style rule may contain nested style rules, and the nesting selector `&` refers to the parent rule.
+
+```css
+.card {
+  color: #333;
+  & .title { font-weight: 700; }   /* == .card .title (& is explicit) */
+  .body { color: #555; }           /* == .card .body (implicit descendant) */
+  &.featured { border: 2px solid gold; }  /* == .card.featured */
+  > img { border-radius: 8px; }    /* == .card > img */
+}
+```
+
+A nested selector is resolved against its parent (`&` takes the parent's specificity, exactly like `:is(<parent>)`); a nested selector with no `&` is made a descendant of the parent. Nesting works to any depth, under a parent selector list (`.a, .b { & .c { } }` matches under either), with a bare type selector (`.card { img { } }`), and inside [`@media`](#css-at-rules)/[`@layer`](#css-at-rules) (the nested rule inherits that context). **Not supported:** an at-rule (`@media`/`@layer`/`@supports`) nested *inside* a style rule — place those at the top level.
+
 ### Pseudo-elements
 
 `::before`, `::after`, `::marker`, `::first-letter`, and `::first-line` are supported. All other pseudo-elements are parsed but have no effect.
