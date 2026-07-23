@@ -661,6 +661,156 @@ namespace PeachPDF.Tests.Integration
             Assert.True(container.ActualSize.Height > 842, $"grid should span multiple pages, was {container.ActualSize.Height}");
         }
 
+        // ─── Named lines (#261) ──────────────────────────────────────────────────
+
+        [Fact]
+        public async Task NamedLine_PlacesItemAtThatLine()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:300pt; grid-template-columns:[c1] 100pt [c2] 100pt [c3] 100pt [c4];'>
+                    <div id='a' style='grid-column-start:c3; height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            // Line c3 is the 3rd column line (index 2) → the item starts at content-left + 200pt.
+            Assert.Equal(container.ClientLeft + 200, a.Location.X, 1.5);
+        }
+
+        [Fact]
+        public async Task NamedNthLine_NegativeCountsFromLastMatchingLine()
+        {
+            // 'c' labels lines 1, 2, 3, 4 (three 100pt columns). 'c 1' is the first c (line 1) and 'c -1'
+            // is the last (line 4), so the item spans all three columns = 300pt.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:300pt; grid-template-columns:[c] 100pt [c] 100pt [c] 100pt [c];'>
+                    <div id='a' style='grid-column-start:c 1; grid-column-end:c -1; height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            Assert.Equal(300, a.ActualBoxSizingWidth, 2.0);
+        }
+
+        [Fact]
+        public async Task NamedLineRange_SpansBetweenTwoNamedLines()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:300pt; grid-template-columns:[start] 100pt 100pt [mid] 100pt [end];'>
+                    <div id='a' style='grid-column-start:start; grid-column-end:mid; height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            // start = line 1, mid = line 3 → spans columns 1-2 = 200pt.
+            Assert.Equal(200, a.ActualBoxSizingWidth, 1.5);
+        }
+
+        // ─── grid-template-areas (#261) ──────────────────────────────────────────
+
+        [Fact]
+        public async Task GridTemplateAreas_EstablishesTrackCounts_AndAreaEdgeLinesPlaceItems()
+        {
+            // A 2-row × 3-col area grid. Explicit track sizes are given so the test exercises area
+            // placement (the #261 feature) against known geometry; an item placed by an area's
+            // -start/-end edges (via the suffix rule on the longhands) fills exactly that area.
+            var html = Wrap(@"
+                <div id='container' style=""display:grid; width:300pt;
+                     grid-template-columns:100pt 100pt 100pt; grid-template-rows:60pt 100pt;
+                     grid-template-areas: 'header header header' 'nav main main';"">
+                    <div id='m' style=""grid-row-start:main; grid-row-end:main;
+                         grid-column-start:main; grid-column-end:main;""></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var m = FindById(root, "m")!;
+            // main occupies row 1 (cols 1-2): 2 columns = 200pt wide, the 100pt second row tall,
+            // starting at column 1 (100pt) and row 1 (60pt).
+            Assert.Equal(200, m.ActualBoxSizingWidth, 2.0);
+            Assert.Equal(100, m.ActualBoxSizingHeight, 2.0);
+            Assert.Equal(container.ClientLeft + 100, m.Location.X, 2.0);
+            Assert.Equal(container.ClientTop + 60, m.Location.Y, 2.0);
+        }
+
+        [Fact]
+        public async Task GridTemplateAreas_WithNoExplicitColumns_DerivesColumnCountFromAreas()
+        {
+            // No grid-template-columns: the 3-column area grid drives the column count, and the columns
+            // (auto, default stretch) share the container width — so each area cell is 100pt wide.
+            var html = Wrap(@"
+                <div id='container' style=""display:grid; width:300pt; grid-template-rows:40pt;
+                     grid-template-areas: 'a b c';"">
+                    <div id='b' style=""grid-column-start:b; grid-column-end:b; height:10pt;""></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var b = FindById(root, "b")!;
+            // b area is the middle column → starts at content-left + 100pt, one column (100pt) wide.
+            Assert.Equal(container.ClientLeft + 100, b.Location.X, 2.0);
+            Assert.Equal(100, b.ActualBoxSizingWidth, 2.0);
+        }
+
+        // ─── grid-area / grid-column named shorthand copy rule (#261) ─────────────
+
+        [Fact]
+        public async Task GridAreaNamedShorthand_FillsWholeArea()
+        {
+            // grid-area: main → all four edges resolve to the main area (the §8.3.1 custom-ident copy rule).
+            var html = Wrap(@"
+                <div id='container' style=""display:grid; width:300pt;
+                     grid-template-columns:100pt 100pt 100pt; grid-template-rows:60pt 100pt;
+                     grid-template-areas: 'header header header' 'nav main main';"">
+                    <div id='m' style=""grid-area:main;""></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var m = FindById(root, "m")!;
+            Assert.Equal(200, m.ActualBoxSizingWidth, 2.0);
+            Assert.Equal(100, m.ActualBoxSizingHeight, 2.0);
+            Assert.Equal(container.ClientLeft + 100, m.Location.X, 2.0);
+            Assert.Equal(container.ClientTop + 60, m.Location.Y, 2.0);
+        }
+
+        [Fact]
+        public async Task GridColumnNamedShorthand_SpansBothNamedEdges()
+        {
+            // grid-column: main → both column edges = main (copy rule) → spans main's columns.
+            var html = Wrap(@"
+                <div id='container' style=""display:grid; width:300pt;
+                     grid-template-columns:100pt 100pt 100pt; grid-template-rows:40pt;
+                     grid-template-areas: 'nav main main';"">
+                    <div id='m' style=""grid-column:main; height:10pt;""></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var m = FindById(root, "m")!;
+            Assert.Equal(200, m.ActualBoxSizingWidth, 2.0);
+        }
+
+        [Fact]
+        public async Task GridColumnNumberShorthand_LeavesEndAuto_SpanOne()
+        {
+            // A line NUMBER does not copy (unlike a custom-ident): grid-column: 2 is a span-1 placement.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:300pt; grid-template-columns:repeat(3, 100pt);'>
+                    <div id='m' style='grid-column:2; height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var m = FindById(root, "m")!;
+            Assert.Equal(100, m.ActualBoxSizingWidth, 2.0);           // span 1, not to the end
+            Assert.Equal(container.ClientLeft + 100, m.Location.X, 2.0); // column 2 (index 1)
+        }
+
+        [Fact]
+        public async Task GridColumnSlashShorthand_StillSpansExplicitLines()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:300pt; grid-template-columns:repeat(3, 100pt);'>
+                    <div id='m' style='grid-column:1 / 3; height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var m = FindById(root, "m")!;
+            Assert.Equal(200, m.ActualBoxSizingWidth, 2.0);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>

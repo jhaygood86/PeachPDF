@@ -44,14 +44,41 @@ namespace PeachPDF.Tests.CSS
         }
 
         [Theory]
+        [InlineData("sidebar")]
+        [InlineData("main-start")]
+        public void NamedLine_Parses(string value)
+        {
+            var line = Parse(value);
+            Assert.NotNull(line);
+            Assert.False(line.IsAuto);
+            Assert.False(line.IsSpan);
+            Assert.Equal(value, line.Name);
+            Assert.Equal(1, line.Value);
+        }
+
+        [Theory]
+        [InlineData("col 2", "col", 2)]
+        [InlineData("2 col", "col", 2)]
+        [InlineData("col -1", "col", -1)]
+        public void NamedNthLine_Parses(string value, string name, int nth)
+        {
+            var line = Parse(value);
+            Assert.NotNull(line);
+            Assert.Equal(name, line.Name);
+            Assert.Equal(nth, line.Value);
+        }
+
+        [Theory]
         [InlineData("")]
         [InlineData("0")]           // line 0 is invalid
         [InlineData("span 0")]      // span must be >= 1
         [InlineData("span")]        // span needs a count
         [InlineData("span auto")]
         [InlineData("1.5")]         // not an integer
-        [InlineData("[name]")]      // named lines out of scope
-        [InlineData("banana")]
+        [InlineData("[name]")]      // bracketed line names belong in a track list, not a <grid-line>
+        [InlineData("none")]        // a CSS-wide/reserved keyword is not a custom-ident line name
+        [InlineData("initial")]
+        [InlineData("span foo")]    // span <custom-ident> is out of v1 scope
         public void Invalid_ReturnsNull(string value)
         {
             Assert.Null(Parse(value));
