@@ -117,6 +117,53 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(595.28, container.CssPageSize!.Value.Height, 2);
         }
 
+        [Fact]
+        public async Task Size_EmDimensions_ResolveAgainstPageFontSize_WhenSet()
+        {
+            // Issue #162: when the @page context sets its own font-size, em/ex in `size` resolve against it
+            // (css-page-3 §7.1), not the root font. font-size:30pt => 10em = 300pt (square).
+            var container = await BuildAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { font-size: 30pt; size: 10em; }
+                </style></head><body><p>content</p></body></html>
+                """);
+
+            Assert.NotNull(container.CssPageSize);
+            Assert.Equal(300, container.CssPageSize!.Value.Width, 3);
+            Assert.Equal(300, container.CssPageSize!.Value.Height, 3);
+        }
+
+        [Fact]
+        public async Task Size_TwoEmDimensions_ResolveAgainstPageFontSize()
+        {
+            // font-size:30pt => 5em x 10em = 150pt x 300pt.
+            var container = await BuildAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { font-size: 30pt; size: 5em 10em; }
+                </style></head><body><p>content</p></body></html>
+                """);
+
+            Assert.NotNull(container.CssPageSize);
+            Assert.Equal(150, container.CssPageSize!.Value.Width, 3);
+            Assert.Equal(300, container.CssPageSize!.Value.Height, 3);
+        }
+
+        [Fact]
+        public async Task Size_RemDimension_StaysRootBased_EvenWithPageFontSize()
+        {
+            // rem always resolves against the root element's font, regardless of @page font-size.
+            var container = await BuildAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { font-size: 30pt; size: 10rem; }
+                </style></head><body><p>content</p></body></html>
+                """);
+
+            var remPt = container.Root!.GetRemHeight(); // ppp = 1: layout units == pt
+            Assert.NotNull(container.CssPageSize);
+            Assert.Equal(10 * remPt, container.CssPageSize!.Value.Width, 3);
+            Assert.NotEqual(300, container.CssPageSize!.Value.Width, 3); // not the 30pt page font
+        }
+
         private static async Task<HtmlContainerInt> BuildAsync(string html)
         {
             var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
