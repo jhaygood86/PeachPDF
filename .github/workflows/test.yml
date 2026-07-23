@@ -56,6 +56,27 @@ jobs:
       if: runner.os == 'Linux' && steps.changes.outputs.src == 'true'
       run: sudo apt-get update && sudo apt-get install -y fontconfig fonts-liberation fonts-dejavu-core
 
+    # Runtime packages only (not -dev) - this deliberately matches what a real deployment target has
+    # available (a production Linux box installs runtime packages via its dependency graph, not -dev
+    # packages), and is why LinuxPlatformCodec probes versioned SONAMEs directly rather than the
+    # unversioned dev-only symlink. NativeImageDecodingIntegrationTests's
+    # Linux_LibavifLibwebp_AreInstalledAndDecode test hard-fails (not skips) if these aren't present.
+    - name: Install libwebp/libavif runtime libraries (Linux)
+      if: runner.os == 'Linux' && steps.changes.outputs.src == 'true'
+      run: sudo apt-get install -y libwebp7 libavif16
+
+    # Best-effort: these are optional Microsoft Store codec packs, not guaranteed to install
+    # non-interactively on a hosted runner. continue-on-error so a provisioning failure never fails the
+    # build - Windows_Wic_WebPAndAvif_DecodeIfOsCodecPackAvailable soft-skips the affected format if,
+    # despite this attempt, the codec still isn't present afterward.
+    - name: Install WebP/AVIF WIC codec packs (Windows, best-effort)
+      if: runner.os == 'Windows' && steps.changes.outputs.src == 'true'
+      continue-on-error: true
+      shell: pwsh
+      run: |
+        winget install --id 9PG2DK419DRG --source msstore --accept-source-agreements --accept-package-agreements --silent
+        winget install --id 9MVZQVXJBQ9V --source msstore --accept-source-agreements --accept-package-agreements --silent
+
     - name: Install diff-cover and ReportGenerator
       if: steps.changes.outputs.src == 'true'
       run: |

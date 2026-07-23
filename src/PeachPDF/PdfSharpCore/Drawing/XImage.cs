@@ -79,7 +79,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         // Useful stuff here: http://stackoverflow.com/questions/350027/setting-wpf-image-source-in-code
         XImage(string path)
         {
-            if (ImageSource.ImageSourceImpl == null) ImageSource.ImageSourceImpl = new StbImageSharpImageSource();
+            if (ImageSource.ImageSourceImpl == null) ImageSource.ImageSourceImpl = new NativeOrStbImageSource();
             _source = ImageSource.FromFile(path);
             Initialize();
         }
@@ -96,7 +96,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
             // Create a dummy unique path.
             _path = "*" + Guid.NewGuid().ToString("B");
             if (ImageSource.ImageSourceImpl == null)
-                ImageSource.ImageSourceImpl = new StbImageSharpImageSource();
+                ImageSource.ImageSourceImpl = new NativeOrStbImageSource();
             _source = ImageSource.FromStream(_path, stream);
             Initialize();
         }
@@ -112,7 +112,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Creates an image from the specified file.
         /// Requires that an instance of an implementation of <see cref="T:MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes.ImageSource"/> be set on the `ImageSource.ImageSourceImpl` property.
-        /// For .NetCore apps, if this property is null at this point, then <see cref="T:PeachPDF.PdfSharpCore.Utils.StbImageSharpImageSource"/> is used.
+        /// For .NetCore apps, if this property is null at this point, then <see cref="T:PeachPDF.PdfSharpCore.Utils.NativeOrStbImageSource"/> is used.
         /// </summary>
         /// <param name="path">The path to a BMP, PNG, GIF, or JPEG file.</param>
         public static XImage FromFile(string path)
@@ -123,7 +123,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Creates an image from the specified stream.<br/>
         /// For non-pdf files, this requires that an instance of an implementation of <see cref="T:MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes.ImageSource"/> be set on the `ImageSource.ImageSourceImpl` property.
-        /// For .NetCore apps, if this property is null at this point, then <see cref="T:PeachPDF.PdfSharpCore.Utils.StbImageSharpImageSource"/> is used.
+        /// For .NetCore apps, if this property is null at this point, then <see cref="T:PeachPDF.PdfSharpCore.Utils.NativeOrStbImageSource"/> is used.
         /// Silverlight supports PNG and JPEF only.
         /// </summary>
         /// <param name="stream">The stream containing a BMP, PNG, GIF, JPEG, TIFF, or PDF file.</param>

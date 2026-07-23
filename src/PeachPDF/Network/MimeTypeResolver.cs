@@ -26,7 +26,7 @@ namespace PeachPDF.Network
     /// extension for the process lifetime, so the (potentially syscall- or file-backed) OS lookup runs at
     /// most once per distinct extension.
     /// </remarks>
-    internal static class MimeTypeResolver
+    internal static partial class MimeTypeResolver
     {
         private const string DefaultMimeType = "application/octet-stream";
 
@@ -148,14 +148,14 @@ namespace PeachPDF.Network
                 // First call sizes the output buffer (pcchOut). A non-zero length means an association
                 // exists; anything else (no association, error) falls through to the static map.
                 _ = NativeMethods.AssocQueryStringW(NativeMethods.AssocfNone, NativeMethods.AssocStrContentType,
-                    extensionWithDot, null, null, ref length);
+                    extensionWithDot, null, IntPtr.Zero, ref length);
 
                 if (length == 0)
                 {
                     return null;
                 }
 
-                var buffer = new StringBuilder((int)length);
+                var buffer = new char[length];
                 var hr = NativeMethods.AssocQueryStringW(NativeMethods.AssocfNone, NativeMethods.AssocStrContentType,
                     extensionWithDot, null, buffer, ref length);
 
@@ -164,7 +164,8 @@ namespace PeachPDF.Network
                     return null;
                 }
 
-                var contentType = buffer.ToString();
+                // pcchOut is updated with the actual copied length, including the terminating null.
+                var contentType = new string(buffer, 0, (int)length - 1);
 
                 // A bare Windows install often has no registered Content Type for an extension, in which
                 // case AssocQueryString returns a non-MIME shell property string (prop:System.…) rather
@@ -321,15 +322,23 @@ namespace PeachPDF.Network
         /// point is only ever reached under the matching <see cref="OperatingSystem"/> guard.
         /// </summary>
         [ExcludeFromCodeCoverage]
-        private static class NativeMethods
+        private static partial class NativeMethods
         {
             // ---- Windows: Shlwapi AssocQueryString ----
 
             internal const int AssocfNone = 0;
             internal const int AssocStrContentType = 14; // ASSOCSTR_CONTENTTYPE (12 is ASSOCSTR_QUICKTIP, which returns a "prop:…" tooltip string)
 
-            [DllImport("Shlwapi.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = false)]
-            internal static extern int AssocQueryStringW(int flags, int str, string pszAssoc, string? pszExtra, StringBuilder? pszOut, ref uint pcchOut);
+            // Two overloads bound to the same native entry point: LibraryImport doesn't marshal
+            // StringBuilder (unlike classic DllImport), and a Span<char>'s empty-vs-null pointer identity
+            // isn't a safe stand-in for the "just give me the required size" call, which the Windows API
+            // expects a true null pszOut for - so the "query size" and "get string" calls get distinct,
+            // explicit signatures instead.
+            [LibraryImport("Shlwapi.dll", EntryPoint = "AssocQueryStringW", StringMarshalling = StringMarshalling.Utf16)]
+            internal static partial int AssocQueryStringW(int flags, int str, string pszAssoc, string? pszExtra, IntPtr pszOut, ref uint pcchOut);
+
+            [LibraryImport("Shlwapi.dll", EntryPoint = "AssocQueryStringW", StringMarshalling = StringMarshalling.Utf16)]
+            internal static partial int AssocQueryStringW(int flags, int str, string pszAssoc, string? pszExtra, Span<char> pszOut, ref uint pcchOut);
 
             // ---- Apple: CoreFoundation + LaunchServices (CoreServices) ----
 
@@ -338,27 +347,27 @@ namespace PeachPDF.Network
 
             internal const uint KCFStringEncodingUtf8 = 0x08000100;
 
-            [DllImport(CoreFoundation)]
-            internal static extern IntPtr CFStringCreateWithCString(IntPtr alloc, [MarshalAs(UnmanagedType.LPUTF8Str)] string cStr, uint encoding);
+            [LibraryImport(CoreFoundation, StringMarshalling = StringMarshalling.Utf8)]
+            internal static partial IntPtr CFStringCreateWithCString(IntPtr alloc, string cStr, uint encoding);
 
-            [DllImport(CoreFoundation)]
-            internal static extern void CFRelease(IntPtr cf);
+            [LibraryImport(CoreFoundation)]
+            internal static partial void CFRelease(IntPtr cf);
 
-            [DllImport(CoreFoundation)]
-            internal static extern IntPtr CFStringGetCStringPtr(IntPtr theString, uint encoding);
+            [LibraryImport(CoreFoundation)]
+            internal static partial IntPtr CFStringGetCStringPtr(IntPtr theString, uint encoding);
 
-            [DllImport(CoreFoundation)]
+            [LibraryImport(CoreFoundation)]
             [return: MarshalAs(UnmanagedType.I1)]
-            internal static extern bool CFStringGetCString(IntPtr theString, byte[] buffer, long bufferSize, uint encoding);
+            internal static partial bool CFStringGetCString(IntPtr theString, byte[] buffer, long bufferSize, uint encoding);
 
-            [DllImport(CoreFoundation)]
-            internal static extern long CFStringGetLength(IntPtr theString);
+            [LibraryImport(CoreFoundation)]
+            internal static partial long CFStringGetLength(IntPtr theString);
 
-            [DllImport(CoreServices)]
-            internal static extern IntPtr UTTypeCreatePreferredIdentifierForTag(IntPtr inTagClass, IntPtr inTag, IntPtr inConformingToUti);
+            [LibraryImport(CoreServices)]
+            internal static partial IntPtr UTTypeCreatePreferredIdentifierForTag(IntPtr inTagClass, IntPtr inTag, IntPtr inConformingToUti);
 
-            [DllImport(CoreServices)]
-            internal static extern IntPtr UTTypeCopyPreferredTagWithClass(IntPtr inUti, IntPtr inTagClass);
+            [LibraryImport(CoreServices)]
+            internal static partial IntPtr UTTypeCopyPreferredTagWithClass(IntPtr inUti, IntPtr inTagClass);
         }
     }
 }

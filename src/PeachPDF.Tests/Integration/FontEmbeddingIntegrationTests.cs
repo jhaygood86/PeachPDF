@@ -151,19 +151,27 @@ body {{ font-family: 'TestMultiWeight', serif; font-size: 14pt; }}
         // -------------------------------------------------------------------------
         // Regression: @font-face's src: local(...) must resolve against a genuinely-installed system
         // font end-to-end (DomParser.CascadeApplyStyleFonts -> RAdapter.AddLocalFontFamily), not just
-        // parse - no-ops (rather than skipping, matching this test project's Windows-only convention -
-        // see GenericFontFamilyIntegrationTests) on any non-Windows host, since it needs a known,
+        // parse - dynamically skipped (via Assert.Skip, matching the convention established by
+        // PeachPDF.Tests.Network.MimeTypeResolverTests) on any non-Windows host, since it needs a known,
         // real installed font's own internal name to reference via local().
         // -------------------------------------------------------------------------
 
         [Fact]
         public async Task LocalFontFace_ResolvesToGenuinelyInstalledSystemFont()
         {
-            if (!OperatingSystem.IsWindows()) return;
+            if (!OperatingSystem.IsWindows())
+            {
+                Assert.Skip("Windows-only: resolves src: local() against a real installed system font.");
+                return;
+            }
 
             var fontsDir = Environment.GetFolderPath(Environment.SpecialFolder.Fonts);
             var arialPath = Path.Combine(fontsDir, "arial.ttf");
-            if (!File.Exists(arialPath)) return;
+            if (!File.Exists(arialPath))
+            {
+                Assert.Skip("This Windows host has no arial.ttf in its Fonts folder.");
+                return;
+            }
 
             var localName = TtfFontDescription.LoadDescription(arialPath).FontNameInvariantCulture;
 

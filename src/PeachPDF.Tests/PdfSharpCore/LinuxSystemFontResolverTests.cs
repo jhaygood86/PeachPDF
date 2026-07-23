@@ -47,10 +47,14 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         [Fact]
         public void Resolve_OnLinux_ReturnsAtLeastOneFont()
         {
-            // No-ops (rather than skipping - matching this test project's existing convention, e.g.
-            // GenericFontFamilyIntegrationTests's Windows-only assertion) on any non-Linux host, since a
-            // real font-discovery result is only meaningful to assert on the actual target platform.
-            if (!OperatingSystem.IsLinux() || OperatingSystem.IsAndroid()) return;
+            // Dynamically skipped (via Assert.Skip, matching the convention established by
+            // PeachPDF.Tests.Network.MimeTypeResolverTests) on any non-Linux host, since a real
+            // font-discovery result is only meaningful to assert on the actual target platform.
+            if (!OperatingSystem.IsLinux() || OperatingSystem.IsAndroid())
+            {
+                Assert.Skip("Linux-only: asserts a real fontconfig font-discovery result.");
+                return;
+            }
 
             var fonts = LinuxSystemFontResolver.Resolve();
 
@@ -68,7 +72,11 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
             // Real Linux CI/dev machines ship fontconfig with at least a serif/sans-serif/monospace
             // alias configured (that's the whole point of fontconfig's default config) - confirms the
             // P/Invoke path genuinely resolves a family, not just that it doesn't throw.
-            if (!OperatingSystem.IsLinux() || OperatingSystem.IsAndroid()) return;
+            if (!OperatingSystem.IsLinux() || OperatingSystem.IsAndroid())
+            {
+                Assert.Skip("Linux-only: asserts a real fontconfig generic-alias resolution.");
+                return;
+            }
 
             var resolved = LinuxSystemFontResolver.ResolveGenericFamily(generic);
 

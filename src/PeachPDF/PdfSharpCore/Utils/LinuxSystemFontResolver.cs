@@ -20,14 +20,19 @@ namespace PeachPDF.PdfSharpCore.Utils
         private static partial Regex ConfDirRegex();
 
 
-        [DllImport(libfontconfig)] private static extern IntPtr FcInitLoadConfigAndFonts();
+        [LibraryImport(libfontconfig)] private static partial IntPtr FcInitLoadConfigAndFonts();
 
         static readonly Lazy<IntPtr> fcConfig = new Lazy<IntPtr>(FcInitLoadConfigAndFonts);
 
 
-        [DllImport(libfontconfig)] public static extern FcPatternHandle FcPatternCreate();
-        [DllImport(libfontconfig)] public static extern int FcPatternGetString(IntPtr p, [MarshalAs(UnmanagedType.LPStr)] string obj, int n, ref IntPtr s);
-        [DllImport(libfontconfig)] public static extern void FcPatternDestroy(IntPtr pattern);
+        // LibraryImport's source generator can't marshal a custom SafeHandle as a RETURN value (unlike
+        // classic DllImport) - each *_Raw entry point returns the bare IntPtr instead, and a small wrapper
+        // constructs the SafeHandle manually via each type's internal FromRaw factory.
+        [LibraryImport(libfontconfig, EntryPoint = "FcPatternCreate")] private static partial IntPtr FcPatternCreate_Raw();
+        public static FcPatternHandle FcPatternCreate() => FcPatternHandle.FromRaw(FcPatternCreate_Raw());
+
+        [LibraryImport(libfontconfig, StringMarshalling = StringMarshalling.Utf8)] public static partial int FcPatternGetString(IntPtr p, string obj, int n, ref IntPtr s);
+        [LibraryImport(libfontconfig)] public static partial void FcPatternDestroy(IntPtr pattern);
 
         internal class FcPatternHandle : SafeHandle
         {
@@ -40,12 +45,21 @@ namespace PeachPDF.PdfSharpCore.Utils
                 FcPatternDestroy(this.handle);
                 return true;
             }
+
+            internal static FcPatternHandle FromRaw(IntPtr raw)
+            {
+                var result = new FcPatternHandle();
+                result.SetHandle(raw);
+                return result;
+            }
         }
 
 
-        [DllImport(libfontconfig)] public static extern FcObjectSetHandle FcObjectSetCreate();
-        [DllImport(libfontconfig)] public static extern int FcObjectSetAdd(FcObjectSetHandle os, [MarshalAs(UnmanagedType.LPStr)] string obj);
-        [DllImport(libfontconfig)] public static extern void FcObjectSetDestroy(IntPtr os);
+        [LibraryImport(libfontconfig, EntryPoint = "FcObjectSetCreate")] private static partial IntPtr FcObjectSetCreate_Raw();
+        public static FcObjectSetHandle FcObjectSetCreate() => FcObjectSetHandle.FromRaw(FcObjectSetCreate_Raw());
+
+        [LibraryImport(libfontconfig, StringMarshalling = StringMarshalling.Utf8)] public static partial int FcObjectSetAdd(FcObjectSetHandle os, string obj);
+        [LibraryImport(libfontconfig)] public static partial void FcObjectSetDestroy(IntPtr os);
 
         internal class FcObjectSetHandle : SafeHandle
         {
@@ -59,6 +73,13 @@ namespace PeachPDF.PdfSharpCore.Utils
                 return true;
             }
 
+            internal static FcObjectSetHandle FromRaw(IntPtr raw)
+            {
+                var result = new FcObjectSetHandle();
+                result.SetHandle(raw);
+                return result;
+            }
+
             public static FcObjectSetHandle Create(params string[] objs)
             {
                 var os = FcObjectSetCreate();
@@ -70,17 +91,21 @@ namespace PeachPDF.PdfSharpCore.Utils
         }
 
 
-        [DllImport(libfontconfig)] public static extern FcFontSetHandle FcFontList(IntPtr config, FcPatternHandle pattern, FcObjectSetHandle os);
-        [DllImport(libfontconfig)] public static extern void FcFontSetDestroy(IntPtr fs);
+        [LibraryImport(libfontconfig, EntryPoint = "FcFontList")] private static partial IntPtr FcFontList_Raw(IntPtr config, FcPatternHandle pattern, FcObjectSetHandle os);
+        public static FcFontSetHandle FcFontList(IntPtr config, FcPatternHandle pattern, FcObjectSetHandle os) => FcFontSetHandle.FromRaw(FcFontList_Raw(config, pattern, os));
+
+        [LibraryImport(libfontconfig)] public static partial void FcFontSetDestroy(IntPtr fs);
 
         // Generic-family alias resolution (the managed equivalent of the `fc-match serif` CLI command):
         // build a pattern requesting the generic family name, let fontconfig apply the user/system config's
         // own substitution rules (exactly what maps "serif"/"sans-serif"/etc. to a real installed family on
         // this distro), then read back the resolved family from the matched pattern.
-        [DllImport(libfontconfig)] private static extern int FcPatternAddString(FcPatternHandle pattern, [MarshalAs(UnmanagedType.LPStr)] string obj, [MarshalAs(UnmanagedType.LPStr)] string value);
-        [DllImport(libfontconfig)] private static extern void FcConfigSubstitute(IntPtr config, FcPatternHandle pattern, int kind);
-        [DllImport(libfontconfig)] private static extern void FcDefaultSubstitute(FcPatternHandle pattern);
-        [DllImport(libfontconfig)] private static extern FcPatternHandle FcFontMatch(IntPtr config, FcPatternHandle pattern, ref int result);
+        [LibraryImport(libfontconfig, StringMarshalling = StringMarshalling.Utf8)] private static partial int FcPatternAddString(FcPatternHandle pattern, string obj, string value);
+        [LibraryImport(libfontconfig)] private static partial void FcConfigSubstitute(IntPtr config, FcPatternHandle pattern, int kind);
+        [LibraryImport(libfontconfig)] private static partial void FcDefaultSubstitute(FcPatternHandle pattern);
+
+        [LibraryImport(libfontconfig, EntryPoint = "FcFontMatch")] private static partial IntPtr FcFontMatch_Raw(IntPtr config, FcPatternHandle pattern, ref int result);
+        private static FcPatternHandle FcFontMatch(IntPtr config, FcPatternHandle pattern, ref int result) => FcPatternHandle.FromRaw(FcFontMatch_Raw(config, pattern, ref result));
 
         private const int FcMatchPattern = 0;
 
@@ -103,6 +128,13 @@ namespace PeachPDF.PdfSharpCore.Utils
                 return true;
             }
 
+            internal static FcFontSetHandle FromRaw(IntPtr raw)
+            {
+                var result = new FcFontSetHandle();
+                result.SetHandle(raw);
+                return result;
+            }
+
             public FcFontSet Read()
             {
                 return Marshal.PtrToStructure<FcFontSet>(this.handle);
@@ -115,7 +147,7 @@ namespace PeachPDF.PdfSharpCore.Utils
             var ptr = IntPtr.Zero;
             var result = FcPatternGetString(handle, obj, 0, ref ptr);
             if (result == 0)
-                return Marshal.PtrToStringAnsi(ptr);
+                return Marshal.PtrToStringUTF8(ptr);
             else
                 return null;
         }

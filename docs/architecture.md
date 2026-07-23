@@ -455,7 +455,18 @@ This paint-order correctness — together with the pagination fixes above (blank
 
 ### Image loading and decoding
 
-Images are loaded on demand by `ImageLoadHandler`. Supported sources include file paths, HTTP URLs (via `INetworkLoader`), `data:` URIs, and MHTML-embedded resources. Decoding is handled by **StbImageSharp**, which supports JPEG, PNG, BMP, GIF, TGA, and HDR. Decoded images are cached for the lifetime of a single render so that the same image referenced multiple times in a document is only decoded once.
+Images are loaded on demand by `ImageLoadHandler`. Supported sources include file paths, HTTP URLs (via `INetworkLoader`), `data:` URIs, and MHTML-embedded resources. Decoding tries the current OS's native image codec first, falling back to **StbImageSharp** (JPEG, PNG, BMP, GIF, TGA, HDR) whenever no native codec is available or it fails on the given bytes — see [Native image codecs](#native-image-codecs) below. Decoded images are cached for the lifetime of a single render so that the same image referenced multiple times in a document is only decoded once.
+
+#### Native image codecs
+
+`PeachPDF.Imaging` (`src/PeachPDF/Imaging/`) resolves one native decoder/encoder pair per OS, selected once via `OperatingSystem.Is*()` checks (`PlatformImageCodecs`) — never reflection-based, so this stays AOT/trim-safe. Every native codec implements `IPlatformImageDecoder`/`IPlatformImageEncoder`, both of which normalize to/from one shared `DecodedImage` shape (a tightly-packed RGBA buffer + width/height + a real alpha-channel scan) so a native decode composes freely with an STB encode or vice versa — the encoder never needs to know which decoder produced the pixels it's given.
+
+- **Windows** — `WicImageCodec`, via Windows Imaging Component (WIC), implemented with `[GeneratedComInterface]` (source-generated COM interop, not classic `[ComImport]`) for both decode and encode. Covers JPEG/PNG/GIF/BMP/TIFF always, and WebP/AVIF opportunistically if the OS has the corresponding optional codec pack installed.
+- **macOS/iOS** — `AppleImageIoCodec`, via Image I/O + CoreGraphics + CoreFoundation, for both decode and encode. One code path covers both OSes since Image I/O's C API is identical on both.
+- **Linux** — `LinuxPlatformCodec`, decode-only, scoped to exactly WebP (via libwebp) and AVIF (via libavif) — JPEG/PNG/GIF/BMP already have full STB support, so native decode isn't needed for those on Linux. See [Image formats](getting-started.md#image-formats) for the runtime library requirement and per-distro notes.
+- **Android** — `AndroidNdkImageDecoder`, decode-only, via the NDK `AImageDecoder` API (API level 30+).
+
+Every codec is designed to never throw out of its `TryDecode`/`TryEncodeJpeg`/`TryEncodeBmp` methods — any native failure (unsupported format, missing OS codec, missing native library) is caught and reported as `false`, which is what drives the fallback to STB. `NativeOrStbImageSource` (`src/PeachPDF/PdfSharpCore/Utils/`) is the `ImageSource` implementation that ties this together, replacing the single hardwired STB path; `StbImageSharpImageSource` itself is unchanged and still independently usable/testable as the pure-STB path.
 
 `ImageLoadHandler` is an implementation detail of `CssImage.Url`: each URL image owns its handler and exposes `EnsureLoadedAsync(HtmlContainerInt)` for lazy loading and `Dispose()` for cleanup. Callers (background layer loops, list marker painting) interact only with `CssImage` and never touch `ImageLoadHandler` directly.
 
@@ -526,7 +537,7 @@ Font resolution maps each codepoint 1:1 to a glyph through the `cmap`; there is 
 
 ### Image pipeline
 
-PdfSharpCore includes importers for JPEG (`ImageImporterJpeg`) and BMP (`ImageImporterBmp`) formats. Other formats (PNG, GIF, etc.) arrive as pre-decoded RGBA bitmaps from StbImageSharp and are written as PDF image XObjects using `XBitmapImage`.
+Every decoded image is embedded as either a JPEG-compressed (`/DCTDecode`) or a Flate-compressed raw-sample PDF image XObject, chosen by whether the decoded image has an alpha channel (a real per-pixel scan of the decoded buffer, not a container-format sniff — see [Native image codecs](#native-image-codecs)): non-transparent images are re-encoded to JPEG, transparent images are re-encoded to BMP and then re-parsed into raw RGB + alpha-mask samples. Re-encoding tries the current OS's native encoder first (Windows/macOS/iOS), falling back to StbImageWriteSharp on Linux/Android and whenever no native encoder is available.
 
 ### Graphics context
 
