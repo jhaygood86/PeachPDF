@@ -33,7 +33,6 @@ using PeachPDF.PdfSharpCore.Pdf.IO;
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Reflection;
 using System.Text;
 
 namespace PeachPDF.PdfSharpCore.Pdf.Advanced
@@ -184,24 +183,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             for (int idx = 0; idx < count; idx++)
                 objects[idx] = irefs[idx].Value;
             return objects;
-        }
-
-        /// <summary>
-        /// Creates the indirect object of the specified type, adds it to the document, and
-        /// returns the object.
-        /// </summary>
-        public T CreateIndirectObject<T>() where T : PdfObject
-        {
-            T result = null;
-            ConstructorInfo ctorInfo = null; // TODO
-            if (ctorInfo != null)
-            {
-                result = (T)ctorInfo.Invoke(new object[] { _document });
-                Debug.Assert(result != null);
-                AddObject(result);
-            }
-            Debug.Assert(result != null, "CreateIndirectObject failed with type " + typeof(T).FullName);
-            return result;
         }
 
         /// <summary>

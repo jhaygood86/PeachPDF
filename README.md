@@ -139,6 +139,10 @@ var results = await Task.WhenAll(htmlDocuments.Select(async html =>
 
 See [Thread safety](https://peachpdf.net/usage-examples.html#thread-safety) for more detail.
 
+## Trimming and Native AOT
+
+PeachPDF is trimming-safe and [Native AOT](https://learn.microsoft.com/dotnet/core/deploying/native-aot/)-compatible (`IsTrimmable` + `IsAotCompatible`). It publishes cleanly under `PublishTrimmed` and `PublishAot` — all platform interop uses source-generated `LibraryImport` marshalling, so nothing PeachPDF needs is trimmed away and there is no runtime code generation. See [Trimming and Native AOT](https://peachpdf.net/getting-started.html#trimming-and-native-aot) for more detail.
+
 ## Fonts
 
 ### Default Font

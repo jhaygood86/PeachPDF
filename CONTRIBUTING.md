@@ -4,7 +4,7 @@ Thanks for your interest in contributing. This document covers how to build, tes
 
 ## Getting started
 
-- The solution is at `src/PeachPDF.sln`. PeachPDF targets .NET 8 and .NET 10.
+- The solution is at `src/PeachPDF.slnx`. PeachPDF targets .NET 8 and .NET 10.
 - All `dotnet` CLI commands below assume your working directory is `src/` — the projects (and their relative paths in this doc) are rooted there.
 
 ## Building and testing
