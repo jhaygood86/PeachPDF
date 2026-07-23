@@ -1,5 +1,6 @@
 #nullable disable
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -36,6 +37,41 @@ namespace PeachPDF.CSS
         public IPropertyValue Construct(Property[] properties)
         {
             return properties.Guard<GridTemplateValue>();
+        }
+
+        /// <summary>
+        /// Builds the box-side <see cref="CssProperty{T}"/> for a grid-template value directly from its authored
+        /// string, for the cascade paths that apply a plain string rather than a Layer A parse result (the
+        /// initial-value seed, a resolved global keyword, an inherited copy, a var()-resolved string). A CSS-wide
+        /// keyword becomes a global value; a string still containing <c>var(</c> stays unresolved (never parsed
+        /// into a bogus template); otherwise the track list is parsed by the same <see cref="GridTrackListGrammar"/>
+        /// the converter uses — keeping all <see cref="CssProperty{T}"/> construction in the CSS-OM layer.
+        /// </summary>
+        internal static CssProperty<GridTemplate> FromCssText(string value)
+        {
+            if (CssGlobalKeywords.TryParse(value, out var keyword))
+                return CssProperty<GridTemplate>.Global(keyword);
+            if (value.Contains("var(", StringComparison.OrdinalIgnoreCase))
+                return CssProperty<GridTemplate>.Unresolved(value);
+            var template = GridTrackListGrammar.TryParse(Tokenize(value));
+            return CssProperty<GridTemplate>.FromValue(value, template);
+        }
+
+        /// <summary>Tokenizes an authored value string with the CSS-OM <see cref="Lexer"/> (whitespace/EOF
+        /// stripped) — the CSS-OM equivalent of the Html-layer <c>CssValueParser.GetCssTokens</c>, so this
+        /// Layer A factory has no upward dependency on <c>Html.Core.Parse</c>.</summary>
+        private static List<Token> Tokenize(string value)
+        {
+            using var lexer = new Lexer(value) { IsInValue = false };
+            var tokens = new List<Token>();
+            Token token;
+            do
+            {
+                token = lexer.Get();
+                if (token.Type != TokenType.EndOfFile && token.Type != TokenType.Whitespace)
+                    tokens.Add(token);
+            } while (token.Type != TokenType.EndOfFile);
+            return tokens;
         }
 
         private sealed class GridTemplateValue : IPropertyValue, ITypedPropertyValue<GridTemplate>

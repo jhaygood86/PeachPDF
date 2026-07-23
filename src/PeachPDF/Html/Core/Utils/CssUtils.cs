@@ -314,22 +314,6 @@ namespace PeachPDF.Html.Core.Utils
                 },
             }.ToFrozenDictionary(StringComparer.Ordinal);
 
-        /// <summary>
-        /// Builds a <see cref="CssProperty{T}"/> from an authored string for the string-based cascade paths
-        /// (initial seed, resolved global keyword, inherited copy, var()-resolved string): a CSS-wide keyword
-        /// becomes a global value, a string still containing <c>var(</c> stays unresolved (never parsed into a
-        /// bogus template), otherwise the track list is parsed. The typed cascade path
-        /// (<see cref="TrySetTypedPropertyValue"/>) bypasses this and reuses Layer A's parse.
-        /// </summary>
-        private static CssProperty<GridTemplate> BuildGridTemplate(string value)
-        {
-            if (CssGlobalKeywords.TryParse(value, out var keyword))
-                return CssProperty<GridTemplate>.Global(keyword);
-            if (value.Contains("var(", StringComparison.OrdinalIgnoreCase))
-                return CssProperty<GridTemplate>.Unresolved(value);
-            var template = GridTrackListGrammar.TryParse(CssValueParser.GetCssTokens(value));
-            return CssProperty<GridTemplate>.FromValue(value, template);
-        }
 
         /// <summary>
         /// Maps a CSS property name to the action that assigns its parsed value onto a <see cref="CssBox"/>,
@@ -460,8 +444,8 @@ namespace PeachPDF.Html.Core.Utils
                 ["order"] = (_, b, v) => b.Order = v,
                 ["row-gap"] = (_, b, v) => b.FlexRowGap = v,
                 ["column-gap"] = (_, b, v) => b.FlexColumnGap = v,
-                ["grid-template-columns"] = (_, b, v) => b.GridTemplateColumns = BuildGridTemplate(v),
-                ["grid-template-rows"] = (_, b, v) => b.GridTemplateRows = BuildGridTemplate(v),
+                ["grid-template-columns"] = (_, b, v) => b.GridTemplateColumns = GridTemplateValueConverter.FromCssText(v),
+                ["grid-template-rows"] = (_, b, v) => b.GridTemplateRows = GridTemplateValueConverter.FromCssText(v),
                 ["grid-template-areas"] = (_, b, v) => b.GridTemplateAreas = v,
                 ["grid-auto-columns"] = (_, b, v) => b.GridAutoColumns = v,
                 ["grid-auto-rows"] = (_, b, v) => b.GridAutoRows = v,
