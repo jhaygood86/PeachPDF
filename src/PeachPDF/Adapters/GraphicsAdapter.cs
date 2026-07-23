@@ -280,7 +280,21 @@ namespace PeachPDF.Adapters
 
         public override void DrawPath(RPen pen, RGraphicsPath path)
         {
-            _g.DrawPath(((PenAdapter)pen).Pen, ((GraphicsPathAdapter)path).GraphicsPath);
+            var xPen = ((PenAdapter)pen).Pen;
+            if (xPen.Brush is XBaseGradientBrush)
+            {
+                // Wrap in q/Q so the SMask applied for a transparent gradient stroke does not
+                // leak into subsequent operations. A later paint that emits no SMask of its own
+                // (an opaque gradient stroke, or any non-gradient content) would otherwise inherit
+                // this stroke's luminosity mask and be masked away (issue #135).
+                var state = _g.Save();
+                _g.DrawPath(xPen, ((GraphicsPathAdapter)path).GraphicsPath);
+                _g.Restore(state);
+            }
+            else
+            {
+                _g.DrawPath(xPen, ((GraphicsPathAdapter)path).GraphicsPath);
+            }
         }
 
         public override void DrawPath(RBrush brush, RGraphicsPath path)
