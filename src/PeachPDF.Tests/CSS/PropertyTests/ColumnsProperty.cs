@@ -187,6 +187,34 @@ namespace PeachPDF.Tests.CSS.PropertyTests
         }
 
         [Fact]
+        public void CssColumsAutoWidthOrderIndependentLegal()
+        {
+            // "auto" is valid for both column-count and column-width, so a positional match lets
+            // column-width claim "auto" and strand "12em"; order-independent matching keeps it legal
+            // ("columns: <'column-width'> || <'column-count'>", CSS Multi-column 1).
+            var snippet = "columns: auto 12em";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("columns", property.Name);
+            Assert.IsType<ColumnsProperty>(property);
+            var concrete = (ColumnsProperty)property;
+            Assert.True(concrete.HasValue);
+            Assert.Equal("12em auto", concrete.Value);
+        }
+
+        [Fact]
+        public void CssColumsWidthAutoLegal()
+        {
+            // Control: the already-ordered form parses through the fast path.
+            var snippet = "columns: 12em auto";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("columns", property.Name);
+            Assert.IsType<ColumnsProperty>(property);
+            var concrete = (ColumnsProperty)property;
+            Assert.True(concrete.HasValue);
+            Assert.Equal("12em auto", concrete.Value);
+        }
+
+        [Fact]
         public void CssColumsAutoLegal()
         {
             var snippet = "columns : auto  ";
