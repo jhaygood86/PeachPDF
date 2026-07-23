@@ -19,15 +19,26 @@ namespace PeachPDF.CSS
         /// is no usable ratio (a bare <c>auto</c>, or a ratio with a zero term — both of which mean "no
         /// preferred aspect ratio" for a non-replaced box).
         /// </summary>
-        internal static bool TryParse(IReadOnlyList<Token> tokens, out double? ratio)
+        internal static bool TryParse(IReadOnlyList<Token> tokens, out double? ratio) =>
+            TryParse(tokens, out ratio, out _);
+
+        /// <summary>
+        /// Validates the token stream as an <c>aspect-ratio</c> value, additionally reporting whether the
+        /// <c>auto</c> keyword was present (<c>[ auto || &lt;ratio&gt; ]</c>). <paramref name="hasAuto"/> lets a
+        /// replaced element prefer its natural aspect ratio and fall back to the specified <c>&lt;ratio&gt;</c>
+        /// (CSS Box Sizing 4 §5): <c>auto &lt;ratio&gt;</c> ⇒ <c>hasAuto=true</c> with a usable
+        /// <paramref name="ratio"/>; a bare <c>&lt;ratio&gt;</c> ⇒ <c>hasAuto=false</c> (the ratio always
+        /// overrides); a bare <c>auto</c> ⇒ <c>hasAuto=true</c> with a null <paramref name="ratio"/>.
+        /// </summary>
+        internal static bool TryParse(IReadOnlyList<Token> tokens, out double? ratio, out bool hasAuto)
         {
             ratio = null;
+            hasAuto = false;
 
             Token[] toks = tokens.Where(t => t.Type != TokenType.Whitespace).ToArray();
             if (toks.Length == 0) return false;
 
             var i = 0;
-            var hasAuto = false;
 
             if (IsAuto(toks[i])) { hasAuto = true; i++; }
 
@@ -37,7 +48,7 @@ namespace PeachPDF.CSS
             if (!TryRatioCore(toks, ref i, out ratio)) return false;
 
             // An optional trailing `auto` (the `||` allows either order: `<ratio> auto`).
-            if (i < toks.Length && !hasAuto && IsAuto(toks[i])) i++;
+            if (i < toks.Length && !hasAuto && IsAuto(toks[i])) { hasAuto = true; i++; }
 
             if (i != toks.Length) return false; // trailing junk
 
@@ -47,7 +58,7 @@ namespace PeachPDF.CSS
         /// <summary>
         /// Validates a bare <c>&lt;ratio&gt;</c> value (<c>&lt;number [0,∞]&gt; [ / &lt;number [0,∞]&gt; ]?</c>),
         /// with no <c>auto</c> — the CSS Values 4 <c>&lt;ratio&gt;</c> data type, as used by the <c>@property</c>
-        /// <c>syntax: "&lt;ratio&gt;"</c> matcher. Distinct from <see cref="TryParse"/>, whose <c>aspect-ratio</c>
+        /// <c>syntax: "&lt;ratio&gt;"</c> matcher. Distinct from <see cref="TryParse(IReadOnlyList{Token}, out double?)"/>, whose <c>aspect-ratio</c>
         /// grammar additionally permits <c>auto</c>. On success <paramref name="ratio"/> is the used width/height
         /// ratio, or null when a term is zero.
         /// </summary>
