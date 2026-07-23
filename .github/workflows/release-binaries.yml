@@ -1,0 +1,95 @@
+name: Release Binaries
+
+# Builds the NativeAOT `peachpdf` CLI for each platform and attaches the archives to the GitHub
+# Release. Runs automatically when a release is published (the "Publish NuGet Package" workflow creates
+# it), or manually via workflow_dispatch against an existing tag.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to build and upload assets for (e.g. v0.9.5)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+          - os: windows-11-arm
+            rid: win-arm64
+          - os: ubuntu-latest
+            rid: linux-x64
+          - os: ubuntu-24.04-arm
+            rid: linux-arm64
+          - os: macos-latest
+            rid: osx-arm64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # NativeAOT on Linux needs a C toolchain and zlib to link the native binary.
+      - name: Install native toolchain (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      - name: Resolve release tag
+        id: meta
+        shell: bash
+        run: |
+          TAG="${{ github.event.release.tag_name || inputs.tag }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish (NativeAOT)
+        shell: bash
+        run: dotnet publish src/PeachPDF.Cli/PeachPDF.Cli.csproj -c Release -r ${{ matrix.rid }} -p:PublishAot=true
+
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          PUBLISH_DIR="src/PeachPDF.Cli/bin/Release/net10.0/${{ matrix.rid }}/publish"
+          STAGE="stage"
+          mkdir -p "$STAGE"
+          mv "$PUBLISH_DIR/PeachPDF.Cli" "$STAGE/peachpdf"
+          chmod +x "$STAGE/peachpdf"
+          cp LICENSE THIRD-PARTY-LICENSES.md "$STAGE/"
+          ASSET="peachpdf-${{ steps.meta.outputs.version }}-${{ matrix.rid }}.tar.gz"
+          tar -czf "$ASSET" -C "$STAGE" .
+          echo "ASSET=$ASSET" >> "$GITHUB_ENV"
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $publishDir = "src/PeachPDF.Cli/bin/Release/net10.0/${{ matrix.rid }}/publish"
+          $stage = "stage"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Move-Item "$publishDir/PeachPDF.Cli.exe" "$stage/peachpdf.exe"
+          Copy-Item LICENSE "$stage/LICENSE"
+          Copy-Item THIRD-PARTY-LICENSES.md "$stage/THIRD-PARTY-LICENSES.md"
+          $asset = "peachpdf-${{ steps.meta.outputs.version }}-${{ matrix.rid }}.zip"
+          Compress-Archive -Path "$stage/*" -DestinationPath $asset -Force
+          "ASSET=$asset" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Upload asset to release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ steps.meta.outputs.tag }}" "$ASSET" --clobber

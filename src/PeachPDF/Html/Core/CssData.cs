@@ -114,6 +114,19 @@ namespace PeachPDF.Html.Core
         }
 
         /// <summary>
+        /// Discards the lazily-built selector index so it is rebuilt from the full
+        /// <see cref="Stylesheets"/> list on the next query. Call after appending a stylesheet to an
+        /// already-queried <see cref="CssData"/> (e.g. <see cref="PeachPdfCssContent.AddStyleSheet"/>).
+        /// <see cref="EnsureIndex"/> guards on <see cref="_universalRules"/>, so clearing it is enough
+        /// to force a full rebuild of every index (<see cref="_tagIndex"/>/<see cref="_classIndex"/>/
+        /// <see cref="_idIndex"/>/<see cref="_universalRules"/>/<see cref="_layerRanks"/>).
+        /// </summary>
+        internal void InvalidateIndex()
+        {
+            _universalRules = null;
+        }
+
+        /// <summary>
         /// Builds the <c>@layer</c> tree while stylesheets are walked and, once complete, assigns each
         /// layer a precedence rank that respects nesting (CSS Cascade 5 §6.4.2): a parent layer's whole
         /// subtree is contiguous and its sub-layers are ordered by first appearance <em>within that

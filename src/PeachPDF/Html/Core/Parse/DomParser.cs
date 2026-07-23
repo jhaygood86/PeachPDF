@@ -75,10 +75,16 @@ namespace PeachPDF.Html.Core.Parse
 
             const bool cssDataChanged = false;
 
-            (cssData, _) = await CascadeParseStyles(root, htmlContainer, cssData, cssDataChanged);
+            // PdfGenerateConfig.IgnoreAuthorStyleSheets (--no-author-style): skip collecting the
+            // document's own <style>/<link> author sheets entirely, so only the UA default styles and
+            // any caller-supplied cssData apply. Inline style="" attributes are unaffected (they're
+            // applied later in CascadeApplyStyles, not here).
+            if (!htmlContainer.IgnoreAuthorStyleSheets)
+            {
+                (cssData, _) = await CascadeParseStyles(root, htmlContainer, cssData, cssDataChanged);
+            }
 
-            //var media = htmlContainer.GetCssMediaType(cssData.MediaBlocks.Keys);
-            var media = "print"; // TODO: fix this
+            var media = string.IsNullOrEmpty(htmlContainer.Media) ? "print" : htmlContainer.Media;
 
             var cssValueParser = new CssValueParser(htmlContainer.Adapter);
 

@@ -66,6 +66,28 @@ namespace PeachPDF
         public double MinContentWidth { get; set; }
 
         /// <summary>
+        /// The CSS media type the cascade matches <c>@media</c> rules against. Defaults to
+        /// <c>"print"</c> (the appropriate media for paged output). Set to another value (e.g.
+        /// <c>"screen"</c>) to render as that media type instead.
+        /// </summary>
+        public string Media { get; set; } = "print";
+
+        /// <summary>
+        /// When set to <c>true</c>, the document's own author style sheets (its <c>&lt;style&gt;</c>
+        /// elements and <c>&lt;link rel="stylesheet"&gt;</c> references) are ignored — only the user-agent
+        /// default styles and any caller-supplied stylesheet (the <c>cssData</c> argument) are applied.
+        /// Inline <c>style</c> attributes are not affected. Defaults to <c>false</c>.
+        /// </summary>
+        public bool IgnoreAuthorStyleSheets { get; set; }
+
+        /// <summary>
+        /// Optional overrides for the generated PDF's document-information metadata (title, author,
+        /// subject, keywords, creator). When non-null, each non-null field overrides the corresponding
+        /// value extracted from the HTML source; when null (the default) all metadata comes from the HTML.
+        /// </summary>
+        public PdfDocumentMetadata? Metadata { get; set; } = null;
+
+        /// <summary>
         /// the page size to use for each page in the generated pdf
         /// </summary>
         public PageSize PageSize { get; set; }

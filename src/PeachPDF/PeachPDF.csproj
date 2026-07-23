@@ -48,6 +48,7 @@
 	</ItemGroup>
 	<ItemGroup>
 		<InternalsVisibleTo Include="PeachPDF.Tests" />
+		<InternalsVisibleTo Include="PeachPDF.Cli" />
 	</ItemGroup>
 	<ItemGroup>
 		<None Include="..\..\README.md" Pack="true" PackagePath="\" />

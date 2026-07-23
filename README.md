@@ -118,6 +118,16 @@ Note that loading resources using relative paths resolves against the configured
 
 A local file's content type is resolved from the OS's own MIME mechanism by default (Windows shell associations, macOS/iOS Uniform Type Identifiers, or Linux `/etc/mime.types`), falling back to a built-in set for HTML, CSS, SVG, PeachPDF's raster image formats, and TTF/OTF/WOFF/WOFF2 fonts. For a local file with an extension outside that set, register its MIME type with the OS so PeachPDF can resolve it. See [Rendering a local HTML file](docs/usage-examples.md#rendering-a-local-html-file) for details.
 
+## Command-line tool
+
+If you just want to convert HTML to PDF from the shell, the standalone **`peachpdf`** command-line tool needs no .NET runtime — it is a single, self-contained Native AOT binary:
+
+```bash
+peachpdf report.html -o report.pdf
+```
+
+Prebuilt binaries for Windows (x64/ARM64), Linux (x64/ARM64), and macOS (Apple Silicon) are attached to each [GitHub Release](https://github.com/jhaygood86/PeachPDF/releases). See the [Command-Line Tool guide](docs/cli.md) for the full option reference.
+
 ## Thread safety
 
 A `PdfGenerator` instance is **not thread-safe** — don't call it concurrently from multiple threads, and don't reuse one instance across overlapping renders.

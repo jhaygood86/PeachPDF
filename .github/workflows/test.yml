@@ -106,6 +106,12 @@ jobs:
       if: steps.changes.outputs.src == 'true'
       run: dotnet test src/PeachPDF.Tests/PeachPDF.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
 
+    # The CLI (net10.0-only) has its own test project; run it into the same coverage directory so the
+    # diff-coverage gate below covers PeachPDF.Cli too.
+    - name: Test CLI
+      if: steps.changes.outputs.src == 'true'
+      run: dotnet test src/PeachPDF.Cli.Tests/PeachPDF.Cli.Tests.csproj --configuration Release --logger "trx;LogFileName=cli-test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+
     - name: Generate HTML coverage report
       if: always() && steps.changes.outputs.src == 'true'
       run: reportgenerator -reports:coverage/**/coverage.cobertura.xml -targetdir:coverage-report -reporttypes:Html
@@ -122,7 +128,9 @@ jobs:
       if: always() && steps.changes.outputs.src == 'true'
       with:
         name: test-results-${{ matrix.os }}
-        path: src/PeachPDF.Tests/**/*.trx
+        path: |
+          src/PeachPDF.Tests/**/*.trx
+          src/PeachPDF.Cli.Tests/**/*.trx
 
     - name: Upload coverage reports
       uses: actions/upload-artifact@v4
