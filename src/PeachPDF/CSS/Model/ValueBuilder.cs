@@ -68,6 +68,13 @@ namespace PeachPDF.CSS
                     // descriptor would be dropped under strict (non-tolerant) parsing - the pipeline default.
                     Add(token);
                     break;
+                case TokenType.SquareBracketOpen:
+                case TokenType.SquareBracketClose:
+                    // Square brackets are valid in a value: grid line names, e.g.
+                    // `grid-template-columns: [sidebar-start] 200px [sidebar-end]`. Without this they'd hit
+                    // the default arm and the whole declaration would be dropped under strict parsing.
+                    Add(token);
+                    break;
                 case TokenType.Comment:
                     break;
                 default:

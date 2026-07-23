@@ -661,6 +661,35 @@ namespace PeachPDF.Tests.Integration
             Assert.True(container.ActualSize.Height > 842, $"grid should span multiple pages, was {container.ActualSize.Height}");
         }
 
+        // ─── Named lines (#261) ──────────────────────────────────────────────────
+
+        [Fact]
+        public async Task NamedLine_PlacesItemAtThatLine()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:300pt; grid-template-columns:[c1] 100pt [c2] 100pt [c3] 100pt [c4];'>
+                    <div id='a' style='grid-column-start:c3; height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            // Line c3 is the 3rd column line (index 2) → the item starts at content-left + 200pt.
+            Assert.Equal(container.ClientLeft + 200, a.Location.X, 1.5);
+        }
+
+        [Fact]
+        public async Task NamedLineRange_SpansBetweenTwoNamedLines()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:300pt; grid-template-columns:[start] 100pt 100pt [mid] 100pt [end];'>
+                    <div id='a' style='grid-column-start:start; grid-column-end:mid; height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            // start = line 1, mid = line 3 → spans columns 1-2 = 200pt.
+            Assert.Equal(200, a.ActualBoxSizingWidth, 1.5);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>
