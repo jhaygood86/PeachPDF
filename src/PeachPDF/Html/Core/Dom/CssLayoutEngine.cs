@@ -66,6 +66,16 @@ namespace PeachPDF.Html.Core.Dom
             var hasImageTagHeight = TryResolveAbsolute(height, out var heightUnits);
             var scaleImageHeight = false;
 
+            // The element's natural (intrinsic) width/height ratio, if it has one, combined with any CSS
+            // `aspect-ratio` into the effective ratio used to size the missing axis (CSS Box Sizing 4 §5): a
+            // bare `<ratio>` overrides the natural ratio, `auto <ratio>` prefers the natural ratio and falls
+            // back to the specified one, and `auto`/no `aspect-ratio` uses the natural ratio alone. Null when
+            // there is neither a natural ratio nor a usable specified one (the pre-existing behavior).
+            double? intrinsicRatio = intrinsicWidth is > 0 && intrinsicHeight is > 0
+                ? intrinsicWidth.Value / intrinsicHeight.Value
+                : null;
+            var effectiveRatio = ResolveReplacedRatio(word.OwnerBox.AspectRatio, intrinsicRatio);
+
             if (hasImageTagWidth)
             {
                 word.Width = widthUnits;
@@ -139,21 +149,18 @@ namespace PeachPDF.Html.Core.Dom
                 word.Height = word.Width > 0 ? word.Width * 1.14f : 22.8f * Length.PointsPerPx;
             }
 
-            if (intrinsicWidth is > 0 && intrinsicHeight is > 0)
+            if (effectiveRatio is > 0)
             {
-                // If only the width was set in the html tag, ratio the height.
+                // If only the width was set (or width was resolved from a percentage / clamped), ratio the
+                // height from it via the effective width/height ratio.
                 if ((hasImageTagWidth && !hasImageTagHeight) || scaleImageHeight)
                 {
-                    // Divide the given tag width with the actual image width, to get the ratio.
-                    var ratio = word.Width / intrinsicWidth.Value;
-                    word.Height = intrinsicHeight.Value * ratio;
+                    word.Height = word.Width / effectiveRatio.Value;
                 }
-                // If only the height was set in the html tag, ratio the width.
+                // If only the height was set, ratio the width from it.
                 else if (hasImageTagHeight && !hasImageTagWidth)
                 {
-                    // Divide the given tag height with the actual image height, to get the ratio.
-                    var ratio = word.Height / intrinsicHeight.Value;
-                    word.Width = intrinsicWidth.Value * ratio;
+                    word.Width = word.Height * effectiveRatio.Value;
                 }
             }
 
@@ -174,7 +181,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (maxHeightVal > -1 && word.Height > maxHeightVal)
                 {
-                    if (intrinsicWidth is > 0 && intrinsicHeight is > 0 && word.Height > 0)
+                    if (effectiveRatio is > 0 && word.Height > 0)
                     {
                         word.Width *= maxHeightVal / word.Height;
                     }
@@ -197,7 +204,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (minHeightVal > -1 && word.Height < minHeightVal)
                 {
-                    if (intrinsicWidth is > 0 && intrinsicHeight is > 0 && word.Height > 0)
+                    if (effectiveRatio is > 0 && word.Height > 0)
                     {
                         word.Width *= minHeightVal / word.Height;
                     }
@@ -214,6 +221,26 @@ namespace PeachPDF.Html.Core.Dom
         /// spec-correct px (1px = 0.75pt) included, so replaced-element sizing agrees with the rest
         /// of the engine by construction.
         /// </summary>
+        /// <summary>
+        /// Resolves the effective width/height ratio for a replaced element from its CSS <c>aspect-ratio</c>
+        /// and its natural (intrinsic) ratio, per CSS Box Sizing 4 §5. A bare <c>&lt;ratio&gt;</c> overrides the
+        /// natural ratio; <c>auto &lt;ratio&gt;</c> prefers the natural ratio and falls back to the specified one
+        /// when the element has none; <c>auto</c>, an absent property, or a zero-term ratio use the natural
+        /// ratio alone. Returns null when neither a natural nor a usable specified ratio exists.
+        /// </summary>
+        private static double? ResolveReplacedRatio(string aspectRatio, double? intrinsicRatio)
+        {
+            if (string.IsNullOrEmpty(aspectRatio) || aspectRatio == CssConstants.Auto)
+                return intrinsicRatio;
+
+            if (!AspectRatioGrammar.TryParse(CssValueParser.GetCssTokens(aspectRatio), out var ratio, out var hasAuto)
+                || ratio is not (> 0))
+                return intrinsicRatio; // bare `auto`, or a zero-term ratio: natural ratio only
+
+            // `auto <ratio>` prefers the natural ratio; a bare `<ratio>` overrides it.
+            return hasAuto ? intrinsicRatio ?? ratio.Value : ratio.Value;
+        }
+
         private static bool TryResolveAbsolute(CssLength length, out double layoutUnits)
         {
             layoutUnits = 0;

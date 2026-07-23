@@ -21,6 +21,10 @@ namespace PeachPDF.Tests.Integration
         private const string Svg96X48 =
             "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='48'%3E%3Crect width='96' height='48' fill='red'/%3E%3C/svg%3E";
 
+        // An SVG with no width/height/viewBox has no natural (intrinsic) aspect ratio.
+        private const string SvgNoIntrinsic =
+            "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E";
+
         [Fact]
         public async Task SvgNaturalSize_UserUnitsAreCssPixels_LayoutAtThreeQuartersPt()
         {
@@ -100,6 +104,63 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(
                 FindById(rootPt, "img")!.Words[0].Width,
                 FindById(rootPx, "img")!.Words[0].Width, 2);
+        }
+
+        // ─── CSS aspect-ratio on replaced elements (issue #219 gap 3) ───
+
+        [Fact]
+        public async Task BareRatio_OverridesNaturalRatio_WhenOnlyWidthSet()
+        {
+            // A bare <ratio> overrides the element's 2:1 natural ratio: width 72pt, aspect-ratio 1/1 => the
+            // height is 72pt (square), not the 36pt the natural ratio would give.
+            var (root, _) = await BuildAndLayout(Wrap($"<img id='img' style='width:72pt; aspect-ratio:1/1' src=\"{Svg96X48}\" />"));
+            var img = FindById(root, "img")!;
+            Assert.Equal(72.0, img.Words[0].Width, 1);
+            Assert.Equal(72.0, img.Words[0].Height, 1);
+        }
+
+        [Fact]
+        public async Task BareRatio_OverridesNaturalRatio_WhenOnlyHeightSet()
+        {
+            // The height→width direction on a replaced element: height 36pt, aspect-ratio 1/1 => width 36pt
+            // (the CSS ratio overrides the 2:1 natural, which would give 72pt).
+            var (root, _) = await BuildAndLayout(Wrap($"<img id='img' style='height:36pt; aspect-ratio:1/1' src=\"{Svg96X48}\" />"));
+            var img = FindById(root, "img")!;
+            Assert.Equal(36.0, img.Words[0].Width, 1);
+            Assert.Equal(36.0, img.Words[0].Height, 1);
+        }
+
+        [Fact]
+        public async Task AutoRatio_PrefersNaturalRatio_OverSpecified()
+        {
+            // `auto <ratio>` prefers the natural ratio when the element has one: the 2:1 natural ratio wins
+            // over the specified 1/1, so width 72pt => height 36pt (NOT the 72pt a bare 1/1 would force).
+            var (root, _) = await BuildAndLayout(Wrap($"<img id='img' style='width:72pt; aspect-ratio:auto 1/1' src=\"{Svg96X48}\" />"));
+            var img = FindById(root, "img")!;
+            Assert.Equal(72.0, img.Words[0].Width, 1);
+            Assert.Equal(36.0, img.Words[0].Height, 1);
+        }
+
+        [Fact]
+        public async Task AutoRatio_FallsBackToSpecified_WhenNoNaturalRatio()
+        {
+            // `auto <ratio>` falls back to the specified <ratio> when the element has no natural ratio: an
+            // SVG with no width/height/viewBox + width 72pt + aspect-ratio auto 3/1 => height 24pt (72/3).
+            var (root, _) = await BuildAndLayout(Wrap($"<img id='img' style='width:72pt; aspect-ratio:auto 3/1' src=\"{SvgNoIntrinsic}\" />"));
+            var img = FindById(root, "img")!;
+            Assert.Equal(72.0, img.Words[0].Width, 1);
+            Assert.Equal(24.0, img.Words[0].Height, 1);
+        }
+
+        [Fact]
+        public async Task NoAspectRatio_KeepsNaturalRatio_Unchanged()
+        {
+            // Regression guard: with no aspect-ratio, the natural 2:1 ratio is used exactly as before —
+            // width 72pt => height 36pt.
+            var (root, _) = await BuildAndLayout(Wrap($"<img id='img' style='width:72pt' src=\"{Svg96X48}\" />"));
+            var img = FindById(root, "img")!;
+            Assert.Equal(72.0, img.Words[0].Width, 1);
+            Assert.Equal(36.0, img.Words[0].Height, 1);
         }
 
         private static string Wrap(string body) =>
