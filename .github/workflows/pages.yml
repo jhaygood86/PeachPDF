@@ -34,6 +34,18 @@ jobs:
           printf 'current: "%s"\n' "$VERSION" > docs/_data/version.yml
           echo "Version: $VERSION"
 
+      - name: Read the live test count into site data
+        run: |
+          # Ask dotnet test to enumerate the suite (discovery only — no execution, theories expanded) and
+          # count the discovered cases, mirroring the version step above: the number is written to
+          # docs/_data/tests.yml and consumed via {{ site.data.tests.total }} on the testing page.
+          COUNT=$(dotnet test src/PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0 --list-tests \
+            | grep -cE '^[[:space:]]+PeachPDF\.Tests\.')
+          if [ "$COUNT" -lt 1000 ]; then echo "Unexpected test count: $COUNT" >&2; exit 1; fi
+          FORMATTED=$(echo "$COUNT" | sed ':a;s/\B[0-9]\{3\}\>/,&/;ta')
+          printf 'total: "%s"\n' "$FORMATTED" > docs/_data/tests.yml
+          echo "Test count: $FORMATTED"
+
       - name: Generate API reference
         run: dotnet build src/PeachPDF/PeachPDF.csproj --configuration Release -p:TargetFramework=net10.0 -p:DisableDefaultDocumentation=false
 
