@@ -101,9 +101,28 @@ namespace PeachPDF.Html.Core.Dom
             var isColumnFlow = flow.IndexOf(CssConstants.Column, StringComparison.OrdinalIgnoreCase) >= 0;
             var isDense = flow.IndexOf(CssConstants.Dense, StringComparison.OrdinalIgnoreCase) >= 0;
 
-            // Per-axis named-line tables (from [name] in the templates; area lines are merged in Stage 2).
+            // Per-axis named-line tables: [name] from the templates, plus name-start/name-end lines each
+            // grid-template-areas area contributes.
             var colLineNames = BuildLineNames(_gridBox.GridTemplateColumns);
             var rowLineNames = BuildLineNames(_gridBox.GridTemplateRows);
+
+            var areas = string.IsNullOrEmpty(_gridBox.GridTemplateAreas) || _gridBox.GridTemplateAreas.Isi(CssConstants.None)
+                ? null
+                : GridTemplateAreasGrammar.TryParse(CssValueParser.GetCssTokens(_gridBox.GridTemplateAreas));
+            if (areas is not null)
+            {
+                foreach (var (name, b) in areas.Areas)
+                {
+                    AddLine(colLineNames, name + "-start", b.C1 + 1);
+                    AddLine(colLineNames, name + "-end", b.C2 + 2);
+                    AddLine(rowLineNames, name + "-start", b.R1 + 1);
+                    AddLine(rowLineNames, name + "-end", b.R2 + 2);
+                }
+                // The area grid establishes the explicit grid size; pad with auto tracks (areas never
+                // resize authored tracks). This drives fixedCount/colCount/rowCount below.
+                while (explicitColDefs.Count < areas.ColCount) explicitColDefs.Add(GridTrackSize.Auto);
+                while (explicitRowDefs.Count < areas.RowCount) explicitRowDefs.Add(GridTrackSize.Auto);
+            }
 
             // The fixed-axis (explicit) track count: columns for row flow, rows for column flow.
             var fixedCount = Math.Max(1, isColumnFlow ? explicitRowDefs.Count : explicitColDefs.Count);
@@ -776,6 +795,15 @@ namespace PeachPDF.Html.Core.Dom
                 foreach (var (name, lines) in names)
                     table[name] = lines.ToList();
             return table;
+        }
+
+        /// <summary>Adds a 1-based line number to a name's entry, keeping the list sorted and deduped.</summary>
+        private static void AddLine(Dictionary<string, List<int>> table, string name, int line)
+        {
+            if (!table.TryGetValue(name, out var lines))
+                table[name] = lines = [];
+            var idx = lines.BinarySearch(line);
+            if (idx < 0) lines.Insert(~idx, line);
         }
 
         private List<GridTrackSize> ExpandTemplate(string value)

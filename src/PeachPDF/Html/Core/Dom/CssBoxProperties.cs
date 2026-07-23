@@ -1437,6 +1437,7 @@ namespace PeachPDF.Html.Core.Dom
         // flex (FlexRowGap/FlexColumnGap above); align/justify-content/items and align-self are shared too.
         public string GridTemplateColumns { get; set; } = CssConstants.None;
         public string GridTemplateRows    { get; set; } = CssConstants.None;
+        public string GridTemplateAreas   { get; set; } = CssConstants.None;
         public string GridAutoColumns     { get; set; } = CssConstants.Auto;
         public string GridAutoRows        { get; set; } = CssConstants.Auto;
         public string GridAutoFlow        { get; set; } = CssConstants.Row;
