@@ -440,6 +440,14 @@ namespace PeachPDF.Svg
             // only SvgGeometryBounds to also bound <text>/<image>/nested-<svg>/<use> content, so a group
             // whose only content is those types (previously unboundable) still gets an isolated composite
             // instead of falling back to a double-blend-prone per-shape alpha multiply.
+            //
+            // Approximation (same as SvgGeometryBounds, which this reuses for objectBoundingBox
+            // gradients/masks): a descendant's own `transform` is NOT folded into the bounds, so a child
+            // carrying a large translate/scale that pushes its painted geometry outside the untransformed
+            // union can be clipped by the raster tile - a pre-existing renderer limitation that applies
+            // equally to the boundable-geometry path, mitigated (not eliminated) by the margin. Likewise a
+            // <use>-of-a-<use>-of-a-container isn't routed here (NeedsContainerOpacityGroup only unwraps one
+            // <use> level), so its target's children fall back to the per-shape multiply.
             if (GetOpacityGroupBounds(g, element, viewport) is not { } bbox || bbox.Width <= 0 || bbox.Height <= 0)
             {
                 // Truly empty / zero-area content: nothing paints, so there is nothing to double-blend -
@@ -586,7 +594,9 @@ namespace PeachPDF.Svg
 
             double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
 
-            foreach (var (cx, cy) in new[] { (rect.X, rect.Y), (rect.Right, rect.Y), (rect.X, rect.Bottom), (rect.Right, rect.Bottom) })
+            ReadOnlySpan<(double X, double Y)> corners =
+                [(rect.X, rect.Y), (rect.Right, rect.Y), (rect.X, rect.Bottom), (rect.Right, rect.Bottom)];
+            foreach (var (cx, cy) in corners)
             {
                 var dx = cx - pivotX;
                 var dy = cy - pivotY;
