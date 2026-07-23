@@ -216,12 +216,6 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Resolves an explicit absolute width/height/min/max on a replaced element to layout units
-        /// (points) through the shared CSS-OM <see cref="Length"/> conversion — any absolute unit,
-        /// spec-correct px (1px = 0.75pt) included, so replaced-element sizing agrees with the rest
-        /// of the engine by construction.
-        /// </summary>
-        /// <summary>
         /// Resolves the effective width/height ratio for a replaced element from its CSS <c>aspect-ratio</c>
         /// and its natural (intrinsic) ratio, per CSS Box Sizing 4 §5. A bare <c>&lt;ratio&gt;</c> overrides the
         /// natural ratio; <c>auto &lt;ratio&gt;</c> prefers the natural ratio and falls back to the specified one
@@ -241,6 +235,12 @@ namespace PeachPDF.Html.Core.Dom
             return hasAuto ? intrinsicRatio ?? ratio.Value : ratio.Value;
         }
 
+        /// <summary>
+        /// Resolves an explicit absolute width/height/min/max on a replaced element to layout units
+        /// (points) through the shared CSS-OM <see cref="Length"/> conversion — any absolute unit,
+        /// spec-correct px (1px = 0.75pt) included, so replaced-element sizing agrees with the rest
+        /// of the engine by construction.
+        /// </summary>
         private static bool TryResolveAbsolute(CssLength length, out double layoutUnits)
         {
             layoutUnits = 0;
