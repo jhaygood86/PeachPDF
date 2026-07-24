@@ -1020,10 +1020,49 @@ namespace PeachPDF.Svg
                         run.Spans.Add(trefRun);
                         break;
                     }
+
+                    case "textPath":
+                    {
+                        var textPathRun = BuildTextRun(child, resolved, childFontContext);
+                        var href = child.GetAttribute("href") ?? child.GetAttribute("xlink:href");
+                        var id = href?.TrimStart('#');
+
+                        // v1 subset: only a <path>'s own geometry is a supported textPath target (not a
+                        // basic shape). A missing/invalid reference leaves PathData null, so the run just
+                        // renders on the ordinary straight baseline.
+                        if (!string.IsNullOrEmpty(id) && _nodesById.TryGetValue(id, out var target) &&
+                            target.Name == "path" && !string.IsNullOrEmpty(target.GetAttribute("d")))
+                        {
+                            textPathRun.PathData = SvgPathDataParser.Parse(target.GetAttribute("d"));
+                            var (offset, isPercent) = ParseStartOffset(child.GetAttribute("startOffset"));
+                            textPathRun.StartOffset = offset;
+                            textPathRun.StartOffsetIsPercent = isPercent;
+                        }
+
+                        run.Spans.Add(textPathRun);
+                        break;
+                    }
                 }
             }
 
             return run;
+        }
+
+        /// <summary>
+        /// Parses a <c>&lt;textPath&gt;</c> <c>startOffset</c>: a length (user units) or a percentage of
+        /// the path's total length. A percentage is stored as its 0..1 fraction plus the percent flag,
+        /// so the render side can resolve it against the (build-time-unknown) total path length.
+        /// </summary>
+        private static (double Offset, bool IsPercent) ParseStartOffset(string? raw)
+        {
+            raw = raw?.Trim();
+            if (string.IsNullOrEmpty(raw))
+                return (0, false);
+
+            if (raw.EndsWith('%'))
+                return ((SvgValueParsers.ParseLength(raw[..^1]) ?? 0) / 100.0, true);
+
+            return (SvgValueParsers.ParseLength(raw) ?? 0, false);
         }
 
         /// <summary>

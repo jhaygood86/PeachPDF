@@ -313,6 +313,21 @@ namespace PeachPDF.Html.Adapters
         public abstract void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl, double letterSpacing = 0);
 
         /// <summary>
+        /// Builds the vector outline of a glyph run as a fillable/strokeable <see cref="RGraphicsPath"/>,
+        /// with the text baseline at <paramref name="baselineOrigin"/> (user-space units) and glyphs
+        /// advancing left-to-right. Unlike <see cref="DrawString"/> (a single-color PDF text show), the
+        /// returned path can be filled with a gradient/pattern brush or stroked - used by the SVG
+        /// renderer for gradient/pattern <c>fill</c>, <c>stroke</c>, and <c>&lt;textPath&gt;</c> on text.
+        /// Returns <c>null</c> when the font produces no glyph outlines (e.g. a CFF/bitmap font, which
+        /// has no <c>glyf</c> table) - the caller's cue to fall back to <see cref="DrawString"/>.
+        /// </summary>
+        /// <param name="str">the run to outline</param>
+        /// <param name="font">the font to outline with</param>
+        /// <param name="baselineOrigin">the pen origin on the text baseline (user-space units)</param>
+        /// <param name="letterSpacing">extra advance between glyphs (same units as <paramref name="baselineOrigin"/>)</param>
+        public abstract RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0);
+
+        /// <summary>
         /// Draws a line connecting the two points specified by the coordinate pairs.
         /// </summary>
         /// <param name="pen">Pen that determines the color, width, and style of the line. </param>

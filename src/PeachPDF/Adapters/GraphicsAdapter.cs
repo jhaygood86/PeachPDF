@@ -10,11 +10,13 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.Fonts.OpenType;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Utilities;
 using System;
+using System.Text;
 
 namespace PeachPDF.Adapters
 {
@@ -172,6 +174,72 @@ namespace PeachPDF.Adapters
             // tagged-PDF-friendly text run regardless of its value.
             var xLetterSpacing = letterSpacing / PixelsPerPoint;
             _g.DrawString(str, ((FontAdapter)font).Font, xBrush, xPoint.X, xPoint.Y, _stringFormat, xLetterSpacing);
+        }
+
+        public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0)
+        {
+            var realFont = ((FontAdapter)font).Font;
+            var descriptor = realFont.Descriptor;
+            if (descriptor is null || descriptor.UnitsPerEm == 0)
+                return null;
+
+            // Design units -> SVG user space. font.Size is in points (XFont.Size = css/svg size / PixelsPerPoint),
+            // while these path coordinates reach the backend un-scaled by PixelsPerPoint (see GraphicsPathAdapter.
+            // Transform), the same space shape paths are built in - so multiply back by PixelsPerPoint. The em-square
+            // is y-up; user space is y-down, so glyph Y is subtracted from the baseline.
+            double scale = realFont.Size * PixelsPerPoint / descriptor.UnitsPerEm;
+
+            var path = GetGraphicsPath();
+            path.FillMode = RFillMode.Nonzero;
+
+            double penX = baselineOrigin.X;
+            double baseY = baselineOrigin.Y;
+            bool anyGeometry = false;
+
+            foreach (var rune in str.EnumerateRunes())
+            {
+                int glyphId = descriptor.CharCodeToGlyphIndex(rune);
+
+                // TryGetGlyphOutline returns false for an empty glyph (e.g. space) or a CFF/bitmap font
+                // with no `glyf` table - either way there's nothing to add for this glyph.
+                if (descriptor.TryGetGlyphOutline(glyphId, out GlyphOutline outline))
+                {
+                    foreach (GlyphContour contour in outline.Contours)
+                    {
+                        path.AddMove(penX + contour.Start.X * scale, baseY - contour.Start.Y * scale);
+
+                        foreach (GlyphSegment segment in contour.Segments)
+                        {
+                            if (segment.IsCubic)
+                            {
+                                path.AddBezierTo(
+                                    penX + segment.Control1.X * scale, baseY - segment.Control1.Y * scale,
+                                    penX + segment.Control2.X * scale, baseY - segment.Control2.Y * scale,
+                                    penX + segment.End.X * scale, baseY - segment.End.Y * scale);
+                            }
+                            else
+                            {
+                                path.LineTo(penX + segment.End.X * scale, baseY - segment.End.Y * scale);
+                            }
+                        }
+
+                        path.CloseFigure();
+                        anyGeometry = true;
+                    }
+                }
+
+                penX += descriptor.GlyphIndexToWidth(glyphId) * scale + letterSpacing;
+            }
+
+            // No geometry at all means the font produced no `glyf` outlines (CFF/bitmap) - signal the
+            // caller to fall back to DrawString.
+            if (!anyGeometry)
+            {
+                path.Dispose();
+                return null;
+            }
+
+            return path;
         }
 
         public override RGraphicsPath GetGraphicsPath()

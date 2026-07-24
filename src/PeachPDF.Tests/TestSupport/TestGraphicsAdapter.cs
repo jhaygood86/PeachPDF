@@ -4,6 +4,7 @@ using PeachPDF.Network;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Tests.TestSupport
@@ -245,6 +246,46 @@ namespace PeachPDF.Tests.TestSupport
         public override object SetAntiAliasSmoothingMode() => new object();
         public override void ReturnPreviousSmoothingMode(object? prevMode) { }
         public override RGraphicsPath GetGraphicsPath() => new TestGraphicsPath();
+
+        /// <summary>
+        /// A synthetic glyph-run outline: one box subpath per non-whitespace rune, advancing along the
+        /// baseline. Faithful to the real <see cref="GraphicsAdapter.GetTextOutline"/> contract
+        /// (non-null exactly when there is fillable geometry, null for a whitespace-only/empty run)
+        /// without needing a real <c>glyf</c> font, so SVG gradient/pattern-fill and stroke-on-text
+        /// paths can be driven and their <see cref="DrawPath(RBrush, RGraphicsPath)"/>/
+        /// <see cref="DrawPath(RPen, RGraphicsPath)"/> calls recorded.
+        /// </summary>
+        public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0)
+        {
+            var path = new TestGraphicsPath();
+            var penX = baselineOrigin.X;
+            var any = false;
+
+            foreach (var rune in str.EnumerateRunes())
+            {
+                if (!System.Text.Rune.IsWhiteSpace(rune))
+                {
+                    var top = baselineOrigin.Y - font.Ascent;
+                    var right = penX + font.Size * 0.5;
+                    path.AddMove(penX, baselineOrigin.Y);
+                    path.LineTo(right, baselineOrigin.Y);
+                    path.LineTo(right, top);
+                    path.LineTo(penX, top);
+                    path.CloseFigure();
+                    any = true;
+                }
+
+                penX += font.Size * 0.6 + letterSpacing;
+            }
+
+            if (!any)
+            {
+                path.Dispose();
+                return null;
+            }
+
+            return path;
+        }
         public override (RGraphics Graphics, RImage Image)? CreateTile(double width, double height) => null;
         public override void DrawImageMasked(RImage image, RImage maskImage, RRect destRect) { }
         public override void DrawImageWithOpacity(RImage image, RRect destRect, double opacity) { }
