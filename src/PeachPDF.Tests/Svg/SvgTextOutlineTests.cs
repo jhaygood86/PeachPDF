@@ -168,18 +168,26 @@ namespace PeachPDF.Tests.Svg
         }
 
         [Fact]
-        public void TextPath_TextAnchorMiddle_CentersTheRunOnItsStart()
+        public void TextPath_TextAnchor_ShiftsTheRunStartAlongThePath()
         {
-            // text-anchor=middle shifts the run start back by half its width; with a mid-path natural
-            // start the run still fits, but fewer glyphs than an equivalent end-anchored run past the end.
+            // text-anchor on the <textPath> shifts the run start back by (middle) half or (end) all of
+            // its width. At a mid-path startOffset, `middle` recenters the whole run over the offset (all
+            // glyphs fit), while `end` pushes it back so it starts earlier - both differ from `start`,
+            // and each anchor exercises its own branch.
+            var start = Render(
+                """<text font-size="40"><textPath href="#p" startOffset="80%">Path</textPath></text>""",
+                """<path id="p" d="M10,50 L190,50"/>""");
             var middle = Render(
-                """<text font-size="40" text-anchor="middle"><textPath href="#p" startOffset="50%">Path</textPath></text>""",
+                """<text font-size="40"><textPath href="#p" startOffset="80%" text-anchor="middle">Path</textPath></text>""",
                 """<path id="p" d="M10,50 L190,50"/>""");
             var end = Render(
-                """<text font-size="40" text-anchor="end"><textPath href="#p" startOffset="50%">Path</textPath></text>""",
+                """<text font-size="40"><textPath href="#p" startOffset="80%" text-anchor="end">Path</textPath></text>""",
                 """<path id="p" d="M10,50 L190,50"/>""");
 
-            Assert.True(middle.DrawStringCalls.Count >= end.DrawStringCalls.Count);
+            // start (offset 144) loses most of the run off the end; middle/end pull it back on, so both
+            // fit more glyphs than start does.
+            Assert.True(middle.DrawStringCalls.Count > start.DrawStringCalls.Count);
+            Assert.True(end.DrawStringCalls.Count >= middle.DrawStringCalls.Count);
         }
 
         [Fact]
