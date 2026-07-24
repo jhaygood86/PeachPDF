@@ -3,6 +3,8 @@ using System;
 using System.IO;
 using System.Linq;
 
+using PeachPDF.Fonts;
+
 namespace PeachPDF.Tests.TestSupport
 {
     /// <summary>
@@ -32,6 +34,29 @@ namespace PeachPDF.Tests.TestSupport
         /// glyph resolution and rendering end to end.
         /// </summary>
         internal static string Emoji => Path.Combine(AppContext.BaseDirectory, "NotoEmoji-Regular.ttf");
+
+        /// <summary>
+        /// A hand-authored COLR <b>version 0</b> test font (public domain, see
+        /// ColorTestFonts.LICENSE.txt): layered outline color glyphs backed by a CPAL palette.
+        /// 'A' is a red box under a green triangle, 'B' a blue circle; 'X'/'Y'/'Z' are the plain
+        /// outline layer glyphs, ' ' is empty.
+        /// </summary>
+        internal static string ColorV0 => Path.Combine(AppContext.BaseDirectory, "ColorTestV0.ttf");
+
+        /// <summary>
+        /// A hand-authored COLR <b>version 1</b> test font (public domain): paint graphs exercising
+        /// layered solids ('A'), a linear gradient ('G'), and a translate transform ('T'), plus a
+        /// single-glyph solid ('B'). Same outline/palette glyphs as <see cref="ColorV0"/>.
+        /// </summary>
+        internal static string ColorV1 => Path.Combine(AppContext.BaseDirectory, "ColorTestV1.ttf");
+
+        /// <summary>
+        /// A subset of the real COLR <b>version 1</b> build of Noto Color Emoji (see
+        /// NotoColorEmoji-Subset.LICENSE.txt): color glyphs via COLR/CPAL over <c>glyf</c> outlines
+        /// (gradients, transforms, compositing), covering a handful of common emoji. Used to prove the
+        /// color-glyph pipeline end to end against a real production color font.
+        /// </summary>
+        internal static string ColorEmoji => Path.Combine(AppContext.BaseDirectory, "NotoColorEmoji-Subset.ttf");
 
         /// <summary>
         /// A real font file path: the first one the host OS reports, or the bundled TTF

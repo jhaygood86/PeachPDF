@@ -5,6 +5,8 @@ using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Utils;
 using PeachPDF.Tests.TestSupport;
 
+using PeachPDF.Fonts;
+
 namespace PeachPDF.Tests.Html.Core
 {
     /// <summary>

@@ -2,6 +2,8 @@ using PeachPDF.PdfSharpCore.Utils;
 using PeachPDF.Tests.TestSupport;
 using System.IO;
 
+using PeachPDF.Fonts;
+
 namespace PeachPDF.Tests.PdfSharpCoreTests
 {
     /// <summary>

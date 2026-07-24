@@ -1,11 +1,13 @@
 using PeachPDF;
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Fonts.OpenType;
+using PeachPDF.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Utils;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+
+using PeachPDF.Fonts;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests
 {

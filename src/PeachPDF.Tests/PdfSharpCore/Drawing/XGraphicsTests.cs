@@ -3,6 +3,8 @@ using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Utils;
 using StbImageWriteSharp;
 
+using PeachPDF.Fonts;
+
 namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
 {
     public class XGraphicsTests

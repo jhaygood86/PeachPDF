@@ -1,6 +1,8 @@
 using PeachPDF.PdfSharpCore.Utils;
 using System;
 
+using PeachPDF.Fonts;
+
 namespace PeachPDF.Tests.PdfSharpCoreTests
 {
     public class LinuxSystemFontResolverTests

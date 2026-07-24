@@ -28,8 +28,8 @@
 #endregion
 
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.PdfSharpCore.Fonts;
-using PeachPDF.PdfSharpCore.Fonts.OpenType;
+using PeachPDF.Fonts;
+using PeachPDF.Fonts.OpenType;
 using System.Diagnostics;
 using System.Text;
 

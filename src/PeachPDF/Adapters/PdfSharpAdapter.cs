@@ -18,7 +18,7 @@ using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
-using PeachPDF.PdfSharpCore.Fonts;
+using PeachPDF.Fonts;
 using PeachPDF.PdfSharpCore.Utils;
 using PeachPDF.Utilities;
 using System;

@@ -1,0 +1,12 @@
+NotoColorEmoji-Subset.ttf is a subset (a handful of common emoji) of the COLRv1
+build of "Noto Color Emoji", Copyright 2013 Google LLC, licensed under the SIL
+Open Font License, Version 1.1 (OFL-1.1). It uses COLR (version 1) + CPAL color
+glyphs over `glyf` outlines (no bitmap tables).
+
+The font is bundled solely as a test/showcase asset to demonstrate and verify
+COLR/CPAL color-glyph rendering. Only a small range of glyphs is retained via
+fonttools subset; the color glyphs are otherwise unmodified. The full OFL text
+follows.
+
+Full license text: https://openfontlicense.org/open-font-license-official-text/
+Source: https://fonts.google.com/noto/specimen/Noto+Emoji

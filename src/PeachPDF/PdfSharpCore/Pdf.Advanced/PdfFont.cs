@@ -27,7 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using PeachPDF.PdfSharpCore.Fonts;
+using PeachPDF.Fonts;
 using System;
 using System.Diagnostics;
 using System.Text;

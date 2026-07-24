@@ -1,6 +1,6 @@
 using PeachPDF;
 using PeachPDF.PdfSharpCore;
-using PeachPDF.PdfSharpCore.Fonts;
+using PeachPDF.Fonts;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Utils;
 using PeachPDF.Tests.TestSupport;

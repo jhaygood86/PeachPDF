@@ -27,8 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using PeachPDF.PdfSharpCore.Fonts;
-using PeachPDF.PdfSharpCore.Fonts.OpenType;
+using PeachPDF.Fonts;
+using PeachPDF.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Utils;
 using System;
 using System.Diagnostics;
@@ -193,7 +193,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         }
 
         /// <summary>
-        /// The specific <see cref="Utils.FontResolver"/> instance this typeface was resolved through its
+        /// The specific <see cref="PeachPDF.Fonts.FontResolver"/> instance this typeface was resolved through its
         /// OWN per-instance cache for (i.e. a custom/<c>@font-face</c>-registered family - see
         /// <see cref="GetOrCreateFrom"/>), or null if it came from the global, process-wide caches (a
         /// pure system-font request, safe to share). <see cref="Drawing.XFont"/> reads this to route

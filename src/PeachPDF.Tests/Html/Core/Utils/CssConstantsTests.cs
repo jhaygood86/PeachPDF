@@ -1,6 +1,8 @@
 using PeachPDF.Html.Core.Utils;
 using System.Linq;
 
+using PeachPDF.Fonts;
+
 namespace PeachPDF.Tests.Html.Core.Utils
 {
     public class CssConstantsTests

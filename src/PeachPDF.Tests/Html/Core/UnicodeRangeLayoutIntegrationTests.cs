@@ -9,6 +9,8 @@ using System.IO;
 using System.Linq;
 using System.Text;
 
+using PeachPDF.Fonts;
+
 namespace PeachPDF.Tests.Html.Core
 {
     /// <summary>
