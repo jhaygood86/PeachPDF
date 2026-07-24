@@ -29,8 +29,8 @@
 
 // #??? Clean up
 
-using PeachPDF.PdfSharpCore.Fonts;
-using PeachPDF.PdfSharpCore.Fonts.OpenType;
+using PeachPDF.Fonts;
+using PeachPDF.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Utils;
 using System;

@@ -6,6 +6,8 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
+using PeachPDF.Fonts;
+
 namespace PeachPDF.Tests.PdfSharpCoreTests
 {
     public class FontResolverTests

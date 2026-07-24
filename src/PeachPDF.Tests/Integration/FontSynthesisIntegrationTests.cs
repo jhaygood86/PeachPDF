@@ -7,6 +7,8 @@ using System.Text;
 using System.Threading.Tasks;
 using Xunit;
 
+using PeachPDF.Fonts;
+
 namespace PeachPDF.Tests.Integration
 {
     /// <summary>

@@ -3,6 +3,8 @@ using PeachPDF.PdfSharpCore.Drawing.Layout;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Utils;
 
+using PeachPDF.Fonts;
+
 namespace PeachPDF.Tests.PdfSharpCoreTests.Basics
 {
     public class SmokeTests

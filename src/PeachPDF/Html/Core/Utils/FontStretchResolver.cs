@@ -1,9 +1,11 @@
+using PeachPDF.Fonts;
+
 namespace PeachPDF.Html.Core.Utils
 {
     /// <summary>
     /// Resolves a CSS <c>font-stretch</c> keyword to the 1-9 numeric scale matching the OpenType OS/2
     /// table's <c>usWidthClass</c> field directly (1=ultra-condensed ... 5=normal ... 9=ultra-expanded) -
-    /// see <see cref="PdfSharpCore.Utils.TtfFontDescription.Stretch"/>, which reads that same field for
+    /// see <see cref="PeachPDF.Fonts.TtfFontDescription.Stretch"/>, which reads that same field for
     /// each registered face, so the two are directly comparable without any extra translation.
     /// </summary>
     internal static class FontStretchResolver

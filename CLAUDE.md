@@ -33,7 +33,7 @@ If a new or changed feature gives PeachPDF a new visible capability, add a new s
 
 ## Project layout
 
-- `src/PeachPDF/` — the library. Notable subtrees: `CSS/` (CSS-OM: tokenizer, parser, value converters), `Html/Core/` (DOM, cascade, layout, paint handlers), `Html/Adapters/` (`RGraphics`/`RAdapter`/etc. abstraction layer), `Svg/` (native SVG tree builder + renderer), `PdfSharpCore/` (embedded fork of PDFsharp — see below, has its own [LICENSE](src/PeachPDF/PdfSharpCore/LICENSE.md)).
+- `src/PeachPDF/` — the library. Notable subtrees: `CSS/` (CSS-OM: tokenizer, parser, value converters), `Html/Core/` (DOM, cascade, layout, paint handlers), `Html/Adapters/` (`RGraphics`/`RAdapter`/etc. abstraction layer), `Svg/` (native SVG tree builder + renderer), `Fonts/` (all font handling — namespace `PeachPDF.Fonts`: OpenType table parsing under `Fonts/OpenType/`, `FontFactory`/`FontResolver`/`FontFamilyModel`/`Woff2Converter`/glyph-outline + `COLR`/`CPAL` decoders; note the OpenType readers are PDFsharp-origin, so their license headers stay intact), `PdfSharpCore/` (embedded fork of PDFsharp — see below, has its own [LICENSE](src/PeachPDF/PdfSharpCore/LICENSE.md)).
 - `src/PeachPDF.Tests/` — xUnit test suite, multi-targets net8.0/net10.0.
 - `src/PeachPDF.Cli/` — the `peachpdf` command-line tool (net10.0-only, NativeAOT-published; conventional command-line argument grammar). Also serves as the library's AOT smoke test (a successful `dotnet publish -p:PublishAot=true` proves the whole pipeline AOT-compiles and runs) — replacing the removed `PeachPDF.AotSmokeTest`. The published native binary's assembly name stays `PeachPDF.Cli` (naming it `peachpdf` collides case-insensitively with the `PeachPDF` library and breaks project-reference restore); the release workflow renames it to `peachpdf` when packaging.
 - `src/PeachPDF.Cli.Tests/` — xUnit v3 test suite for the CLI (net10.0-only, to reference the net10-only CLI). Library-behavior changes the CLI depends on are tested in `PeachPDF.Tests` instead (they exercise `PeachPDF` internals); `.github/workflows/test.yml` runs both projects' coverage into one directory so the diff-coverage gate covers the CLI too.
@@ -62,7 +62,7 @@ dotnet test --collect:"XPlat Code Coverage" --settings PeachPDF.Tests/coverlet.r
 
 Before considering any non-trivial code change complete, run the command above and check diff coverage on the lines you changed. If new/changed code falls short of the 90% diff-coverage threshold CI enforces, add tests to close the gap before finishing — don't leave it for CI to catch.
 
-Avoid writing tests against `PdfSharpCore.Fonts.FontFactory` (and OpenType neighbors) without care — it caches resolved fonts in `static readonly Dictionary` fields shared process-wide, and xUnit's parallel test-class execution makes new tests here a real order-dependent-flakiness risk against the rest of the suite.
+Avoid writing tests against `PeachPDF.Fonts.FontFactory` (and OpenType neighbors) without care — it caches resolved fonts in `static readonly Dictionary` fields shared process-wide, and xUnit's parallel test-class execution makes new tests here a real order-dependent-flakiness risk against the rest of the suite.
 
 ## Post-change review pass
 

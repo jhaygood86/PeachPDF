@@ -1,11 +1,13 @@
 using PeachPDF.Html.Core.Utils;
 
+using PeachPDF.Fonts;
+
 namespace PeachPDF.Tests.Html.Core.Utils
 {
     /// <summary>
     /// Unit tests for <see cref="GenericFontFamilyResolver"/> - verified-Chromium generic-family mapping
     /// per platform. Uses explicit platform booleans (mirroring
-    /// <c>PdfSharpCore.Utils.FontResolver.DiscoverSupportedFonts</c>'s own precedent) so every platform's
+    /// <c>PeachPDF.Fonts.FontResolver.DiscoverSupportedFonts</c>'s own precedent) so every platform's
     /// table is exercised regardless of the host OS actually running these tests.
     /// </summary>
     public class GenericFontFamilyResolverTests

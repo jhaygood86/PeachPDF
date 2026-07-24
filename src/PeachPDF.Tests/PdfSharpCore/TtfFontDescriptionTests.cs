@@ -4,6 +4,8 @@ using PeachPDF.Tests.TestSupport;
 using System.IO;
 using System.Linq;
 
+using PeachPDF.Fonts;
+
 namespace PeachPDF.Tests.PdfSharpCoreTests
 {
     public class TtfFontDescriptionTests

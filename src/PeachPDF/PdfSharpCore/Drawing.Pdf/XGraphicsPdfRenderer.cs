@@ -31,7 +31,7 @@
 
 #define ITALIC_SIMULATION
 
-using PeachPDF.PdfSharpCore.Fonts.OpenType;
+using PeachPDF.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Internal;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;

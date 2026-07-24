@@ -3,6 +3,8 @@ using System;
 using System.IO;
 using System.Linq;
 
+using PeachPDF.Fonts;
+
 namespace PeachPDF.Tests.TestSupport
 {
     /// <summary>

@@ -1,5 +1,5 @@
 using System.IO.Compression;
-using PeachPDF.PdfSharpCore.Fonts;
+using PeachPDF.Fonts;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 {

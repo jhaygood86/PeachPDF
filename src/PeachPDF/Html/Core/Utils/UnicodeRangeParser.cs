@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Parse;
-using PeachPDF.PdfSharpCore.Fonts.OpenType;
+using PeachPDF.Fonts.OpenType;
 
 namespace PeachPDF.Html.Core.Utils
 {

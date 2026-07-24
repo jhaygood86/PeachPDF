@@ -7,6 +7,8 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
+using PeachPDF.Fonts;
+
 namespace PeachPDF.Tests.Integration
 {
     /// <summary>

@@ -1,9 +1,11 @@
+using PeachPDF.Fonts;
+
 namespace PeachPDF.Html.Core.Utils
 {
     /// <summary>
     /// Resolves an <c>@font-face</c> rule's own <c>font-weight</c>/<c>font-style</c>/<c>font-stretch</c>
     /// descriptor strings (<see cref="PeachPDF.CSS.IFontFaceRule"/>) into the override values
-    /// <c>PdfSharpCore.Utils.FontResolver.AddFont</c> takes - these are authoritative for how a specific
+    /// <c>PeachPDF.Fonts.FontResolver.AddFont</c> takes - these are authoritative for how a specific
     /// registered face participates in matching, independent of what the font file's own internal tables
     /// say (see <c>DomParser.CascadeApplyStyleFonts</c>). Returns null for any descriptor this can't
     /// confidently resolve to a single concrete value (absent, or a variable-font weight/stretch *range*

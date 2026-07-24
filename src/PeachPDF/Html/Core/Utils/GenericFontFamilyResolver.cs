@@ -2,6 +2,8 @@ using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
 
+using PeachPDF.Fonts;
+
 namespace PeachPDF.Html.Core.Utils
 {
     /// <summary>
@@ -9,7 +11,7 @@ namespace PeachPDF.Html.Core.Utils
     /// <c>fantasy</c>) to real installed family names, matching real Chromium behavior per platform rather
     /// than a single invented cross-platform table. Chromium hardcodes specific family names on Windows,
     /// macOS, and Android, but delegates to the OS's own font-matching (fontconfig) on Linux - see
-    /// <c>PdfSharpCore.Utils.LinuxSystemFontResolver.ResolveGenericFamily</c> for that half.
+    /// <c>PeachPDF.Fonts.LinuxSystemFontResolver.ResolveGenericFamily</c> for that half.
     /// </summary>
     /// <remarks>
     /// Values verified against Chromium's own font-settings documentation and font-transition discussions
@@ -63,7 +65,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <summary>
         /// Resolves <paramref name="genericFamily"/> (one of <see cref="Generics"/>) against the
         /// hardcoded, Chromium-matched table for whichever platform flag is true. Takes explicit platform
-        /// booleans (mirroring <see cref="PdfSharpCore.Utils.FontResolver.DiscoverSupportedFonts"/>'s own
+        /// booleans (mirroring <see cref="PeachPDF.Fonts.FontResolver.DiscoverSupportedFonts"/>'s own
         /// precedent) rather than querying <see cref="OperatingSystem"/> internally, so the table itself is
         /// directly unit-testable on any CI runner regardless of host OS. Checked in Android/Windows/macOS
         /// order (Android is Linux-kernel-based and must take priority over any Linux flag also being
