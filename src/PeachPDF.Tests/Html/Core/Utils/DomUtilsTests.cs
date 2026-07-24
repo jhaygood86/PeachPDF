@@ -419,43 +419,29 @@ namespace PeachPDF.Tests.Html.Core.Utils
             Assert.Contains(wrapperFlattened, p => p.Box == plainChild);
         }
 
-        // ─── CollectPrintableContentRanges (Round 9: CSS Paged Media Level 3 §3.2's
-        // content-empty-page-skipping mechanism) ────────────────────────────────────
+        // ─── HasOwnPrintableContent (CSS Paged Media Level 3 §3.2's content-empty-page
+        // rule; the fragment-tree builder decides page materialization with it) ─────
 
         [Fact]
-        public async Task CollectPrintableContentRanges_RealContentSeparatedByPureMarginGap_ProducesTwoDisjointRanges()
+        public async Task HasOwnPrintableContent_BoxWithABackground_Counts()
         {
-            // A large, purely-decorative gap (no background/border/text of its own - mirroring
-            // Acid2's own "100em" margins) between two real, painted boxes must not itself become
-            // part of either range, nor merge them into one.
-            var root = await Render(
-                "<div id='a' style='height:20px; background:rgb(0,0,0);'></div>" +
-                "<div id='gap' style='height:900px;'></div>" +
-                "<div id='b' style='height:20px; background:rgb(0,0,0);'></div>");
-            var a = DomUtils.GetBoxById(root, "a")!;
-            var b = DomUtils.GetBoxById(root, "b")!;
+            var root = await Render("<div id='a' style='height:20px; background:rgb(0,0,0);'></div>");
 
-            var ranges = DomUtils.CollectPrintableContentRanges(root);
-
-            Assert.Contains(ranges, r => Math.Abs(r.Top - a.Location.Y) < 0.5 && Math.Abs(r.Bottom - a.ActualBottom) < 0.5);
-            Assert.Contains(ranges, r => Math.Abs(r.Top - b.Location.Y) < 0.5 && Math.Abs(r.Bottom - b.ActualBottom) < 0.5);
-            Assert.DoesNotContain(ranges, r => r.Top <= a.ActualBottom + 5 && r.Bottom >= b.Location.Y - 5);
+            Assert.True(DomUtils.HasOwnPrintableContent(DomUtils.GetBoxById(root, "a")!));
         }
 
         [Fact]
-        public async Task CollectPrintableContentRanges_PureMarginOnlyDocument_ProducesNoRanges()
+        public async Task HasOwnPrintableContent_PurelyDecorativeGap_DoesNotCount()
         {
             // A box with real laid-out height but no background/border/text/generated content at all
-            // (the shape of Acid2's own "100em" margin gaps) must not contribute any range.
+            // (the shape of Acid2's own "100em" margin gaps) must not make its page look non-empty.
             var root = await Render("<div id='gap' style='height:900px;'></div>");
 
-            var ranges = DomUtils.CollectPrintableContentRanges(root);
-
-            Assert.Empty(ranges);
+            Assert.False(DomUtils.HasOwnPrintableContent(DomUtils.GetBoxById(root, "gap")!));
         }
 
         [Fact]
-        public async Task CollectPrintableContentRanges_GeneratedPseudoElementContent_Counts()
+        public async Task HasOwnPrintableContent_GeneratedPseudoElementContent_Counts()
         {
             // Per CSS Paged Media Level 3 §3.2's own carve-out, generated content always counts, even
             // with an empty "content: ''" (Acid2's own ".nose div div:before"/":after" shape) and no
@@ -463,29 +449,17 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var root = await Render(
                 "<div id='b'></div><style>#b:before{content:''; display:block; width:10px; height:10px; " +
                 "border:1px solid rgb(1,2,3);}</style>");
-            var b = DomUtils.GetBoxById(root, "b")!;
-            var before = b.Boxes.Single(x => x.IsBeforePseudoElement);
+            var before = DomUtils.GetBoxById(root, "b")!.Boxes.Single(x => x.IsBeforePseudoElement);
 
-            var ranges = DomUtils.CollectPrintableContentRanges(root);
-
-            Assert.Contains(ranges, r => Math.Abs(r.Top - before.Location.Y) < 0.5 && Math.Abs(r.Bottom - before.ActualBottom) < 0.5);
+            Assert.True(DomUtils.HasOwnPrintableContent(before));
         }
 
         [Fact]
-        public async Task CollectPrintableContentRanges_FixedPositionContent_IsExcluded()
+        public async Task HasOwnPrintableContent_VisibleBorderAlone_Counts()
         {
-            // position:fixed content repeats identically on every generated page regardless of scroll
-            // offset (see CssBox.Paint/PaintImpCore's "IsFixed" branches) - if it counted as "real"
-            // content here, every page-slot (including genuinely empty margin gaps) would look
-            // non-empty, defeating the whole content-empty-page-skip mechanism. Mirrors the same
-            // exclusion CssBox.PerformLayoutImp already applies when growing HtmlContainer.ActualSize.
-            var root = await Render(
-                "<div id='fixedBox' style='position:fixed; top:0; left:0; width:50px; height:50px; " +
-                "background:rgb(0,0,0);'></div>");
+            var root = await Render("<div id='a' style='height:20px; border-top:1px solid rgb(1,2,3);'></div>");
 
-            var ranges = DomUtils.CollectPrintableContentRanges(root);
-
-            Assert.Empty(ranges);
+            Assert.True(DomUtils.HasOwnPrintableContent(DomUtils.GetBoxById(root, "a")!));
         }
 
         // --- Helper ---

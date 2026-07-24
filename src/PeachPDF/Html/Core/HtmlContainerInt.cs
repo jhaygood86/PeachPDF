@@ -553,10 +553,49 @@ namespace PeachPDF.Html.Core
             (HasFloatedBoxes, HasOutOfFlowBoxes, HasStackingHoistCandidates) =
                 ComputeFlowFlags(Root, includeStackingHoistCandidates: true);
 
+            // Must precede the fragment-tree build: which page-slots carry printable content depends
+            // on SuppressOwnBackgroundPaint, so a canvas background resolved afterwards would make
+            // the promoted box look like real content spanning the whole document.
+            ResolveCanvasBackground();
+
             // Layout's final phase: freeze the mutable box geometry above into the immutable fragment
             // tree everything downstream consumes. Built once, after the reflow loop has settled, so
             // the tree can never describe an intermediate pass's geometry.
             FragmentTree = FragmentTreeBuilder.Build(this);
+        }
+
+        /// <summary>
+        /// The box whose background fills the whole page canvas, per
+        /// <see href="https://www.w3.org/TR/CSS21/colors.html#background">CSS 2.1 §14.2</see>:
+        /// <c>body</c>'s background if it declares one, else <c>html</c>'s, else none. Null when
+        /// neither declares a background.
+        /// </summary>
+        internal CssBox? CanvasBackgroundBox { get; private set; }
+
+        /// <summary>
+        /// Resolves <see cref="CanvasBackgroundBox"/> and marks the chosen box so its own ordinary
+        /// background pass is suppressed — otherwise the same background would be painted twice, once
+        /// across the page and again at the box's own (possibly much smaller) laid-out rectangle.
+        /// </summary>
+        /// <remarks>
+        /// Purely cascade-driven, so this belongs to layout rather than paint: nothing here reads
+        /// geometry, and the pagination rule that decides which pages exist needs the answer.
+        /// </remarks>
+        private void ResolveCanvasBackground()
+        {
+            var html = DomUtils.GetBoxByTagName(Root, "html");
+            var body = DomUtils.GetBoxByTagName(Root, "body");
+
+            // Cleared first so a re-layout can never leave a previous winner suppressed.
+            if (html is not null) html.SuppressOwnBackgroundPaint = false;
+            if (body is not null) body.SuppressOwnBackgroundPaint = false;
+
+            CanvasBackgroundBox = body is { HasOwnBackground: true } ? body
+                : html is { HasOwnBackground: true } ? html
+                : null;
+
+            if (CanvasBackgroundBox is not null)
+                CanvasBackgroundBox.SuppressOwnBackgroundPaint = true;
         }
 
         /// <summary>
@@ -675,7 +714,7 @@ namespace PeachPDF.Html.Core
         /// on the "shifted grid" every page-boundary decision needs to agree on: slot <c>k</c> occupies
         /// <c>[k·PageSize.Height + MarginTop, (k+1)·PageSize.Height + MarginTop)</c>. This is the
         /// convention the painter's own per-page clip/translation (<c>PdfGenerator.AddPdfPages</c>) and
-        /// <see cref="GetPaginationSlots"/> already use - <see cref="PageSize"/>'s <c>Height</c> is
+        /// the fragment-tree builder's own slot walk already uses - <see cref="PageSize"/>'s <c>Height</c> is
         /// already margin-free (<c>PdfGenerator.SetContent</c> subtracts both margins from the raw page
         /// height up front), so every page's real content band starts <see cref="MarginTop"/> past each
         /// raw multiple of <see cref="PageSize"/>'s height, not at the raw multiple itself. Callers must
@@ -782,61 +821,6 @@ namespace PeachPDF.Html.Core
         /// relocation uses. Same sentinel caveat as <see cref="PageIndexOf"/>.
         /// </summary>
         internal double NextPageTopOf(double y) => PageTopOf(PageIndexOf(y) + 1);
-
-        /// <summary>
-        /// The page-relative Y ("<c>pageY</c>" in <c>PdfGenerator.AddPdfPages</c>'s own terms - i.e.
-        /// <c>-scrollOffset + MarginTop</c>) of every page-slot that should actually be materialized
-        /// as a real PDF page, per CSS Paged Media Level 3 §3.2: "User agents SHOULD avoid generating
-        /// a large number of content-empty pages". A slot is skipped when no box's own laid-out
-        /// range (see <see cref="DomUtils.CollectPrintableContentRanges"/>) overlaps it - this is what
-        /// lets a document with huge, purely-decorative margins (e.g. Acid2's own "100em" margins on
-        /// "#top"/".picture", meant to be scrolled off-screen in a real, single-viewport browser) skip
-        /// straight past those gaps instead of paginating through several blank pages to reach the
-        /// real content on the far side. Non-destructive: no content is discarded or repositioned,
-        /// only which page-slots get a <c>PdfPage</c> materialized for them changes.
-        /// </summary>
-        internal IReadOnlyList<(int SlotIndex, double SlotTop)> GetPaginationSlots()
-        {
-            var slots = new List<(int SlotIndex, double SlotTop)>();
-
-            if (ActualSize.Height <= 0 || Root is null)
-                return slots;
-
-            var printableRanges = DomUtils.CollectPrintableContentRanges(Root);
-            var rangeIndex = 0;
-
-            // Slots are walked by grid index so per-page @page margin overrides can give each slot
-            // its own band top/height (PageTopOf/PageBottomOf consult PageGeometry when overrides
-            // exist). The emitted SlotTop stays in the historical "scrollOffset" convention
-            // (PageTopOf(k) - MarginTop): the painter offsets content so the slot's band top lands
-            // at the BASE content origin, then its per-page delta translate moves it to the page's
-            // own margins. Overlap-testing printable ranges against the true band
-            // [PageTopOf(k), PageBottomOf(k)) also fixes a historical skew where the test window
-            // omitted the MarginTop shift, crediting content in the last MarginTop-px of band k-1
-            // to slot k. The iteration cap is a defensive backstop behind PageGeometryTable's
-            // minimum-band clamp (a degenerate margin override can never make a band non-positive).
-            const int maxSlots = 100_000;
-            for (var k = 0; PageTopOf(k) - MarginTop < ActualSize.Height && k < maxSlots; k++)
-            {
-                var bandTop = PageTopOf(k);
-                var bandBottom = PageBottomOf(k);
-
-                while (rangeIndex < printableRanges.Count && printableRanges[rangeIndex].Bottom < bandTop)
-                    rangeIndex++;
-
-                if (rangeIndex < printableRanges.Count && printableRanges[rangeIndex].Top < bandBottom)
-                    slots.Add((k, bandTop - MarginTop));
-            }
-
-            // Never emit a 0-page PDF for a document that genuinely laid out some non-zero height -
-            // if literally nothing qualified as "printable" (e.g. every box is a whole-page canvas
-            // background, or the printable-content heuristic is simply too conservative for some
-            // edge case), fall back to the first slot rather than producing nothing at all.
-            if (slots.Count == 0)
-                slots.Add((0, 0.0));
-
-            return slots;
-        }
 
         /// <summary>
         /// Render the html using the given device.

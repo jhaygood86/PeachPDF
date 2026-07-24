@@ -1,5 +1,6 @@
 using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
+using PeachPDF.Html.Core.Fragments;
 using PeachPDF.PdfSharpCore.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
@@ -7,8 +8,8 @@ using System.Threading.Tasks;
 namespace PeachPDF.Tests.Html.Core
 {
     /// <summary>
-    /// Tests for <see cref="HtmlContainerInt.GetPaginationSlots"/> - the Round 9 mechanism that skips
-    /// materializing PDF pages for wholly content-empty page-slots, per CSS Paged Media Level 3 §3.2
+    /// Tests for the fragment tree's page-materialization rule - which skips building a
+    /// fragmentainer for a wholly content-empty page-slot, per CSS Paged Media Level 3 §3.2
     /// ("User agents SHOULD avoid generating a large number of content-empty pages"). Added for the
     /// real Acid2 fixture's own intentionally-huge "100em" margins on "#top"/".picture" (meant to be
     /// scrolled off-screen in a real, single-viewport browser - a mechanic a paginated PDF otherwise
@@ -17,7 +18,7 @@ namespace PeachPDF.Tests.Html.Core
     public class HtmlContainerIntPaginationTests
     {
         [Fact]
-        public async Task GetPaginationSlots_RealContentSeparatedByMultiPageGap_SkipsWhollyEmptySlots()
+        public async Task Fragmentainers_RealContentSeparatedByMultiPageGap_SkipWhollyEmptySlots()
         {
             // Page height 200: real content at the very top (page-slot 0) and real content starting
             // around y=900 (page-slot 4, since 900/200=4.5) - slots 1-3 have nothing painted in them
@@ -28,7 +29,7 @@ namespace PeachPDF.Tests.Html.Core
                 "<div id='b' style='height:20pt; background:rgb(0,0,0);'></div>",
                 pageHeight: 200);
 
-            var slotTops = container.GetPaginationSlots().Select(s => s.SlotTop).ToList();
+            var slotTops = container.FragmentTree!.Fragmentainers.Select(f => f.LocalOriginY).ToList();
 
             Assert.Contains(0.0, slotTops);
             Assert.DoesNotContain(200.0, slotTops);
@@ -38,7 +39,7 @@ namespace PeachPDF.Tests.Html.Core
         }
 
         [Fact]
-        public async Task GetPaginationSlots_ContiguousRealContent_KeepsEveryPage()
+        public async Task Fragmentainers_ContiguousRealContent_KeepEveryPage()
         {
             // Real, painted content spanning several page-heights (no gaps) must still produce one
             // slot per page, exactly matching the un-skipped pagination behavior - this is the
@@ -49,14 +50,14 @@ namespace PeachPDF.Tests.Html.Core
                 "<div style='height:900pt; background:rgb(9,9,9);'>section content spanning pages</div>",
                 pageHeight: 200);
 
-            var slots = container.GetPaginationSlots();
+            var fragmentainers = container.FragmentTree!.Fragmentainers;
 
-            Assert.Equal(new[] { 0.0, 200.0, 400.0, 600.0, 800.0 }, slots.Select(s => s.SlotTop));
-            Assert.Equal(new[] { 0, 1, 2, 3, 4 }, slots.Select(s => s.SlotIndex));
+            Assert.Equal(new[] { 0.0, 200.0, 400.0, 600.0, 800.0 }, fragmentainers.Select(f => f.LocalOriginY));
+            Assert.Equal(new[] { 0, 1, 2, 3, 4 }, fragmentainers.Select(f => f.SlotIndex));
         }
 
         [Fact]
-        public async Task GetPaginationSlots_PureMarginOnlyDocument_FallsBackToSingleSlot()
+        public async Task Fragmentainers_PureMarginOnlyDocument_FallBackToASingleFragmentainer()
         {
             // A document that laid out to a real, non-zero height but has nothing "printable"
             // anywhere (an extreme, all-margin edge case) must still produce exactly one page - never
@@ -65,10 +66,10 @@ namespace PeachPDF.Tests.Html.Core
                 "<div id='gap' style='height:900px;'></div>",
                 pageHeight: 200);
 
-            var slots = container.GetPaginationSlots();
+            var fragmentainer = Assert.Single(container.FragmentTree!.Fragmentainers);
 
-            Assert.Single(slots);
-            Assert.Equal((0, 0.0), slots[0]);
+            Assert.Equal(0, fragmentainer.SlotIndex);
+            Assert.Equal(0.0, fragmentainer.LocalOriginY);
         }
 
         // --- Helper ---

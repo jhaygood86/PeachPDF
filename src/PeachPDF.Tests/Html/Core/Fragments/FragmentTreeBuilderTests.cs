@@ -59,23 +59,32 @@ namespace PeachPDF.Tests.Html.Core.Fragments
 
         // ─── Parity with the pre-fragment-tree pipeline ────────────────────────────
 
+        /// <summary>
+        /// Pins the exact set of materialized pages, and each one's local origin, against the values
+        /// the pre-fragment-tree pagination-slot walk produced for the same fixtures. Introducing the
+        /// fragment tree was meant to change how pages are discovered (structurally, from layout's own
+        /// output) without changing which pages exist.
+        /// </summary>
         [Theory]
-        [InlineData("<p id='p'>hello</p>", 842)]
-        [InlineData("<div style='height:1000pt'>x</div>", 200)]
-        [InlineData("<p>a</p><p style='page-break-before:always'>b</p><p style='page-break-before:always'>c</p>", 300)]
-        [InlineData("<div style='margin-top:900pt'>far below</div>", 200)]
-        public async Task Fragmentainers_MatchTheLegacyPaginationSlots(string body, double pageHeight)
+        // A short document is one page.
+        [InlineData("<p id='p'>hello</p>", 842, "0", "0")]
+        // A tall but content-empty div only prints where its one word is, so later slots are skipped.
+        [InlineData("<div style='height:1000pt'>x</div>", 200, "0", "0")]
+        // Forced breaks materialize consecutive pages; each origin is the previous plus one band.
+        [InlineData("<p>a</p><p style='page-break-before:always'>b</p><p style='page-break-before:always'>c</p>", 300, "0,1,2", "0,260,520")]
+        // A margin large enough to cross a page is truncated, so it never paginates as blank space.
+        [InlineData("<div style='margin-top:900pt'>far below</div>", 200, "0", "0")]
+        // Real content either side of a tall empty gap: the gap's own slots are never materialized.
+        [InlineData("<p>top</p><div style='height:900pt'></div><p>far below</p>", 200, "0,6", "0,960")]
+        public async Task MaterializedPages_MatchThePrePagedFragmentTreeBehaviour(
+            string body, double pageHeight, string expectedSlots, string expectedOrigins)
         {
             var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(body), pageHeight: pageHeight);
 
-            var legacySlots = container.GetPaginationSlots();
             var fragmentainers = container.FragmentTree!.Fragmentainers;
 
-            Assert.Equal(legacySlots.Select(s => s.SlotIndex), fragmentainers.Select(f => f.SlotIndex));
-
-            // SlotTop is the "scroll offset" convention the painter used: PageTopOf(k) - MarginTop.
-            // That is exactly LocalOriginY, i.e. what the builder now subtracts up front.
-            Assert.Equal(legacySlots.Select(s => s.SlotTop), fragmentainers.Select(f => f.LocalOriginY));
+            Assert.Equal(expectedSlots, string.Join(",", fragmentainers.Select(f => f.SlotIndex)));
+            Assert.Equal(expectedOrigins, string.Join(",", fragmentainers.Select(f => f.LocalOriginY)));
         }
 
         [Fact]
@@ -248,6 +257,24 @@ namespace PeachPDF.Tests.Html.Core.Fragments
             Assert.Equal(2, slots.Count);
             Assert.Equal(0, slots[0]);
             Assert.True(slots[1] > 1, $"expected a skipped gap, got slots [{string.Join(", ", slots)}]");
+        }
+
+        [Fact]
+        public async Task CanvasBackgroundBox_DoesNotCountAsPrintableContent()
+        {
+            // A root background is promoted to fill every page's canvas, so it must not count as this
+            // box's own content - otherwise "html { background: … }" would look like real content
+            // across the root's entire auto height (i.e. the whole document) and no page could ever be
+            // skipped. The promotion is resolved during layout precisely so the fragment tree can see
+            // it; resolving it afterwards silently reinstated every skipped page.
+            var (_, container) = await LayoutHarness.LayoutAsync(
+                "<!DOCTYPE html><html><head><style>html { background: white }</style></head>"
+                + "<body style='margin:0'><p>top</p><div style='height:900pt'></div><p>far below</p></body></html>",
+                pageHeight: 200);
+
+            Assert.NotNull(container.CanvasBackgroundBox);
+            Assert.True(container.CanvasBackgroundBox!.SuppressOwnBackgroundPaint);
+            Assert.Equal("0,6", string.Join(",", container.FragmentTree!.Fragmentainers.Select(f => f.SlotIndex)));
         }
 
         [Fact]
