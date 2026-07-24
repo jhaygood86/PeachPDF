@@ -274,80 +274,208 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>
-        /// Renders one text run (a <c>&lt;text&gt;</c>, <c>&lt;tspan&gt;</c>, or <c>&lt;tref&gt;</c> - see
-        /// <see cref="SvgTextElement"/>), then recurses into its <see cref="SvgTextElement.Spans"/>. The
-        /// cursor is threaded by reference through siblings so a span without its own <c>x</c>/<c>y</c>
-        /// continues immediately after the previous run's rendered width - ordinary SVG text flow,
-        /// approximated to whole-run granularity rather than per-glyph (see the type's doc comment).
+        /// One addressable character of a <c>&lt;text&gt;</c> subtree during flatten/layout: the glyph, its
+        /// owning run (font/paint/anchor) and accumulated opacity, its assigned per-character position/
+        /// rotation (null = unset ⇒ flow/inherit), and the layout results (<see cref="Px"/>/<see cref="Py"/>/
+        /// <see cref="Advance"/>).
         /// </summary>
-        private static void RenderTextRun(RGraphics g, SvgDocument document, SvgTextElement run, double inheritedOpacity, ref double cursorX, ref double cursorY)
+        private sealed class GlyphInfo
         {
-            // A <textPath> lays its glyphs along a referenced path and positions itself entirely (it does
-            // not flow from, or advance, the surrounding text cursor).
-            if (run.PathData is not null && run.Font is { } pathFont)
-            {
-                RenderTextPath(g, document, run, pathFont, inheritedOpacity);
-                return;
-            }
-
-            var opacity = inheritedOpacity * run.Opacity;
-
-            if (run.HasOwnX) cursorX = run.X;
-            if (run.HasOwnY) cursorY = run.Y;
-
-            var x = cursorX + run.Dx;
-            var y = cursorY + run.Dy;
-
-            if (run.Text.Length > 0 && run.Font is { } font)
-            {
-                var size = g.MeasureString(run.Text, font);
-
-                var drawX = run.TextAnchor switch
-                {
-                    SvgTextAnchor.Middle => x - size.Width / 2,
-                    SvgTextAnchor.End => x - size.Width,
-                    _ => x,
-                };
-
-                // DrawString positions from the top-left of the line box, not the baseline - shift up
-                // by the font's ascent so (x, y) lands on the baseline, per SVG's <text> coordinate
-                // semantics.
-                var drawY = y - font.Ascent;
-
-                var pushedRotation = run.RotateDegrees != 0;
-                if (pushedRotation)
-                {
-                    var radians = run.RotateDegrees * (Math.PI / 180.0);
-                    var cos = Math.Cos(radians);
-                    var sin = Math.Sin(radians);
-                    var toOrigin = new RMatrix(1, 0, 0, 1, -x, -y);
-                    var rotate = new RMatrix(cos, sin, -sin, cos, 0, 0);
-                    var fromOrigin = new RMatrix(1, 0, 0, 1, x, y);
-                    g.PushTransform(MultiplyMatrix(MultiplyMatrix(toOrigin, rotate), fromOrigin));
-                }
-
-                PaintTextRun(g, document, run, font, drawX, drawY, size, opacity);
-
-                if (pushedRotation)
-                    g.PopTransform();
-
-                cursorX = x + size.Width;
-                cursorY = y;
-            }
-
-            foreach (var span in run.Spans)
-                RenderTextRun(g, document, span, opacity, ref cursorX, ref cursorY);
+            public required string Glyph { get; init; }
+            public required SvgTextElement Run { get; init; }
+            public required RFont Font { get; init; }
+            public double Opacity { get; init; }
+            public double? X { get; set; }
+            public double? Y { get; set; }
+            public double? Dx { get; set; }
+            public double? Dy { get; set; }
+            public double? Rotate { get; set; }
+            public double Px { get; set; }
+            public double Py { get; set; }
+            public double Advance { get; set; }
         }
 
         /// <summary>
-        /// Paints one text run's fill and stroke. Plain solid, non-stroked text keeps the fast
+        /// Renders a whole <c>&lt;text&gt;</c> element: its subtree is flattened to an addressable-character
+        /// stream (SVG 1.1 §10.4), laid out (per-character x/y/dx/dy/rotate lists, text chunks, per-chunk
+        /// <c>text-anchor</c>), and painted - consecutive same-run, unrotated, in-flow characters as one
+        /// selectable <see cref="RGraphics.DrawString"/>, anything positioned/rotated/gradient/stroked per
+        /// glyph. A <c>&lt;textPath&gt;</c> descendant lays out independently along its path.
+        /// </summary>
+        private static void RenderText(RGraphics g, SvgDocument document, SvgTextElement text, double opacity)
+        {
+            var glyphs = new List<GlyphInfo>();
+            var textPaths = new List<(SvgTextElement Run, double ParentOpacity)>();
+            FlattenRun(text, 1.0, glyphs, textPaths);
+
+            if (glyphs.Count > 0)
+            {
+                LayoutGlyphs(g, glyphs);
+                PaintGlyphs(g, document, glyphs, opacity);
+            }
+
+            // A <textPath> positions itself entirely along its path; render each in document order after
+            // the straight-baseline glyphs (mixing straight text and a textPath in one <text> is rare).
+            foreach (var (run, parentOpacity) in textPaths)
+                RenderTextPath(g, document, run, opacity * parentOpacity);
+        }
+
+        /// <summary>
+        /// Flattens a run's subtree into <paramref name="glyphs"/> in document order (a <c>&lt;textPath&gt;</c>
+        /// descendant is collected into <paramref name="textPaths"/> instead), then assigns this run's own
+        /// per-character position lists to the characters it contributed - innermost-wins, since a nested
+        /// run's own <see cref="FlattenRun"/> runs (and assigns) before this outer assignment.
+        /// <paramref name="opacityFactor"/> is the product of the run-chain's <c>opacity</c> below the root
+        /// <c>&lt;text&gt;</c> (whose own opacity is already folded into the caller's base opacity).
+        /// </summary>
+        private static void FlattenRun(SvgTextElement run, double opacityFactor, List<GlyphInfo> glyphs, List<(SvgTextElement, double)> textPaths)
+        {
+            var startIndex = glyphs.Count;
+
+            foreach (var item in run.Content)
+            {
+                switch (item)
+                {
+                    case SvgTextFragment fragment when run.Font is { } font:
+                        foreach (var rune in fragment.Text.EnumerateRunes())
+                            glyphs.Add(new GlyphInfo { Glyph = rune.ToString(), Run = run, Font = font, Opacity = opacityFactor });
+                        break;
+
+                    case SvgTextSpan span when span.Run.PathData is not null:
+                        textPaths.Add((span.Run, opacityFactor));
+                        break;
+
+                    case SvgTextSpan span:
+                        FlattenRun(span.Run, opacityFactor * span.Run.Opacity, glyphs, textPaths);
+                        break;
+                }
+            }
+
+            AssignPositionLists(run, glyphs, startIndex);
+        }
+
+        /// <summary>Assigns <paramref name="run"/>'s x/y/dx/dy/rotate lists to the characters it contributed (from <paramref name="startIndex"/>) by subtree-relative index; <c>rotate</c>'s last value persists for the remaining characters. Only fills slots a nested run hasn't already claimed (innermost-wins).</summary>
+        private static void AssignPositionLists(SvgTextElement run, List<GlyphInfo> glyphs, int startIndex)
+        {
+            var count = glyphs.Count - startIndex;
+            for (var k = 0; k < count; k++)
+            {
+                var gi = glyphs[startIndex + k];
+                if (run.XList is { } xl && k < xl.Length) gi.X ??= xl[k];
+                if (run.YList is { } yl && k < yl.Length) gi.Y ??= yl[k];
+                if (run.DxList is { } dxl && k < dxl.Length) gi.Dx ??= dxl[k];
+                if (run.DyList is { } dyl && k < dyl.Length) gi.Dy ??= dyl[k];
+                if (run.RotateList is { Length: > 0 } rl) gi.Rotate ??= k < rl.Length ? rl[k] : rl[^1];
+            }
+        }
+
+        /// <summary>
+        /// Lays out the flattened character stream on the straight baseline: advances a pen, applying each
+        /// character's absolute x/y (starting a new text chunk) and relative dx/dy, then shifts each chunk by
+        /// its start run's <c>text-anchor</c> over the chunk's own extent.
+        /// </summary>
+        private static void LayoutGlyphs(RGraphics g, List<GlyphInfo> glyphs)
+        {
+            double penX = 0, penY = 0;
+            var chunkStarts = new List<int> { 0 };
+
+            for (var i = 0; i < glyphs.Count; i++)
+            {
+                var gi = glyphs[i];
+
+                if (gi.X is { } gx)
+                {
+                    penX = gx;
+                    if (i > 0)
+                        chunkStarts.Add(i);
+                }
+                if (gi.Y is { } gy)
+                    penY = gy;
+
+                penX += gi.Dx ?? 0;
+                penY += gi.Dy ?? 0;
+
+                gi.Px = penX;
+                gi.Py = penY;
+                gi.Advance = g.MeasureString(gi.Glyph, gi.Font).Width;
+
+                penX += gi.Advance;
+            }
+
+            for (var c = 0; c < chunkStarts.Count; c++)
+            {
+                var start = chunkStarts[c];
+                var end = c + 1 < chunkStarts.Count ? chunkStarts[c + 1] : glyphs.Count;
+
+                var anchor = glyphs[start].Run.TextAnchor;
+                if (anchor == SvgTextAnchor.Start)
+                    continue;
+
+                var extent = glyphs[end - 1].Px + glyphs[end - 1].Advance - glyphs[start].Px;
+                var shift = anchor == SvgTextAnchor.Middle ? -extent / 2 : -extent;
+
+                for (var i = start; i < end; i++)
+                    glyphs[i].Px += shift;
+            }
+        }
+
+        /// <summary>
+        /// Paints the laid-out character stream: a maximal contiguous group of same-run, unrotated,
+        /// in-flow characters is painted as one <see cref="RGraphics.DrawString"/> (kept selectable); a
+        /// rotated character is painted on its own, rotated about its own position.
+        /// </summary>
+        private static void PaintGlyphs(RGraphics g, SvgDocument document, List<GlyphInfo> glyphs, double opacity)
+        {
+            var i = 0;
+            while (i < glyphs.Count)
+            {
+                var start = glyphs[i];
+                var font = start.Font;
+
+                if ((start.Rotate ?? 0) != 0)
+                {
+                    var glyphSize = g.MeasureString(start.Glyph, font);
+                    var radians = start.Rotate!.Value * (Math.PI / 180.0);
+                    var cos = Math.Cos(radians);
+                    var sin = Math.Sin(radians);
+                    var toOrigin = new RMatrix(1, 0, 0, 1, -start.Px, -start.Py);
+                    var rotate = new RMatrix(cos, sin, -sin, cos, 0, 0);
+                    var fromOrigin = new RMatrix(1, 0, 0, 1, start.Px, start.Py);
+                    g.PushTransform(MultiplyMatrix(MultiplyMatrix(toOrigin, rotate), fromOrigin));
+                    PaintTextGlyphs(g, document, start.Run, start.Glyph, font, start.Px, start.Py - font.Ascent, glyphSize, opacity * start.Opacity);
+                    g.PopTransform();
+                    i++;
+                    continue;
+                }
+
+                var builder = new StringBuilder(start.Glyph);
+                i++;
+                while (i < glyphs.Count)
+                {
+                    var gc = glyphs[i];
+                    if (!ReferenceEquals(gc.Run, start.Run) || (gc.Rotate ?? 0) != 0
+                        || gc.X is not null || gc.Y is not null || (gc.Dx ?? 0) != 0 || (gc.Dy ?? 0) != 0)
+                        break;
+                    builder.Append(gc.Glyph);
+                    i++;
+                }
+
+                var text = builder.ToString();
+                var size = g.MeasureString(text, font);
+                PaintTextGlyphs(g, document, start.Run, text, font, start.Px, start.Py - font.Ascent, size, opacity * start.Opacity);
+            }
+        }
+
+        /// <summary>
+        /// Paints one straight-baseline group of characters (<paramref name="text"/>, all sharing one run's
+        /// font/fill/stroke) at a given top-left origin. Plain solid, non-stroked text keeps the fast
         /// <see cref="RGraphics.DrawString"/> path (a single-color PDF text show, so it stays
         /// selectable and tagged-PDF-friendly). A gradient/pattern <c>fill</c> or any <c>stroke</c>
-        /// needs the glyph run as an addressable vector path (<see cref="RGraphics.GetTextOutline"/>),
+        /// needs the glyphs as an addressable vector path (<see cref="RGraphics.GetTextOutline"/>),
         /// filled/stroked through the same brush/pen machinery shapes use - outlined text is vector art
         /// (not selectable). A CFF/bitmap font yields no outline, so it falls back to a solid fill.
         /// </summary>
-        private static void PaintTextRun(RGraphics g, SvgDocument document, SvgTextElement run, RFont font, double drawX, double drawY, RSize size, double opacity)
+        private static void PaintTextGlyphs(RGraphics g, SvgDocument document, SvgTextElement run, string text, RFont font, double drawX, double drawY, RSize size, double opacity)
         {
             var hasStroke = run.Stroke.Kind != SvgPaintKind.None && run.StrokeWidth > 0;
             var needsOutline = run.Fill.Kind is SvgPaintKind.GradientRef or SvgPaintKind.PatternRef || hasStroke;
@@ -359,7 +487,7 @@ namespace PeachPDF.Svg
                     return;
 
                 var solid = ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity);
-                g.DrawString(run.Text, font, solid, new RPoint(drawX, drawY), size, rtl: false);
+                g.DrawString(text, font, solid, new RPoint(drawX, drawY), size, rtl: false);
                 return;
             }
 
@@ -368,14 +496,14 @@ namespace PeachPDF.Svg
             // the objectBoundingBox reference for gradient/pattern paint - SvgGeometryBounds can't
             // measure text statically.
             var baseline = new RPoint(drawX, drawY + font.Ascent);
-            var outline = g.GetTextOutline(run.Text, font, baseline);
+            var outline = g.GetTextOutline(text, font, baseline);
 
             if (outline is null)
             {
                 // CFF/bitmap font: no glyf outlines. Best-effort solid fill; a gradient/pattern/stroke
                 // simply can't be honored here (documented gap).
                 if (run.Fill.Kind == SvgPaintKind.Solid)
-                    g.DrawString(run.Text, font, ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity), new RPoint(drawX, drawY), size, rtl: false);
+                    g.DrawString(text, font, ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity), new RPoint(drawX, drawY), size, rtl: false);
                 return;
             }
 
@@ -407,16 +535,16 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>
-        /// Lays a <c>&lt;textPath&gt;</c>'s glyphs along its referenced path: each glyph is placed at its
-        /// own midpoint distance along the path (honoring <c>startOffset</c> and <c>text-anchor</c>) and
-        /// rotated to the path tangent there. A glyph whose midpoint falls before the path start or past
-        /// its end is dropped (SVG text-on-a-path). Solid, non-stroked glyphs use the fast
-        /// <c>DrawString</c> path; gradient/pattern fill and stroke outline each glyph, exactly like
-        /// straight-baseline text (<see cref="PaintTextRun"/>).
+        /// Lays a <c>&lt;textPath&gt;</c>'s glyphs along its referenced path (a <c>&lt;path&gt;</c> or a basic
+        /// shape): the run's own text and any nested <c>&lt;tspan&gt;</c>s are flattened in document order,
+        /// and each glyph is placed at its own midpoint distance along the path (honoring <c>startOffset</c>,
+        /// <c>text-anchor</c>, per-character <c>dx</c>/<c>dy</c>/<c>rotate</c>, and <c>side</c>) and rotated
+        /// to the path tangent there. A glyph whose midpoint falls off the path is dropped. Each glyph paints
+        /// in its own run's font/fill/stroke via <see cref="PaintGlyphAlongPath"/>.
         /// </summary>
-        private static void RenderTextPath(RGraphics g, SvgDocument document, SvgTextElement run, RFont font, double inheritedOpacity)
+        private static void RenderTextPath(RGraphics g, SvgDocument document, SvgTextElement run, double inheritedOpacity)
         {
-            if (run.PathData is not { } segments || run.Text.Length == 0)
+            if (run.PathData is not { } segments)
                 return;
 
             var geometry = new SvgTextPathGeometry(segments);
@@ -426,7 +554,21 @@ namespace PeachPDF.Svg
 
             var opacity = inheritedOpacity * run.Opacity;
 
-            var runWidth = g.MeasureString(run.Text, font).Width;
+            // Flatten the textPath's own text plus nested <tspan>s (a nested <textPath> is out of scope and
+            // dropped). Each glyph carries its owning run (font/paint) and its assigned dx/dy/rotate.
+            var glyphs = new List<GlyphInfo>();
+            var ignoredTextPaths = new List<(SvgTextElement, double)>();
+            FlattenRun(run, 1.0, glyphs, ignoredTextPaths);
+            if (glyphs.Count == 0)
+                return;
+
+            double runWidth = 0;
+            foreach (var gi in glyphs)
+            {
+                gi.Advance = g.MeasureString(gi.Glyph, gi.Font).Width;
+                runWidth += gi.Advance;
+            }
+
             var startOffset = (run.StartOffsetIsPercent ? run.StartOffset * totalLength : run.StartOffset)
                 + run.TextAnchor switch
                 {
@@ -435,31 +577,46 @@ namespace PeachPDF.Svg
                     _ => 0,
                 };
 
-            var hasStroke = run.Stroke.Kind != SvgPaintKind.None && run.StrokeWidth > 0;
-            var needsOutline = run.Fill.Kind is SvgPaintKind.GradientRef or SvgPaintKind.PatternRef || hasStroke;
-
             var pen = 0.0;
-            foreach (var rune in run.Text.EnumerateRunes())
+            foreach (var gi in glyphs)
             {
-                var glyph = rune.ToString();
-                var advance = g.MeasureString(glyph, font).Width;
-                var mid = startOffset + pen + advance / 2;
-                pen += advance;
+                var extraDx = gi.Dx ?? 0;
+                var extraDy = gi.Dy ?? 0;
+                var advance = gi.Advance;
+
+                var mid = startOffset + pen + extraDx + advance / 2;
+                pen += advance + extraDx;   // dx shifts the current position along the path
+
+                // side="right" reads the path in reverse (measured from the far end, glyphs flipped 180°).
+                var distance = run.Side == SvgTextPathSide.Right ? totalLength - mid : mid;
 
                 // A glyph centered off the ends of the path is not rendered.
-                if (mid < 0 || mid > totalLength)
+                if (distance < 0 || distance > totalLength)
                     continue;
 
-                var (px, py, angleDegrees) = geometry.PointAtLength(mid);
-                var radians = angleDegrees * (Math.PI / 180.0);
-                var cos = Math.Cos(radians);
-                var sin = Math.Sin(radians);
+                var (px, py, tangentDegrees) = geometry.PointAtLength(distance);
+                if (run.Side == SvgTextPathSide.Right)
+                    tangentDegrees += 180;
 
-                // Frame: rotate to the tangent, then translate to the path point. The glyph is drawn
-                // centered on that point (baseline origin at local -advance/2).
-                var frame = MultiplyMatrix(new RMatrix(cos, sin, -sin, cos, 0, 0), new RMatrix(1, 0, 0, 1, px, py));
+                var tangentRad = tangentDegrees * (Math.PI / 180.0);
+                var tangentCos = Math.Cos(tangentRad);
+                var tangentSin = Math.Sin(tangentRad);
+
+                // dy offsets the glyph perpendicular to the path (along the normal).
+                var offsetX = px - tangentSin * extraDy;
+                var offsetY = py + tangentCos * extraDy;
+
+                // The glyph frame rotates to the tangent plus any per-character rotate, then translates.
+                var glyphRad = (tangentDegrees + (gi.Rotate ?? 0)) * (Math.PI / 180.0);
+                var frame = MultiplyMatrix(
+                    new RMatrix(Math.Cos(glyphRad), Math.Sin(glyphRad), -Math.Sin(glyphRad), Math.Cos(glyphRad), 0, 0),
+                    new RMatrix(1, 0, 0, 1, offsetX, offsetY));
+
+                var hasStroke = gi.Run.Stroke.Kind != SvgPaintKind.None && gi.Run.StrokeWidth > 0;
+                var needsOutline = gi.Run.Fill.Kind is SvgPaintKind.GradientRef or SvgPaintKind.PatternRef || hasStroke;
+
                 g.PushTransform(frame);
-                PaintGlyphAlongPath(g, document, run, font, glyph, advance, opacity, needsOutline, hasStroke);
+                PaintGlyphAlongPath(g, document, gi.Run, gi.Font, gi.Glyph, advance, opacity * gi.Opacity, needsOutline, hasStroke);
                 g.PopTransform();
             }
         }
@@ -708,72 +865,52 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>
-        /// Local-space bounds of a <c>&lt;text&gt;</c> and its <c>&lt;tspan&gt;</c> descendants, computed
-        /// with the exact same cursor/anchor/measurement math <see cref="RenderTextRun"/> paints with
-        /// (threaded <c>cursorX</c>/<c>cursorY</c>, <c>HasOwnX</c>/<c>HasOwnY</c>, <c>Dx</c>/<c>Dy</c>,
-        /// <c>MeasureString</c>, <c>TextAnchor</c>, and <c>drawY = y - Ascent</c>) so
-        /// the tile region and the painted glyphs can't drift. A per-glyph <c>rotate</c> is bounded by
-        /// its rotated corners; the tile's own -10%/+20% margin absorbs any slack.
+        /// Local-space bounds of a <c>&lt;text&gt;</c> and its descendants, computed from the exact same
+        /// flatten + layout <see cref="RenderText"/> paints with (so the opacity-group tile region and the
+        /// painted glyphs can't drift). Each straight glyph contributes its measured box (rotated by its own
+        /// per-character <c>rotate</c> about its position); a <c>&lt;textPath&gt;</c> descendant contributes
+        /// its flattened path's bbox inflated by the font ascent. The tile's own -10%/+20% margin absorbs slack.
         /// </summary>
         private static RRect? MeasureTextBounds(RGraphics g, SvgTextElement text)
         {
             RRect? result = null;
-            double cursorX = text.X, cursorY = text.Y;
-            AccumulateTextRunBounds(g, text, ref cursorX, ref cursorY, ref result);
+
+            var glyphs = new List<GlyphInfo>();
+            var textPaths = new List<(SvgTextElement Run, double ParentOpacity)>();
+            FlattenRun(text, 1.0, glyphs, textPaths);
+
+            if (glyphs.Count > 0)
+            {
+                LayoutGlyphs(g, glyphs);
+                foreach (var gi in glyphs)
+                {
+                    var size = g.MeasureString(gi.Glyph, gi.Font);
+                    var box = new RRect(gi.Px, gi.Py - gi.Font.Ascent, size.Width, size.Height);
+                    if ((gi.Rotate ?? 0) != 0)
+                        box = RotateRectBounds(box, gi.Rotate!.Value, gi.Px, gi.Py);
+                    result = result is { } r ? UnionRects(r, box) : box;
+                }
+            }
+
+            foreach (var (run, _) in textPaths)
+            {
+                if (run.PathData is not { } pathSegments || run.Font is not { } pathFont)
+                    continue;
+
+                var geometry = new SvgTextPathGeometry(pathSegments);
+                if (geometry.IsEmpty)
+                    continue;
+
+                var inflate = pathFont.Ascent;
+                var pathBox = geometry.Bounds;
+                var runBox = new RRect(pathBox.X - inflate, pathBox.Y - inflate, pathBox.Width + 2 * inflate, pathBox.Height + 2 * inflate);
+                result = result is { } existing ? UnionRects(existing, runBox) : runBox;
+            }
+
             return result;
         }
 
-        private static void AccumulateTextRunBounds(RGraphics g, SvgTextElement run, ref double cursorX, ref double cursorY, ref RRect? bounds)
-        {
-            // A <textPath> positions itself along its path, not from the text cursor: union the
-            // flattened path's bbox (inflated by the font's vertical extent so glyphs riding above/below
-            // the path are enclosed), then stop - it neither advances the cursor nor flows into spans.
-            if (run.PathData is { } pathSegments && run.Font is { } pathFont)
-            {
-                var geometry = new SvgTextPathGeometry(pathSegments);
-                if (!geometry.IsEmpty)
-                {
-                    var inflate = pathFont.Ascent;
-                    var pathBox = geometry.Bounds;
-                    var runBox = new RRect(pathBox.X - inflate, pathBox.Y - inflate, pathBox.Width + 2 * inflate, pathBox.Height + 2 * inflate);
-                    bounds = bounds is { } existing ? UnionRects(existing, runBox) : runBox;
-                }
-                return;
-            }
-
-            if (run.HasOwnX) cursorX = run.X;
-            if (run.HasOwnY) cursorY = run.Y;
-
-            var x = cursorX + run.Dx;
-            var y = cursorY + run.Dy;
-
-            if (run.Text.Length > 0 && run.Font is { } font)
-            {
-                var size = g.MeasureString(run.Text, font);
-
-                var drawX = run.TextAnchor switch
-                {
-                    SvgTextAnchor.Middle => x - size.Width / 2,
-                    SvgTextAnchor.End => x - size.Width,
-                    _ => x,
-                };
-                var drawY = y - font.Ascent;
-
-                var runBounds = new RRect(drawX, drawY, size.Width, size.Height);
-                if (run.RotateDegrees != 0)
-                    runBounds = RotateRectBounds(runBounds, run.RotateDegrees, x, y);
-
-                bounds = bounds is { } b ? UnionRects(b, runBounds) : runBounds;
-
-                cursorX = x + size.Width;
-                cursorY = y;
-            }
-
-            foreach (var span in run.Spans)
-                AccumulateTextRunBounds(g, span, ref cursorX, ref cursorY, ref bounds);
-        }
-
-        /// <summary>Axis-aligned envelope of <paramref name="rect"/> rotated <paramref name="degrees"/> about (<paramref name="pivotX"/>, <paramref name="pivotY"/>) - matches the pivot <see cref="RenderTextRun"/> rotates its glyphs around.</summary>
+        /// <summary>Axis-aligned envelope of <paramref name="rect"/> rotated <paramref name="degrees"/> about (<paramref name="pivotX"/>, <paramref name="pivotY"/>) - matches the pivot <see cref="PaintGlyphs"/> rotates its glyphs around.</summary>
         private static RRect RotateRectBounds(RRect rect, double degrees, double pivotX, double pivotY)
         {
             var radians = degrees * (Math.PI / 180.0);
@@ -905,11 +1042,8 @@ namespace PeachPDF.Svg
                     break;
 
                 case SvgTextElement text:
-                {
-                    double cursorX = text.X, cursorY = text.Y;
-                    RenderTextRun(g, document, text, opacity, ref cursorX, ref cursorY);
+                    RenderText(g, document, text, opacity);
                     break;
-                }
 
                 case SvgUseElement { Target: { } target } use:
                 {

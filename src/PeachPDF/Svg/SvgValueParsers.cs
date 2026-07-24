@@ -124,6 +124,49 @@ namespace PeachPDF.Svg
             return double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v * scale : null;
         }
 
+        /// <summary>
+        /// Parses a whitespace/comma-separated list of lengths (the <c>x</c>/<c>y</c>/<c>dx</c>/<c>dy</c>
+        /// per-character positioning grammar, SVG 1.1 §10.4): each token is parsed as a
+        /// <see cref="ParseLength"/> (so unit suffixes and percentages are honored), a non-parseable
+        /// token contributing 0. Returns null for a missing/empty value.
+        /// </summary>
+        public static double[]? ParseLengthList(string? value, double? referenceLength = null)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            var parts = value.Trim().Split([',', ' ', '\t', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0)
+                return null;
+
+            var values = new double[parts.Length];
+            for (var i = 0; i < parts.Length; i++)
+                values[i] = ParseLength(parts[i], referenceLength) ?? 0;
+
+            return values;
+        }
+
+        /// <summary>
+        /// Parses a whitespace/comma-separated list of unitless numbers (the <c>rotate</c> per-character
+        /// grammar, SVG 1.1 §10.4), scanning with the shared <see cref="SvgNumberScanner"/> like
+        /// <c>SvgPointsParser</c>. Returns null for a missing/empty value.
+        /// </summary>
+        public static double[]? ParseNumberList(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            var values = new List<double>();
+            var pos = 0;
+            while (SvgNumberScanner.TryReadNumber(value, ref pos, out var number))
+            {
+                values.Add(number);
+                SvgNumberScanner.SkipSeparators(value, ref pos);
+            }
+
+            return values.Count == 0 ? null : [.. values];
+        }
+
         /// <summary>Is <paramref name="value"/> a CSS math function (<c>calc</c>/<c>min</c>/<c>max</c>/<c>clamp</c>) call?</summary>
         private static bool IsCalcExpression(string value) =>
             value.StartsWith("calc(", StringComparison.OrdinalIgnoreCase)

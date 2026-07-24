@@ -19,6 +19,7 @@ using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -46,6 +47,12 @@ namespace PeachPDF.Svg
         private readonly Dictionary<string, ISvgSourceNode> _nodesById = new(StringComparer.Ordinal);
         private readonly SvgDocument _document = new();
         private int _useDepth;
+
+        /// <summary>
+        /// The root element's used <c>font-size</c> (the value <c>rem</c> font-sizes resolve against),
+        /// captured once in <see cref="BuildDocument"/>. Defaults to the UA initial font size until then.
+        /// </summary>
+        private double _rootFontSize = Html.Core.Utils.CssConstants.FontSize;
 
 
         /// <summary>
@@ -128,12 +135,16 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>
-        /// Font properties inherited through a <c>&lt;text&gt;</c>/<c>&lt;tspan&gt;</c>/<c>&lt;tref&gt;</c>
-        /// subtree only - a deliberate v1 scope reduction, since real SVG inherits font-family/
-        /// font-size/font-weight/font-style from ANY ancestor (including <c>&lt;g&gt;</c>/<c>&lt;svg&gt;</c>),
-        /// not just from a text run's own text-run ancestors. <see cref="InheritedPaint"/> is not
-        /// extended with these instead, to avoid threading font resolution through every non-text
-        /// element in the tree for a property only text ever consults.
+        /// The inherited font properties (font-family/font-size/font-weight/font-style), threaded down
+        /// through the recursive build alongside <see cref="InheritedPaint"/> so a <c>&lt;text&gt;</c>
+        /// inherits them from ANY ancestor (<c>&lt;g&gt;</c>/<c>&lt;svg&gt;</c>/<c>&lt;a&gt;</c>/<c>&lt;use&gt;</c>),
+        /// per normal SVG/CSS inheritance - not just from its own <c>&lt;text&gt;</c>/<c>&lt;tspan&gt;</c>
+        /// text-run ancestors. Deliberately kept separate from <see cref="InheritedPaint"/> and carried
+        /// as cheap resolved values (no <see cref="RFont"/>): only <c>&lt;text&gt;</c>/<c>&lt;tspan&gt;</c>/
+        /// <c>&lt;tref&gt;</c> resolve an actual font from it, so non-text elements only propagate the
+        /// context, never realize a font. Relative <c>font-size</c> (<c>em</c>/<c>ex</c>/<c>%</c>) resolves
+        /// against <see cref="Size"/> (the parent's used size); <c>rem</c> against the root's (see
+        /// <see cref="_rootFontSize"/>).
         /// </summary>
         private readonly record struct FontContext(string Family, double Size, bool Bold, bool Italic)
         {
@@ -343,9 +354,14 @@ namespace PeachPDF.Svg
 
             CollectDefinitions(root);
 
+            // The root <svg>'s own font-* seeds inheritance for the whole tree, and its font-size is the
+            // basis for rem. (When the root sets no font-size, this stays the UA default.)
+            var rootFont = ComputeFontContext(root, FontContext.Default);
+            _rootFontSize = rootFont.Size;
+
             foreach (var child in root.Children)
             {
-                var element = BuildElement(child, InheritedPaint.Initial);
+                var element = BuildElement(child, InheritedPaint.Initial, rootFont);
                 if (element is not null)
                     _document.Children.Add(element);
             }
@@ -394,11 +410,11 @@ namespace PeachPDF.Svg
         /// (definitions like &lt;defs&gt;/&lt;linearGradient&gt;/&lt;radialGradient&gt;/&lt;clipPath&gt;/
         /// &lt;stop&gt;, or any unrecognized element).
         /// </summary>
-        private SvgElement? BuildElement(ISvgSourceNode node, InheritedPaint inherited)
+        private SvgElement? BuildElement(ISvgSourceNode node, InheritedPaint inherited, FontContext fontContext)
         {
             return node.Name switch
             {
-                "g" => BuildGroup(node, inherited),
+                "g" => BuildGroup(node, inherited, fontContext),
                 "path" => BuildPath(node, inherited),
                 "circle" => BuildCircle(node, inherited),
                 "polygon" => BuildPolygon(node, inherited),
@@ -406,24 +422,25 @@ namespace PeachPDF.Svg
                 "rect" => BuildRect(node, inherited),
                 "ellipse" => BuildEllipse(node, inherited),
                 "line" => BuildLine(node, inherited),
-                "use" => BuildUse(node, inherited),
-                "svg" => BuildNestedSvg(node, inherited),
+                "use" => BuildUse(node, inherited, fontContext),
+                "svg" => BuildNestedSvg(node, inherited, fontContext),
                 "image" => BuildImage(node, inherited),
-                "text" => BuildTextRun(node, inherited, FontContext.Default),
-                "switch" => BuildSwitch(node, inherited),
-                "a" => BuildAnchor(node, inherited),
+                "text" => BuildTextRun(node, inherited, fontContext, new TextWhitespaceState()),
+                "switch" => BuildSwitch(node, inherited, fontContext),
+                "a" => BuildAnchor(node, inherited, fontContext),
                 _ => null,
             };
         }
 
-        private SvgGroupElement BuildGroup(ISvgSourceNode node, InheritedPaint inherited)
+        private SvgGroupElement BuildGroup(ISvgSourceNode node, InheritedPaint inherited, FontContext fontContext)
         {
             var group = new SvgGroupElement();
             var resolved = ApplyCommon(group, node, inherited);
+            var childFont = ComputeFontContext(node, fontContext);
 
             foreach (var child in node.Children)
             {
-                var element = BuildElement(child, resolved);
+                var element = BuildElement(child, resolved, childFont);
                 if (element is not null)
                     group.Children.Add(element);
             }
@@ -437,11 +454,13 @@ namespace PeachPDF.Svg
         /// so, per a deliberate v1 simplification, this always renders only the first buildable child,
         /// same as if every other candidate had failed its (nonexistent) test.
         /// </summary>
-        private SvgElement? BuildSwitch(ISvgSourceNode node, InheritedPaint inherited)
+        private SvgElement? BuildSwitch(ISvgSourceNode node, InheritedPaint inherited, FontContext fontContext)
         {
+            var childFont = ComputeFontContext(node, fontContext);
+
             foreach (var child in node.Children)
             {
-                var element = BuildElement(child, inherited);
+                var element = BuildElement(child, inherited, childFont);
                 if (element is not null)
                     return element;
             }
@@ -449,17 +468,18 @@ namespace PeachPDF.Svg
             return null;
         }
 
-        private SvgAnchorElement BuildAnchor(ISvgSourceNode node, InheritedPaint inherited)
+        private SvgAnchorElement BuildAnchor(ISvgSourceNode node, InheritedPaint inherited, FontContext fontContext)
         {
             var anchor = new SvgAnchorElement
             {
                 Href = node.GetAttribute("href") ?? node.GetAttribute("xlink:href"),
             };
             var resolved = ApplyCommon(anchor, node, inherited);
+            var childFont = ComputeFontContext(node, fontContext);
 
             foreach (var child in node.Children)
             {
-                var element = BuildElement(child, resolved);
+                var element = BuildElement(child, resolved, childFont);
                 if (element is not null)
                     anchor.Children.Add(element);
             }
@@ -551,7 +571,7 @@ namespace PeachPDF.Svg
             return line;
         }
 
-        private SvgUseElement? BuildUse(ISvgSourceNode node, InheritedPaint inherited)
+        private SvgUseElement? BuildUse(ISvgSourceNode node, InheritedPaint inherited, FontContext fontContext)
         {
             var href = node.GetAttribute("href") ?? node.GetAttribute("xlink:href");
             var id = href?.TrimStart('#');
@@ -574,6 +594,9 @@ namespace PeachPDF.Svg
             // xlink:href="#circleWithNoFillOfItsOwn"/> paints the circle stroked red, not the
             // SVG-wide default black fill.
             var resolved = ApplyCommon(use, node, inherited);
+            // The <use>'s own font-* likewise become the inherited font context for the referenced
+            // content (so <use font-size="30" href="#text"/> renders the referenced text at 30).
+            var childFont = ComputeFontContext(node, fontContext);
 
             _useDepth++;
             // <symbol> is excluded from BuildElement's general dispatch (like <defs> content, it must
@@ -581,8 +604,8 @@ namespace PeachPDF.Svg
             // paintable through this explicit <use> reference, which is what actually establishes its
             // viewport (a <symbol> has no size of its own; see BuildSymbol/SvgSymbolElement).
             var target = targetNode.Name == "symbol"
-                ? BuildSymbol(targetNode, resolved)
-                : BuildElement(targetNode, resolved);
+                ? BuildSymbol(targetNode, resolved, childFont)
+                : BuildElement(targetNode, resolved, childFont);
             _useDepth--;
 
             if (target is null)
@@ -597,7 +620,7 @@ namespace PeachPDF.Svg
         /// system its own children resolve percentage lengths against, but a symbol has no
         /// width/height of its own - see <see cref="SvgSymbolElement"/>.
         /// </summary>
-        private SvgSymbolElement BuildSymbol(ISvgSourceNode node, InheritedPaint inherited)
+        private SvgSymbolElement BuildSymbol(ISvgSourceNode node, InheritedPaint inherited, FontContext fontContext)
         {
             var symbol = new SvgSymbolElement
             {
@@ -605,6 +628,7 @@ namespace PeachPDF.Svg
                 PreserveAspectRatio = SvgValueParsers.ParsePreserveAspectRatio(node.GetAttribute("preserveAspectRatio")),
             };
             var resolved = ApplyCommon(symbol, node, inherited);
+            var childFont = ComputeFontContext(node, fontContext);
 
             var previousWidth = _viewportWidth;
             var previousHeight = _viewportHeight;
@@ -613,7 +637,7 @@ namespace PeachPDF.Svg
 
             foreach (var child in node.Children)
             {
-                var element = BuildElement(child, resolved);
+                var element = BuildElement(child, resolved, childFont);
                 if (element is not null)
                     symbol.Children.Add(element);
             }
@@ -629,7 +653,7 @@ namespace PeachPDF.Svg
         /// <c>height</c> defaults to the enclosing viewport's own size (spec's 100% default) rather
         /// than 0, so an unsized nested <c>&lt;svg&gt;</c> still fills its available space.
         /// </summary>
-        private SvgNestedSvgElement BuildNestedSvg(ISvgSourceNode node, InheritedPaint inherited)
+        private SvgNestedSvgElement BuildNestedSvg(ISvgSourceNode node, InheritedPaint inherited, FontContext fontContext)
         {
             var viewBox = SvgValueParsers.ParseViewBox(node.GetAttribute("viewBox"));
 
@@ -643,6 +667,7 @@ namespace PeachPDF.Svg
                 PreserveAspectRatio = SvgValueParsers.ParsePreserveAspectRatio(node.GetAttribute("preserveAspectRatio")),
             };
             var resolved = ApplyCommon(nested, node, inherited);
+            var childFont = ComputeFontContext(node, fontContext);
 
             var previousWidth = _viewportWidth;
             var previousHeight = _viewportHeight;
@@ -651,7 +676,7 @@ namespace PeachPDF.Svg
 
             foreach (var child in node.Children)
             {
-                var element = BuildElement(child, resolved);
+                var element = BuildElement(child, resolved, childFont);
                 if (element is not null)
                     nested.Children.Add(element);
             }
@@ -781,7 +806,7 @@ namespace PeachPDF.Svg
 
             foreach (var child in node.Children)
             {
-                var shape = BuildElement(child, InheritedPaint.Initial);
+                var shape = BuildElement(child, InheritedPaint.Initial, FontContext.Default);
                 if (shape is not null)
                     clipPath.Shapes.Add(shape);
             }
@@ -941,29 +966,107 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>
-        /// Builds one text run - shared by <c>&lt;text&gt;</c> (the subtree root) and its
-        /// <c>&lt;tspan&gt;</c>/<c>&lt;tref&gt;</c> children (see <see cref="SvgTextElement"/>).
-        /// <paramref name="fontContext"/> is this run's inherited font (see <see cref="FontContext"/>'s
-        /// doc comment for why it's a separate, text-subtree-only inheritance channel rather than part
-        /// of <see cref="InheritedPaint"/>).
+        /// Resolves an element's own declared font properties (font-family/font-size/font-weight/
+        /// font-style, via <see cref="ResolveStyledAttr"/>) layered over the <paramref name="inherited"/>
+        /// context, honoring the literal <c>inherit</c> keyword. Cheap - it produces resolved values only
+        /// (no <see cref="RFont"/>); a text run realizes the actual font from the result. Used both to
+        /// propagate the font context through container elements and to resolve a text run's own font.
         /// </summary>
-        private SvgTextElement BuildTextRun(ISvgSourceNode node, InheritedPaint inherited, FontContext fontContext)
+        private FontContext ComputeFontContext(ISvgSourceNode node, FontContext inherited)
+        {
+            var familyAttr = ResolveStyledAttr(node, "font-family");
+            var family = string.IsNullOrWhiteSpace(familyAttr) || familyAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.Family
+                : familyAttr.Split(',')[0].Trim().Trim('\'', '"');
+
+            var size = ResolveFontSize(ResolveStyledAttr(node, "font-size"), inherited.Size) ?? inherited.Size;
+
+            var weightAttr = ResolveStyledAttr(node, "font-weight");
+            var bold = weightAttr switch
+            {
+                null => inherited.Bold,
+                _ when weightAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase) => inherited.Bold,
+                _ when weightAttr.Equals("bold", StringComparison.OrdinalIgnoreCase) || weightAttr.Equals("bolder", StringComparison.OrdinalIgnoreCase) => true,
+                _ when int.TryParse(weightAttr, out var weightValue) => weightValue >= 700,
+                _ => false,
+            };
+
+            var styleAttr = ResolveStyledAttr(node, "font-style");
+            var italic = styleAttr is null || styleAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.Italic
+                : styleAttr.Equals("italic", StringComparison.OrdinalIgnoreCase) || styleAttr.Equals("oblique", StringComparison.OrdinalIgnoreCase);
+
+            return new FontContext(family, size, bold, italic);
+        }
+
+        /// <summary>
+        /// Resolves a <c>font-size</c> value in the same unit domain the rest of the text pipeline uses.
+        /// Relative units resolve against the real inherited size: <c>em</c>/<c>%</c>/<c>ex</c> against
+        /// <paramref name="parentSize"/> (the parent's used font-size), <c>rem</c> against the root's
+        /// (<see cref="_rootFontSize"/>). Absolute units (<c>pt</c>/<c>px</c>/<c>pc</c>/<c>in</c>/<c>cm</c>/
+        /// <c>mm</c>), a unitless number, and <c>calc()</c> defer to <see cref="SvgValueParsers.ParseLength"/>.
+        /// Returns null for a missing/unparseable value (caller falls back to the inherited size).
+        /// </summary>
+        private double? ResolveFontSize(string? value, double parentSize)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            var t = value.Trim();
+
+            if (t.Equals("inherit", StringComparison.OrdinalIgnoreCase))
+                return parentSize;
+
+            static double? Number(string s) =>
+                double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : null;
+
+            if (t.EndsWith("rem", StringComparison.OrdinalIgnoreCase))
+                return Number(t[..^3]) is { } r ? r * _rootFontSize : null;
+            if (t.EndsWith("em", StringComparison.OrdinalIgnoreCase))
+                return Number(t[..^2]) is { } e ? e * parentSize : null;
+            if (t.EndsWith("ex", StringComparison.OrdinalIgnoreCase))
+                return Number(t[..^2]) is { } x ? x * parentSize * 0.5 : null;
+            if (t.EndsWith('%'))
+                return Number(t[..^1]) is { } p ? p / 100.0 * parentSize : null;
+
+            // Absolute units / unitless / calc(). A '%' inside a calc resolves against the parent size.
+            return SvgValueParsers.ParseLength(t, parentSize);
+        }
+
+        /// <summary>
+        /// Builds one text run - shared by <c>&lt;text&gt;</c> (the subtree root) and its
+        /// <c>&lt;tspan&gt;</c>/<c>&lt;tref&gt;</c>/<c>&lt;textPath&gt;</c> children (see
+        /// <see cref="SvgTextElement"/>). <paramref name="fontContext"/> is this run's inherited font
+        /// context (from any ancestor - see <see cref="FontContext"/>). <paramref name="state"/> collapses
+        /// whitespace across the whole <c>&lt;text&gt;</c> subtree as one unit (SVG 1.1 §10.15): it is
+        /// created fresh per top-level <c>&lt;text&gt;</c> and shared with every descendant run.
+        /// </summary>
+        private SvgTextElement BuildTextRun(ISvgSourceNode node, InheritedPaint inherited, FontContext fontContext, TextWhitespaceState state)
         {
             var xAttr = node.GetAttribute("x");
             var yAttr = node.GetAttribute("y");
+            var xList = SvgValueParsers.ParseLengthList(xAttr, _viewportWidth);
+            var yList = SvgValueParsers.ParseLengthList(yAttr, _viewportHeight);
+            var dxList = SvgValueParsers.ParseLengthList(node.GetAttribute("dx"), _viewportWidth);
+            var dyList = SvgValueParsers.ParseLengthList(node.GetAttribute("dy"), _viewportHeight);
+            var rotateList = SvgValueParsers.ParseNumberList(node.GetAttribute("rotate"));
 
             var run = new SvgTextElement
             {
                 HasOwnX = !string.IsNullOrEmpty(xAttr),
                 HasOwnY = !string.IsNullOrEmpty(yAttr),
-                X = SvgValueParsers.ParseLength(xAttr, _viewportWidth) ?? 0,
-                Y = SvgValueParsers.ParseLength(yAttr, _viewportHeight) ?? 0,
-                Dx = SvgValueParsers.ParseLength(node.GetAttribute("dx"), _viewportWidth) ?? 0,
-                Dy = SvgValueParsers.ParseLength(node.GetAttribute("dy"), _viewportHeight) ?? 0,
-                // Only a single leading rotation value applies to the whole run - see SvgTextElement's
-                // doc comment re: per-character arrays being out of v1 scope.
-                RotateDegrees = SvgValueParsers.ParseLength(node.GetAttribute("rotate")) ?? 0,
-                Text = CollapseWhitespace(node.GetTextContent()),
+                // The scalar X/Y/Dx/Dy/RotateDegrees are the leading list value (the whole-run/chunk origin);
+                // the full per-character lists live in XList/YList/DxList/DyList/RotateList.
+                X = xList is { Length: > 0 } ? xList[0] : 0,
+                Y = yList is { Length: > 0 } ? yList[0] : 0,
+                Dx = dxList is { Length: > 0 } ? dxList[0] : 0,
+                Dy = dyList is { Length: > 0 } ? dyList[0] : 0,
+                RotateDegrees = rotateList is { Length: > 0 } ? rotateList[0] : 0,
+                XList = xList,
+                YList = yList,
+                DxList = dxList,
+                DyList = dyList,
+                RotateList = rotateList,
             };
 
             var resolved = ApplyCommon(run, node, inherited);
@@ -975,71 +1078,82 @@ namespace PeachPDF.Svg
                 _ => SvgTextAnchor.Start,
             };
 
-            var familyAttr = ResolveStyledAttr(node, "font-family");
-            var family = string.IsNullOrWhiteSpace(familyAttr) ? fontContext.Family : familyAttr.Split(',')[0].Trim().Trim('\'', '"');
-
-            var size = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "font-size"), ViewportDiagonal) ?? fontContext.Size;
-
-            var weightAttr = ResolveStyledAttr(node, "font-weight");
-            var bold = weightAttr switch
-            {
-                null => fontContext.Bold,
-                _ when weightAttr.Equals("bold", StringComparison.OrdinalIgnoreCase) || weightAttr.Equals("bolder", StringComparison.OrdinalIgnoreCase) => true,
-                _ when int.TryParse(weightAttr, out var weightValue) => weightValue >= 700,
-                _ => false,
-            };
-
-            var styleAttr = ResolveStyledAttr(node, "font-style");
-            var italic = styleAttr is null
-                ? fontContext.Italic
-                : styleAttr.Equals("italic", StringComparison.OrdinalIgnoreCase) || styleAttr.Equals("oblique", StringComparison.OrdinalIgnoreCase);
+            var runFont = ComputeFontContext(node, fontContext);
 
             var fontStyle = RFontStyle.Regular;
-            if (bold) fontStyle |= RFontStyle.Bold;
-            if (italic) fontStyle |= RFontStyle.Italic;
+            if (runFont.Bold) fontStyle |= RFontStyle.Bold;
+            if (runFont.Italic) fontStyle |= RFontStyle.Italic;
 
-            run.Font = _adapter.GetFont(family, size, fontStyle) ?? _adapter.GetFont(Html.Core.Utils.CssConstants.DefaultFont, size, fontStyle);
+            run.Font = _adapter.GetFont(runFont.Family, runFont.Size, fontStyle)
+                       ?? _adapter.GetFont(Html.Core.Utils.CssConstants.DefaultFont, runFont.Size, fontStyle);
 
-            var childFontContext = new FontContext(family, size, bold, italic);
+            var childFontContext = runFont;
 
-            foreach (var child in node.Children)
+            // Walk this run's loose text and child elements in document order, so text authored after a
+            // child element keeps its place and whitespace collapses across the boundaries (SVG §10.15).
+            foreach (var content in node.ContentNodes)
             {
+                if (content.IsText)
+                {
+                    var text = state.Collapse(content.Text ?? "");
+                    if (text.Length > 0)
+                        run.Content.Add(new SvgTextFragment { Text = text });
+                    continue;
+                }
+
+                var child = content.Element!;
                 switch (child.Name)
                 {
                     case "tspan":
-                        run.Spans.Add(BuildTextRun(child, resolved, childFontContext));
+                        run.Content.Add(new SvgTextSpan { Run = BuildTextRun(child, resolved, childFontContext, state) });
                         break;
 
                     case "tref":
                     {
-                        var trefRun = BuildTextRun(child, resolved, childFontContext);
+                        var trefRun = BuildTextRun(child, resolved, childFontContext, state);
                         var href = child.GetAttribute("href") ?? child.GetAttribute("xlink:href");
                         var id = href?.TrimStart('#');
                         if (!string.IsNullOrEmpty(id) && _nodesById.TryGetValue(id, out var target))
-                            trefRun.Text = CollapseWhitespace(target.GetTextContent());
-                        run.Spans.Add(trefRun);
+                        {
+                            // A tref's own text is the referenced element's text, collapsed as part of the
+                            // same subtree stream (replacing whatever the tref element itself contained).
+                            trefRun.Content.Clear();
+                            var text = state.Collapse(target.GetTextContent());
+                            if (text.Length > 0)
+                                trefRun.Content.Add(new SvgTextFragment { Text = text });
+                        }
+                        run.Content.Add(new SvgTextSpan { Run = trefRun });
                         break;
                     }
 
                     case "textPath":
                     {
-                        var textPathRun = BuildTextRun(child, resolved, childFontContext);
+                        var textPathRun = BuildTextRun(child, resolved, childFontContext, state);
                         var href = child.GetAttribute("href") ?? child.GetAttribute("xlink:href");
                         var id = href?.TrimStart('#');
 
-                        // v1 subset: only a <path>'s own geometry is a supported textPath target (not a
-                        // basic shape). A missing/invalid reference leaves PathData null, so the run just
-                        // renders on the ordinary straight baseline.
-                        if (!string.IsNullOrEmpty(id) && _nodesById.TryGetValue(id, out var target) &&
-                            target.Name == "path" && !string.IsNullOrEmpty(target.GetAttribute("d")))
+                        // The target may be a <path> (its own d geometry) or a basic shape (converted to
+                        // path geometry). A missing/invalid/empty reference leaves PathData null, so the run
+                        // just renders on the ordinary straight baseline.
+                        if (!string.IsNullOrEmpty(id) && _nodesById.TryGetValue(id, out var target))
                         {
-                            textPathRun.PathData = SvgPathDataParser.Parse(target.GetAttribute("d"));
-                            var (offset, isPercent) = ParseStartOffset(child.GetAttribute("startOffset"));
-                            textPathRun.StartOffset = offset;
-                            textPathRun.StartOffsetIsPercent = isPercent;
+                            var pathData = target.Name == "path"
+                                ? (string.IsNullOrEmpty(target.GetAttribute("d")) ? null : SvgPathDataParser.Parse(target.GetAttribute("d")))
+                                : SvgShapeToPath.Convert(target);
+
+                            if (pathData is { Count: > 0 })
+                            {
+                                textPathRun.PathData = pathData;
+                                var (offset, isPercent) = ParseStartOffset(child.GetAttribute("startOffset"));
+                                textPathRun.StartOffset = offset;
+                                textPathRun.StartOffsetIsPercent = isPercent;
+                                textPathRun.Side = string.Equals(child.GetAttribute("side")?.Trim(), "right", StringComparison.OrdinalIgnoreCase)
+                                    ? SvgTextPathSide.Right
+                                    : SvgTextPathSide.Left;
+                            }
                         }
 
-                        run.Spans.Add(textPathRun);
+                        run.Content.Add(new SvgTextSpan { Run = textPathRun });
                         break;
                     }
                 }
@@ -1066,14 +1180,46 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>
-        /// SVG's default (<c>xml:space="default"</c>) whitespace handling: runs of whitespace collapse
-        /// to a single space, leading/trailing whitespace is trimmed. Applied independently per text
-        /// run rather than across a whole <c>&lt;text&gt;</c> subtree as one unit (the fully spec-correct
-        /// behavior) - a documented v1 simplification, same category as <see cref="SvgTextElement"/>'s
-        /// other scope reductions.
+        /// SVG's default (<c>xml:space="default"</c>) whitespace collapsing (SVG 1.1 §10.15), applied
+        /// across a whole <c>&lt;text&gt;</c> subtree as one unit rather than per run: one instance is
+        /// created per top-level <c>&lt;text&gt;</c> and threaded through every descendant run's build, so
+        /// a run of whitespace spanning a run boundary collapses to a single space (kept on the following
+        /// run's leading edge) and only the whole subtree's leading/trailing whitespace is trimmed.
         /// </summary>
-        private static string CollapseWhitespace(string text) =>
-            string.IsNullOrEmpty(text) ? "" : System.Text.RegularExpressions.Regex.Replace(text, "\\s+", " ").Trim();
+        private sealed class TextWhitespaceState
+        {
+            private bool _atStart = true;      // still trimming the whole subtree's leading whitespace
+            private bool _pendingSpace;        // a whitespace run has ended; emit one space before the next glyph
+
+            /// <summary>Collapses one text fragment, advancing the shared cross-run state.</summary>
+            public string Collapse(string raw)
+            {
+                if (string.IsNullOrEmpty(raw))
+                    return "";
+
+                var sb = new StringBuilder(raw.Length);
+                foreach (var ch in raw)
+                {
+                    if (char.IsWhiteSpace(ch))
+                    {
+                        if (!_atStart)
+                            _pendingSpace = true;
+                        continue;
+                    }
+
+                    if (_pendingSpace)
+                    {
+                        sb.Append(' ');
+                        _pendingSpace = false;
+                    }
+
+                    sb.Append(ch);
+                    _atStart = false;
+                }
+
+                return sb.ToString();
+            }
+        }
 
         private SvgMarkerElement BuildMarker(ISvgSourceNode node)
         {
@@ -1095,7 +1241,7 @@ namespace PeachPDF.Svg
 
             foreach (var child in node.Children)
             {
-                var element = BuildElement(child, InheritedPaint.Initial);
+                var element = BuildElement(child, InheritedPaint.Initial, FontContext.Default);
                 if (element is not null)
                     marker.Children.Add(element);
             }
@@ -1166,7 +1312,7 @@ namespace PeachPDF.Svg
 
             foreach (var child in node.Children)
             {
-                var element = BuildElement(child, InheritedPaint.Initial);
+                var element = BuildElement(child, InheritedPaint.Initial, FontContext.Default);
                 if (element is not null)
                     children.Add(element);
             }

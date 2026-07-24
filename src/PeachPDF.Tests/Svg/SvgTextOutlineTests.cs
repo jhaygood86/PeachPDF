@@ -248,5 +248,84 @@ namespace PeachPDF.Tests.Svg
 
             Assert.Equal(2, g.DrawStringCalls.Count);
         }
+
+        // ─── #188 gap 1: per-character positioning at paint time ───
+
+        [Fact]
+        public void PerCharX_EmitsOneDrawStringPerGlyphAtGivenPositions()
+        {
+            // Each character has its own absolute x, so each is its own text chunk: three separate,
+            // single-character shows placed exactly at the listed x positions.
+            var g = Render("""<text x="10 30 50" y="50" font-size="40" fill="rgb(0,0,0)">abc</text>""");
+
+            Assert.Equal(3, g.DrawStringCalls.Count);
+            Assert.Collection(g.DrawStringCalls,
+                c => { Assert.Equal("a", c.Text); Assert.Equal(10, c.Point.X, 3); },
+                c => { Assert.Equal("b", c.Text); Assert.Equal(30, c.Point.X, 3); },
+                c => { Assert.Equal("c", c.Text); Assert.Equal(50, c.Point.X, 3); });
+        }
+
+        [Fact]
+        public void FlowingText_SingleSelectableDrawString()
+        {
+            // Ordinary in-flow, unrotated, single-run text stays one selectable DrawString (the fast path
+            // is preserved despite the per-glyph layout capability).
+            var g = Render("""<text x="10" y="50" font-size="40" fill="rgb(0,0,0)">Hello</text>""");
+
+            var draw = Assert.Single(g.DrawStringCalls);
+            Assert.Equal("Hello", draw.Text);
+            Assert.Empty(PathCalls(g));
+        }
+
+        [Fact]
+        public void PerCharRotate_GradientFill_OutlinesEachGlyph()
+        {
+            // A per-character rotate list rotates each glyph about its own position, so a gradient fill
+            // outlines each glyph individually - one filled outline per character, no text show.
+            var g = Render(
+                """<text x="10" y="50" font-size="40" rotate="10 20 30" fill="url(#grad)">abc</text>""",
+                """<linearGradient id="grad"><stop offset="0" stop-color="red"/><stop offset="1" stop-color="blue"/></linearGradient>""");
+
+            Assert.Empty(g.DrawStringCalls);
+            Assert.Equal(3, PathCalls(g).Count);
+        }
+
+        // ─── #188 gap 4 / #289: nested tspan + shape targets on a textPath ───
+
+        [Fact]
+        public void TextPath_NestedTspan_LaysAllCharactersAlongThePath()
+        {
+            // The nested <tspan>'s "B" must be laid along the path too (the #289 "ABC renders A+C" bug):
+            // three single-glyph shows, not two.
+            var g = Render(
+                """<text font-size="40"><textPath href="#p">A<tspan>B</tspan>C</textPath></text>""",
+                """<path id="p" d="M10,50 L190,50"/>""");
+
+            Assert.Equal(3, g.DrawStringCalls.Count);
+            Assert.All(g.DrawStringCalls, c => Assert.Equal(1, c.Text.Length));
+        }
+
+        [Fact]
+        public void TextPath_ShapeTarget_DrawsGlyphsAlongTheShape()
+        {
+            // A textPath may reference a basic shape (here a rect); its outline becomes the path.
+            var g = Render(
+                """<text font-size="40"><textPath href="#r">Hi</textPath></text>""",
+                """<rect id="r" x="10" y="20" width="180" height="60"/>""");
+
+            Assert.Equal(2, g.DrawStringCalls.Count);
+        }
+
+        [Fact]
+        public void TextPath_SideRight_DrawsGlyphsReadingFromTheFarEnd()
+        {
+            // side="right" reads the path from the far end and flips each glyph - it still places every
+            // glyph that lands on the path.
+            var g = Render(
+                """<text font-size="40"><textPath href="#p" side="right">Hi</textPath></text>""",
+                """<path id="p" d="M10,50 L190,50"/>""");
+
+            Assert.Equal(2, g.DrawStringCalls.Count);
+        }
     }
 }

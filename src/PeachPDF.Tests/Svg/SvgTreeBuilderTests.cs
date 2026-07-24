@@ -1253,7 +1253,10 @@ namespace PeachPDF.Tests.Svg
             var text = Assert.IsType<SvgTextElement>(Assert.Single(document.Children));
             Assert.Equal("Hello", text.Text);
             var span = Assert.Single(text.Spans);
-            Assert.Equal("World", span.Text);
+            // Whitespace now collapses across the whole <text> subtree (SVG 1.1 §10.15), so the space
+            // between "Hello" and "World" is preserved on the following run's leading edge rather than
+            // trimmed away per-run - the run's own text still stays separate from its parent's.
+            Assert.Equal(" World", span.Text);
             Assert.Equal(RColor.FromArgb(0xff, 0x00, 0x00), span.Fill.Color);
         }
 
@@ -1313,6 +1316,227 @@ namespace PeachPDF.Tests.Svg
 
             var text = Assert.IsType<SvgTextElement>(Assert.Single(document.Children));
             Assert.NotNull(text.Font);
+        }
+
+        // ─── #188 gap 1: per-character x/y/dx/dy/rotate lists ───
+
+        [Fact]
+        public void Text_XList_ParsesPerCharacterPositions()
+        {
+            var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><text x="10 20 30" y="5">abc</text></svg>""");
+
+            var text = Assert.IsType<SvgTextElement>(Assert.Single(document.Children));
+            Assert.NotNull(text.XList);
+            Assert.Equal([10, 20, 30], text.XList!);
+            Assert.True(text.HasOwnX);
+            Assert.Equal(10, text.X, 3);   // the scalar stays the leading value
+        }
+
+        [Fact]
+        public void Text_RotateList_RepeatsLastValue()
+        {
+            var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><text rotate="0 15 30">abc</text></svg>""");
+
+            var text = Assert.IsType<SvgTextElement>(Assert.Single(document.Children));
+            Assert.Equal([0, 15, 30], text.RotateList!);
+            Assert.Equal(0, text.RotateDegrees, 3);
+        }
+
+        [Fact]
+        public void Text_DxDyList_Parsed()
+        {
+            var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><text dx="1 2" dy="3 4">ab</text></svg>""");
+
+            var text = Assert.IsType<SvgTextElement>(Assert.Single(document.Children));
+            Assert.Equal([1, 2], text.DxList!);
+            Assert.Equal([3, 4], text.DyList!);
+        }
+
+        [Fact]
+        public void Text_SingleXValue_StillScalar()
+        {
+            var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><text x="5" y="6">ab</text></svg>""");
+
+            var text = Assert.IsType<SvgTextElement>(Assert.Single(document.Children));
+            Assert.Equal([5], text.XList!);
+            Assert.Equal(5, text.X, 3);
+            Assert.True(text.HasOwnX);
+        }
+
+        // ─── #188 gap 2: cross-ancestor font inheritance + relative font-size ───
+
+        private static SvgTextElement FirstText(SvgElement element) => element switch
+        {
+            SvgTextElement text => text,
+            SvgGroupElement group => group.Children.Select(FirstText).First(t => t is not null),
+            SvgUseElement { Target: { } target } => FirstText(target),
+            _ => null!,
+        };
+
+        private static double TextFontSize(string body)
+        {
+            var document = BuildFrom($"""<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">{body}</svg>""");
+            return document.Children.Select(FirstText).First(t => t is not null).Font!.Size;
+        }
+
+        [Fact]
+        public void Text_InheritsFontSizeFromAncestorGroup()
+        {
+            // A <text> with no font-size of its own uses the ancestor <g>'s, matching a direct font-size.
+            Assert.Equal(TextFontSize("""<text font-size="30">Hi</text>"""),
+                         TextFontSize("""<g font-size="30"><text>Hi</text></g>"""), 3);
+        }
+
+        [Fact]
+        public void Text_InheritsFontSizeThroughNestedGroups()
+        {
+            Assert.Equal(TextFontSize("""<text font-size="30">Hi</text>"""),
+                         TextFontSize("""<g font-size="30"><g><text>Hi</text></g></g>"""), 3);
+        }
+
+        [Fact]
+        public void Text_OwnFontSizeOverridesAncestor()
+        {
+            Assert.Equal(TextFontSize("""<text font-size="10">Hi</text>"""),
+                         TextFontSize("""<g font-size="30"><text font-size="10">Hi</text></g>"""), 3);
+        }
+
+        [Fact]
+        public void Text_EmFontSize_ResolvesAgainstParent()
+        {
+            // 1.5em against a 20-unit ancestor font-size is 30 (previously em used a fixed 16px approximation).
+            Assert.Equal(TextFontSize("""<text font-size="30">Hi</text>"""),
+                         TextFontSize("""<g font-size="20"><text font-size="1.5em">Hi</text></g>"""), 3);
+        }
+
+        [Fact]
+        public void Text_PercentFontSize_ResolvesAgainstParent()
+        {
+            Assert.Equal(TextFontSize("""<text font-size="30">Hi</text>"""),
+                         TextFontSize("""<g font-size="20"><text font-size="150%">Hi</text></g>"""), 3);
+        }
+
+        [Fact]
+        public void Text_ExFontSize_ResolvesAgainstParent()
+        {
+            // 2ex against a 20-unit ancestor is 2 * 20 * 0.5 = 20.
+            Assert.Equal(TextFontSize("""<text font-size="20">Hi</text>"""),
+                         TextFontSize("""<g font-size="20"><text font-size="2ex">Hi</text></g>"""), 3);
+        }
+
+        [Fact]
+        public void Text_InheritFontSizeKeyword_TakesAncestorSize()
+        {
+            Assert.Equal(TextFontSize("""<text font-size="30">Hi</text>"""),
+                         TextFontSize("""<g font-size="30"><text font-size="inherit">Hi</text></g>"""), 3);
+        }
+
+        private static double RootedTextFontSize(string markup) =>
+            BuildFrom(markup).Children.Select(FirstText).First(t => t is not null).Font!.Size;
+
+        [Fact]
+        public void Text_RemFontSize_ResolvesAgainstRoot()
+        {
+            // 2rem is relative to the root <svg>'s font-size (40), not the nearer <g> (10): 2 * 40 = 80.
+            var rem = RootedTextFontSize("""<svg xmlns="http://www.w3.org/2000/svg" font-size="40"><g font-size="10"><text font-size="2rem">Hi</text></g></svg>""");
+            var direct = RootedTextFontSize("""<svg xmlns="http://www.w3.org/2000/svg"><text font-size="80">Hi</text></svg>""");
+            Assert.Equal(direct, rem, 3);
+        }
+
+        [Fact]
+        public void Text_InheritsFontThroughUse()
+        {
+            // A <use font-size> becomes the inherited font context for the referenced text.
+            Assert.Equal(TextFontSize("""<text font-size="30">Hi</text>"""),
+                         TextFontSize("""<defs><text id="t">Hi</text></defs><use font-size="30" xlink:href="#t"/>"""), 3);
+        }
+
+        // ─── #188 gap 3: whole-subtree whitespace collapsing + source-order interleaving ───
+
+        [Fact]
+        public void Text_CollapsesWhitespaceAcrossTspanBoundary()
+        {
+            var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><text>a <tspan>b</tspan></text></svg>""");
+
+            var text = Assert.IsType<SvgTextElement>(Assert.Single(document.Children));
+            Assert.Equal("a", text.Text);
+            Assert.Equal(" b", Assert.Single(text.Spans).Text);   // the boundary space survives
+        }
+
+        [Fact]
+        public void Text_TrimsLeadingAndTrailingAcrossSubtree()
+        {
+            var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><text>   a   <tspan>b</tspan>   </text></svg>""");
+
+            var text = Assert.IsType<SvgTextElement>(Assert.Single(document.Children));
+            Assert.Equal("a", text.Text);                          // leading trimmed, inner collapsed to one
+            Assert.Equal(" b", Assert.Single(text.Spans).Text);    // trailing whitespace dropped entirely
+        }
+
+        [Fact]
+        public void Text_TextAfterChildElement_KeptInOrder()
+        {
+            var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><text>a <tspan>x</tspan> b</text></svg>""");
+
+            var text = Assert.IsType<SvgTextElement>(Assert.Single(document.Children));
+            // Source order is preserved: loose "a", then the <tspan>, then the trailing loose " b" (which
+            // would be dropped entirely under the old own-text-before-all-spans model). Each boundary space
+            // lands on the following run's leading edge, so the tspan carries " x".
+            Assert.Collection(text.Content,
+                item => Assert.Equal("a", Assert.IsType<SvgTextFragment>(item).Text),
+                item => Assert.Equal(" x", Assert.IsType<SvgTextSpan>(item).Run.Text),
+                item => Assert.Equal(" b", Assert.IsType<SvgTextFragment>(item).Text));
+        }
+
+        // ─── #188 gap 4 / #289: textPath side, shape targets, nested tspan ───
+
+        [Fact]
+        public void TextPath_TargetingRect_BuildsPathData()
+        {
+            var document = BuildFrom("""
+                <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+                  <defs><rect id="r" x="0" y="0" width="100" height="50"/></defs>
+                  <text><textPath xlink:href="#r">Hi</textPath></text>
+                </svg>
+                """);
+
+            var text = Assert.IsType<SvgTextElement>(Assert.Single(document.Children));
+            var textPath = Assert.Single(text.Spans);
+            Assert.NotNull(textPath.PathData);
+            Assert.NotEmpty(textPath.PathData!);
+        }
+
+        [Fact]
+        public void TextPath_SideRight_Parsed()
+        {
+            var document = BuildFrom("""
+                <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+                  <defs><path id="p" d="M0,0 L100,0"/></defs>
+                  <text><textPath xlink:href="#p" side="right">Hi</textPath></text>
+                </svg>
+                """);
+
+            var text = Assert.IsType<SvgTextElement>(Assert.Single(document.Children));
+            Assert.Equal(SvgTextPathSide.Right, Assert.Single(text.Spans).Side);
+        }
+
+        [Fact]
+        public void TextPath_NestedTspan_KeptInContent()
+        {
+            var document = BuildFrom("""
+                <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+                  <defs><path id="p" d="M0,0 L100,0"/></defs>
+                  <text><textPath xlink:href="#p">A<tspan>B</tspan>C</textPath></text>
+                </svg>
+                """);
+
+            var text = Assert.IsType<SvgTextElement>(Assert.Single(document.Children));
+            var textPath = Assert.Single(text.Spans);
+            // The nested <tspan>'s "B" must be retained (the #289 "ABC renders A+C" bug), in order.
+            Assert.Collection(textPath.Content,
+                item => Assert.Equal("A", Assert.IsType<SvgTextFragment>(item).Text),
+                item => Assert.Equal("B", Assert.IsType<SvgTextSpan>(item).Run.Text),
+                item => Assert.Equal("C", Assert.IsType<SvgTextFragment>(item).Text));
         }
 
         [Fact]

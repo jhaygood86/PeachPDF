@@ -63,6 +63,14 @@ namespace PeachPDF.Svg
         public IEnumerable<ISvgSourceNode> Children =>
             _element.Elements().Select(e => (ISvgSourceNode)new XElementSvgSourceNode(e, _svgRoot, _cssData, _media, _varContext));
 
+        public IEnumerable<SvgContentNode> ContentNodes =>
+            _element.Nodes().Select(n => n switch
+            {
+                XText text => SvgContentNode.OfText(text.Value),
+                XElement element => SvgContentNode.OfElement(new XElementSvgSourceNode(element, _svgRoot, _cssData, _media, _varContext)),
+                _ => (SvgContentNode?)null,
+            }).Where(c => c is not null).Select(c => c!.Value);
+
         /// <summary>
         /// Only this element's own direct text-node children - deliberately NOT <see cref="XElement.Value"/>,
         /// which recurses into descendant elements' text too. Matches <see cref="CssBoxSvgSourceNode"/>'s
