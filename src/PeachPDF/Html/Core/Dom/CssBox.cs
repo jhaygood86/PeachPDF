@@ -122,6 +122,10 @@ namespace PeachPDF.Html.Core.Dom
             set => _htmlContainer = value;
         }
 
+        /// <inheritdoc/>
+        protected override IReadOnlyDictionary<(string Name, string Family), RegisteredFontPalette>? FontPaletteValuesRegistry
+            => HtmlContainer?.FontPaletteValues;
+
         /// <summary>
         /// Gets or sets the parent box of this box
         /// </summary>
@@ -3708,7 +3712,7 @@ namespace PeachPDF.Html.Core.Dom
                 var baselineAdjust = styleSource.ActualFont.Ascent - font.Ascent;
                 var wordPoint = new RPoint(word.Left + offset.X, word.Top + offset.Y + baselineAdjust);
                 var text = word.FirstLineText ?? word.Text!;
-                g.DrawString(text, font, styleSource.ActualColor, wordPoint, new RSize(word.Width, word.Height), isRtl, styleSource.ActualLetterSpacing);
+                g.DrawString(text, font, styleSource.ActualColor, wordPoint, new RSize(word.Width, word.Height), isRtl, styleSource.ActualLetterSpacing, styleSource.ActualFontPalette);
             }
         }
 

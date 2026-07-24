@@ -318,5 +318,41 @@ namespace PeachPDF.CSS
             }
             return ColorSpaceMath.HueMethod.Shorter;
         }
+
+        private static ColorSpaceMath.HueMethod MapHueName(string name) => name switch
+        {
+            "longer" => ColorSpaceMath.HueMethod.Longer,
+            "increasing" => ColorSpaceMath.HueMethod.Increasing,
+            "decreasing" => ColorSpaceMath.HueMethod.Decreasing,
+            _ => ColorSpaceMath.HueMethod.Shorter
+        };
+
+        /// <summary>
+        /// Blends two colors per the CSS <c>palette-mix()</c> rules (CSS Fonts 4), reusing <c>color-mix()</c>'s
+        /// color-space mapping (<see cref="MapSpace"/>) and CSS Color 5 §3 percentage normalization so the two
+        /// functions interpolate identically. <paramref name="p1"/>/<paramref name="p2"/> are 0..100 percentages
+        /// (or null); <paramref name="hueName"/> is a hue-interpolation direction (or null for the default).
+        /// </summary>
+        internal static Color MixPaletteColors(Color c1, Color c2, string spaceName, string hueName, double? p1, double? p2)
+        {
+            // CSS keywords are case-insensitive; MapSpace/MapHueName match lowercase literals, so fold first
+            // (a mixed-case space would otherwise silently fall through to the sRGB/Shorter default).
+            var space = MapSpace(spaceName.ToLowerInvariant());
+            var hue = MapHueName(hueName.ToLowerInvariant());
+
+            double? f1 = p1 is { } a ? Math.Clamp(a, 0, 100) / 100.0 : null;
+            double? f2 = p2 is { } b ? Math.Clamp(b, 0, 100) / 100.0 : null;
+
+            if (f1 is null && f2 is null) { f1 = 0.5; f2 = 0.5; }
+            else if (f1 is null) f1 = 1.0 - f2;
+            else if (f2 is null) f2 = 1.0 - f1;
+
+            var sum = f1.Value + f2.Value;
+            if (sum <= 0) return c1;
+
+            var alphaMultiplier = sum < 1.0 ? sum : 1.0;
+            var t = f2.Value / sum;
+            return Color.Mix(c1, c2, t, space, hue, alphaMultiplier);
+        }
     }
 }

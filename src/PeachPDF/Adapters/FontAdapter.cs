@@ -10,7 +10,9 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.Fonts.OpenType;
 using PeachPDF.Html.Adapters;
+using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Drawing;
 
 namespace PeachPDF.Adapters
@@ -81,6 +83,32 @@ namespace PeachPDF.Adapters
         public override bool HasGlyph(System.Text.Rune rune) => Font.Descriptor?.HasGlyph(rune) ?? false;
 
         public override string FaceKey => Font.GlyphTypeface.Key;
+
+        // ---- CPAL color-palette query surface --------------------------------------------------
+        // Backed by the font's OpenTypeDescriptor.ColorPalette (the CPAL table). Null for a non-color font,
+        // in which case each member falls back to the RFont "no palettes" default.
+
+        private CpalTable? ColorPalette => Font.Descriptor is { IsColorFont: true } d ? d.ColorPalette : null;
+
+        public override int PaletteCount => ColorPalette?.PaletteCount ?? 0;
+
+        public override int PaletteEntryCount => ColorPalette?.EntriesPerPalette ?? 0;
+
+        public override int? FirstLightPalette() => ColorPalette?.FirstLightPalette();
+
+        public override int? FirstDarkPalette() => ColorPalette?.FirstDarkPalette();
+
+        public override bool TryGetPaletteColor(int paletteIndex, int entryIndex, out RColor color)
+        {
+            if (ColorPalette is { } cpal && cpal.TryGetColor(paletteIndex, entryIndex, out var c))
+            {
+                color = RColor.FromArgb(c.A, c.R, c.G, c.B);
+                return true;
+            }
+
+            color = RColor.Empty;
+            return false;
+        }
 
         /// <summary>
         /// Set font metrics to be cached for the font for future use.

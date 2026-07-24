@@ -16,6 +16,7 @@ using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Utilities;
 using System;
+using System.Collections.Generic;
 using System.Text;
 
 namespace PeachPDF.Adapters
@@ -162,7 +163,7 @@ namespace PeachPDF.Adapters
             throw new NotSupportedException();
         }
 
-        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl, double letterSpacing = 0)
+        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl, double letterSpacing = 0, RFontPalette? fontPalette = null)
         {
             var xBrush = ((BrushAdapter)_adapter.GetSolidBrush(color)).Brush;
             var xPoint = Utils.Convert(point, PixelsPerPoint);
@@ -173,7 +174,23 @@ namespace PeachPDF.Adapters
             // extra draw calls and the string stays a single, contiguous, copy/paste- and
             // tagged-PDF-friendly text run regardless of its value.
             var xLetterSpacing = letterSpacing / PixelsPerPoint;
-            _g.DrawString(str, ((FontAdapter)font).Font, xBrush, xPoint.X, xPoint.Y, _stringFormat, xLetterSpacing);
+            _g.DrawString(str, ((FontAdapter)font).Font, xBrush, xPoint.X, xPoint.Y, _stringFormat, xLetterSpacing, ToGlyphPalette(fontPalette));
+        }
+
+        /// <summary>
+        /// Converts a resolved <see cref="RFontPalette"/> (adapter layer, <see cref="RColor"/> overrides) into the
+        /// backend <see cref="XGlyphPalette"/> (<see cref="XColor"/> overrides). Null passes straight through.
+        /// </summary>
+        private static XGlyphPalette? ToGlyphPalette(RFontPalette? palette)
+        {
+            if (palette is null)
+                return null;
+
+            var overrides = new Dictionary<int, XColor>(palette.Overrides.Count);
+            foreach (var (entryIndex, color) in palette.Overrides)
+                overrides[entryIndex] = XColor.FromArgb(color.A, color.R, color.G, color.B);
+
+            return new XGlyphPalette(palette.BasePaletteIndex, overrides);
         }
 
         public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0)

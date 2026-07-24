@@ -193,7 +193,7 @@ namespace PeachPDF.Tests.TestSupport
 
         public TestRecordingGraphics() : base(new TestGraphicsAdapter(), new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
 
-        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl, double letterSpacing = 0)
+        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl, double letterSpacing = 0, RFontPalette? fontPalette = null)
         {
             var call = new DrawStringCall(str, font, color, point, size, rtl, letterSpacing);
             DrawStringCalls.Add(call);

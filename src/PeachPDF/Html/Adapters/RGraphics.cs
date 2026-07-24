@@ -310,7 +310,12 @@ namespace PeachPDF.Html.Adapters
         /// before this parameter existed - implementations should only fall back to a slower
         /// per-character draw loop when this is non-zero.
         /// </param>
-        public abstract void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl, double letterSpacing = 0);
+        /// <param name="fontPalette">
+        /// the resolved CSS <c>font-palette</c> selection (a CPAL palette index + per-entry color overrides)
+        /// for a COLR/CPAL color font; <c>null</c> (the default/common case) selects palette 0 with no
+        /// overrides, identical to how color-glyph drawing always worked before this parameter existed.
+        /// </param>
+        public abstract void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl, double letterSpacing = 0, RFontPalette? fontPalette = null);
 
         /// <summary>
         /// Builds the vector outline of a glyph run as a fillable/strokeable <see cref="RGraphicsPath"/>,

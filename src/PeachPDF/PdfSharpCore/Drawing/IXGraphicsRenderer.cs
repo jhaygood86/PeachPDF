@@ -121,7 +121,11 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// `letter-spacing`), realized via the PDF `Tc` character-spacing operator - the whole string
         /// is still shown with a single text-showing operation.
         /// </param>
-        void DrawString(string s, XFont font, XBrush brush, XRect layoutRectangle, XStringFormat format, double letterSpacing = 0);
+        /// <param name="fontPalette">
+        /// The resolved CSS <c>font-palette</c> selection (CPAL palette index + per-entry color overrides) for a
+        /// COLR/CPAL color font; <c>null</c> selects palette 0 with no overrides (the default color-glyph path).
+        /// </param>
+        void DrawString(string s, XFont font, XBrush brush, XRect layoutRectangle, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null);
 
         /// <summary>
         /// Draws an image.

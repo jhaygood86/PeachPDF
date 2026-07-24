@@ -1,0 +1,16 @@
+NablaSubset.ttf is a subset (the letters in "PALETTE") of "Nabla", Copyright 2022
+The Nabla Project Authors (https://github.com/googlefonts/nabla), licensed under
+the SIL Open Font License, Version 1.1 (OFL-1.1). Nabla is a COLR (version 1) +
+CPAL color font with color glyphs over `glyf` outlines.
+
+The font is bundled solely as a test/showcase asset to demonstrate and verify the
+CSS `font-palette` property, the `@font-palette-values` at-rule, and `palette-mix()`
+against a real multi-palette color font. The subset was produced with fonttools:
+it is instantiated at the default variable-font instance, subset to a handful of
+glyphs, and its CPAL table is upgraded to version 1 with two palettes flagged
+USABLE_WITH_DARK_BACKGROUND / USABLE_WITH_LIGHT_BACKGROUND so the `light`/`dark`
+keywords resolve to a real palette. The color glyphs are otherwise unmodified. See
+generate_nabla_subset.py. The full OFL text follows.
+
+Full license text: https://openfontlicense.org/open-font-license-official-text/
+Source: https://fonts.google.com/specimen/Nabla

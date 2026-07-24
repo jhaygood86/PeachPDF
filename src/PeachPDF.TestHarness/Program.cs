@@ -4928,6 +4928,67 @@ await SaveShowcaseAsync("color_emoji", "Text &amp; Fonts", "Color Fonts (COLR/CP
     "compositing. Glyphs are drawn as vectors, not embedded font programs.",
     colorEmojiHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// CSS font-palette: selecting among a color font's CPAL palettes, defining custom palettes via
+// @font-palette-values (base-palette + override-colors), the light/dark keywords, and palette-mix().
+// Uses a subset of Nabla (a real COLR v1 font with 7 palettes).
+var nablaB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NablaSubset.ttf")));
+string PaletteSwatch(string cls, string title, string detail) =>
+    "<td>" +
+    $"<div class=\"pw {cls}\">PALETTE</div>" +
+    $"<div class=\"desc\">{title}</div>" +
+    $"<div class=\"css\">{detail}</div>" +
+    "</td>";
+var fontPaletteHtml =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    $"@font-face {{ font-family: 'Nabla'; src: url('data:font/truetype;base64,{nablaB64}') format('truetype'); }}" +
+    "@font-palette-values --blue { font-family: 'Nabla'; base-palette: 2; }" +
+    "@font-palette-values --grey { font-family: 'Nabla'; base-palette: 3; }" +
+    "@font-palette-values --custom { font-family: 'Nabla'; base-palette: 0; override-colors: 0 #1db954, 1 #0a7d34, 2 #14532d, 3 #86efac; }" +
+    "body { font: 9pt Arial, sans-serif; margin: 0 }" +
+    "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
+    "h2 { font-size: 11pt; margin: 1.1em 0 0.4em; padding-bottom: 2px; border-bottom: 1px solid #999 }" +
+    "p.intro { margin: 0 0 0.8em; color: #555 }" +
+    ".hero { font-family: 'Nabla'; font-size: 40pt; line-height: 1.2 }" +
+    "table.sw { border-collapse: collapse; width: 100%; table-layout: fixed }" +
+    "table.sw td { padding: 8px 6px; vertical-align: top; text-align: center }" +
+    ".pw { font-family: 'Nabla'; font-size: 22pt; line-height: 1; letter-spacing: 1pt }" +
+    ".desc { font-size: 8pt; font-weight: bold; color: #444; margin-top: 6px }" +
+    ".css { font-size: 7pt; color: #666 }" +
+    ".p-normal { font-palette: normal }" +
+    ".p-blue { font-palette: --blue }" +
+    ".p-grey { font-palette: --grey }" +
+    ".p-light { font-palette: light }" +
+    ".p-dark { font-palette: dark }" +
+    ".p-custom { font-palette: --custom }" +
+    ".p-mix { font-palette: palette-mix(in oklab, --blue, --grey) }" +
+    "</style></head><body>" +
+    "<h1>CSS <code>font-palette</code></h1>" +
+    "<p class=\"intro\">A COLR/CPAL color font can ship several palettes; <code>font-palette</code> chooses " +
+    "between them, and <code>@font-palette-values</code> defines custom palettes (a <code>base-palette</code> " +
+    "plus per-index <code>override-colors</code>). The hero below is a subset of Nabla, a real COLR&nbsp;v1 " +
+    "font with 7 palettes, shown in its default palette.</p>" +
+    "<div class=\"hero p-normal\">PALETTE</div>" +
+    "<h2>Palette selection</h2>" +
+    "<p class=\"intro\">The same text, same font — only <code>font-palette</code> differs:</p>" +
+    "<table class=\"sw\"><tr>" +
+    PaletteSwatch("p-normal", "normal", "font-palette: normal (palette 0)") +
+    PaletteSwatch("p-blue", "base-palette", "@font-palette-values --blue { base-palette: 2 }") +
+    PaletteSwatch("p-grey", "base-palette", "@font-palette-values --grey { base-palette: 3 }") +
+    "</tr><tr>" +
+    PaletteSwatch("p-light", "light", "font-palette: light (light-flagged palette)") +
+    PaletteSwatch("p-dark", "dark", "font-palette: dark (dark-flagged palette)") +
+    PaletteSwatch("p-custom", "override-colors", "override-colors: 0 #1db954, 1 #0a7d34, …") +
+    "</tr><tr>" +
+    PaletteSwatch("p-mix", "palette-mix()", "palette-mix(in oklab, --blue, --grey)") +
+    "</tr></table>" +
+    "</body></html>";
+await SaveShowcaseAsync("font_palette", "Text &amp; Fonts", "CSS font-palette",
+    "Selecting among a COLR/CPAL color font's palettes with the CSS font-palette property: the light/dark " +
+    "keywords, custom palettes via @font-palette-values (base-palette + override-colors), and palette-mix(). " +
+    "Rendered against a subset of Nabla, a real 7-palette COLR v1 font.",
+    fontPaletteHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // The manifest that drives the website's /showcase page (see docs/showcase.html and
 // .github/workflows/pages.yml). Field names are camelCased for Liquid (site.data.showcases).
 var manifestJson = JsonSerializer.Serialize(showcaseManifest,

@@ -280,6 +280,14 @@ namespace PeachPDF.Html.Core
             = new Dictionary<string, RegisteredProperty>(StringComparer.Ordinal);
 
         /// <summary>
+        /// Palette overrides registered with <c>@font-palette-values</c> at-rules, keyed by
+        /// <c>(name, normalized-family)</c>. Consulted when resolving <c>font-palette: &lt;dashed-ident&gt;</c>
+        /// for a COLR/CPAL color font. Rebuilt each parse pass.
+        /// </summary>
+        internal IReadOnlyDictionary<(string Name, string Family), RegisteredFontPalette> FontPaletteValues { get; set; }
+            = new Dictionary<(string, string), RegisteredFontPalette>();
+
+        /// <summary>
         /// The relative-unit resolution context for per-page <c>@page</c> margins, captured by
         /// <c>DomParser.CascadeApplyPageStyles</c> on every parse pass (see
         /// <see cref="Entities.PageLengthContext"/> for why capture-at-parse). Null until a document

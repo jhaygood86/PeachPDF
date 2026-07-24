@@ -37,6 +37,10 @@ namespace PeachPDF.CSS
         // UnknownProperty (Converters.Any) and validated later against the syntax string in Layer B.
         private readonly FrozenDictionary<string, LonghandCreator> _propertyDescriptors;
 
+        // @font-palette-values descriptors (font-family / base-palette / override-colors). Stored raw via
+        // UnknownProperty and validated later in Layer B (RegisteredFontPalette.FromRule).
+        private readonly FrozenDictionary<string, LonghandCreator> _fontPaletteDescriptors;
+
         private readonly FrozenDictionary<string, LonghandCreator> _longhands;
 
         private readonly FrozenDictionary<string, string[]> _mappings;
@@ -278,6 +282,7 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.FontVariant, () => new FontVariantProperty(), false, true);
             AddLonghand(PropertyNames.FontWeight, () => new FontWeightProperty(), true, true);
             AddLonghand(PropertyNames.FontStretch, () => new FontStretchProperty(), true, true);
+            AddLonghand(PropertyNames.FontPalette, () => new FontPaletteProperty());
 
             AddShorthand(PropertyNames.Gap, () => new GapProperty(),
                 PropertyNames.RowGap,
@@ -537,6 +542,14 @@ namespace PeachPDF.CSS
             };
             _propertyDescriptors = propertyDescriptorsBuilder.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
+            var fontPaletteDescriptorsBuilder = new Dictionary<string, LonghandCreator>(StringComparer.OrdinalIgnoreCase)
+            {
+                [PropertyNames.FontFamily] = () => new UnknownProperty(PropertyNames.FontFamily),
+                [PropertyNames.BasePalette] = () => new UnknownProperty(PropertyNames.BasePalette),
+                [PropertyNames.OverrideColors] = () => new UnknownProperty(PropertyNames.OverrideColors),
+            };
+            _fontPaletteDescriptors = fontPaletteDescriptorsBuilder.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
             _longhands = _longhandsBuilder.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
             _mappings = _mappingsBuilder.ToFrozenDictionary();
             _shorthands = _shorthandsBuilder.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
@@ -590,6 +603,11 @@ namespace PeachPDF.CSS
         public Property CreatePropertyDescriptor(string name)
         {
             return _propertyDescriptors.TryGetValue(name, out var propertyCreator) ? propertyCreator() : null;
+        }
+
+        public Property CreateFontPaletteDescriptor(string name)
+        {
+            return _fontPaletteDescriptors.TryGetValue(name, out var propertyCreator) ? propertyCreator() : null;
         }
 
         public Property CreateViewport(string name)

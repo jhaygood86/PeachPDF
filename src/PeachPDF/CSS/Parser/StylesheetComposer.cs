@@ -49,6 +49,8 @@ namespace PeachPDF.CSS
 
             if (token.Data.Is(RuleNames.Property)) return CreateProperty(token);
 
+            if (token.Data.Is(RuleNames.FontPaletteValues)) return CreateFontPaletteValues(token);
+
             if (token.Data.Is(RuleNames.Layer)) return CreateLayer(token);
 
             return token.Data.Is(RuleNames.Document) ? CreateDocument(token) : CreateUnknown(token);
@@ -172,6 +174,28 @@ namespace PeachPDF.CSS
             if (token.Type == TokenType.CurlyBracketOpen)
             {
                 var end = FillDeclarations(rule, PropertyFactory.Instance.CreatePropertyDescriptor);
+                rule.StylesheetText = CreateView(start, end);
+                _nodes.Pop();
+                return rule;
+            }
+
+            _nodes.Pop();
+            return SkipDeclarations(token);
+        }
+
+        public Rule CreateFontPaletteValues(Token current)
+        {
+            var rule = new FontPaletteValuesRule(_parser);
+            var start = current.Position;
+            var token = NextToken();
+            _nodes.Push(rule);
+            ParseComments(ref token);
+            rule.Name = GetRuleName(ref token);
+            ParseComments(ref token);
+
+            if (token.Type == TokenType.CurlyBracketOpen)
+            {
+                var end = FillDeclarations(rule, PropertyFactory.Instance.CreateFontPaletteDescriptor);
                 rule.StylesheetText = CreateView(start, end);
                 _nodes.Pop();
                 return rule;

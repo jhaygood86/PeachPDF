@@ -804,7 +804,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             public override void ReturnPreviousSmoothingMode(object? prevMode) { }
             public override PeachPDF.Html.Adapters.Entities.RSize MeasureString(string str, PeachPDF.Html.Adapters.RFont font) => new(0, 12);
             public override void MeasureString(string str, PeachPDF.Html.Adapters.RFont font, double maxWidth, out int charFit, out double charFitWidth) { charFit = str?.Length ?? 0; charFitWidth = 0; }
-            public override void DrawString(string str, PeachPDF.Html.Adapters.RFont font, PeachPDF.Html.Adapters.Entities.RColor color, PeachPDF.Html.Adapters.Entities.RPoint point, PeachPDF.Html.Adapters.Entities.RSize size, bool rtl, double letterSpacing = 0) => DrawnStrings.Add((str, point.Y));
+            public override void DrawString(string str, PeachPDF.Html.Adapters.RFont font, PeachPDF.Html.Adapters.Entities.RColor color, PeachPDF.Html.Adapters.Entities.RPoint point, PeachPDF.Html.Adapters.Entities.RSize size, bool rtl, double letterSpacing = 0, PeachPDF.Html.Adapters.Entities.RFontPalette? fontPalette = null) => DrawnStrings.Add((str, point.Y));
             public override void DrawRectangle(PeachPDF.Html.Adapters.RPen pen, double x, double y, double width, double height) { }
             public override void DrawRectangle(PeachPDF.Html.Adapters.RBrush brush, double x, double y, double width, double height) { }
             public override void DrawImage(PeachPDF.Html.Adapters.RImage image, PeachPDF.Html.Adapters.Entities.RRect destRect, PeachPDF.Html.Adapters.Entities.RRect srcRect) { }

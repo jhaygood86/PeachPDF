@@ -16,6 +16,7 @@
 //
 #endregion
 
+using System.Collections.Generic;
 using System.Text;
 using PeachPDF.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -33,12 +34,15 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         private readonly double _letterSpacing; // world units
         private readonly bool _pageDownwards;
         private readonly XColor _foreground;
+        private readonly int _paletteIndex;     // selected CPAL palette (CSS font-palette), default 0
+        private readonly IReadOnlyDictionary<int, XColor>? _overrides; // CPAL entry index -> override color
 
         private readonly double _baselineX;
         private readonly double _baselineY;
 
         public ColorGlyphPainter(XGraphicsPdfRenderer renderer, OpenTypeDescriptor descriptor, XFont font,
-            XBrush brush, double baselineX, double baselineY, double letterSpacing, XPageDirection pageDirection)
+            XBrush brush, double baselineX, double baselineY, double letterSpacing, XPageDirection pageDirection,
+            int paletteIndex = 0, IReadOnlyDictionary<int, XColor>? overrides = null)
         {
             _renderer = renderer;
             _gfx = renderer.Gfx;
@@ -47,6 +51,8 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             _letterSpacing = letterSpacing;
             _pageDownwards = pageDirection == XPageDirection.Downwards;
             _foreground = brush is XSolidBrush solid ? solid.Color : XColors.Black;
+            _paletteIndex = paletteIndex;
+            _overrides = overrides is { Count: > 0 } ? overrides : null;
             _baselineX = baselineX;
             _baselineY = baselineY;
         }
@@ -143,9 +149,15 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             XColor color;
             if (paletteIndex == UseForegroundColor)
             {
+                // The COLR "use text color" sentinel is a paint reference, not a real CPAL entry index, so it
+                // resolves to the text color regardless of any font-palette override-colors.
                 color = _foreground;
             }
-            else if (_descriptor.ColorPalette.TryGetColor(0, paletteIndex, out var c))
+            else if (_overrides is not null && _overrides.TryGetValue(paletteIndex, out var over))
+            {
+                color = over;
+            }
+            else if (_descriptor.ColorPalette.TryGetColor(_paletteIndex, paletteIndex, out var c))
             {
                 color = XColor.FromArgb(c.A, c.R, c.G, c.B);
             }

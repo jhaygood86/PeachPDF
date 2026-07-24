@@ -117,6 +117,7 @@ namespace PeachPDF.CSS
         public static readonly string Float = "float";
         public static readonly string FontFamily = "font-family";
         public static readonly string FontFeatureSettings = "font-feature-settings";
+        public static readonly string FontPalette = "font-palette";
         public static readonly string FontSize = "font-size";
         public static readonly string FontSizeAdjust = "font-size-adjust";
         public static readonly string FontStyle = "font-style";
@@ -266,6 +267,8 @@ namespace PeachPDF.CSS
         public static readonly string Syntax = "syntax";
         public static readonly string InitialValue = "initial-value";
         public static readonly string Inherits = "inherits";
+        public static readonly string BasePalette = "base-palette";
+        public static readonly string OverrideColors = "override-colors";
         public static readonly string ObjectFit = "object-fit";
         public static readonly string ObjectPosition = "object-position";
         public static readonly string Size = "size";
