@@ -2456,6 +2456,119 @@ await SaveShowcaseAsync("svg", "Graphics & Effects", "SVG",
     "Inline and embedded SVG rendered as true vector PDF content: shapes, paths, gradients, patterns, masks, and text.",
     svgHtml, pdfConfig);
 
+// --- advanced SVG text showcase (gradient/pattern fill, stroke, textPath) ---
+
+static string TextPanel(string desc, string svg) =>
+    "<td>" +
+    $"<div class=\"stage\">{svg}</div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    "</td>";
+
+const string SvgTextCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt; break-after: avoid }
+    table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
+    table.sw td { padding: 3px; vertical-align: top; width: 33.33% }
+    .stage { background: #fafafa; border: 1px solid #ccc; text-align: center }
+    .desc { font-size: 7pt; font-weight: bold; color: #444; margin: 2px 0 1px }
+    </style>
+    """;
+
+var svgTextAdvancedHtml = "<!DOCTYPE html><html><head>" + SvgTextCss + "</head><body>" +
+
+    "<h1>SVG text: gradient/pattern fill, stroke &amp; textPath</h1>" +
+    "<p class=\"intro\">A gradient/pattern <b>fill</b> or any <b>stroke</b> on &lt;text&gt; outlines each glyph to a vector path and paints it with the same brush/pen machinery shapes use; a &lt;textPath&gt; lays glyphs along a referenced &lt;path&gt;. Plain solid text keeps the fast, selectable text-show path. (docs/supported-svg-features.md)</p>" +
+
+    "<h2>1 — Gradient &amp; pattern fill</h2>" +
+    "<table class=\"sw\"><tr>" +
+    TextPanel("linear-gradient fill",
+        """
+        <svg viewBox="0 0 200 70" width="190" height="66">
+          <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#e11"/><stop offset="0.5" stop-color="#b0e"/><stop offset="1" stop-color="#14e"/></linearGradient></defs>
+          <text x="8" y="48" font-size="42" font-weight="bold" fill="url(#lg)">Peach</text>
+        </svg>
+        """) +
+    TextPanel("radial-gradient fill",
+        """
+        <svg viewBox="0 0 200 70" width="190" height="66">
+          <defs><radialGradient id="rg"><stop offset="0" stop-color="#ffd23f"/><stop offset="1" stop-color="#ee4266"/></radialGradient></defs>
+          <text x="8" y="48" font-size="42" font-weight="bold" fill="url(#rg)">Glow</text>
+        </svg>
+        """) +
+    TextPanel("tiled pattern fill",
+        """
+        <svg viewBox="0 0 200 70" width="190" height="66">
+          <defs><pattern id="dots" width="10" height="10" patternUnits="userSpaceOnUse"><rect width="10" height="10" fill="#2c3e50"/><circle cx="5" cy="5" r="2.5" fill="#f1c40f"/></pattern></defs>
+          <text x="8" y="48" font-size="42" font-weight="bold" fill="url(#dots)">Dots</text>
+        </svg>
+        """) +
+    "</tr></table>" +
+
+    "<h2>2 — Stroke on text</h2>" +
+    "<table class=\"sw\"><tr>" +
+    TextPanel("fill + contrasting stroke",
+        """
+        <svg viewBox="0 0 200 70" width="190" height="66">
+          <text x="8" y="50" font-size="44" font-weight="bold" fill="#ffd23f" stroke="#2c3e50" stroke-width="2">Bold</text>
+        </svg>
+        """) +
+    TextPanel("outline only (fill:none)",
+        """
+        <svg viewBox="0 0 200 70" width="190" height="66">
+          <text x="8" y="50" font-size="44" font-weight="bold" fill="none" stroke="#16a085" stroke-width="1.5">Line</text>
+        </svg>
+        """) +
+    TextPanel("gradient fill + stroke",
+        """
+        <svg viewBox="0 0 200 70" width="190" height="66">
+          <defs><linearGradient id="gs" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff9966"/><stop offset="1" stop-color="#ff5e62"/></linearGradient></defs>
+          <text x="8" y="50" font-size="44" font-weight="bold" fill="url(#gs)" stroke="#7a1c1c" stroke-width="1">Warm</text>
+        </svg>
+        """) +
+    "</tr></table>" +
+
+    "<h2>3 — Text on a path (&lt;textPath&gt;)</h2>" +
+    "<p class=\"intro\">Each glyph is placed at its own distance along the path and rotated to the tangent there; text past the path end is dropped. startOffset and text-anchor shift the run's start along the path.</p>" +
+    "<table class=\"sw\"><tr>" +
+    TextPanel("along a wavy curve, gradient",
+        """
+        <svg viewBox="0 0 200 110" width="190" height="104">
+          <defs>
+            <path id="wave" d="M10,70 C50,20 100,110 140,60 S 190,30 195,60" fill="none"/>
+            <linearGradient id="wg" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#e11"/><stop offset="1" stop-color="#14e"/></linearGradient>
+          </defs>
+          <use href="#wave" stroke="#ddd" stroke-width="1"/>
+          <text font-size="16" font-weight="bold" fill="url(#wg)"><textPath href="#wave">Following a curve!</textPath></text>
+        </svg>
+        """) +
+    TextPanel("around a circle",
+        """
+        <svg viewBox="0 0 200 110" width="190" height="104">
+          <defs><path id="ring" d="M100,95 m-45,0 a45,45 0 1 1 90,0 a45,45 0 1 1 -90,0" fill="none"/></defs>
+          <use href="#ring" stroke="#eee" stroke-width="1"/>
+          <text font-size="13" font-weight="bold" fill="#16a085"><textPath href="#ring" startOffset="5%">Around and around we go...</textPath></text>
+        </svg>
+        """) +
+    TextPanel("centered on the path (text-anchor)",
+        """
+        <svg viewBox="0 0 200 110" width="190" height="104">
+          <defs><path id="arc" d="M15,90 Q100,10 185,90" fill="none"/></defs>
+          <use href="#arc" stroke="#ddd" stroke-width="1"/>
+          <text font-size="15" font-weight="bold" fill="#8e44ad" text-anchor="middle"><textPath href="#arc" startOffset="50%">Centered</textPath></text>
+        </svg>
+        """) +
+    "</tr></table>" +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("svg_text_advanced", "Graphics & Effects", "SVG Text: Gradient, Stroke & Path",
+    "SVG text with gradient/pattern fill, stroke, and glyphs laid along a path (textPath) - all rendered as real vector PDF content.",
+    svgTextAdvancedHtml, pdfConfig);
+
 // --- opacity showcase ---
 
 static string OpacitySwatch(string desc, string bodyHtml, string cssLabel) =>

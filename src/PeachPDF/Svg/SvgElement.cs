@@ -113,10 +113,12 @@ namespace PeachPDF.Svg
     /// <c>dx</c>/<c>dy</c>/<c>rotate</c> arrays (SVG 1.1's full per-glyph positioning model) are out of
     /// scope in v1 - only a single leading value applies to the whole run, the same simplification
     /// already used elsewhere in this renderer (e.g. <c>&lt;switch&gt;</c>'s first-child-only rule).
-    /// Only a solid <see cref="SvgElement.Fill"/> is painted (<see cref="Html.Adapters.RGraphics.DrawString"/>
-    /// takes a single color, not a brush) - a gradient/pattern fill or any <see cref="SvgElement.Stroke"/>
-    /// on text is a documented v1 gap (would need glyph-outline-as-path support, the same underlying
-    /// gap that puts <c>&lt;textPath&gt;</c> out of v1 scope).
+    /// A solid <see cref="SvgElement.Fill"/> is painted with the fast <see cref="Html.Adapters.RGraphics.DrawString"/>
+    /// path (a single-color text show, kept selectable); a gradient/pattern fill or any
+    /// <see cref="SvgElement.Stroke"/> instead outlines the glyph run to a vector path
+    /// (<see cref="Html.Adapters.RGraphics.GetTextOutline"/>) and fills/strokes it through the same
+    /// brush/pen machinery shapes use. When <see cref="PathData"/> is set (a <c>&lt;textPath&gt;</c>),
+    /// the run's glyphs are laid out along that path instead of a straight baseline.
     /// </summary>
     internal sealed class SvgTextElement : SvgElement
     {
@@ -137,6 +139,19 @@ namespace PeachPDF.Svg
 
         /// <summary>Child <c>&lt;tspan&gt;</c>/<c>&lt;tref&gt;</c> runs, in document order.</summary>
         public List<SvgTextElement> Spans { get; } = [];
+
+        /// <summary>
+        /// The referenced path's geometry when this run is a <c>&lt;textPath&gt;</c> (its <c>href</c>
+        /// resolved to a <c>&lt;path&gt;</c>'s <c>d</c>), else null. When set, the run's glyphs are
+        /// placed along the path via arc-length positioning rather than on a straight baseline.
+        /// </summary>
+        public IReadOnlyList<PathSegment>? PathData { get; set; }
+
+        /// <summary>The <c>startOffset</c> distance along the path where the run begins (default 0).</summary>
+        public double StartOffset { get; set; }
+
+        /// <summary>Whether <see cref="StartOffset"/> is a percentage of the path's total length (else a user-space length).</summary>
+        public bool StartOffsetIsPercent { get; set; }
     }
 
     internal sealed class SvgCircleElement : SvgElement

@@ -15,6 +15,7 @@ using PeachPDF.Html.Adapters.Entities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 
 namespace PeachPDF.Svg
 {
@@ -279,8 +280,16 @@ namespace PeachPDF.Svg
         /// continues immediately after the previous run's rendered width - ordinary SVG text flow,
         /// approximated to whole-run granularity rather than per-glyph (see the type's doc comment).
         /// </summary>
-        private static void RenderTextRun(RGraphics g, SvgTextElement run, double inheritedOpacity, ref double cursorX, ref double cursorY)
+        private static void RenderTextRun(RGraphics g, SvgDocument document, SvgTextElement run, double inheritedOpacity, ref double cursorX, ref double cursorY)
         {
+            // A <textPath> lays its glyphs along a referenced path and positions itself entirely (it does
+            // not flow from, or advance, the surrounding text cursor).
+            if (run.PathData is not null && run.Font is { } pathFont)
+            {
+                RenderTextPath(g, document, run, pathFont, inheritedOpacity);
+                return;
+            }
+
             var opacity = inheritedOpacity * run.Opacity;
 
             if (run.HasOwnX) cursorX = run.X;
@@ -317,7 +326,7 @@ namespace PeachPDF.Svg
                     g.PushTransform(MultiplyMatrix(MultiplyMatrix(toOrigin, rotate), fromOrigin));
                 }
 
-                PaintTextRun(g, run, font, drawX, drawY, size, opacity);
+                PaintTextRun(g, document, run, font, drawX, drawY, size, opacity);
 
                 if (pushedRotation)
                     g.PopTransform();
@@ -327,20 +336,183 @@ namespace PeachPDF.Svg
             }
 
             foreach (var span in run.Spans)
-                RenderTextRun(g, span, opacity, ref cursorX, ref cursorY);
+                RenderTextRun(g, document, span, opacity, ref cursorX, ref cursorY);
         }
 
         /// <summary>
-        /// Only a solid <see cref="SvgElement.Fill"/> is painted - see <see cref="SvgTextElement"/>'s
-        /// doc comment for why gradient/pattern fill and any stroke on text are out of v1 scope.
+        /// Paints one text run's fill and stroke. Plain solid, non-stroked text keeps the fast
+        /// <see cref="RGraphics.DrawString"/> path (a single-color PDF text show, so it stays
+        /// selectable and tagged-PDF-friendly). A gradient/pattern <c>fill</c> or any <c>stroke</c>
+        /// needs the glyph run as an addressable vector path (<see cref="RGraphics.GetTextOutline"/>),
+        /// filled/stroked through the same brush/pen machinery shapes use - outlined text is vector art
+        /// (not selectable). A CFF/bitmap font yields no outline, so it falls back to a solid fill.
         /// </summary>
-        private static void PaintTextRun(RGraphics g, SvgTextElement run, RFont font, double drawX, double drawY, RSize size, double opacity)
+        private static void PaintTextRun(RGraphics g, SvgDocument document, SvgTextElement run, RFont font, double drawX, double drawY, RSize size, double opacity)
         {
-            if (run.Fill.Kind != SvgPaintKind.Solid)
+            var hasStroke = run.Stroke.Kind != SvgPaintKind.None && run.StrokeWidth > 0;
+            var needsOutline = run.Fill.Kind is SvgPaintKind.GradientRef or SvgPaintKind.PatternRef || hasStroke;
+
+            if (!needsOutline)
+            {
+                // Fast path: solid fill (or no fill at all) with no stroke.
+                if (run.Fill.Kind != SvgPaintKind.Solid)
+                    return;
+
+                var solid = ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity);
+                g.DrawString(run.Text, font, solid, new RPoint(drawX, drawY), size, rtl: false);
+                return;
+            }
+
+            // DrawString positions from the top-left of the line box; the outline places the baseline
+            // directly, so shift down by the ascent. The measured box (top-left drawX/drawY, size) is
+            // the objectBoundingBox reference for gradient/pattern paint - SvgGeometryBounds can't
+            // measure text statically.
+            var baseline = new RPoint(drawX, drawY + font.Ascent);
+            var outline = g.GetTextOutline(run.Text, font, baseline);
+
+            if (outline is null)
+            {
+                // CFF/bitmap font: no glyf outlines. Best-effort solid fill; a gradient/pattern/stroke
+                // simply can't be honored here (documented gap).
+                if (run.Fill.Kind == SvgPaintKind.Solid)
+                    g.DrawString(run.Text, font, ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity), new RPoint(drawX, drawY), size, rtl: false);
+                return;
+            }
+
+            var textBounds = new RRect(drawX, drawY, size.Width, size.Height);
+
+            // Fill then stroke, matching SVG paint order.
+            if (run.Fill.Kind != SvgPaintKind.None)
+            {
+                if (run.Fill.Kind == SvgPaintKind.PatternRef)
+                {
+                    PaintPatternFill(g, document, run, outline, opacity * run.FillOpacity, textBounds);
+                }
+                else
+                {
+                    var brush = ResolvePaintBrush(g, document, run, run.Fill, opacity * run.FillOpacity, textBounds);
+                    if (brush is not null)
+                        g.DrawPath(brush, outline);
+                }
+            }
+
+            if (hasStroke)
+            {
+                var pen = ResolveStrokePen(g, document, run, opacity * run.StrokeOpacity, textBounds);
+                if (pen is not null)
+                    g.DrawPath(pen, outline);
+            }
+
+            outline.Dispose();
+        }
+
+        /// <summary>
+        /// Lays a <c>&lt;textPath&gt;</c>'s glyphs along its referenced path: each glyph is placed at its
+        /// own midpoint distance along the path (honoring <c>startOffset</c> and <c>text-anchor</c>) and
+        /// rotated to the path tangent there. A glyph whose midpoint falls before the path start or past
+        /// its end is dropped (SVG text-on-a-path). Solid, non-stroked glyphs use the fast
+        /// <c>DrawString</c> path; gradient/pattern fill and stroke outline each glyph, exactly like
+        /// straight-baseline text (<see cref="PaintTextRun"/>).
+        /// </summary>
+        private static void RenderTextPath(RGraphics g, SvgDocument document, SvgTextElement run, RFont font, double inheritedOpacity)
+        {
+            if (run.PathData is not { } segments || run.Text.Length == 0)
                 return;
 
-            var color = ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity);
-            g.DrawString(run.Text, font, color, new RPoint(drawX, drawY), size, rtl: false);
+            var geometry = new SvgTextPathGeometry(segments);
+            var totalLength = geometry.TotalLength;
+            if (totalLength <= 0)
+                return;
+
+            var opacity = inheritedOpacity * run.Opacity;
+
+            var runWidth = g.MeasureString(run.Text, font).Width;
+            var startOffset = (run.StartOffsetIsPercent ? run.StartOffset * totalLength : run.StartOffset)
+                + run.TextAnchor switch
+                {
+                    SvgTextAnchor.Middle => -runWidth / 2,
+                    SvgTextAnchor.End => -runWidth,
+                    _ => 0,
+                };
+
+            var hasStroke = run.Stroke.Kind != SvgPaintKind.None && run.StrokeWidth > 0;
+            var needsOutline = run.Fill.Kind is SvgPaintKind.GradientRef or SvgPaintKind.PatternRef || hasStroke;
+
+            var pen = 0.0;
+            foreach (var rune in run.Text.EnumerateRunes())
+            {
+                var glyph = rune.ToString();
+                var advance = g.MeasureString(glyph, font).Width;
+                var mid = startOffset + pen + advance / 2;
+                pen += advance;
+
+                // A glyph centered off the ends of the path is not rendered.
+                if (mid < 0 || mid > totalLength)
+                    continue;
+
+                var (px, py, angleDegrees) = geometry.PointAtLength(mid);
+                var radians = angleDegrees * (Math.PI / 180.0);
+                var cos = Math.Cos(radians);
+                var sin = Math.Sin(radians);
+
+                // Frame: rotate to the tangent, then translate to the path point. The glyph is drawn
+                // centered on that point (baseline origin at local -advance/2).
+                var frame = MultiplyMatrix(new RMatrix(cos, sin, -sin, cos, 0, 0), new RMatrix(1, 0, 0, 1, px, py));
+                g.PushTransform(frame);
+                PaintGlyphAlongPath(g, document, run, font, glyph, advance, opacity, needsOutline, hasStroke);
+                g.PopTransform();
+            }
+        }
+
+        /// <summary>Paints one glyph of a <c>&lt;textPath&gt;</c> at the current (already rotated/translated) frame, centered on the local origin.</summary>
+        private static void PaintGlyphAlongPath(RGraphics g, SvgDocument document, SvgTextElement run, RFont font, string glyph, double advance, double opacity, bool needsOutline, bool hasStroke)
+        {
+            var leftX = -advance / 2;
+            var glyphSize = g.MeasureString(glyph, font);
+
+            if (!needsOutline)
+            {
+                if (run.Fill.Kind != SvgPaintKind.Solid)
+                    return;
+
+                g.DrawString(glyph, font, ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity), new RPoint(leftX, -font.Ascent), glyphSize, rtl: false);
+                return;
+            }
+
+            var outline = g.GetTextOutline(glyph, font, new RPoint(leftX, 0));
+            if (outline is null)
+            {
+                if (run.Fill.Kind == SvgPaintKind.Solid)
+                    g.DrawString(glyph, font, ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity), new RPoint(leftX, -font.Ascent), glyphSize, rtl: false);
+                return;
+            }
+
+            // objectBoundingBox gradient/pattern on a textPath glyph uses the glyph's own local box (an
+            // envelope approximation, since the run's straight bbox is meaningless in the rotated frame).
+            var bounds = new RRect(leftX, -font.Ascent, glyphSize.Width, glyphSize.Height);
+
+            if (run.Fill.Kind != SvgPaintKind.None)
+            {
+                if (run.Fill.Kind == SvgPaintKind.PatternRef)
+                {
+                    PaintPatternFill(g, document, run, outline, opacity * run.FillOpacity, bounds);
+                }
+                else
+                {
+                    var brush = ResolvePaintBrush(g, document, run, run.Fill, opacity * run.FillOpacity, bounds);
+                    if (brush is not null)
+                        g.DrawPath(brush, outline);
+                }
+            }
+
+            if (hasStroke)
+            {
+                var strokePen = ResolveStrokePen(g, document, run, opacity * run.StrokeOpacity, bounds);
+                if (strokePen is not null)
+                    g.DrawPath(strokePen, outline);
+            }
+
+            outline.Dispose();
         }
 
         private static void RenderElement(RGraphics g, SvgDocument document, SvgElement element, double inheritedOpacity, (double Width, double Height) viewport)
@@ -553,6 +725,22 @@ namespace PeachPDF.Svg
 
         private static void AccumulateTextRunBounds(RGraphics g, SvgTextElement run, ref double cursorX, ref double cursorY, ref RRect? bounds)
         {
+            // A <textPath> positions itself along its path, not from the text cursor: union the
+            // flattened path's bbox (inflated by the font's vertical extent so glyphs riding above/below
+            // the path are enclosed), then stop - it neither advances the cursor nor flows into spans.
+            if (run.PathData is { } pathSegments && run.Font is { } pathFont)
+            {
+                var geometry = new SvgTextPathGeometry(pathSegments);
+                if (!geometry.IsEmpty)
+                {
+                    var inflate = pathFont.Ascent;
+                    var pathBox = geometry.Bounds;
+                    var runBox = new RRect(pathBox.X - inflate, pathBox.Y - inflate, pathBox.Width + 2 * inflate, pathBox.Height + 2 * inflate);
+                    bounds = bounds is { } existing ? UnionRects(existing, runBox) : runBox;
+                }
+                return;
+            }
+
             if (run.HasOwnX) cursorX = run.X;
             if (run.HasOwnY) cursorY = run.Y;
 
@@ -719,7 +907,7 @@ namespace PeachPDF.Svg
                 case SvgTextElement text:
                 {
                     double cursorX = text.X, cursorY = text.Y;
-                    RenderTextRun(g, text, opacity, ref cursorX, ref cursorY);
+                    RenderTextRun(g, document, text, opacity, ref cursorX, ref cursorY);
                     break;
                 }
 
@@ -912,13 +1100,22 @@ namespace PeachPDF.Svg
             g.PopTransform();
         }
 
-        private static RBrush? ResolvePaintBrush(RGraphics g, SvgDocument document, SvgElement owner, SvgPaint paint, double opacity)
+        /// <summary>
+        /// The bounding box <c>objectBoundingBox</c> paint (gradient/pattern) resolves against. Text
+        /// runs pass their measured box as <paramref name="boundsOverride"/> because
+        /// <see cref="SvgGeometryBounds.GetBoundingBox"/> can't measure a <c>&lt;text&gt;</c> statically;
+        /// every non-text caller passes null and keeps the geometric bounds.
+        /// </summary>
+        private static RRect? OwnerBounds(SvgElement owner, RRect? boundsOverride)
+            => boundsOverride ?? SvgGeometryBounds.GetBoundingBox(owner);
+
+        private static RBrush? ResolvePaintBrush(RGraphics g, SvgDocument document, SvgElement owner, SvgPaint paint, double opacity, RRect? boundsOverride = null)
         {
             return paint.Kind switch
             {
                 SvgPaintKind.Solid => g.GetSolidBrush(ApplyOpacity(paint.Color, opacity)),
                 SvgPaintKind.GradientRef when paint.ReferenceId is { } id && document.Gradients.TryGetValue(id, out var gradient)
-                    => ResolveGradientBrush(g, owner, gradient, opacity),
+                    => ResolveGradientBrush(g, owner, gradient, opacity, boundsOverride),
                 _ => null,
             };
         }
@@ -931,12 +1128,12 @@ namespace PeachPDF.Svg
         /// this stays fully vector - never rasterizes, matching this renderer's core design principle
         /// - unlike a "render once to a bitmap, then repeat the bitmap" approach would.
         /// </summary>
-        private static void PaintPatternFill(RGraphics g, SvgDocument document, SvgElement element, RGraphicsPath path, double opacity)
+        private static void PaintPatternFill(RGraphics g, SvgDocument document, SvgElement element, RGraphicsPath path, double opacity, RRect? boundsOverride = null)
         {
             if (element.Fill.ReferenceId is not { } id || !document.Patterns.TryGetValue(id, out var pattern))
                 return;
 
-            var (x, y, width, height) = ResolvePatternRect(element, pattern);
+            var (x, y, width, height) = ResolvePatternRect(element, pattern, boundsOverride);
             if (width <= 0 || height <= 0)
                 return;
 
@@ -947,7 +1144,7 @@ namespace PeachPDF.Svg
             RenderViewport(t.Graphics, document, 0, 0, width, height, pattern.ViewBox, pattern.PreserveAspectRatio, pattern.Children, opacity);
             t.Graphics.Dispose();
 
-            var bounds = SvgGeometryBounds.GetBoundingBox(element) ?? new RRect(x, y, width, height);
+            var bounds = OwnerBounds(element, boundsOverride) ?? new RRect(x, y, width, height);
 
             // One tile of margin on every side absorbs any shift introduced by patternTransform below,
             // which the col/row computation itself (deliberately kept simple) doesn't account for -
@@ -982,18 +1179,18 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>Resolves a pattern's tile rect, same objectBoundingBox/userSpaceOnUse handling as <see cref="ResolveGradientPoint"/>.</summary>
-        private static (double X, double Y, double Width, double Height) ResolvePatternRect(SvgElement owner, SvgPattern pattern)
+        private static (double X, double Y, double Width, double Height) ResolvePatternRect(SvgElement owner, SvgPattern pattern, RRect? boundsOverride = null)
         {
             if (pattern.PatternUnitsUserSpaceOnUse)
                 return (pattern.X, pattern.Y, pattern.Width, pattern.Height);
 
-            if (SvgGeometryBounds.GetBoundingBox(owner) is not { } bbox)
+            if (OwnerBounds(owner, boundsOverride) is not { } bbox)
                 return (pattern.X, pattern.Y, pattern.Width, pattern.Height);
 
             return (bbox.X + pattern.X * bbox.Width, bbox.Y + pattern.Y * bbox.Height, pattern.Width * bbox.Width, pattern.Height * bbox.Height);
         }
 
-        private static RBrush? ResolveGradientBrush(RGraphics g, SvgElement owner, SvgGradient gradient, double opacity)
+        private static RBrush? ResolveGradientBrush(RGraphics g, SvgElement owner, SvgGradient gradient, double opacity, RRect? boundsOverride = null)
         {
             if (gradient.Stops.Count == 0)
                 return null;
@@ -1009,8 +1206,8 @@ namespace PeachPDF.Svg
             {
                 case SvgLinearGradient linear:
                 {
-                    var (x1, y1) = ResolveGradientPoint(owner, gradient, linear.X1, linear.Y1);
-                    var (x2, y2) = ResolveGradientPoint(owner, gradient, linear.X2, linear.Y2);
+                    var (x1, y1) = ResolveGradientPoint(owner, gradient, linear.X1, linear.Y1, boundsOverride);
+                    var (x2, y2) = ResolveGradientPoint(owner, gradient, linear.X2, linear.Y2, boundsOverride);
                     var p1 = new RPoint(x1, y1);
                     var p2 = new RPoint(x2, y2);
 
@@ -1022,7 +1219,7 @@ namespace PeachPDF.Svg
                     // PDF shading's /Extend to false, with no tiling behind it, so most of a typical
                     // fill silently stayed unpainted.
                     if (isRepeating)
-                        (p1, p2, stops) = ExpandLinearSpread(owner, p1, p2, stops, reflect);
+                        (p1, p2, stops) = ExpandLinearSpread(owner, p1, p2, stops, reflect, boundsOverride);
 
                     p1 = ApplyMatrix(p1, gradient.GradientTransform);
                     p2 = ApplyMatrix(p2, gradient.GradientTransform);
@@ -1031,14 +1228,14 @@ namespace PeachPDF.Svg
 
                 case SvgRadialGradient radial:
                 {
-                    var (cx, cy) = ResolveGradientPoint(owner, gradient, radial.Cx, radial.Cy);
-                    var (fx, fy) = ResolveGradientPoint(owner, gradient, radial.Fx ?? radial.Cx, radial.Fy ?? radial.Cy);
-                    var r = ResolveGradientRadius(owner, gradient, radial.R);
+                    var (cx, cy) = ResolveGradientPoint(owner, gradient, radial.Cx, radial.Cy, boundsOverride);
+                    var (fx, fy) = ResolveGradientPoint(owner, gradient, radial.Fx ?? radial.Cx, radial.Fy ?? radial.Cy, boundsOverride);
+                    var r = ResolveGradientRadius(owner, gradient, radial.R, boundsOverride);
 
                     // Radial counterpart: tiles concentric rings outward from the center to cover the
                     // shape's bounding box, rather than extending along a linear axis.
                     if (isRepeating)
-                        (r, stops) = ExpandRadialSpread(owner, new RPoint(cx, cy), r, stops, reflect);
+                        (r, stops) = ExpandRadialSpread(owner, new RPoint(cx, cy), r, stops, reflect, boundsOverride);
 
                     var center = ApplyMatrix(new RPoint(cx, cy), gradient.GradientTransform);
                     var focal = ApplyMatrix(new RPoint(fx, fy), gradient.GradientTransform);
@@ -1067,9 +1264,9 @@ namespace PeachPDF.Svg
         /// paints one cycle and leaves the rest of the shape unpainted, same as before this existed.
         /// </summary>
         private static (RPoint P1, RPoint P2, (RColor Color, double Position)[] Stops) ExpandLinearSpread(
-            SvgElement owner, RPoint p1, RPoint p2, (RColor Color, double Position)[] stops, bool reflect)
+            SvgElement owner, RPoint p1, RPoint p2, (RColor Color, double Position)[] stops, bool reflect, RRect? boundsOverride = null)
         {
-            if (stops.Length < 2 || SvgGeometryBounds.GetBoundingBox(owner) is not { } bbox)
+            if (stops.Length < 2 || OwnerBounds(owner, boundsOverride) is not { } bbox)
                 return (p1, p2, stops);
 
             var dx = p2.X - p1.X;
@@ -1125,9 +1322,9 @@ namespace PeachPDF.Svg
 
         /// <summary>Radial counterpart of <see cref="ExpandLinearSpread"/> - tiles concentric rings outward from <paramref name="center"/> to cover <paramref name="owner"/>'s bounding box.</summary>
         private static (double R, (RColor Color, double Position)[] Stops) ExpandRadialSpread(
-            SvgElement owner, RPoint center, double r, (RColor Color, double Position)[] stops, bool reflect)
+            SvgElement owner, RPoint center, double r, (RColor Color, double Position)[] stops, bool reflect, RRect? boundsOverride = null)
         {
-            if (stops.Length < 2 || r < 1e-9 || SvgGeometryBounds.GetBoundingBox(owner) is not { } bbox)
+            if (stops.Length < 2 || r < 1e-9 || OwnerBounds(owner, boundsOverride) is not { } bbox)
                 return (r, stops);
 
             var corners = new[]
@@ -1179,30 +1376,30 @@ namespace PeachPDF.Svg
         /// positioned shapes via <c>fill:url(#id)</c>. Falls back to treating the fraction as a raw
         /// coordinate if <paramref name="owner"/> has no computable bounding box (e.g. zero-size).
         /// </summary>
-        private static (double X, double Y) ResolveGradientPoint(SvgElement owner, SvgGradient gradient, double rawX, double rawY)
+        private static (double X, double Y) ResolveGradientPoint(SvgElement owner, SvgGradient gradient, double rawX, double rawY, RRect? boundsOverride = null)
         {
             if (gradient.GradientUnitsUserSpaceOnUse)
                 return (rawX, rawY);
 
-            if (SvgGeometryBounds.GetBoundingBox(owner) is not { } bbox)
+            if (OwnerBounds(owner, boundsOverride) is not { } bbox)
                 return (rawX, rawY);
 
             return (bbox.X + rawX * bbox.Width, bbox.Y + rawY * bbox.Height);
         }
 
         /// <summary>Same as <see cref="ResolveGradientPoint"/> but for a single scalar radius, scaled by the bounding box's spec-defined diagonal formula.</summary>
-        private static double ResolveGradientRadius(SvgElement owner, SvgGradient gradient, double rawR)
+        private static double ResolveGradientRadius(SvgElement owner, SvgGradient gradient, double rawR, RRect? boundsOverride = null)
         {
             if (gradient.GradientUnitsUserSpaceOnUse)
                 return rawR;
 
-            if (SvgGeometryBounds.GetBoundingBox(owner) is not { } bbox)
+            if (OwnerBounds(owner, boundsOverride) is not { } bbox)
                 return rawR;
 
             return rawR * Math.Sqrt((bbox.Width * bbox.Width + bbox.Height * bbox.Height) / 2.0);
         }
 
-        private static RPen? ResolveStrokePen(RGraphics g, SvgDocument document, SvgElement element, double opacity)
+        private static RPen? ResolveStrokePen(RGraphics g, SvgDocument document, SvgElement element, double opacity, RRect? boundsOverride = null)
         {
             RPen pen;
 
@@ -1214,7 +1411,7 @@ namespace PeachPDF.Svg
                      element.Stroke.ReferenceId is { } id &&
                      document.Gradients.TryGetValue(id, out var gradient))
             {
-                var brush = ResolveGradientBrush(g, element, gradient, opacity);
+                var brush = ResolveGradientBrush(g, element, gradient, opacity, boundsOverride);
                 if (brush is null)
                     return null;
 
