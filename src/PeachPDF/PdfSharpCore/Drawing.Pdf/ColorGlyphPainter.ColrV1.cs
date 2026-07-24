@@ -80,13 +80,49 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             }
         }
 
-        // Source-over compositing: paint the backdrop, then the source on top. Real separable /BM
-        // blend modes and Porter-Duff handling are layered on in Stage 6.
+        // Compositing: paint the backdrop, then the source on top. A separable/HSL blend mode is
+        // applied to the source via a PDF /BM ExtGState; Porter-Duff-only modes that PDF cannot
+        // express degrade to source-over (an accepted gap).
         private void PaintComposite(ColrPaintComposite composite, ColrAffine t, bool hasClip, XRect clip, int depth)
         {
             PaintV1(composite.Backdrop, t, hasClip, clip, depth + 1);
+
+            string? blendMode = BlendModeName(composite.Mode);
+            if (blendMode is null)
+            {
+                PaintV1(composite.Source, t, hasClip, clip, depth + 1); // source-over
+                return;
+            }
+
+            XGraphicsState state = _gfx.Save();
+            _renderer.SetBlendMode(blendMode);
             PaintV1(composite.Source, t, hasClip, clip, depth + 1);
+            _gfx.Restore(state);
         }
+
+        /// <summary>
+        /// Maps a COLR CompositeMode to a PDF blend-mode name, or null for source-over (the common
+        /// SRC_OVER, and the fallback for Porter-Duff modes PDF cannot express natively).
+        /// </summary>
+        private static string? BlendModeName(int compositeMode) => compositeMode switch
+        {
+            13 => "Screen",
+            14 => "Overlay",
+            15 => "Darken",
+            16 => "Lighten",
+            17 => "ColorDodge",
+            18 => "ColorBurn",
+            19 => "HardLight",
+            20 => "SoftLight",
+            21 => "Difference",
+            22 => "Exclusion",
+            23 => "Multiply",
+            24 => "Hue",
+            25 => "Saturation",
+            26 => "Color",
+            27 => "Luminosity",
+            _ => null, // SRC_OVER and the non-expressible Porter-Duff modes -> source-over
+        };
 
         /// <summary>Fills the active clip region with a brush (a rectangle over the clip bounds, clipped).</summary>
         private void FillClip(bool hasClip, XRect clip, XBrush? brush)
@@ -109,10 +145,13 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             // p2 rotates the gradient; the common (perpendicular) case reduces to the p0->p1 axis.
             XPoint p0 = Map(t, g.X0, g.Y0);
             XPoint p1 = Map(t, g.X1, g.Y1);
-            var brush = new XLinearGradientBrush(p0, p1, colors, positions);
-            if (g.Line.Extend == ColrExtend.Repeat || g.Line.Extend == ColrExtend.Reflect)
-                brush.IsRepeating = true;
-            return brush;
+
+            // repeat/reflect: PDF axial shadings only pad, so tile (or mirror) the stops over a few
+            // periods and extend the gradient axis to cover them.
+            if (g.Line.Extend is ColrExtend.Repeat or ColrExtend.Reflect)
+                ExpandLinearExtend(ref p0, ref p1, ref colors, ref positions, g.Line.Extend);
+
+            return new XLinearGradientBrush(p0, p1, colors, positions);
         }
 
         private XRadialGradientBrush? BuildRadialBrush(ColrPaintRadialGradient g, ColrAffine t)
@@ -124,10 +163,8 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             XPoint outer = Map(t, g.X1, g.Y1);
             XPoint focal = Map(t, g.X0, g.Y0);
             double r = g.R1 * radiusScale;
-            var brush = new XRadialGradientBrush(outer, r, r, colors, positions, focal);
-            if (g.Line.Extend == ColrExtend.Repeat || g.Line.Extend == ColrExtend.Reflect)
-                brush.IsRepeating = true;
-            return brush;
+            // Radial repeat/reflect extend is not modeled (pad only) - an accepted gap.
+            return new XRadialGradientBrush(outer, r, r, colors, positions, focal);
         }
 
         private XConicGradientBrush? BuildSweepBrush(ColrPaintSweepGradient g, ColrAffine t)
@@ -182,6 +219,50 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 positions[i] = stops[i].Offset;
             }
             return true;
+        }
+
+        /// <summary>
+        /// Tiles (repeat) or mirrors (reflect) the gradient stops over a few periods either side of
+        /// the base [0,1] range and extends the gradient axis to cover them, since PDF axial shadings
+        /// can only pad. Colors/positions are rewritten in place; p0/p1 move outward.
+        /// </summary>
+        private static void ExpandLinearExtend(ref XPoint p0, ref XPoint p1, ref XColor[] colors, ref double[] positions, ColrExtend extend)
+        {
+            const int periods = 2; // each side
+            int total = 2 * periods + 1;
+
+            var samples = new List<(double T, XColor Color)>();
+            for (int p = -periods; p <= periods; p++)
+            {
+                bool mirror = extend == ColrExtend.Reflect && ((p % 2 + 2) % 2 == 1);
+                for (int j = 0; j < positions.Length; j++)
+                {
+                    double local = mirror ? 1.0 - positions[j] : positions[j];
+                    samples.Add((p + local, colors[j]));
+                }
+            }
+            samples.Sort((a, b) => a.T.CompareTo(b.T));
+
+            // Extend the axis so the new [0,1] parameter spans original t in [-periods, periods+1].
+            XPoint dir = new(p1.X - p0.X, p1.Y - p0.Y);
+            XPoint newP0 = new(p0.X - periods * dir.X, p0.Y - periods * dir.Y);
+            p1 = new XPoint(p1.X + periods * dir.X, p1.Y + periods * dir.Y);
+            p0 = newP0;
+
+            var newColors = new XColor[samples.Count];
+            var newPositions = new double[samples.Count];
+            double last = -1;
+            for (int i = 0; i < samples.Count; i++)
+            {
+                double pos = (samples[i].T + periods) / total;
+                if (pos <= last)
+                    pos = last + 1e-6; // keep strictly increasing for the stitching function
+                last = pos;
+                newColors[i] = samples[i].Color;
+                newPositions[i] = pos;
+            }
+            colors = newColors;
+            positions = newPositions;
         }
 
         private static List<ColrColorStop> SortedStops(ColrColorLine line)

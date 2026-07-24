@@ -50,14 +50,14 @@ def outline_glyphs():
     glyphs["tri"] = pen.glyph()
 
     # Empty glyphs (color base glyphs carry no glyf outline; space has none either).
-    for name in ("colorA", "colorB", "grad", "xform", "space", ".notdef"):
+    for name in ("colorA", "colorB", "grad", "xform", "compo", "gradF", "space", ".notdef"):
         glyphs[name] = TTGlyphPen(None).glyph()
 
     return glyphs
 
 
 def build_base(family_name):
-    glyph_order = [".notdef", "space", "box", "circ", "tri", "colorA", "colorB", "grad", "xform"]
+    glyph_order = [".notdef", "space", "box", "circ", "tri", "colorA", "colorB", "grad", "xform", "compo", "gradF"]
     cmap = {
         0x20: "space",
         0x58: "box",     # 'X' - a plain outline glyph in a color font (fallback path)
@@ -67,6 +67,8 @@ def build_base(family_name):
         0x42: "colorB",  # 'B'
         0x47: "grad",    # 'G'
         0x54: "xform",   # 'T'
+        0x4D: "compo",   # 'M' - composite (multiply blend)
+        0x46: "gradF",   # 'F' - reflect-extend linear gradient
     }
     advances = {n: 1000 for n in glyph_order}
     advances["space"] = 500
@@ -122,6 +124,19 @@ def build_v1():
         },
         # A simple single-glyph solid (blue circle).
         "colorB": glyph("circ", solid(2)),
+        # Composite: blue triangle multiplied over a yellow box (overlap -> black).
+        "compo": {
+            "Format": ot.PaintFormat.PaintComposite,
+            "SourcePaint": glyph("tri", solid(2)),
+            "CompositeMode": ot.CompositeMode.MULTIPLY,
+            "BackdropPaint": glyph("box", solid(3)),
+        },
+        # Reflect-extend linear gradient: a short central axis mirrored across the box.
+        "gradF": glyph("box", {
+            "Format": ot.PaintFormat.PaintLinearGradient,
+            "ColorLine": {"ColorStop": [(0.0, 0), (1.0, 2)], "Extend": ot.ExtendMode.REFLECT},
+            "x0": 400, "y0": 0, "x1": 600, "y1": 0, "x2": 400, "y2": 800,
+        }),
     }
     fb.setupCOLR(colr, version=1)
     fb.font.save(os.path.join(HERE, "ColorTestV1.ttf"))

@@ -111,6 +111,30 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task ColrV1_CompositeGlyph_EmitsBlendModeExtGState()
+        {
+            // 'M' is PaintComposite(source=blue tri, MULTIPLY, backdrop=yellow box).
+            string pdf = await RenderWithColorFont(BundledFonts.ColorV1, "M");
+
+            Assert.Equal(0, Count(pdf, " Tj"));
+            Assert.Contains("/BM", pdf);
+            Assert.Contains("/Multiply", pdf);
+        }
+
+        [Fact]
+        public async Task ColrV1_ReflectGradientGlyph_EmitsShadingWithExpandedStops()
+        {
+            // 'F' is a REFLECT-extend linear gradient; the stops are tiled/mirrored across periods.
+            string pdf = await RenderWithColorFont(BundledFonts.ColorV1, "F");
+
+            Assert.Equal(0, Count(pdf, " Tj"));
+            Assert.Contains("/ShadingType 2", pdf);
+            // The reflect expansion produces more than the two authored stops (a multi-bound stitching
+            // function), unlike a plain 2-stop pad gradient.
+            Assert.True(Count(pdf, "/FunctionType 2") >= 3, "reflect expansion should yield several stop segments");
+        }
+
+        [Fact]
         public async Task NonColorFont_StillUsesTextShow()
         {
             // Regression guard: an ordinary font keeps the embedded-font Tj path.

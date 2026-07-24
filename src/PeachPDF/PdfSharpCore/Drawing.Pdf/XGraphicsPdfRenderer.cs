@@ -385,6 +385,19 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             AppendStrokeFill(pen, brush, path.FillMode, false);
         }
 
+        /// <summary>
+        /// Activates a separable/HSL PDF blend mode (a <c>/BM</c> ExtGState) for subsequent painting.
+        /// Scope it with a surrounding q/Q; the Q restores the blend mode to Normal. Used by the
+        /// COLRv1 PaintComposite interpreter.
+        /// </summary>
+        internal void SetBlendMode(string pdfBlendModeName)
+        {
+            var extGState = new PdfExtGState(Owner);
+            extGState.Elements.SetName("/BM", pdfBlendModeName);
+            string gs = Resources.AddExtGState(extGState);
+            Append(gs + " gs\n");
+        }
+
         // ----- DrawString ---------------------------------------------------------------------------
 
         public void DrawString(string s, XFont font, XBrush brush, XRect rect, XStringFormat format, double letterSpacing = 0)
