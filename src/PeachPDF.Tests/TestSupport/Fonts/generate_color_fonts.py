@@ -56,7 +56,7 @@ def outline_glyphs():
     return glyphs
 
 
-def build_base():
+def build_base(family_name):
     glyph_order = [".notdef", "space", "box", "circ", "tri", "colorA", "colorB", "grad", "xform"]
     cmap = {
         0x20: "space",
@@ -79,14 +79,14 @@ def build_base():
     metrics = {n: (advances[n], 0) for n in glyph_order}
     fb.setupHorizontalMetrics(metrics)
     fb.setupHorizontalHeader(ascent=800, descent=-200)
-    fb.setupNameTable({"familyName": "PeachPDF Color Test", "styleName": "Regular"})
+    fb.setupNameTable({"familyName": family_name, "styleName": "Regular"})
     fb.setupOS2(sTypoAscender=800, sTypoDescender=-200, usWinAscent=800, usWinDescent=200)
     fb.setupPost()
     return fb
 
 
 def build_v0():
-    fb = build_base()
+    fb = build_base("PeachPDF ColorTest V0")
     fb.setupCPAL([PALETTE])
     fb.setupCOLR({
         "colorA": [("box", 0), ("tri", 1)],   # red box under a green triangle
@@ -96,7 +96,7 @@ def build_v0():
 
 
 def build_v1():
-    fb = build_base()
+    fb = build_base("PeachPDF ColorTest V1")
     fb.setupCPAL([PALETTE])
 
     glyph = lambda g, paint: {"Format": ot.PaintFormat.PaintGlyph, "Glyph": g, "Paint": paint}

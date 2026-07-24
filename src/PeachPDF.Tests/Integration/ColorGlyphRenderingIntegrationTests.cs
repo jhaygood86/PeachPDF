@@ -86,6 +86,31 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task ColrV1_LayeredSolidGlyph_PaintsPaletteFillsWithinGlyphClips()
+        {
+            // 'A' in the v1 font is PaintColrLayers of two PaintGlyph->PaintSolid layers.
+            string pdf = await RenderWithColorFont(BundledFonts.ColorV1, "A");
+
+            Assert.Equal(0, Count(pdf, " Tj"));
+            var fills = FillColors(pdf);
+            Assert.Contains(fills, c => Approx(c, 1, 0, 0));   // red box layer
+            Assert.Contains(fills, c => Approx(c, 0, 0.5, 0)); // green triangle layer
+            // Each PaintGlyph clips its fill to the glyph outline (W n).
+            Assert.True(Count(pdf, "W n") >= 2, "each layer's PaintGlyph should establish a clip");
+        }
+
+        [Fact]
+        public async Task ColrV1_LinearGradientGlyph_EmitsAxialShadingWithinGlyphClip()
+        {
+            // 'G' is PaintGlyph(box) -> PaintLinearGradient (red -> blue).
+            string pdf = await RenderWithColorFont(BundledFonts.ColorV1, "G");
+
+            Assert.Equal(0, Count(pdf, " Tj"));
+            Assert.Contains("/ShadingType 2", pdf);            // axial (linear) gradient shading
+            Assert.True(Count(pdf, "W n") >= 1, "the gradient is clipped to the glyph outline");
+        }
+
+        [Fact]
         public async Task NonColorFont_StillUsesTextShow()
         {
             // Regression guard: an ordinary font keeps the embedded-font Tj path.
