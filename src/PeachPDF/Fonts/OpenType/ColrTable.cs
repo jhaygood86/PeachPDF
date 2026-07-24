@@ -211,7 +211,7 @@ namespace PeachPDF.Fonts.OpenType
         public bool TryGetV0Layers(int glyphId, out List<(int LayerGlyphId, int PaletteIndex)> layers)
         {
             layers = null!;
-            if (!_baseGlyphRecords.TryGetValue(glyphId, out var record))
+            if (!_baseGlyphRecords.TryGetValue(glyphId, out var record) || record.Count <= 0)
                 return false;
 
             layers = new List<(int, int)>(record.Count);
@@ -445,7 +445,11 @@ namespace PeachPDF.Fonts.OpenType
         }
 
         private static ColrAffine Skew(double xSkewRadians, double ySkewRadians)
-            => new(1, System.Math.Tan(-xSkewRadians), System.Math.Tan(-ySkewRadians), 1, 0, 0);
+        {
+            // COLR PaintSkew: x' = x - tan(xSkew)·y, y' = y + tan(ySkew)·x.
+            // In ColrAffine (XX, YX, XY, YY, DX, DY): XY = -tan(xSkew), YX = +tan(ySkew).
+            return new ColrAffine(1, System.Math.Tan(ySkewRadians), -System.Math.Tan(xSkewRadians), 1, 0, 0);
+        }
 
         private static ColrAffine AroundCenter(ColrAffine m, double cx, double cy)
         {

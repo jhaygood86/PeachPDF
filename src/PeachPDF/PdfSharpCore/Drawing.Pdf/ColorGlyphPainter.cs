@@ -68,16 +68,18 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             ColrAffine placement = Placement(originX);
             ColrTable colr = _descriptor.ColorTable;
 
+            // Per the COLR processing model a v1-aware renderer resolves the v1 BaseGlyphList first,
+            // falling back to the v0 layer records only when the glyph has no v1 paint.
+            if (colr.Version >= 1 && colr.GetV1BaseGlyphPaint(glyphId) is { } paint)
+            {
+                PaintV1(paint, placement, hasClip: false, clip: default, depth: 0);
+                return;
+            }
+
             if (colr.TryGetV0Layers(glyphId, out var layers))
             {
                 foreach ((int layerGlyphId, int paletteIndex) in layers)
                     FillGlyphOutline(layerGlyphId, placement, ResolveColor(paletteIndex));
-                return;
-            }
-
-            if (colr.Version >= 1 && colr.GetV1BaseGlyphPaint(glyphId) is { } paint)
-            {
-                PaintV1(paint, placement, hasClip: false, clip: default, depth: 0);
                 return;
             }
 

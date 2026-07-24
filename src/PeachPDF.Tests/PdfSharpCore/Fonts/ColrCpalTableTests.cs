@@ -170,6 +170,14 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             Assert.Equal(50, affine.DX, 3);
             Assert.Equal(50, affine.DY, 3);
 
+            // Skew ('K', xSkewAngle=15, ySkewAngle=0): x' = x - tan(15°)·y, y' = y. So in
+            // (XX, YX, XY, YY): XY = -tan(15°), YX = tan(0) = 0 (guards against the axis/sign slots).
+            var skew = Assert.IsType<ColrPaintTransform>(colr.GetV1BaseGlyphPaint(Gid(face, 'K'))).Affine;
+            Assert.Equal(1, skew.XX, 3);
+            Assert.Equal(1, skew.YY, 3);
+            Assert.Equal(-System.Math.Tan(15 * System.Math.PI / 180), skew.XY, 3);
+            Assert.Equal(0, skew.YX, 3);
+
             // PaintColrGlyph references another base glyph.
             var colrGlyph = Assert.IsType<ColrPaintColrGlyph>(colr.GetV1BaseGlyphPaint(Gid(face, 'L')));
             Assert.Equal(Gid(face, 'A'), colrGlyph.GlyphId);
