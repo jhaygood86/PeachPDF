@@ -17,6 +17,7 @@ using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
+using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -551,7 +552,20 @@ namespace PeachPDF.Html.Core
             // Every box's size is final now, so it's safe to also compute HasStackingHoistCandidates.
             (HasFloatedBoxes, HasOutOfFlowBoxes, HasStackingHoistCandidates) =
                 ComputeFlowFlags(Root, includeStackingHoistCandidates: true);
+
+            // Layout's final phase: freeze the mutable box geometry above into the immutable fragment
+            // tree everything downstream consumes. Built once, after the reflow loop has settled, so
+            // the tree can never describe an intermediate pass's geometry.
+            FragmentTree = FragmentTreeBuilder.Build(this);
         }
+
+        /// <summary>
+        /// The immutable output of the last <see cref="PerformLayout"/> — the document sliced into
+        /// per-page <see cref="Fragments.BoxFragment"/>s (CSS Fragmentation Level 3 §2). Null until the
+        /// document has been laid out. This is the layout↔paint contract: paint reads geometry from
+        /// here, never from <see cref="Dom.CssBox"/>.
+        /// </summary>
+        internal FragmentTree? FragmentTree { get; private set; }
 
         /// <summary>
         /// Recursively checks whether any box in the tree is floated, out-of-flow, and/or (when

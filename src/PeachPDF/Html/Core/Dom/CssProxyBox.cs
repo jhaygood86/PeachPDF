@@ -11,8 +11,7 @@
 // "The Art of War"
 
 using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
-using System.Collections.Generic;
+using PeachPDF.Html.Core.Fragments;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Dom
@@ -28,7 +27,15 @@ namespace PeachPDF.Html.Core.Dom
     internal sealed class CssProxyBox : CssBox
     {
         private readonly CssBox _sourceBox;
-        private LayoutSnapshot? _snapshot;
+        private BoxGeometrySnapshot? _snapshot;
+
+        /// <summary>
+        /// This proxy's captured geometry for its <see cref="SourceBox"/> subtree — where that subtree
+        /// sits on <i>this</i> proxy's page. <see cref="FragmentTreeBuilder"/> reads it to build the
+        /// repeated header/footer's fragments, since the source subtree is not reachable by walking
+        /// <see cref="CssBox.Boxes"/>. Null before this proxy has been laid out.
+        /// </summary>
+        internal BoxGeometrySnapshot? SourceGeometry => _snapshot;
 
         /// <summary>
         /// The original box this proxy repeats (a repeating &lt;thead&gt;/&lt;tfoot&gt;, removed
@@ -93,11 +100,7 @@ namespace PeachPDF.Html.Core.Dom
 #endif
 
             // Capture the layout snapshot
-            _snapshot = LayoutSnapshot.Capture(_sourceBox);
-
-#if DEBUG
-            System.Console.WriteLine($"  Snapshot captured - BoxStates.Count={_snapshot.BoxStates.Count}");
-#endif
+            _snapshot = BoxGeometrySnapshot.Capture(_sourceBox);
 
             // Copy final dimensions from source to this proxy
             ActualBottom = _sourceBox.ActualBottom;
@@ -161,111 +164,6 @@ namespace PeachPDF.Html.Core.Dom
 #if DEBUG
             System.Console.WriteLine("CssProxyBox.PaintImpCore: END");
 #endif
-        }
-
-        /// <summary>
-        /// Stores layout state for a box and all its descendants.
-        /// </summary>
-        private sealed class LayoutSnapshot
-        {
-            public Dictionary<CssBox, BoxLayoutState> BoxStates { get; } = new();
-
-            /// <summary>
-            /// Captures the current layout state of a box tree.
-            /// </summary>
-            public static LayoutSnapshot Capture(CssBox root)
-            {
-                var snapshot = new LayoutSnapshot();
-                CaptureBox(root, snapshot);
-                return snapshot;
-            }
-
-            private static void CaptureBox(CssBox box, LayoutSnapshot snapshot)
-            {
-                var state = new BoxLayoutState
-                {
-                    Location = box.Location,
-                    ActualBottom = box.ActualBottom,
-                    ActualRight = box.ActualRight,
-                };
-
-                // Capture rectangles
-                foreach (var kvp in box.Rectangles)
-                {
-                    state.Rectangles[kvp.Key] = kvp.Value;
-                }
-
-                // Capture word positions
-                foreach (var word in box.Words)
-                {
-                    state.Words.Add(new BoxLayoutState.WordState
-                    {
-                        Left = word.Left,
-                        Top = word.Top
-                    });
-                }
-
-                snapshot.BoxStates[box] = state;
-
-                // Recursively capture children
-                foreach (var child in box.Boxes)
-                {
-                    CaptureBox(child, snapshot);
-                }
-            }
-
-            /// <summary>
-            /// Applies the snapshot state to a box tree.
-            /// </summary>
-            public void Apply(CssBox root)
-            {
-                ApplyToBox(root);
-            }
-
-            private void ApplyToBox(CssBox box)
-            {
-                if (!BoxStates.TryGetValue(box, out var state))
-                    return;
-
-                box.Location = state.Location;
-                box.ActualBottom = state.ActualBottom;
-                box.ActualRight = state.ActualRight;
-
-                // Restore rectangles
-                box.Rectangles.Clear();
-                foreach (var kvp in state.Rectangles)
-                {
-                    box.Rectangles[kvp.Key] = kvp.Value;
-                }
-
-                // Restore word positions
-                for (int i = 0; i < System.Math.Min(box.Words.Count, state.Words.Count); i++)
-                {
-                    box.Words[i].Left = state.Words[i].Left;
-                    box.Words[i].Top = state.Words[i].Top;
-                }
-
-                // Recursively apply to children
-                foreach (var child in box.Boxes)
-                {
-                    ApplyToBox(child);
-                }
-            }
-
-            internal sealed class BoxLayoutState
-            {
-                public RPoint Location { get; init; }
-                public double ActualBottom { get; init; }
-                public double ActualRight { get; init; }
-                public Dictionary<CssLineBox, RRect> Rectangles { get; init; } = new();
-                public List<WordState> Words { get; init; } = new();
-
-                internal sealed class WordState
-                {
-                    public double Left { get; init; }
-                    public double Top { get; init; }
-                }
-            }
         }
     }
 }

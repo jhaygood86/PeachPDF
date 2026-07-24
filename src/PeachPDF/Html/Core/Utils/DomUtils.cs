@@ -913,7 +913,7 @@ namespace PeachPDF.Html.Core.Utils
             }
         }
 
-        private static bool HasOwnPrintableContent(CssBox box)
+        internal static bool HasOwnPrintableContent(CssBox box)
         {
             // Generated content (::before/::after/::marker/::first-letter) always counts, per CSS
             // Paged Media Level 3 §3.2's own carve-out - this is what keeps Acid2's own
