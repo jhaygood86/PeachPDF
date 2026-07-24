@@ -117,12 +117,10 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// The built <see cref="SvgDocument"/> and its unshifted (layout-time, not paint-time
-        /// scroll-offset-adjusted) rendered rectangle, for <c>&lt;a&gt;</c> link-annotation discovery
-        /// (see <see cref="SvgRenderer.CollectLinks"/>) - deliberately not reusing <see cref="PaintImpCore"/>'s
-        /// rect computation, since that one applies <see cref="Html.Core.HtmlContainerInt.ScrollOffset"/>,
-        /// which varies per output page during pagination and would need to be un-applied again to get
-        /// back to the single full-document-space rectangle link annotations need.
+        /// The built <see cref="SvgDocument"/> and its rendered rectangle in full document space, for
+        /// <c>&lt;a&gt;</c> link-annotation discovery (see <see cref="SvgRenderer.CollectLinks"/>) -
+        /// deliberately not reusing <see cref="PaintImpCore"/>'s rect, which is local to whichever
+        /// fragmentainer is being painted and would have to be mapped back out again.
         /// </summary>
         internal (SvgDocument Document, RRect Rect)? GetLinkSource()
         {

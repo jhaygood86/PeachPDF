@@ -11,7 +11,7 @@ namespace PeachPDF.Tests.Integration
     /// from <c>rect.Top / PageSize.Height</c> with no <c>MarginTop</c> shift, off-by-one for content
     /// near band boundaries; (2) the raw grid-slot index was used directly as a
     /// <c>document.Pages</c> index, so any content-empty slot skipped by
-    /// <c>GetPaginationSlots</c> silently dropped (or misplaced) every annotation after the gap.
+    /// content-empty-page skipping silently dropped (or misplaced) every annotation after the gap.
     /// </summary>
     public class HandleLinksPaginationTests
     {
@@ -47,7 +47,7 @@ namespace PeachPDF.Tests.Integration
         public async Task Link_AfterSkippedEmptySlots_LandsOnMaterializedSecondPage()
         {
             // The 2500pt spacer has no text/background/border, so the grid slots it spans are
-            // content-empty and never materialized (GetPaginationSlots) - the linked paragraph sits
+            // content-empty and never materialized (no fragmentainer is built for it) - the linked paragraph sits
             // in grid slot 3 but on materialized page 2 of 2. The historical code indexed
             // document.Pages by the raw slot number and silently dropped this annotation.
             const string html = """

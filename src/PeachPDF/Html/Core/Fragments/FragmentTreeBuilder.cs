@@ -174,14 +174,7 @@ namespace PeachPDF.Html.Core.Fragments
             if (box.Display == CssConstants.None)
                 return BandSpan.None;
 
-            var span = BandSpan.None;
-            var isFixed = box.IsFixed;
-
-            for (var i = 0; i < candidates.Count; i++)
-            {
-                if (HasOwnGeometryIn(box, snapshot, isFixed, container, candidates[i]))
-                    span = span.Including(i);
-            }
+            var span = OwnSpan(box, snapshot, box.IsFixed, container, candidates);
 
             foreach (var (childBox, childOwner, childSnapshot) in ChildrenOf(box, owner, snapshot))
             {
@@ -338,6 +331,75 @@ namespace PeachPDF.Html.Core.Fragments
 
             var bounds = BoundsOf(box, snapshot);
             return bounds.Bottom >= slot.BandTop && bounds.Top < slot.BandBottom;
+        }
+
+        /// <summary>
+        /// The fragmentainers <paramref name="box"/>'s own geometry lands in — ignoring descendants,
+        /// which <see cref="CollectSpans"/> unions in separately.
+        /// </summary>
+        private static BandSpan OwnSpan(
+            CssBox box, BoxGeometrySnapshot? snapshot, bool isFixed, HtmlContainerInt container, List<CandidateSlot> candidates)
+        {
+            var span = BandSpan.None;
+
+            // A fixed rectangle does not move with the page, so which bands it lands in has nothing to
+            // do with where it sits in the document - every band has to be asked. There are few such
+            // boxes, and the answer is usually "all of them".
+            if (isFixed)
+            {
+                for (var i = 0; i < candidates.Count; i++)
+                {
+                    if (HasOwnGeometryIn(box, snapshot, isFixed: true, container, candidates[i]))
+                        span = span.Including(i);
+                }
+
+                return span;
+            }
+
+            var rectangles = RectanglesOf(box, snapshot);
+
+            if (rectangles.Count > 0)
+            {
+                foreach (var rect in rectangles.Values)
+                {
+                    span = span.Union(BandsOf(rect, container, candidates));
+                }
+            }
+            else
+            {
+                span = span.Union(BandsOf(BoundsOf(box, snapshot), container, candidates));
+            }
+
+            for (var i = 0; i < box.Words.Count; i++)
+            {
+                span = span.Union(BandsOf(WordRectOf(box, i, snapshot), container, candidates));
+            }
+
+            return span;
+        }
+
+        /// <summary>
+        /// The fragmentainers one document-space rectangle lands in. Bands are contiguous, so the
+        /// candidates worth testing are bounded by the bands containing the rectangle's own top and
+        /// bottom — widened by one either way to absorb the boundary and epsilon cases, then confirmed
+        /// with the same test <see cref="HasOwnGeometryIn"/> applies. Bounding this matters: a long
+        /// document has thousands of bands, and every box would otherwise be asked about all of them.
+        /// </summary>
+        private static BandSpan BandsOf(RRect rect, HtmlContainerInt container, List<CandidateSlot> candidates)
+        {
+            var last = candidates.Count - 1;
+            var from = Math.Clamp(container.PageIndexOf(rect.Top) - 1, 0, last);
+            var to = Math.Clamp(container.PageIndexOf(rect.Bottom) + 1, 0, last);
+
+            var span = BandSpan.None;
+
+            for (var i = from; i <= to; i++)
+            {
+                if (IntersectsBand(rect, isFixed: false, container, candidates[i]))
+                    span = span.Including(i);
+            }
+
+            return span;
         }
 
         private static bool HasOwnGeometryIn(

@@ -1194,7 +1194,7 @@ namespace PeachPDF.Tests.Integration
         // there's no scrollbar, so this must not have the unintended side effect of clipping away
         // content on any page beyond the first.
         //
-        // Also now doubles as a check that HtmlContainerInt.GetPaginationSlots (the Round 9
+        // Also now doubles as a check that the fragment tree's page materialization (the Round 9
         // content-empty-page-skipping mechanism added for the real Acid2 fixture's own huge "100em"
         // margins - see Acid2RegressionTests.FullFixture_MatchesPrinceXmlPageCount) doesn't misfire
         // against a plain multi-section document that merely also sets "overflow:hidden" on "html":

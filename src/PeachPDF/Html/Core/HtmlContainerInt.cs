@@ -44,12 +44,6 @@ namespace PeachPDF.Html.Core
     /// <see cref="ActualSize"/> can be exceed the max size by layout restrictions (unwrap-able line, set image size, etc.).<br/>
     /// Set zero for unlimited (width/height separately).<br/>
     /// </para>
-    /// <para>
-    /// <b>ScrollOffset:</b><br/>
-    /// This will adjust the rendered html by the given offset so the content will be "scrolled".<br/>
-    /// Element that is rendered at location (50,100) with offset of (0,200) will not be rendered
-    /// at -100, therefore outside the client rectangle.
-    /// </para>
     /// </remarks>
     internal sealed class HtmlContainerInt : IDisposable
     {
@@ -184,16 +178,6 @@ namespace PeachPDF.Html.Core
         }
 
         internal void ClearNamedPageElements() => _namedPageElements.Clear();
-
-        /// <summary>
-        /// The scroll offset of the html.<br/>
-        /// This will adjust the rendered html by the given offset so the content will be "scrolled".<br/>
-        /// </summary>
-        /// <example>
-        /// Element that is rendered at location (50,100) with offset of (0,200) will not be rendered as it
-        /// will be at -100 therefore outside the client rectangle.
-        /// </example>
-        public RPoint ScrollOffset { get; set; }
 
         /// <summary>
         /// When true, <see cref="CssLayoutEngine.FlowBox"/>'s per-word page-break-avoidance check
@@ -689,18 +673,16 @@ namespace PeachPDF.Html.Core
         }
 
         /// <summary>
-        /// Per-page paint-window override set by <c>PdfGenerator.AddPdfPages</c>'s page loop (the
-        /// same per-page mutation pattern as <see cref="ScrollOffset"/>) so a page whose margins
-        /// are overridden by a per-page <c>@page</c> rule (e.g. <c>:first { margin: 0 }</c>) gets a
+        /// Per-page paint-window override set by <c>PdfGenerator.AddPdfPages</c>'s page loop, so a
+        /// page whose margins are overridden by a per-page <c>@page</c> rule (e.g. <c>:first { margin: 0 }</c>) gets a
         /// window matching its own margins instead of the base-margin <see cref="PageBoxRect"/>.
         /// <see cref="PerformPaint"/> falls back to <see cref="PageBoxRect"/> when unset.
         /// </summary>
         internal RRect? PageClipOverride { get; set; }
 
         /// <summary>
-        /// The page/viewport rect, in the same per-page paint-time coordinate space every box's
-        /// painted <c>Rectangles</c> use (i.e. independent of <see cref="ScrollOffset"/>, exactly like
-        /// a <c>position: fixed</c> box's own offset override) - the same rect <see cref="PerformPaint"/>
+        /// The page/viewport rect, in the same fragmentainer-local coordinate space every painted
+        /// fragment uses - the same rect <see cref="PerformPaint"/>
         /// pushes as the top-level page clip, also used as the background positioning area for a
         /// <c>background-attachment: fixed</c> layer (CSS Backgrounds 3 §3.9).
         /// </summary>
@@ -895,16 +877,6 @@ namespace PeachPDF.Html.Core
 
 
         #region Private methods
-
-        /// <summary>
-        /// Adjust the offset of the given location by the current scroll offset.
-        /// </summary>
-        /// <param name="location">the location to adjust</param>
-        /// <returns>the adjusted location</returns>
-        private RPoint OffsetByScroll(RPoint location)
-        {
-            return new RPoint(location.X - ScrollOffset.X, location.Y - ScrollOffset.Y);
-        }
 
         /// <summary>
         /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.

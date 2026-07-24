@@ -73,7 +73,7 @@ namespace PeachPDF.Tests.Integration
             Assert.True(document.PageCount <= 3,
                 $"expected a small handful of pages (the fixture's own huge, intentionally-off-screen " +
                 $"100em margins account for some unavoidable blank space, though HtmlContainerInt." +
-                $"GetPaginationSlots now skips wholly content-empty pages per CSS Paged Media Level 3 " +
+                $"Wholly content-empty pages are skipped per CSS Paged Media Level 3 " +
                 $"§3.2), got {document.PageCount}");
         }
 
@@ -85,7 +85,7 @@ namespace PeachPDF.Tests.Integration
             // fixture in exactly 2 pages: ".intro" on its own page, and "#top"/".picture"'s real face
             // content on a second page, with the huge intentional "100em" margin gaps before/after
             // (see the class doc comment) never materializing as their own content-empty pages at all
-            // (HtmlContainerInt.GetPaginationSlots, per CSS Paged Media Level 3 §3.2). If this
+            // (the fragment tree's page materialization, per CSS Paged Media Level 3 §3.2). If this
             // regresses, either that skip mechanism broke or the real face/intro content grew enough
             // to spill onto an extra page.
             var html = File.ReadAllText(FixturePath);

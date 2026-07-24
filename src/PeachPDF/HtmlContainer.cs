@@ -46,20 +46,6 @@ namespace PeachPDF
         internal HtmlContainerInt HtmlContainerInt { get; }
 
         /// <summary>
-        /// The scroll offset of the html.<br/>
-        /// This will adjust the rendered html by the given offset so the content will be "scrolled".<br/>
-        /// </summary>
-        /// <example>
-        /// Element that is rendered at location (50,100) with offset of (0,200) will not be rendered as it
-        /// will be at -100 therefore outside the client rectangle.
-        /// </example>
-        public XPoint ScrollOffset
-        {
-            get => Utils.Convert(HtmlContainerInt.ScrollOffset, PixelsPerPoint);
-            set => HtmlContainerInt.ScrollOffset = Utils.Convert(value, PixelsPerPoint);
-        }
-
-        /// <summary>
         /// The top-left most location of the rendered html.<br/>
         /// This will offset the top-left corner of the rendered html.
         /// </summary>

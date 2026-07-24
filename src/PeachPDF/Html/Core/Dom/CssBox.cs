@@ -1265,7 +1265,7 @@ namespace PeachPDF.Html.Core.Dom
                     // "shifted grid" [k·PageSize.Height + MarginTop, (k+1)·PageSize.Height + MarginTop),
                     // not raw multiples of PageSize.Height from document Y=0. PageIndexOf/PageTopOf are
                     // the single, unambiguous definition of that grid (matching what the painter's own
-                    // per-page clip and GetPaginationSlots already use) - computing this via raw modulo
+                    // per-page clip and the fragment builder's slot walk already use) - computing this via raw modulo
                     // arithmetic against PageSize.Height alone (as this used to) silently lands a
                     // marginTop-wide band, right at the end of every raw page, one whole page short.
                     //
@@ -1346,7 +1346,7 @@ namespace PeachPDF.Html.Core.Dom
                             var pageHeight = HtmlContainer!.PageSize.Height;
                             if (pageHeight > 0)
                             {
-                                // Same shifted grid GetPaginationSlots()/the forced-break logic above use
+                                // Same shifted grid the fragment builder/the forced-break logic above use
                                 // (see HtmlContainer.PageIndexOf's own doc comment) - matching
                                 // BreakInside_Avoid_PositionsAtTopOfNextPage's already-established
                                 // convention. The epsilons attribute a value flush ON a boundary to
