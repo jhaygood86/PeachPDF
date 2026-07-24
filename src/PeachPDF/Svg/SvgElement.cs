@@ -146,7 +146,7 @@ namespace PeachPDF.Svg
         public double Dx { get; set; }
         public double Dy { get; set; }
 
-        /// <summary>The leading <c>rotate</c> value (= <c>RotateList[0]</c>), kept for the whole-run fast path.</summary>
+        /// <summary>The leading <c>rotate</c> value (= <c>RotateList[0]</c>); the full per-character list is in <see cref="RotateList"/>.</summary>
         public double RotateDegrees { get; set; }
 
         /// <summary>Per-character absolute <c>x</c> list (SVG 1.1 §10.4); null when the attribute is absent.</summary>
