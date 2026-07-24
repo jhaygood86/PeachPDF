@@ -400,7 +400,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
         // ----- DrawString ---------------------------------------------------------------------------
 
-        public void DrawString(string s, XFont font, XBrush brush, XRect rect, XStringFormat format, double letterSpacing = 0)
+        public void DrawString(string s, XFont font, XBrush brush, XRect rect, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null)
         {
             double x = rect.X;
             double y = rect.Y;
@@ -489,9 +489,11 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             if (isColorFont)
             {
                 // Color fonts (COLR/CPAL): paint each glyph's color layers as vector fills rather than
-                // embedding the font program and showing CID text. No AddChars/Tj for these glyphs.
+                // embedding the font program and showing CID text. No AddChars/Tj for these glyphs. The
+                // resolved font-palette (index + entry overrides), when present, selects the CPAL palette.
+                int paletteIndex = fontPalette?.BasePaletteIndex ?? 0;
                 var colorPainter = new ColorGlyphPainter(this, descriptor, font, brush, x, y,
-                    letterSpacing, Gfx.PageDirection);
+                    letterSpacing, Gfx.PageDirection, paletteIndex, fontPalette?.Overrides);
                 colorPainter.Paint(s);
             }
             else

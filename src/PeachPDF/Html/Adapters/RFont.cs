@@ -10,6 +10,8 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.Html.Adapters.Entities;
+
 namespace PeachPDF.Html.Adapters
 {
     /// <summary>
@@ -58,5 +60,32 @@ namespace PeachPDF.Html.Adapters
         /// character. Two <see cref="RFont"/>s with the same key at the same size/style render identically.
         /// </summary>
         public abstract string FaceKey { get; }
+
+        // ---- CPAL color-palette query surface (COLR/CPAL color fonts) ---------------------------
+        // Lets the CSS layer resolve `font-palette` (light/dark, @font-palette-values, palette-mix) against
+        // the used font's own palettes. A non-color font reports no palettes; the defaults below make every
+        // non-color RFont a no-op, so only the color-capable adapter overrides them.
+
+        /// <summary>The number of CPAL palettes this font carries (0 for a non-color font).</summary>
+        public virtual int PaletteCount => 0;
+
+        /// <summary>The number of color entries in each CPAL palette (0 for a non-color font).</summary>
+        public virtual int PaletteEntryCount => 0;
+
+        /// <summary>The index of the first palette flagged usable with a light background, or null when none.</summary>
+        public virtual int? FirstLightPalette() => null;
+
+        /// <summary>The index of the first palette flagged usable with a dark background, or null when none.</summary>
+        public virtual int? FirstDarkPalette() => null;
+
+        /// <summary>
+        /// Resolves a CPAL palette entry to its color. Returns false when the font has no palette data or the
+        /// indices are out of range.
+        /// </summary>
+        public virtual bool TryGetPaletteColor(int paletteIndex, int entryIndex, out RColor color)
+        {
+            color = RColor.Empty;
+            return false;
+        }
     }
 }

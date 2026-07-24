@@ -60,6 +60,7 @@ The following fonts are embedded in the `PeachPDF.Tests` project **solely as tes
 |---|---|
 | Noto Emoji (subset; © 2013 Google LLC) — see `src/PeachPDF.Tests/NotoEmoji-Regular.LICENSE.txt` | [SIL OFL 1.1](https://openfontlicense.org/) |
 | Noto Color Emoji (COLR v1 subset; © 2013 Google LLC) — see `src/PeachPDF.Tests/NotoColorEmoji-Subset.LICENSE.txt` | [SIL OFL 1.1](https://openfontlicense.org/) |
+| Nabla (COLR v1 subset; © 2022 The Nabla Project Authors) — a 7-palette color font for `font-palette` tests; see `src/PeachPDF.Tests/NablaSubset.LICENSE.txt` | [SIL OFL 1.1](https://openfontlicense.org/) |
 | Inter | [SIL OFL 1.1](https://openfontlicense.org/) |
 | Source Code Pro | [SIL OFL 1.1](https://openfontlicense.org/) |
 | Source Sans 3 | [SIL OFL 1.1](https://openfontlicense.org/) |
@@ -74,6 +75,7 @@ The following assets are embedded in the `PeachPDF.TestHarness` project **solely
 |---|---|
 | [Charts.css](https://chartscss.org) v1.2.0 (© 2020 Rami Yushuvaev) — the pure-CSS charting framework used by the [Charts.css showcase](showcase.html); see `src/PeachPDF.TestHarness/charts.css.LICENSE.txt` | [MIT](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF.TestHarness/charts.css.LICENSE.txt) |
 | Noto Color Emoji (COLR v1 subset; © 2013 Google LLC) — the real color-emoji font in the [Color Fonts showcase](showcase.html); see `src/PeachPDF.TestHarness/NotoColorEmoji-Subset.LICENSE.txt` | [SIL OFL 1.1](https://openfontlicense.org/) |
+| Nabla (COLR v1 subset; © 2022 The Nabla Project Authors) — the 7-palette color font in the [font-palette showcase](showcase.html); see `src/PeachPDF.TestHarness/NablaSubset.LICENSE.txt` | [SIL OFL 1.1](https://openfontlicense.org/) |
 
 ## License FAQ
 

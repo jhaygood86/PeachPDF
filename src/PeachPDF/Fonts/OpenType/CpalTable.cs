@@ -16,10 +16,15 @@ namespace PeachPDF.Fonts.OpenType
 {
     internal sealed class CpalTable
     {
+        // Palette-type flag bits (CPAL v1, per-palette). See the spec link above.
+        private const uint UsableWithLightBackground = 0x0001;
+        private const uint UsableWithDarkBackground = 0x0002;
+
         // Color records, already swizzled from on-disk BGRA to RGBA (4 bytes per entry).
         private readonly byte[] _rgba;
         private readonly ushort[] _firstColorRecordIndex; // per palette
         private readonly int _numColorRecords;
+        private readonly uint[] _paletteTypes;            // per palette (CPAL v1); empty for v0
 
         public int PaletteCount => _firstColorRecordIndex.Length;
         public int EntriesPerPalette { get; }
@@ -29,7 +34,7 @@ namespace PeachPDF.Fonts.OpenType
             int tableStart = face.TableDictionary[TableTagNames.Cpal].Offset;
             face.Position = tableStart;
 
-            face.ReadUShort();                          // version (v0 fields are all we use)
+            int version = face.ReadUShort();
             EntriesPerPalette = face.ReadUShort();      // numPaletteEntries
             int numPalettes = face.ReadUShort();
             _numColorRecords = face.ReadUShort();
@@ -39,6 +44,24 @@ namespace PeachPDF.Fonts.OpenType
             for (int i = 0; i < numPalettes; i++)
                 _firstColorRecordIndex[i] = face.ReadUShort();
 
+            _paletteTypes = [];
+            if (version >= 1)
+            {
+                // CPAL v1 header extension: three array offsets follow the v0 fields. Only the palette-type
+                // flags (light/dark suitability) are consumed; the label arrays are ignored.
+                uint paletteTypesArrayOffset = face.ReadULong();
+                face.ReadULong();                       // paletteLabelsArrayOffset (unused)
+                face.ReadULong();                       // paletteEntryLabelsArrayOffset (unused)
+
+                if (paletteTypesArrayOffset != 0 && numPalettes > 0)
+                {
+                    face.Position = tableStart + (int)paletteTypesArrayOffset;
+                    _paletteTypes = new uint[numPalettes];
+                    for (int i = 0; i < numPalettes; i++)
+                        _paletteTypes[i] = face.ReadULong();
+                }
+            }
+
             _rgba = new byte[_numColorRecords * 4];
             if (_numColorRecords > 0 && colorRecordsArrayOffset != 0)
             {
@@ -47,6 +70,26 @@ namespace PeachPDF.Fonts.OpenType
                     _rgba[i] = face.ReadByte();
                 SwizzleBgraToRgba(_rgba);
             }
+        }
+
+        /// <summary>
+        /// The index of the first palette flagged <c>USABLE_WITH_LIGHT_BACKGROUND</c> (CPAL v1), or null when no
+        /// palette carries the flag (a v0 font, or none flagged). Backs <c>font-palette: light</c>.
+        /// </summary>
+        public int? FirstLightPalette() => FirstPaletteWithFlag(UsableWithLightBackground);
+
+        /// <summary>
+        /// The index of the first palette flagged <c>USABLE_WITH_DARK_BACKGROUND</c> (CPAL v1), or null when no
+        /// palette carries the flag. Backs <c>font-palette: dark</c>.
+        /// </summary>
+        public int? FirstDarkPalette() => FirstPaletteWithFlag(UsableWithDarkBackground);
+
+        private int? FirstPaletteWithFlag(uint flag)
+        {
+            for (int i = 0; i < _paletteTypes.Length; i++)
+                if ((_paletteTypes[i] & flag) != 0)
+                    return i;
+            return null;
         }
 
         /// <summary>

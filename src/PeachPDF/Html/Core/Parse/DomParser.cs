@@ -100,6 +100,9 @@ namespace PeachPDF.Html.Core.Parse
             // resolution both consult the registry. (Shared with the standalone-SVG loader via BuildRegistry.)
             htmlContainer.RegisteredProperties = RegisteredProperty.BuildRegistry(cssData, cssValueParser);
 
+            // Collect @font-palette-values registrations (consulted when resolving font-palette:<dashed-ident>).
+            htmlContainer.FontPaletteValues = RegisteredFontPalette.BuildRegistry(cssData, cssValueParser);
+
             // The cascade (CascadeApplyStyles) still recurses into an inline <svg>'s descendants on
             // purpose - inline SVG participates in the document cascade, and its shape boxes need their
             // custom properties (--x) populated for var() to resolve. Likewise CorrectTextBoxes only

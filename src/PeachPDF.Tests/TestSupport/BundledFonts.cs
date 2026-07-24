@@ -59,6 +59,15 @@ namespace PeachPDF.Tests.TestSupport
         internal static string ColorEmoji => Path.Combine(AppContext.BaseDirectory, "NotoColorEmoji-Subset.ttf");
 
         /// <summary>
+        /// A subset of Google's "Nabla" (see NablaSubset.LICENSE.txt): a real COLR <b>version 1</b> color font
+        /// with <b>7 CPAL palettes</b> (10 entries each) over <c>glyf</c> outlines, covering the letters in
+        /// "PALETTE". The subset upgrades CPAL to v1 and flags palette 1 as dark- and palette 2 as
+        /// light-background so <c>font-palette: light</c>/<c>dark</c> resolve to a real palette. Used to test and
+        /// showcase the CSS <c>font-palette</c> property, <c>@font-palette-values</c>, and <c>palette-mix()</c>.
+        /// </summary>
+        internal static string Nabla => Path.Combine(AppContext.BaseDirectory, "NablaSubset.ttf");
+
+        /// <summary>
         /// A real font file path: the first one the host OS reports, or the bundled TTF
         /// if the host reports none.
         /// </summary>

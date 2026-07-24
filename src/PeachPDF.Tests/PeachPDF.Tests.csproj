@@ -41,6 +41,10 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>ColorTestV1.ttf</Link>
     </None>
+    <None Include="TestSupport\Fonts\NablaSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>NablaSubset.ttf</Link>
+    </None>
     <None Include="NotoColorEmoji-Subset.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

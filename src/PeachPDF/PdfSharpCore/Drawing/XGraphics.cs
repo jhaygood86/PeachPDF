@@ -1198,9 +1198,9 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws the specified text string.
         /// </summary>
-        public void DrawString(string s, XFont font, XBrush brush, double x, double y, XStringFormat format, double letterSpacing = 0)
+        public void DrawString(string s, XFont font, XBrush brush, double x, double y, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null)
         {
-            DrawString(s, font, brush, new XRect(x, y, 0, 0), format, letterSpacing);
+            DrawString(s, font, brush, new XRect(x, y, 0, 0), format, letterSpacing, fontPalette);
         }
 
 
@@ -1215,7 +1215,7 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws the specified text string.
         /// </summary>
-        public void DrawString(string text, XFont font, XBrush brush, XRect layoutRectangle, XStringFormat format, double letterSpacing = 0)
+        public void DrawString(string text, XFont font, XBrush brush, XRect layoutRectangle, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null)
         {
             if (text == null)
                 throw new ArgumentNullException("text");
@@ -1234,7 +1234,7 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
                 format = XStringFormats.Default;
 
             if (_renderer != null)
-                _renderer.DrawString(text, font, brush, layoutRectangle, format, letterSpacing);
+                _renderer.DrawString(text, font, brush, layoutRectangle, format, letterSpacing, fontPalette);
         }
 
         // ----- MeasureString ------------------------------------------------------------------------

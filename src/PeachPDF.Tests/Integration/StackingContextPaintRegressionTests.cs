@@ -254,7 +254,7 @@ namespace PeachPDF.Tests.Integration
             public DrawCountingGraphics(RAdapter adapter)
                 : base(adapter, new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
 
-            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl, double letterSpacing = 0) => DrawOperations++;
+            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl, double letterSpacing = 0, RFontPalette? fontPalette = null) => DrawOperations++;
             public override void DrawLine(RPen pen, double x1, double y1, double x2, double y2) => DrawOperations++;
             public override void DrawRectangle(RPen pen, double x, double y, double width, double height) => DrawOperations++;
             public override void DrawRectangle(RBrush brush, double x, double y, double width, double height) => DrawOperations++;

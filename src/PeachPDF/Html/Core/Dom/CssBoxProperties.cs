@@ -74,6 +74,9 @@ namespace PeachPDF.Html.Core.Dom
         private double _actualBorderBottomLeftRadiusX = double.NaN;
         private double _actualBorderBottomLeftRadiusY = double.NaN;
         private RColor _actualColor = RColor.Empty;
+        private string _fontPalette = "normal";
+        private RFontPalette? _actualFontPalette;
+        private bool _actualFontPaletteResolved;
         private double _actualPaddingTop = double.NaN;
         private double _actualPaddingBottom = double.NaN;
         private double _actualPaddingRight = double.NaN;
@@ -551,6 +554,17 @@ namespace PeachPDF.Html.Core.Dom
         public string FontWeight { get; set; } = "normal";
 
         public string FontStretch { get; set; } = "normal";
+
+        public string FontPalette
+        {
+            get => _fontPalette;
+            set
+            {
+                _fontPalette = value;
+                _actualFontPaletteResolved = false;
+                _actualFontPalette = null;
+            }
+        }
 
         public string Overflow { get; set; } = "visible";
 
@@ -1159,6 +1173,32 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Gets the resolved <c>font-palette</c> selection for this box's used font (CSS Fonts 4), or null for
+        /// the default palette (index 0, no overrides). Only meaningful for a COLR/CPAL color font; a non-color
+        /// font, or plain <c>font-palette: normal</c>, resolves to null so the default paint path is unchanged.
+        /// Resolved against this box's primary font (<see cref="ActualFont"/> / <see cref="FontFamily"/>); a
+        /// per-codepoint fallback or synthesized small-caps face drawn for part of the run is a different
+        /// object, but a non-color fallback ignores the palette anyway, so the only mismatch would be a run
+        /// that falls back from one color font to a different color font (an accepted edge).
+        /// </summary>
+        public RFontPalette? ActualFontPalette
+        {
+            get
+            {
+                if (!_actualFontPaletteResolved)
+                {
+                    _actualFontPalette = FontPaletteResolver.Resolve(FontPalette, ActualFont, FontFamily, FontPaletteValuesRegistry);
+                    _actualFontPaletteResolved = true;
+                }
+
+                return _actualFontPalette;
+            }
+        }
+
+        /// <summary>The document's <c>@font-palette-values</c> registry, or null when none/unavailable.</summary>
+        protected abstract IReadOnlyDictionary<(string Name, string Family), RegisteredFontPalette>? FontPaletteValuesRegistry { get; }
+
+        /// <summary>
         /// Gets the font that should be actually used to paint the text of the box
         /// </summary>
         public RFont ActualFont
@@ -1626,6 +1666,7 @@ namespace PeachPDF.Html.Core.Dom
             FontVariant = p.FontVariant;
             FontWeight = p.FontWeight;
             FontStretch = p.FontStretch;
+            FontPalette = p.FontPalette;
             ListStyleImage = p.ListStyleImage;
             ListStylePosition = p.ListStylePosition;
             ListStyleType = p.ListStyleType;

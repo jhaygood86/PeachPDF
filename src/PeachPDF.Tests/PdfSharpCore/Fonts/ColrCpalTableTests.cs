@@ -70,6 +70,28 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         }
 
         [Fact]
+        public void Cpal_V1_ReadsMultiplePalettesAndLightDarkFlags()
+        {
+            // The Nabla subset carries 7 CPAL palettes (v1), with palette 1 flagged dark-background and
+            // palette 2 light-background (see BundledFonts.Nabla / generate_nabla_subset.py).
+            CpalTable cpal = Face(BundledFonts.Nabla).cpal;
+            Assert.NotNull(cpal);
+            Assert.Equal(7, cpal.PaletteCount);
+            Assert.Equal(8, cpal.EntriesPerPalette);
+
+            Assert.Equal(2, cpal.FirstLightPalette());
+            Assert.Equal(1, cpal.FirstDarkPalette());
+
+            // Palette selection resolves distinct entry-0 colors per palette (palette 0 warm yellow,
+            // palette 2 blue) - proving the paletteIndex argument is honored, not ignored.
+            Assert.True(cpal.TryGetColor(0, 0, out var p0));
+            Assert.Equal((byte)255, p0.R);
+            Assert.True(cpal.TryGetColor(2, 0, out var p2));
+            Assert.Equal((0, 160, 225), (p2.R, p2.G, p2.B));
+            Assert.NotEqual((p0.R, p0.G, p0.B), (p2.R, p2.G, p2.B));
+        }
+
+        [Fact]
         public void ColrV1_ParsesPaintColrLayersOfGlyphClippedSolids()
         {
             OpenTypeFontface face = Face(BundledFonts.ColorV1);
