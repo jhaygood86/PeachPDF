@@ -21,6 +21,9 @@ Stylesheet Application
 Layout (CssLayoutEngine)
     │
     ▼
+Fragmentation (FragmentTree)
+    │
+    ▼
 Painting (RGraphics)
     │
     ▼
@@ -372,7 +375,7 @@ Boxes with `display: flex` or `inline-flex` are laid out by a dedicated engine i
 
 **Key type:** `CssLayoutEngineColumns` ([Html/Core/Dom/CssLayoutEngineColumns.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Dom/CssLayoutEngineColumns.cs))
 
-A box that establishes a CSS Multi-column formatting context (`column-count`/`column-width` resolved to other than `auto`) is entered from `CssBox.PerformLayoutImp` the same way flex/table are, in place of the normal block-children loop. Because the rest of the engine's pagination is a passive per-page paint-time clip (see Pagination below) rather than an explicit line-by-line break decision, real inline-level fragmentation — splitting one element's own lines across a column boundary — isn't available to reuse here. `CssLayoutEngineColumns` instead fragments at whole-child granularity, in two phases:
+A box that establishes a CSS Multi-column formatting context (`column-count`/`column-width` resolved to other than `auto`) is entered from `CssBox.PerformLayoutImp` the same way flex/table are, in place of the normal block-children loop. Because the rest of the engine decides page breaks by relocating whole boxes and words during layout (see Pagination below) rather than by an explicit line-by-line break decision, real inline-level fragmentation — splitting one element's own lines across a column boundary — isn't available to reuse here. A column is a fragmentainer in [CSS Fragmentation Level 3](https://www.w3.org/TR/css-break-3/) terms, but only pages are modelled as fragmentainers in the [fragment tree](#6-fragmentation); this engine still re-bands whole children itself. `CssLayoutEngineColumns` instead fragments at whole-child granularity, in two phases:
 
 1. **Virtual single-column pass** — every child is laid out once, unmodified, as one tall flow at the resolved column width (reusing ordinary `CssBox.PerformLayout` recursion untouched). This gives each child its correct natural height and the natural collapsed-margin gap to its next sibling, without reimplementing line/box measurement.
 2. **Re-banding pass** — each child is walked in document order and reassigned — atomically, never split — to a `(page-row, column)` slot by height, then moved into place with `CssBox.OffsetTop`/`OffsetLeft` (the same deep-subtree-shift primitives forced page breaks already use elsewhere). A child that doesn't fit in the remaining space advances to the next column, or — once every column on the current page-row is full — the next page-row's first column. `column-fill: balance` (the default) is approximated by targeting an even split of the *remaining* content's height across the row's columns, clamped to that row's actual page budget — this degrades to `column-fill: auto`-like sequential filling once remaining content exceeds one page-row, and genuinely balances only the final, shorter row.
@@ -396,15 +399,55 @@ Because the output is a paginated PDF, layout must determine page breaks for all
 
 Three further paged-media behaviors keep the break points spec-conformant rather than naive:
 
-- **Blank-page skipping** ([CSS Paged Media Level 3 §3.2](https://www.w3.org/TR/css-page-3/#renderer-defaults), "user agents should avoid generating a large number of content-empty pages"). Page count is not a bare `ceil(height / pageHeight)`: `HtmlContainerInt.GetPaginationSlots`, backed by `DomUtils.CollectPrintableContentRanges` ([Html/Core/Utils/DomUtils.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Utils/DomUtils.cs)), only materializes a `PdfPage` for a page slot that some box's own painted geometry — text, generated content, image, background, or border — actually intersects, so an oversized top margin or a tall empty gap no longer emits genuinely blank pages. One subtlety is load-bearing: an inline or text box's real per-line position lives in its `Rectangles` map (one rect per line it spans), not in its `Location`/`ActualBottom` (which stay at a bogus line-local value for such boxes), so the collector reads `Rectangles` when present — reading `Location` instead once collapsed every page of a multi-page document into one range. This is the section [CSS Paged Media](html-css-support.md#css-paged-media)'s "(see pagination)" note points to.
+- **Blank-page skipping** ([CSS Paged Media Level 3 §3.2](https://www.w3.org/TR/css-page-3/#renderer-defaults), "user agents should avoid generating a large number of content-empty pages"). Page count is not a bare `ceil(height / pageHeight)`: a page-slot that no printable fragment landed in never becomes a fragmentainer, so no `PdfPage` is created for it — see [Fragmentation](#6-fragmentation), which is where this now falls out of. One subtlety is load-bearing: an inline or text box's real per-line position lives in its `Rectangles` map (one rect per line it spans), not in its `Location`/`ActualBottom` (which stay at a bogus line-local value for such boxes), so the fragment builder reads `Rectangles` when present — reading `Location` instead once collapsed every page of a multi-page document into one range. This is the section [CSS Paged Media](html-css-support.md#css-paged-media)'s "(see pagination)" note points to.
 - **Margin truncation at unforced breaks** ([CSS Fragmentation Level 3 §5.2](https://www.w3.org/TR/css-break-3/#break-margins), "margins adjoining a break are truncated to zero"). In `CssBox.PerformLayoutImp`'s static/relative-positioning branch, a collapsed vertical margin large enough to push a box across one or more page boundaries *by itself* is discarded and the box starts flush at the top of the very next page — rather than the margin paginating through as literal blank vertical space. Margins after a **forced** break (`break-before: page`, etc.) are explicitly preserved, per the same section. See [Page Breaks](html-css-support.md#page-breaks).
 - **Keep-with-next relocation** ([CSS Fragmentation Level 3 §3.1](https://www.w3.org/TR/css-break-3/#break-between)). Whenever content is relocated to the next page — an unforced margin break, a `break-inside: avoid` box, an `orphans`/`widows` push, or a table body/first-row that would cross the boundary — the maximal run of preceding siblings chained to it by `break-after`/`break-before: avoid` is pulled along (`DomUtils.GetPrecedingKeepWithNextRun`, `CssBox.OffsetTopWithKeepWithNextRun`, and `CssLayoutEngineTable.PullKeepWithNextRun` for the table pre-checks), so a heading is never stranded at the bottom of the page its content just left. The UA print stylesheet's `h1–h6 { page-break-after: avoid }` gives this behavior by default; chains are transitive and an unsatisfiable `avoid` is relaxed per §5.3.
 
-After layout every `CssBox` has a final bounding rectangle and each `CssLineBox` has absolute document coordinates ready for the painting phase.
+After layout every `CssBox` has a final bounding rectangle and each `CssLineBox` has absolute document coordinates. Layout's last phase turns that into its real output — the fragment tree.
 
 ---
 
-## 6. Painting
+## 6. Fragmentation
+
+**Key types:** `FragmentTree` / `FragmentainerFragment` / `BoxFragment` ([Html/Core/Fragments/Fragment.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Fragments/Fragment.cs)), `FragmentTreeBuilder` ([Html/Core/Fragments/FragmentTreeBuilder.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Fragments/FragmentTreeBuilder.cs))
+
+The phases above compute geometry *on* the box tree; this phase freezes it into an immutable **fragment tree**, which is what layout actually hands downstream. It implements the box-fragment model of [CSS Fragmentation Module Level 3 §2](https://www.w3.org/TR/css-break-3/), and is the same shape as the fragment tree in Chromium's LayoutNG.
+
+### The model
+
+A **fragmentainer** is one slot content flows into — for PeachPDF, one page. It is not a DOM element. A **box fragment** is the portion of one box that lives in one fragmentainer: a box crossing a page boundary produces one fragment per page it appears on. Each fragment owns its geometry and keeps a read-only reference to its `CssBox` for style and paint-handler dispatch, mirroring LayoutNG's `NGPhysicalFragment` → `LayoutObject` link.
+
+| Type | What it is |
+|---|---|
+| `FragmentTree` | the document's fragmentainers, in page order |
+| `FragmentainerFragment` | one page: its pagination slot, its resolved band geometry, and its root box fragment |
+| `BoxFragment` | one box's portion of one page — its decoration rectangles, its words, its child fragments |
+| `LineFragment` | one decoration rectangle (one line box's, or the whole border box for a block-level box) |
+| `TextFragment` | one positioned word |
+
+`BoxFragment` also records `IsFirstFragment`/`IsLastFragment`, which identify the edges a `box-decoration-break` value applies at ([§6.2](https://www.w3.org/TR/css-break-3/#break-decoration)), and `WholeBoxRect`, the unfragmented border box that whole-box effects (the `transform` pivot, the `clip-path` reference box) resolve against.
+
+### Coordinates
+
+Fragment rectangles are **fragmentainer-local**: `local.Y = documentY - (PageTopOf(k) - MarginTop)`, X unchanged, since a page's horizontal margin offset is applied by the painter's own page translate. A `position: fixed` fragment subtracts nothing and is emitted in every fragmentainer, which is how fixed content repeats on every page.
+
+### How it is built
+
+`FragmentTreeBuilder.Build` runs as the final phase of `HtmlContainerInt.PerformLayout`, after the reflow loop has settled, so the tree can never describe an intermediate pass. It walks the box tree twice — once to record each box's first and last fragmentainer (not knowable until the whole document has been walked), once to allocate the records — applying one shared emission rule: a box emits a fragment where its own geometry lands in a page's content band, or where any descendant emits. Band membership uses the painter's own minimum-overlap epsilon, so the tree contains exactly the rectangles the painter would draw.
+
+Two box kinds are not reachable by walking `CssBox.Boxes` and get explicit structure here. A repeating table `<thead>`/`<tfoot>` lives in a `CssProxyBox` whose source subtree is deliberately outside the live tree; the builder descends into it through the proxy's own captured geometry, so the repeated header becomes real fragments, one set per page. A rowspan placeholder (`CssSpacingBox`) gets the cell that spans into it as a fragment child, so that cell appears once per row it spans.
+
+**Blank-page skipping falls out of the build.** [CSS Paged Media Level 3 §3.2](https://www.w3.org/TR/css-page-3/#renderer-defaults) asks user agents to avoid generating content-empty pages; a page-slot that no printable fragment landed in simply never becomes a fragmentainer. Whether a box counts as printable is `DomUtils.HasOwnPrintableContent` — text, generated content, an image, a visible background or border — excluding `position: fixed` content (which repeats everywhere and would make every slot look non-empty) and the box promoted to fill the page canvas (see [Paint order](#paint-order)). This is what lets Acid2's own intentionally-huge `100em` margins, meant to be scrolled off-screen in a single-viewport browser, skip straight past the gap instead of paginating through several blank pages.
+
+### What this replaced
+
+Pagination used to be a paint-time effect: layout produced one tall strip, page count was rediscovered geometrically afterwards by intersecting a page grid against a list of printable Y-ranges, and the painter re-walked the same mutable box tree once per page with a per-page scroll offset written onto the container between paints. Fragments make which pages exist, and where content sits on each, facts produced by layout rather than reconstructed by paint.
+
+**Fragmentation still happens after layout, not during it.** PeachPDF lays a document out as one continuous flow — relocating whole boxes and words that straddle a page as it goes — and this builder slices that flow into fragmentainers. LayoutNG instead resumes layout in the next fragmentainer from a break token, producing fragments incrementally. The resulting tree is the same shape, which is what everything downstream needs; converting layout itself is separate work.
+
+---
+
+## 7. Painting
 
 **Key types:** `RGraphics` ([Html/Adapters/RGraphics.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Adapters/RGraphics.cs)), `BordersDrawHandler` ([Html/Core/Handlers/BordersDrawHandler.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Handlers/BordersDrawHandler.cs)), `CssImagePainter` ([Html/Core/Handlers/CssImagePainter.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Handlers/CssImagePainter.cs)), `CssImage` ([Html/Core/Entities/CssImage.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Entities/CssImage.cs)), `BackgroundImageDrawHandler` ([Html/Core/Handlers/BackgroundImageDrawHandler.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Handlers/BackgroundImageDrawHandler.cs))
 
@@ -430,9 +473,11 @@ Brush and pen objects are created through the adapter (`GetSolidBrush`, `GetPen`
 
 ### Paint order
 
-`CssBox.Paint` applies the CSS painters algorithm in the correct order, skipping boxes with `display: none` or `visibility: hidden`. Fixed-position boxes suspend the clip stack so they paint relative to the page rather than within any page margin clip. Off-screen boxes are culled by intersecting their containing block's client rectangle with the current clip before calling `PaintImp`.
+**Painting consumes the fragment tree, not the box tree.** `HtmlContainerInt.PerformPaint` takes one `FragmentainerFragment` — one page — and paints its fragment subtree; `CssBox.Paint` and everything below it receive the `BoxFragment` being painted and read every rectangle from it, using the box only for style and handler dispatch. Because fragment rectangles are already fragmentainer-local, there is no per-page coordinate offset to apply.
 
-Each box is painted as follows:
+`CssBox.Paint` applies the CSS painters algorithm in the correct order, skipping boxes with `display: none` or `visibility: hidden`. Fixed-position boxes suspend the clip stack so they paint relative to the page rather than within any page margin clip. A fragment exists only where its box has something on that page, so the off-screen cull reduces to intersecting the fragment's own rectangles with the current clip — a fragment that carries only descendants is always entered, since a hoisted out-of-flow descendant can paint outside it.
+
+Each box fragment is painted as follows:
 
 1. **Background colour** — fills the box's border area with `background-color`.
 2. **Background images, gradients, and list markers** — All CSS image values (whether used as a `background-image` layer or a `list-style-image` marker) are represented as a `CssImage` discriminated union and painted through the single entry point `CssImagePainter.Paint`. The host supplies the destination rectangle and position/repeat settings; `CssImagePainter` dispatches by image type:
@@ -461,7 +506,7 @@ Images are loaded on demand by `ImageLoadHandler`. Supported sources include fil
 
 ---
 
-## 7. PDF Rendering
+## 8. PDF Rendering
 
 **Library:** PdfSharpCore (forked and merged into PeachPDF)
 
