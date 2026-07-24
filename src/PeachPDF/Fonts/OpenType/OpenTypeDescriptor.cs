@@ -269,6 +269,22 @@ namespace PeachPDF.Fonts.OpenType
         /// </summary>
         public bool HasGlyph(Rune value) => CharCodeToGlyphIndexCore(value.Value) != 0;
 
+        /// <summary>
+        /// True when this font carries COLR + CPAL color-glyph data over glyf outlines, so its color
+        /// glyphs can be drawn as vector fills. CFF-flavored color fonts report false (no glyf).
+        /// </summary>
+        public bool IsColorFont => FontFace.colr != null && FontFace.cpal != null && FontFace.glyf != null;
+
+        /// <summary>The font's COLR table, or null if it has none.</summary>
+        public ColrTable ColorTable => FontFace.colr;
+
+        /// <summary>The font's CPAL palette, or null if it has none.</summary>
+        public CpalTable ColorPalette => FontFace.cpal;
+
+        /// <summary>Decodes a glyph's outline (glyf contours) into drawable vector segments.</summary>
+        public bool TryGetGlyphOutline(int glyphIndex, out GlyphOutline outline)
+            => GlyphOutlineDecoder.TryGetGlyphOutline(FontFace, glyphIndex, out outline);
+
         private int CharCodeToGlyphIndexCore(int value)
         {
             // The format-4 cmap only maps the Basic Multilingual Plane. A codepoint above U+FFFF (astral,

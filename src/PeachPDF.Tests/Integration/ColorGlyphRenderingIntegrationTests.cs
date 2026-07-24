@@ -1,0 +1,110 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using PeachPDF;
+using PeachPDF.Fonts;
+using PeachPDF.PdfSharpCore;
+using PeachPDF.Tests.TestSupport;
+using Xunit;
+
+namespace PeachPDF.Tests.Integration
+{
+    /// <summary>
+    /// End-to-end tests that a COLR/CPAL color font renders its glyphs as layered vector fills in
+    /// the content stream (multiple solid fills per glyph, in the palette colors) instead of an
+    /// embedded-font Tj text show.
+    /// </summary>
+    public class ColorGlyphRenderingIntegrationTests
+    {
+        private static async Task<string> RenderWithColorFont(string fontPath, string body)
+        {
+            var family = TtfFontDescription.LoadDescription(fontPath).FontFamilyInvariantCulture;
+            var generator = new PdfGenerator();
+            await using (var stream = File.OpenRead(fontPath))
+                await generator.AddFontFromStream(stream);
+
+            var html = $"<!DOCTYPE html><html><head><style>" +
+                       $"body {{ font-family: '{family}'; font-size: 100pt; color: black; }}" +
+                       $"</style></head><body>{body}</body></html>";
+
+            var config = new PdfGenerateConfig { PageSize = PageSize.A4, CompressContentStreams = false };
+            var doc = await generator.GeneratePdf(html, config);
+            var ms = new MemoryStream();
+            doc.Save(ms);
+            return Encoding.Latin1.GetString(ms.ToArray());
+        }
+
+        // All non-stroking RGB fill colors ("r g b rg") in document order.
+        private static List<(double R, double G, double B)> FillColors(string pdf)
+        {
+            var colors = new List<(double, double, double)>();
+            foreach (Match m in Regex.Matches(pdf, @"(-?\d*\.?\d+) (-?\d*\.?\d+) (-?\d*\.?\d+) rg"))
+            {
+                double D(int i) => double.Parse(m.Groups[i].Value, CultureInfo.InvariantCulture);
+                colors.Add((D(1), D(2), D(3)));
+            }
+            return colors;
+        }
+
+        private static int Count(string haystack, string needle)
+        {
+            int n = 0, i = 0;
+            while ((i = haystack.IndexOf(needle, i, StringComparison.Ordinal)) >= 0) { n++; i += needle.Length; }
+            return n;
+        }
+
+        [Fact]
+        public async Task ColrV0Glyph_PaintsLayeredSolidFills_AndNoTextShow()
+        {
+            // 'A' is authored as a red box under a green triangle.
+            string pdf = await RenderWithColorFont(BundledFonts.ColorV0, "A");
+
+            // No CID text show for a color glyph - it is drawn as vector fills.
+            Assert.Equal(0, Count(pdf, " Tj"));
+
+            var fills = FillColors(pdf);
+            // Two layers -> two distinct solid fills.
+            Assert.Contains(fills, c => Approx(c, 1, 0, 0));       // red box
+            Assert.Contains(fills, c => Approx(c, 0, 0.5, 0));     // green triangle
+            // At least two fill-path operators (one per layer).
+            Assert.True(Count(pdf, "\nf\n") >= 2, "expected at least two fill operators for the two layers");
+        }
+
+        [Fact]
+        public async Task PlainGlyphInColorFont_PaintsSingleForegroundFill()
+        {
+            // 'X' maps to the plain 'box' outline (no COLR record): drawn once in the text color.
+            string pdf = await RenderWithColorFont(BundledFonts.ColorV0, "X");
+
+            Assert.Equal(0, Count(pdf, " Tj"));
+            var fills = FillColors(pdf);
+            Assert.Contains(fills, c => Approx(c, 0, 0, 0)); // black text color
+        }
+
+        [Fact]
+        public async Task NonColorFont_StillUsesTextShow()
+        {
+            // Regression guard: an ordinary font keeps the embedded-font Tj path.
+            var generator = new PdfGenerator();
+            await using (var stream = File.OpenRead(BundledFonts.Ttf))
+                await generator.AddFontFromStream(stream);
+            var family = TtfFontDescription.LoadDescription(BundledFonts.Ttf).FontFamilyInvariantCulture;
+
+            var html = $"<!DOCTYPE html><html><head><style>body {{ font-family: '{family}'; }}</style></head><body>Hi</body></html>";
+            var config = new PdfGenerateConfig { PageSize = PageSize.A4, CompressContentStreams = false };
+            var doc = await generator.GeneratePdf(html, config);
+            var ms = new MemoryStream();
+            doc.Save(ms);
+            var pdf = Encoding.Latin1.GetString(ms.ToArray());
+
+            Assert.True(Count(pdf, " Tj") >= 1, "ordinary text should still emit a Tj show");
+        }
+
+        private static bool Approx((double R, double G, double B) c, double r, double g, double b)
+            => Math.Abs(c.R - r) < 0.02 && Math.Abs(c.G - g) < 0.02 && Math.Abs(c.B - b) < 0.02;
+    }
+}

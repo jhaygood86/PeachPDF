@@ -31,6 +31,7 @@
 
 #define ITALIC_SIMULATION
 
+using PeachPDF.Fonts;
 using PeachPDF.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Internal;
 using PeachPDF.PdfSharpCore.Pdf;
@@ -403,7 +404,13 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             bool strikeout = (font.Style & XFontStyle.Strikeout) != 0;
             bool underline = (font.Style & XFontStyle.Underline) != 0;
 
-            Realize(font, brush, boldSimulation ? 2 : 0, letterSpacing);
+            // Resolve the descriptor without registering the font for embedding, so a color font
+            // that we draw as vectors (below) is never realized/embedded as an unused subset.
+            OpenTypeDescriptor descriptor = (OpenTypeDescriptor)FontDescriptorCache.GetOrCreateDescriptorFor(font);
+            bool isColorFont = font.Unicode && descriptor.IsColorFont;
+
+            if (!isColorFont)
+                Realize(font, brush, boldSimulation ? 2 : 0, letterSpacing);
 
             switch (format.Alignment)
             {
@@ -464,100 +471,111 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 }
             }
 
-            PdfFont realizedFont = _gfxState._realizedFont;
-            Debug.Assert(realizedFont != null);
-            realizedFont.AddChars(s);
-
             const string format2 = Config.SignificantFigures4;
-            OpenTypeDescriptor descriptor = realizedFont.FontDescriptor._descriptor;
 
-            string text = null;
-            if (font.Unicode)
+            if (isColorFont)
             {
-                StringBuilder sb = new StringBuilder();
-                bool isSymbolFont = descriptor.FontFace.cmap.symbol;
-                foreach (Rune rune in s.EnumerateRunes())
-                {
-                    Rune lookup = rune;
-                    if (isSymbolFont && rune.Value <= 0xFFFF)
-                    {
-                        // Remap for symbol fonts (BMP-only).
-                        lookup = new Rune(rune.Value | (descriptor.FontFace.os2.usFirstCharIndex & 0xFF00));
-                    }
-                    int glyphID = descriptor.CharCodeToGlyphIndex(lookup);
-                    sb.Append((char)glyphID);
-                }
-                s = sb.ToString();
-
-                byte[] bytes = PdfEncoders.RawUnicodeEncoding.GetBytes(s);
-                bytes = PdfEncoders.FormatStringLiteral(bytes, true, false, true);
-                text = PdfEncoders.RawEncoding.GetString(bytes, 0, bytes.Length);
+                // Color fonts (COLR/CPAL): paint each glyph's color layers as vector fills rather than
+                // embedding the font program and showing CID text. No AddChars/Tj for these glyphs.
+                var colorPainter = new ColorGlyphPainter(this, descriptor, font, brush, x, y,
+                    letterSpacing, Gfx.PageDirection);
+                colorPainter.Paint(s);
             }
             else
             {
-                byte[] bytes = PdfEncoders.WinAnsiEncoding.GetBytes(s);
-                text = PdfEncoders.ToStringLiteral(bytes, false);
-            }
+                PdfFont realizedFont = _gfxState._realizedFont;
+                Debug.Assert(realizedFont != null);
+                realizedFont.AddChars(s);
 
-            // Map absolute position to PDF world space.
-            XPoint pos = new XPoint(x, y);
-            pos = WorldToView(pos);
+                string text = null;
+                if (font.Unicode)
+                {
+                    StringBuilder sb = new StringBuilder();
+                    bool isSymbolFont = descriptor.FontFace.cmap.symbol;
+                    foreach (Rune rune in s.EnumerateRunes())
+                    {
+                        Rune lookup = rune;
+                        if (isSymbolFont && rune.Value <= 0xFFFF)
+                        {
+                            // Remap for symbol fonts (BMP-only).
+                            lookup = new Rune(rune.Value | (descriptor.FontFace.os2.usFirstCharIndex & 0xFF00));
+                        }
+                        int glyphID = descriptor.CharCodeToGlyphIndex(lookup);
+                        sb.Append((char)glyphID);
+                    }
+                    s = sb.ToString();
 
-            double verticalOffset = 0;
-            if (boldSimulation)
-            {
-                // Adjust baseline in case of bold simulation???
-                // No, because this would change the center of the glyphs.
-                //verticalOffset = font.Size * Const.BoldEmphasis / 2;
-            }
+                    byte[] bytes = PdfEncoders.RawUnicodeEncoding.GetBytes(s);
+                    bytes = PdfEncoders.FormatStringLiteral(bytes, true, false, true);
+                    text = PdfEncoders.RawEncoding.GetString(bytes, 0, bytes.Length);
+                }
+                else
+                {
+                    byte[] bytes = PdfEncoders.WinAnsiEncoding.GetBytes(s);
+                    text = PdfEncoders.ToStringLiteral(bytes, false);
+                }
+
+                // Map absolute position to PDF world space.
+                XPoint pos = new XPoint(x, y);
+                pos = WorldToView(pos);
+
+                double verticalOffset = 0;
+                if (boldSimulation)
+                {
+                    // Adjust baseline in case of bold simulation???
+                    // No, because this would change the center of the glyphs.
+                    //verticalOffset = font.Size * Const.BoldEmphasis / 2;
+                }
 
 #if ITALIC_SIMULATION
-            // A declared "oblique <angle>" (see XFont.ObliqueSkewSinus) drives the exact shear amount;
-            // plain "italic"/bare "oblique" (the common case, ObliqueSkewSinus null) keeps the fixed
-            // sin(20°) approximation this renderer has always used.
-            double skewSinus = font.ObliqueSkewSinus ?? Const.ItalicSkewAngleSinus;
+                // A declared "oblique <angle>" (see XFont.ObliqueSkewSinus) drives the exact shear amount;
+                // plain "italic"/bare "oblique" (the common case, ObliqueSkewSinus null) keeps the fixed
+                // sin(20°) approximation this renderer has always used.
+                double skewSinus = font.ObliqueSkewSinus ?? Const.ItalicSkewAngleSinus;
 
-            if (italicSimulation)
-            {
-                if (_gfxState.ItalicSimulationOn)
+                if (italicSimulation)
                 {
-                    AdjustTdOffset(ref pos, verticalOffset, skewSinus);
-                    AppendFormatArgs("{0:" + format2 + "} {1:" + format2 + "} Td\n{2} Tj\n", pos.X, pos.Y, text);
+                    if (_gfxState.ItalicSimulationOn)
+                    {
+                        AdjustTdOffset(ref pos, verticalOffset, skewSinus);
+                        AppendFormatArgs("{0:" + format2 + "} {1:" + format2 + "} Td\n{2} Tj\n", pos.X, pos.Y, text);
+                    }
+                    else
+                    {
+                        // Italic simulation is done by skewing characters to the right.
+                        XMatrix m = new XMatrix(1, 0, skewSinus, 1, pos.X, pos.Y);
+                        AppendFormatArgs("{0:" + format2 + "} {1:" + format2 + "} {2:" + format2 + "} {3:" + format2 + "} {4:" + format2 + "} {5:" + format2 + "} Tm\n{6} Tj\n",
+                            m.M11, m.M12, m.M21, m.M22, m.OffsetX, m.OffsetY, text);
+                        _gfxState.ItalicSimulationOn = true;
+                        AdjustTdOffset(ref pos, verticalOffset, null);
+                    }
                 }
                 else
                 {
-                    // Italic simulation is done by skewing characters to the right.
-                    XMatrix m = new XMatrix(1, 0, skewSinus, 1, pos.X, pos.Y);
-                    AppendFormatArgs("{0:" + format2 + "} {1:" + format2 + "} {2:" + format2 + "} {3:" + format2 + "} {4:" + format2 + "} {5:" + format2 + "} Tm\n{6} Tj\n",
-                        m.M11, m.M12, m.M21, m.M22, m.OffsetX, m.OffsetY, text);
-                    _gfxState.ItalicSimulationOn = true;
-                    AdjustTdOffset(ref pos, verticalOffset, null);
+                    if (_gfxState.ItalicSimulationOn)
+                    {
+                        XMatrix m = new XMatrix(1, 0, 0, 1, pos.X, pos.Y);
+                        AppendFormatArgs("{0:" + format2 + "} {1:" + format2 + "} {2:" + format2 + "} {3:" + format2 + "} {4:" + format2 + "} {5:" + format2 + "} Tm\n{6} Tj\n",
+                            m.M11, m.M12, m.M21, m.M22, m.OffsetX, m.OffsetY, text);
+                        _gfxState.ItalicSimulationOn = false;
+                        AdjustTdOffset(ref pos, verticalOffset, null);
+                    }
+                    else
+                    {
+                        AdjustTdOffset(ref pos, verticalOffset, null);
+                        AppendFormatArgs("{0:" + format2 + "} {1:" + format2 + "} Td {2} Tj\n", pos.X, pos.Y, text);
+                    }
                 }
-            }
-            else
-            {
-                if (_gfxState.ItalicSimulationOn)
-                {
-                    XMatrix m = new XMatrix(1, 0, 0, 1, pos.X, pos.Y);
-                    AppendFormatArgs("{0:" + format2 + "} {1:" + format2 + "} {2:" + format2 + "} {3:" + format2 + "} {4:" + format2 + "} {5:" + format2 + "} Tm\n{6} Tj\n",
-                        m.M11, m.M12, m.M21, m.M22, m.OffsetX, m.OffsetY, text);
-                    _gfxState.ItalicSimulationOn = false;
-                    AdjustTdOffset(ref pos, verticalOffset, null);
-                }
-                else
-                {
-                    AdjustTdOffset(ref pos, verticalOffset, null);
-                    AppendFormatArgs("{0:" + format2 + "} {1:" + format2 + "} Td {2} Tj\n", pos.X, pos.Y, text);
-                }
-            }
 #else
                 AdjustTextMatrix(ref pos);
                 AppendFormat2("{0:" + format2 + "} {1:" + format2 + "} Td {2} Tj\n", pos.X, pos.Y, text);
 #endif
+            }
+
             if (underline)
             {
-                double underlinePosition = lineSpace * realizedFont.FontDescriptor._descriptor.UnderlinePosition / font.CellSpace;
-                double underlineThickness = lineSpace * realizedFont.FontDescriptor._descriptor.UnderlineThickness / font.CellSpace;
+                double underlinePosition = lineSpace * descriptor.UnderlinePosition / font.CellSpace;
+                double underlineThickness = lineSpace * descriptor.UnderlineThickness / font.CellSpace;
                 //DrawRectangle(null, brush, x, y - underlinePosition, width, underlineThickness);
                 double underlineRectY = Gfx.PageDirection == XPageDirection.Downwards
                     ? y - underlinePosition
@@ -567,8 +585,8 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
             if (strikeout)
             {
-                double strikeoutPosition = lineSpace * realizedFont.FontDescriptor._descriptor.StrikeoutPosition / font.CellSpace;
-                double strikeoutSize = lineSpace * realizedFont.FontDescriptor._descriptor.StrikeoutSize / font.CellSpace;
+                double strikeoutPosition = lineSpace * descriptor.StrikeoutPosition / font.CellSpace;
+                double strikeoutSize = lineSpace * descriptor.StrikeoutSize / font.CellSpace;
                 //DrawRectangle(null, brush, x, y - strikeoutPosition - strikeoutSize, width, strikeoutSize);
                 double strikeoutRectY = Gfx.PageDirection == XPageDirection.Downwards
                     ? y - strikeoutPosition
