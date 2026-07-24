@@ -153,6 +153,8 @@ namespace PeachPDF.Fonts.OpenType
         internal GlyphDataTable glyf = null!;
         internal IndexToLocationTable loca = null!;
         internal GlyphSubstitutionTable gsub = null!;
+        internal ColrTable colr = null!;
+        internal CpalTable cpal = null!;
         internal VerticalHeaderTable vhea = null!; // TODO
         internal VerticalMetricsTable vmtx = null!; // TODO
         // ReSharper restore InconsistentNaming
@@ -349,6 +351,13 @@ namespace PeachPDF.Fonts.OpenType
 
                 if (Seek(ControlValueProgram.Tag) != -1)
                     prep = new ControlValueProgram(this);
+
+                // Optional color-glyph tables (COLR/CPAL). Absent on ordinary fonts.
+                if (TableDictionary.ContainsKey(TableTagNames.Cpal))
+                    cpal = new CpalTable(this);
+
+                if (TableDictionary.ContainsKey(TableTagNames.Colr))
+                    colr = new ColrTable(this);
             }
             catch (Exception)
             {

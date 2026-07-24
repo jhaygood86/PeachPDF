@@ -36,6 +36,21 @@ namespace PeachPDF.Tests.TestSupport
         internal static string Emoji => Path.Combine(AppContext.BaseDirectory, "NotoEmoji-Regular.ttf");
 
         /// <summary>
+        /// A hand-authored COLR <b>version 0</b> test font (public domain, see
+        /// ColorTestFonts.LICENSE.txt): layered outline color glyphs backed by a CPAL palette.
+        /// 'A' is a red box under a green triangle, 'B' a blue circle; 'X'/'Y'/'Z' are the plain
+        /// outline layer glyphs, ' ' is empty.
+        /// </summary>
+        internal static string ColorV0 => Path.Combine(AppContext.BaseDirectory, "ColorTestV0.ttf");
+
+        /// <summary>
+        /// A hand-authored COLR <b>version 1</b> test font (public domain): paint graphs exercising
+        /// layered solids ('A'), a linear gradient ('G'), and a translate transform ('T'), plus a
+        /// single-glyph solid ('B'). Same outline/palette glyphs as <see cref="ColorV0"/>.
+        /// </summary>
+        internal static string ColorV1 => Path.Combine(AppContext.BaseDirectory, "ColorTestV1.ttf");
+
+        /// <summary>
         /// A real font file path: the first one the host OS reports, or the bundled TTF
         /// if the host reports none.
         /// </summary>

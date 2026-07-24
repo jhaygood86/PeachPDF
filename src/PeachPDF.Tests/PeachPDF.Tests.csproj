@@ -33,6 +33,14 @@
     <None Include="SourceSans3-Regular.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="TestSupport\Fonts\ColorTestV0.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>ColorTestV0.ttf</Link>
+    </None>
+    <None Include="TestSupport\Fonts\ColorTestV1.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>ColorTestV1.ttf</Link>
+    </None>
     <None Include="TestSupport\acid2.html">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

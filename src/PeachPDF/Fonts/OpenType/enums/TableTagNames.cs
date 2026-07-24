@@ -134,6 +134,18 @@ namespace PeachPDF.Fonts.OpenType
         /// </summary>
         public const string EBSC = "EBSC";
 
+        // --- Color Tables ---
+
+        /// <summary>
+        /// Color table (layered/gradient color glyphs).
+        /// </summary>
+        public const string Colr = "COLR";
+
+        /// <summary>
+        /// Color palette table.
+        /// </summary>
+        public const string Cpal = "CPAL";
+
         // --- Advanced Typographic Tables ---
 
         /// <summary>
