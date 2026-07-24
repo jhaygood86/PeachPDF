@@ -9,6 +9,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Xunit;
+using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -222,7 +223,7 @@ namespace PeachPDF.Tests.Integration
             await container.PerformLayout(graphics);
 
             var divBox = FindByTag(container.Root!, "div")!;
-            await divBox.Paint(graphics);
+            await FragmentPaintHarness.PaintBox(container, divBox, graphics);
         }
 
         [Fact]
@@ -254,7 +255,7 @@ namespace PeachPDF.Tests.Integration
             await container.PerformLayout(graphics);
 
             var svgBox = FindByTag(container.Root!, "svg")!;
-            await svgBox.Paint(graphics);
+            await FragmentPaintHarness.PaintBox(container, svgBox, graphics);
         }
 
         private static async Task<string> GetPdfText(string html)

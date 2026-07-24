@@ -18,6 +18,7 @@ using PeachPDF.Svg;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using PeachPDF.Html.Core.Fragments;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -70,25 +71,20 @@ namespace PeachPDF.Html.Core.Dom
         /// Paints the fragment
         /// </summary>
         /// <param name="g">the device to draw to</param>
-        protected override ValueTask PaintImpCore(RGraphics g)
+        /// <param name="fragment">this box\'s fragment on the page being painted</param>
+        protected override ValueTask PaintImpCore(RGraphics g, BoxFragment fragment)
         {
             EnsureDocument();
 
-            var rect = CommonUtils.GetFirstValueOrDefault(Rectangles);
-            var offset = RPoint.Empty;
+            var rect = fragment.PrimaryRect;
 
-            if (!IsFixed)
-                offset = HtmlContainer!.ScrollOffset;
-
-            rect.Offset(offset);
-
-            var clipped = RenderUtils.ClipGraphicsByOverflow(g, this);
+            var clipped = RenderUtils.ClipGraphicsByOverflow(g, this, fragment.OriginY);
 
             PaintBackground(g, rect, true);
             BordersDrawHandler.DrawBoxBorders(g, this, rect, true, true);
 
-            var r = _svgWord.Rectangle;
-            r.Offset(offset);
+            if (!fragment.TryGetWordRect(_svgWord, out var r))
+                r = rect;
             r.Height -= ActualBorderTopWidth + ActualBorderBottomWidth + ActualPaddingTop + ActualPaddingBottom;
             r.Y += ActualBorderTopWidth + ActualPaddingTop;
             r.X = Math.Floor(r.X);

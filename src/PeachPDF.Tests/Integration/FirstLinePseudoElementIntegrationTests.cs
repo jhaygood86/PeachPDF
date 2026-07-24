@@ -22,13 +22,13 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Color_AppliesToFirstLineOnly()
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<style>p::first-line { color: rgb(255,0,0) }</style>" +
                 "<p id='p' style='width:120px'>Some fairly long wrapped text here today</p>"));
             var p = FindById(root, "p")!;
 
             var g = new TestRecordingGraphics();
-            await p.Paint(g);
+            await FragmentPaintHarness.PaintBox(container, p, g);
 
             var calls = g.DrawStringCalls;
             Assert.True(calls.Count > 1, $"expected multiple draw calls, got {calls.Count}");
@@ -109,7 +109,7 @@ namespace PeachPDF.Tests.Integration
             // fidelity requirement: words that land on line 1 must use the first-line font/width, but
             // words that overflow to line 2 must revert to the box's own normal font/width, not stay
             // stuck with the first-line one.
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<style>p::first-line { font-size: 300% }</style>" +
                 "<p id='p' style='width:80pt; font-size:10pt'><b id='b'>alpha beta gamma delta epsilon</b></p>"));
             var p = FindById(root, "p")!;
@@ -153,7 +153,7 @@ namespace PeachPDF.Tests.Integration
             // measurement. Compared here against a plain, non-boundary-crossing paragraph carrying the
             // identical letter-spacing and text, which is unambiguously covered by the ordinary
             // MeasureWordsSize path.
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<style>#p::first-line { font-size: 300% }</style>" +
                 "<p id='p' style='width:80px; font-size:10pt; letter-spacing:2px'>" +
                 "<b id='b'>alpha beta gamma delta epsilon</b></p>" +
@@ -179,7 +179,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task SingleLine_NoWrap_WholeContentQualifiesAsFirstLine()
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<style>p::first-line { color: rgb(0,0,255) }</style>" +
                 "<p id='p' style='width:500px'>short line of text</p>"));
             var p = FindById(root, "p")!;
@@ -191,7 +191,7 @@ namespace PeachPDF.Tests.Integration
             Assert.All(allWords.Where(w => !w.IsImage), w => Assert.NotNull(w.FirstLineStyle));
 
             var g = new TestRecordingGraphics();
-            await p.Paint(g);
+            await FragmentPaintHarness.PaintBox(container, p, g);
             Assert.NotEmpty(g.DrawStringCalls);
             Assert.All(g.DrawStringCalls, c => Assert.Equal(RColor.FromArgb(0, 0, 255), c.Color));
         }
@@ -199,7 +199,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task NestedInline_AppliesThroughMultipleLevelsWithoutBoxSplitting()
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<style>p::first-line { color: rgb(0,128,0) }</style>" +
                 "<p id='p' style='width:500px'>plain <em><strong id='deep'>deeply nested</strong></em> text</p>"));
             var p = FindById(root, "p")!;
@@ -208,7 +208,7 @@ namespace PeachPDF.Tests.Integration
             Assert.Single(p.LineBoxes);
 
             var g = new TestRecordingGraphics();
-            await p.Paint(g);
+            await FragmentPaintHarness.PaintBox(container, p, g);
 
             Assert.NotEmpty(g.DrawStringCalls);
             Assert.All(g.DrawStringCalls, c => Assert.Equal(RColor.FromArgb(0, 128, 0), c.Color));
@@ -221,13 +221,13 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task TextDecoration_AppliesToFirstLineOnly()
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<style>p::first-line { text-decoration: underline }</style>" +
                 "<p id='p' style='width:120px'>Some fairly long wrapped text here today</p>"));
             var p = FindById(root, "p")!;
 
             var g = new TestRecordingGraphics();
-            await p.Paint(g);
+            await FragmentPaintHarness.PaintBox(container, p, g);
 
             var lines = g.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToList();
             Assert.NotEmpty(lines);
@@ -240,13 +240,13 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task BackgroundColor_AppliesToFirstLineOnly()
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<style>p::first-line { background-color: rgb(0,255,0) }</style>" +
                 "<p id='p' style='width:120px'>Some fairly long wrapped text here today</p>"));
             var p = FindById(root, "p")!;
 
             var g = new TestRecordingGraphics();
-            await p.Paint(g);
+            await FragmentPaintHarness.PaintBox(container, p, g);
 
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
             Assert.Contains(rects, r => r.Color == RColor.FromArgb(0, 255, 0));
@@ -299,7 +299,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task TextTransform_UppercasesFirstLineOnly()
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<style>p::first-line { text-transform: uppercase }</style>" +
                 "<p id='p' style='width:120px'>some fairly long wrapped text here today</p>"));
             var p = FindById(root, "p")!;
@@ -317,7 +317,7 @@ namespace PeachPDF.Tests.Integration
             Assert.All(laterWords, w => Assert.Null(w.FirstLineText));
 
             var g = new TestRecordingGraphics();
-            await p.Paint(g);
+            await FragmentPaintHarness.PaintBox(container, p, g);
 
             var calls = g.DrawStringCalls;
             var firstLineBottom = p.LineBoxes[0].LineBottom;
@@ -337,7 +337,7 @@ namespace PeachPDF.Tests.Integration
             // uppercase, all casing information needed to correctly apply the first-line rule's own
             // capitalize is otherwise destroyed - re-deriving from an already-uppercased "HELLO" can only
             // ever produce "Hello" by coincidence, never a real capitalize of mixed-case source text.
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<style>p::first-line { text-transform: capitalize }</style>" +
                 "<p id='p' style='width:500px; text-transform:uppercase'>hello world</p>"));
             var p = FindById(root, "p")!;

@@ -3,6 +3,7 @@ using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Html.Core.Dom
 {
@@ -462,15 +463,13 @@ namespace PeachPDF.Tests.Html.Core.Dom
 
             // Page 0 is an intermediate page - the footer should repeat here.
             var page0Recording = new RecordingGraphics(adapter);
-            container.ScrollOffset = new PeachPDF.Html.Adapters.Entities.RPoint(0, 0);
-            await container.PerformPaint(page0Recording);
+            await FragmentPaintHarness.PaintPage(container, page0Recording);
             _output.WriteLine($"Page 0 drawn strings: [{string.Join(", ", page0Recording.DrawnStrings.Select(w => w.Text))}]");
             Assert.Contains(page0Recording.DrawnStrings, w => w.Text.Contains("FOOTERMARKER"));
 
             // The footer must also appear at the end of the table's content on the last page.
             var lastPageRecording = new RecordingGraphics(adapter);
-            container.ScrollOffset = new PeachPDF.Html.Adapters.Entities.RPoint(0, -(lastPageIndex * pageHeight));
-            await container.PerformPaint(lastPageRecording);
+            await FragmentPaintHarness.PaintPage(container, lastPageRecording, lastPageIndex);
             _output.WriteLine($"Last page drawn strings: [{string.Join(", ", lastPageRecording.DrawnStrings.Select(w => w.Text))}]");
             Assert.Contains(lastPageRecording.DrawnStrings, w => w.Text.Contains("FOOTERMARKER"));
         }
@@ -527,7 +526,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             _output.WriteLine($"Injected PageBreakBottoms[0]={injectedY} (below table top by 5 units)");
 
             // PerformPaint must complete without throwing despite the degenerate entry.
-            var ex = await Record.ExceptionAsync(async () => await container.PerformPaint(graphics));
+            var ex = await Record.ExceptionAsync(async () => await FragmentPaintHarness.PaintPage(container, graphics));
             Assert.Null(ex);
         }
 
@@ -567,11 +566,10 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var pageBreakBottom0 = table.PageBreakBottoms[0];
             _output.WriteLine($"PageBreakBottoms[0]={pageBreakBottom0}, Table.ActualBottom={table.ActualBottom}");
 
-            // Paint page 0 using the recording graphics adapter (ScrollOffset = 0 so visual Y = absolute Y).
+            // Paint page 0 using the recording graphics adapter (page 0's local Y equals absolute Y).
             var adapter = new PeachPDF.Adapters.PdfSharpAdapter();
             var recording = new RecordingGraphics(adapter);
-            container.ScrollOffset = new PeachPDF.Html.Adapters.Entities.RPoint(0, 0);
-            await container.PerformPaint(recording);
+            await FragmentPaintHarness.PaintPage(container, recording);
 
             // The outer table bottom border must be drawn at approximately pageBreakBottom0.
             // DrawBoxBorders renders it at rectForBorders.Bottom - borderWidth/2; use the
@@ -622,13 +620,11 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var pageBreakBottom1 = table.PageBreakBottoms![1];
             _output.WriteLine($"PageBreakBottoms[1]={pageBreakBottom1}, Table.ActualBottom={table.ActualBottom}");
 
-            // Paint page 1 (scroll offset = -pageHeight).
             var adapter = new PeachPDF.Adapters.PdfSharpAdapter();
             var recording = new RecordingGraphics(adapter);
-            container.ScrollOffset = new PeachPDF.Html.Adapters.Entities.RPoint(0, -pageHeight);
-            await container.PerformPaint(recording);
+            await FragmentPaintHarness.PaintPage(container, recording, page: 1);
 
-            // rectForBorders.Bottom = pageBreakBottomVisual = pageBreakBottom1 + (-pageHeight).
+            // Page 1's fragments are local to its own band, so the break bottom lands one page up.
             var pageBreakBottomVisual = pageBreakBottom1 - pageHeight;
             const double tolerance = 3.0;
             _output.WriteLine($"Expected bottom border near Y={pageBreakBottomVisual:F1}");
@@ -670,18 +666,16 @@ namespace PeachPDF.Tests.Html.Core.Dom
 
             // Determine the last page: the page where the table's actual bottom resides.
             var lastPageIndex = (int)(table.ActualBottom / pageHeight);
-            var lastScrollOffset = -(lastPageIndex * pageHeight);
-            _output.WriteLine($"Table.ActualBottom={table.ActualBottom}, lastPageIndex={lastPageIndex}, scrollOffset={lastScrollOffset}");
+            _output.WriteLine($"Table.ActualBottom={table.ActualBottom}, lastPageIndex={lastPageIndex}");
 
-            // The bottom border line sits at actualRect.Bottom - borderWidth/2 in visual coords.
-            // actualRect.Bottom = table.ActualBottom + scrollOffset (after Offset(offset)).
-            var expectedBottomBorderY = table.ActualBottom + lastScrollOffset;
+            // The bottom border line sits at the fragment's own bottom minus borderWidth/2, and the
+            // fragment's coordinates are local to the last page's band.
+            var expectedBottomBorderY = table.ActualBottom - lastPageIndex * pageHeight;
             _output.WriteLine($"Expected bottom border near Y={expectedBottomBorderY}");
 
             var adapter = new PeachPDF.Adapters.PdfSharpAdapter();
             var recording = new RecordingGraphics(adapter);
-            container.ScrollOffset = new PeachPDF.Html.Adapters.Entities.RPoint(0, lastScrollOffset);
-            await container.PerformPaint(recording);
+            await FragmentPaintHarness.PaintPage(container, recording, lastPageIndex);
 
             _output.WriteLine($"Horizontal lines recorded: [{string.Join(", ", recording.HorizontalLines.Select(y => $"{y:F1}"))}]");
 

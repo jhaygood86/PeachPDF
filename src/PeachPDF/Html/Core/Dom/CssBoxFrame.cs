@@ -16,6 +16,7 @@ using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Utils;
 using System;
 using System.Threading.Tasks;
+using PeachPDF.Html.Core.Fragments;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -60,22 +61,19 @@ namespace PeachPDF.Html.Core.Dom
         /// Paints the fragment
         /// </summary>
         /// <param name="g">the device to draw to</param>
-        protected override ValueTask PaintImpCore(RGraphics g)
+        /// <param name="fragment">this box\'s fragment on the page being painted</param>
+        protected override ValueTask PaintImpCore(RGraphics g, BoxFragment fragment)
         {
-            var rects = CommonUtils.GetFirstValueOrDefault(Rectangles);
+            var rects = fragment.PrimaryRect;
 
-            var offset = (HtmlContainer != null && !IsFixed) ? HtmlContainer.ScrollOffset : RPoint.Empty;
-            rects.Offset(offset);
-
-            var clipped = RenderUtils.ClipGraphicsByOverflow(g, this);
+            var clipped = RenderUtils.ClipGraphicsByOverflow(g, this, fragment.OriginY);
 
             PaintBackground(g, rects, true);
 
             BordersDrawHandler.DrawBoxBorders(g, this, rects, true, true);
 
-            var word = Words[0];
-            var tmpRect = word.Rectangle;
-            tmpRect.Offset(offset);
+            if (!fragment.TryGetWordRect(Words[0], out var tmpRect))
+                tmpRect = rects;
             tmpRect.Height -= ActualBorderTopWidth + ActualBorderBottomWidth + ActualPaddingTop + ActualPaddingBottom;
             tmpRect.Y += ActualBorderTopWidth + ActualPaddingTop;
             tmpRect.X = Math.Floor(tmpRect.X);

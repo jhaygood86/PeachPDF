@@ -25,6 +25,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using PeachPDF.Html.Core.Fragments;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -603,21 +604,14 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        internal void ResetPaint()
-        {
-            _hasPainted = false;
-
-            foreach (var childBox in Boxes)
-            {
-                childBox.ResetPaint();
-            }
-        }
-
         /// <summary>
-        /// Paints the fragment
+        /// Paints one of this box's fragments — the portion of it that lives in a single fragmentainer
+        /// (CSS Fragmentation Level 3 §2). All geometry comes from <paramref name="fragment"/>, which
+        /// already carries fragmentainer-local coordinates; this box supplies only style.
         /// </summary>
         /// <param name="g">Device context to use</param>
-        public async ValueTask Paint(RGraphics g)
+        /// <param name="fragment">this box's fragment in the fragmentainer being painted</param>
+        internal async ValueTask Paint(RGraphics g, BoxFragment fragment)
         {
 #if DEBUG
             Console.WriteLine($"paint: {ToString()}");
@@ -633,101 +627,36 @@ namespace PeachPDF.Html.Core.Dom
                     g.SuspendClipping();
                 }
 
-                // don't call paint if the rectangle of the box is not in visible rectangle
-                var visible = Rectangles.Count == 0;
-                if (!visible)
-                {
-                    var clip = g.GetClip();
-
-                    // Check this box's OWN rects individually via the same IsRectVisible helper
-                    // PaintImpCore/PaintDecoration already use, not ContainingBlock.ClientRectangle as
-                    // one combined region - an inline box (e.g. a replaced <object>/<img>) can paint
-                    // well outside its containing block's client area whenever that containing block
-                    // collapses to zero height by design (Acid2's own "#eyes-a { height: 0; line-height:
-                    // 2em; }" trick, whose inline content is positioned via line-height/vertical-align
-                    // alone) - using the containing block's rectangle here treated the box as invisible
-                    // and skipped its entire paint (including nested replaced content and backgrounds),
-                    // not just mis-measured its visible area. Checked per rect (rather than unioning
-                    // them all into one bounding rect first) so a box fragmented across many pages -
-                    // Rectangles isn't itself page-scoped - can't produce one giant union spanning pages
-                    // it isn't actually on, which would defeat this check's purpose as a cheap early-out.
-                    // IsRectVisible's own doc comment covers the degenerate-touch/epsilon handling
-                    // (GitHub issue #113) this loop relies on.
-                    foreach (var r in Rectangles.Values)
-                    {
-                        var rect = r;
-                        if (!IsFixed)
-                        {
-                            //rect.Offset(new RPoint(-HtmlContainer.Location.X, -HtmlContainer.Location.Y));
-                            rect.Offset(HtmlContainer!.ScrollOffset);
-                        }
-
-                        if (IsRectVisible(rect, clip))
-                        {
-                            visible = true;
-                            break;
-                        }
-                    }
-                }
-                else if (HtmlContainer?.HasOutOfFlowBoxes ?? true)
-                {
-                    // Rectangles.Count == 0 boxes (most block-level containers) have historically always
-                    // been treated as visible here regardless of the current clip, so every page walked
-                    // every box in the whole document. That's only safe to tighten up when there's no
-                    // out-of-flow content (float/absolute/fixed) anywhere in the document: an out-of-flow
-                    // descendant's visual position can fall outside this box's own Bounds, and it's only
-                    // discovered/painted via this box's own PaintImp -> FlattenStackingContext call, so
-                    // skipping that call based on Bounds alone could silently drop it. With no such content
-                    // anywhere (checked once for the whole document - see HtmlContainerInt.PerformLayout),
-                    // every descendant is normal-flow and nested within this box's own Bounds, so it's safe
-                    // to prune using them below instead.
-                }
-                else
-                {
-                    var clip = g.GetClip();
-                    var rect = Bounds;
-                    rect.X -= 2;
-                    rect.Width += 2;
-                    if (!IsFixed)
-                    {
-                        rect.Offset(HtmlContainer!.ScrollOffset);
-                    }
-                    clip.Intersect(rect);
-
-                    // See the identical zero-area-intersection fix/comment in the Rectangles.Count > 0
-                    // branch above (GitHub issue #113) - applies here too, for the Bounds-based cull.
-                    visible = clip.Width > VisibilityClipEpsilon && clip.Height > VisibilityClipEpsilon;
-                }
+                // A fragment only exists where its box has something in this fragmentainer, so the
+                // cheap early-out is now just "is any of it inside the current clip" - the clip being
+                // narrower than the page band whenever an ancestor's overflow or a clip-path is active.
+                // A fragment that carries only descendants (no decoration rectangles of its own) must
+                // always be entered: a hoisted out-of-flow descendant can paint well outside this
+                // fragment's own rectangle and is only reached through this call.
+                var visible = fragment.Lines.Count == 0 || IsAnyRectVisible(fragment, g.GetClip());
 
                 if (visible)
                 {
                     var transformed = IsTransformed;
-                    var pageOffset = IsFixed ? RPoint.Empty : HtmlContainer!.ScrollOffset;
 
                     if (transformed)
                     {
                         // ActualTransformMatrix is cached treating the box's own top-left as local
-                        // (0, 0) - painting draws in absolute page coordinates, so re-anchor the pivot
-                        // to the box's actual page position (its Bounds, shifted by the current page's
-                        // scroll offset, same as the visibility check above) right before pushing it.
-                        var pageMatrix = ActualTransformMatrix.RebaseOrigin(
-                            Bounds.X + pageOffset.X, Bounds.Y + pageOffset.Y);
-                        g.PushTransform(pageMatrix);
+                        // (0, 0), so re-anchor the pivot to where the box sits on this page. The whole
+                        // (unfragmented) border box is deliberately used rather than this fragment's
+                        // own rectangle: per-fragment transform origins are a separate change.
+                        g.PushTransform(ActualTransformMatrix.RebaseOrigin(fragment.WholeBoxRect.X, fragment.WholeBoxRect.Y));
                     }
 
                     // clip-path clips the entire element rendering (background, border, content, children).
                     // It is established inside the transform push so the clip and the content it clips are
                     // transformed together (CSS Masking 1: the clip is in the element's local coordinate
                     // system, which any `transform` then maps). The reference box is the border-box (the
-                    // default), in absolute paint coordinates (Bounds shifted by the current page scroll).
+                    // default) of the whole box, for the same reason as the transform pivot above.
                     var clipped = false;
                     if (ClipPath != CssConstants.None && !string.IsNullOrEmpty(ClipPath))
                     {
-                        var referenceBox = new RRect(
-                            Bounds.X + pageOffset.X, Bounds.Y + pageOffset.Y,
-                            ActualBoxSizingWidth, ActualBoxSizingHeight);
-
-                        if (CssClipPathResolver.TryBuildClipPath(g, ClipPath, referenceBox, this, out var clipGeometry, out _)
+                        if (CssClipPathResolver.TryBuildClipPath(g, ClipPath, fragment.WholeBoxRect, this, out var clipGeometry, out _)
                             && clipGeometry is not null)
                         {
                             g.PushClip(clipGeometry);
@@ -737,11 +666,11 @@ namespace PeachPDF.Html.Core.Dom
 
                     if (IsOpaque)
                     {
-                        await PaintImp(g);
+                        await PaintImp(g, fragment);
                     }
                     else
                     {
-                        await PaintWithOpacity(g);
+                        await PaintWithOpacity(g, fragment);
                     }
 
                     if (clipped)
@@ -764,6 +693,22 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Whether any of <paramref name="fragment"/>'s own decoration rectangles survives
+        /// <paramref name="clip"/>. Checked per rectangle rather than against their union, so a
+        /// fragment whose rectangles are far apart on the line cannot be kept alive by empty space
+        /// between them.
+        /// </summary>
+        private static bool IsAnyRectVisible(BoxFragment fragment, RRect clip)
+        {
+            foreach (var line in fragment.Lines)
+            {
+                if (IsRectVisible(line.Rect, clip)) return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
         /// Paints this box (and, via <see cref="PaintImp"/>, its whole subtree) into an offscreen tile
         /// sized to the current page's visible clip, then composites that tile onto <paramref name="g"/>
         /// as a single flattened result at <c>ActualOpacity</c> - the CSS <c>opacity</c> property
@@ -781,7 +726,7 @@ namespace PeachPDF.Html.Core.Dom
         /// caller in <see cref="Paint"/>) is left active and applies to the tile's placement automatically,
         /// since PDF's own <c>cm</c> operator concatenates - no separate transform-folding is needed here.
         /// </remarks>
-        private async ValueTask PaintWithOpacity(RGraphics g)
+        private async ValueTask PaintWithOpacity(RGraphics g, BoxFragment fragment)
         {
             var clip = g.GetClip();
             var tileRect = new RRect(0, 0, clip.Right, clip.Bottom);
@@ -791,12 +736,12 @@ namespace PeachPDF.Html.Core.Dom
             {
                 // No page/document context to own a Form XObject in (e.g. a measure-only pass) -
                 // opacity has no visual effect there anyway, so just paint directly.
-                await PaintImp(g);
+                await PaintImp(g, fragment);
                 return;
             }
 
             t.Graphics.PushClip(clip);
-            await PaintImp(t.Graphics);
+            await PaintImp(t.Graphics, fragment);
             t.Graphics.Dispose();
 
             g.DrawImageWithOpacity(t.Image, tileRect, ActualOpacity);
@@ -1994,15 +1939,12 @@ namespace PeachPDF.Html.Core.Dom
             return _parentBox;
         }
 
-        private void PaintContentImage(RGraphics g)
+        private void PaintContentImage(RGraphics g, BoxFragment fragment)
         {
             if (ContentImage == null) return;
-            var offset = IsFixed ? RPoint.Empty : HtmlContainer!.ScrollOffset;
-            var areas = Rectangles.Count == 0 ? [Bounds] : Rectangles.Values.ToArray();
-            foreach (var area in areas)
+            foreach (var line in fragment.Lines)
             {
-                var rect = area;
-                rect.Offset(offset);
+                var rect = line.Rect;
                 if (rect.Width <= 0 || rect.Height <= 0) continue;
                 CssImagePainter.Paint(g, ContentImage, layerIndex: 0, isFirst: true,
                     originRect: rect, clipRect: rect, roundedClipPath: null,
@@ -2918,30 +2860,29 @@ namespace PeachPDF.Html.Core.Dom
             Location = Location with { X = Location.X + amount };
         }
 
-        private bool _hasPainted;
-
         /// <summary>
-        /// Paints the fragment, wrapping <see cref="PaintImpCore(RGraphics)"/> (the actual per-box
-        /// paint logic, overridden by replaced-element subclasses) with tagged-PDF structure-tree/
-        /// marked-content bookkeeping when tagging is enabled
+        /// Paints one fragment, wrapping <see cref="PaintImpCore(RGraphics, BoxFragment)"/> (the actual
+        /// per-box paint logic, overridden by replaced-element subclasses) with tagged-PDF
+        /// structure-tree/marked-content bookkeeping when tagging is enabled
         /// (<c>HtmlContainer.StructureTagBuilder</c> is non-null). This is the single choke point
         /// all tagging flows through, mirroring how <see cref="Paint"/> already conditionally wraps
-        /// <see cref="PaintImpCore(RGraphics)"/>/<see cref="PaintWithOpacity"/> for transform/opacity
-        /// handling. When tagging is disabled this adds one null check and otherwise behaves exactly
-        /// as calling <see cref="PaintImpCore(RGraphics)"/> directly would.
+        /// <see cref="PaintImpCore(RGraphics, BoxFragment)"/>/<see cref="PaintWithOpacity"/> for
+        /// transform/opacity handling. When tagging is disabled this adds one null check and
+        /// otherwise behaves exactly as calling <c>PaintImpCore</c> directly would.
         /// </summary>
         /// <param name="g">the device to draw to</param>
-        protected async ValueTask PaintImp(RGraphics g)
+        /// <param name="fragment">the fragment being painted</param>
+        protected async ValueTask PaintImp(RGraphics g, BoxFragment fragment)
         {
-            // Mirrors PaintImpCore's own early-out: skip classification/tagging entirely for a call
-            // that will paint nothing this pass (see PaintImpCore's identical _hasPainted check).
-            if (_hasPainted)
+            // Mirrors PaintImpCore's own early-out: skip classification/tagging entirely for a
+            // fragment that has already been painted on this page.
+            if (HtmlContainer is not null && !HtmlContainer.TryClaimForPaint(fragment))
                 return;
 
             var builder = HtmlContainer?.StructureTagBuilder;
             if (builder == null)
             {
-                await PaintImpCore(g);
+                await PaintImpCore(g, fragment);
                 return;
             }
 
@@ -2950,25 +2891,25 @@ namespace PeachPDF.Html.Core.Dom
             {
                 case StructureTagKind.Artifact:
                     using (builder.OpenArtifact(g))
-                        await PaintImpCore(g);
+                        await PaintImpCore(g, fragment);
                     break;
 
                 case StructureTagKind.Grouping when classification.StructureType == Keywords.Li:
-                    await PaintListItem(g, builder);
+                    await PaintListItem(g, fragment, builder);
                     break;
 
                 case StructureTagKind.Grouping:
                     using (builder.OpenGroupingElement(this, classification.StructureType!))
-                        await PaintImpCore(g);
+                        await PaintImpCore(g, fragment);
                     break;
 
                 case StructureTagKind.Content:
                     using (builder.OpenContentElement(g, this, classification.StructureType!, classification.AltText))
-                        await PaintImpCore(g);
+                        await PaintImpCore(g, fragment);
                     break;
 
                 default:
-                    await PaintImpCore(g);
+                    await PaintImpCore(g, fragment);
                     break;
             }
         }
@@ -2985,28 +2926,42 @@ namespace PeachPDF.Html.Core.Dom
         /// reading order) - the marker's own on-page paint position is unaffected by this call-order
         /// swap, since it's driven entirely by pre-computed layout coordinates, not paint order.
         /// </summary>
-        private async ValueTask PaintListItem(RGraphics g, StructureTagBuilder builder)
+        private async ValueTask PaintListItem(RGraphics g, BoxFragment fragment, StructureTagBuilder builder)
         {
             using (builder.OpenGroupingElement(this, Keywords.Li))
             {
-                var markerBox = Boxes.FirstOrDefault(b => b.IsMarkerPseudoElement);
-                if (markerBox != null)
+                var markerFragment = FindMarkerFragment(fragment);
+                if (markerFragment is not null)
                 {
+                    var markerBox = markerFragment.Box;
                     var markerClassification = StructureTagMapper.Classify(markerBox);
                     if (markerClassification.Kind == StructureTagKind.None)
                     {
-                        await markerBox.PaintImpCore(g);
+                        await markerBox.PaintImpCore(g, markerFragment);
                     }
                     else
                     {
                         using (builder.OpenContentElement(g, markerBox, markerClassification.StructureType ?? Keywords.Lbl))
-                            await markerBox.PaintImpCore(g);
+                            await markerBox.PaintImpCore(g, markerFragment);
                     }
                 }
 
                 using (builder.OpenListItemBodyElement(this))
-                    await PaintImpCore(g, paintMarkers: false);
+                    await PaintImpCore(g, fragment, paintMarkers: false);
             }
+        }
+
+        /// <summary>
+        /// This fragment's <c>::marker</c> child fragment, if the marker appears on this page at all.
+        /// </summary>
+        private static BoxFragment? FindMarkerFragment(BoxFragment fragment)
+        {
+            foreach (var child in fragment.Children)
+            {
+                if (child.Box.IsMarkerPseudoElement) return child;
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -3017,50 +2972,35 @@ namespace PeachPDF.Html.Core.Dom
         /// logic still override this method, exactly as they overrode "PaintImp" before.
         /// </summary>
         /// <param name="g">the device to draw to</param>
-        protected virtual async ValueTask PaintImpCore(RGraphics g)
+        /// <param name="fragment">the fragment being painted, the source of all geometry</param>
+        protected virtual async ValueTask PaintImpCore(RGraphics g, BoxFragment fragment)
         {
-            await PaintImpCore(g, paintMarkers: true);
+            await PaintImpCore(g, fragment, paintMarkers: true);
         }
 
         /// <summary>
         /// The actual paint logic, with list-marker painting optionally excluded. Only the base
         /// <see cref="CssBox"/> needs this overload - it exists so the tagged-PDF &lt;li&gt; path in
         /// <see cref="PaintImp"/> (always a plain <see cref="CssBox"/>, never one of the replaced-
-        /// element subclasses that override the virtual <see cref="PaintImpCore(RGraphics)"/>) can
+        /// element subclasses that override the virtual <see cref="PaintImpCore(RGraphics, BoxFragment)"/>) can
         /// paint an &lt;li&gt;'s body content and its marker as two separately MCID-tagged, sibling
         /// structure elements ("/Lbl" and "/LBody") instead of one combined region.
         /// </summary>
-        private async ValueTask PaintImpCore(RGraphics g, bool paintMarkers)
+        private async ValueTask PaintImpCore(RGraphics g, BoxFragment fragment, bool paintMarkers)
         {
-            if (_hasPainted)
-            {
-                return;
-            }
-
             if (Display == CssConstants.None ||
                 (Display == CssConstants.TableCell && EmptyCells == CssConstants.Hide && IsSpaceOrEmpty)) return;
 
-            var clipped = RenderUtils.ClipGraphicsByOverflow(g, this);
+            var clipped = RenderUtils.ClipGraphicsByOverflow(g, this, fragment.OriginY);
 
-            // Captured together (not as two separate Rectangles.Keys/.Values calls) so each rect's
-            // associated line box - needed to resolve first-line style per rect below - can never
-            // misalign with its rect by index.
-            var rectEntries = Rectangles.Count == 0
-                ? new (CssLineBox? Line, RRect Rect)[] { (null, Bounds) }
-                : Rectangles.Select(kv => (Line: (CssLineBox?)kv.Key, Rect: kv.Value)).ToArray();
+            // This fragment's own decoration rectangles - one per line box it spans on this page, or a
+            // single whole-border-box rectangle for a block-level box. Already fragmentainer-local.
+            var lines = fragment.Lines;
             var clip = g.GetClip();
-            var rects = rectEntries.Select(e => e.Rect).ToArray();
-            var offset = RPoint.Empty;
 
-            if (!IsFixed)
+            for (var i = 0; i < lines.Count; i++)
             {
-                offset = HtmlContainer!.ScrollOffset;
-            }
-
-            for (var i = 0; i < rects.Length; i++)
-            {
-                var actualRect = rects[i];
-                actualRect.Offset(offset);
+                var actualRect = lines[i].Rect;
 
                 if (!IsRectVisible(actualRect, clip)) continue;
 
@@ -3076,7 +3016,7 @@ namespace PeachPDF.Html.Core.Dom
                 // PdfGenerator.ResolveCanvasBackground / PaintCanvasBackground) already had it painted
                 // for every page - skip this box's own normal paint pass so it isn't painted twice.
                 if (!SuppressOwnBackgroundPaint)
-                    PaintBackground(g, actualRect, i == 0, GetFirstLineStyleForRect(rectEntries[i].Line));
+                    PaintBackground(g, actualRect, i == 0, GetFirstLineStyleForRect(lines[i].Line));
 
                 // Inset shadows paint AFTER (over) the background, clipped to the padding box.
                 if (hasBoxShadow)
@@ -3089,52 +3029,43 @@ namespace PeachPDF.Html.Core.Dom
                 if ((Display == CssConstants.Table || Display == CssConstants.InlineTable)
                     && PageBreakBottoms != null && HtmlContainer != null)
                 {
-                    var pageHeight = HtmlContainer.PageSize.Height;
-                    if (pageHeight > 0)
+                    // PageBreakBottoms is keyed by pagination slot, which is exactly what the fragment
+                    // records - no re-deriving the slot from a scroll offset.
+                    if (PageBreakBottoms.TryGetValue(fragment.FragmentainerIndex, out var pageBreakBottom))
                     {
-                        // -offset.Y is the current slot's top in scrollOffset space (slotTop, no
-                        // MarginTop shift), so re-add MarginTop to express it as a document-space
-                        // content-band Y before asking the shared grid which slot it is; the epsilon
-                        // absorbs the same float noise the old "+0.001" fudge did.
-                        var currentPageIndex = HtmlContainer.PageIndexOf(
-                            -offset.Y + HtmlContainer.MarginTop + HtmlContainerInt.PageBoundaryEpsilon);
-                        if (PageBreakBottoms.TryGetValue(currentPageIndex, out var pageBreakBottom))
+                        var pageBreakBottomVisual = pageBreakBottom - fragment.OriginY;
+                        if (pageBreakBottomVisual < actualRect.Bottom)
                         {
-                            var pageBreakBottomVisual = pageBreakBottom + offset.Y;
-                            if (pageBreakBottomVisual < actualRect.Bottom)
-                            {
-                                rectForBorders = new RRect(
-                                    actualRect.Left,
-                                    actualRect.Top,
-                                    actualRect.Width,
-                                    pageBreakBottomVisual - actualRect.Top);
-                            }
+                            rectForBorders = new RRect(
+                                actualRect.Left,
+                                actualRect.Top,
+                                actualRect.Width,
+                                pageBreakBottomVisual - actualRect.Top);
                         }
                     }
                 }
 
-                BordersDrawHandler.DrawBoxBorders(g, this, rectForBorders, i == 0, i == rects.Length - 1);
+                BordersDrawHandler.DrawBoxBorders(g, this, rectForBorders, i == 0, i == lines.Count - 1);
             }
 
             if (ColumnRuleSegments is { Count: > 0 } && ActualColumnRuleWidth > 0)
             {
-                PaintColumnRules(g, offset, clip);
+                PaintColumnRules(g, fragment.OriginY, clip);
             }
 
-            PaintWords(g, offset);
+            PaintWords(g, fragment);
 
-            for (var i = 0; i < rects.Length; i++)
+            for (var i = 0; i < lines.Count; i++)
             {
-                var actualRect = rects[i];
-                actualRect.Offset(offset);
+                var actualRect = lines[i].Rect;
 
                 if (IsRectVisible(actualRect, clip))
                 {
-                    PaintDecoration(g, actualRect, i == 0, i == rects.Length - 1, GetFirstLineStyleForRect(rectEntries[i].Line));
+                    PaintDecoration(g, actualRect, i == 0, i == lines.Count - 1, GetFirstLineStyleForRect(lines[i].Line));
                 }
             }
 
-            var stackingContextBoxes = DomUtils.FlattenStackingContext(this);
+            var stackingContextBoxes = DomUtils.FlattenStackingContext(fragment);
 
             foreach (var layerBoxes in DomUtils.GetBoxesByLayers(stackingContextBoxes))
             {
@@ -3193,21 +3124,19 @@ namespace PeachPDF.Html.Core.Dom
 
             if (paintMarkers)
             {
-                var markerBox = Boxes.FirstOrDefault(b => b.IsMarkerPseudoElement);
-                if (markerBox != null)
+                var markerFragment = FindMarkerFragment(fragment);
+                if (markerFragment != null)
                 {
-                    await markerBox.PaintImpCore(g);
+                    await markerFragment.Box.PaintImpCore(g, markerFragment);
                 }
             }
 
-            PaintContentImage(g);
-
-            _hasPainted = true;
+            PaintContentImage(g, fragment);
         }
 
         /// <summary>
         /// Whether <paramref name="box"/> belongs in the "inline" paint pass of the block/float/inline
-        /// ordering in <see cref="PaintImpCore(RGraphics)"/>: either it's genuinely inline-level itself, or it's a
+        /// ordering in <see cref="PaintImpCore(RGraphics, BoxFragment)"/>: either it's genuinely inline-level itself, or it's a
         /// plain block-level box whose entire content is inline (an "invisible" wrapper carrying only
         /// inline content, own box aside - e.g. Acid2's own "#eyes-a", a div around nothing but its
         /// resolved inline &lt;object&gt; image). <c>Boxes.Count > 0</c> guards against misclassifying a
@@ -3228,9 +3157,10 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private static async ValueTask PaintStackingParticipant(RGraphics g, DomUtils.StackingParticipant participant)
         {
-            var pushedClips = RenderUtils.PushAncestorOverflowClips(g, participant.Box, participant.ClipAncestors);
+            var fragment = participant.Fragment;
+            var pushedClips = RenderUtils.PushAncestorOverflowClips(g, participant.ClipAncestors, fragment.OriginY);
 
-            await participant.Box.Paint(g);
+            await fragment.Box.Paint(g, fragment);
 
             for (var i = 0; i < pushedClips; i++)
                 g.PopClip();
@@ -3240,7 +3170,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Draws the vertical rule lines between columns of a multi-column container, one segment per
         /// gap per page-row (see <see cref="ColumnRuleSegments"/>).
         /// </summary>
-        private void PaintColumnRules(RGraphics g, RPoint offset, RRect clip)
+        private void PaintColumnRules(RGraphics g, double originY, RRect clip)
         {
             var pen = g.GetPen(ActualColumnRuleColor);
             pen.Width = ActualColumnRuleWidth;
@@ -3251,11 +3181,13 @@ namespace PeachPDF.Html.Core.Dom
                 _ => RDashStyle.Solid,
             };
 
+            // Column rules are recorded by the columns engine in document space, so they need the same
+            // origin shift the builder already applied to every other rectangle on this page.
             foreach (var (x, top, bottom) in ColumnRuleSegments!)
             {
-                var visualX = x + offset.X;
-                var visualTop = top + offset.Y;
-                var visualBottom = bottom + offset.Y;
+                var visualX = x;
+                var visualTop = top - originY;
+                var visualBottom = bottom - originY;
 
                 if (!IsRectVisible(new RRect(visualX - 1, visualTop, 2, visualBottom - visualTop), clip)) continue;
 
@@ -3671,20 +3603,19 @@ namespace PeachPDF.Html.Core.Dom
         /// Paint all the words in the box.
         /// </summary>
         /// <param name="g">the device to draw into</param>
-        /// <param name="offset">the current scroll offset to offset the words</param>
-        private void PaintWords(RGraphics g, RPoint offset)
+        /// <param name="fragment">the fragment whose words are painted</param>
+        private void PaintWords(RGraphics g, BoxFragment fragment)
         {
             if (Width is null or { Length: <= 0 }) return;
 
             var isRtl = Direction == CssConstants.Rtl;
 
-            foreach (var word in Words)
+            foreach (var wordFragment in fragment.Words)
             {
+                var word = wordFragment.Word;
                 if (word.IsLineBreak || word.IsImage) continue;
                 var clip = g.GetClip();
-                var wordRect = word.Rectangle;
-                wordRect.Offset(offset);
-                clip.Intersect(wordRect);
+                clip.Intersect(wordFragment.Rect);
 
                 // A word whose box was relocated to the next page's content top (keep-with-next,
                 // break-inside:avoid, orphans/widows) sits exactly flush against the previous page's
@@ -3710,7 +3641,7 @@ namespace PeachPDF.Html.Core.Dom
                 // word (font == ActualFont), so it is a no-op there.
                 var font = ResolveWordFont(word, styleSource);
                 var baselineAdjust = styleSource.ActualFont.Ascent - font.Ascent;
-                var wordPoint = new RPoint(word.Left + offset.X, word.Top + offset.Y + baselineAdjust);
+                var wordPoint = new RPoint(wordFragment.Rect.X, wordFragment.Rect.Y + baselineAdjust);
                 var text = word.FirstLineText ?? word.Text!;
                 g.DrawString(text, font, styleSource.ActualColor, wordPoint, new RSize(word.Width, word.Height), isRtl, styleSource.ActualLetterSpacing, styleSource.ActualFontPalette);
             }

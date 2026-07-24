@@ -155,8 +155,8 @@ namespace PeachPDF.Html.Core.Fragments
         /// fragmentainer still has a root to paint into.
         /// </summary>
         private static BoxFragment EmptyRootFragment(CssBox root, int fragmentainerIndex, double localOriginY) =>
-            new(RRect.Empty, root, fragmentainerIndex, Localize(root.Bounds, localOriginY), IsFixed: false,
-                IsFirstFragment: true, IsLastFragment: true, [], [], []);
+            new(RRect.Empty, root, fragmentainerIndex, localOriginY, Localize(root.Bounds, localOriginY),
+                IsFixed: false, IsFirstFragment: true, IsLastFragment: true, [], [], []);
 
         /// <summary>
         /// Records, for every box, the exact inclusive range of fragmentainers it emits a fragment in.
@@ -215,7 +215,10 @@ namespace PeachPDF.Html.Core.Fragments
             List<LineFragment> lines = [];
             List<TextFragment> words = [];
 
-            if (HasOwnGeometryIn(box, snapshot, isFixed, container, slot))
+            // A proxy carries no content of its own - it stands in for its source subtree, whose
+            // styles it copied wholesale, so painting its own decoration would draw a repeated
+            // header's background twice.
+            if (box is not CssProxyBox && HasOwnGeometryIn(box, snapshot, isFixed, container, slot))
             {
                 var rectangles = RectanglesOf(box, snapshot);
 
@@ -265,6 +268,7 @@ namespace PeachPDF.Html.Core.Fragments
                 UnionRects(lines, children),
                 box,
                 fragmentainerIndex,
+                originY,
                 Localize(BoundsOf(box, snapshot), originY),
                 isFixed,
                 fragmentainerIndex == span.First,
@@ -291,6 +295,12 @@ namespace PeachPDF.Html.Core.Fragments
 
                 yield break;
             }
+
+            // A rowspan placeholder shows the cell that spans into it, which lives in an earlier row.
+            // That cell therefore appears in the tree once per row it spans - the fragments are
+            // distinct objects, so each is painted in its own place.
+            if (box is CssSpacingBox spacing)
+                yield return (spacing.ExtendedBox, owner, snapshot);
 
             foreach (var childBox in box.Boxes)
             {

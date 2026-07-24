@@ -13,6 +13,7 @@
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
+using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Svg;
 using System;
 using System.Collections.Generic;
@@ -625,16 +626,29 @@ namespace PeachPDF.Html.Core.Utils
         // participant - it paints via the claiming stacking context's own paint loop instead, bypassing
         // those ancestors' Paint() calls entirely, so their overflow clipping must be reapplied
         // explicitly (see RenderUtils.PushAncestorOverflowClips) around its own Paint() call.
-        internal readonly record struct StackingParticipant(CssBox Box, IReadOnlyList<CssBox> ClipAncestors);
-
-        public static IEnumerable<StackingParticipant> FlattenStackingContext(CssBox box)
+        internal readonly record struct StackingParticipant(BoxFragment Fragment, IReadOnlyList<CssBox> ClipAncestors)
         {
+            /// <summary>The box whose style and stacking role decide where this participant paints.</summary>
+            internal CssBox Box => Fragment.Box;
+        }
+
+        /// <summary>
+        /// The participants of one fragment's own stacking context, discovered over its <i>fragment</i>
+        /// children — so a descendant that does not appear on this page is simply not found. The
+        /// ordering rules themselves are unchanged and still read the originating boxes.
+        /// </summary>
+        public static IEnumerable<StackingParticipant> FlattenStackingContext(BoxFragment fragment)
+        {
+            var box = fragment.Box;
+
             // Plain in-flow, non-stacking-context children always paint here, nested normally - this is
             // what keeps this box's own overflow-clip scope (pushed/popped around this same children
             // loop in CssBox.PaintImpCore) wrapped around them, and their own further plain descendants
             // are handled the same way, recursively, by their own subsequent Paint() call.
-            foreach (var childBox in box.Boxes)
+            foreach (var childFragment in fragment.Children)
             {
+                var childBox = childFragment.Box;
+
                 // ::marker boxes (inside or outside position) are always painted via one explicit
                 // Paint(g) call from CssBox.PaintImpCore/PaintListItem, not discovered generically here
                 // - both so the tagged-PDF path can wrap the marker in its own "/Lbl" structure element
@@ -646,7 +660,7 @@ namespace PeachPDF.Html.Core.Utils
 
                 if (!NeedsStackingHoist(childBox))
                 {
-                    yield return new StackingParticipant(childBox, []);
+                    yield return new StackingParticipant(childFragment, []);
                 }
             }
 
@@ -669,7 +683,7 @@ namespace PeachPDF.Html.Core.Utils
             if (!IsLocalOrderingScope(box)) yield break;
             if (!(box.HtmlContainer?.HasStackingHoistCandidates ?? true)) yield break;
 
-            foreach (var participant in SearchForHoistableDescendants(box, []))
+            foreach (var participant in SearchForHoistableDescendants(fragment, []))
             {
                 yield return participant;
             }
@@ -733,10 +747,12 @@ namespace PeachPDF.Html.Core.Utils
         // safe here: the whole sequence is drained eagerly and synchronously by FlattenStackingContext's
         // caller before anything else touches it.
         private static IEnumerable<StackingParticipant> SearchForHoistableDescendants(
-            CssBox box, List<CssBox> ancestorPath, bool claimFloatsHere = true)
+            BoxFragment fragment, List<CssBox> ancestorPath, bool claimFloatsHere = true)
         {
-            foreach (var childBox in box.Boxes)
+            foreach (var childFragment in fragment.Children)
             {
+                var childBox = childFragment.Box;
+
                 if (childBox.IsMarkerPseudoElement) continue;
 
                 var isStackingContext = IsStackingContextBox(childBox);
@@ -745,7 +761,7 @@ namespace PeachPDF.Html.Core.Utils
 
                 if (isStackingContext || isLocalOrderingScope || isPlainFloatToClaim)
                 {
-                    yield return new StackingParticipant(childBox, ancestorPath.ToArray());
+                    yield return new StackingParticipant(childFragment, ancestorPath.ToArray());
                     if (isStackingContext) continue;
                 }
 
@@ -755,7 +771,7 @@ namespace PeachPDF.Html.Core.Utils
                 var claimBeyond = isLocalOrderingScope ? false : claimFloatsHere;
 
                 ancestorPath.Add(childBox);
-                foreach (var descendant in SearchForHoistableDescendants(childBox, ancestorPath, claimBeyond))
+                foreach (var descendant in SearchForHoistableDescendants(childFragment, ancestorPath, claimBeyond))
                 {
                     yield return descendant;
                 }

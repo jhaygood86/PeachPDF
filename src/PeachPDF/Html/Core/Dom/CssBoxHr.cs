@@ -16,6 +16,7 @@ using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System.Threading.Tasks;
+using PeachPDF.Html.Core.Fragments;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -96,10 +97,10 @@ namespace PeachPDF.Html.Core.Dom
         /// Paints the fragment
         /// </summary>
         /// <param name="g">the device to draw to</param>
-        protected override ValueTask PaintImpCore(RGraphics g)
+        /// <param name="fragment">this box\'s fragment on the page being painted</param>
+        protected override ValueTask PaintImpCore(RGraphics g, BoxFragment fragment)
         {
-            var offset = (HtmlContainer != null && !IsFixed) ? HtmlContainer.ScrollOffset : RPoint.Empty;
-            var rect = new RRect(Bounds.X + offset.X, Bounds.Y + offset.Y, Bounds.Width, Bounds.Height);
+            var rect = fragment.WholeBoxRect;
 
             if (rect.Height > 2 && RenderUtils.IsColorVisible(ActualBackgroundColor))
             {

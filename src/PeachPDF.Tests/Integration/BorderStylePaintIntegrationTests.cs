@@ -32,12 +32,12 @@ namespace PeachPDF.Tests.Integration
         [InlineData("outset")]
         public async Task BorderStyle_AllCss1Keywords_DoNotThrowWhenPainted(string style)
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 $"<div id='b' style='border: 12px {style} rgb(51,51,51)'>x</div>"));
             var div = FindById(root, "b")!;
 
             var g = new TestRecordingGraphics();
-            var exception = await Record.ExceptionAsync(async () => await div.Paint(g));
+            var exception = await Record.ExceptionAsync(async () => await FragmentPaintHarness.PaintBox(container, div, g));
 
             Assert.Null(exception);
         }
@@ -45,12 +45,12 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task BorderStyleDouble_DrawsTwoEqualWidthStripesWithGap()
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<div id='b' style='border-top-style: double; border-top-width: 12pt; border-top-color: rgb(51,51,51)'>x</div>"));
             var div = FindById(root, "b")!;
 
             var g = new TestRecordingGraphics();
-            await div.Paint(g);
+            await FragmentPaintHarness.PaintBox(container, div, g);
 
             var lines = g.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToList();
             Assert.Equal(2, lines.Count);
@@ -71,12 +71,12 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task BorderStyleGroove_OuterStripeIsDarker_InnerStripeIsBaseColor()
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<div id='b' style='border-top-style: groove; border-top-width: 12px; border-top-color: rgb(51,51,51)'>x</div>"));
             var div = FindById(root, "b")!;
 
             var g = new TestRecordingGraphics();
-            await div.Paint(g);
+            await FragmentPaintHarness.PaintBox(container, div, g);
 
             var lines = g.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToList();
             Assert.Equal(2, lines.Count);
@@ -88,18 +88,18 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task BorderStyleRidge_IsMirrorImageOfGroove()
         {
-            var (grooveRoot, _) = await BuildAndLayout(Wrap(
+            var (grooveRoot, container) = await BuildAndLayout(Wrap(
                 "<div id='b' style='border-top-style: groove; border-top-width: 12px; border-top-color: rgb(51,51,51)'>x</div>"));
             var grooveDiv = FindById(grooveRoot, "b")!;
             var grooveG = new TestRecordingGraphics();
-            await grooveDiv.Paint(grooveG);
+            await FragmentPaintHarness.PaintBox(container, grooveDiv, grooveG);
             var grooveLines = grooveG.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToList();
 
-            var (ridgeRoot, _) = await BuildAndLayout(Wrap(
+            var (ridgeRoot, ridgeContainer) = await BuildAndLayout(Wrap(
                 "<div id='b' style='border-top-style: ridge; border-top-width: 12px; border-top-color: rgb(51,51,51)'>x</div>"));
             var ridgeDiv = FindById(ridgeRoot, "b")!;
             var ridgeG = new TestRecordingGraphics();
-            await ridgeDiv.Paint(ridgeG);
+            await FragmentPaintHarness.PaintBox(ridgeContainer, ridgeDiv, ridgeG);
             var ridgeLines = ridgeG.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToList();
 
             Assert.Equal(2, grooveLines.Count);
@@ -118,12 +118,12 @@ namespace PeachPDF.Tests.Integration
             // GetRoundedBorderPath has no double/groove/ridge concept (border-radius is CSS2/3
             // territory) - this locks in the documented narrowing: a rounded double/groove/ridge
             // border degrades to a single solid-colored stroke rather than crashing.
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<div id='b' style='border-top-style: double; border-top-width: 12px; border-top-color: rgb(51,51,51); border-radius: 8px'>x</div>"));
             var div = FindById(root, "b")!;
 
             var g = new TestRecordingGraphics();
-            var exception = await Record.ExceptionAsync(async () => await div.Paint(g));
+            var exception = await Record.ExceptionAsync(async () => await FragmentPaintHarness.PaintBox(container, div, g));
 
             Assert.Null(exception);
             Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
@@ -137,7 +137,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task BorderStyleTwoValueShorthand_OnlyPaintsTheSolidSides()
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<div id='b' style='width:40px; height:40px; border-width:4px; border-color:rgb(51,51,51); border-style: none solid'>x</div>"));
             var div = FindById(root, "b")!;
 
@@ -147,7 +147,7 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(CssConstants.Solid, div.BorderLeftStyle);
 
             var g = new TestRecordingGraphics();
-            await div.Paint(g);
+            await FragmentPaintHarness.PaintBox(container, div, g);
 
             // Solid borders paint as a mitered quad (BordersDrawHandler.SetInOutsetRectanglePoints),
             // not a single line - see BordersDrawHandler's own doc comment on why (the classic CSS
@@ -179,7 +179,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task BorderColorFourValueShorthand_ResolvesTopRightBottomLeftPerSide()
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<div id='b' style='border-style:solid; border-width:1px; border-color: rgb(1,0,0) rgb(0,1,0) rgb(0,0,1) rgb(1,1,0)'>x</div>"));
             var div = FindById(root, "b")!;
 
@@ -195,7 +195,7 @@ namespace PeachPDF.Tests.Integration
             // Mirrors the fixture's own "border-width: 0 2em" (2-value: top/bottom=0, left/right=2em)
             // followed later by a same-specificity "border-width: 1em" (all sides) - the later rule
             // must win outright on every side, not merge/leave the 2-value expansion partially intact.
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<div id='b' style='border-style:solid'></div>"
                 + "<style>#b { border-width: 0 2em; } #b { border-width: 1em; }</style>"));
             var div = FindById(root, "b")!;

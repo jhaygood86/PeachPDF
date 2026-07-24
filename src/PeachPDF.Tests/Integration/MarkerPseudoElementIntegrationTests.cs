@@ -4,6 +4,7 @@ using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
+using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -12,7 +13,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task ListItem_GetsSynthesizedMarkerBox_WithLblTagType()
         {
-            var (root, _) = await BuildAndLayout(Wrap("<ul><li id='li'>text</li></ul>"));
+            var (root, container) = await BuildAndLayout(Wrap("<ul><li id='li'>text</li></ul>"));
             var li = FindById(root, "li")!;
 
             var marker = li.Boxes.SingleOrDefault(b => b.IsMarkerPseudoElement);
@@ -28,10 +29,10 @@ namespace PeachPDF.Tests.Integration
             // both so the tagged-PDF path can wrap it in its own "/Lbl" element separately from the
             // rest of the list item's "/LBody" content, and so an "outside" marker never gets treated
             // as if it were normal in-flow content of the stacking context it belongs to.
-            var (root, _) = await BuildAndLayout(Wrap("<ul><li id='li'>text</li></ul>"));
+            var (root, container) = await BuildAndLayout(Wrap("<ul><li id='li'>text</li></ul>"));
             var li = FindById(root, "li")!;
 
-            var flattened = PeachPDF.Html.Core.Utils.DomUtils.FlattenStackingContext(li).ToList();
+            var flattened = PeachPDF.Html.Core.Utils.DomUtils.FlattenStackingContext(FragmentPaintHarness.FragmentOf(container, li)).ToList();
             Assert.DoesNotContain(flattened, p => p.Box.IsMarkerPseudoElement);
         }
 
@@ -40,7 +41,7 @@ namespace PeachPDF.Tests.Integration
         {
             // Unlike the old cascade-only stub (display: none), a real ::marker box's Display is the
             // ordinary CSS initial value ("inline") - it's a genuine, laid-out box now.
-            var (root, _) = await BuildAndLayout(Wrap("<ul><li id='li'>text</li></ul>"));
+            var (root, container) = await BuildAndLayout(Wrap("<ul><li id='li'>text</li></ul>"));
             var li = FindById(root, "li")!;
 
             var marker = li.Boxes.Single(b => b.IsMarkerPseudoElement);
@@ -53,7 +54,7 @@ namespace PeachPDF.Tests.Integration
             // The default (outside) marker for the first <li> in an <ol> shows "1." - proving
             // CssBoxMarker.ResolveDefaultContent() actually ran and the box laid itself out with a
             // real, non-zero Location/size (CssBoxMarker.PerformLayoutImp), not a display:none stub.
-            var (root, _) = await BuildAndLayout(Wrap("<ol><li id='li'>text</li></ol>"));
+            var (root, container) = await BuildAndLayout(Wrap("<ol><li id='li'>text</li></ol>"));
             var li = FindById(root, "li")!;
 
             var marker = (CssBoxMarker)li.Boxes.Single(b => b.IsMarkerPseudoElement);
@@ -66,7 +67,7 @@ namespace PeachPDF.Tests.Integration
         public async Task MarkerTagType_CanBeSuppressedByAuthor()
         {
             var html = Wrap("<style>li::marker { -peachpdf-pdf-tag-type: none }</style><ul><li id='li'>text</li></ul>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var li = FindById(root, "li")!;
 
             var marker = li.Boxes.Single(b => b.IsMarkerPseudoElement);
@@ -76,7 +77,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task NonListItemElement_DoesNotGetMarkerBox()
         {
-            var (root, _) = await BuildAndLayout(Wrap("<p id='p'>text</p>"));
+            var (root, container) = await BuildAndLayout(Wrap("<p id='p'>text</p>"));
             var p = FindById(root, "p")!;
 
             Assert.DoesNotContain(p.Boxes, b => b.IsMarkerPseudoElement);

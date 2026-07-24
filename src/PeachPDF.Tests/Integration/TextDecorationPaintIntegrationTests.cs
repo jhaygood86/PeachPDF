@@ -22,12 +22,12 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Underline_DrawsLineBelowRectangleTop()
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<span id='s' style='text-decoration:underline; color:rgb(0,0,255)'>text</span>"));
             var s = FindById(root, "s")!;
 
             var g = new TestRecordingGraphics();
-            await s.Paint(g);
+            await FragmentPaintHarness.PaintBox(container, s, g);
 
             var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
             Assert.Equal(RColor.FromArgb(0, 0, 255), line.Color);
@@ -40,12 +40,12 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Overline_DrawsLineAtRectangleTop()
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<span id='s' style='text-decoration:overline'>text</span>"));
             var s = FindById(root, "s")!;
 
             var g = new TestRecordingGraphics();
-            await s.Paint(g);
+            await FragmentPaintHarness.PaintBox(container, s, g);
 
             var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
             var rect = s.Rectangles.Values.Single();
@@ -56,12 +56,12 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task LineThrough_DrawsLineNearRectangleMiddle()
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<span id='s' style='text-decoration:line-through'>text</span>"));
             var s = FindById(root, "s")!;
 
             var g = new TestRecordingGraphics();
-            await s.Paint(g);
+            await FragmentPaintHarness.PaintBox(container, s, g);
 
             var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
             var rect = s.Rectangles.Values.Single();
@@ -88,12 +88,12 @@ namespace PeachPDF.Tests.Integration
             // (CSS Text Decoration 3 §2.2). PaintDecoration must draw a line for EACH keyword. (The prior
             // implementation switched on the whole string, so a combined value matched no case and drew a
             // single stray line at y=0 — this asserts both lines now paint at their proper positions.)
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<span id='s' style='text-decoration:underline overline'>text</span>"));
             var s = FindById(root, "s")!;
 
             var g = new TestRecordingGraphics();
-            await s.Paint(g);
+            await FragmentPaintHarness.PaintBox(container, s, g);
 
             var lines = g.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToList();
             Assert.Equal(2, lines.Count);
@@ -110,12 +110,12 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task TextDecorationColor_OverridesElementColor()
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<span id='s' style='text-decoration:underline; text-decoration-color:rgb(255,0,0); color:rgb(0,0,255)'>text</span>"));
             var s = FindById(root, "s")!;
 
             var g = new TestRecordingGraphics();
-            await s.Paint(g);
+            await FragmentPaintHarness.PaintBox(container, s, g);
 
             var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
             Assert.Equal(RColor.FromArgb(255, 0, 0), line.Color);
@@ -124,12 +124,12 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task TextDecorationNone_DrawsNoLine()
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<span id='s' style='text-decoration:none'>text</span>"));
             var s = FindById(root, "s")!;
 
             var g = new TestRecordingGraphics();
-            await s.Paint(g);
+            await FragmentPaintHarness.PaintBox(container, s, g);
 
             Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
         }
@@ -138,12 +138,12 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<double> GetDecorationYAsync(string decorationLine)
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 $"<span id='s' style='text-decoration:{decorationLine}'>text</span>"));
             var s = FindById(root, "s")!;
 
             var g = new TestRecordingGraphics();
-            await s.Paint(g);
+            await FragmentPaintHarness.PaintBox(container, s, g);
 
             return Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>()).Y1;
         }

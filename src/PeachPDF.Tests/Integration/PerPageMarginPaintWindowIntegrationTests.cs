@@ -35,7 +35,7 @@ namespace PeachPDF.Tests.Integration
         {
             var container = await BuildLayoutAsync(SimpleCoverHtml);
 
-            var recording = await PaintPageAsync(container, scrollOffset: 0, clipOverride: null);
+            var recording = await PaintPageAsync(container, page: 0, clipOverride: null);
 
             var firstClip = Assert.IsType<TestRecordingGraphics.PushClipCall>(recording.Log[0]);
             Assert.Equal(container.PageBoxRect, firstClip.Rect);
@@ -48,7 +48,7 @@ namespace PeachPDF.Tests.Integration
             var container = await BuildLayoutAsync(SimpleCoverHtml);
             var fullBleedWindow = new RRect(MarginLeftPx, MarginTopPx, SheetWidth, BandHeight);
 
-            var recording = await PaintPageAsync(container, scrollOffset: 0, clipOverride: fullBleedWindow);
+            var recording = await PaintPageAsync(container, page: 0, clipOverride: fullBleedWindow);
 
             var firstClip = Assert.IsType<TestRecordingGraphics.PushClipCall>(recording.Log[0]);
             Assert.Equal(fullBleedWindow, firstClip.Rect);
@@ -65,11 +65,11 @@ namespace PeachPDF.Tests.Integration
             var container = await BuildLayoutAsync(TwoPageCoverHtml);
             var fullBleedWindow = new RRect(MarginLeftPx, MarginTopPx, SheetWidth, BandHeight);
 
-            var page1 = await PaintPageAsync(container, scrollOffset: 0, clipOverride: fullBleedWindow);
+            var page1 = await PaintPageAsync(container, page: 0, clipOverride: fullBleedWindow);
             Assert.Contains(page1.DrawStringCalls, c => c.Text.Contains("CoverMarker"));
             Assert.DoesNotContain(page1.DrawStringCalls, c => c.Text.Contains("PageTwoMarker"));
 
-            var page2 = await PaintPageAsync(container, scrollOffset: -BandHeight, clipOverride: null);
+            var page2 = await PaintPageAsync(container, page: 1, clipOverride: null);
             Assert.Contains(page2.DrawStringCalls, c => c.Text.Contains("PageTwoMarker"));
             Assert.DoesNotContain(page2.DrawStringCalls, c => c.Text.Contains("CoverMarker"));
         }
@@ -84,11 +84,11 @@ namespace PeachPDF.Tests.Integration
             // which the page's delta translate maps to physical [0, 612]).
             var container = await BuildLayoutAsync(TwoPageCoverHtml);
 
-            var defaultWindow = await PaintPageAsync(container, scrollOffset: 0, clipOverride: null);
+            var defaultWindow = await PaintPageAsync(container, page: 0, clipOverride: null);
             Assert.DoesNotContain(defaultWindow.DrawStringCalls, c => c.Text.Contains("EdgeMarker"));
 
             var fullBleedWindow = new RRect(MarginLeftPx, MarginTopPx, SheetWidth, BandHeight);
-            var widened = await PaintPageAsync(container, scrollOffset: 0, clipOverride: fullBleedWindow);
+            var widened = await PaintPageAsync(container, page: 0, clipOverride: fullBleedWindow);
             Assert.Contains(widened.DrawStringCalls, c => c.Text.Contains("EdgeMarker"));
             Assert.Contains(widened.DrawStringCalls, c => c.Text.Contains("CoverMarker"));
         }
@@ -147,12 +147,11 @@ namespace PeachPDF.Tests.Integration
         }
 
         private static async Task<TestRecordingGraphics> PaintPageAsync(
-            HtmlContainerInt container, double scrollOffset, RRect? clipOverride)
+            HtmlContainerInt container, int page, RRect? clipOverride)
         {
             var recording = new TestRecordingGraphics();
-            container.ScrollOffset = new RPoint(0, scrollOffset);
             container.PageClipOverride = clipOverride;
-            await container.PerformPaint(recording);
+            await FragmentPaintHarness.PaintPage(container, recording, page);
             return recording;
         }
     }

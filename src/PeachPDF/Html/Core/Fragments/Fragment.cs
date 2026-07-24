@@ -68,6 +68,13 @@ namespace PeachPDF.Html.Core.Fragments
     /// </param>
     /// <param name="Box">the originating box — the source of all style and paint-handler dispatch</param>
     /// <param name="FragmentainerIndex">the pagination slot index this fragment belongs to</param>
+    /// <param name="OriginY">
+    /// the document Y that was subtracted to place this fragment in its fragmentainer's local space —
+    /// <see cref="FragmentainerFragment.LocalOriginY"/>, or 0 for a fixed fragment. Paint needs it for
+    /// the handful of coordinates layout still records in document space (a multi-column container's
+    /// rule segments, a paginated table's per-page break bottoms) and to map an ancestor's
+    /// <c>overflow</c> clip into this fragment's space.
+    /// </param>
     /// <param name="WholeBoxRect">
     /// the box's <i>unfragmented</i> border box mapped into this fragmentainer's local space. Effects
     /// that are defined against the whole box rather than one fragment — the <c>transform</c> pivot and
@@ -92,13 +99,41 @@ namespace PeachPDF.Html.Core.Fragments
         RRect Rect,
         CssBox Box,
         int FragmentainerIndex,
+        double OriginY,
         RRect WholeBoxRect,
         bool IsFixed,
         bool IsFirstFragment,
         bool IsLastFragment,
         IReadOnlyList<LineFragment> Lines,
         IReadOnlyList<TextFragment> Words,
-        IReadOnlyList<BoxFragment> Children) : Fragment(Rect);
+        IReadOnlyList<BoxFragment> Children) : Fragment(Rect)
+    {
+        /// <summary>
+        /// This fragment's principal decoration rectangle — the one a replaced element (an image, an
+        /// inline SVG, an <c>&lt;iframe&gt;</c>) paints its background and border over. Falls back to
+        /// <see cref="Fragment.Rect"/> for a fragment that exists only to carry descendants.
+        /// </summary>
+        internal RRect PrimaryRect => Lines.Count > 0 ? Lines[0].Rect : Rect;
+
+        /// <summary>
+        /// This fragment's rectangle for <paramref name="word"/>. Replaced boxes hold a single word
+        /// whose rectangle — not the box's own — positions the replaced content.
+        /// </summary>
+        internal bool TryGetWordRect(CssRect word, out RRect rect)
+        {
+            foreach (var candidate in Words)
+            {
+                if (ReferenceEquals(candidate.Word, word))
+                {
+                    rect = candidate.Rect;
+                    return true;
+                }
+            }
+
+            rect = RRect.Empty;
+            return false;
+        }
+    }
 
     /// <summary>
     /// One fragmentainer — for PeachPDF, one materialized PDF page. Per

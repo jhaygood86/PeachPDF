@@ -5,6 +5,7 @@ using PeachPDF.Html.Core.Utils;
 using PeachPDF.Svg;
 using System;
 using System.Threading.Tasks;
+using PeachPDF.Html.Core.Fragments;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -63,38 +64,32 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        protected override async ValueTask PaintImpCore(RGraphics g)
+        protected override async ValueTask PaintImpCore(RGraphics g, BoxFragment fragment)
         {
             await EnsureResolved();
 
             if (!_isReplaced)
             {
-                await base.PaintImpCore(g);
+                await base.PaintImpCore(g, fragment);
                 return;
             }
 
-            var rect = CommonUtils.GetFirstValueOrDefault(Rectangles);
-            var offset = RPoint.Empty;
+            var rect = fragment.PrimaryRect;
 
-            if (!IsFixed)
-                offset = HtmlContainer!.ScrollOffset;
-
-            rect.Offset(offset);
-
-            var clipped = RenderUtils.ClipGraphicsByOverflow(g, this);
+            var clipped = RenderUtils.ClipGraphicsByOverflow(g, this, fragment.OriginY);
 
             PaintBackground(g, rect, true);
             BordersDrawHandler.DrawBoxBorders(g, this, rect, true, true);
 
-            var r = _imageWord!.Rectangle;
-            r.Offset(offset);
+            if (!fragment.TryGetWordRect(_imageWord!, out var r))
+                r = rect;
             r.Height -= ActualBorderTopWidth + ActualBorderBottomWidth + ActualPaddingTop + ActualPaddingBottom;
             r.Y += ActualBorderTopWidth + ActualPaddingTop;
             r.X = Math.Floor(r.X);
             r.Y = Math.Floor(r.Y);
 
             // object-fit / object-position honored via the shared replaced-content renderer.
-            ReplacedContentRenderer.Paint(g, r, _imageWord.Image, _svgDocument, this);
+            ReplacedContentRenderer.Paint(g, r, _imageWord!.Image, _svgDocument, this);
 
             if (clipped)
                 g.PopClip();

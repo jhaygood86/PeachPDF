@@ -348,19 +348,6 @@ namespace PeachPDF
                 if (deltaX != 0 || deltaY != 0)
                     g.TranslateTransform(deltaX, deltaY);
 
-                // scrollOffset is already in layout-pixel space (GetPaginationSlots walks the
-                // internal PageSize.Height), so it must be assigned to the internal container
-                // directly. The public HtmlContainer.ScrollOffset setter treats its input as
-                // POINTS and multiplies by PixelsPerPoint to store pixels - feeding it a pixel
-                // value scaled the offset twice whenever ShrinkToFit actually shrank content
-                // (PixelsPerPoint > 1), sliding every page's content up by slot ×
-                // (PixelsPerPoint - 1). The error compounded per page (~1.5pt/page on the SVG
-                // showcase), so by page 4+ a box laid out flush at a page's top painted its
-                // glyph tops back across the previous page's bottom clip edge - fragments must
-                // start at the top of their own fragmentainer, not straddle the previous one
-                // (CSS Fragmentation Level 3 §4; CSS2.1 §13.2's page box model).
-                container.HtmlContainerInt.ScrollOffset = new RPoint(0, scrollOffset);
-
                 // Same-units (internal pixel space) generalization of PageBoxRect's default paint
                 // window: x/y adapt to this page's margin override via the delta translate above;
                 // the width pins the window's right edge to the physical paper edge (identical to
@@ -375,7 +362,7 @@ namespace PeachPDF
                     (page.Width - mL) * _pdfSharpAdapter.PixelsPerPoint,
                     geom.BandHeight);
 
-                await container.PerformPaint(g);
+                await container.PerformPaint(g, fragmentainer);
 
                 // Restore to pre-content state so margin boxes render in absolute page coordinates
                 g.Restore(preContentState);

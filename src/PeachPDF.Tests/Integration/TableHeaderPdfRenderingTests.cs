@@ -8,6 +8,7 @@ using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using System.Linq;
+using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -281,7 +282,7 @@ namespace PeachPDF.Tests.Integration
             await container.PerformLayout(measureGraphics);
 
             var recorder = new DrawStringRecordingGraphics(adapter);
-            await container.PerformPaint(recorder);
+            await FragmentPaintHarness.PaintPage(container, recorder);
 
             Assert.Equal(1, recorder.DrawnStrings.Count(s => s == "Header"));
             Assert.Equal(1, recorder.DrawnStrings.Count(s => s == "Body"));

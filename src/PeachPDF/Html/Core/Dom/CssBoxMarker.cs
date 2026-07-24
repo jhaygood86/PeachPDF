@@ -15,6 +15,7 @@ using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Utils;
 using System.Threading.Tasks;
+using PeachPDF.Html.Core.Fragments;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -159,13 +160,11 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        protected override async ValueTask PaintImpCore(RGraphics g)
+        protected override async ValueTask PaintImpCore(RGraphics g, BoxFragment fragment)
         {
             if (ContentImage is not null)
             {
-                var offset = IsFixed ? RPoint.Empty : HtmlContainer!.ScrollOffset;
-                var rect = Rectangles.Count == 0 ? Bounds : CommonUtils.GetFirstValueOrDefault(Rectangles);
-                rect.Offset(offset);
+                var rect = fragment.PrimaryRect;
                 if (rect is { Width: > 0, Height: > 0 })
                 {
                     PaintMarkerImage(g, rect);
@@ -176,9 +175,8 @@ namespace PeachPDF.Html.Core.Dom
 
             if (Words.Count == 0) return; // content: none, or list-style-type: none with no image
 
-            var wordOffset = IsFixed ? RPoint.Empty : HtmlContainer!.ScrollOffset;
-            var wordRect = Words[0].Rectangle;
-            wordRect.Offset(wordOffset);
+            // A marker whose own word fell outside this page's band has nothing to draw here.
+            if (!fragment.TryGetWordRect(Words[0], out var wordRect)) return;
 
             if (MarkerShape is not null)
             {

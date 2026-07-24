@@ -8,6 +8,7 @@ using PeachPDF.PdfSharpCore;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -205,8 +206,7 @@ namespace PeachPDF.Tests.Integration
             var counter = new DrawCountingGraphics(adapter);
             if (container.Root is not null)
             {
-                container.Root.ResetPaint();
-                await container.Root.Paint(counter);
+                await FragmentPaintHarness.PaintBox(container, container.Root, counter);
             }
 
             return counter.DrawOperations;

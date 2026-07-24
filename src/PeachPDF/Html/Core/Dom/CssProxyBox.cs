@@ -115,55 +115,24 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Paints by applying the captured snapshot to the source box and delegating paint.
+        /// Paints this proxy's fragment subtree — the repeated header/footer content, which the
+        /// fragment builder already positioned from <see cref="SourceGeometry"/>.
         /// </summary>
-        protected override async ValueTask PaintImpCore(RGraphics g)
+        /// <remarks>
+        /// The snapshot is still written back onto the live source boxes first. One source subtree is
+        /// shared by every page's proxy, so those boxes carry only whichever page positioned them
+        /// last — and while paint takes its <i>rectangles</i> from fragments, the
+        /// <c>overflow: hidden</c> clip walk still resolves ancestor client rectangles off the live
+        /// boxes. Without this, that clip lands at another page's position and culls the whole
+        /// repeated row. Removing this last piece of live-geometry coupling is follow-on work.
+        /// </remarks>
+        /// <param name="g">the device to draw to</param>
+        /// <param name="fragment">this proxy's fragment on the page being painted</param>
+        protected override async ValueTask PaintImpCore(RGraphics g, BoxFragment fragment)
         {
-#if DEBUG
-            System.Console.WriteLine($"CssProxyBox.PaintImpCore: START - Location={Location}, Snapshot={(_snapshot == null ? "NULL" : "EXISTS")}");
-#endif
+            _snapshot?.Apply(_sourceBox);
 
-            if (_snapshot == null)
-            {
-#if DEBUG
-                System.Console.WriteLine("CssProxyBox.PaintImpCore: No snapshot, returning");
-#endif
-                return;
-            }
-
-            // Step 1: Reset source box paint state before applying snapshot
-            _sourceBox.ResetPaint();
-
-            // Step 2: Temporarily reparent source box to this proxy for painting
-            // This sets ParentBox AND adds to Boxes collection
-            _sourceBox.ParentBox = this;
-
-#if DEBUG
-            System.Console.WriteLine($"CssProxyBox.PaintImpCore: After reparent - this.Boxes.Count={Boxes.Count}");
-#endif
-
-            // Step 3: Apply our snapshot to source box
-            _snapshot.Apply(_sourceBox);
-
-#if DEBUG
-            System.Console.WriteLine($"CssProxyBox.PaintImpCore: After snapshot apply - Source.Location={_sourceBox.Location}");
-#endif
-
-            // Step 4: Directly paint the source box (don't call base - we ARE the wrapper). This is
-            // a full Paint() call (not PaintImpCore) so the source box goes through its own tagging
-            // classification independently - see StructureTagMapper's CssProxyBox pass-through note.
-            await _sourceBox.Paint(g);
-
-#if DEBUG
-            System.Console.WriteLine("CssProxyBox.PaintImpCore: After source paint");
-#endif
-
-            // Step 5: Remove from Boxes to avoid interference with other proxies
-            Boxes.Remove(_sourceBox);
-
-#if DEBUG
-            System.Console.WriteLine("CssProxyBox.PaintImpCore: END");
-#endif
+            await base.PaintImpCore(g, fragment);
         }
     }
 }

@@ -823,23 +823,44 @@ namespace PeachPDF.Html.Core
         internal double NextPageTopOf(double y) => PageTopOf(PageIndexOf(y) + 1);
 
         /// <summary>
-        /// Render the html using the given device.
+        /// Paints one fragmentainer — one page. Everything painted comes from
+        /// <paramref name="fragmentainer"/>'s fragment subtree, whose coordinates are already local to
+        /// this page, so the painter never consults the box tree for geometry.
         /// </summary>
-        /// <param name="g">the device to use to render</param>
-        public async ValueTask PerformPaint(RGraphics g)
+        /// <param name="g">the device to use</param>
+        /// <param name="fragmentainer">the page to paint</param>
+        public async ValueTask PerformPaint(RGraphics g, FragmentainerFragment fragmentainer)
         {
             ArgumentNullException.ThrowIfNull(g);
+            ArgumentNullException.ThrowIfNull(fragmentainer);
+
+            ResetPaintClaims();
 
             g.PushClip(PageClipOverride ?? PageBoxRect);
 
-            if (Root is not null)
-            {
-                Root.ResetPaint();
-                await Root.Paint(g);
-            }
+            await fragmentainer.Root.Box.Paint(g, fragmentainer.Root);
 
             g.PopClip();
         }
+
+        /// <summary>
+        /// Fragments already painted on the page currently being painted. A fragment can be reached
+        /// twice in one page walk — once nested, once hoisted out for stacking-context ordering — and
+        /// must only paint the first time. Reference identity is deliberate: two structurally equal
+        /// fragments (a rowspan cell shown in each row it spans) are genuinely separate things to paint.
+        /// </summary>
+        private readonly HashSet<BoxFragment> _paintedFragments = new(ReferenceEqualityComparer.Instance);
+
+        /// <summary>
+        /// Claims <paramref name="fragment"/> for painting, returning false if it has already been
+        /// painted on this page.
+        /// </summary>
+        internal bool TryClaimForPaint(BoxFragment fragment) => _paintedFragments.Add(fragment);
+
+        /// <summary>
+        /// Forgets which fragments have been painted, so a new page's walk starts clean.
+        /// </summary>
+        internal void ResetPaintClaims() => _paintedFragments.Clear();
 
         /// <summary>
         /// Given the list of available media types, returns the "best" one

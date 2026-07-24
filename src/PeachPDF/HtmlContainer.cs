@@ -22,6 +22,7 @@ using PeachPDF.Utilities;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using PeachPDF.Html.Core.Fragments;
 
 namespace PeachPDF
 {
@@ -233,15 +234,16 @@ namespace PeachPDF
         }
 
         /// <summary>
-        /// Render the html using the given device.
+        /// Render one page of the laid-out html using the given device.
         /// </summary>
         /// <param name="g">the device to use to render</param>
-        public async ValueTask PerformPaint(XGraphics g)
+        /// <param name="fragmentainer">the page to render, from layout's fragment tree</param>
+        internal async ValueTask PerformPaint(XGraphics g, FragmentainerFragment fragmentainer)
         {
             ArgumentNullException.ThrowIfNull(g);
 
             using var ig = new GraphicsAdapter(HtmlContainerInt.Adapter, g, PixelsPerPoint);
-            await HtmlContainerInt.PerformPaint(ig);
+            await HtmlContainerInt.PerformPaint(ig, fragmentainer);
         }
 
         public void Dispose()
