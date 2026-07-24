@@ -2332,6 +2332,17 @@ var svgHtml = "<!DOCTYPE html><html><head>" + SvgShowcaseCss + "</head><body>" +
             """<svg viewBox="0 0 100 100" width="80" height="80"><text x="10"><tspan x="10" y="30" font-size="16" font-weight="bold" fill="#2980b9">Bold</tspan><tspan x="10" y="55" font-size="14" font-style="italic" fill="#c0392b">Italic</tspan><tspan x="10" y="80" font-size="12" fill="#16a085">Regular</tspan></text></svg>""",
             "own x/y starts a new line; size/weight/style vary")
     ) +
+    Row(
+        SvgSwatch("font-* inherited from an ancestor &lt;g&gt;",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><rect width="100" height="100" fill="#eafaf1"/><g font-family="serif" font-size="16" font-weight="bold" fill="#16a085"><text x="8" y="40">Peach</text><text x="8" y="72" font-size="1.5em">1.5em</text></g></svg>""",
+            "text inherits family/size/weight from &lt;g&gt;; 1.5em = 24"),
+        SvgSwatch("per-character x list + rotate",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><rect width="100" height="100" fill="#fef9e7"/><text x="6 22 38 54 70" y="55" rotate="0 12 -8 16 -12" font-size="22" fill="#c0392b">Peach</text></svg>""",
+            "each glyph its own x + rotation (SVG §10.4)"),
+        SvgSwatch("nested &lt;tspan&gt; along a &lt;textPath&gt;",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><defs><path id="tp" d="M8,72 Q50,8 92,72"/></defs><path d="M8,72 Q50,8 92,72" fill="none" stroke="#d5dbdb"/><text font-size="13" fill="#8e44ad"><textPath href="#tp">Pe<tspan fill="#c0392b" font-weight="bold">ach</tspan></textPath></text></svg>""",
+            "restyled tspan laid along the curve too")
+    ) +
 
     "<h2>20 — Inline &lt;svg&gt; vs &lt;img src=\"data:image/svg+xml\"&gt;</h2>" +
     "<p class=\"intro\">The identical SVG markup rendered two ways: embedded directly in the HTML, and encoded as a base64 data: URI on an &lt;img&gt; tag. Both go through the same vector renderer.</p>" +

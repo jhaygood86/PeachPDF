@@ -66,6 +66,13 @@ namespace PeachPDF.Svg
         public IEnumerable<ISvgSourceNode> Children =>
             _box.Boxes.Select(b => (ISvgSourceNode)new CssBoxSvgSourceNode(b, _svgRoot, _cssData, _media, _varContext));
 
+        public IEnumerable<SvgContentNode> ContentNodes =>
+            // A box with no HtmlTag is a loose text node (its Text is the run's characters); one with an
+            // HtmlTag is a child element. The HTML tokenizer already emits them as ordered child boxes.
+            _box.Boxes.Select(b => b.HtmlTag is null
+                ? SvgContentNode.OfText(b.Text ?? string.Empty)
+                : SvgContentNode.OfElement(new CssBoxSvgSourceNode(b, _svgRoot, _cssData, _media, _varContext)));
+
         /// <summary>
         /// Mirrors <c>DomParser.CascadeParseStyles</c>'s own precedent for reading a <c>&lt;style&gt;</c>
         /// box's CSS text (direct child boxes are plain text nodes, not further nested elements - the

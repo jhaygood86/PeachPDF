@@ -36,6 +36,15 @@ namespace PeachPDF.Svg
         IEnumerable<ISvgSourceNode> Children { get; }
 
         /// <summary>
+        /// This node's direct children - loose text nodes AND element nodes - in document order. Unlike
+        /// <see cref="Children"/> (elements only) and <see cref="GetTextContent"/> (own text flattened,
+        /// losing its position relative to child elements), this preserves the interleaving of text and
+        /// elements, which SVG text layout needs (e.g. the space in <c>&lt;text&gt;a &lt;tspan&gt;b&lt;/tspan&gt; c&lt;/text&gt;</c>,
+        /// and the ordering of text authored after a child element).
+        /// </summary>
+        IEnumerable<SvgContentNode> ContentNodes { get; }
+
+        /// <summary>
         /// The concatenated text content of this node's children - only meaningful for a
         /// <c>&lt;style&gt;</c> element's CSS text today; empty for a node whose children are all
         /// elements rather than text.
@@ -60,5 +69,31 @@ namespace PeachPDF.Svg
         /// CSS context, or null if the value is guaranteed-invalid.
         /// </summary>
         string? ResolveVar(string value) => value;
+    }
+
+    /// <summary>
+    /// One direct child of an <see cref="ISvgSourceNode"/> as seen by <see cref="ISvgSourceNode.ContentNodes"/>:
+    /// either a loose text node (<see cref="Text"/> set, <see cref="Element"/> null) or a child element
+    /// (<see cref="Element"/> set, <see cref="Text"/> null).
+    /// </summary>
+    internal readonly struct SvgContentNode
+    {
+        private SvgContentNode(string? text, ISvgSourceNode? element)
+        {
+            Text = text;
+            Element = element;
+        }
+
+        /// <summary>The raw (un-collapsed) text of a text node, or null when this is an element node.</summary>
+        public string? Text { get; }
+
+        /// <summary>The child element, or null when this is a text node.</summary>
+        public ISvgSourceNode? Element { get; }
+
+        /// <summary>True when this is a text node (<see cref="Text"/> is set).</summary>
+        public bool IsText => Element is null;
+
+        public static SvgContentNode OfText(string text) => new(text, null);
+        public static SvgContentNode OfElement(ISvgSourceNode element) => new(null, element);
     }
 }

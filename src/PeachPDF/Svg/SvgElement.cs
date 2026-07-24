@@ -13,6 +13,7 @@
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace PeachPDF.Svg
 {
@@ -103,22 +104,38 @@ namespace PeachPDF.Svg
 
     internal enum SvgTextAnchor { Start, Middle, End }
 
+    /// <summary>Which side of a <c>&lt;textPath&gt;</c>'s path its glyphs read along (SVG 2 <c>side</c>).</summary>
+    internal enum SvgTextPathSide { Left, Right }
+
+    /// <summary>One item of a text run's ordered <see cref="SvgTextElement.Content"/>: a text fragment or a child run.</summary>
+    internal abstract class SvgTextContentItem;
+
+    /// <summary>A run of this element's own (whitespace-collapsed) text, in document order among its content.</summary>
+    internal sealed class SvgTextFragment : SvgTextContentItem
+    {
+        public string Text { get; set; } = "";
+    }
+
+    /// <summary>A child run (<c>&lt;tspan&gt;</c>/<c>&lt;tref&gt;</c>/<c>&lt;textPath&gt;</c>) in document order among its content.</summary>
+    internal sealed class SvgTextSpan : SvgTextContentItem
+    {
+        public required SvgTextElement Run { get; init; }
+    }
+
     /// <summary>
-    /// A single positioned text run - built from a <c>&lt;text&gt;</c>, <c>&lt;tspan&gt;</c>, or
-    /// <c>&lt;tref&gt;</c> element (all three share this shape; only the root of a subtree is ever an
-    /// actual <c>&lt;text&gt;</c>). <see cref="HasOwnX"/>/<see cref="HasOwnY"/> distinguish "this run
-    /// starts a new absolute position" from "this run continues immediately after its previous
-    /// sibling's rendered width" (ordinary SVG text flow) - resolved at render time, once each run's
-    /// measured width is known (see <see cref="SvgRenderer"/>). Per-character <c>x</c>/<c>y</c>/
-    /// <c>dx</c>/<c>dy</c>/<c>rotate</c> arrays (SVG 1.1's full per-glyph positioning model) are out of
-    /// scope in v1 - only a single leading value applies to the whole run, the same simplification
-    /// already used elsewhere in this renderer (e.g. <c>&lt;switch&gt;</c>'s first-child-only rule).
-    /// A solid <see cref="SvgElement.Fill"/> is painted with the fast <see cref="Html.Adapters.RGraphics.DrawString"/>
-    /// path (a single-color text show, kept selectable); a gradient/pattern fill or any
-    /// <see cref="SvgElement.Stroke"/> instead outlines the glyph run to a vector path
-    /// (<see cref="Html.Adapters.RGraphics.GetTextOutline"/>) and fills/strokes it through the same
-    /// brush/pen machinery shapes use. When <see cref="PathData"/> is set (a <c>&lt;textPath&gt;</c>),
-    /// the run's glyphs are laid out along that path instead of a straight baseline.
+    /// A positioned text run - built from a <c>&lt;text&gt;</c>, <c>&lt;tspan&gt;</c>, <c>&lt;tref&gt;</c>,
+    /// or <c>&lt;textPath&gt;</c> element (all share this shape; only the root of a subtree is ever an
+    /// actual <c>&lt;text&gt;</c>). Its own text and child runs are held interleaved in document order in
+    /// <see cref="Content"/> (so text authored after a child element keeps its place). <see cref="HasOwnX"/>/
+    /// <see cref="HasOwnY"/> distinguish "this run starts a new absolute position (text chunk)" from
+    /// "continues from the current position" - resolved at render time (see <see cref="SvgRenderer"/>).
+    /// The per-character <c>x</c>/<c>y</c>/<c>dx</c>/<c>dy</c>/<c>rotate</c> lists (SVG 1.1 §10.4) are held
+    /// in <see cref="XList"/>/<see cref="YList"/>/<see cref="DxList"/>/<see cref="DyList"/>/<see cref="RotateList"/>;
+    /// they address this run's own characters (a value list on an ancestor also carries into a nested
+    /// run's characters, innermost-wins). A solid <see cref="SvgElement.Fill"/> without positioning/rotation
+    /// paints via the fast selectable <see cref="Html.Adapters.RGraphics.DrawString"/> path; positioned/
+    /// rotated glyphs, a gradient/pattern fill, or any <see cref="SvgElement.Stroke"/> outline each glyph.
+    /// When <see cref="PathData"/> is set (a <c>&lt;textPath&gt;</c>), the run's glyphs lay along that path.
     /// </summary>
     internal sealed class SvgTextElement : SvgElement
     {
@@ -128,21 +145,45 @@ namespace PeachPDF.Svg
         public double Y { get; set; }
         public double Dx { get; set; }
         public double Dy { get; set; }
+
+        /// <summary>The leading <c>rotate</c> value (= <c>RotateList[0]</c>); the full per-character list is in <see cref="RotateList"/>.</summary>
         public double RotateDegrees { get; set; }
+
+        /// <summary>Per-character absolute <c>x</c> list (SVG 1.1 §10.4); null when the attribute is absent.</summary>
+        public double[]? XList { get; set; }
+
+        /// <summary>Per-character absolute <c>y</c> list; null when absent.</summary>
+        public double[]? YList { get; set; }
+
+        /// <summary>Per-character relative <c>dx</c> list; null when absent.</summary>
+        public double[]? DxList { get; set; }
+
+        /// <summary>Per-character relative <c>dy</c> list; null when absent.</summary>
+        public double[]? DyList { get; set; }
+
+        /// <summary>Per-character <c>rotate</c> list (degrees); the last value repeats for the run's remaining characters. Null when absent.</summary>
+        public double[]? RotateList { get; set; }
+
         public SvgTextAnchor TextAnchor { get; set; } = SvgTextAnchor.Start;
+
+        /// <summary>The <c>&lt;textPath&gt;</c> <c>side</c> (default <see cref="SvgTextPathSide.Left"/>).</summary>
+        public SvgTextPathSide Side { get; set; } = SvgTextPathSide.Left;
 
         /// <summary>Null when the resolved font family (and the library-wide default fallback) couldn't be found - the run then renders nothing rather than throwing, unlike ordinary HTML text.</summary>
         public RFont? Font { get; set; }
 
-        /// <summary>This run's own direct text content only - not its <see cref="Spans"/>' text.</summary>
-        public string Text { get; set; } = "";
+        /// <summary>This run's own text and child runs, interleaved in document order.</summary>
+        public List<SvgTextContentItem> Content { get; } = [];
 
-        /// <summary>Child <c>&lt;tspan&gt;</c>/<c>&lt;tref&gt;</c> runs, in document order.</summary>
-        public List<SvgTextElement> Spans { get; } = [];
+        /// <summary>This run's own direct text only (the concatenation of its <see cref="SvgTextFragment"/> content), not its child spans' text.</summary>
+        public string Text => Content.Count == 0 ? "" : string.Concat(Content.OfType<SvgTextFragment>().Select(f => f.Text));
+
+        /// <summary>This run's child <c>&lt;tspan&gt;</c>/<c>&lt;tref&gt;</c>/<c>&lt;textPath&gt;</c> runs, in document order.</summary>
+        public IEnumerable<SvgTextElement> Spans => Content.OfType<SvgTextSpan>().Select(s => s.Run);
 
         /// <summary>
         /// The referenced path's geometry when this run is a <c>&lt;textPath&gt;</c> (its <c>href</c>
-        /// resolved to a <c>&lt;path&gt;</c>'s <c>d</c>), else null. When set, the run's glyphs are
+        /// resolved to a <c>&lt;path&gt;</c> or a basic shape), else null. When set, the run's glyphs are
         /// placed along the path via arc-length positioning rather than on a straight baseline.
         /// </summary>
         public IReadOnlyList<PathSegment>? PathData { get; set; }

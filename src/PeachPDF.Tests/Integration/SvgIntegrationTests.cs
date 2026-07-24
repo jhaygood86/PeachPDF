@@ -1739,6 +1739,91 @@ namespace PeachPDF.Tests.Integration
             Assert.NotEqual(startPdfText, middlePdfText);
         }
 
+        // ----- #188 text-model generalization - real-adapter end-to-end -----
+
+        [Fact]
+        public async Task InlineSvg_TextInheritsAncestorFontSize_ChangesRendering()
+        {
+            // A <text> with no font-size of its own now inherits the ancestor <g font-size> (larger than
+            // the UA default), which changes what reaches the content stream.
+            var inherited = await GetPdfText("""
+                <!DOCTYPE html><html><body><svg viewBox="0 0 200 100" width="200" height="100">
+                <g font-size="40"><text x="10" y="50" fill="#000000">Hi</text></g></svg></body></html>
+                """);
+            var uaDefault = await GetPdfText("""
+                <!DOCTYPE html><html><body><svg viewBox="0 0 200 100" width="200" height="100">
+                <text x="10" y="50" fill="#000000">Hi</text></svg></body></html>
+                """);
+
+            Assert.NotEqual(inherited, uaDefault);
+        }
+
+        [Fact]
+        public async Task InlineSvg_EmFontSize_ResolvesAgainstAncestor()
+        {
+            // Identical `font-size:1em` text renders differently under a 40- vs 10-unit ancestor font-size,
+            // proving em resolves against the true parent size (a fixed 16px approximation would tie them).
+            var big = await GetPdfText("""
+                <!DOCTYPE html><html><body><svg viewBox="0 0 200 100" width="200" height="100">
+                <g font-size="40"><text x="10" y="50" font-size="1em" fill="#000000">Hi</text></g></svg></body></html>
+                """);
+            var small = await GetPdfText("""
+                <!DOCTYPE html><html><body><svg viewBox="0 0 200 100" width="200" height="100">
+                <g font-size="10"><text x="10" y="50" font-size="1em" fill="#000000">Hi</text></g></svg></body></html>
+                """);
+
+            Assert.NotEqual(big, small);
+        }
+
+        [Fact]
+        public async Task InlineSvg_PerCharacterX_EmitsAGlyphShowPerCharacter()
+        {
+            // A per-character x list makes each character its own positioned text show; plain text is a
+            // single show for the whole run.
+            var perChar = await GetPdfText("""
+                <!DOCTYPE html><html><body><svg viewBox="0 0 200 100" width="200" height="100">
+                <text x="10 40 70" y="50" font-size="20" fill="#000000">abc</text></svg></body></html>
+                """);
+            var plain = await GetPdfText("""
+                <!DOCTYPE html><html><body><svg viewBox="0 0 200 100" width="200" height="100">
+                <text x="10" y="50" font-size="20" fill="#000000">abc</text></svg></body></html>
+                """);
+
+            Assert.True(CountOccurrences(perChar, "Tj") > CountOccurrences(plain, "Tj"));
+        }
+
+        [Fact]
+        public async Task InlineSvg_WhitespaceAcrossTspan_Preserved()
+        {
+            // The space between a run and a following <tspan> now survives subtree whitespace collapsing,
+            // so it changes the layout versus the same markup without that space.
+            var withSpace = await GetPdfText("""
+                <!DOCTYPE html><html><body><svg viewBox="0 0 200 100" width="200" height="100">
+                <text x="10" y="50" font-size="20" fill="#000000">a <tspan>b</tspan></text></svg></body></html>
+                """);
+            var withoutSpace = await GetPdfText("""
+                <!DOCTYPE html><html><body><svg viewBox="0 0 200 100" width="200" height="100">
+                <text x="10" y="50" font-size="20" fill="#000000">a<tspan>b</tspan></text></svg></body></html>
+                """);
+
+            Assert.NotEqual(withSpace, withoutSpace);
+        }
+
+        [Fact]
+        public async Task InlineSvg_TextPathWithNestedTspan_RendersAllGlyphs()
+        {
+            // A <tspan> nested in a <textPath> lays its glyph along the path too (the #289 dropped-"B"
+            // bug): three per-glyph text shows for A, B, C.
+            var pdfText = await GetPdfText("""
+                <!DOCTYPE html><html><body><svg viewBox="0 0 200 100" width="200" height="100">
+                <defs><path id="p" d="M10,50 L190,50"/></defs>
+                <text font-size="20" fill="#000000"><textPath href="#p">A<tspan>B</tspan>C</textPath></text>
+                </svg></body></html>
+                """);
+
+            Assert.True(CountOccurrences(pdfText, "Tj") >= 3);
+        }
+
         // ----- Clip-shape transform (issue #169) - real-adapter end-to-end -----
 
         private const string TransformedClipHtml = """
