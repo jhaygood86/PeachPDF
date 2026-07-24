@@ -297,6 +297,36 @@ namespace PeachPDF.Tests.CSS.PropertyTests
         }
 
         [Fact]
+        public void CssTransformOriginVerticalKeywordThenLengthIllegal()
+        {
+            // "top 2px" is invalid (CSS Transforms 1): the trailing <length> z-offset only exists in the
+            // two-value production, but "top" is a vertical-only keyword that cannot fill the horizontal
+            // position, and there is no second position value - so this is neither a valid single value nor a
+            // valid two-value pair, and the "2px" cannot be reinterpreted as a z-offset.
+            var snippet = "transform-origin:  top 2px ";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("transform-origin", property.Name);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TransformOriginProperty>(property);
+            var concrete = (TransformOriginProperty)property;
+            Assert.False(concrete.HasValue);
+        }
+
+        [Fact]
+        public void CssTransformOriginVerticalKeywordThenLengthWithZIllegal()
+        {
+            // As above, invalid for the same reason; a trailing <length> z-offset cannot rescue an invalid
+            // single-keyword-plus-length position.
+            var snippet = "transform-origin:  top 2px 10px ";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("transform-origin", property.Name);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TransformOriginProperty>(property);
+            var concrete = (TransformOriginProperty)property;
+            Assert.False(concrete.HasValue);
+        }
+
+        [Fact]
         public void CssTransformOriginXKeywordYOffsetLegal()
         {
             var snippet = "transform-origin:  left 2px ";
