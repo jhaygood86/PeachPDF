@@ -54,22 +54,26 @@ Portions of PeachPDF are sourced from third parties and are licensed under alter
 
 ### Test-suite font assets (not distributed)
 
-The following fonts are embedded in the `PeachPDF.Tests` project **solely as test assets** — so the test suite can exercise font matching, `unicode-range` selection, subsetting/embedding, and monochrome-emoji (astral / `cmap` format-12) rendering against real font files rather than depending on whatever fonts happen to be installed on the machine running the tests. They are **not shipped in the PeachPDF library or its NuGet package**, and impose no obligation on applications that consume PeachPDF. Each is licensed under the [SIL Open Font License 1.1](https://openfontlicense.org/):
+The following fonts are embedded in the `PeachPDF.Tests` project **solely as test assets** — so the test suite can exercise font matching, `unicode-range` selection, subsetting/embedding, monochrome-emoji (astral / `cmap` format-12), and color-glyph (`COLR`/`CPAL`) rendering against real font files rather than depending on whatever fonts happen to be installed on the machine running the tests. They are **not shipped in the PeachPDF library or its NuGet package**, and impose no obligation on applications that consume PeachPDF. The OFL-licensed fonts are each under the [SIL Open Font License 1.1](https://openfontlicense.org/):
 
 | Font | License |
 |---|---|
 | Noto Emoji (subset; © 2013 Google LLC) — see `src/PeachPDF.Tests/NotoEmoji-Regular.LICENSE.txt` | [SIL OFL 1.1](https://openfontlicense.org/) |
+| Noto Color Emoji (COLR v1 subset; © 2013 Google LLC) — see `src/PeachPDF.Tests/NotoColorEmoji-Subset.LICENSE.txt` | [SIL OFL 1.1](https://openfontlicense.org/) |
 | Inter | [SIL OFL 1.1](https://openfontlicense.org/) |
 | Source Code Pro | [SIL OFL 1.1](https://openfontlicense.org/) |
 | Source Sans 3 | [SIL OFL 1.1](https://openfontlicense.org/) |
 
+The two hand-authored `COLR` color-glyph fixtures used by the color-font tests (`ColorTestV0.ttf` / `ColorTestV1.ttf`) contain no third-party font data and are released into the public domain (CC0); see `src/PeachPDF.Tests/TestSupport/Fonts/ColorTestFonts.LICENSE.txt`.
+
 ### Showcase assets (not distributed)
 
-The following asset is embedded in the `PeachPDF.TestHarness` project **solely to render a showcase** — it is **not shipped in the PeachPDF library or its NuGet package**, and imposes no obligation on applications that consume PeachPDF. Its original license notice is kept intact in the file header and in an accompanying `LICENSE.txt`:
+The following assets are embedded in the `PeachPDF.TestHarness` project **solely to render a showcase** — they are **not shipped in the PeachPDF library or its NuGet package**, and impose no obligation on applications that consume PeachPDF. Each original license notice is kept intact in the file header and/or an accompanying `LICENSE.txt`:
 
 | Asset | License |
 |---|---|
 | [Charts.css](https://chartscss.org) v1.2.0 (© 2020 Rami Yushuvaev) — the pure-CSS charting framework used by the [Charts.css showcase](showcase.html); see `src/PeachPDF.TestHarness/charts.css.LICENSE.txt` | [MIT](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF.TestHarness/charts.css.LICENSE.txt) |
+| Noto Color Emoji (COLR v1 subset; © 2013 Google LLC) — the real color-emoji font in the [Color Fonts showcase](showcase.html); see `src/PeachPDF.TestHarness/NotoColorEmoji-Subset.LICENSE.txt` | [SIL OFL 1.1](https://openfontlicense.org/) |
 
 ## License FAQ
 

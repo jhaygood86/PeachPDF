@@ -133,6 +133,57 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         }
 
         [Fact]
+        public void ColrV1_ParsesRadialAndSweepGradients()
+        {
+            OpenTypeFontface face = Face(BundledFonts.ColorV1);
+            ColrTable colr = face.colr;
+
+            var radial = Assert.IsType<ColrPaintRadialGradient>(
+                Assert.IsType<ColrPaintGlyph>(colr.GetV1BaseGlyphPaint(Gid(face, 'R'))).Paint);
+            Assert.Equal(500, radial.X1, 3);
+            Assert.Equal(400, radial.R1, 3);
+            Assert.Equal(2, radial.Line.Stops.Count);
+
+            var sweep = Assert.IsType<ColrPaintSweepGradient>(
+                Assert.IsType<ColrPaintGlyph>(colr.GetV1BaseGlyphPaint(Gid(face, 'S'))).Paint);
+            Assert.Equal(500, sweep.CenterX, 3);
+            Assert.Equal(3, sweep.Line.Stops.Count);
+        }
+
+        [Fact]
+        public void ColrV1_ParsesTransformFamilyAndColrGlyphReference()
+        {
+            OpenTypeFontface face = Face(BundledFonts.ColorV1);
+            ColrTable colr = face.colr;
+
+            // Every transform-family paint normalizes to a ColrPaintTransform wrapping its child:
+            // C=scale-around-center, O=rotate-around-center, K=skew, W=affine, D=scale, E=scale-uniform,
+            // H=scale-uniform-around-center, I=rotate, J=skew-around-center.
+            foreach (char ch in new[] { 'C', 'O', 'K', 'W', 'D', 'E', 'H', 'I', 'J' })
+            {
+                var transform = Assert.IsType<ColrPaintTransform>(colr.GetV1BaseGlyphPaint(Gid(face, ch)));
+                Assert.NotNull(transform.Paint);
+            }
+
+            // General affine transform ('W') carries the authored translation.
+            var affine = Assert.IsType<ColrPaintTransform>(colr.GetV1BaseGlyphPaint(Gid(face, 'W'))).Affine;
+            Assert.Equal(50, affine.DX, 3);
+            Assert.Equal(50, affine.DY, 3);
+
+            // PaintColrGlyph references another base glyph.
+            var colrGlyph = Assert.IsType<ColrPaintColrGlyph>(colr.GetV1BaseGlyphPaint(Gid(face, 'L')));
+            Assert.Equal(Gid(face, 'A'), colrGlyph.GlyphId);
+        }
+
+        [Fact]
+        public void Colr_UnknownGlyph_ReturnsNoPaint()
+        {
+            OpenTypeFontface face = Face(BundledFonts.ColorV1);
+            Assert.Null(face.colr.GetV1BaseGlyphPaint(Gid(face, 'X'))); // 'X' is a plain outline glyph
+            Assert.Null(face.colr.GetLayerPaint(9999));                 // out-of-range layer index
+        }
+
+        [Fact]
         public void OrdinaryFont_HasNoColorTables()
         {
             OpenTypeFontface face = Face(BundledFonts.Ttf);

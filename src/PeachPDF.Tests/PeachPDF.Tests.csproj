@@ -41,6 +41,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>ColorTestV1.ttf</Link>
     </None>
+    <None Include="NotoColorEmoji-Subset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="TestSupport\acid2.html">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

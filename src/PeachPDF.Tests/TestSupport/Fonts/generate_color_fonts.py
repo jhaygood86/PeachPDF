@@ -50,14 +50,19 @@ def outline_glyphs():
     glyphs["tri"] = pen.glyph()
 
     # Empty glyphs (color base glyphs carry no glyf outline; space has none either).
-    for name in ("colorA", "colorB", "grad", "xform", "compo", "gradF", "space", ".notdef"):
+    for name in ("colorA", "colorB", "grad", "xform", "compo", "gradF",
+                 "radialG", "sweepG", "scaleG", "rotateG", "skewG", "xfG", "colrRef",
+                 "scaleP", "scaleUP", "scaleUCP", "rotateP", "skewCP",
+                 "space", ".notdef"):
         glyphs[name] = TTGlyphPen(None).glyph()
 
     return glyphs
 
 
 def build_base(family_name):
-    glyph_order = [".notdef", "space", "box", "circ", "tri", "colorA", "colorB", "grad", "xform", "compo", "gradF"]
+    glyph_order = [".notdef", "space", "box", "circ", "tri", "colorA", "colorB", "grad", "xform",
+                   "compo", "gradF", "radialG", "sweepG", "scaleG", "rotateG", "skewG", "xfG", "colrRef",
+                   "scaleP", "scaleUP", "scaleUCP", "rotateP", "skewCP"]
     cmap = {
         0x20: "space",
         0x58: "box",     # 'X' - a plain outline glyph in a color font (fallback path)
@@ -69,6 +74,18 @@ def build_base(family_name):
         0x54: "xform",   # 'T'
         0x4D: "compo",   # 'M' - composite (multiply blend)
         0x46: "gradF",   # 'F' - reflect-extend linear gradient
+        0x52: "radialG", # 'R' - radial gradient
+        0x53: "sweepG",  # 'S' - sweep (conic) gradient
+        0x43: "scaleG",  # 'C' - scale-around-center transform
+        0x4F: "rotateG", # 'O' - rotate-around-center transform
+        0x4B: "skewG",   # 'K' - skew transform
+        0x57: "xfG",     # 'W' - affine transform (PaintTransform)
+        0x4C: "colrRef", # 'L' - PaintColrGlyph reference to 'colorA'
+        0x44: "scaleP",  # 'D' - PaintScale
+        0x45: "scaleUP", # 'E' - PaintScaleUniform
+        0x48: "scaleUCP",# 'H' - PaintScaleUniformAroundCenter
+        0x49: "rotateP", # 'I' - PaintRotate
+        0x4A: "skewCP",  # 'J' - PaintSkewAroundCenter
     }
     advances = {n: 1000 for n in glyph_order}
     advances["space"] = 500
@@ -137,6 +154,50 @@ def build_v1():
             "ColorLine": {"ColorStop": [(0.0, 0), (1.0, 2)], "Extend": ot.ExtendMode.REFLECT},
             "x0": 400, "y0": 0, "x1": 600, "y1": 0, "x2": 400, "y2": 800,
         }),
+        # Radial gradient (two circles).
+        "radialG": glyph("box", {
+            "Format": ot.PaintFormat.PaintRadialGradient,
+            "ColorLine": {"ColorStop": [(0.0, 0), (1.0, 2)], "Extend": ot.ExtendMode.PAD},
+            "x0": 500, "y0": 400, "r0": 0, "x1": 500, "y1": 400, "r1": 400,
+        }),
+        # Sweep (conic) gradient.
+        "sweepG": glyph("box", {
+            "Format": ot.PaintFormat.PaintSweepGradient,
+            "ColorLine": {"ColorStop": [(0.0, 0), (0.5, 1), (1.0, 2)], "Extend": ot.ExtendMode.PAD},
+            "centerX": 500, "centerY": 400, "startAngle": 0, "endAngle": 360,
+        }),
+        # Scale-around-center over a green box.
+        "scaleG": {
+            "Format": ot.PaintFormat.PaintScaleAroundCenter,
+            "scaleX": 0.5, "scaleY": 0.5, "centerX": 500, "centerY": 400,
+            "Paint": glyph("box", solid(1)),
+        },
+        # Rotate-around-center over a red triangle.
+        "rotateG": {
+            "Format": ot.PaintFormat.PaintRotateAroundCenter,
+            "angle": 45, "centerX": 500, "centerY": 400,
+            "Paint": glyph("tri", solid(0)),
+        },
+        # Skew over a blue box.
+        "skewG": {
+            "Format": ot.PaintFormat.PaintSkew,
+            "xSkewAngle": 15, "ySkewAngle": 0,
+            "Paint": glyph("box", solid(2)),
+        },
+        # General affine transform over a yellow triangle.
+        "xfG": {
+            "Format": ot.PaintFormat.PaintTransform,
+            "Transform": (1.0, 0.0, 0.0, 1.0, 50.0, 50.0),
+            "Paint": glyph("tri", solid(3)),
+        },
+        # PaintColrGlyph: reuse colorA's paint.
+        "colrRef": {"Format": ot.PaintFormat.PaintColrGlyph, "Glyph": "colorA"},
+        # The remaining transform variants (non-around-center scale/rotate, uniform scales, skew-around-center).
+        "scaleP": {"Format": ot.PaintFormat.PaintScale, "scaleX": 0.6, "scaleY": 0.8, "Paint": glyph("box", solid(0))},
+        "scaleUP": {"Format": ot.PaintFormat.PaintScaleUniform, "scale": 0.7, "Paint": glyph("box", solid(1))},
+        "scaleUCP": {"Format": ot.PaintFormat.PaintScaleUniformAroundCenter, "scale": 0.7, "centerX": 500, "centerY": 400, "Paint": glyph("box", solid(2))},
+        "rotateP": {"Format": ot.PaintFormat.PaintRotate, "angle": 30, "Paint": glyph("tri", solid(3))},
+        "skewCP": {"Format": ot.PaintFormat.PaintSkewAroundCenter, "xSkewAngle": 10, "ySkewAngle": 5, "centerX": 500, "centerY": 400, "Paint": glyph("box", solid(0))},
     }
     fb.setupCOLR(colr, version=1)
     fb.font.save(os.path.join(HERE, "ColorTestV1.ttf"))

@@ -4765,6 +4765,56 @@ await SaveShowcaseAsync("responsive_media_dark", "Responsive Design", "Dark Mode
         PreferredColorScheme = PdfColorScheme.Dark
     });
 
+// Color fonts (COLR/CPAL) rendered as vector content. The hero row is a subset of the real COLRv1
+// build of Noto Color Emoji; the feature breakdown uses a small hand-authored public-domain COLRv1
+// fixture whose glyphs isolate each paint feature.
+var notoColorB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoColorEmoji-Subset.ttf")));
+var colorFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "ColorTestV1.ttf")));
+string ColorGlyph(string ch, string title, string detail) =>
+    "<td>" +
+    $"<div class=\"cg\">{ch}</div>" +
+    $"<div class=\"desc\">{title}</div>" +
+    $"<div class=\"css\">{detail}</div>" +
+    "</td>";
+var colorEmojiHtml =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    $"@font-face {{ font-family: 'NotoColor'; src: url('data:font/truetype;base64,{notoColorB64}') format('truetype'); }}" +
+    $"@font-face {{ font-family: 'ColorTest'; src: url('data:font/truetype;base64,{colorFontB64}') format('truetype'); }}" +
+    "body { font: 9pt Arial, sans-serif; margin: 0 }" +
+    "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
+    "h2 { font-size: 11pt; margin: 1.1em 0 0.4em; padding-bottom: 2px; border-bottom: 1px solid #999 }" +
+    "p.intro { margin: 0 0 0.8em; color: #555 }" +
+    ".emoji { font-family: 'NotoColor'; font-size: 46pt; line-height: 1.25; letter-spacing: 10pt }" +
+    "table.sw { border-collapse: collapse; width: 100%; }" +
+    "table.sw td { padding: 6px; vertical-align: top; width: 33%; text-align: center }" +
+    ".cg { font-family: 'ColorTest'; font-size: 52pt; line-height: 1; height: 70px }" +
+    ".desc { font-size: 8pt; font-weight: bold; color: #444; margin-top: 4px }" +
+    ".css { font-size: 7pt; color: #666 }" +
+    "</style></head><body>" +
+    "<h1>Color fonts (COLR / CPAL)</h1>" +
+    "<p class=\"intro\">COLR/CPAL color-glyph fonts are rendered as native PDF vector content — no font " +
+    "program is embedded for these glyphs; each is drawn as vector fills. The row below is the real " +
+    "COLR&nbsp;v1 build of Noto Color Emoji (gradients, transforms, compositing all handled).</p>" +
+    "<div class=\"emoji\">\U0001F600 ❤ \U0001F44D \U0001F680 \U0001F308 ⭐ \U0001F525 \U0001F642</div>" +
+    "<h2>COLR paint features</h2>" +
+    "<p class=\"intro\">The same pipeline, broken down by paint type (hand-authored COLR&nbsp;v1 fixture):</p>" +
+    "<table class=\"sw\"><tr>" +
+    ColorGlyph("A", "Layered solids", "PaintColrLayers → red box under a green triangle") +
+    ColorGlyph("B", "Single solid", "PaintGlyph → PaintSolid (blue)") +
+    ColorGlyph("G", "Linear gradient", "PaintLinearGradient (red → blue)") +
+    "</tr><tr>" +
+    ColorGlyph("T", "Transform", "PaintTranslate over a yellow triangle") +
+    ColorGlyph("M", "Blend compositing", "PaintComposite MULTIPLY (blue × yellow → black)") +
+    ColorGlyph("F", "Reflect gradient", "PaintLinearGradient, EXTEND_REFLECT") +
+    "</tr></table>" +
+    "</body></html>";
+await SaveShowcaseAsync("color_emoji", "Text &amp; Fonts", "Color Fonts (COLR/CPAL)",
+    "COLR/CPAL color-glyph fonts — including the real COLR v1 build of Noto Color Emoji — rendered as " +
+    "native PDF vector content: layered palette colors, gradients, transforms, and blend-mode " +
+    "compositing. Glyphs are drawn as vectors, not embedded font programs.",
+    colorEmojiHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // The manifest that drives the website's /showcase page (see docs/showcase.html and
 // .github/workflows/pages.yml). Field names are camelCased for Liquid (site.data.showcases).
 var manifestJson = JsonSerializer.Serialize(showcaseManifest,

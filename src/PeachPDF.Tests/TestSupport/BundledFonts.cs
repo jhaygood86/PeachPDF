@@ -51,6 +51,14 @@ namespace PeachPDF.Tests.TestSupport
         internal static string ColorV1 => Path.Combine(AppContext.BaseDirectory, "ColorTestV1.ttf");
 
         /// <summary>
+        /// A subset of the real COLR <b>version 1</b> build of Noto Color Emoji (see
+        /// NotoColorEmoji-Subset.LICENSE.txt): color glyphs via COLR/CPAL over <c>glyf</c> outlines
+        /// (gradients, transforms, compositing), covering a handful of common emoji. Used to prove the
+        /// color-glyph pipeline end to end against a real production color font.
+        /// </summary>
+        internal static string ColorEmoji => Path.Combine(AppContext.BaseDirectory, "NotoColorEmoji-Subset.ttf");
+
+        /// <summary>
         /// A real font file path: the first one the host OS reports, or the bundled TTF
         /// if the host reports none.
         /// </summary>

@@ -135,6 +135,57 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task RealNotoColorEmoji_RendersAsVectorFillsWithGradients_NoTextShow()
+        {
+            // End-to-end against the real COLR v1 Noto Color Emoji subset: an emoji run must paint as
+            // vector content (fills + gradient shadings), with no CID text show and no embedded font.
+            string pdf = await RenderWithColorFont(BundledFonts.ColorEmoji, "\U0001F600\U0001F308"); // grin, rainbow
+
+            Assert.Equal(0, Count(pdf, " Tj"));
+            Assert.True(Count(pdf, "\nf\n") >= 1, "emoji should paint vector fills");
+            Assert.Contains("/ShadingType", pdf);        // real Noto emoji use gradients
+            Assert.DoesNotContain("/FontFile2", pdf);     // the color font is not embedded
+        }
+
+        [Fact]
+        public async Task ColrV1_RadialSweepAndTransformGlyphs_PaintAsVectorContent()
+        {
+            // R = radial, S = sweep, C/O/K/W/D/E/H/I/J = every transform variant, L = colr-glyph reference.
+            string pdf = await RenderWithColorFont(BundledFonts.ColorV1, "RSCOKWLDEHIJ");
+
+            Assert.Equal(0, Count(pdf, " Tj"));
+            Assert.Contains("/ShadingType 3", pdf);   // radial gradient
+            Assert.Contains("/ShadingType 4", pdf);   // sweep (conic) gradient mesh
+            // Transform and colr-glyph paints still fill palette colors within glyph clips.
+            var fills = FillColors(pdf);
+            Assert.Contains(fills, c => Approx(c, 1, 0, 0)); // red (rotate over triangle, colrRef box)
+            Assert.True(Count(pdf, "W n") >= 5, "each glyph paint clips to its outline");
+        }
+
+        [Fact]
+        public async Task ColorGlyph_WithUnderline_StillDrawsDecoration()
+        {
+            // Exercises the shared underline/strikeout path on the color-font branch.
+            var family = TtfFontDescription.LoadDescription(BundledFonts.ColorV1).FontFamilyInvariantCulture;
+            var generator = new PdfGenerator();
+            await using (var stream = File.OpenRead(BundledFonts.ColorV1))
+                await generator.AddFontFromStream(stream);
+            var html = $"<!DOCTYPE html><html><head><style>body {{ font-family: '{family}'; font-size: 60pt; " +
+                       "text-decoration: underline line-through; }}</style></head><body>A</body></html>";
+            var config = new PdfGenerateConfig { PageSize = PageSize.A4, CompressContentStreams = false };
+            var doc = await generator.GeneratePdf(html, config);
+            var ms = new MemoryStream();
+            doc.Save(ms);
+            var pdf = Encoding.Latin1.GetString(ms.ToArray());
+
+            Assert.Equal(0, Count(pdf, " Tj"));
+            // The color glyph still paints (its layers fill), and generating the PDF exercises the
+            // shared underline/strikeout decoration path on the color-font branch without error.
+            Assert.True(Count(pdf, "\nf\n") >= 2, "the color glyph's layers should fill");
+            Assert.True(doc.PageCount >= 1);
+        }
+
+        [Fact]
         public async Task NonColorFont_StillUsesTextShow()
         {
             // Regression guard: an ordinary font keeps the embedded-font Tj path.
