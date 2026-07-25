@@ -367,13 +367,12 @@ namespace PeachPDF.Html.Core.Dom
         public string BreakInside { get; set; } = CssConstants.Auto;
         public string BreakAfter { get; set; } = CssConstants.Auto;
 
-        // css-break-3 §6.2. Stored and cascaded, but nothing reads it yet, so neither value is honored:
-        // a box split across a page paints its whole border/background and lets the page clip cut it
-        // (slice-like), while an inline split across lines gets slice-like borders but re-resolves its
-        // background and border-radius per line rect (clone-like). A future implementation has two sets
-        // of edges to drive off: BoxFragment.IsFirstFragment/IsLastFragment for the page breaks (see
-        // Html/Core/Fragments/Fragment.cs), and the per-line rect index in FragmentPainter's own
-        // PaintBoxContent loop for the line breaks.
+        // css-break-3 §6.2, honored at both the page breaks of a block box and the line-box breaks of an
+        // inline one. Read by Html/Core/Paint/BoxDecorationGeometry, which owns the whole decision and
+        // resolves it against the per-rectangle geometry the fragment tree carries
+        // (Html/Core/Fragments/SliceGeometry) - deliberately not against BoxFragment's
+        // IsFirstFragment/IsLastFragment, whose span includes descendants. Layout also reserves room for
+        // cloned decorations, so a cloned border at a break pushes content rather than overlapping it.
         public string BoxDecorationBreak { get; set; } = CssConstants.Slice;
 
         // Enforced in CssBox.PerformLayoutImp, for plain (non-multi-column) block flow only: a box whose

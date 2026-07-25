@@ -7,6 +7,7 @@ using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace PeachPDF.Html.Core.Paint
@@ -27,15 +28,19 @@ namespace PeachPDF.Html.Core.Paint
         /// own normal paint path uses so canvas-fill behavior matches per-box behavior exactly.
         /// </summary>
         internal static void PaintCanvasBackground(RGraphics g, CssBox box, RRect rect) =>
-            PaintBackground(g, box, rect, isFirst: true);
+            PaintBackground(g, box, BoxDecorationGeometry.Unbroken(rect));
 
         /// <summary>
         /// Paints the background of a box.
         /// </summary>
         /// <param name="g">the device to draw into</param>
         /// <param name="box">the box whose background style is painted</param>
-        /// <param name="rect">the bounding rectangle to draw in</param>
-        /// <param name="isFirst">is it the first rectangle of the element</param>
+        /// <param name="geometry">
+        /// where this background resolves, per <c>box-decoration-break</c> — see
+        /// <see cref="BoxDecorationGeometry"/>. The caller pushes
+        /// <see cref="BoxDecorationGeometry.ClipRect"/> when the geometry says so; this method paints the
+        /// whole of <see cref="BoxDecorationGeometry.DecorationRect"/> and lets that clip cut it.
+        /// </param>
         /// <param name="firstLineStyle">
         /// When set, this rect is on the target's first formatted line under a <c>::first-line</c>
         /// rule - its resolved <c>background-color</c> is used instead of the box's own. Only
@@ -44,8 +49,10 @@ namespace PeachPDF.Html.Core.Paint
         /// those, like border/padding/border-radius (genuine box-model properties CSS2.1 never allows
         /// on <c>::first-line</c> at all), always come from the box's own resolved style.
         /// </param>
-        internal static void PaintBackground(RGraphics g, CssBox box, RRect rect, bool isFirst, CssBox? firstLineStyle = null)
+        internal static void PaintBackground(RGraphics g, CssBox box, in BoxDecorationGeometry geometry, CssBox? firstLineStyle = null)
         {
+            var rect = geometry.DecorationRect;
+
             if (rect is not { Width: > 0, Height: > 0 }) return;
 
             RRect BoxModelRect(string value) => value switch
@@ -121,7 +128,7 @@ namespace PeachPDF.Html.Core.Paint
 
                 void DrawBrush(RBrush brush) => PaintClippedBrush(g, box, brush, clipRect, roundedClipPath);
 
-                CssImagePainter.Paint(g, box.BackgroundImages![layerIndex], layerIndex, isFirst, originRect, clipRect,
+                CssImagePainter.Paint(g, box.BackgroundImages![layerIndex], layerIndex, originRect, clipRect,
                     roundedClipPath, box.BackgroundPosition, box.BackgroundSize, box.BackgroundRepeat, box.BackgroundAttachment,
                     viewportRect, box, DrawBrush);
 
@@ -159,11 +166,21 @@ namespace PeachPDF.Html.Core.Paint
         /// overlap rather than abut, there are no partial-alpha shared edges to double-blend into seam lines,
         /// and the corners round off automatically over the blur radius. Layers paint last-listed first so the
         /// first-declared shadow ends up on top.
+        /// <para>
+        /// Under <c>box-decoration-break: slice</c> the shadow belongs to the unbroken box and "no
+        /// box-shadow is drawn at a broken edge" (css-break-3 §6.2), so the shape is built over
+        /// <see cref="BoxDecorationGeometry.DecorationRect"/> and cut at the break edges only. It is
+        /// deliberately <b>not</b> clipped to this fragment's own rectangle the way the background is: a
+        /// shadow legitimately falls outside the box it belongs to, so clipping it there would erase it.
+        /// </para>
         /// </summary>
-        private static void PaintBoxShadows(RGraphics g, CssBox box, RRect borderBox, bool inset)
+        private static void PaintBoxShadows(RGraphics g, CssBox box, in BoxDecorationGeometry geometry, bool inset)
         {
             var layers = BoxShadowGrammar.TryParse(CssValueParser.GetCssTokens(box.BoxShadow));
             if (layers is null || layers.Count == 0) return;
+
+            var borderBox = geometry.DecorationRect;
+            var sliced = PushBreakEdgeClip(g, box, geometry, layers);
 
             for (var i = layers.Count - 1; i >= 0; i--)
             {
@@ -181,6 +198,47 @@ namespace PeachPDF.Html.Core.Paint
                 else
                     PaintOutsetShadow(g, box, borderBox, dx, dy, blur, spread, color);
             }
+
+            if (sliced)
+                g.PopClip();
+        }
+
+        /// <summary>
+        /// Confines a sliced shadow to this fragment, cutting it at the fragmentation breaks and nowhere
+        /// else: an edge the box really owns keeps the room the shadow needs to spill into, an edge that is
+        /// a break stops exactly at the fragment. Returns whether a clip was pushed.
+        /// </summary>
+        /// <remarks>
+        /// The room to spill is measured from the shadow layers themselves rather than taken from the
+        /// current clip: <c>RGraphics.GetClip</c> reports the last rectangle pushed, which for an
+        /// unclipped surface is unbounded, and inflating that produces meaningless coordinates.
+        /// </remarks>
+        private static bool PushBreakEdgeClip(
+            RGraphics g, CssBox box, in BoxDecorationGeometry geometry, IReadOnlyList<BoxShadowGrammar.ShadowLayer> layers)
+        {
+            if (geometry is { HasLeftEdge: true, HasRightEdge: true }) return false;
+
+            var bleed = 0d;
+
+            foreach (var layer in layers)
+            {
+                var dx = Math.Abs(CssValueParser.ParseLength(layer.OffsetX, 0, box));
+                var dy = Math.Abs(CssValueParser.ParseLength(layer.OffsetY, 0, box));
+                var blur = CssValueParser.ParseLength(layer.Blur, 0, box);
+                var spread = CssValueParser.ParseLength(layer.Spread, 0, box);
+
+                bleed = Math.Max(bleed, Math.Max(dx, dy) + Math.Max(0, blur) + Math.Max(0, spread));
+            }
+
+            var shape = geometry.DecorationRect;
+
+            g.PushClip(RRect.FromLTRB(
+                geometry.HasLeftEdge ? shape.Left - bleed : geometry.ClipRect.Left,
+                shape.Top - bleed,
+                geometry.HasRightEdge ? shape.Right + bleed : geometry.ClipRect.Right,
+                shape.Bottom + bleed));
+
+            return true;
         }
 
         /// <summary>Resolves a shadow layer's authored color string to an <see cref="RColor"/>; a null/omitted
@@ -414,14 +472,18 @@ namespace PeachPDF.Html.Core.Paint
         /// <param name="g">the device to draw into</param>
         /// <param name="box">the box whose decoration style is painted</param>
         /// <param name="rectangle">the decoration rectangle</param>
-        /// <param name="isFirst">whether this is the box's first rectangle</param>
-        /// <param name="isLast">whether this is the box's last rectangle</param>
+        /// <param name="hasLeftEdge">
+        /// whether the box's leading padding and border belong to this rectangle, and so inset the
+        /// decoration's start. False at a fragmentation break under <c>box-decoration-break: slice</c>, where
+        /// no padding is inserted (css-break-3 §6.2), and always true under <c>clone</c>.
+        /// </param>
+        /// <param name="hasRightEdge">whether the box's trailing padding and border belong to this rectangle</param>
         /// <param name="firstLineStyle">
         /// When set, this rectangle is on the target's first formatted line under a <c>::first-line</c>
         /// rule - its resolved text-decoration/color/font (for underline-offset) are used instead of
         /// the box's own.
         /// </param>
-        private static void PaintDecoration(RGraphics g, CssBox box, RRect rectangle, bool isFirst, bool isLast, CssBox? firstLineStyle = null)
+        private static void PaintDecoration(RGraphics g, CssBox box, RRect rectangle, bool hasLeftEdge, bool hasRightEdge, CssBox? firstLineStyle = null)
         {
             // The `text-decoration` shorthand is expanded into these longhands by the CSS-OM (Layer A) before
             // it ever reaches the box, so the painter reads the longhands directly. text-decoration-line may
@@ -447,11 +509,11 @@ namespace PeachPDF.Html.Core.Paint
             var textDecorationActualColor = string.IsNullOrEmpty(textDecorationColor) ? styleSource.ActualColor : box.HtmlContainer!.CssParser.ParseColor(textDecorationColor);
 
             double x1 = rectangle.X;
-            if (isFirst)
+            if (hasLeftEdge)
                 x1 += box.ActualPaddingLeft + box.ActualBorderLeftWidth;
 
             double x2 = rectangle.Right;
-            if (isLast)
+            if (hasRightEdge)
                 x2 -= box.ActualPaddingRight + box.ActualBorderRightWidth;
 
             var dashStyle = textDecorationStyle switch
@@ -527,7 +589,7 @@ namespace PeachPDF.Html.Core.Paint
             {
                 var rect = line.Rect;
                 if (rect.Width <= 0 || rect.Height <= 0) continue;
-                CssImagePainter.Paint(g, box.ContentImage, layerIndex: 0, isFirst: true,
+                CssImagePainter.Paint(g, box.ContentImage, layerIndex: 0,
                     originRect: rect, clipRect: rect, roundedClipPath: null,
                     positionList: "0% 0%", sizeList: CssConstants.Auto, repeatList: "no-repeat",
                     attachmentList: CssConstants.Scroll, viewportRect: rect, box: box,

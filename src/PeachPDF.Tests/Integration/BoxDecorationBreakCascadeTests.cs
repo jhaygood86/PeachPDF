@@ -12,8 +12,9 @@ namespace PeachPDF.Tests.Integration
     /// structural clone of the box.
     /// <para>
     /// Everything here is driven through the real cascade rather than the <see cref="CssUtils"/> setter, so a
-    /// missing registry entry or a lost global-keyword chain in the converter fails loudly. Paint is out of
-    /// scope: nothing reads the value yet, so these tests assert storage only.
+    /// missing registry entry or a lost global-keyword chain in the converter fails loudly. These tests assert
+    /// storage only — what the stored value then does to the output is
+    /// <see cref="BoxDecorationBreakPaintIntegrationTests"/>.
     /// </para>
     /// </summary>
     public class BoxDecorationBreakCascadeTests

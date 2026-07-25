@@ -152,7 +152,7 @@ namespace PeachPDF.Html.Core.Dom
             using var graphicsAdapter = new GraphicsAdapter(adapter, g, pixelsPerPoint);
             var paintRect = new RRect(rect.X * pixelsPerPoint, rect.Y * pixelsPerPoint, rect.Width * pixelsPerPoint, rect.Height * pixelsPerPoint);
 
-            CssImagePainter.Paint(graphicsAdapter, image, layerIndex: 0, isFirst: true,
+            CssImagePainter.Paint(graphicsAdapter, image, layerIndex: 0,
                 originRect: paintRect, clipRect: paintRect, roundedClipPath: null,
                 positionList: positionList, sizeList: CssConstants.Auto, repeatList: "no-repeat",
                 attachmentList: CssConstants.Scroll, viewportRect: paintRect, box: rootBox,

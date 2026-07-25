@@ -341,7 +341,148 @@ namespace PeachPDF.Tests.Html.Core.Fragments
             Assert.True(tree.Fragmentainers[0].Geometry.BandHeight < tree.Fragmentainers[1].Geometry.BandHeight);
         }
 
+        // ─── Slice geometry (box-decoration-break, css-break-3 §6.2) ───────────────
+
+        [Fact]
+        public async Task WrappingInline_CarriesTheUnbrokenBoxAsSeenFromEachLine()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div style='width:200pt;font:10pt Arial'><span id='s'>Alpha<br>Beta<br>Gamma</span></div>"));
+
+            var span = LayoutHarness.FindById(root, "s")!;
+            var lines = LinesOf(container.FragmentTree!, "s");
+            Assert.Equal(3, lines.Count);
+
+            // The unbroken box is the span on one infinitely long line, so it is as wide as the three
+            // rectangles put together...
+            var total = span.Rectangles.Values.Sum(r => r.Width);
+            Assert.All(lines, line => Assert.Equal(total, line.Slice.UnbrokenStrip.Width, 3));
+
+            // ...positioned so each line's own slice of it lines up. That is what puts the strip's left edge
+            // at the first line's left and its right edge at the last line's right, which is in turn what
+            // makes a rounded or gradient-filled decoration come out sliced with no per-corner special case.
+            var preceding = 0d;
+            for (var i = 0; i < lines.Count; i++)
+            {
+                Assert.Equal(lines[i].Rect.X - preceding, lines[i].Slice.UnbrokenStrip.X, 3);
+                preceding += lines[i].Rect.Width;
+            }
+
+            Assert.Equal(lines[0].Rect.Left, lines[0].Slice.UnbrokenStrip.Left, 3);
+            Assert.Equal(lines[^1].Rect.Right, lines[^1].Slice.UnbrokenStrip.Right, 3);
+        }
+
+        [Fact]
+        public async Task WrappingInline_OwnsOnlyItsTrueOuterEdges()
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div style='width:200pt;font:10pt Arial'><span id='s'>Alpha<br>Beta<br>Gamma</span></div>"));
+
+            var lines = LinesOf(container.FragmentTree!, "s");
+
+            Assert.Equal([true, false, false], lines.Select(l => l.Slice.HasLeftEdge));
+            Assert.Equal([false, false, true], lines.Select(l => l.Slice.HasRightEdge));
+        }
+
+        [Fact]
+        public async Task InlineSpanningAPageBreak_KeepsCountingEdgesAcrossPages()
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div style='width:200pt;font:10pt Arial;line-height:30pt'>" +
+                "<span id='s'>Alpha<br>Beta<br>Gamma<br>Delta</span></div>"),
+                pageHeight: 80, margin: 0);
+
+            var tree = container.FragmentTree!;
+            Assert.True(tree.Fragmentainers.Count >= 2, "fixture must paginate");
+
+            // Three lines land on page 0 and the fourth on page 1. Edges belong to the box, not to a page,
+            // so the leading edge is on page 0's first line and the trailing edge on page 1's only line -
+            // page 0's last line owns neither, even though it is the last one *there*.
+            var page0 = LinesOf(tree, "s", page: 0);
+            var page1 = LinesOf(tree, "s", page: 1);
+
+            Assert.Equal([true, false, false], page0.Select(l => l.Slice.HasLeftEdge));
+            Assert.Equal([false, false, false], page0.Select(l => l.Slice.HasRightEdge));
+            Assert.All(page1, l => Assert.False(l.Slice.HasLeftEdge));
+            Assert.True(page1[^1].Slice.HasRightEdge);
+        }
+
+        [Fact]
+        public async Task BlockSpanningAPageBreak_CutsItsFragmentRectToEachBand()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                // The background is what makes the second page carry printable content, so it is materialized
+                // at all (CSS Paged Media 3 §3.2 — a content-empty slot never becomes a page).
+                LayoutHarness.Wrap("<div id='tall' style='height:300pt;background:#0f0'>x</div>"),
+                pageHeight: 200, margin: 0);
+
+            var tall = LayoutHarness.FindById(root, "tall")!;
+            var tree = container.FragmentTree!;
+            Assert.Equal(2, tree.Fragmentainers.Count);
+
+            foreach (var fragmentainer in tree.Fragmentainers)
+            {
+                var line = Assert.Single(LinesOf(tree, "tall", fragmentainer.SlotIndex));
+
+                // A block-level box is one rectangle, so nothing slices it in the inline axis...
+                Assert.Equal(line.Rect, line.Slice.UnbrokenStrip);
+                Assert.True(line.Slice.HasLeftEdge);
+                Assert.True(line.Slice.HasRightEdge);
+
+                // ...but it is fragmented in the block axis, and the fragment rect is the part of it that
+                // lives in this band - which is what `clone` closes off with its own border.
+                Assert.True(line.Slice.FragmentRect.Height < tall.Bounds.Height,
+                    $"expected the band-cut rect to be shorter than the whole box ({tall.Bounds.Height})");
+                Assert.InRange(line.Slice.FragmentRect.Bottom, 0, fragmentainer.Geometry.BandHeight + container.MarginTop + 1);
+            }
+        }
+
+        [Fact]
+        public async Task UnfragmentedBox_IsItsOwnDecorationArea()
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap("<div id='d' style='height:20pt'>x</div>"));
+
+            var line = Assert.Single(LinesOf(container.FragmentTree!, "d"));
+
+            Assert.Equal(line.Rect, line.Slice.UnbrokenStrip);
+            Assert.Equal(line.Rect, line.Slice.FragmentRect);
+            Assert.True(line.Slice.HasLeftEdge);
+            Assert.True(line.Slice.HasRightEdge);
+        }
+
+        [Fact]
+        public async Task RowspanCell_ShownInEveryRowItSpans_CarriesTheSameSliceGeometry()
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<table><tr><td id='spanning' rowspan='2'>tall</td><td>a</td></tr><tr><td>b</td></tr></table>"));
+
+            // The same cell box appears once per row it spans, through a CssSpacingBox. Each appearance is a
+            // distinct fragment, and none of them is a slice of anything.
+            var lines = LinesOf(container.FragmentTree!, "spanning");
+            Assert.NotEmpty(lines);
+
+            Assert.All(lines, line =>
+            {
+                Assert.Equal(line.Rect, line.Slice.UnbrokenStrip);
+                Assert.True(line.Slice.HasLeftEdge);
+                Assert.True(line.Slice.HasRightEdge);
+            });
+        }
+
         // ─── Helpers ───────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// A box's decoration rectangles, in the order they were laid out — across every page, or on one
+        /// named page.
+        /// </summary>
+        private static List<LineFragment> LinesOf(FragmentTree tree, string id, int? page = null) =>
+        [
+            .. FragmentsOf(tree, id)
+                .Where(f => page is null || f.FragmentainerIndex == page)
+                .SelectMany(f => f.Lines)
+                .OrderBy(l => l.Rect.Y).ThenBy(l => l.Rect.X)
+        ];
 
         private static string ThreePageBlocks() => string.Concat(
             Enumerable.Range(0, 30).Select(i => $"<p style='margin:0;height:20pt'>line {i}</p>"));

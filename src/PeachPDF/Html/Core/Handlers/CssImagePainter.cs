@@ -18,7 +18,16 @@ namespace PeachPDF.Html.Core.Handlers
         /// (or, when a real <c>background-size</c> makes the layer smaller/larger than the box, get rendered
         /// once into a <see cref="RGraphics.CreateTile"/> tile and then positioned/repeated exactly like a
         /// url() image); URL images are drawn directly via <see cref="BackgroundImageDrawHandler"/>.
-        /// The <paramref name="isFirst"/> flag gates URL painting (URL images only appear on the first rectangle).
+        /// <para>
+        /// A layer is painted over whatever positioning area it is handed, with no notion of which of a
+        /// broken box's rectangles this is. That is what makes it correct under both
+        /// <c>box-decoration-break</c> values: the caller hands it the unbroken box under <c>slice</c>, so a
+        /// <c>no-repeat</c> image lands wherever in the box it belongs (on the last line for
+        /// <c>background-position: right</c>) and is cut by the clip to the rectangle that contains it, and
+        /// hands it each fragment's own box under <c>clone</c>, so the image appears once per fragment. A box
+        /// with an image layer is kept off <see cref="Paint.BoxDecorationGeometry"/>'s short path precisely
+        /// so this holds.
+        /// </para>
         /// <paramref name="attachmentList"/> is the (possibly comma-list, per-layer) resolved
         /// background-attachment value; for a layer resolving to <c>fixed</c>, <paramref name="viewportRect"/>
         /// (the page/viewport rect, in the same paint-time coordinate space as <paramref name="originRect"/>)
@@ -30,7 +39,6 @@ namespace PeachPDF.Html.Core.Handlers
             RGraphics g,
             CssImage image,
             int layerIndex,
-            bool isFirst,
             RRect originRect,
             RRect clipRect,
             RGraphicsPath? roundedClipPath,
@@ -47,7 +55,7 @@ namespace PeachPDF.Html.Core.Handlers
 
             switch (image)
             {
-                case CssImage.Url urlImage when isFirst && urlImage.Image != null:
+                case CssImage.Url urlImage when urlImage.Image != null:
                 {
                     var sizeValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(sizeList), layerIndex);
                     var positionValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(positionList), layerIndex);
@@ -57,7 +65,7 @@ namespace PeachPDF.Html.Core.Handlers
                         intrinsicSizeInCssPixels: true);
                     break;
                 }
-                case CssImage.Url urlImage when isFirst && urlImage.SvgDocument != null:
+                case CssImage.Url urlImage when urlImage.SvgDocument != null:
                     PaintSvgLayer(g, urlImage.SvgDocument, layerIndex, positioningRect, clipRect, roundedClipPath,
                         positionList, sizeList, repeatList, box);
                     break;
