@@ -136,8 +136,7 @@ namespace PeachPDF.Html.Core.Utils
 
                 // css-break §5.2: a forced break value on either side of the pair takes precedence
                 // over a break-avoidance value on the other - such a pair is never kept together.
-                if (prev.BreakAfter is CssConstants.Page or CssConstants.Always
-                    || current.BreakBefore is CssConstants.Page or CssConstants.Always)
+                if (prev.BreakAfter is CssConstants.Page || current.BreakBefore is CssConstants.Page)
                     break;
 
                 if (prev.BreakAfter is not CssConstants.Avoid && current.BreakBefore is not CssConstants.Avoid)

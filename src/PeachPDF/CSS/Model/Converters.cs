@@ -280,6 +280,7 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter BreakModeConverter = Map.BreakModes.ToConverter();
         public static readonly IValueConverter BreakInsideModeConverter = Map.BreakInsideModes.ToConverter();
         public static readonly IValueConverter PageBreakModeConverter = Map.PageBreakModes.ToConverter();
+        public static readonly IValueConverter PageBreakInsideModeConverter = Map.PageBreakInsideModes.ToConverter();
         public static readonly IValueConverter UnicodeModeConverter = Map.UnicodeModes.ToConverter();
         public static readonly IValueConverter VisibilityConverter = Map.Visibilities.ToConverter();
         public static readonly IValueConverter PlayStateConverter = Map.PlayStates.ToConverter();
