@@ -16,6 +16,7 @@ using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Entities;
+using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System;
@@ -259,30 +260,64 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         /// <param name="g"></param>
         /// <param name="blockBox"></param>
-        public static async ValueTask CreateLineBoxes(RGraphics g, CssBox blockBox)
+        public static async ValueTask<InlineBreakToken?> CreateLineBoxes(RGraphics g, CssBox blockBox, InlineBreakToken? resume = null)
         {
             ArgumentNullException.ThrowIfNull(g);
             ArgumentNullException.ThrowIfNull(blockBox);
 
-            blockBox.LineBoxes.Clear();
+            var context = blockBox.HtmlContainer?.CurrentFragmentainer;
+            var fragmenting = context is { IsFragmenting: true };
+
+            // A resumed flow continues the same block: its earlier lines live in a fragmentainer that
+            // has already been filled, so they are neither cleared nor re-finalized.
+            var completedLines = resume?.CompletedLineCount ?? 0;
+            if (resume is null) blockBox.LineBoxes.Clear();
 
             var limitRight = blockBox.ClientRight;
 
             //Get the start x and y of the blockBox
             var startX = blockBox.ClientLeft;
-            var startY = blockBox.ClientTop;
+
+            // Resumed content starts at the new fragmentainer's own content edge. `text-indent` applies
+            // to the first formatted line only (CSS Text §5), so it is not re-applied here.
+            var startY = resume is not null && context is not null ? context.ResumeContentTop : blockBox.ClientTop;
+
+            var seedLine = new CssLineBox(blockBox);
 
             CssLineBoxCoordinates coordinates = new()
             {
-                Line = new CssLineBox(blockBox),
-                CurrentX = startX + blockBox.ActualTextIndent,
+                Line = seedLine,
+                CurrentX = startX + (resume is null ? blockBox.ActualTextIndent : 0),
                 CurrentY = startY,
                 MaxRight = startX,
-                MaxBottom = startY
+                MaxBottom = startY,
+                Fragmentainer = fragmenting ? context : null,
+                ResumeOrdinal = resume?.ResumeWordIndex ?? 0,
+                SuppressLeadingWrap = resume is not null
             };
 
             //Flow words and boxes
             await FlowBox(g, blockBox, blockBox, limitRight, 0, startX, coordinates);
+
+            // A resumed flow's seed line is abandoned when its first word forces a wrap - a <br>, or
+            // content that no longer fits. Leaving it behind would put an empty line box in the middle
+            // of the block's line list, which every count-based rule downstream reads: orphans/widows
+            // counts lines either side of a boundary, and ::first-line matches by index.
+            if (resume is not null && seedLine.Words.Count == 0)
+            {
+                blockBox.LineBoxes.Remove(seedLine);
+            }
+
+            if (coordinates.Break is { } stopped)
+            {
+                // The line being built when the break was taken belongs to the next fragmentainer, so
+                // it is discarded here and rebuilt whole by the resumed pass - a line box never
+                // straddles a fragmentainer (css-break-3 §4.1). Everything still in the list is
+                // complete, which is what the resumed pass must not re-finalize.
+                blockBox.LineBoxes.Remove(coordinates.Line);
+                FinalizeLineBoxes(blockBox, completedLines);
+                return stopped with { CompletedLineCount = blockBox.LineBoxes.Count };
+            }
 
             // if width is not restricted we need to lower it to the actual width
             if (blockBox.ActualRight >= 90999)
@@ -290,15 +325,7 @@ namespace PeachPDF.Html.Core.Dom
                 blockBox.ActualRight = coordinates.MaxRight + blockBox.ActualPaddingRight + blockBox.ActualBorderRightWidth;
             }
 
-            //Gets the rectangles for each line-box
-            foreach (var lineBox in blockBox.LineBoxes)
-            {
-                ApplyHorizontalAlignment(lineBox);
-                ApplyRightToLeft(blockBox, lineBox);
-                BubbleRectangles(blockBox, lineBox);
-                ApplyVerticalAlignment(lineBox);
-                lineBox.AssignRectanglesToBoxes();
-            }
+            FinalizeLineBoxes(blockBox, completedLines);
 
             blockBox.ActualBottom = coordinates.MaxBottom + blockBox.ActualPaddingBottom + blockBox.ActualBorderBottomWidth;
 
@@ -306,6 +333,27 @@ namespace PeachPDF.Html.Core.Dom
             if (blockBox.Height != CssConstants.Auto && blockBox.Overflow == CssConstants.Hidden && blockBox.ActualBottom - blockBox.Location.Y > blockBox.ActualHeight)
             {
                 blockBox.ActualBottom = blockBox.Location.Y + blockBox.ActualHeight + blockBox.ActualPaddingBottom + blockBox.ActualPaddingTop;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Aligns and bubbles the line boxes this pass produced, starting at
+        /// <paramref name="firstLine"/>. Lines below that index were emitted into an earlier
+        /// fragmentainer; re-running alignment over them would re-align and re-bubble geometry that has
+        /// already been consumed, against a later pass's <c>MaxRight</c>.
+        /// </summary>
+        private static void FinalizeLineBoxes(CssBox blockBox, int firstLine)
+        {
+            for (var i = firstLine; i < blockBox.LineBoxes.Count; i++)
+            {
+                var lineBox = blockBox.LineBoxes[i];
+                ApplyHorizontalAlignment(lineBox);
+                ApplyRightToLeft(blockBox, lineBox);
+                BubbleRectangles(blockBox, lineBox);
+                ApplyVerticalAlignment(lineBox);
+                lineBox.AssignRectanglesToBoxes();
             }
         }
 
@@ -1118,7 +1166,10 @@ namespace PeachPDF.Html.Core.Dom
                 var leftSpacing = (b.Position != CssConstants.Absolute && b.Position != CssConstants.Fixed) ? b.ActualMarginLeft + b.ActualBorderLeftWidth + b.ActualPaddingLeft : 0;
                 var rightSpacing = (b.Position != CssConstants.Absolute && b.Position != CssConstants.Fixed) ? b.ActualMarginRight + b.ActualBorderRightWidth + b.ActualPaddingRight : 0;
 
-                b.RectanglesReset();
+                // A resumed flow is continuing this block, so the per-line rectangles bubbled into
+                // inline boxes by the fragmentainers already filled must survive - resetting them here
+                // would blank out their backgrounds, borders and text decoration on those pages.
+                if (coordinates.ResumeOrdinal == 0) b.RectanglesReset();
                 await b.MeasureWordsSize(g);
 
                 // Still on blockBox's first formatted line and a ::first-line rule applies to it -
@@ -1161,6 +1212,12 @@ namespace PeachPDF.Html.Core.Dom
                     {
                         var word = b.Words[wordIndex];
 
+                        // The walk order is fixed, so this ordinal names a position in it. Words below
+                        // the resume point were placed in an earlier fragmentainer: their geometry and
+                        // their line boxes already exist and this pass must not touch them.
+                        var wordOrdinal = coordinates.WordOrdinal++;
+                        if (wordOrdinal < coordinates.ResumeOrdinal) continue;
+
                         if (coordinates.MaxBottom - coordinates.CurrentY < box.ActualLineHeight)
                             coordinates.MaxBottom += box.ActualLineHeight - (coordinates.MaxBottom - coordinates.CurrentY);
 
@@ -1191,7 +1248,19 @@ namespace PeachPDF.Html.Core.Dom
                             overflows = false;
                         }
 
-                        if (!word.SuppressWrapBefore && (overflows || word.IsLineBreak || wrapNoWrapBox))
+                        // A resumed flow's opening line is empty, so there is nothing to wrap away from;
+                        // honouring the wrap would leave a blank line at the top of the fragmentainer.
+                        var wrapping = !word.SuppressWrapBefore && (overflows || word.IsLineBreak || wrapNoWrapBox);
+
+                        if (wrapping && coordinates is { SuppressLeadingWrap: true, Line.Words.Count: 0 })
+                        {
+                            wrapping = false;
+                            wrapNoWrapBox = false;
+                        }
+
+                        coordinates.SuppressLeadingWrap = false;
+
+                        if (wrapping)
                         {
                             // b's content straddles the line-1/2 boundary: its words were measured
                             // using blockBox's first-line style (above), but word (and everything after
@@ -1216,11 +1285,18 @@ namespace PeachPDF.Html.Core.Dom
                             }
 
                             coordinates.Line = new CssLineBox(blockBox);
+                            coordinates.LineStartOrdinal = wordOrdinal;
 
                             if (word.IsImage || word.Equals(b.FirstWord))
                             {
                                 coordinates.CurrentX += leftSpacing;
                             }
+                        }
+                        else if (coordinates.Line.Words.Count == 0)
+                        {
+                            // First word of the flow's opening line, which was created by the caller
+                            // rather than by a wrap.
+                            coordinates.LineStartOrdinal = wordOrdinal;
                         }
 
                         coordinates.Line.ReportExistanceOf(word);
@@ -1237,7 +1313,31 @@ namespace PeachPDF.Html.Core.Dom
 
                         if (box is { IsFixed: false, IsTableCell: false } && box.HtmlContainer?.SuppressWordPageBreaks != true)
                         {
-                            word.BreakPage();
+                            if (coordinates.Fragmentainer is not null)
+                            {
+                                // The same question CssRect.BreakPage asks, answered one step earlier so
+                                // this flow can stop here instead of relocating the word and carrying on.
+                                // The break is taken at the start of the line, not at this word: a line
+                                // box is monolithic (css-break-3 §4.1), so the whole of it moves to the
+                                // next fragmentainer rather than leaving its shorter words behind.
+                                if (word.WouldStraddleFragmentainer())
+                                {
+                                    // CompletedLineCount is filled in by CreateLineBoxes once the
+                                    // in-progress line has been discarded, since that is what fixes how
+                                    // many lines this fragmentainer actually kept.
+                                    coordinates.Break = new InlineBreakToken(
+                                        blockBox,
+                                        // The fragmentainer after the one this line was trying to sit
+                                        // in, which is not in general the one after the pass's own.
+                                        box.HtmlContainer!.PageIndexOf(word.Top + HtmlContainerInt.PageBoundaryEpsilon) + 1,
+                                        [], coordinates.LineStartOrdinal, CompletedLineCount: 0);
+                                    return;
+                                }
+                            }
+                            else
+                            {
+                                word.BreakPage();
+                            }
                         }
 
                         coordinates.CurrentX = word.Left + word.FullWidth;
@@ -1250,6 +1350,8 @@ namespace PeachPDF.Html.Core.Dom
                         word.Left += box.ActualMarginLeft;
                         word.Top += box.ActualMarginTop;
                     }
+
+                    if (coordinates.Break is not null) return;
 
                     // A box holding its words directly (e.g. a ::before/::after pseudo-element,
                     // whose generated text lives on the box itself rather than an anonymous
@@ -1307,6 +1409,7 @@ namespace PeachPDF.Html.Core.Dom
                 else
                 {
                     await FlowBox(g, blockBox, b, limitRight, lineSpacing, lineStartX, coordinates);
+                    if (coordinates.Break is not null) return;
                     ApplyAtomicInlineVerticalInsets(b, box, coordinates);
                 }
 

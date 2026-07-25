@@ -258,20 +258,43 @@ namespace PeachPDF.Html.Core.Dom
                 $"{Text!.Replace(' ', '-').Replace("\n", "\\n")} ({Text.Length} char{(Text.Length != 1 ? "s" : string.Empty)})";
         }
 
-        public bool BreakPage()
+        /// <summary>
+        /// Whether this word, at its current <see cref="Top"/>, crosses a fragmentainer boundary — the
+        /// one predicate both the resumable inline flow and the legacy relocation below decide on.
+        /// </summary>
+        /// <remarks>
+        /// A word taller than a whole band never counts as straddling: there is no fragmentainer it
+        /// could fit in, so moving it would only repeat the question on the next one. That makes it
+        /// monolithic content in the sense of
+        /// <see href="https://www.w3.org/TR/css-break-3/#monolithic">css-break-3 §2</see> — it overflows
+        /// rather than being split.
+        /// </remarks>
+        public bool WouldStraddleFragmentainer()
         {
             var container = OwnerBox.HtmlContainer;
 
             if (Height >= container!.PageSize.Height)
                 return false;
 
-            // See CssBox.BreakPage's comment - the epsilons make a line ending exactly ON a slot
-            // boundary a non-break (it fits wholly in the earlier slot).
-            if (container.PageIndexOf(Top + HtmlContainerInt.PageBoundaryEpsilon)
-                >= container.PageIndexOf(Bottom - HtmlContainerInt.PageBoundaryEpsilon))
+            // The epsilons make a line ending exactly ON a slot boundary a non-break (it fits wholly in
+            // the earlier slot).
+            return container.PageIndexOf(Top + HtmlContainerInt.PageBoundaryEpsilon)
+                   < container.PageIndexOf(Bottom - HtmlContainerInt.PageBoundaryEpsilon);
+        }
+
+        public bool BreakPage()
+        {
+            var container = OwnerBox.HtmlContainer;
+
+            if (!WouldStraddleFragmentainer())
                 return false;
 
-            Top = container.NextPageTopOf(Top) + 1;
+            // The fragmentainer's own content edge, per css-break-3 §2. This used to land one unit
+            // below it, purely to keep a relocated word off the exact boundary value - a question the
+            // page grid's own epsilons already answer, and which the band-overlap test in the fragment
+            // builder answers the same way (a rect starting exactly at a band top belongs to that band
+            // and overlaps the previous one by zero).
+            Top = container.NextPageTopOf(Top);
             return true;
         }
     }

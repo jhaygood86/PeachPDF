@@ -17,6 +17,7 @@ using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
+using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Paint;
 using PeachPDF.Html.Core.Parse;
@@ -196,6 +197,41 @@ namespace PeachPDF.Html.Core
         /// independently drifted to), permanently desyncing the word from its own box.
         /// </summary>
         internal bool SuppressWordPageBreaks { get; set; }
+
+        /// <summary>
+        /// The fragmentainer the current layout pass is filling, or null outside
+        /// <see cref="LayoutDocument"/> (and for the unpaginated/measurement pass, which has no grid to
+        /// break against). Layout reads this rather than the page grid directly wherever it needs to
+        /// know which fragmentainer it is in.
+        /// </summary>
+        internal FragmentainerContext? CurrentFragmentainer { get; private set; }
+
+        /// <summary>
+        /// Whether a break may be taken for the content being laid out right now. False during a
+        /// measurement pass at a provisional position, inside monolithic content, and outside a
+        /// <see cref="LayoutDocument"/> pass, where there is no fragmentainer to break against.
+        /// </summary>
+        internal bool IsFragmenting => CurrentFragmentainer?.IsFragmenting ?? false;
+
+        /// <summary>
+        /// Increments once per <see cref="LayoutDocument"/> invocation. A box records the generation it
+        /// last laid out in, so resumption state left behind by an earlier invocation — the
+        /// unrestricted-width double layout, the per-page-width reflow loop, <c>ShrinkToFit</c>'s
+        /// re-layout — is recognised as stale instead of being resumed into.
+        /// </summary>
+        internal int LayoutGeneration { get; private set; }
+
+        /// <summary>
+        /// How many fragmentainer passes the last <see cref="LayoutDocument"/> ran — one, plus one per
+        /// break it had to resume from. A document whose content never overflows a fragmentainer takes a
+        /// single pass, which is what keeps the common case as cheap as the old single-flow model.
+        /// </summary>
+        internal int FragmentainerPasses { get; private set; }
+
+        /// <summary>
+        /// Defensive backstop on the driver loop, mirroring the cap the fragment-tree slot walk uses.
+        /// </summary>
+        private const int MaxFragmentainers = 100_000;
 
         /// <summary>
         /// The top-left most location of the rendered html.<br/>
@@ -481,23 +517,14 @@ namespace PeachPDF.Html.Core
             Root.Size = new RSize(MaxSize.Width > 0 ? MaxSize.Width : PageSize.Width, 0);
             Root.Location = Location;
 
-            // Every layout pass starts from a clean named-page registry and geometry table:
-            // registrations append (they aren't idempotent), so without this each re-layout pass
-            // (the unrestricted-width double layout below, ShrinkToFit's re-layout) accumulated
-            // duplicates and began with a stale ActivePageName from the PREVIOUS pass's last
-            // element, which could spuriously force or suppress the first named-page break.
-            ClearNamedPageElements();
-            PageGeometry.Reset();
-            await Root.PerformLayout(g);
+            await LayoutDocument(g);
 
             if (MaxSize.Width <= 0.1)
             {
                 // in case the width is not restricted we need to double layout, first will find the width so second can layout by it (center alignment)
                 Root.Size = new RSize((int)Math.Ceiling(ActualSize.Width), 0);
                 ActualSize = RSize.Empty;
-                ClearNamedPageElements();
-                PageGeometry.Reset();
-                await Root.PerformLayout(g);
+                await LayoutDocument(g);
             }
 
             // Per-page horizontal reflow (CSS Paged Media 3: "the edges of the page area act as a
@@ -520,9 +547,7 @@ namespace PeachPDF.Html.Core
                     Root.Size = new RSize(rootWidth, 0);
                     Root.Location = Location;
                     ActualSize = RSize.Empty;
-                    ClearNamedPageElements();
-                    PageGeometry.Reset();
-                    await Root.PerformLayout(g);
+                    await LayoutDocument(g);
 
                     var current = PageAssignmentSignature();
                     if (current.SequenceEqual(previous)) break;
@@ -547,6 +572,78 @@ namespace PeachPDF.Html.Core
             // tree everything downstream consumes. Built once, after the reflow loop has settled, so
             // the tree can never describe an intermediate pass's geometry.
             FragmentTree = FragmentTreeBuilder.Build(this);
+        }
+
+        /// <summary>
+        /// Lays the document out once, filling one fragmentainer at a time: a pass targets a
+        /// fragmentainer, and where content does not fit it records where it stopped so the next pass
+        /// can resume from exactly that point
+        /// (<see href="https://www.w3.org/TR/css-break-3/#breaking-controls">CSS Fragmentation Level 3
+        /// §2/§4.4</see>).
+        /// </summary>
+        /// <remarks>
+        /// This is the atom the three re-layout loops in <see cref="PerformLayout"/> and
+        /// <c>PdfGenerator</c>'s <c>ShrinkToFit</c> pass all share. The named-page registry and page
+        /// geometry table are reset here, once per invocation and never per fragmentainer — a
+        /// document's registrations accumulate <i>across</i> its fragmentainers, and only a whole new
+        /// layout invalidates them.
+        /// </remarks>
+        private async ValueTask LayoutDocument(RGraphics g)
+        {
+            LayoutGeneration++;
+            FragmentainerPasses = 0;
+
+            // Registrations append (they aren't idempotent), so without this each re-layout accumulated
+            // duplicates and began with a stale ActivePageName from the PREVIOUS invocation's last
+            // element, which could spuriously force or suppress the first named-page break.
+            ClearNamedPageElements();
+            PageGeometry.Reset();
+
+            BreakToken? token = null;
+
+            try
+            {
+                var slot = 0;
+
+                for (var pass = 0; pass < MaxFragmentainers; pass++)
+                {
+                    var context = new FragmentainerContext(this, Root!, slot);
+                    CurrentFragmentainer = context;
+
+                    Root!.ResumeAt(token, resumeTopOverride: null);
+                    await Root.PerformLayout(g);
+                    FragmentainerPasses++;
+
+                    var next = context.OutgoingToken;
+
+                    if (next is null) break;
+
+                    if (next == token)
+                    {
+                        // The pass reproduced the record it was handed, so re-entering would resume at
+                        // the same point forever. Lay the remainder out monolithically instead: an
+                        // overflowing fragmentainer is a far better outcome than dropped content, and
+                        // it is what css-break-3 §4.3's own last-resort relaxation amounts to.
+                        ReportError(HtmlRenderErrorType.Layout, "Layout could not advance past a fragmentainer boundary");
+
+                        var final = new FragmentainerContext(this, Root, slot);
+                        final.EnterMonolithic();
+                        CurrentFragmentainer = final;
+
+                        Root.ResumeAt(token, resumeTopOverride: null);
+                        await Root.PerformLayout(g);
+                        FragmentainerPasses++;
+                        break;
+                    }
+
+                    token = next;
+                    slot = next.ResumeSlotIndex;
+                }
+            }
+            finally
+            {
+                CurrentFragmentainer = null;
+            }
         }
 
         /// <summary>
