@@ -49,10 +49,12 @@ namespace PeachPDF.Html.Core.Fragments
         /// <summary>
         /// Tolerance for deciding that a decoration rectangle's edge coincides with the unbroken box's own
         /// edge — that is, that it is a real box edge rather than a fragmentation break
-        /// (<see cref="SliceGeometry.HasLeftEdge"/>). A coordinate comparison, so it is deliberately not
-        /// <see cref="BandOverlapEpsilon"/>'s overlap tolerance.
+        /// (<see cref="SliceGeometry.HasLeftEdge"/>). Deliberately <see cref="RRect"/>'s own equality
+        /// tolerance rather than <see cref="BandOverlapEpsilon"/>'s overlap one: paint compares the strip to
+        /// the rectangle with <c>==</c> to decide whether anything needs slicing at all, so a finer tolerance
+        /// here could call an edge broken on a rectangle paint had already judged unbroken.
         /// </summary>
-        private const double EdgeEpsilon = 1e-6;
+        private const double EdgeEpsilon = 0.001;
 
         /// <summary>
         /// Identifies a box within the walk. A repeating table header's source subtree is reached
@@ -230,7 +232,7 @@ namespace PeachPDF.Html.Core.Fragments
                     // §6.2's geometry is computed from ALL of the box's rectangles, not just the ones
                     // that survive the band filter below: a decoration a break slices is defined by the
                     // whole unbroken box, which no single fragmentainer can see.
-                    var slices = SliceGeometriesOf(rectangles, isFixed, container, slot, originY);
+                    var slices = SliceGeometriesOf(box, rectangles, isFixed, container, slot, originY);
 
                     foreach (var (line, rect) in rectangles)
                     {
@@ -250,7 +252,7 @@ namespace PeachPDF.Html.Core.Fragments
                         // the strip is the rectangle itself. Its block axis is still fragmented, which is
                         // what the band-cut FragmentRect carries.
                         lines.Add(new LineFragment(local, null,
-                            new SliceGeometry(local, Localize(BandCut(bounds, isFixed, container, slot), originY),
+                            new SliceGeometry(local, Localize(BandCut(bounds, box, isFixed, container, slot), originY),
                                 HasLeftEdge: true, HasRightEdge: true)));
                     }
                 }
@@ -478,9 +480,22 @@ namespace PeachPDF.Html.Core.Fragments
         /// (<see href="https://www.w3.org/TR/css-break-3/#break-decoration">§6.2</see>). Rectangles that
         /// fit inside the band come back unchanged, which is every rectangle of an unfragmented box.
         /// </summary>
-        private static RRect BandCut(RRect rect, bool isFixed, HtmlContainerInt container, CandidateSlot slot)
+        /// <remarks>
+        /// A cloning <b>ancestor</b> re-opens with its own border and padding at the band edge, and each
+        /// fragment is wrapped independently — so a nested box's fragment starts inside its ancestors' and the
+        /// band it may occupy is inset by them. Without that inset every level of a nested cloning stack would
+        /// close on the same line, drawing each border over the last, while layout (which reserves the whole
+        /// nested sum) left a gap where the inner borders should have been.
+        /// </remarks>
+        private static RRect BandCut(RRect rect, CssBox box, bool isFixed, HtmlContainerInt container, CandidateSlot slot)
         {
             var (bandTop, bandBottom) = BandOf(isFixed, container, slot);
+
+            if (container.HasCloneDecorations)
+            {
+                bandTop += DomUtils.ClonedBlockStart(box.ParentBox);
+                bandBottom -= DomUtils.ClonedBlockEnd(box.ParentBox);
+            }
 
             var top = Math.Max(rect.Top, bandTop);
             var bottom = Math.Min(rect.Bottom, bandBottom);
@@ -507,8 +522,16 @@ namespace PeachPDF.Html.Core.Fragments
         /// list. A right-to-left block reverses the inline progression, so the strip extends rightwards
         /// from each rectangle instead of leftwards.
         /// </para>
+        /// <para>
+        /// <b>Only a box broken by <i>someone else's</i> line breaks gets a strip.</b> A box that owns the line
+        /// boxes its rectangles are keyed by holds its own text — a <c>display: block</c> or
+        /// <c>inline-block</c> <c>::before</c>, say — so those rectangles are stacked down the block axis
+        /// rather than being slices along the inline one, and concatenating their widths would describe a box
+        /// that does not exist. Each is its own decoration area instead.
+        /// </para>
         /// </remarks>
         private static Dictionary<CssLineBox, SliceGeometry> SliceGeometriesOf(
+            CssBox box,
             IReadOnlyDictionary<CssLineBox, RRect> rectangles,
             bool isFixed,
             HtmlContainerInt container,
@@ -517,9 +540,16 @@ namespace PeachPDF.Html.Core.Fragments
         {
             var slices = new Dictionary<CssLineBox, SliceGeometry>(rectangles.Count);
 
-            RRect FragmentRectOf(RRect rect) => Localize(BandCut(rect, isFixed, container, slot), originY);
+            RRect FragmentRectOf(RRect rect) => Localize(BandCut(rect, box, isFixed, container, slot), originY);
 
-            if (rectangles.Count == 1)
+            var ownsItsLines = false;
+            foreach (var line in rectangles.Keys)
+            {
+                ownsItsLines = ReferenceEquals(line.OwnerBox, box);
+                break;
+            }
+
+            if (rectangles.Count == 1 || ownsItsLines)
             {
                 foreach (var (line, rect) in rectangles)
                 {

@@ -129,7 +129,43 @@ namespace PeachPDF.Tests.Integration
                 $"expected nested cloned spacing to stay inside the measure ({div.ClientRight}), got {r.Right}"));
         }
 
+        [Fact]
+        public async Task Clone_WrappingInline_ReservesItsMarginOnEveryLineToo()
+        {
+            // §6.2 wraps each fragment with "the border, padding, and margin", and a box's own leading spacing
+            // is that same sum when it starts on a line — so a continuation line has to skip past the margin as
+            // well. Leaving it out also made the two ends disagree, since the trailing spacing reserved on every
+            // line has always included the margin.
+            var (withMargin, _) = await LayoutHarness.LayoutAsync(MarginedInline(margin: 12));
+            var (withoutMargin, _) = await LayoutHarness.LayoutAsync(MarginedInline(margin: 0));
+
+            var marginedStart = ContinuationTextLeft(LayoutHarness.FindById(withMargin, "s")!);
+            var plainStart = ContinuationTextLeft(LayoutHarness.FindById(withoutMargin, "s")!);
+
+            Assert.Equal(12, marginedStart - plainStart, 2);
+        }
+
         // ── the block axis: page breaks ───────────────────────────────────────────────────────────────
+
+        [Fact]
+        public async Task Clone_InsetTallerThanThePage_OverflowsInsteadOfPaginatingForever()
+        {
+            // A cloned inset larger than the band leaves no room for content on any page. Treating that as a
+            // break would take one — and then take another on the page it resumed on, for every page there is.
+            // Content that cannot fit anywhere is monolithic instead (css-break-3 §2): it overflows.
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='b' style='box-decoration-break:clone;border-bottom:2pt solid #000;padding-bottom:800pt;" +
+                "font:10pt Arial;line-height:14pt'>" +
+                string.Join(" ", Enumerable.Range(0, 40).Select(i => $"word{i}")) + "</div>"),
+                pageHeight: 400, margin: 10);
+
+            Assert.NotNull(container.FragmentTree);
+            Assert.InRange(container.FragmentTree!.Fragmentainers.Count, 1, 40);
+
+            // Every line still landed somewhere rather than being pushed off the document entirely.
+            var block = LayoutHarness.FindById(root, "b")!;
+            Assert.NotEmpty(LineTops(block));
+        }
 
         [Fact]
         public async Task Clone_ResumedContent_StartsBelowTheBorderAndPaddingTheFragmentReopensWith()
@@ -206,6 +242,11 @@ namespace PeachPDF.Tests.Integration
         }
 
         // ── helpers ───────────────────────────────────────────────────────────────────────────────────
+
+        private static string MarginedInline(double margin) => LayoutHarness.Wrap(
+            "<div id='d' style='width:170pt;font:10pt Arial'>" +
+            $"<span id='s' style='margin:0 {margin}pt;padding:0 5pt;background:#ff0;box-decoration-break:clone'>" +
+            string.Join(" ", Enumerable.Range(0, 30).Select(i => $"word{i}")) + "</span></div>");
 
         private static string NestedInlines(bool innerClones) => LayoutHarness.Wrap(
             "<div id='d' style='width:170pt;font:10pt Arial'>" +

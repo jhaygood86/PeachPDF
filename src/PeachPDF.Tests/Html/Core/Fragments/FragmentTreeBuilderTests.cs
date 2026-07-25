@@ -438,6 +438,70 @@ namespace PeachPDF.Tests.Html.Core.Fragments
         }
 
         [Fact]
+        public async Task BoxOwningItsOwnLines_IsNotTreatedAsAnInlineSlice()
+        {
+            // A box that lays out its own line boxes gets one rectangle per line - stacked down the block axis,
+            // not slices along the inline one. Concatenating their widths would describe a box that does not
+            // exist and resolve a gradient or corner radii against it.
+            //
+            // Only a box that owns its lines qualifies. A `display: inline-block` generated-content box does
+            // NOT: PeachPDF flows its text into the parent block's own line boxes, so it really is one inline
+            // run broken across lines and the strip is right for it.
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                "<!DOCTYPE html><html><head><style>" +
+                "p::before { display: block; width: 100pt; background: #0f0; border-radius: 8pt;" +
+                " content: 'a fairly long generated label that wraps onto several lines' }" +
+                "</style></head><body style='margin:0'><p id='p' style='width:200pt;font:10pt Arial'>x</p></body></html>");
+
+            var generated = LayoutHarness.Descendants(LayoutHarness.FindById(root, "p")!)
+                .First(b => b.IsBeforePseudoElement);
+
+            var lines = LinesOf(container.FragmentTree!, generated);
+            Assert.True(lines.Count > 1, $"fixture must produce several rectangles, got {lines.Count}");
+
+            Assert.All(lines, line =>
+            {
+                Assert.Equal(line.Rect, line.Slice.UnbrokenStrip);
+                Assert.True(line.Slice.HasLeftEdge);
+                Assert.True(line.Slice.HasRightEdge);
+            });
+        }
+
+        [Fact]
+        public async Task NestedCloningBoxes_EachFragmentStartsInsideItsAncestors()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='outer' style='box-decoration-break:clone;border-top:4pt solid #f00;padding-top:10pt;" +
+                "border-bottom:4pt solid #f00;padding-bottom:10pt'>" +
+                "<div id='inner' style='box-decoration-break:clone;border-top:4pt solid #00f;padding-top:10pt;" +
+                "border-bottom:4pt solid #00f;padding-bottom:10pt;font:10pt Arial;line-height:14pt'>" +
+                string.Join(" ", Enumerable.Range(0, 300).Select(i => $"word{i}")) + "</div></div>"),
+                pageHeight: 200, margin: 10);
+
+            var tree = container.FragmentTree!;
+            Assert.True(tree.Fragmentainers.Count > 2, "fixture must paginate");
+
+            var outer = LayoutHarness.FindById(root, "outer")!;
+            var inner = LayoutHarness.FindById(root, "inner")!;
+
+            // Each fragment is wrapped independently, so the inner box's fragment opens inside the outer box's
+            // re-opened border and padding rather than on the same line as it — otherwise both borders would be
+            // drawn at the band edge, one over the other, with layout's reserved room left blank between them.
+            foreach (var fragmentainer in tree.Fragmentainers.Skip(1))
+            {
+                var page = fragmentainer.SlotIndex;
+                var outerRect = Assert.Single(LinesOf(tree, "outer", page)).Slice.FragmentRect;
+                var innerRect = Assert.Single(LinesOf(tree, "inner", page)).Slice.FragmentRect;
+
+                Assert.Equal(outerRect.Top + 14, innerRect.Top, 1);
+                Assert.Equal(outerRect.Bottom - 14, innerRect.Bottom, 1);
+            }
+
+            Assert.NotNull(outer);
+            Assert.NotNull(inner);
+        }
+
+        [Fact]
         public async Task UnfragmentedBox_IsItsOwnDecorationArea()
         {
             var (_, container) = await LayoutHarness.LayoutAsync(
@@ -480,6 +544,16 @@ namespace PeachPDF.Tests.Html.Core.Fragments
         [
             .. FragmentsOf(tree, id)
                 .Where(f => page is null || f.FragmentainerIndex == page)
+                .SelectMany(f => f.Lines)
+                .OrderBy(l => l.Rect.Y).ThenBy(l => l.Rect.X)
+        ];
+
+        /// <summary>The same, for a box with no <c>id</c> to find it by — a generated-content box.</summary>
+        private static List<LineFragment> LinesOf(FragmentTree tree, CssBox box) =>
+        [
+            .. tree.Fragmentainers
+                .SelectMany(f => Flatten(f.Root))
+                .Where(f => ReferenceEquals(f.Box, box))
                 .SelectMany(f => f.Lines)
                 .OrderBy(l => l.Rect.Y).ThenBy(l => l.Rect.X)
         ];

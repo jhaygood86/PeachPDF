@@ -652,6 +652,12 @@ namespace PeachPDF.Html.Core.Utils
         /// fragment is wrapped independently, so the one starting in the new fragmentainer opens with its own
         /// border and padding, and content has to start below them. Summed over <paramref name="box"/> and
         /// every ancestor, since a break inside a nested box breaks all of them at once.
+        /// <para>
+        /// Margin is excluded, unlike on the inline axis (<see cref="ClonedInlineStart"/>): a margin adjoining an
+        /// unforced break is truncated to zero by
+        /// <see href="https://www.w3.org/TR/css-break-3/#break-margins">§5.2</see>, so at a page break there is
+        /// no margin left for §6.2 to clone.
+        /// </para>
         /// </summary>
         internal static double ClonedBlockStart(CssBox? box)
         {
@@ -684,11 +690,17 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         /// <summary>
-        /// The inline-start border and padding cloned fragments re-insert after a line break, summed over the
-        /// inline boxes from <paramref name="from"/> up to — but not including — <paramref name="stopAt"/>,
-        /// the block whose lines are being built. Margin is excluded: it is not painted, and a box's
-        /// decoration rectangle does not cover it.
+        /// The inline-start margin, border and padding cloned fragments re-insert after a line break, summed
+        /// over the inline boxes from <paramref name="from"/> up to — but not including —
+        /// <paramref name="stopAt"/>, the block whose lines are being built.
         /// </summary>
+        /// <remarks>
+        /// Margin is included, as §6.2 says ("wrapped with the border, padding, and margin"), and to match what
+        /// a box's <i>own</i> leading spacing does when it starts on a line — that is the same margin+border+
+        /// padding sum. Only the block axis leaves margin out, because there
+        /// <see href="https://www.w3.org/TR/css-break-3/#break-margins">§5.2</see> truncates a margin adjoining
+        /// an unforced break to zero, which is the opposite instruction.
+        /// </remarks>
         internal static double ClonedInlineStart(CssBox? from, CssBox stopAt)
         {
             var total = 0d;
@@ -696,7 +708,7 @@ namespace PeachPDF.Html.Core.Utils
             for (var current = from; current is not null && !ReferenceEquals(current, stopAt); current = current.ParentBox)
             {
                 if (current.BoxDecorationBreak == CssConstants.Clone)
-                    total += current.ActualBorderLeftWidth + current.ActualPaddingLeft;
+                    total += current.ActualMarginLeft + current.ActualBorderLeftWidth + current.ActualPaddingLeft;
             }
 
             return total;
@@ -713,7 +725,7 @@ namespace PeachPDF.Html.Core.Utils
             for (var current = from; current is not null && !ReferenceEquals(current, stopAt); current = current.ParentBox)
             {
                 if (current.BoxDecorationBreak == CssConstants.Clone)
-                    total += current.ActualBorderRightWidth + current.ActualPaddingRight;
+                    total += current.ActualMarginRight + current.ActualBorderRightWidth + current.ActualPaddingRight;
             }
 
             return total;
