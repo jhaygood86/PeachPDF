@@ -203,6 +203,29 @@ namespace PeachPDF.Tests.Integration
             }
         }
 
+        [Fact]
+        public async Task Slice_FinishedInlineBlock_IsNotInsetAgainByEveryLaterPass()
+        {
+            // An inline-block's vertical border and padding are applied by shifting every word it has
+            // flowed. A resumed pass that walked back through one placed pages ago would shift those
+            // words down again, once more for each fragmentainer after the one they landed in - so the
+            // damage grows with the document rather than being a fixed offset.
+            var (paginated, container) = await LayoutHarness.LayoutAsync(InlineBlockThenLines(20),
+                pageHeight: PageHeight, margin: Margin);
+            var (single, singleContainer) = await LayoutHarness.LayoutAsync(InlineBlockThenLines(3),
+                pageHeight: PageHeight, margin: Margin);
+
+            AssertPaginated(container);
+            Assert.Equal(1, singleContainer.FragmentainerPasses);
+
+            // The inline-block sits on the block's first line either way, so the number of lines after
+            // it - and therefore the number of passes - must make no difference to where it lands.
+            var paginatedTop = AllWords(LayoutHarness.FindById(paginated, "ib")!).Min(w => w.Top);
+            var singleTop = AllWords(LayoutHarness.FindById(single, "ib")!).Min(w => w.Top);
+
+            Assert.Equal(singleTop, paginatedTop, 2);
+        }
+
         // ── clone (the control) ──────────────────────────────────────────────────────────────────────
 
         [Fact]
@@ -264,6 +287,16 @@ namespace PeachPDF.Tests.Integration
             (clone ? ";box-decoration-break:clone" : "") + "'>" +
             string.Join("<br>", Enumerable.Range(0, 20).Select(i => $"Line{i}")) +
             "</span></p>");
+
+        /// <summary>
+        /// A vertically-padded inline-block on the block's first line, followed by enough lines to
+        /// control how many fragmentainers the block spans.
+        /// </summary>
+        private static string InlineBlockThenLines(int lines) => LayoutHarness.Wrap(
+            "<p id='p' style='margin:0;line-height:22pt;font-size:10pt'>" +
+            "<span id='ib' style='display:inline-block;padding:9pt 0;border-top:3pt solid #000'>Alpha</span><br>" +
+            string.Join("<br>", Enumerable.Range(1, lines).Select(i => $"Line{i}")) +
+            "</p>");
 
         /// <summary>The same content with no decoration at all, so the difference between the two is the
         /// decoration and nothing else.</summary>

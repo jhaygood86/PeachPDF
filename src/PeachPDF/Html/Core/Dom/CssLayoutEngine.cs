@@ -1436,7 +1436,12 @@ namespace PeachPDF.Html.Core.Dom
                     // (boxes = [box], b == box): there the insets are applied by the PARENT's
                     // own recursion branch after this call returns - applying both would inset
                     // the words twice.
-                    if (!ReferenceEquals(b, box))
+                    //
+                    // ...and neither does a box this pass placed nothing for: the inset shifts every
+                    // word the box has flowed, so re-running it on a resumed pass would move an
+                    // earlier fragmentainer's words down again, once per pass after the one that
+                    // placed them.
+                    if (!ReferenceEquals(b, box) && coordinates.PlacedSince(childStartOrdinal))
                     {
                         ApplyAtomicInlineVerticalInsets(b, box, coordinates);
                     }
@@ -1486,7 +1491,13 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     await FlowBox(g, blockBox, b, limitRight, lineSpacing, lineStartX, coordinates, childClonedResumeStart);
                     if (coordinates.Break is not null) return;
-                    ApplyAtomicInlineVerticalInsets(b, box, coordinates);
+
+                    // Same as the branch above: an inset applies to the words this pass placed, and a
+                    // box it placed none for has already had it.
+                    if (coordinates.PlacedSince(childStartOrdinal))
+                    {
+                        ApplyAtomicInlineVerticalInsets(b, box, coordinates);
+                    }
                 }
 
                 // A box whose content was all placed in an earlier fragmentainer is not re-closed here
@@ -1516,7 +1527,12 @@ namespace PeachPDF.Html.Core.Dom
             // plain inline's ActualHeight is just its own padding+border, since it never gets a
             // Size of its own - extending the flow by that would grow the containing block in
             // violation of §10.8.1).
-            if (box.Display is not CssConstants.Inline && coordinates.MaxBottom - startY < box.ActualHeight)
+            //
+            // Like the width branch below, this compares an advance measured in this pass against the
+            // box's whole height, so it only means anything for a box this pass both opened and
+            // finished. For one it merely walked through the deficit is the box's entire height, which
+            // it would then add to the flow all over again.
+            if (opensHere && box.Display is not CssConstants.Inline && coordinates.MaxBottom - startY < box.ActualHeight)
             {
                 coordinates.MaxBottom = startY + box.ActualHeight;
             }
@@ -1565,7 +1581,13 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
-            box.LastHostingLineBox = coordinates.Line;
+            // The mirror of the entry guard: a box this pass placed nothing for closed in an earlier
+            // fragmentainer, and its last hosting line is the one it closed on there. Nothing reads a
+            // clobbered value today - BubbleRectangles never reaches such a box on this page's lines,
+            // and earlier lines are not re-finalized - but that is a property of two other methods, not
+            // an invariant of this pair, and #336's whole difficulty was that one half of it could not
+            // be trusted.
+            if (coordinates.PlacedSince(startOrdinal)) box.LastHostingLineBox = coordinates.Line;
         }
 
         /// <summary>
