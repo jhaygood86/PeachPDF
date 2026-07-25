@@ -633,10 +633,79 @@ namespace PeachPDF.Html.Core
             // the promoted box look like real content spanning the whole document.
             ResolveCanvasBackground();
 
+            // Also before the build, and only once the reflow loop has settled, since it reads the
+            // final document height.
+            ReserveTrailingDirectionalBreak();
+
             // Layout's final phase: freeze the mutable box geometry above into the immutable fragment
             // tree everything downstream consumes. Built once, after the reflow loop has settled, so
             // the tree can never describe an intermediate pass's geometry.
             FragmentTree = FragmentTreeBuilder.Build(this);
+        }
+
+        /// <summary>
+        /// Honors a directional <c>break-after</c> on the last box of the flow, per
+        /// <see href="https://www.w3.org/TR/css-break-3/#break-between">css-break-3 §3.1</see>: pads the
+        /// document with a blank page where one is needed for the page <i>after</i> it to fall on the
+        /// requested side. The book idiom — a volume that must end so the next one opens recto.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This needs its own pass because a break between siblings is taken by the box that follows it,
+        /// and at the end of the flow there is no such box. The rule is deliberately the same one: only
+        /// the slot <i>stepped over</i> is reserved, never the slot the (non-existent) following content
+        /// would occupy. So the document gains at most one page.
+        /// </para>
+        /// <para>
+        /// The value is taken from the last in-flow descendant chain. Full §3.1 break-value propagation
+        /// up out of a subtree is a separate matter; this is the narrow last-box case.
+        /// </para>
+        /// </remarks>
+        private void ReserveTrailingDirectionalBreak()
+        {
+            if (Root is null || PageSize.Height <= 0 || PageSize.Height >= double.MaxValue - 1)
+                return;
+
+            var last = LastInFlowDescendant(Root);
+            var side = PageSide.Any;
+
+            for (var box = last; box is not null && side is PageSide.Any; box = box.ParentBox)
+            {
+                side = BreakValues.RequiredSide(null, box.BreakAfter);
+            }
+
+            if (side is PageSide.Any)
+                return;
+
+            var lastSlot = PageIndexOf(MarginTop + ActualSize.Height - PageBoundaryEpsilon);
+
+            if (!BreakValues.SlotIsOn(lastSlot + 1, side))
+                SetBlankSlotReservation(last ?? Root, lastSlot + 1);
+        }
+
+        /// <summary>
+        /// The deepest last in-flow box of <paramref name="box"/>'s subtree, or null when it has none.
+        /// </summary>
+        private static CssBox? LastInFlowDescendant(CssBox box)
+        {
+            CssBox? last = null;
+
+            for (var i = box.Boxes.Count - 1; i >= 0; i--)
+            {
+                var child = box.Boxes[i];
+
+                if (child.Display == CssConstants.None
+                    || child.Position is CssConstants.Absolute or CssConstants.Fixed
+                    || child.IsFloated)
+                {
+                    continue;
+                }
+
+                last = LastInFlowDescendant(child) ?? child;
+                break;
+            }
+
+            return last;
         }
 
         /// <summary>

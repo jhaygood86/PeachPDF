@@ -184,6 +184,58 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(container.PageTopOf(2), second!.Location.Y, 0.5);
         }
 
+        // A directional break-after on the last box of the flow pads the document, so the page that
+        // would follow it falls on the requested side - the book idiom, where a volume ends such that
+        // the next one opens recto. Content ends on slot 0 (a right page), so the next page is slot 1,
+        // a left page: asking for recto needs a blank page, asking for verso already has it.
+        [Theory]
+        [InlineData("break-after: recto", new[] { 0, 1 })]
+        [InlineData("break-after: right", new[] { 0, 1 })]
+        [InlineData("break-after: verso", new[] { 0 })]
+        [InlineData("break-after: left", new[] { 0 })]
+        [InlineData("break-after: page", new[] { 0 })]
+        public async Task TrailingDirectionalBreakAfter_PadsTheDocument(string declaration, int[] expectedSlots)
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap($"<div id='only' style='height:50pt;{declaration}'>only</div>"),
+                pageHeight: PageHeight);
+
+            Assert.Equal(expectedSlots, container.FragmentTree!.Fragmentainers.Select(f => f.SlotIndex));
+        }
+
+        // The padding page is real in the PDF, and the trailing reservation sits past everything the
+        // document laid out - so the builder's slot walk has to look beyond the document height.
+        [Fact]
+        public async Task TrailingDirectionalBreakAfter_ProducesARealFinalPage()
+        {
+            var pdf = await RenderAsync(
+                """
+                <!DOCTYPE html><html><head><style>
+                body { margin: 0; }
+                </style></head><body>
+                <div style='height:50pt; break-after: recto'>only</div>
+                </body></html>
+                """);
+
+            Assert.Equal(2, pdf.PdfDocument.PageCount);
+
+            var streams = ContentStreams(pdf);
+            Assert.Contains("Tj", streams[0]);
+            Assert.DoesNotContain("Tj", streams[1]);
+        }
+
+        // The value is taken from the last in-flow descendant chain, so a break-after declared on a
+        // wrapper whose last child carries none still pads.
+        [Fact]
+        public async Task TrailingDirectionalBreakAfter_OnAnAncestor_StillPads()
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap("<div style='break-after: recto'><p style='height:50pt'>only</p></div>"),
+                pageHeight: PageHeight);
+
+            Assert.Equal([0, 1], container.FragmentTree!.Fragmentainers.Select(f => f.SlotIndex));
+        }
+
         // A known boundary, characterized rather than left silent: the break is derived from the
         // previous sibling, so a box that has none takes no break at all. Pre-existing for `page`.
         [Fact]
