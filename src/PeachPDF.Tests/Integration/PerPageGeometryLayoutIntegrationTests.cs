@@ -201,12 +201,13 @@ namespace PeachPDF.Tests.Integration
         public async Task ForcedBreakAfterCollapseThroughSiblingAtBoundary_TargetsSlotAfterIt()
         {
             // A fully empty sibling relocated TO a slot boundary by its own preceding break
-            // occupies the LATER slot, so the break between it and the next box computes its
-            // target past that slot (the bumped bottom lands at slot 2's top). The next box's own
-            // POSITION still collapses through the empty sibling to the earlier content's bottom
-            // (CSS2.1 §8.3.1 margin-collapse-through - a pre-existing engine boundary), so only
-            // the bumped bottom is asserted here; the intentional-blank-page behavior for a
-            // non-collapsing sibling is covered by ConsecutiveForcedBreaks above.
+            // occupies the LATER slot, so the break between it and the next box targets the slot
+            // past that one. The target is now named on the box that takes the break rather than
+            // reached by inflating the empty sibling's height, which has two visible consequences
+            // asserted here: the empty sibling keeps its own (zero) height, and the next box
+            // actually lands on the target - it used to collapse through the empty sibling to the
+            // earlier content's bottom (CSS2.1 §8.3.1 margin-collapse-through), since a bumped
+            // bottom is not something margin collapsing consults.
             var container = await BuildLayoutAsync("""
                 <!DOCTYPE html><html><head><style>
                 @page { margin: 60pt 50pt; }
@@ -220,9 +221,12 @@ namespace PeachPDF.Tests.Integration
                 """);
 
             var b = FindById(container.Root!, "b");
+            var c = FindById(container.Root!, "c");
             Assert.NotNull(b);
+            Assert.NotNull(c);
             Assert.Equal(container.PageTopOf(1), b!.Location.Y, 0.1);
-            Assert.Equal(container.PageTopOf(2), b.ActualBottom, 0.1);
+            Assert.Equal(container.PageTopOf(1), b.ActualBottom, 0.1);
+            Assert.Equal(container.PageTopOf(2), c!.Location.Y, 0.1);
         }
 
         [Theory]

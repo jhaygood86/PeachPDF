@@ -1049,6 +1049,21 @@ namespace PeachPDF.Html.Core.Dom
         private bool _shouldRegisterPage;
 
         /// <summary>
+        /// Where a forced break (css-break-3 §3.1) puts this box: the content top of the slot it lands
+        /// in, already stepped past a slot on the wrong side for a directional value. Resolved by
+        /// <see cref="PerformLayoutPrologue"/> and consumed on arrival by <c>PlaceBlockBox</c>.
+        /// </summary>
+        /// <remarks>
+        /// The break used to be expressed by inflating the <i>previous sibling's</i> <c>ActualBottom</c>
+        /// to the target instead. That setter alters <c>Size.Height</c>, so a predecessor with a
+        /// background or border painted down to the page bottom — and for a directional break it would
+        /// have painted straight across the blank page, which would also have made that slot look
+        /// printable and so defeated the reservation. Naming the target on the box that actually takes
+        /// the break keeps the predecessor's geometry its own.
+        /// </remarks>
+        private double? _forcedBreakTop;
+
+        /// <summary>
         /// Where this box stopped, when it could not finish inside the fragmentainer the current pass is
         /// filling. Read by the parent's child loop, which wraps it in a link of its own and returns in
         /// turn, so the record unwinds to the fragmentation-context root.
@@ -1270,6 +1285,13 @@ namespace PeachPDF.Html.Core.Dom
             _isForcedBreak = BreakValues.IsForcedPageBreak(BreakBefore)
                              || BreakValues.IsForcedPageBreak(previousSiblingForBreak?.BreakAfter)
                              || pageNameChanged;
+            // Every run of this prologue re-decides from scratch: the keep-with-next retry at the end of
+            // PerformLayoutEpilogue clears _prologueDone and re-enters layout for this box at a new
+            // position, where the break can legitimately land somewhere else. So both the target and
+            // this box's blank-slot reservation are retracted here and only re-asserted below.
+            _forcedBreakTop = null;
+            HtmlContainer?.SetBlankSlotReservation(this, null);
+
             if (_isForcedBreak)
             {
                 if (previousSiblingForBreak is not null)
@@ -1293,15 +1315,31 @@ namespace PeachPDF.Html.Core.Dom
                     // and this box still pushes past it, preserving the intentional blank page.
                     var container = HtmlContainer!;
                     var prevBottom = previousSiblingForBreak.ActualBottom;
-                    var target = container.PageTopOf(
-                        container.PageIndexOf(prevBottom - HtmlContainerInt.PageBoundaryEpsilon) + 1);
-                    if (previousSiblingForBreak.Location.Y >= target - HtmlContainerInt.PageBoundaryEpsilon)
+                    var slot = container.PageIndexOf(prevBottom - HtmlContainerInt.PageBoundaryEpsilon) + 1;
+                    if (previousSiblingForBreak.Location.Y >= container.PageTopOf(slot) - HtmlContainerInt.PageBoundaryEpsilon)
                     {
-                        target = container.PageTopOf(
-                            container.PageIndexOf(previousSiblingForBreak.Location.Y + HtmlContainerInt.PageBoundaryEpsilon) + 1);
+                        slot = container.PageIndexOf(
+                            previousSiblingForBreak.Location.Y + HtmlContainerInt.PageBoundaryEpsilon) + 1;
                     }
 
-                    previousSiblingForBreak.ActualBottom = target;
+                    // css-break-3 §3.1: left/right/recto/verso force one *or two* page breaks, so that
+                    // the content after the break begins on a page of the required side. The slot
+                    // stepped over becomes a deliberately-blank page.
+                    //
+                    // Gated on IsFragmenting because inside monolithic content (multicol's virtual
+                    // single-column first pass, and the flex/grid/table engines) and during a
+                    // measurement pass at a provisional position, this box's coordinates are not where
+                    // it ends up - a reservation made from them would materialize a blank page nowhere
+                    // near the real content. A directional break degrades to a plain page break there,
+                    // the same engine-independence boundary the other break machinery already has.
+                    var side = BreakValues.RequiredSide(BreakBefore, previousSiblingForBreak.BreakAfter);
+                    if (side is not PageSide.Any && container.IsFragmenting && !BreakValues.SlotIsOn(slot, side))
+                    {
+                        container.SetBlankSlotReservation(this, slot);
+                        slot++;
+                    }
+
+                    _forcedBreakTop = container.PageTopOf(slot);
                 }
             }
         }
@@ -1539,6 +1577,23 @@ namespace PeachPDF.Html.Core.Dom
                         // "does not fit" conclusion and break again, forever.
                         _resumeTopOverride = null;
                         top = resumedTop;
+                    }
+                    else if (_forcedBreakTop is { } forcedTop)
+                    {
+                        // The prologue worked out which slot the forced break lands in. Applied here,
+                        // to this box, rather than by inflating the previous sibling's height to reach
+                        // it: that predecessor's own geometry is not the break's to change.
+                        //
+                        // The collapsed top margin is carried over deliberately: §5.2 truncates margins
+                        // adjoining an *unforced* break only, so the margin after a forced one is
+                        // preserved. It is read from CollapsedMarginTop, which MarginTopCollapse above
+                        // has just set to the group's value, rather than measured as "top - baseTop":
+                        // where the previous sibling is self-collapsing those two differ, because
+                        // MarginTopCollapse resolves such a box's position against an earlier anchor and
+                        // cancels baseTop back out (CSS2.1 §8.3.1). Taking the difference there would
+                        // land this box at the anchor's offset from the break rather than at the break.
+                        _forcedBreakTop = null;
+                        top = forcedTop + CollapsedMarginTop;
                     }
                     else if (prevSibling is not null && !_isForcedBreak)
                     {
