@@ -318,8 +318,6 @@ namespace PeachPDF.Html.Core.Fragments
         /// detaches the source row-group, so the chain ends there and never leaves the subtree.
         /// </para>
         /// <para>
-        /// The clip is the padding edge, not the content edge, per
-        /// <see href="https://www.w3.org/TR/CSS21/visufx.html#overflow">CSS 2.1 §11.1.1</see>.
         /// </para>
         /// </remarks>
         private static RRect? OverflowClipOf(CssBox box, BoxGeometrySnapshot? snapshot, double originY)
@@ -338,20 +336,13 @@ namespace PeachPDF.Html.Core.Fragments
         }
 
         /// <summary>
-        /// A box's padding-edge rectangle, taken from <paramref name="snapshot"/> when it holds one for
-        /// the box. Border and padding are page-invariant, so only the box's position and extent have to
-        /// come from the snapshot.
+        /// A box's padding-edge rectangle at the position <paramref name="snapshot"/> recorded for it, or
+        /// its live one. Border widths are page-invariant, so only the box's extent comes from the
+        /// snapshot — the geometry itself is <see cref="RenderUtils.PaddingEdgeOf"/>, shared with the one
+        /// remaining box-based clip caller so the two cannot drift apart.
         /// </summary>
-        private static RRect PaddingEdgeOf(CssBox box, BoxGeometrySnapshot? snapshot)
-        {
-            var bounds = BoundsOf(box, snapshot);
-
-            return RRect.FromLTRB(
-                bounds.Left + box.ActualBorderLeftWidth,
-                bounds.Top + box.ActualBorderTopWidth,
-                bounds.Right - box.ActualBorderRightWidth,
-                bounds.Bottom - box.ActualBorderBottomWidth);
-        }
+        private static RRect PaddingEdgeOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
+            RenderUtils.PaddingEdgeOf(box, BoundsOf(box, snapshot));
 
         /// <summary>
         /// A box's children for fragment-building purposes. This is <see cref="CssBox.Boxes"/> for

@@ -434,7 +434,7 @@ A **fragmentainer** is one slot content flows into — for PeachPDF, one page. I
 | `LineFragment` | one decoration rectangle (one line box's, or the whole border box for a block-level box) |
 | `TextFragment` | one positioned word |
 
-`BoxFragment` also records `IsFirstFragment`/`IsLastFragment`, which identify the edges a `box-decoration-break` value applies at ([§6.2](https://www.w3.org/TR/css-break-3/#break-decoration)), and `WholeBoxRect`, the unfragmented border box that whole-box effects (the `transform` pivot, the `clip-path` reference box) resolve against.
+`BoxFragment` also records `IsFirstFragment`/`IsLastFragment`, which say where a box's fragments begin and end (the edges a `box-decoration-break` value applies at are finer than this — they are per decoration rectangle, on `LineFragment.Slice`); `WholeBoxRect`, the unfragmented border box that whole-box effects (the `transform` pivot, the `clip-path` reference box) resolve against; and `OverflowClip`, the rectangle an `overflow: hidden` ancestor clips this fragment to. That last one is resolved during the build rather than looked up from the boxes at paint time, because a box can be shown at several places in one document — a repeated table header is one source subtree standing in for every page's proxy, and its boxes hold only the last position layout gave them. The builder is the only thing that still knows which of those positions a given fragment came from.
 
 ### Coordinates
 
@@ -488,7 +488,7 @@ One painter instance paints one page, so per-page state (which fragments have al
 
 `FragmentPainter.PaintFragment` applies the CSS painters algorithm in the correct order, skipping boxes with `display: none` or `visibility: hidden`. Fixed-position boxes suspend the clip stack so they paint relative to the page rather than within any page margin clip. A fragment exists only where its box has something on that page, so the off-screen cull reduces to intersecting the fragment's own rectangles with the current clip — a fragment that carries only descendants is always entered, since a hoisted out-of-flow descendant can paint outside it.
 
-Boxes that cannot be expressed by the generic paint — replaced elements (`<img>`, `<object>`/`<video>`, inline `<svg>`, `<iframe>`), `<hr>`, `::marker`, and a repeated table header/footer's proxy — are drawn by an `IFragmentContentPainter` chosen from the box's type (`FragmentContentPainters.For`). The four replaced kinds share one `ReplacedFragmentPainter` base, which owns the sequence they have in common (overflow clip, background, borders, then the replacement content in the content box of the phantom word that carries it) and asks the subclass only where the content comes from and how to draw it. Adding a new replaced element means adding a content painter, not paint code on `CssBox`.
+Boxes that cannot be expressed by the generic paint — replaced elements (`<img>`, `<object>`/`<video>`, inline `<svg>`, `<iframe>`), `<hr>` and `::marker` — are drawn by an `IFragmentContentPainter` chosen from the box's type (`FragmentContentPainters.For`). The four replaced kinds share one `ReplacedFragmentPainter` base, which owns the sequence they have in common (overflow clip, background, borders, then the replacement content in the content box of the phantom word that carries it) and asks the subclass only where the content comes from and how to draw it. Adding a new replaced element means adding a content painter, not paint code on `CssBox`.
 
 Each box fragment is painted as follows:
 

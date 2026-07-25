@@ -38,6 +38,10 @@ namespace PeachPDF.Html.Core.Utils
         /// <see cref="Fragments.BoxFragment.OverflowClip"/>. Already in the fragment's own space, so
         /// there is nothing here to map.
         /// </summary>
+        /// <param name="g">the graphics to clip</param>
+        /// <param name="overflowClip">
+        /// the clip resolved for the fragment being painted, or null when no ancestor clips it
+        /// </param>
         /// <returns>true - was clipped, false - not clipped</returns>
         public static bool ClipGraphicsByOverflow(RGraphics g, RRect? overflowClip)
         {
@@ -61,13 +65,7 @@ namespace PeachPDF.Html.Core.Utils
             if (overflowBox.Overflow != CssConstants.Hidden) return false;
 
             var prevClip = g.GetClip();
-            // CSS spec: overflow clips at the padding edge, not the content edge.
-            // Expand ClientRectangle (content-box) outward by the containing block's padding.
-            var rect = overflowBox.ClientRectangle;
-            rect.X -= overflowBox.ActualPaddingLeft;
-            rect.Width += overflowBox.ActualPaddingLeft + overflowBox.ActualPaddingRight;
-            rect.Y -= overflowBox.ActualPaddingTop;
-            rect.Height += overflowBox.ActualPaddingTop + overflowBox.ActualPaddingBottom;
+            var rect = PaddingEdgeOf(overflowBox, overflowBox.Bounds);
 
             rect.Offset(0, -originY);
 
@@ -75,6 +73,23 @@ namespace PeachPDF.Html.Core.Utils
             g.PushClip(rect);
             return true;
         }
+
+        /// <summary>
+        /// The rectangle an <c>overflow: hidden</c> box clips its descendants to: its padding edge, not
+        /// its content edge (<see href="https://www.w3.org/TR/css-overflow-3/#overflow-propagation">CSS
+        /// Overflow Level 3 §2</see>).
+        /// </summary>
+        /// <param name="box">the clipping box, read for its border widths only</param>
+        /// <param name="borderBox">
+        /// that box's border box. Passed in rather than read from <paramref name="box"/> so a caller
+        /// holding a <see cref="Fragments.BoxGeometrySnapshot"/> can resolve the box at the position that
+        /// snapshot recorded — the same box can be shown at several places in one document.
+        /// </param>
+        internal static RRect PaddingEdgeOf(CssBox box, RRect borderBox) => RRect.FromLTRB(
+            borderBox.Left + box.ActualBorderLeftWidth,
+            borderBox.Top + box.ActualBorderTopWidth,
+            borderBox.Right - box.ActualBorderRightWidth,
+            borderBox.Bottom - box.ActualBorderBottomWidth);
 
         /// <summary>
         /// Pushes the <c>overflow: hidden</c> clip of every box in <paramref name="ancestors"/> that has

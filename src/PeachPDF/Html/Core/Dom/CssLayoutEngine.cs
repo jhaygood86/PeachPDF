@@ -1237,11 +1237,16 @@ namespace PeachPDF.Html.Core.Dom
                     childClonedResumeStart += leftSpacing;
                 }
 
+                // What the guard above actually put on the cursor. The float branches below re-establish
+                // the line start from scratch rather than adjusting it, so they have to re-apply the same
+                // amount - re-applying the raw `leftSpacing` would put back exactly what `slice` suppresses.
+                var appliedLeftSpacing = childOpensHere || b.BoxDecorationBreak == CssConstants.Clone ? leftSpacing : 0;
+
                 var lastLeftIntersectingFloatBox = DomUtils.GetLastLeftIntersectingFloatBox(box, coordinates);
 
                 if (lastLeftIntersectingFloatBox is not null)
                 {
-                    coordinates.CurrentX = lastLeftIntersectingFloatBox.ActualRight + lastLeftIntersectingFloatBox.ActualMarginRight + leftSpacing;
+                    coordinates.CurrentX = lastLeftIntersectingFloatBox.ActualRight + lastLeftIntersectingFloatBox.ActualMarginRight + appliedLeftSpacing;
                 }
 
                 if (b.Words.Count > 0)
@@ -1381,7 +1386,7 @@ namespace PeachPDF.Html.Core.Dom
 
                         if (lastLeftIntersectingFloatBox is not null)
                         {
-                            coordinates.CurrentX = lastLeftIntersectingFloatBox.ActualRight + lastLeftIntersectingFloatBox.ActualMarginRight + leftSpacing;
+                            coordinates.CurrentX = lastLeftIntersectingFloatBox.ActualRight + lastLeftIntersectingFloatBox.ActualMarginRight + appliedLeftSpacing;
                         }
 
                         word.Left = coordinates.CurrentX;
@@ -1448,6 +1453,17 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 else if (b.Display == CssConstants.InlineFlex)
                 {
+                    // Nothing at all for a box a resumed pass is only walking through. An inline-flex
+                    // contributes no word ordinals, so nothing else here would notice that it belongs to
+                    // an earlier fragmentainer - and this branch positions the box, re-runs the flex
+                    // engine over its children and sets the cursor to the box's own right edge, so
+                    // re-entering it moves an already-placed box onto this page and indents everything
+                    // after it by its width. The dispatch stays here rather than falling through to the
+                    // recursion below, which would walk the flex container's children as inline content
+                    // and advance word ordinals this box never had on the pass that placed it - and the
+                    // ordinals have to mean the same thing on every pass for any of these guards to work.
+                    if (!childOpensHere) continue;
+
                     // Treat inline-flex as an atomic inline element: run flex layout then advance the
                     // cursor by the box's outer size.  coordinates.CurrentX is already past the left
                     // margin+border+padding (leftSpacing was added above), so Location.X sits at the
@@ -1505,7 +1521,9 @@ namespace PeachPDF.Html.Core.Dom
                 // shifts everything after it to the right. A box straddling the break does end here,
                 // and does get it.
                 if (coordinates.PlacedSince(childStartOrdinal))
+                {
                     coordinates.CurrentX += rightSpacing;
+                }
             }
 
             // handle height setting: the flowed content came out shorter than the box's own

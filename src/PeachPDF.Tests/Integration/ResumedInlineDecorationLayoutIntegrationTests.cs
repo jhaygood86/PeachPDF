@@ -250,6 +250,68 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(singleTop, paginatedTop, 2);
         }
 
+        [Fact]
+        public async Task Slice_InlineCrossingAPageBreakBesideAFloat_StillResumesAtTheContentEdge()
+        {
+            // The float branches re-establish the line start from scratch rather than adjusting it, so
+            // they have to re-apply exactly the leading spacing the pass applied - not the box's raw
+            // spacing, which is what `slice` suppresses for a box the pass is only walking through.
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div id='d' style='margin:0'>" +
+                    "<div style='float:left;width:60pt;height:900pt;background:#ccc'></div>" +
+                    "<p id='p' style='margin:0;line-height:22pt;font-size:10pt'>" +
+                    "<span id='s' style='padding-left:20pt;background:#0f0'>" +
+                    string.Join("<br>", Enumerable.Range(0, 30).Select(i => $"Line{i}")) +
+                    "</span></p></div>"),
+                pageHeight: PageHeight, margin: Margin);
+
+            AssertPaginated(container);
+
+            var span = LayoutHarness.FindById(root, "s")!;
+            var starts = LineStarts(span);
+
+            // Every line after the first clears the float and starts there, with no leading pad - the
+            // float's own right edge, which is the same on the resumed page as on the first.
+            var continuation = starts.Skip(1).Select(line => line.Left).Distinct().ToList();
+            Assert.Single(continuation);
+            Assert.Equal(starts[0].Left - 20, continuation[0], 2);
+
+            // ...and the resumption really happened partway through.
+            Assert.Contains(starts.Skip(1), line => PageOf(container, line.Top) > 0);
+        }
+
+        [Fact]
+        public async Task Slice_FinishedInlineFlex_IsNotRepositionedOntoTheResumedPage()
+        {
+            // An inline-flex contributes no word ordinals, so nothing else in the walk would notice it
+            // belongs to an earlier fragmentainer. Its branch positions the box, re-runs the flex engine
+            // and sets the cursor to the box's own right edge.
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<p id='p' style='margin:0;line-height:22pt;font-size:10pt'>" +
+                    "<span id='f' style='display:inline-flex;width:40pt'>Flex</span><br>" +
+                    string.Join("<br>", Enumerable.Range(1, 59).Select(i => $"Line{i}")) +
+                    "</p>"),
+                pageHeight: PageHeight, margin: Margin);
+
+            AssertPaginated(container);
+
+            var p = LayoutHarness.FindById(root, "p")!;
+            var flex = LayoutHarness.FindById(root, "f")!;
+
+            // It sits on the block's first line and must stay there...
+            Assert.Equal(0, PageOf(container, flex.Location.Y));
+
+            // ...and must not push the pages it was never on to the right by its own width.
+            var laterPageWords = AllWords(p)
+                .Where(w => !w.IsLineBreak && PageOf(container, w.Top) > 0)
+                .ToList();
+
+            Assert.NotEmpty(laterPageWords);
+            Assert.All(laterPageWords, w => Assert.Equal(p.ClientLeft, w.Left, 2));
+        }
+
         // ── clone (the control) ──────────────────────────────────────────────────────────────────────
 
         [Fact]

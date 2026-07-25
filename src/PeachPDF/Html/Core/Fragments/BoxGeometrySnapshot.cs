@@ -76,6 +76,5 @@ namespace PeachPDF.Html.Core.Fragments
         }
 
         internal bool TryGetGeometry(CssBox box, out BoxGeometry geometry) => _geometry.TryGetValue(box, out geometry!);
-
     }
 }
