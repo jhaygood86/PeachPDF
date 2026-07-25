@@ -23,7 +23,8 @@ namespace PeachPDF.Tests.Integration
         private const double BorderTop = 10;
         private const double BorderBottom = 8;
         private const double PaddingBlock = 6;
-        private const double InlineSpacing = 7;   // 2pt border + 5pt padding
+        private const double InlineSpacing = 7;        // 2pt border + 5pt padding
+        private const double InnerInlineSpacing = 7;   // the nested fixture's inner span: 2pt border + 5pt padding
 
         // ── the inline axis: line breaks ──────────────────────────────────────────────────────────────
 
@@ -96,6 +97,36 @@ namespace PeachPDF.Tests.Integration
             // for them - so no line's decoration runs past the measure it was laid out in.
             Assert.All(rects, r => Assert.True(r.Right <= div.ClientRight + 0.01,
                 $"expected the cloned trailing spacing to stay inside the measure ({div.ClientRight}), got {r.Right}"));
+        }
+
+        [Fact]
+        public async Task Clone_NestedCloningInlines_ReserveBothTheirSpacings()
+        {
+            // The reservation is summed over a box and every cloning ancestor, so a wrap inside the inner span
+            // has to leave room for - and then skip past - both boxes' border and padding. Only the outer one
+            // clones in the control, which is what makes the difference attributable to the inner one.
+            var (bothRoot, _) = await LayoutHarness.LayoutAsync(NestedInlines(innerClones: true));
+            var (outerRoot, _) = await LayoutHarness.LayoutAsync(NestedInlines(innerClones: false));
+
+            var both = LayoutHarness.FindById(bothRoot, "inner")!;
+            var outerOnly = LayoutHarness.FindById(outerRoot, "inner")!;
+
+            var bothRects = Rectangles(both);
+            Assert.True(bothRects.Count > 1, $"fixture must wrap the inner span, got {bothRects.Count} line(s)");
+
+            // A continuation line's text starts further in when the inner span clones too, by the inner
+            // span's own leading spacing on top of the outer span's. Compared on the words rather than on the
+            // rectangles, which coincide here for unrelated reasons: a cloning box's rectangle is pulled back
+            // over its own leading spacing on every line, a non-cloning one's only on its first.
+            var bothStart = ContinuationTextLeft(both);
+            var outerStart = ContinuationTextLeft(outerOnly);
+
+            Assert.Equal(InnerInlineSpacing, bothStart - outerStart, 2);
+
+            // And the room was reserved rather than merely consumed: nothing spills past the measure.
+            var div = LayoutHarness.FindById(bothRoot, "d")!;
+            Assert.All(bothRects, r => Assert.True(r.Right <= div.ClientRight + 0.01,
+                $"expected nested cloned spacing to stay inside the measure ({div.ClientRight}), got {r.Right}"));
         }
 
         // ── the block axis: page breaks ───────────────────────────────────────────────────────────────
@@ -176,11 +207,27 @@ namespace PeachPDF.Tests.Integration
 
         // ── helpers ───────────────────────────────────────────────────────────────────────────────────
 
+        private static string NestedInlines(bool innerClones) => LayoutHarness.Wrap(
+            "<div id='d' style='width:170pt;font:10pt Arial'>" +
+            "<span id='outer' style='border-left:3pt solid #000;padding-left:6pt;box-decoration-break:clone'>" +
+            "<span id='inner' style='border-left:2pt solid #000;padding-left:5pt" +
+            (innerClones ? ";box-decoration-break:clone" : "") + "'>" +
+            string.Join(" ", Enumerable.Range(0, 30).Select(i => $"word{i}")) +
+            "</span></span></div>");
+
         private static string PaginatingBlock(bool clone) => LayoutHarness.Wrap(
             $"<div id='b' style='font:10pt Arial;line-height:14pt;border-top:{BorderTop}pt solid #000;" +
             $"border-bottom:{BorderBottom}pt solid #000;padding:{PaddingBlock}pt 0" +
             (clone ? ";box-decoration-break:clone" : "") + "'>" +
             string.Join(" ", Enumerable.Range(0, 400).Select(i => $"word{i}")) + "</div>");
+
+        /// <summary>Where the text on a box's last line begins — its leftmost word on that line.</summary>
+        private static double ContinuationTextLeft(CssBox box)
+        {
+            var words = box.Words.Concat(box.Boxes.SelectMany(b => b.Words)).ToList();
+            var lastTop = words.Max(w => w.Top);
+            return words.Where(w => w.Top >= lastTop - 0.01).Min(w => w.Left);
+        }
 
         private static List<RRect> Rectangles(CssBox box) =>
             box.Rectangles.Values.OrderBy(r => r.Y).ThenBy(r => r.X).ToList();
