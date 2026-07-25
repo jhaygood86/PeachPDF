@@ -210,7 +210,10 @@ namespace PeachPDF.Tests.Integration
             // flowed. A resumed pass that walked back through one placed pages ago would shift those
             // words down again, once more for each fragmentainer after the one they landed in - so the
             // damage grows with the document rather than being a fixed offset.
-            var (paginated, container) = await LayoutHarness.LayoutAsync(InlineBlockThenLines(20),
+            // Enough pages that some line is bound to straddle a boundary whatever the platform's font
+            // metrics make a line's own height: the band is not a whole number of line heights, so each
+            // successive boundary falls at a different phase within a line.
+            var (paginated, container) = await LayoutHarness.LayoutAsync(InlineBlockThenLines(60),
                 pageHeight: PageHeight, margin: Margin);
             var (single, singleContainer) = await LayoutHarness.LayoutAsync(InlineBlockThenLines(3),
                 pageHeight: PageHeight, margin: Margin);
@@ -222,6 +225,27 @@ namespace PeachPDF.Tests.Integration
             // it - and therefore the number of passes - must make no difference to where it lands.
             var paginatedTop = AllWords(LayoutHarness.FindById(paginated, "ib")!).Min(w => w.Top);
             var singleTop = AllWords(LayoutHarness.FindById(single, "ib")!).Min(w => w.Top);
+
+            Assert.Equal(singleTop, paginatedTop, 2);
+        }
+
+        [Fact]
+        public async Task Slice_FinishedGeneratedInlineBlock_IsNotInsetAgainByEveryLaterPass()
+        {
+            // The same defect on the other of the two paths that apply the inset: a box holding its words
+            // directly - a ::before, whose generated text lives on the box itself rather than in an
+            // anonymous child - never goes through the FlowBox recursion, so it is inset by its parent's
+            // own loop instead.
+            var (paginated, container) = await LayoutHarness.LayoutAsync(GeneratedInlineBlockThenLines(60),
+                pageHeight: PageHeight, margin: Margin);
+            var (single, singleContainer) = await LayoutHarness.LayoutAsync(GeneratedInlineBlockThenLines(3),
+                pageHeight: PageHeight, margin: Margin);
+
+            AssertPaginated(container);
+            Assert.Equal(1, singleContainer.FragmentainerPasses);
+
+            var paginatedTop = GeneratedWordTop(paginated);
+            var singleTop = GeneratedWordTop(single);
 
             Assert.Equal(singleTop, paginatedTop, 2);
         }
@@ -297,6 +321,24 @@ namespace PeachPDF.Tests.Integration
             "<span id='ib' style='display:inline-block;padding:9pt 0;border-top:3pt solid #000'>Alpha</span><br>" +
             string.Join("<br>", Enumerable.Range(1, lines).Select(i => $"Line{i}")) +
             "</p>");
+
+        /// <summary>
+        /// The same shape as <see cref="InlineBlockThenLines"/>, but the vertically-padded inline-block is
+        /// a <c>::before</c>, so its text lives on the box itself.
+        /// </summary>
+        private static string GeneratedInlineBlockThenLines(int lines) => LayoutHarness.Wrap(
+            "<style>#p::before { content:'Alpha'; display:inline-block; padding:9pt 0; " +
+            "border-top:3pt solid #000 }</style>" +
+            "<p id='p' style='margin:0;line-height:22pt;font-size:10pt'>" +
+            string.Join("<br>", Enumerable.Range(1, lines).Select(i => $"Line{i}")) +
+            "</p>");
+
+        /// <summary>Where the generated <c>::before</c> text sits.</summary>
+        private static double GeneratedWordTop(CssBox root) =>
+            LayoutHarness.Descendants(LayoutHarness.FindById(root, "p")!)
+                .SelectMany(b => b.Words)
+                .Where(w => w.Text == "Alpha")
+                .Min(w => w.Top);
 
         /// <summary>The same content with no decoration at all, so the difference between the two is the
         /// decoration and nothing else.</summary>
