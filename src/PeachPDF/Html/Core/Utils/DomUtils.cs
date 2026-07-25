@@ -13,6 +13,7 @@
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
+using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Svg;
 using System;
@@ -117,7 +118,9 @@ namespace PeachPDF.Html.Core.Utils
         /// <summary>
         /// Collects the maximal run of preceding in-flow siblings chained to <paramref name="box"/> by
         /// break avoidance (css-break §3.1, class A break points): for each consecutive pair, the earlier
-        /// sibling's break-after is <c>avoid</c> or the later sibling's break-before is <c>avoid</c>.
+        /// sibling's break-after or the later sibling's break-before forbids a page break
+        /// (<see cref="BreakValues.AvoidsPageBreak"/> — <c>avoid</c> or <c>avoid-page</c>, but not
+        /// <c>avoid-column</c>/<c>avoid-region</c>, which name other fragmentation contexts).
         /// Returned in top-to-bottom document order; empty when no avoid chain exists. Callers use this
         /// to pull e.g. an <c>h2 { break-after: avoid }</c> heading (the UA default for h1-h6 under
         /// @media print) along whenever they move <paramref name="box"/> to the next page.
@@ -136,10 +139,10 @@ namespace PeachPDF.Html.Core.Utils
 
                 // css-break §5.2: a forced break value on either side of the pair takes precedence
                 // over a break-avoidance value on the other - such a pair is never kept together.
-                if (prev.BreakAfter is CssConstants.Page || current.BreakBefore is CssConstants.Page)
+                if (BreakValues.IsForcedPageBreak(prev.BreakAfter) || BreakValues.IsForcedPageBreak(current.BreakBefore))
                     break;
 
-                if (prev.BreakAfter is not CssConstants.Avoid && current.BreakBefore is not CssConstants.Avoid)
+                if (!BreakValues.AvoidsPageBreak(prev.BreakAfter) && !BreakValues.AvoidsPageBreak(current.BreakBefore))
                     break;
 
                 run.Insert(0, prev);

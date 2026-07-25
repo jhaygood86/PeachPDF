@@ -1049,6 +1049,41 @@ namespace PeachPDF.Html.Core.Dom
         private bool _shouldRegisterPage;
 
         /// <summary>
+        /// Where a forced break (css-break-3 §3.1) puts this box: the content top of the slot it lands
+        /// in, already stepped past a slot on the wrong side for a directional value. Resolved by
+        /// <see cref="PerformLayoutPrologue"/> and consumed on arrival by <c>PlaceBlockBox</c>.
+        /// </summary>
+        /// <remarks>
+        /// The break used to be expressed by inflating the <i>previous sibling's</i> <c>ActualBottom</c>
+        /// to the target instead. That setter alters <c>Size.Height</c>, so a predecessor with a
+        /// background or border painted down to the page bottom — and for a directional break it would
+        /// have painted straight across the blank page, which would also have made that slot look
+        /// printable and so defeated the reservation. Naming the target on the box that actually takes
+        /// the break keeps the predecessor's geometry its own.
+        /// </remarks>
+        private double? _forcedBreakTop;
+
+        /// <summary>
+        /// The side css-break-3 §3.1 requires the page after this box's forced break to fall on, or
+        /// <see cref="PageSide.Any"/>. Resolved by <see cref="PerformLayoutPrologue"/> and acted on when
+        /// the box is placed, once its preserved top margin is known.
+        /// </summary>
+        private PageSide _forcedBreakSide;
+
+        /// <summary>
+        /// Whether this box's position was set by a forced break (css-break-3 §3.1).
+        /// </summary>
+        /// <remarks>
+        /// A forced break is a hard positional constraint, not a margin, so such a box anchors what
+        /// follows it even when it is otherwise self-collapsing: <see cref="MarginTopCollapse"/>'s
+        /// walk-back must stop here rather than resolving the next box against an earlier sibling and
+        /// undoing the break. The canonical case is an empty <c>&lt;div class="page-break"&gt;</c>
+        /// marker, which has nothing in it to collapse but everything to say about where the next
+        /// section starts.
+        /// </remarks>
+        internal bool PlacedByForcedBreak { get; private set; }
+
+        /// <summary>
         /// Where this box stopped, when it could not finish inside the fragmentainer the current pass is
         /// filling. Read by the parent's child loop, which wraps it in a link of its own and returns in
         /// turn, so the record unwinds to the fragmentation-context root.
@@ -1267,7 +1302,18 @@ namespace PeachPDF.Html.Core.Dom
             // resolution but harmless (it resolves to the same name).
             var pageNameChanged = HtmlContainer is not null && UsedPageName != HtmlContainer.ActivePageName;
             _shouldRegisterPage = HtmlContainer is not null && (hasExplicitPageName || pageNameChanged);
-            _isForcedBreak = IsForcedBreakValue(BreakBefore) || IsForcedBreakValue(previousSiblingForBreak?.BreakAfter) || pageNameChanged;
+            _isForcedBreak = BreakValues.IsForcedPageBreak(BreakBefore)
+                             || BreakValues.IsForcedPageBreak(previousSiblingForBreak?.BreakAfter)
+                             || pageNameChanged;
+            // Every run of this prologue re-decides from scratch: the keep-with-next retry at the end of
+            // PerformLayoutEpilogue clears _prologueDone and re-enters layout for this box at a new
+            // position, where the break can legitimately land somewhere else. So both the target and
+            // this box's blank-slot reservation are retracted here and only re-asserted below.
+            _forcedBreakTop = null;
+            _forcedBreakSide = PageSide.Any;
+            PlacedByForcedBreak = false;
+            HtmlContainer?.SetBlankSlotReservation(this, null);
+
             if (_isForcedBreak)
             {
                 if (previousSiblingForBreak is not null)
@@ -1289,17 +1335,28 @@ namespace PeachPDF.Html.Core.Dom
                     // boundary (the consecutive-forced-breaks case - it was itself relocated there
                     // by its own preceding break) occupies the LATER slot, so the break between it
                     // and this box still pushes past it, preserving the intentional blank page.
+                    // StaticBottom, and the previous sibling's static top, throughout: a relative offset
+                    // moves a box visually without affecting the layout of anything around it
+                    // (CSS 2.1 §9.4.3), so it must not decide which slot the break lands in either.
                     var container = HtmlContainer!;
-                    var prevBottom = previousSiblingForBreak.ActualBottom;
-                    var target = container.PageTopOf(
-                        container.PageIndexOf(prevBottom - HtmlContainerInt.PageBoundaryEpsilon) + 1);
-                    if (previousSiblingForBreak.Location.Y >= target - HtmlContainerInt.PageBoundaryEpsilon)
+                    var prevBottom = previousSiblingForBreak.StaticBottom;
+                    var prevTop = previousSiblingForBreak.Location.Y - previousSiblingForBreak.RelativeOffsetY;
+                    var slot = container.PageIndexOf(prevBottom - HtmlContainerInt.PageBoundaryEpsilon) + 1;
+                    if (prevTop >= container.PageTopOf(slot) - HtmlContainerInt.PageBoundaryEpsilon)
                     {
-                        target = container.PageTopOf(
-                            container.PageIndexOf(previousSiblingForBreak.Location.Y + HtmlContainerInt.PageBoundaryEpsilon) + 1);
+                        slot = container.PageIndexOf(prevTop + HtmlContainerInt.PageBoundaryEpsilon) + 1;
                     }
 
-                    previousSiblingForBreak.ActualBottom = target;
+                    _forcedBreakTop = container.PageTopOf(slot);
+
+                    // Which side the content after the break has to begin on (css-break-3 §3.1's
+                    // left/right/recto/verso, which force one *or two* page breaks). Resolved here but
+                    // acted on in PlaceBlockBox: only that knows this box's preserved top margin, which
+                    // can itself carry the box past the slot the break landed in, and only boxes that
+                    // reach it take the break at all - a display:none or out-of-flow box runs this
+                    // prologue but is never placed, so reserving a blank page here would manufacture
+                    // one for a break that is never taken.
+                    _forcedBreakSide = BreakValues.RequiredSide(BreakBefore, previousSiblingForBreak.BreakAfter);
                 }
             }
         }
@@ -1538,7 +1595,63 @@ namespace PeachPDF.Html.Core.Dom
                         _resumeTopOverride = null;
                         top = resumedTop;
                     }
-                    else if (prevSibling is not null && !_isForcedBreak)
+                    else if (_forcedBreakTop is { } forcedTop)
+                    {
+                        // The prologue worked out which slot the forced break lands in. Applied here,
+                        // to this box, rather than by inflating the previous sibling's height to reach
+                        // it: that predecessor's own geometry is not the break's to change.
+                        //
+                        // §5.2 truncates margins adjoining an *unforced* break only, so the margin on
+                        // the new page's side of a forced break survives and opens that page. That is
+                        // this box's own margin collapsed with its adjoining first-child chain - which
+                        // is what MarginTopCollapse computes for a box with no previous sibling, and
+                        // the break makes this box exactly that. The group computed against the real
+                        // previous sibling is the wrong quantity: it also holds that sibling's
+                        // margin-bottom, which belongs to the page being left.
+                        _forcedBreakTop = null;
+                        PlacedByForcedBreak = true;
+
+                        var forcedBreakMargin = MarginTopCollapse(null);
+                        top = forcedTop + forcedBreakMargin;
+
+                        // §3.1's "one or two page breaks": the content after the break has to *begin*
+                        // on a page of the requested side, so the side is checked against where this
+                        // box actually lands - which the preserved margin above can carry past the slot
+                        // the break itself reached. The slot stepped over becomes a deliberately-blank
+                        // page.
+                        //
+                        // Gated on IsFragmenting because inside monolithic content (multicol's virtual
+                        // single-column first pass, and the flex/grid/table engines) and during a
+                        // measurement pass at a provisional position, this box's coordinates are not
+                        // where it ends up - a reservation made from them would materialize a blank
+                        // page nowhere near the real content. A directional break degrades to a plain
+                        // page break there, the same engine-independence boundary the other break
+                        // machinery already has.
+                        // The margin travels with the box across the step, so it is preserved on
+                        // whichever page the box ends up opening. Bounded rather than a plain "if"
+                        // because a margin taller than a band can carry the box past the slot the step
+                        // just chose; two rounds settle every case a single alternation can produce,
+                        // and the small cap keeps a degenerate band from spinning.
+                        for (var guard = 0; _forcedBreakSide is not PageSide.Any && HtmlContainer!.IsFragmenting && guard < 4; guard++)
+                        {
+                            var landing = HtmlContainer.PageIndexOf(top + HtmlContainerInt.PageBoundaryEpsilon);
+
+                            if (BreakValues.SlotIsOn(landing, _forcedBreakSide))
+                                break;
+
+                            HtmlContainer.SetBlankSlotReservation(this, landing);
+                            top = HtmlContainer.PageTopOf(landing + 1) + forcedBreakMargin;
+                        }
+                    }
+                    // A previous sibling that a forced break placed and that contributes no height of
+                    // its own - the empty "<div class='page-break'>" marker - puts the break
+                    // immediately before this box, so this box's margin adjoins a *forced* break and
+                    // §5.2 preserves it rather than truncating it. Without this the flush-boundary
+                    // convention below reads the marker's position (exactly a slot top, so one epsilon
+                    // earlier is the previous slot) as a boundary this box's margin crossed, and
+                    // discards the margin.
+                    else if (prevSibling is not null && !_isForcedBreak
+                             && !(prevSibling.PlacedByForcedBreak && prevSibling.IsMarginCollapseThrough()))
                     {
                         var pageHeight = HtmlContainer!.PageSize.Height;
                         if (pageHeight > 0)
@@ -1796,7 +1909,10 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
-            if (BreakInside is CssConstants.Avoid)
+            // avoid / avoid-page, but not avoid-column or avoid-region: this mover is a page-context
+            // mover by construction (it measures against PageBandHeightOf and relocates to PageTopOf),
+            // so a hint naming a different fragmentation context must not suppress a page break.
+            if (BreakValues.AvoidsPageBreak(BreakInside))
             {
                 // Shifted-grid convention (see HtmlContainer.PageIndexOf) - topRelativeToCurrentPage is
                 // this box's distance from the start of its own page's real content band, not a raw
@@ -2223,15 +2339,6 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Returns true if the given break-before or break-after value is a forced page-break value
-        /// per CSS Fragmentation §3.1. That is <c>page</c> alone: <c>always</c> is not a break-* value,
-        /// only a legacy page-break-* one, and <see cref="CssUtils"/> rewrites it to <c>page</c> on the way in.
-        /// The directional values (left, right, recto, verso) parse but are not yet honored.
-        /// </summary>
-        private static bool IsForcedBreakValue(string? value) =>
-            value is CssConstants.Page;
-
-        /// <summary>
         /// Gets the longest word (in width) inside the box, deeply.
         /// </summary>
         /// <param name="box"></param>
@@ -2539,7 +2646,11 @@ namespace PeachPDF.Html.Core.Dom
                 // reveals the group's true, larger collapsed value). Bounded defensively (real documents
                 // never have this many consecutive self-collapsing siblings) so any unexpected sibling-
                 // chain quirk degrades to "stop walking back" instead of spinning forever.
-                if (prevSibling.IsMarginCollapseThrough())
+                // A box whose own position was set by a forced break anchors what follows it even when
+                // it is self-collapsing: the break is a positional constraint rather than a margin, so
+                // walking back past it would resolve this box against an earlier sibling and undo the
+                // break outright. An empty "<div class='page-break'>" marker is exactly that box.
+                if (prevSibling.IsMarginCollapseThrough() && !prevSibling.PlacedByForcedBreak)
                 {
                     prevSibling.FoldSelfCollapsingMargins(ref margins);
                 }
@@ -2551,11 +2662,11 @@ namespace PeachPDF.Html.Core.Dom
 
                 var walker = prevSibling;
                 var walkBackSteps = 0;
-                while (walker.IsMarginCollapseThrough() && walkBackSteps++ < 1000)
+                while (walker.IsMarginCollapseThrough() && !walker.PlacedByForcedBreak && walkBackSteps++ < 1000)
                 {
                     var earlierSibling = DomUtils.GetPreviousSibling(walker, false);
                     if (earlierSibling == null || earlierSibling == walker) break;
-                    if (earlierSibling.IsMarginCollapseThrough())
+                    if (earlierSibling.IsMarginCollapseThrough() && !earlierSibling.PlacedByForcedBreak)
                     {
                         earlierSibling.FoldSelfCollapsingMargins(ref margins);
                     }
@@ -2564,7 +2675,7 @@ namespace PeachPDF.Html.Core.Dom
                         margins.Fold(earlierSibling.ActualMarginBottom);
                     }
                     walker = earlierSibling;
-                    if (!walker.IsMarginCollapseThrough()) anchor = walker;
+                    if (!walker.IsMarginCollapseThrough() || walker.PlacedByForcedBreak) anchor = walker;
                 }
             }
 

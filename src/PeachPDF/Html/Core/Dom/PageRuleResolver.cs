@@ -234,8 +234,8 @@ namespace PeachPDF.Html.Core.Dom
                     var pseudoMatches = pseudo switch
                     {
                         null => true,
-                        "left" => pageNumber % 2 == 0,
-                        "right" => pageNumber % 2 != 0,
+                        "left" => !IsRightPage(pageNumber),
+                        "right" => IsRightPage(pageNumber),
                         _ => false
                     };
 
@@ -256,5 +256,17 @@ namespace PeachPDF.Html.Core.Dom
 
             return result;
         }
+
+        /// <summary>
+        /// Whether 1-based <paramref name="pageNumber"/> is a right-hand page. In a left-to-right page
+        /// progression the first page is a right page, so odd page numbers are right pages.
+        /// </summary>
+        /// <remarks>
+        /// The single home for the page-parity rule: <c>@page :left</c>/<c>:right</c> selection above and
+        /// css-break-3 §3.1's directional forced breaks
+        /// (<see cref="Fragmentation.BreakValues.SlotIsOn"/>) both resolve through it, so the pages a
+        /// <c>break-before: right</c> targets are by construction the pages <c>@page :right</c> styles.
+        /// </remarks>
+        internal static bool IsRightPage(int pageNumber) => pageNumber % 2 != 0;
     }
 }

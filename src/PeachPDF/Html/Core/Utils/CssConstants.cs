@@ -31,6 +31,9 @@ namespace PeachPDF.Html.Core.Utils
         public const string Always = "always";
         public const string Auto = "auto";
         public const string Avoid = "avoid";
+        public const string AvoidColumn = "avoid-column";
+        public const string AvoidPage = "avoid-page";
+        public const string AvoidRegion = "avoid-region";
         public const string Baseline = "baseline";
         public const string Before = "before";
         public const string Blink = "blink";
@@ -113,6 +116,8 @@ namespace PeachPDF.Html.Core.Utils
         public const string Page = "page";
         public const string Percent = "%";
         public const string Pre = "pre";
+        public const string Recto = "recto";
+        public const string Verso = "verso";
         public const string PreWrap = "pre-wrap";
         public const string PreLine = "pre-line";
         public const string Relative = "relative";

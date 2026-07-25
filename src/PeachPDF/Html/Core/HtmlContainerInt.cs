@@ -182,6 +182,72 @@ namespace PeachPDF.Html.Core
         internal void ClearNamedPageElements() => _namedPageElements.Clear();
 
         /// <summary>
+        /// Pagination slots a directional forced break (css-break-3 §3.1 <c>left</c>/<c>right</c>/
+        /// <c>recto</c>/<c>verso</c>) deliberately stepped over, so the content after the break lands on
+        /// a page of the required side. Keyed by the box that took the break, by reference.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Keyed by owner rather than held as a bare set of indices because a reservation has to be
+        /// <i>retractable</i>: the keep-with-next retry in <c>CssBox.PerformLayoutEpilogue</c> clears
+        /// <c>_prologueDone</c> and re-runs the prologue within the same layout generation, at a new
+        /// position, where the same box may legitimately reach a different answer. A set would keep the
+        /// stale one forever.
+        /// </para>
+        /// <para>
+        /// Write-only during layout: nothing layout does reads this, and its sole consumer is
+        /// <see cref="Fragments.FragmentTreeBuilder"/>, which runs once after the last
+        /// <see cref="LayoutDocument"/>. So it can never feed back into box positions, and cannot
+        /// destabilise the per-page-width reflow loop — it annotates the final layout rather than
+        /// informing it.
+        /// </para>
+        /// </remarks>
+        private readonly Dictionary<CssBox, int> _reservedBlankSlots = [];
+
+        /// <summary>
+        /// The slot a trailing directional <c>break-after</c> pads the document with, if any. Held
+        /// separately from <see cref="_reservedBlankSlots"/> rather than under the last box's key: that
+        /// box may itself have taken a <c>break-before</c> and reserved a slot, and one key per box
+        /// would silently drop whichever reservation was made second.
+        /// </summary>
+        private int? _trailingBlankSlot;
+
+        /// <summary>
+        /// Records (or, with a null <paramref name="slotIndex"/>, retracts) the blank slot
+        /// <paramref name="owner"/>'s forced break steps over.
+        /// </summary>
+        internal void SetBlankSlotReservation(CssBox owner, int? slotIndex)
+        {
+            if (slotIndex is { } slot)
+                _reservedBlankSlots[owner] = slot;
+            else
+                _reservedBlankSlots.Remove(owner);
+        }
+
+        /// <summary>
+        /// Whether some directional forced break deliberately left slot <paramref name="slotIndex"/>
+        /// empty, so the fragment tree must materialize it as a real (blank) page.
+        /// </summary>
+        internal bool IsReservedBlankSlot(int slotIndex) =>
+            _trailingBlankSlot == slotIndex || _reservedBlankSlots.ContainsValue(slotIndex);
+
+        /// <summary>
+        /// The last deliberately-blank slot, or null when there is none. A trailing
+        /// <c>break-after</c> can reserve a slot past the laid-out content, which is why the fragment
+        /// builder's slot walk cannot be bounded by the document height alone.
+        /// </summary>
+        internal int? MaxReservedBlankSlot =>
+            _reservedBlankSlots.Count == 0
+                ? _trailingBlankSlot
+                : Math.Max(_reservedBlankSlots.Values.Max(), _trailingBlankSlot ?? -1);
+
+        internal void ClearBlankSlotReservations()
+        {
+            _reservedBlankSlots.Clear();
+            _trailingBlankSlot = null;
+        }
+
+        /// <summary>
         /// When true, <see cref="CssLayoutEngine.FlowBox"/>'s per-word page-break-avoidance check
         /// (<see cref="Dom.CssRect.BreakPage"/>, which permanently jumps a replaced-element word's
         /// <c>Top</c> to the next page) is skipped. Set around a throwaway/measurement-only layout
@@ -459,6 +525,8 @@ namespace PeachPDF.Html.Core
             // document's bands before the next layout pass (which resets again defensively).
             PageGeometry.Reset();
             PageLengthContext = null;
+            // Keyed by CssBox, so dropping the tree without this would retain every box in it.
+            ClearBlankSlotReservations();
         }
 
         /// <summary>
@@ -580,10 +648,79 @@ namespace PeachPDF.Html.Core
             // the promoted box look like real content spanning the whole document.
             ResolveCanvasBackground();
 
+            // Also before the build, and only once the reflow loop has settled, since it reads the
+            // final document height.
+            ReserveTrailingDirectionalBreak();
+
             // Layout's final phase: freeze the mutable box geometry above into the immutable fragment
             // tree everything downstream consumes. Built once, after the reflow loop has settled, so
             // the tree can never describe an intermediate pass's geometry.
             FragmentTree = FragmentTreeBuilder.Build(this);
+        }
+
+        /// <summary>
+        /// Honors a directional <c>break-after</c> on the last box of the flow, per
+        /// <see href="https://www.w3.org/TR/css-break-3/#break-between">css-break-3 §3.1</see>: pads the
+        /// document with a blank page where one is needed for the page <i>after</i> it to fall on the
+        /// requested side. The book idiom — a volume that must end so the next one opens recto.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This needs its own pass because a break between siblings is taken by the box that follows it,
+        /// and at the end of the flow there is no such box. The rule is deliberately the same one: only
+        /// the slot <i>stepped over</i> is reserved, never the slot the (non-existent) following content
+        /// would occupy. So the document gains at most one page.
+        /// </para>
+        /// <para>
+        /// The value is taken from the last in-flow descendant chain. Full §3.1 break-value propagation
+        /// up out of a subtree is a separate matter; this is the narrow last-box case.
+        /// </para>
+        /// </remarks>
+        private void ReserveTrailingDirectionalBreak()
+        {
+            if (Root is null || PageSize.Height <= 0 || PageSize.Height >= double.MaxValue - 1)
+                return;
+
+            var last = LastInFlowDescendant(Root);
+            var side = PageSide.Any;
+
+            for (var box = last; box is not null && side is PageSide.Any; box = box.ParentBox)
+            {
+                side = BreakValues.RequiredSide(null, box.BreakAfter);
+            }
+
+            if (side is PageSide.Any)
+                return;
+
+            var lastSlot = PageIndexOf(MarginTop + ActualSize.Height - PageBoundaryEpsilon);
+
+            if (!BreakValues.SlotIsOn(lastSlot + 1, side))
+                _trailingBlankSlot = lastSlot + 1;
+        }
+
+        /// <summary>
+        /// The deepest last in-flow box of <paramref name="box"/>'s subtree, or null when it has none.
+        /// </summary>
+        private static CssBox? LastInFlowDescendant(CssBox box)
+        {
+            CssBox? last = null;
+
+            for (var i = box.Boxes.Count - 1; i >= 0; i--)
+            {
+                var child = box.Boxes[i];
+
+                if (child.Display == CssConstants.None
+                    || child.Position is CssConstants.Absolute or CssConstants.Fixed
+                    || child.IsFloated)
+                {
+                    continue;
+                }
+
+                last = LastInFlowDescendant(child) ?? child;
+                break;
+            }
+
+            return last;
         }
 
         /// <summary>
@@ -607,9 +744,12 @@ namespace PeachPDF.Html.Core
 
             // Registrations append (they aren't idempotent), so without this each re-layout accumulated
             // duplicates and began with a stale ActivePageName from the PREVIOUS invocation's last
-            // element, which could spuriously force or suppress the first named-page break.
+            // element, which could spuriously force or suppress the first named-page break. Blank-slot
+            // reservations go the same way: each invocation re-decides every one of them from scratch,
+            // and only the last invocation's set describes the layout the fragment tree is built from.
             ClearNamedPageElements();
             PageGeometry.Reset();
+            ClearBlankSlotReservations();
 
             BreakToken? token = null;
 
