@@ -367,11 +367,21 @@ namespace PeachPDF.Html.Core.Dom
         public string BreakInside { get; set; } = CssConstants.Auto;
         public string BreakAfter { get; set; } = CssConstants.Auto;
 
-        // Parsed, cascaded, and inherited like any other CSS property, but currently have no effect on
-        // pagination: PeachPDF's block flow relies on paint-time per-page clipping (no explicit per-line
-        // page-break decision to arbitrate) and the multicol engine only fragments at whole-child
-        // granularity (see CssLayoutEngineColumns), so neither has a break point orphans/widows could
-        // apply to. Same posture as background-attachment elsewhere in this file.
+        // css-break-3 §6.2. Stored and cascaded, but nothing reads it yet, so neither value is honored:
+        // a box split across a page paints its whole border/background and lets the page clip cut it
+        // (slice-like), while an inline split across lines gets slice-like borders but re-resolves its
+        // background and border-radius per line rect (clone-like). A future implementation has two sets
+        // of edges to drive off: BoxFragment.IsFirstFragment/IsLastFragment for the page breaks (see
+        // Html/Core/Fragments/Fragment.cs), and the per-line rect index in FragmentPainter's own
+        // PaintBoxContent loop for the line breaks.
+        public string BoxDecorationBreak { get; set; } = CssConstants.Slice;
+
+        // Enforced in CssBox.PerformLayoutImp, for plain (non-multi-column) block flow only: a box whose
+        // lines would straddle a page boundary with too few before/after it is pushed whole to the next
+        // page. That is coarser than the spec, which pulls only the minimum lines across the break, and
+        // it is skipped for a box taller than one page (pushing it whole would just recreate the same
+        // violation). Inert inside multicol, whose whole-child fragmentation never splits a child in the
+        // first place, so it cannot strand a line.
         public string Orphans { get; set; } = "2";
         public string Widows { get; set; } = "2";
 
@@ -1735,6 +1745,9 @@ namespace PeachPDF.Html.Core.Dom
             Width = p.Width;
             MaxWidth = p.MaxWidth;
             MinWidth = p.MinWidth;
+            // Same reasoning as PdfTagType below: not inherited, but a structural duplicate of the same
+            // element's box has to carry the element's own resolved value.
+            BoxDecorationBreak = p.BoxDecorationBreak;
             // Not a real inherited property (never copied in the "always" section above, so
             // ordinary parent->child cascade seeding never touches it) - but every "everything"
             // call site here (CssProxyBox's repeated-header/footer clone, DomParser's inline/block

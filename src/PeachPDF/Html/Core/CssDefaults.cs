@@ -237,6 +237,7 @@ namespace PeachPDF.Html.Core
             { "border-top-left-radius", "0" },
             { "border-top-right-radius", "0" },
             { "bottom", CssConstants.Auto },
+            { PropertyNames.BoxDecorationBreak, CssConstants.Slice },
             { "box-sizing", CssConstants.ContentBox },
             { "break-after", CssConstants.Auto },
             { "break-before", CssConstants.Auto },

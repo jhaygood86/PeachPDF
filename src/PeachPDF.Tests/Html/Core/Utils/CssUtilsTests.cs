@@ -221,6 +221,8 @@ namespace PeachPDF.Tests.Html.Core.Utils
             ["border-bottom-style", "dashed"], ["border-left-style", "dotted"], ["border-right-style", "double"], ["border-top-style", "groove"],
             ["border-bottom-color", "rgb(1, 2, 3)"], ["border-left-color", "rgb(4, 5, 6)"], ["border-right-color", "rgb(7, 8, 9)"], ["border-top-color", "rgb(10, 11, 12)"],
             ["border-spacing", "3px"], ["border-collapse", "collapse"], ["box-sizing", "border-box"],
+            // "clone" only - a "slice" row would pass with the setter deleted, since slice is the default.
+            ["box-decoration-break", "clone"],
             ["border-top-left-radius", "1px"], ["border-top-right-radius", "2px"], ["border-bottom-right-radius", "3px"], ["border-bottom-left-radius", "4px"],
             ["transform", "rotate(10deg)"], ["transform-origin", "left top"], ["opacity", "0.5"],
             ["counter-increment", "c 1"], ["counter-reset", "c 0"], ["counter-set", "c 2"], ["string-set", "none"],
@@ -399,6 +401,19 @@ namespace PeachPDF.Tests.Html.Core.Utils
             Assert.Equal(CssConstants.Auto, CssDefaults.GetInitialValue(name));
         }
 
+        // Same two prerequisites for box-decoration-break (css-break-3 §6.2): without the known-name entry
+        // there is no revert snapshot to roll back to, and without the initial-value entry
+        // "initial"/"unset"/"revert" resolve to null and the declaration is dropped. The behavioural
+        // consequence is asserted end-to-end in BoxDecorationBreakCascadeTests.
+        [Fact]
+        public async Task BoxDecorationBreak_IsSnapshottableAndHasAnInitialValue()
+        {
+            var (box, _) = await FindDivBoxAndParser("");
+
+            Assert.Contains("box-decoration-break", CssUtils.SnapshotProperties(box).Keys);
+            Assert.Equal(CssConstants.Slice, CssDefaults.GetInitialValue("box-decoration-break"));
+        }
+
         // End-to-end through the real cascade (not the CssUtils setter directly): a css-break-3 §3.1 value
         // authored in a stylesheet has to survive Layer A's validation and land on the box verbatim, while a
         // value outside that set is rejected at parse time and leaves the property at its initial value.
@@ -456,6 +471,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [InlineData("border-top-width", "banana", "3px")]
         [InlineData("border-top-style", "not-a-style", "solid")]
         [InlineData("box-sizing", "weird-box", "border-box")]
+        [InlineData("box-decoration-break", "sliced", "clone")]
         [InlineData("column-count", "0", "2")]
         [InlineData("column-span", "sometimes", "all")]
         public async Task SetPropertyValue_InvalidValue_IsRejected(string name, string invalid, string valid)
