@@ -45,6 +45,7 @@ namespace PeachPDF.Html.Core.Utils
         public const string KeepAll = "keep-all";
         public const string Capitalize = "capitalize";
         public const string Center = "center";
+        public const string Clone = "clone";
         public const string Collapse = "collapse";
         public const string Condensed = "condensed";
         public const string Contain = "contain";
@@ -124,6 +125,7 @@ namespace PeachPDF.Html.Core.Utils
         public const string Scroll = "scroll";
         public const string Serif = "serif";
         public const string Show = "show";
+        public const string Slice = "slice";
         public const string Small = "small";
         public const string SmallCaps = "small-caps";
         public const string Smaller = "smaller";

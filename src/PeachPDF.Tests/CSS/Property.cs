@@ -1078,6 +1078,34 @@ namespace PeachPDF.Tests.CSS
             Assert.Equal("inherit", concrete.Original);
         }
 
+        // The rest of the CSS-wide keywords on box-decoration-break (css-break-3 §6.2). Layer B's
+        // initial-value store and known-name list only do their job if the declaration survives parsing,
+        // so the converter's global-keyword chain is a prerequisite for the cascade behaviour.
+        [Theory]
+        [InlineData("initial")]
+        [InlineData("unset")]
+        [InlineData("revert")]
+        [InlineData("revert-layer")]
+        public void CssBoxDecorationBreakGlobalKeywordLegal(string keyword)
+        {
+            var property = ParseDeclaration($"box-decoration-break:{keyword}");
+            Assert.IsType<BoxDecorationBreak>(property);
+            Assert.True(property.HasValue);
+            Assert.Equal(keyword, property.Value);
+        }
+
+        // slice/clone is the whole value set - anything else is invalid CSS and dropped at parse time.
+        [Theory]
+        [InlineData("none")]
+        [InlineData("both")]
+        [InlineData("slice clone")]
+        public void CssBoxDecorationBreakRejectsNonSpecValue(string value)
+        {
+            var property = ParseDeclaration($"box-decoration-break:{value}");
+            Assert.IsType<BoxDecorationBreak>(property);
+            Assert.False(property.HasValue);
+        }
+
         [Fact]
         public void CssContentNormalLegal()
         {
