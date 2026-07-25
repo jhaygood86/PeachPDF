@@ -115,24 +115,14 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Paints this proxy's fragment subtree — the repeated header/footer content, which the
-        /// fragment builder already positioned from <see cref="SourceGeometry"/>.
-        /// </summary>
-        /// <remarks>
-        /// The snapshot is still written back onto the live source boxes first. One source subtree is
-        /// shared by every page's proxy, so those boxes carry only whichever page positioned them
+        /// Writes this proxy's captured geometry back onto the live source boxes. One source subtree
+        /// is shared by every page's proxy, so those boxes carry only whichever page positioned them
         /// last — and while paint takes its <i>rectangles</i> from fragments, the
         /// <c>overflow: hidden</c> clip walk still resolves ancestor client rectangles off the live
         /// boxes. Without this, that clip lands at another page's position and culls the whole
-        /// repeated row. Removing this last piece of live-geometry coupling is follow-on work.
-        /// </remarks>
-        /// <param name="g">the device to draw to</param>
-        /// <param name="fragment">this proxy's fragment on the page being painted</param>
-        protected override async ValueTask PaintImpCore(RGraphics g, BoxFragment fragment)
-        {
-            _snapshot?.Apply(_sourceBox);
-
-            await base.PaintImpCore(g, fragment);
-        }
+        /// repeated row. Removing this last piece of live-geometry coupling is follow-on work; see
+        /// <c>ProxyFragmentPainter</c>, the only caller.
+        /// </summary>
+        internal void ApplySourceGeometry() => _snapshot?.Apply(_sourceBox);
     }
 }

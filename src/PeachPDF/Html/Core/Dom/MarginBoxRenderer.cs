@@ -128,7 +128,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Paints a margin box's image content via the same <see cref="CssImagePainter"/>/
         /// <see cref="BackgroundImageDrawHandler"/> pipeline used for in-flow <c>content: url(...)</c>
-        /// (<see cref="CssBox.PaintContentImage"/>) - natural size, aligned within the box per
+        /// (<c>FragmentPainter.PaintContentImage</c>) - natural size, aligned within the box per
         /// <paramref name="positionList"/> (a CSS <c>background-position</c> value derived from the
         /// box's resolved <c>text-align</c>/<c>vertical-align</c>, so an image follows the same
         /// alignment its text content would - CSS Paged Media Level 3 §7.2), clipped to the box, no

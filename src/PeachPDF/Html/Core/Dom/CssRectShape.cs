@@ -33,7 +33,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Gets if the word represents an image (a marker shape is treated as an atomic replaced
         /// element for inline flow/line-breaking purposes, same as a raster image - and, via
-        /// <see cref="CssBox.PaintWords"/>'s existing <c>IsImage</c> skip, is never drawn by the
+        /// <c>FragmentPainter.PaintWords</c>'s existing <c>IsImage</c> skip, is never drawn by the
         /// generic per-word text-painting loop).
         /// </summary>
         public override bool IsImage => true;

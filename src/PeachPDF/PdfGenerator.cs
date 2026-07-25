@@ -18,6 +18,7 @@ using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Handlers;
+using PeachPDF.Html.Core.Paint;
 using PeachPDF.Html.Core.Parse;
 using System;
 using System.Linq;
@@ -335,7 +336,8 @@ namespace PeachPDF
                     // so the fill reaches the true full page bleed (including the margin-box area), not
                     // just the content rect.
                     using var canvasGraphics = new GraphicsAdapter(_pdfSharpAdapter, g, _pdfSharpAdapter.PixelsPerPoint);
-                    canvasBackgroundBox.PaintCanvasBackground(canvasGraphics, new RRect(0, 0, page.Width * _pdfSharpAdapter.PixelsPerPoint, page.Height * _pdfSharpAdapter.PixelsPerPoint));
+                    FragmentPainter.PaintCanvasBackground(canvasGraphics, canvasBackgroundBox,
+                        new RRect(0, 0, page.Width * _pdfSharpAdapter.PixelsPerPoint, page.Height * _pdfSharpAdapter.PixelsPerPoint));
                 }
 
                 // Save state so the content transform can be undone for margin box rendering

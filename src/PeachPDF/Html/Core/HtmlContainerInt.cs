@@ -18,6 +18,7 @@ using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Fragments;
+using PeachPDF.Html.Core.Paint;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -227,7 +228,7 @@ namespace PeachPDF.Html.Core
         /// <summary>
         /// Whether any box in the current document is out-of-flow (floated, absolutely positioned, or
         /// fixed). Computed alongside <see cref="HasFloatedBoxes"/> and used by
-        /// <see cref="CssBox.Paint"/> to decide whether Bounds-based page-visibility pruning is safe (an
+        /// <see cref="Paint.FragmentPainter"/> to decide whether Bounds-based page-visibility pruning is safe (an
         /// out-of-flow descendant's visual position can fall outside its "invisible" ancestor's own
         /// Bounds, so that pruning is only safe with none anywhere in the document).
         /// </summary>
@@ -811,38 +812,15 @@ namespace PeachPDF.Html.Core
         /// </summary>
         /// <param name="g">the device to use</param>
         /// <param name="fragmentainer">the page to paint</param>
-        public async ValueTask PerformPaint(RGraphics g, FragmentainerFragment fragmentainer)
+        public ValueTask PerformPaint(RGraphics g, FragmentainerFragment fragmentainer)
         {
             ArgumentNullException.ThrowIfNull(g);
             ArgumentNullException.ThrowIfNull(fragmentainer);
 
-            ResetPaintClaims();
-
-            g.PushClip(PageClipOverride ?? PageBoxRect);
-
-            await fragmentainer.Root.Box.Paint(g, fragmentainer.Root);
-
-            g.PopClip();
+            // A painter instance owns one page's paint, so all per-page paint state lives and dies
+            // with it rather than on the container or the box tree.
+            return new FragmentPainter(this).Paint(g, fragmentainer);
         }
-
-        /// <summary>
-        /// Fragments already painted on the page currently being painted. A fragment can be reached
-        /// twice in one page walk — once nested, once hoisted out for stacking-context ordering — and
-        /// must only paint the first time. Reference identity is deliberate: two structurally equal
-        /// fragments (a rowspan cell shown in each row it spans) are genuinely separate things to paint.
-        /// </summary>
-        private readonly HashSet<BoxFragment> _paintedFragments = new(ReferenceEqualityComparer.Instance);
-
-        /// <summary>
-        /// Claims <paramref name="fragment"/> for painting, returning false if it has already been
-        /// painted on this page.
-        /// </summary>
-        internal bool TryClaimForPaint(BoxFragment fragment) => _paintedFragments.Add(fragment);
-
-        /// <summary>
-        /// Forgets which fragments have been painted, so a new page's walk starts clean.
-        /// </summary>
-        internal void ResetPaintClaims() => _paintedFragments.Clear();
 
         /// <summary>
         /// Given the list of available media types, returns the "best" one

@@ -2,6 +2,7 @@ using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
+using PeachPDF.Html.Core.Paint;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Tests.TestSupport
@@ -20,16 +21,11 @@ namespace PeachPDF.Tests.TestSupport
             container.PerformPaint(g, container.FragmentTree!.Fragmentainers[page]);
 
         /// <summary>
-        /// Paints a single box's fragment on <paramref name="page"/>, without the surrounding page clip
-        /// — the box-level equivalent of the old <c>box.Paint(g)</c>.
+        /// Paints a single box's fragment on <paramref name="page"/>, without the surrounding page
+        /// clip. Gets its own painter, so its already-painted set starts clean.
         /// </summary>
-        internal static async ValueTask PaintBox(HtmlContainerInt container, CssBox box, RGraphics g, int page = 0)
-        {
-            container.ResetPaintClaims();
-
-            var fragment = FragmentOf(container, box, page);
-            await fragment.Box.Paint(g, fragment);
-        }
+        internal static ValueTask PaintBox(HtmlContainerInt container, CssBox box, RGraphics g, int page = 0) =>
+            new FragmentPainter(container).PaintFragment(g, FragmentOf(container, box, page));
 
         /// <summary>
         /// The fragment of <paramref name="box"/> on <paramref name="page"/>. Fails the test if the box

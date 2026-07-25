@@ -10,7 +10,7 @@ namespace PeachPDF.Html.Core.Handlers
 {
     /// <summary>
     /// Orchestrates tagged-PDF structure-tree/MCID/ParentTree bookkeeping, driven live from the
-    /// box-tree paint walk (see <see cref="CssBox.PaintImp"/>) rather than an event-interception
+    /// fragment paint walk (see <see cref="Paint.FragmentPainter"/>) rather than an event-interception
     /// layer around raw drawing calls - PeachPDF already fully controls its own paint walk, unlike
     /// upstream PDFsharp's XGraphics-event-driven UAManager/StructureBuilder this reimplements the
     /// same underlying algorithm (AddMarkedContentToStructureElement/AddToParentTree) for.
@@ -79,7 +79,7 @@ namespace PeachPDF.Html.Core.Handlers
 
         /// <summary>
         /// Opens the "/LBody" grouping element for a tagged &lt;li&gt;'s body content - see
-        /// <see cref="CssBox.PaintListItem"/>. A dedicated cache/overload (rather than
+        /// <c>FragmentPainter.PaintListItem</c>. A dedicated cache/overload (rather than
         /// <see cref="OpenGroupingElement"/>) because the same <paramref name="box"/> (the &lt;li&gt;
         /// itself) already owns a distinct "/LI" element in <see cref="_elementsByBox"/>.
         /// </summary>
