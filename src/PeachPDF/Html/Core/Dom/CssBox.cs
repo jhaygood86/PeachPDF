@@ -1121,6 +1121,24 @@ namespace PeachPDF.Html.Core.Dom
         private bool _prologueDone;
 
         /// <summary>
+        /// Where <see cref="PerformLayoutImp"/> is to re-place this box, set when an
+        /// <see cref="EarlyBreak"/> is taken by re-laying the box out rather than by moving it.
+        /// </summary>
+        private double? _earlyBreakRetryTop;
+
+        /// <summary>
+        /// Whether this box has already taken an <see cref="EarlyBreak"/> on this fragmentainer pass.
+        /// </summary>
+        /// <remarks>
+        /// Not a re-entrancy guard — a latch. The relocated box's own epilogue runs again and asks the
+        /// same question again, and an unsatisfiable <c>avoid</c> is <i>relaxed</i> rather than skipped
+        /// (§5.3), so the arm answers "still does not fit, move it" every time. One correction per box
+        /// per pass is also what [§4.3](https://www.w3.org/TR/css-break-3/#possible-breaks) sanctions:
+        /// a bounded reconsideration, not an open-ended search.
+        /// </remarks>
+        private bool _earlyBreakTaken;
+
+        /// <summary>
         /// The <see cref="HtmlContainerInt.LayoutGeneration"/> this box last laid out in. Resumption
         /// state left behind by an earlier layout — the unrestricted-width double layout, the
         /// per-page-width reflow loop, <c>ShrinkToFit</c>'s re-layout — is recognised as stale by this
@@ -1173,17 +1191,36 @@ namespace PeachPDF.Html.Core.Dom
                 await PerformLayoutPrologue(g);
             }
 
-            await LayoutContents(g, resume);
-
-            if (PendingBreakToken is not null || RequestedBreakBeforeTop is not null)
+            // Bounded by _earlyBreakTaken: the epilogue may conclude, once, that this box has to start
+            // somewhere else, and the only honest way to act on that is to lay it out again there.
+            while (true)
             {
-                // This box did not finish in this fragmentainer. Its epilogue judges a *complete* box,
-                // so it waits for the pass that completes it; the record unwinds from here.
-                PublishBreakToTheContextRoot();
-                return;
-            }
+                await LayoutContents(g, resume);
 
-            await PerformLayoutEpilogue(g);
+                if (PendingBreakToken is not null || RequestedBreakBeforeTop is not null)
+                {
+                    // This box did not finish in this fragmentainer. Its epilogue judges a *complete*
+                    // box, so it waits for the pass that completes it; the record unwinds from here.
+                    PublishBreakToTheContextRoot();
+                    return;
+                }
+
+                await PerformLayoutEpilogue(g);
+
+                if (_earlyBreakRetryTop is not { } retryTop) return;
+
+                _earlyBreakRetryTop = null;
+
+                // The same one-shot channel a break-before uses, for the same reason: the target has
+                // already been worked out and must not be re-derived here.
+                _resumeTopOverride = retryTop;
+
+                // A retry re-places this box; it does not continue where a previous fragmentainer left
+                // off. The prologue deliberately does not run again — everything it settles is either
+                // already consumed or overridden by the target above, and re-running it would register
+                // this box's named strings and named page a second time.
+                resume = null;
+            }
         }
 
         /// <summary>
@@ -1206,6 +1243,12 @@ namespace PeachPDF.Html.Core.Dom
             _incomingToken = null;
             PendingBreakToken = null;
             RequestedBreakBeforeTop = null;
+
+            // One §4.3 correction per box per fragmentainer pass. A resumed pass is a fresh chance to
+            // make one, at coordinates the previous pass had not settled.
+            _earlyBreakTaken = false;
+            _earlyBreakRetryTop = null;
+
             return resume;
         }
 
@@ -2011,7 +2054,12 @@ namespace PeachPDF.Html.Core.Dom
             var avoidsBreak = BreakValues.AvoidsPageBreak(BreakInside);
             var monolithic = IsMonolithicBoxThisMoverMayMove();
 
-            if (avoidsBreak || monolithic)
+            // One correction per box per pass (_earlyBreakTaken). Where the box was laid out again
+            // rather than moved, this epilogue is the relocated box's own, and it asks the same
+            // question of the same geometry - an unsatisfiable `avoid` is relaxed rather than skipped
+            // (§5.3), so without the latch the answer is "still does not fit" and the box walks down
+            // the document one page per pass.
+            if ((avoidsBreak || monolithic) && !_earlyBreakTaken)
             {
                 // Shifted-grid convention (see HtmlContainer.PageIndexOf) - topRelativeToCurrentPage is
                 // this box's distance from the start of its own page's real content band, not a raw
@@ -2029,14 +2077,16 @@ namespace PeachPDF.Html.Core.Dom
                 // it instead (#350). The question is asked of the *destination* band, which per-page
                 // @page margins can size differently from the current one and from PageSize.Height.
                 if (bottomRelativeToCurrentPage > HtmlContainer.PageBandHeightOf(currentPageIndex)
-                    && (avoidsBreak || FitsInFragmentainer(currentPageIndex + 1)))
-                {
-                    TakeEarlyBreak(EarlyBreak.Discover(
+                    && (avoidsBreak || FitsInFragmentainer(currentPageIndex + 1))
+                    && TakeEarlyBreak(EarlyBreak.Discover(
                         this,
                         HtmlContainer.PageTopOf(currentPageIndex + 1),
                         // The two reasons share a mover but not a rationale, and §4.3 relaxation will
                         // need to tell "may not be broken" from "asks not to be broken" apart.
-                        monolithic ? EarlyBreakReason.Monolithic : EarlyBreakReason.AvoidBreakInside));
+                        monolithic ? EarlyBreakReason.Monolithic : EarlyBreakReason.AvoidBreakInside)))
+                {
+                    // Being laid out again, at a position nothing below this point has seen yet.
+                    return;
                 }
             }
 
@@ -2051,6 +2101,7 @@ namespace PeachPDF.Html.Core.Dom
             // A paragraph taller than one page is left alone: pushing it whole can't help; it would just
             // recreate the same violation on the next page.
             if (DomUtils.ContainsInlinesOnly(this) && LineBoxes.Count > 1
+                && !_earlyBreakTaken
                 && int.TryParse(Orphans, out var orphans) && int.TryParse(Widows, out var widows)
                 && (orphans > 1 || widows > 1))
             {
@@ -2072,9 +2123,10 @@ namespace PeachPDF.Html.Core.Dom
                         var linesBefore = LineBoxes.Count(l => l.LineBottom <= boundaryY);
                         var linesAfter = LineBoxes.Count - linesBefore;
 
-                        if (linesBefore > 0 && linesAfter > 0 && (linesBefore < orphans || linesAfter < widows))
+                        if (linesBefore > 0 && linesAfter > 0 && (linesBefore < orphans || linesAfter < widows)
+                            && TakeEarlyBreak(EarlyBreak.Discover(this, boundaryY, EarlyBreakReason.OrphansWidows)))
                         {
-                            TakeEarlyBreak(EarlyBreak.Discover(this, boundaryY, EarlyBreakReason.OrphansWidows));
+                            return;
                         }
                     }
                 }
@@ -3160,17 +3212,35 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Acts on a break decision discovered against this box.
+        /// Acts on a break decision discovered against this box, and reports whether it was taken by
+        /// re-laying the box out — in which case the caller must stop, because everything it has
+        /// measured so far describes a position the box is about to leave.
         /// </summary>
         /// <remarks>
-        /// The single place the four §4.3 corrections — <c>break-inside: avoid</c>,
+        /// <para>
+        /// The single place the §4.3 corrections — <c>break-inside: avoid</c>,
         /// <see href="https://www.w3.org/TR/css-break-3/#monolithic">§2</see> monolithic content,
-        /// <c>orphans</c>/<c>widows</c>, and the keep-with-next pull they all share — turn a stated
-        /// decision into geometry, so that how a break is <i>taken</i> is decided once rather than
-        /// per mover.
+        /// <c>orphans</c>/<c>widows</c>, and the keep-with-next pull they share — turn a stated
+        /// decision into geometry, so that how a break is <i>taken</i> is decided once rather than per
+        /// mover.
+        /// </para>
+        /// <para>
+        /// Re-laying the box out is what makes the decision honest: a box that had already begun
+        /// flowing text across the boundary cannot simply be shifted, because its later lines were laid
+        /// out against the next band's top and the shift carries that gap into the box as interior
+        /// blank space. Where the box cannot be laid out again — see <see cref="CanBeLaidOutAgain"/> —
+        /// the move degrades to the translation this used to always do.
+        /// </para>
         /// </remarks>
-        internal void TakeEarlyBreak(EarlyBreak decision)
+        private bool TakeEarlyBreak(EarlyBreak decision)
         {
+            if (decision.BeforeBox == this && CanBeLaidOutAgain(decision))
+            {
+                _earlyBreakRetryTop = decision.Top;
+                _earlyBreakTaken = true;
+                return true;
+            }
+
             // The run's head lands on the decision's target and everything below it keeps its distance,
             // so the spacing inside the group survives the move.
             var offset = decision.Top - decision.BeforeBox.Location.Y;
@@ -3181,6 +3251,71 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             OffsetTop(offset);
+            _earlyBreakTaken = true;
+            return false;
+        }
+
+        /// <summary>
+        /// Whether this box can take <paramref name="decision"/> by being laid out again at its new
+        /// position, rather than by being translated to it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Three things have to hold. The box must <see cref="PlacesItselfAsBlockBox">place itself</see>,
+        /// since the target is delivered through <c>PlaceBlockBox</c> and any other box would simply
+        /// ignore it and never move at all. It must not already have taken a break on this pass
+        /// (<see cref="_earlyBreakTaken"/>). And breaking must be live: inside the flex, grid, table and
+        /// multi-column engines a box's coordinates are provisional — a flex item is laid out at the
+        /// container's content origin purely to be measured, and is translated into place afterwards —
+        /// so re-flowing it there would change the very measurement the engine is in the middle of
+        /// taking. That is the #166 boundary the rest of the break machinery already has, and inside it
+        /// the translation remains exactly what it was.
+        /// </para>
+        /// <para>
+        /// The box must also actually <i>fit</i> where it is going. An <c>avoid</c> that cannot be
+        /// satisfied is relaxed by moving the box anyway, so that as much of it as possible lands on
+        /// one page (§5.3) — which is a sound thing to do to a box being <i>translated</i> and a
+        /// runaway when the box is laid out again: it still does not fit, so it fragments from its new
+        /// top, that fragmentation opens another fragmentainer pass, and the pass re-asks the same
+        /// question. Verified to walk a box down 100,000 pages before the driver's own cap stopped it.
+        /// Relaxation therefore keeps the translation, which is exactly what it did before.
+        /// </para>
+        /// <para>
+        /// The last exclusion is narrower and is a defect rather than a boundary: laying a table out a
+        /// second time does not reproduce the first result. Its repeating <c>&lt;thead&gt;</c> is
+        /// detached from the tree and replaced by one proxy per page, and a second run neither finds
+        /// the header nor removes the proxies — so the header stops repeating and stale copies are left
+        /// behind, or, once the structure is restored, the header's height is counted twice. Until that
+        /// is fixed a subtree containing one keeps the translation.
+        /// </para>
+        /// </remarks>
+        private bool CanBeLaidOutAgain(EarlyBreak decision) =>
+            PlacesItselfAsBlockBox
+            && HtmlContainer is { IsFragmenting: true }
+            && decision.KeepWithNextRun.Count == 0
+            && FitsInFragmentainer(decision.Slot)
+            && !ContainsARepeatingTable(this);
+
+        /// <summary>
+        /// Whether <paramref name="box"/>'s subtree contains a table that repeats a header or footer
+        /// group — the structure a second layout of the same table does not reproduce.
+        /// </summary>
+        /// <remarks>
+        /// Both spellings have to be looked for, because the first layout consumes the first one: before
+        /// it, the repeating group is an ordinary child of the table; after it, the group has been
+        /// detached and only the per-page <see cref="CssProxyBox"/> proxies remain.
+        /// </remarks>
+        private static bool ContainsARepeatingTable(CssBox box)
+        {
+            if (box.Display is CssConstants.Table or CssConstants.InlineTable
+                && box.Boxes.Exists(child =>
+                    child is CssProxyBox
+                    || child.Display is CssConstants.TableHeaderGroup or CssConstants.TableFooterGroup))
+            {
+                return true;
+            }
+
+            return box.Boxes.Exists(ContainsARepeatingTable);
         }
 
         /// <summary>

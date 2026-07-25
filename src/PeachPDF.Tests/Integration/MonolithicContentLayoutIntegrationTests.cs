@@ -53,16 +53,16 @@ namespace PeachPDF.Tests.Integration
             Assert.True(bottom > top, "fixture must straddle a page boundary when nothing forbids it");
         }
 
-        // Characterization of a boundary the headline test's own fixture hides. Where the box was already
-        // split by a *word-level* break before the epilogue ran, the mover shifts it uniformly - but the
-        // resumed lines were laid out at the next band's top rather than continuing from the previous
-        // page's last line, so the shift carries that fragmentainer gap along as a hole inside the box,
-        // and leaves its height inflated by the same amount. 140pt of filler happens to be the one
-        // alignment in this range where the gap is zero; 130 and 150 are not.
+        // The two arms share a mover, so they must agree exactly however the box came to straddle -
+        // including where it was already split by a *word-level* break before the epilogue ran, which
+        // the headline test's own fixture hides. 140pt of filler is the one alignment in this range
+        // where the two ways of relocating a box happened to agree anyway, which is why it must not be
+        // the only case here.
         //
-        // Pre-existing, and not introduced here: `break-inside: avoid` reproduces it identically, and did
-        // so before monolithic content reached this mover. Recorded as an accepted gap rather than fixed,
-        // since fixing it means re-flowing the relocated box rather than translating it.
+        // This was a characterization while the mover translated the box: the shift carried the
+        // fragmentainer gap along inside it. The box is now laid out again at its new position
+        // (EarlyBreak), so the equality below is the invariant rather than a shared defect - see
+        // EarlyBreakLayoutIntegrationTests for what each arm now produces.
         [Theory]
         [InlineData(130)]
         [InlineData(140)]
@@ -82,6 +82,14 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(
                 b.LineBoxes.SelectMany(l => l.Words).Select(w => w.Top),
                 a.LineBoxes.SelectMany(l => l.Words).Select(w => w.Top));
+
+            // Both arms relocate the box whole, and neither carries a page gap into it: every line sits
+            // one line-height below the last, and the box is exactly as tall as its own content.
+            var lineTops = b.LineBoxes.SelectMany(l => l.Words).Select(w => w.Top).Distinct().Order().ToList();
+
+            Assert.All(
+                lineTops.Zip(lineTops.Skip(1), (previous, next) => next - previous),
+                spacing => Assert.True(spacing <= 20 + 0.5, $"a {spacing:F1}pt step between lines exceeds the 20pt line height"));
         }
 
         private static string GapDocument(double fillerHeight, string cardCss) =>
