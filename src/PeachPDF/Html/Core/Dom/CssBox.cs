@@ -2031,8 +2031,12 @@ namespace PeachPDF.Html.Core.Dom
                 if (bottomRelativeToCurrentPage > HtmlContainer.PageBandHeightOf(currentPageIndex)
                     && (avoidsBreak || FitsInFragmentainer(currentPageIndex + 1)))
                 {
-                    var offset = HtmlContainer.PageTopOf(currentPageIndex + 1) - Location.Y;
-                    OffsetTopWithKeepWithNextRun(offset, topRelativeToCurrentPage);
+                    TakeEarlyBreak(EarlyBreak.Discover(
+                        this,
+                        HtmlContainer.PageTopOf(currentPageIndex + 1),
+                        // The two reasons share a mover but not a rationale, and §4.3 relaxation will
+                        // need to tell "may not be broken" from "asks not to be broken" apart.
+                        monolithic ? EarlyBreakReason.Monolithic : EarlyBreakReason.AvoidBreakInside));
                 }
             }
 
@@ -2070,8 +2074,7 @@ namespace PeachPDF.Html.Core.Dom
 
                         if (linesBefore > 0 && linesAfter > 0 && (linesBefore < orphans || linesAfter < widows))
                         {
-                            var offset = boundaryY - Location.Y;
-                            OffsetTopWithKeepWithNextRun(offset, ownTopRelativeToPage);
+                            TakeEarlyBreak(EarlyBreak.Discover(this, boundaryY, EarlyBreakReason.OrphansWidows));
                         }
                     }
                 }
@@ -3154,6 +3157,30 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             Location = Location with { Y = Location.Y + amount };
+        }
+
+        /// <summary>
+        /// Acts on a break decision discovered against this box.
+        /// </summary>
+        /// <remarks>
+        /// The single place the four §4.3 corrections — <c>break-inside: avoid</c>,
+        /// <see href="https://www.w3.org/TR/css-break-3/#monolithic">§2</see> monolithic content,
+        /// <c>orphans</c>/<c>widows</c>, and the keep-with-next pull they all share — turn a stated
+        /// decision into geometry, so that how a break is <i>taken</i> is decided once rather than
+        /// per mover.
+        /// </remarks>
+        internal void TakeEarlyBreak(EarlyBreak decision)
+        {
+            // The run's head lands on the decision's target and everything below it keeps its distance,
+            // so the spacing inside the group survives the move.
+            var offset = decision.Top - decision.BeforeBox.Location.Y;
+
+            foreach (var member in decision.KeepWithNextRun)
+            {
+                member.OffsetTop(offset);
+            }
+
+            OffsetTop(offset);
         }
 
         /// <summary>
