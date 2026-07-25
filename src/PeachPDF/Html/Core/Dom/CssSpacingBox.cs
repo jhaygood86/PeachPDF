@@ -1,7 +1,5 @@
-using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core.Utils;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -37,11 +35,8 @@ namespace PeachPDF.Html.Core.Dom
             return ExtendedBox.BreakPage();
         }
 
-        protected override async ValueTask PaintImpCore(RGraphics g)
-        {
-            ExtendedBox.ResetPaint();
-
-            await ExtendedBox.Paint(g);
-        }
+        // This box paints nothing of its own. The spanned cell shows through it because the fragment
+        // builder makes that cell one of this box's fragment children, so the ordinary paint walk
+        // reaches it - rather than this box re-entering paint on a box that lives elsewhere in the tree.
     }
 }

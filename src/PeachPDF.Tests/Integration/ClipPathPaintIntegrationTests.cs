@@ -19,12 +19,12 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Polygon_PushesResolvedClipPath_BracketingThePaint()
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<div id='el' style='clip-path: polygon(0 0, 100% 0, 50% 100%); width: 40pt; height: 30pt; background: red'>x</div>"));
             var el = FindById(root, "el")!;
 
             var g = new TestRecordingGraphics();
-            await el.Paint(g);
+            FragmentPaintHarness.PaintBox(container, el, g);
 
             // Exactly one clip pushed (an RGraphicsPath) and one popped.
             Assert.Single(g.ClipPaths);
@@ -47,12 +47,12 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Inset_PushesRectangularClip_InsetFromBorderBox()
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<div id='el' style='clip-path: inset(5pt 10pt); width: 40pt; height: 30pt; background: red'>x</div>"));
             var el = FindById(root, "el")!;
 
             var g = new TestRecordingGraphics();
-            await el.Paint(g);
+            FragmentPaintHarness.PaintBox(container, el, g);
 
             Assert.Single(g.ClipPaths);
             var b = el.Bounds;
@@ -70,12 +70,12 @@ namespace PeachPDF.Tests.Integration
         [InlineData("ellipse(60% 40%)")]
         public async Task CircleAndEllipse_RadiusKeywords_ProduceAClip(string clipPath)
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 $"<div id='el' style='clip-path: {clipPath}; width: 40pt; height: 30pt; background: red'>x</div>"));
             var el = FindById(root, "el")!;
 
             var g = new TestRecordingGraphics();
-            await el.Paint(g);
+            FragmentPaintHarness.PaintBox(container, el, g);
 
             // An ellipse/circle clip is built as four arc segments — a non-empty clip path is pushed.
             Assert.Single(g.ClipPaths);
@@ -85,12 +85,12 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task NoClipPath_PushesNoClip()
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<div id='el' style='width: 40pt; height: 30pt; background: red'>x</div>"));
             var el = FindById(root, "el")!;
 
             var g = new TestRecordingGraphics();
-            await el.Paint(g);
+            FragmentPaintHarness.PaintBox(container, el, g);
 
             Assert.Empty(g.ClipPaths);
         }
@@ -99,13 +99,13 @@ namespace PeachPDF.Tests.Integration
         public async Task InvalidClipPath_IsDroppedAtParse_AndPushesNoClip()
         {
             // `banana` is not a valid basic shape; Layer A drops the declaration, so nothing clips.
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<div id='el' style='clip-path: banana; width: 40pt; height: 30pt; background: red'>x</div>"));
             var el = FindById(root, "el")!;
             Assert.Equal("none", el.ClipPath);
 
             var g = new TestRecordingGraphics();
-            await el.Paint(g);
+            FragmentPaintHarness.PaintBox(container, el, g);
             Assert.Empty(g.ClipPaths);
         }
 

@@ -28,7 +28,7 @@ namespace PeachPDF.Tests.Integration
             // Absolute units throughout (no em/mm) so the expected value doesn't depend on font-size
             // resolution/unit conversion - only the min-vs-max precedence itself is under test.
             var html = Wrap("<div id='b' style='height:8pt; min-height:20pt; max-height:5pt;'></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var box = FindById(root, "b")!;
 
             // min-height (20pt) and max-height (5pt) conflict; min-height must win per §10.7, so the
@@ -41,7 +41,7 @@ namespace PeachPDF.Tests.Integration
         {
             // Sanity check for the same mechanism without a conflict: max-height alone must still clamp.
             var html = Wrap("<div id='b' style='height:100pt; max-height:20pt;'></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var box = FindById(root, "b")!;
 
             Assert.InRange(box.ActualBottom - box.Location.Y, 19.5, 20.5);
@@ -65,7 +65,7 @@ namespace PeachPDF.Tests.Integration
                 "  <div id='content' style='height:50px;'></div>" +
                 "  <div id='b' style='height:60%; max-height:20px;'></div>" +
                 "</div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var box = FindById(root, "b")!;
 
             // "height: 60%" must resolve to auto (zero intrinsic content) here, not against #cb's own
@@ -81,7 +81,7 @@ namespace PeachPDF.Tests.Integration
                 "  <div id='content' style='height:50px;'></div>" +
                 "  <div id='b' style='min-height:80%;'></div>" +
                 "</div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var box = FindById(root, "b")!;
 
             // "min-height: 80%" against an indefinite containing block must be treated as 0 (CSS2.1
@@ -109,7 +109,7 @@ namespace PeachPDF.Tests.Integration
                 "    <div id='content' style='height:20pt;'></div>" +
                 "  </div>" +
                 "</div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var box = FindById(root, "b")!;
 
             // #b's border-box height must be its own content (20pt) plus its own bottom border (10pt)
@@ -127,7 +127,7 @@ namespace PeachPDF.Tests.Integration
             var html = Wrap(@"
                 <div id='before' style='height:20px;'></div>
                 <div id='floated' style='float:left; margin-top:-10px; width:30px; height:30px;'></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var before = FindById(root, "before")!;
             var floated = FindById(root, "floated")!;
 
@@ -143,7 +143,7 @@ namespace PeachPDF.Tests.Integration
             var html = Wrap(@"
                 <div id='floated' style='float:left; width:30px; height:50px;'></div>
                 <div id='cleared' style='clear:both; height:10px;'></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var floated = FindById(root, "floated")!;
             var cleared = FindById(root, "cleared")!;
 
@@ -162,7 +162,7 @@ namespace PeachPDF.Tests.Integration
                 <div id='floated' style='float:left; width:30px; height:10px;'></div>
                 <div id='before' style='height:200px;'></div>
                 <div id='cleared' style='clear:both; height:10px;'></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var before = FindById(root, "before")!;
             var cleared = FindById(root, "cleared")!;
 
@@ -181,7 +181,7 @@ namespace PeachPDF.Tests.Integration
             var html = Wrap(@"
                 <div id='floated' style='float:left; width:30pt; height:100pt; margin-bottom:-20pt;'></div>
                 <div id='cleared' style='clear:both; height:10pt;'></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var floated = FindById(root, "floated")!;
             var cleared = FindById(root, "cleared")!;
 
@@ -198,7 +198,7 @@ namespace PeachPDF.Tests.Integration
             var html = Wrap(@"
                 <div id='floated' style='float:left; width:30pt; height:50pt; position:relative; top:30pt;'></div>
                 <div id='cleared' style='clear:both; height:10pt;'></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var floated = FindById(root, "floated")!;
             var cleared = FindById(root, "cleared")!;
 
@@ -242,7 +242,7 @@ namespace PeachPDF.Tests.Integration
                 <div id='a' style='height:20pt;'></div>
                 <div id='e' style='margin-top:10pt; margin-bottom:100pt;'></div>
                 <div id='b' style='height:10pt;'></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var a = FindById(root, "a")!;
             var e = FindById(root, "e")!;
             var b = FindById(root, "b")!;
@@ -263,7 +263,7 @@ namespace PeachPDF.Tests.Integration
                 <div id='a' style='height:20pt;'></div>
                 <div id='e' style='margin-top:30pt; margin-bottom:-12pt;'></div>
                 <div id='f' style='float:left; width:20pt; height:20pt; margin-top:5pt;'></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var e = FindById(root, "e")!;
             var f = FindById(root, "f")!;
 
@@ -279,7 +279,7 @@ namespace PeachPDF.Tests.Integration
             var html = Wrap(@"
                 <div id='a' style='height:20px;'></div>
                 <hr id='h' style='margin:0;' />");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var a = FindById(root, "a")!;
             var h = FindById(root, "h")!;
 
@@ -303,7 +303,7 @@ namespace PeachPDF.Tests.Integration
                 <div id='a' style='height:20px; margin-bottom:40px;'></div>
                 <div id='e' style='margin:50px 0;'><div style='margin-bottom:-48px;'></div></div>
                 <div id='b' style='margin-top:45px; height:10px;'></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var a = FindById(root, "a")!;
             var b = FindById(root, "b")!;
 
@@ -322,7 +322,7 @@ namespace PeachPDF.Tests.Integration
             var html = Wrap(@"
                 <div id='a' style='height:20pt; margin-bottom:-6pt;'></div>
                 <div id='b' style='height:10pt;'></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var a = FindById(root, "a")!;
             var b = FindById(root, "b")!;
 
@@ -342,7 +342,7 @@ namespace PeachPDF.Tests.Integration
             var html = Wrap(
                 "<div id='parent' style='border-top:1pt solid black; border-bottom:1pt solid black;'>"
                 + "<div id='child' style='height:20pt; margin-bottom:-10pt;'></div></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var parent = FindById(root, "parent")!;
 
             // Parent's content height must be exactly the child's 20pt (plus its own 1pt+1pt borders =
@@ -360,7 +360,7 @@ namespace PeachPDF.Tests.Integration
             // top is auto, bottom is set - per CSS2.1 §9.4.3, bottom applies with its sign flipped
             // (a positive "bottom" pulls the box UP, i.e. subtracts from Y).
             var html = Wrap("<div id='t' style='position:relative; bottom:10px; width:10px; height:10px;'></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var box = FindById(root, "t")!;
 
             // Static-flow position is Y=8 (default body margin); "bottom:10px" must move it to Y=-2.
@@ -381,7 +381,7 @@ namespace PeachPDF.Tests.Integration
                 + "<div id='shifted' style='position:relative; bottom:-30pt; height:40pt;'></div>"
                 + "</div>"
                 + "<div id='after' style='height:10pt;'></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var parent = FindById(root, "parent")!;
             var shifted = FindById(root, "shifted")!;
             var after = FindById(root, "after")!;
@@ -405,7 +405,7 @@ namespace PeachPDF.Tests.Integration
             var html = Wrap(@"
                 <div id='shifted' style='position:relative; top:25pt; height:40pt;'></div>
                 <div id='after' style='height:10pt;'></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var shifted = FindById(root, "shifted")!;
             var after = FindById(root, "after")!;
 
@@ -419,7 +419,7 @@ namespace PeachPDF.Tests.Integration
             var html = Wrap(
                 "<div id='cb' style='position:relative; width:100pt; height:100pt;'>"
                 + "<div id='t' style='position:absolute; bottom:10pt; width:10pt; height:10pt;'></div></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var cb = FindById(root, "t")!.ParentBox!;
             var box = FindById(root, "t")!;
 
@@ -442,7 +442,7 @@ namespace PeachPDF.Tests.Integration
             var html = Wrap(
                 "<div id='cb' style='position:relative; border:16pt solid black; width:100pt; height:100pt;'>"
                 + "<div id='t' style='position:absolute; top:0; left:0; margin:36pt 0 0 60pt; width:10pt; height:10pt;'></div></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var cb = FindById(root, "cb")!;
             var box = FindById(root, "t")!;
 
@@ -467,7 +467,7 @@ namespace PeachPDF.Tests.Integration
             // of each other.
             var html = Wrap(
                 "<div id='t' style='position:fixed; top:10pt; left:20pt; margin:5pt 0 0 8pt; width:10pt; height:10pt;'></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var box = FindById(root, "t")!;
 
             Assert.InRange(box.Location.X, 20 + 8 - 0.5, 20 + 8 + 0.5);
@@ -496,7 +496,7 @@ namespace PeachPDF.Tests.Integration
                 + "<div id='border1' style='border-left:40pt solid black; border-right:40pt solid black;'></div>"
                 + "<div id='border2' style='border-left:30pt solid black; border-right:30pt solid black;'></div>"
                 + "</div></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var target = FindById(root, "target")!;
 
             var targetWidth = target.ActualRight - target.Location.X;
@@ -526,7 +526,7 @@ namespace PeachPDF.Tests.Integration
                 + "<div id='wide1' style='width:100pt; height:10pt;'></div>"
                 + "<div id='wide2' style='width:90pt; height:10pt;'></div>"
                 + "</div></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var target = FindById(root, "target")!;
 
             var targetWidth = target.ActualRight - target.Location.X;
@@ -551,7 +551,7 @@ namespace PeachPDF.Tests.Integration
                 + "<div id='target' style='position:absolute;'>"
                 + "<span id='inlineWide' style='display:inline; width:200px;'></span>"
                 + "</div></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var target = FindById(root, "target")!;
 
             var targetWidth = target.ActualRight - target.Location.X;
@@ -577,7 +577,7 @@ namespace PeachPDF.Tests.Integration
             const string png1x1 =
                 "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mP4/58BAAT/Af9jgNErAAAAAElFTkSuQmCC";
             var html = Wrap($"<img id='t' src='{png1x1}' style='background: url({png1x1});' />");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var target = FindById(root, "t")!;
 
             var backgroundImage = Assert.Single(target.BackgroundImages!);
@@ -599,7 +599,7 @@ namespace PeachPDF.Tests.Integration
             // Acid2RegressionTests.NoseDiv_MiddleLevel_DoesNotReceiveBogusPseudoElementBox).
             var html = Wrap("<div id='a' class='a'><div id='middle'><div id='inner'></div></div></div>"
                 + "<style>.a div div:before { content: 'X'; }</style>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var outer = FindById(root, "a")!;
             var middle = FindById(root, "middle")!;
             var inner = FindById(root, "inner")!;
@@ -621,7 +621,7 @@ namespace PeachPDF.Tests.Integration
         {
             var html = Wrap("<div id='t' class='first one'></div>"
                 + "<style>[class~=one].first.one { color: rgb(1, 2, 3); }</style>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var box = FindById(root, "t")!;
             Assert.Equal("rgb(1, 2, 3)", box.Color);
         }
@@ -631,7 +631,7 @@ namespace PeachPDF.Tests.Integration
         {
             var html = Wrap("<div class='first one'><span id='t' class='second two'></span></div>"
                 + "<style>[class~=one][class~=first] [class=second\\ two][class=\"second two\"] { color: rgb(4, 5, 6); }</style>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var box = FindById(root, "t")!;
             Assert.Equal("rgb(4, 5, 6)", box.Color);
         }
@@ -644,7 +644,7 @@ namespace PeachPDF.Tests.Integration
             // must be dropped, never matched, even though the element's actual class is exactly that.
             var html = Wrap("<div id='t' class='second two' style='color: rgb(255,0,0)'></div>"
                 + "<style>[class=second two] { color: rgb(4, 5, 6); }</style>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var box = FindById(root, "t")!;
             Assert.Equal("rgb(255, 0, 0)", box.Color);
         }
@@ -678,7 +678,7 @@ namespace PeachPDF.Tests.Integration
                 await container.PerformLayout(measureGraphics);
 
             var recorder = new TestRecordingGraphics();
-            await container.PerformPaint(recorder);
+            FragmentPaintHarness.PaintPage(container, recorder);
 
             var drawRectCalls = recorder.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
             var blackIndex = drawRectCalls.FindIndex(c => c.Color == RColor.FromArgb(255, 0, 0, 0));
@@ -745,7 +745,7 @@ namespace PeachPDF.Tests.Integration
                 await container.PerformLayout(measureGraphics);
 
             var recorder = new TestRecordingGraphics();
-            await container.PerformPaint(recorder);
+            FragmentPaintHarness.PaintPage(container, recorder);
 
             var drawRectCalls = recorder.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
             var blockIndex = drawRectCalls.FindIndex(c => c.Color == RColor.FromArgb(70, 80, 90));
@@ -769,7 +769,7 @@ namespace PeachPDF.Tests.Integration
         {
             var html = Wrap("<div class='intro'><a id='t' href='#top'>text</a></div>"
                 + "<style>.intro :link { color: rgb(0, 0, 255); }</style>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var anchor = FindById(root, "t")!;
             Assert.Equal("rgb(0, 0, 255)", anchor.Color);
         }
@@ -779,7 +779,7 @@ namespace PeachPDF.Tests.Integration
         {
             var html = Wrap("<div id='t'><span>text</span></div>"
                 + "<style>#t:hover { color: rgb(0, 0, 255); }</style>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var box = FindById(root, "t")!;
             Assert.NotEqual("rgb(0, 0, 255)", box.Color);
         }
@@ -793,7 +793,7 @@ namespace PeachPDF.Tests.Integration
                 "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mP4/58BAAT/Af9jgNErAAAAAElFTkSuQmCC";
             var html = Wrap("<div id='t' style='width:50px; height:50px; "
                 + "background: red url(" + png1x1 + ");'></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var box = FindById(root, "t")!;
 
             Assert.Equal("rgb(255, 0, 0)", box.BackgroundColor);
@@ -816,7 +816,7 @@ namespace PeachPDF.Tests.Integration
                 "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mP4%2F58BAAT%2FAf9jgNErAAAAAElFTkSuQmCC";
             var html = Wrap("<div id='t' style='width:128px; height:128px; "
                 + "background: red url(" + percentEncodedPng1x1Yellow + ");'></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var box = FindById(root, "t")!;
 
             Assert.NotNull(box.BackgroundImages);
@@ -835,7 +835,7 @@ namespace PeachPDF.Tests.Integration
         {
             var html = Wrap("<div class='intro'><span id='t'></span></div>"
                 + "<style>.intro * { color: rgb(7, 8, 9); }</style>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var box = FindById(root, "t")!;
             Assert.Equal("rgb(7, 8, 9)", box.Color);
         }
@@ -859,7 +859,7 @@ namespace PeachPDF.Tests.Integration
             // CssData.DoesSelectorMatch's AllSelector case.)
             var html = Wrap("<div id='wrap'><div class='parser' id='t' style='color: rgb(1, 2, 3);'></div></div>"
                 + "<style>* html .parser { color: rgb(10, 11, 12); }</style>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var box = FindById(root, "t")!;
             Assert.Equal("rgb(1, 2, 3)", box.Color);
         }
@@ -874,7 +874,7 @@ namespace PeachPDF.Tests.Integration
         {
             var html = Wrap("<div id='t' class='two error'></div>"
                 + "<style>.two.error.two { color: rgb(13, 14, 15); }</style>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var box = FindById(root, "t")!;
             Assert.Equal("rgb(13, 14, 15)", box.Color);
         }
@@ -886,7 +886,7 @@ namespace PeachPDF.Tests.Integration
             // regardless of declaration order, proving duplicates aren't collapsed for specificity.
             var html = Wrap("<div id='t' class='two error'></div>"
                 + "<style>.two.error.two { color: rgb(16, 17, 18); } .two.error { color: rgb(19, 20, 21); }</style>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var box = FindById(root, "t")!;
             Assert.Equal("rgb(16, 17, 18)", box.Color);
         }
@@ -898,7 +898,7 @@ namespace PeachPDF.Tests.Integration
         {
             var html = Wrap("<p></p><table></table><p id='t'></p>"
                 + "<style>p + table + p { color: rgb(22, 23, 24); }</style>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var box = FindById(root, "t")!;
             Assert.Equal("rgb(22, 23, 24)", box.Color);
         }
@@ -910,7 +910,7 @@ namespace PeachPDF.Tests.Integration
             // between them) - must not match.
             var html = Wrap("<p></p><table></table><div></div><p id='t' style='color: rgb(255,0,0)'></p>"
                 + "<style>p + table + p { color: rgb(22, 23, 24); }</style>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var box = FindById(root, "t")!;
             Assert.Equal("rgb(255, 0, 0)", box.Color);
         }
@@ -923,7 +923,7 @@ namespace PeachPDF.Tests.Integration
         {
             var html = Wrap("<div class='smile'><div><div><span><em><strong id='t'></strong></em></span></div></div></div>"
                 + "<style>.smile div div span em strong { color: rgb(25, 26, 27); }</style>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var box = FindById(root, "t")!;
             Assert.Equal("rgb(25, 26, 27)", box.Color);
         }
@@ -937,7 +937,7 @@ namespace PeachPDF.Tests.Integration
         {
             var html = Wrap("<div id='t' class='parser' style='color: rgb(255,0,0)'></div>"
                 + @"<style>\.parser { color: rgb(28, 29, 30); }</style>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var box = FindById(root, "t")!;
             Assert.Equal("rgb(255, 0, 0)", box.Color);
         }
@@ -950,7 +950,7 @@ namespace PeachPDF.Tests.Integration
         {
             var html = Wrap("<div id='t'></div>"
                 + "<style>#t { color: rgb(31, 32, 33); border: solid; color: rgb(34, 35, 36); }</style>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var box = FindById(root, "t")!;
             Assert.Equal("rgb(34, 35, 36)", box.Color);
         }
@@ -967,14 +967,14 @@ namespace PeachPDF.Tests.Integration
             var html = Wrap("<div id='b'></div>"
                 + "<style>#b:before { content: ''; display:block; width:20px; height:20px; "
                 + "background: rgb(37,38,39); border: 2px solid rgb(40,41,42); }</style>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var div = FindById(root, "b")!;
 
             var beforeBox = div.Boxes.FirstOrDefault(b => b.IsBeforePseudoElement);
             Assert.NotNull(beforeBox);
 
             var g = new TestRecordingGraphics();
-            await div.Paint(g);
+            FragmentPaintHarness.PaintBox(container, div, g);
 
             Assert.Contains(g.Log.OfType<TestRecordingGraphics.DrawRectCall>(),
                 r => r.Color == RColor.FromArgb(37, 38, 39));
@@ -991,14 +991,14 @@ namespace PeachPDF.Tests.Integration
             var html = Wrap("<div id='outer'><div id='b'></div></div>"
                 + "<style>#outer :after { content: ''; display:block; width:20px; height:20px; "
                 + "background: rgb(43,44,45); border: 2px solid rgb(46,47,48); }</style>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var div = FindById(root, "b")!;
 
             var afterBox = div.Boxes.FirstOrDefault(b => b.IsAfterPseudoElement);
             Assert.NotNull(afterBox);
 
             var g = new TestRecordingGraphics();
-            await div.Paint(g);
+            FragmentPaintHarness.PaintBox(container, div, g);
 
             Assert.Contains(g.Log.OfType<TestRecordingGraphics.DrawRectCall>(),
                 r => r.Color == RColor.FromArgb(43, 44, 45));
@@ -1013,7 +1013,7 @@ namespace PeachPDF.Tests.Integration
         public async Task FontShorthand_SlashSeparatedLineHeight_ResolvesFontSizeAndLineHeight()
         {
             var html = Wrap("<div id='parent'><div id='t' style='font: 2em/24px sans-serif'>x</div></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var parent = FindById(root, "parent")!;
             var box = FindById(root, "t")!;
 
@@ -1044,7 +1044,7 @@ namespace PeachPDF.Tests.Integration
                 + "<span id='tall' style='font-size:40px;'>Tall</span>"
                 + $"<img id='img' src='{png1x1}' style='display:inline; vertical-align:bottom; width:10px; height:10px;' />"
                 + "</div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var img = FindById(root, "img")!;
             var tall = FindById(root, "tall")!;
 
@@ -1086,7 +1086,7 @@ namespace PeachPDF.Tests.Integration
                 + "<li id='t' style='list-style:none;'></li>"
                 + "<li style='display:table-cell'></li>"
                 + "</ul>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var li = FindById(root, "t")!;
 
             // A marker placeholder box is still synthesized (CssBoxMarker.ResolveDefaultContent just
@@ -1109,7 +1109,7 @@ namespace PeachPDF.Tests.Integration
             // interpolation left on, a PDF viewer smooths/blurs each tiny tile when rasterizing at any
             // DPI above its native pixel size, and two independently-blurred layers never cancel out to
             // solid the way crisp, hard-edged pixel tiles do.
-            var (root, _) = await BuildAndLayout(Wrap("<div id='t'></div>"));
+            var (root, container) = await BuildAndLayout(Wrap("<div id='t'></div>"));
             var box = FindById(root, "t")!;
 
             var image = new TrackingImage();
@@ -1152,7 +1152,7 @@ namespace PeachPDF.Tests.Integration
                 + "<td id='tall' style='height:40px;'></td>"
                 + "<td id='short' style='height:5px;'></td>"
                 + "</tr></table>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var tall = FindById(root, "tall")!;
             var shortCell = FindById(root, "short")!;
 
@@ -1168,7 +1168,7 @@ namespace PeachPDF.Tests.Integration
                 + "<td id='c1' style='width:20px;'>a</td>"
                 + "<td id='c2' style='width:20px;'>b</td>"
                 + "</tr></table>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var c1 = FindById(root, "c1")!;
             var c2 = FindById(root, "c2")!;
 
@@ -1183,7 +1183,7 @@ namespace PeachPDF.Tests.Integration
         {
             var html = Wrap("<div id='parent' style='float:left;'>"
                 + "<div id='t' style='float:inherit;'></div></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var box = FindById(root, "t")!;
 
             Assert.Equal("left", box.Float);
@@ -1194,7 +1194,7 @@ namespace PeachPDF.Tests.Integration
         // there's no scrollbar, so this must not have the unintended side effect of clipping away
         // content on any page beyond the first.
         //
-        // Also now doubles as a check that HtmlContainerInt.GetPaginationSlots (the Round 9
+        // Also now doubles as a check that the fragment tree's page materialization (the Round 9
         // content-empty-page-skipping mechanism added for the real Acid2 fixture's own huge "100em"
         // margins - see Acid2RegressionTests.FullFixture_MatchesPrinceXmlPageCount) doesn't misfire
         // against a plain multi-section document that merely also sets "overflow:hidden" on "html":
@@ -1230,7 +1230,7 @@ namespace PeachPDF.Tests.Integration
         public async Task NbspOnlyTextNode_NotSoleChild_SurvivesCorrectTextBoxesAndRenders()
         {
             var html = Wrap("<div id='b'><span id='s'></span>&nbsp;</div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var div = FindById(root, "b")!;
 
             Assert.Equal(2, div.Boxes.Count);
@@ -1248,7 +1248,7 @@ namespace PeachPDF.Tests.Integration
             var html = Wrap(
                 "<div id='a' style='height:20pt; margin-bottom:30pt;'></div>"
                 + "<div id='b' style='height:10pt; margin-top:10pt;'></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var a = FindById(root, "a")!;
             var b = FindById(root, "b")!;
 
@@ -1261,7 +1261,7 @@ namespace PeachPDF.Tests.Integration
             var html = Wrap(
                 "<div id='a' style='height:40pt; margin-bottom:-5pt;'></div>"
                 + "<div id='b' style='height:10pt; margin-top:-15pt;'></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var a = FindById(root, "a")!;
             var b = FindById(root, "b")!;
 
@@ -1277,7 +1277,7 @@ namespace PeachPDF.Tests.Integration
             var html = Wrap(
                 "<div id='parent'>"
                 + "<div id='child' style='padding:5px; height:10px; margin-top:30px;'></div></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var parent = FindById(root, "parent")!;
             var child = FindById(root, "child")!;
 
@@ -1295,7 +1295,7 @@ namespace PeachPDF.Tests.Integration
                 "<div id='before' style='height:5pt;'></div>"
                 + "<div id='parent'>"
                 + "<div id='child' style='padding:5pt; height:10pt; margin-top:30pt;'></div></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var before = FindById(root, "before")!;
             var parent = FindById(root, "parent")!;
 
@@ -1310,7 +1310,7 @@ namespace PeachPDF.Tests.Integration
             var html = Wrap(
                 "<div id='parent' style='border-top:4pt solid black;'>"
                 + "<div id='child' style='height:10pt; margin-top:30pt;'></div></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var parent = FindById(root, "parent")!;
             var child = FindById(root, "child")!;
 
@@ -1326,7 +1326,7 @@ namespace PeachPDF.Tests.Integration
                 "<div id='floated' style='float:left; width:10pt; height:60pt;'></div>"
                 + "<div id='parent'>"
                 + "<div id='child' style='clear:both; height:10pt; margin-top:30pt;'></div></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var parent = FindById(root, "parent")!;
             var child = FindById(root, "child")!;
 
@@ -1352,7 +1352,7 @@ namespace PeachPDF.Tests.Integration
                 "<div id='before' style='height:20pt; margin-bottom:15pt;'></div>"
                 + "<div id='grandparent'><div id='parent'>"
                 + "<div id='child' style='height:10pt; margin-top:40pt;'></div></div></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var before = FindById(root, "before")!;
             var child = FindById(root, "child")!;
 
@@ -1369,7 +1369,7 @@ namespace PeachPDF.Tests.Integration
                 "<div id='outer'>"
                 + "<div id='parent'><div id='content' style='height:20pt; margin-bottom:50pt;'></div></div>"
                 + "</div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var parent = FindById(root, "parent")!;
 
             // #parent IS #outer's last (only) child - its own bottom-margin fold may happen, since
@@ -1393,7 +1393,7 @@ namespace PeachPDF.Tests.Integration
                 "<div id='outer'>"
                 + "<div id='parent'><div id='content' style='height:20pt; margin-bottom:50pt;'></div></div>"
                 + "<div id='sibling' style='height:5pt;'></div></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var parent = FindById(root, "parent")!;
 
             // No fold: #parent's own height is just its content's 20pt, the 50pt margin stays external
@@ -1409,7 +1409,7 @@ namespace PeachPDF.Tests.Integration
                 + "<div id='parent' style='margin-bottom:-5pt;'>"
                 + "<div id='content' style='height:20pt; margin-bottom:-10pt;'></div></div>"
                 + "</div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var parent = FindById(root, "parent")!;
 
             // #parent IS its parent's only/last child, so the fold applies. Both this box's own bottom
@@ -1431,7 +1431,7 @@ namespace PeachPDF.Tests.Integration
                 "<div id='a' style='height:20pt;'></div>"
                 + "<div id='empty' style='margin-top:10pt; margin-bottom:30pt;'></div>"
                 + "<div id='b' style='height:10pt;'></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var a = FindById(root, "a")!;
             var b = FindById(root, "b")!;
 
@@ -1451,7 +1451,7 @@ namespace PeachPDF.Tests.Integration
                 + "<div id='empty1' style='margin-top:5pt; margin-bottom:15pt;'></div>"
                 + "<div id='empty2' style='margin-top:25pt; margin-bottom:8pt;'></div>"
                 + "<div id='b' style='height:10pt;'></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var a = FindById(root, "a")!;
             var b = FindById(root, "b")!;
 
@@ -1478,7 +1478,7 @@ namespace PeachPDF.Tests.Integration
             var html = Wrap(
                 "<div id='a' style='border-bottom:5px solid black;'>content</div>"
                 + "<div id='b' style='height:10px;'></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var a = FindById(root, "a")!;
             var b = FindById(root, "b")!;
 
@@ -1493,7 +1493,7 @@ namespace PeachPDF.Tests.Integration
             var html = Wrap(
                 "<div id='before' style='height:20pt; margin-bottom:50pt;'></div>"
                 + "<div id='floated' style='float:left; margin-top:5pt; width:10pt; height:10pt;'></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var before = FindById(root, "before")!;
             var floated = FindById(root, "floated")!;
 
@@ -1519,7 +1519,7 @@ namespace PeachPDF.Tests.Integration
             var html = Wrap(
                 "<div id='parent' style='overflow:hidden;'>"
                 + "<div id='child' style='height:10pt; margin-top:30pt;'></div></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var parent = FindById(root, "parent")!;
             var child = FindById(root, "child")!;
 
@@ -1533,7 +1533,7 @@ namespace PeachPDF.Tests.Integration
             var html = Wrap(
                 "<div id='parent' style='overflow:visible;'>"
                 + "<div id='child' style='height:10px; margin-top:30px;'></div></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var parent = FindById(root, "parent")!;
             var child = FindById(root, "child")!;
 
@@ -1547,7 +1547,7 @@ namespace PeachPDF.Tests.Integration
                 "<div id='outer'>"
                 + "<div id='parent' style='overflow:hidden;'>"
                 + "<div id='content' style='height:20pt; margin-bottom:50pt;'></div></div></div>");
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var parent = FindById(root, "parent")!;
 
             // No fold: parent's own height is just its content's 20pt, the 50pt margin stays external.

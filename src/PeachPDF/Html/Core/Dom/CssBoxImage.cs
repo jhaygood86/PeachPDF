@@ -63,45 +63,15 @@ namespace PeachPDF.Html.Core.Dom
         public string ImageSource => GetAttribute("src");
 
         /// <summary>
-        /// Paints the fragment
+        /// The phantom word carrying this box's replaced content, whose own rectangle positions the
+        /// image within the box. Read by <c>ImageFragmentPainter</c>.
         /// </summary>
-        /// <param name="g">the device to draw to</param>
-        protected override async ValueTask PaintImpCore(RGraphics g)
-        {
-            // load image if it is in visible rectangle
-            if (_imageLoadHandler == null)
-            {
-                _imageLoadHandler = new ImageLoadHandler(HtmlContainer!);
-                await _imageLoadHandler.LoadImage(ImageSource);
-                OnLoadImageComplete();
-            }
+        internal CssRectImage ReplacedWord => _imageWord;
 
-            var rect = CommonUtils.GetFirstValueOrDefault(Rectangles);
-            var offset = RPoint.Empty;
-
-            if (!IsFixed)
-                offset = HtmlContainer!.ScrollOffset;
-
-            rect.Offset(offset);
-
-            var clipped = RenderUtils.ClipGraphicsByOverflow(g, this);
-
-            PaintBackground(g, rect, true);
-            BordersDrawHandler.DrawBoxBorders(g, this, rect, true, true);
-
-            var r = _imageWord.Rectangle;
-            r.Offset(offset);
-            r.Height -= ActualBorderTopWidth + ActualBorderBottomWidth + ActualPaddingTop + ActualPaddingBottom;
-            r.Y += ActualBorderTopWidth + ActualPaddingTop;
-            r.X = Math.Floor(r.X);
-            r.Y = Math.Floor(r.Y);
-
-            // object-fit / object-position honored via the shared replaced-content renderer.
-            ReplacedContentRenderer.Paint(g, r, _imageWord.Image, _svgDocument, this);
-
-            if (clipped)
-                g.PopClip();
-        }
+        /// <summary>
+        /// The parsed SVG scene graph when the source was detected to be an SVG image, else null.
+        /// </summary>
+        internal SvgDocument? SvgDocument => _svgDocument;
 
         /// <summary>
         /// Assigns words its width and height
@@ -173,10 +143,10 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// The parsed <see cref="SvgDocument"/> (for a <c>&lt;img src="x.svg"&gt;</c>) and its
-        /// unshifted rendered rectangle, for <c>&lt;a&gt;</c> link-annotation discovery - see
-        /// <see cref="CssBoxSvg.GetLinkSource"/> for why this doesn't reuse <see cref="PaintImpCore"/>'s
-        /// (scroll-offset-adjusted) rect computation. Null for an ordinary raster image.
+        /// The parsed <see cref="Svg.SvgDocument"/> (for a <c>&lt;img src="x.svg"&gt;</c>) and its
+        /// rendered rectangle in full document space, for <c>&lt;a&gt;</c> link-annotation discovery -
+        /// see <see cref="CssBoxSvg.GetLinkSource"/> for why this doesn't reuse the painter's own
+        /// (fragmentainer-local) rect computation. Null for an ordinary raster image.
         /// </summary>
         internal (SvgDocument Document, RRect Rect)? GetLinkSource()
         {

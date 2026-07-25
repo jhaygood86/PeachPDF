@@ -16,7 +16,9 @@ using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
+using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Handlers;
+using PeachPDF.Html.Core.Paint;
 using PeachPDF.Html.Core.Parse;
 using System;
 using System.Linq;
@@ -268,11 +270,10 @@ namespace PeachPDF
             var structureTagBuilder = config.EnableTaggedPdf ? new StructureTagBuilder(document.PdfDocument) : null;
             container.HtmlContainerInt.StructureTagBuilder = structureTagBuilder;
 
-            // Per CSS2.1 §14.2, the "canvas" (here: every page) is filled with body's background if it
-            // declares one, else html's - resolved once, up front, since which box (if either) is chosen
-            // never changes page to page. Whichever box was chosen also gets its own normal background
-            // paint pass suppressed (see SuppressOwnBackgroundPaint), so it isn't painted twice.
-            var canvasBackgroundBox = ResolveCanvasBackground(container.HtmlContainerInt.Root);
+            // Per CSS2.1 §14.2 the "canvas" (here: every page) is filled with body's background if it
+            // declares one, else html's. Resolved during layout, since the fragment tree's own
+            // page-materialization rule depends on it.
+            var canvasBackgroundBox = container.HtmlContainerInt.CanvasBackgroundBox;
 
             // Margin-box `content: url(...)` images (see MarginBoxRenderer.ResolveContentImage) are
             // cached by declaration text across the whole document, since the same margin rule - and
@@ -280,31 +281,31 @@ namespace PeachPDF
             // document would re-decode (or re-fetch, for a network image) the same logo once per page.
             var marginBoxImageCache = new Dictionary<string, CssImage?>();
 
-            // Create a PDF page for each page-slot that would actually show something, per CSS Paged
-            // Media Level 3 §3.2 ("User agents SHOULD avoid generating a large number of
-            // content-empty pages") - e.g. Acid2's own "100em" margins on "#top"/".picture" are
-            // intentionally huge, meant to be scrolled off-screen in a real, single-viewport browser;
-            // without this, a paginated PDF would dutifully generate several genuinely blank pages to
-            // walk through that margin before reaching the real content on the far side. Must run
-            // after canvasBackgroundBox above, since GetPaginationSlots relies on
-            // CssBox.SuppressOwnBackgroundPaint (set by ResolveCanvasBackground) to avoid treating the
-            // whole-page canvas fill itself as "real content" spanning the entire document.
-            var pageSlots = container.HtmlContainerInt.GetPaginationSlots();
+            // One PDF page per fragmentainer. The fragment tree is layout's own output, so which
+            // pages exist is a structural fact rather than a geometric rediscovery: a page-slot that
+            // no printable fragment landed in was never built, per CSS Paged Media Level 3 §3.2
+            // ("User agents SHOULD avoid generating a large number of content-empty pages") - e.g.
+            // Acid2's own "100em" margins on "#top"/".picture" are intentionally huge, meant to be
+            // scrolled off-screen in a real, single-viewport browser; without this a paginated PDF
+            // would dutifully emit several genuinely blank pages to walk through that margin before
+            // reaching the real content on the far side.
+            var fragmentainers = container.HtmlContainerInt.FragmentTree?.Fragmentainers ?? [];
             int pageNumber = 0;
-            var totalPages = pageSlots.Count;
-            foreach (var (slotIndex, slotTop) in pageSlots)
+            var totalPages = fragmentainers.Count;
+            foreach (var fragmentainer in fragmentainers)
             {
                 pageNumber++;
-                var scrollOffset = -slotTop;
+                var slotIndex = fragmentainer.SlotIndex;
+                var scrollOffset = -fragmentainer.LocalOriginY;
 
                 // The single source of truth for this slot's margins and band: the same geometry
-                // table layout paginated against, so paint can never disagree with layout about a
-                // page's content band. Margins come out in true points (the space the clip/translate
-                // below and MarginBoxRenderer use); Top/BandHeight are internal-pixel document space
-                // (the space NamedPageElement Ys live in), which also fixes the historical
-                // ShrinkToFit drift where pageY mixed a pixel-space slot top with a point-space
-                // MarginTop for named-page attribution.
-                var geom = container.HtmlContainerInt.PageGeometry.GetPage(slotIndex);
+                // table layout paginated against, carried on the fragmentainer itself, so paint can
+                // never disagree with layout about a page's content band. Margins come out in true
+                // points (the space the clip/translate below and MarginBoxRenderer use);
+                // Top/BandHeight are internal-pixel document space (the space NamedPageElement Ys
+                // live in), which also fixes the historical ShrinkToFit drift where pageY mixed a
+                // pixel-space slot top with a point-space MarginTop for named-page attribution.
+                var geom = fragmentainer.Geometry;
                 var pageY = geom.Top;
                 var applicableMargins = SelectApplicableMarginRules(
                     container.PageRules,
@@ -335,7 +336,8 @@ namespace PeachPDF
                     // so the fill reaches the true full page bleed (including the margin-box area), not
                     // just the content rect.
                     using var canvasGraphics = new GraphicsAdapter(_pdfSharpAdapter, g, _pdfSharpAdapter.PixelsPerPoint);
-                    canvasBackgroundBox.PaintCanvasBackground(canvasGraphics, new RRect(0, 0, page.Width * _pdfSharpAdapter.PixelsPerPoint, page.Height * _pdfSharpAdapter.PixelsPerPoint));
+                    FragmentPainter.PaintCanvasBackground(canvasGraphics, canvasBackgroundBox,
+                        new RRect(0, 0, page.Width * _pdfSharpAdapter.PixelsPerPoint, page.Height * _pdfSharpAdapter.PixelsPerPoint));
                 }
 
                 // Save state so the content transform can be undone for margin box rendering
@@ -347,19 +349,6 @@ namespace PeachPDF
                 var deltaY = mT - container.MarginTop;
                 if (deltaX != 0 || deltaY != 0)
                     g.TranslateTransform(deltaX, deltaY);
-
-                // scrollOffset is already in layout-pixel space (GetPaginationSlots walks the
-                // internal PageSize.Height), so it must be assigned to the internal container
-                // directly. The public HtmlContainer.ScrollOffset setter treats its input as
-                // POINTS and multiplies by PixelsPerPoint to store pixels - feeding it a pixel
-                // value scaled the offset twice whenever ShrinkToFit actually shrank content
-                // (PixelsPerPoint > 1), sliding every page's content up by slot ×
-                // (PixelsPerPoint - 1). The error compounded per page (~1.5pt/page on the SVG
-                // showcase), so by page 4+ a box laid out flush at a page's top painted its
-                // glyph tops back across the previous page's bottom clip edge - fragments must
-                // start at the top of their own fragmentainer, not straddle the previous one
-                // (CSS Fragmentation Level 3 §4; CSS2.1 §13.2's page box model).
-                container.HtmlContainerInt.ScrollOffset = new RPoint(0, scrollOffset);
 
                 // Same-units (internal pixel space) generalization of PageBoxRect's default paint
                 // window: x/y adapt to this page's margin override via the delta translate above;
@@ -375,7 +364,7 @@ namespace PeachPDF
                     (page.Width - mL) * _pdfSharpAdapter.PixelsPerPoint,
                     geom.BandHeight);
 
-                await container.PerformPaint(g);
+                container.PerformPaint(g, fragmentainer);
 
                 // Restore to pre-content state so margin boxes render in absolute page coordinates
                 g.Restore(preContentState);
@@ -411,31 +400,12 @@ namespace PeachPDF
             structureTagBuilder?.Finish();
 
             // add web links and anchors
-            HandleLinks(document.PdfDocument, container, orgPageSize, pageSlots, structureTagBuilder);
+            HandleLinks(document.PdfDocument, container, orgPageSize, fragmentainers, structureTagBuilder);
 
             measure?.Dispose();
         }
 
         #region Private/Protected methods
-
-        /// <summary>
-        /// Resolves which box's background (if any) should fill the whole page canvas, per CSS2.1 §14.2:
-        /// <c>&lt;body&gt;</c>'s own background if it declares one, else <c>&lt;html&gt;</c>'s, else no
-        /// canvas fill at all. The chosen box (if any) has <see cref="CssBox.SuppressOwnBackgroundPaint"/>
-        /// set so its own normal paint pass doesn't also paint the same background a second time at its
-        /// own (possibly much smaller than a page) laid-out rect.
-        /// </summary>
-        private static CssBox? ResolveCanvasBackground(CssBox? root)
-        {
-            var html = DomUtils.GetBoxByTagName(root, "html");
-            var body = DomUtils.GetBoxByTagName(root, "body");
-
-            var chosen = body is { HasOwnBackground: true } ? body : html is { HasOwnBackground: true } ? html : null;
-            if (chosen != null)
-                chosen.SuppressOwnBackgroundPaint = true;
-
-            return chosen;
-        }
 
         private static void ApplyDocumentMetadata(PdfDocument pdfDocument, HtmlDocumentMetadata? metadata, PdfDocumentMetadata? overrides)
         {
@@ -503,17 +473,17 @@ namespace PeachPDF
         /// element (see the tagging-aware section below), completing the bidirectional PDF/UA
         /// linkage between the annotation and the structure tree.
         /// </summary>
-        private static void HandleLinks(PdfDocument document, HtmlContainer container, XSize orgPageSize, IReadOnlyList<(int SlotIndex, double SlotTop)> pageSlots, StructureTagBuilder? structureTagBuilder = null)
+        private static void HandleLinks(PdfDocument document, HtmlContainer container, XSize orgPageSize, IReadOnlyList<FragmentainerFragment> fragmentainers, StructureTagBuilder? structureTagBuilder = null)
         {
             var inner = container.HtmlContainerInt;
             var ppp = container.PixelsPerPoint;
 
-            // Materialized pages are the emitted pagination slots, which may skip content-empty
-            // grid slots entirely (GetPaginationSlots) - so a document-space slot index and a
-            // document.Pages index are NOT interchangeable. Build the slot -> page mapping once.
-            var slotToPage = new Dictionary<int, int>(pageSlots.Count);
-            for (var p = 0; p < pageSlots.Count; p++)
-                slotToPage[pageSlots[p].SlotIndex] = p;
+            // Materialized pages are the fragmentainers, which may skip content-empty grid slots
+            // entirely - so a document-space slot index and a document.Pages index are NOT
+            // interchangeable. Build the slot -> page mapping once.
+            var slotToPage = new Dictionary<int, int>(fragmentainers.Count);
+            for (var p = 0; p < fragmentainers.Count; p++)
+                slotToPage[fragmentainers[p].SlotIndex] = p;
 
             var maxMappedSlot = slotToPage.Count > 0 ? slotToPage.Keys.Max() : -1;
 
@@ -557,7 +527,7 @@ namespace PeachPDF
                         for (var s = Math.Max(anchorSlot, 0); anchorPage < 0 && s <= maxMappedSlot; s++)
                             if (slotToPage.TryGetValue(s, out var found))
                                 anchorPage = found;
-                        if (anchorPage < 0) anchorPage = pageSlots.Count - 1;
+                        if (anchorPage < 0) anchorPage = fragmentainers.Count - 1;
 
                         var anchorTopPt = inner.PageGeometry.GetPage(anchorSlot).MarginTopPt
                             + (anchorRect.Value.Top * ppp - inner.PageTopOf(anchorSlot)) / ppp;

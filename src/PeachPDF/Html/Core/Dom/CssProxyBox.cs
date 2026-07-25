@@ -11,8 +11,7 @@
 // "The Art of War"
 
 using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Adapters.Entities;
-using System.Collections.Generic;
+using PeachPDF.Html.Core.Fragments;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Dom
@@ -28,7 +27,15 @@ namespace PeachPDF.Html.Core.Dom
     internal sealed class CssProxyBox : CssBox
     {
         private readonly CssBox _sourceBox;
-        private LayoutSnapshot? _snapshot;
+        private BoxGeometrySnapshot? _snapshot;
+
+        /// <summary>
+        /// This proxy's captured geometry for its <see cref="SourceBox"/> subtree — where that subtree
+        /// sits on <i>this</i> proxy's page. <see cref="FragmentTreeBuilder"/> reads it to build the
+        /// repeated header/footer's fragments, since the source subtree is not reachable by walking
+        /// <see cref="CssBox.Boxes"/>. Null before this proxy has been laid out.
+        /// </summary>
+        internal BoxGeometrySnapshot? SourceGeometry => _snapshot;
 
         /// <summary>
         /// The original box this proxy repeats (a repeating &lt;thead&gt;/&lt;tfoot&gt;, removed
@@ -93,11 +100,7 @@ namespace PeachPDF.Html.Core.Dom
 #endif
 
             // Capture the layout snapshot
-            _snapshot = LayoutSnapshot.Capture(_sourceBox);
-
-#if DEBUG
-            System.Console.WriteLine($"  Snapshot captured - BoxStates.Count={_snapshot.BoxStates.Count}");
-#endif
+            _snapshot = BoxGeometrySnapshot.Capture(_sourceBox);
 
             // Copy final dimensions from source to this proxy
             ActualBottom = _sourceBox.ActualBottom;
@@ -112,160 +115,14 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Paints by applying the captured snapshot to the source box and delegating paint.
+        /// Writes this proxy's captured geometry back onto the live source boxes. One source subtree
+        /// is shared by every page's proxy, so those boxes carry only whichever page positioned them
+        /// last — and while paint takes its <i>rectangles</i> from fragments, the
+        /// <c>overflow: hidden</c> clip walk still resolves ancestor client rectangles off the live
+        /// boxes. Without this, that clip lands at another page's position and culls the whole
+        /// repeated row. Removing this last piece of live-geometry coupling is follow-on work; see
+        /// <c>ProxyFragmentPainter</c>, the only caller.
         /// </summary>
-        protected override async ValueTask PaintImpCore(RGraphics g)
-        {
-#if DEBUG
-            System.Console.WriteLine($"CssProxyBox.PaintImpCore: START - Location={Location}, Snapshot={(_snapshot == null ? "NULL" : "EXISTS")}");
-#endif
-
-            if (_snapshot == null)
-            {
-#if DEBUG
-                System.Console.WriteLine("CssProxyBox.PaintImpCore: No snapshot, returning");
-#endif
-                return;
-            }
-
-            // Step 1: Reset source box paint state before applying snapshot
-            _sourceBox.ResetPaint();
-
-            // Step 2: Temporarily reparent source box to this proxy for painting
-            // This sets ParentBox AND adds to Boxes collection
-            _sourceBox.ParentBox = this;
-
-#if DEBUG
-            System.Console.WriteLine($"CssProxyBox.PaintImpCore: After reparent - this.Boxes.Count={Boxes.Count}");
-#endif
-
-            // Step 3: Apply our snapshot to source box
-            _snapshot.Apply(_sourceBox);
-
-#if DEBUG
-            System.Console.WriteLine($"CssProxyBox.PaintImpCore: After snapshot apply - Source.Location={_sourceBox.Location}");
-#endif
-
-            // Step 4: Directly paint the source box (don't call base - we ARE the wrapper). This is
-            // a full Paint() call (not PaintImpCore) so the source box goes through its own tagging
-            // classification independently - see StructureTagMapper's CssProxyBox pass-through note.
-            await _sourceBox.Paint(g);
-
-#if DEBUG
-            System.Console.WriteLine("CssProxyBox.PaintImpCore: After source paint");
-#endif
-
-            // Step 5: Remove from Boxes to avoid interference with other proxies
-            Boxes.Remove(_sourceBox);
-
-#if DEBUG
-            System.Console.WriteLine("CssProxyBox.PaintImpCore: END");
-#endif
-        }
-
-        /// <summary>
-        /// Stores layout state for a box and all its descendants.
-        /// </summary>
-        private sealed class LayoutSnapshot
-        {
-            public Dictionary<CssBox, BoxLayoutState> BoxStates { get; } = new();
-
-            /// <summary>
-            /// Captures the current layout state of a box tree.
-            /// </summary>
-            public static LayoutSnapshot Capture(CssBox root)
-            {
-                var snapshot = new LayoutSnapshot();
-                CaptureBox(root, snapshot);
-                return snapshot;
-            }
-
-            private static void CaptureBox(CssBox box, LayoutSnapshot snapshot)
-            {
-                var state = new BoxLayoutState
-                {
-                    Location = box.Location,
-                    ActualBottom = box.ActualBottom,
-                    ActualRight = box.ActualRight,
-                };
-
-                // Capture rectangles
-                foreach (var kvp in box.Rectangles)
-                {
-                    state.Rectangles[kvp.Key] = kvp.Value;
-                }
-
-                // Capture word positions
-                foreach (var word in box.Words)
-                {
-                    state.Words.Add(new BoxLayoutState.WordState
-                    {
-                        Left = word.Left,
-                        Top = word.Top
-                    });
-                }
-
-                snapshot.BoxStates[box] = state;
-
-                // Recursively capture children
-                foreach (var child in box.Boxes)
-                {
-                    CaptureBox(child, snapshot);
-                }
-            }
-
-            /// <summary>
-            /// Applies the snapshot state to a box tree.
-            /// </summary>
-            public void Apply(CssBox root)
-            {
-                ApplyToBox(root);
-            }
-
-            private void ApplyToBox(CssBox box)
-            {
-                if (!BoxStates.TryGetValue(box, out var state))
-                    return;
-
-                box.Location = state.Location;
-                box.ActualBottom = state.ActualBottom;
-                box.ActualRight = state.ActualRight;
-
-                // Restore rectangles
-                box.Rectangles.Clear();
-                foreach (var kvp in state.Rectangles)
-                {
-                    box.Rectangles[kvp.Key] = kvp.Value;
-                }
-
-                // Restore word positions
-                for (int i = 0; i < System.Math.Min(box.Words.Count, state.Words.Count); i++)
-                {
-                    box.Words[i].Left = state.Words[i].Left;
-                    box.Words[i].Top = state.Words[i].Top;
-                }
-
-                // Recursively apply to children
-                foreach (var child in box.Boxes)
-                {
-                    ApplyToBox(child);
-                }
-            }
-
-            internal sealed class BoxLayoutState
-            {
-                public RPoint Location { get; init; }
-                public double ActualBottom { get; init; }
-                public double ActualRight { get; init; }
-                public Dictionary<CssLineBox, RRect> Rectangles { get; init; } = new();
-                public List<WordState> Words { get; init; } = new();
-
-                internal sealed class WordState
-                {
-                    public double Left { get; init; }
-                    public double Top { get; init; }
-                }
-            }
-        }
+        internal void ApplySourceGeometry() => _snapshot?.Apply(_sourceBox);
     }
 }

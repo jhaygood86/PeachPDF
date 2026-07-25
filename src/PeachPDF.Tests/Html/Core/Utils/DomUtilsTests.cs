@@ -5,6 +5,7 @@ using PeachPDF.PdfSharpCore.Drawing;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Html.Core.Utils
 {
@@ -304,158 +305,29 @@ namespace PeachPDF.Tests.Html.Core.Utils
             Assert.False(DomUtils.IsProperTableChild(div));
         }
 
+        // ─── HasOwnPrintableContent (CSS Paged Media Level 3 §3.2's content-empty-page
+        // rule; the fragment-tree builder decides page materialization with it) ─────
+
         [Fact]
-        public async Task GetBoxesByLayers_GroupsByZIndexInOrder()
+        public async Task HasOwnPrintableContent_BoxWithABackground_Counts()
         {
-            var root = await Render(
-                "<div><span id='a' style='position: relative; z-index: 2;'>A</span>" +
-                "<span id='b' style='position: relative; z-index: 1;'>B</span></div>");
-            var a = DomUtils.GetBoxById(root, "a")!;
-            var b = DomUtils.GetBoxById(root, "b")!;
+            var root = await Render("<div id='a' style='height:20px; background:rgb(0,0,0);'></div>");
 
-            var layers = DomUtils.GetBoxesByLayers(
-                [new DomUtils.StackingParticipant(a, []), new DomUtils.StackingParticipant(b, [])]).ToList();
-
-            Assert.Equal(2, layers.Count);
-            Assert.Contains(layers[1], p => p.Box == a);
-            Assert.Contains(layers[0], p => p.Box == b);
+            Assert.True(DomUtils.HasOwnPrintableContent(DomUtils.GetBoxById(root, "a")!));
         }
 
         [Fact]
-        public async Task FlattenStackingContext_DeeplyNestedStackingContextBox_IsDiscoveredByItsEnclosingContext()
-        {
-            // Regression: the old algorithm only ever yielded a child when it was NOT itself a
-            // stacking-context box, so a position:relative;z-index descendant - however deep, through
-            // any number of plain wrapper divs - was silently dropped and never painted at all.
-            var root = await Render(
-                "<div><div><div>" +
-                "<span id='inner' style='position: relative; z-index: 1;'>Text</span>" +
-                "</div></div></div>");
-            var inner = DomUtils.GetBoxById(root, "inner")!;
-
-            var flattened = DomUtils.FlattenStackingContext(root).ToList();
-
-            Assert.Contains(flattened, p => p.Box == inner);
-        }
-
-        [Fact]
-        public async Task FlattenStackingContext_OutOfFlowDescendantOfOpacityBox_StaysWithinIt()
-        {
-            // Opacity now establishes a stacking context, so an out-of-flow descendant of an
-            // opacity box must be claimed by the opacity box's own FlattenStackingContext call, not
-            // hoisted past it to an outer ancestor (which would bypass the opacity compositing group
-            // entirely and paint the descendant at full alpha, and at the wrong z-order timing).
-            var root = await Render(
-                "<div id='op' style='opacity: 0.5;'>" +
-                "<div id='abschild' style='position: absolute; top: 0; left: 0;'>x</div>" +
-                "</div>");
-            var op = DomUtils.GetBoxById(root, "op")!;
-            var abschild = DomUtils.GetBoxById(root, "abschild")!;
-
-            var rootFlattened = DomUtils.FlattenStackingContext(root).ToList();
-            Assert.Contains(rootFlattened, p => p.Box == op);
-            Assert.DoesNotContain(rootFlattened, p => p.Box == abschild);
-
-            var opFlattened = DomUtils.FlattenStackingContext(op).ToList();
-            Assert.Contains(opFlattened, p => p.Box == abschild);
-        }
-
-        [Fact]
-        public async Task FlattenStackingContext_OutOfFlowDescendantOfTransformedBox_StaysWithinIt()
-        {
-            var root = await Render(
-                "<div id='tr' style='transform: rotate(10deg);'>" +
-                "<div id='abschild' style='position: absolute; top: 0; left: 0;'>x</div>" +
-                "</div>");
-            var tr = DomUtils.GetBoxById(root, "tr")!;
-            var abschild = DomUtils.GetBoxById(root, "abschild")!;
-
-            var rootFlattened = DomUtils.FlattenStackingContext(root).ToList();
-            Assert.Contains(rootFlattened, p => p.Box == tr);
-            Assert.DoesNotContain(rootFlattened, p => p.Box == abschild);
-
-            var trFlattened = DomUtils.FlattenStackingContext(tr).ToList();
-            Assert.Contains(trFlattened, p => p.Box == abschild);
-        }
-
-        [Fact]
-        public async Task FlattenStackingContext_ZIndexedBoxNestedInPlainOutOfFlowWrapper_EscapesToTrueAncestor()
-        {
-            // Full-fidelity case: a position:relative;z-index box nested inside a plain
-            // position:absolute wrapper (no z-index of its own, so it does NOT establish a stacking
-            // context) must still be discoverable by the wrapper's true enclosing stacking context -
-            // it must not be trapped competing only within the absolute wrapper's own local scope.
-            var root = await Render(
-                "<div style='position: absolute; top: 0; left: 0;'>" +
-                "<span id='nested' style='position: relative; z-index: -1;'>Text</span>" +
-                "</div>");
-            var nested = DomUtils.GetBoxById(root, "nested")!;
-
-            var rootFlattened = DomUtils.FlattenStackingContext(root).ToList();
-
-            Assert.Contains(rootFlattened, p => p.Box == nested);
-        }
-
-        [Fact]
-        public async Task FlattenStackingContext_PlainChildOfPlainWrapper_StaysNestedNotHoisted()
-        {
-            // A plain (non-out-of-flow, non-stacking-context) child of a plain, non-stacking-context
-            // wrapper must be discovered via the wrapper's own FlattenStackingContext call, not
-            // hoisted straight to a distant ancestor - the wrapper's own Paint() call is what keeps
-            // e.g. an overflow:hidden clip on the wrapper wrapped around this child. `root` here is a
-            // synthetic box above the real <html>/<body> elements (see DomParser.GenerateCssTree), so
-            // `wrapper` itself is a few plain levels below `root` too - the point under test is that
-            // `plainChild` never leaks into any ancestor's flatten result above its own direct parent.
-            var root = await Render(
-                "<div id='wrapper'><span id='plainChild'>Text</span></div>");
-            var wrapper = DomUtils.GetBoxById(root, "wrapper")!;
-            var plainChild = DomUtils.GetBoxById(root, "plainChild")!;
-
-            var rootFlattened = DomUtils.FlattenStackingContext(root).ToList();
-            Assert.DoesNotContain(rootFlattened, p => p.Box == wrapper);
-            Assert.DoesNotContain(rootFlattened, p => p.Box == plainChild);
-
-            var wrapperFlattened = DomUtils.FlattenStackingContext(wrapper).ToList();
-            Assert.Contains(wrapperFlattened, p => p.Box == plainChild);
-        }
-
-        // ─── CollectPrintableContentRanges (Round 9: CSS Paged Media Level 3 §3.2's
-        // content-empty-page-skipping mechanism) ────────────────────────────────────
-
-        [Fact]
-        public async Task CollectPrintableContentRanges_RealContentSeparatedByPureMarginGap_ProducesTwoDisjointRanges()
-        {
-            // A large, purely-decorative gap (no background/border/text of its own - mirroring
-            // Acid2's own "100em" margins) between two real, painted boxes must not itself become
-            // part of either range, nor merge them into one.
-            var root = await Render(
-                "<div id='a' style='height:20px; background:rgb(0,0,0);'></div>" +
-                "<div id='gap' style='height:900px;'></div>" +
-                "<div id='b' style='height:20px; background:rgb(0,0,0);'></div>");
-            var a = DomUtils.GetBoxById(root, "a")!;
-            var b = DomUtils.GetBoxById(root, "b")!;
-
-            var ranges = DomUtils.CollectPrintableContentRanges(root);
-
-            Assert.Contains(ranges, r => Math.Abs(r.Top - a.Location.Y) < 0.5 && Math.Abs(r.Bottom - a.ActualBottom) < 0.5);
-            Assert.Contains(ranges, r => Math.Abs(r.Top - b.Location.Y) < 0.5 && Math.Abs(r.Bottom - b.ActualBottom) < 0.5);
-            Assert.DoesNotContain(ranges, r => r.Top <= a.ActualBottom + 5 && r.Bottom >= b.Location.Y - 5);
-        }
-
-        [Fact]
-        public async Task CollectPrintableContentRanges_PureMarginOnlyDocument_ProducesNoRanges()
+        public async Task HasOwnPrintableContent_PurelyDecorativeGap_DoesNotCount()
         {
             // A box with real laid-out height but no background/border/text/generated content at all
-            // (the shape of Acid2's own "100em" margin gaps) must not contribute any range.
+            // (the shape of Acid2's own "100em" margin gaps) must not make its page look non-empty.
             var root = await Render("<div id='gap' style='height:900px;'></div>");
 
-            var ranges = DomUtils.CollectPrintableContentRanges(root);
-
-            Assert.Empty(ranges);
+            Assert.False(DomUtils.HasOwnPrintableContent(DomUtils.GetBoxById(root, "gap")!));
         }
 
         [Fact]
-        public async Task CollectPrintableContentRanges_GeneratedPseudoElementContent_Counts()
+        public async Task HasOwnPrintableContent_GeneratedPseudoElementContent_Counts()
         {
             // Per CSS Paged Media Level 3 §3.2's own carve-out, generated content always counts, even
             // with an empty "content: ''" (Acid2's own ".nose div div:before"/":after" shape) and no
@@ -463,29 +335,17 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var root = await Render(
                 "<div id='b'></div><style>#b:before{content:''; display:block; width:10px; height:10px; " +
                 "border:1px solid rgb(1,2,3);}</style>");
-            var b = DomUtils.GetBoxById(root, "b")!;
-            var before = b.Boxes.Single(x => x.IsBeforePseudoElement);
+            var before = DomUtils.GetBoxById(root, "b")!.Boxes.Single(x => x.IsBeforePseudoElement);
 
-            var ranges = DomUtils.CollectPrintableContentRanges(root);
-
-            Assert.Contains(ranges, r => Math.Abs(r.Top - before.Location.Y) < 0.5 && Math.Abs(r.Bottom - before.ActualBottom) < 0.5);
+            Assert.True(DomUtils.HasOwnPrintableContent(before));
         }
 
         [Fact]
-        public async Task CollectPrintableContentRanges_FixedPositionContent_IsExcluded()
+        public async Task HasOwnPrintableContent_VisibleBorderAlone_Counts()
         {
-            // position:fixed content repeats identically on every generated page regardless of scroll
-            // offset (see CssBox.Paint/PaintImpCore's "IsFixed" branches) - if it counted as "real"
-            // content here, every page-slot (including genuinely empty margin gaps) would look
-            // non-empty, defeating the whole content-empty-page-skip mechanism. Mirrors the same
-            // exclusion CssBox.PerformLayoutImp already applies when growing HtmlContainer.ActualSize.
-            var root = await Render(
-                "<div id='fixedBox' style='position:fixed; top:0; left:0; width:50px; height:50px; " +
-                "background:rgb(0,0,0);'></div>");
+            var root = await Render("<div id='a' style='height:20px; border-top:1px solid rgb(1,2,3);'></div>");
 
-            var ranges = DomUtils.CollectPrintableContentRanges(root);
-
-            Assert.Empty(ranges);
+            Assert.True(DomUtils.HasOwnPrintableContent(DomUtils.GetBoxById(root, "a")!));
         }
 
         // --- Helper ---

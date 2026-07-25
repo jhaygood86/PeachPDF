@@ -4,6 +4,7 @@ using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Paint;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore;
 using PeachPDF.PdfSharpCore.Pdf;
@@ -15,6 +16,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -72,7 +74,7 @@ namespace PeachPDF.Tests.Integration
             Assert.True(document.PageCount <= 3,
                 $"expected a small handful of pages (the fixture's own huge, intentionally-off-screen " +
                 $"100em margins account for some unavoidable blank space, though HtmlContainerInt." +
-                $"GetPaginationSlots now skips wholly content-empty pages per CSS Paged Media Level 3 " +
+                $"Wholly content-empty pages are skipped per CSS Paged Media Level 3 " +
                 $"§3.2), got {document.PageCount}");
         }
 
@@ -84,7 +86,7 @@ namespace PeachPDF.Tests.Integration
             // fixture in exactly 2 pages: ".intro" on its own page, and "#top"/".picture"'s real face
             // content on a second page, with the huge intentional "100em" margin gaps before/after
             // (see the class doc comment) never materializing as their own content-empty pages at all
-            // (HtmlContainerInt.GetPaginationSlots, per CSS Paged Media Level 3 §3.2). If this
+            // (the fragment tree's page materialization, per CSS Paged Media Level 3 §3.2). If this
             // regresses, either that skip mechanism broke or the real face/intro content grew enough
             // to spill onto an extra page.
             var html = File.ReadAllText(FixturePath);
@@ -160,7 +162,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Picture_HasCompactHeight_NotInflatedByItsOwnBottomMargin()
         {
-            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
             var picture = FindByClass(root, "picture")!;
 
             var height = picture.ActualBottom - picture.Location.Y;
@@ -174,7 +176,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Nose_PercentageHeightResolvesToAuto_CappedByMaxHeight()
         {
-            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
             var nose = FindByClass(root, "nose")!;
 
             var height = nose.ActualBottom - nose.Location.Y;
@@ -189,7 +191,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task LandmarkElements_AreFoundAndPositionedInDocumentOrder()
         {
-            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
 
             var intro = FindByClass(root, "intro");
             var top = FindById(root, "top");
@@ -221,7 +223,7 @@ namespace PeachPDF.Tests.Integration
             //    DomParser.CorrectTextBoxes previously deleted before layout/paint ever ran (it treated
             //    an empty-string Text exactly like meaningless inter-tag whitespace).
             // Together these silently dropped the nose's border/background geometry entirely.
-            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
             var nose = FindByClass(root, "nose")!;
 
             var pseudoBoxes = new List<CssBox>();
@@ -250,7 +252,7 @@ namespace PeachPDF.Tests.Integration
             // margin dropped, which pulled ".nose" a full margin-bottom too far up into ".eyes" (whose
             // own opaque background then hid the nose diamond entirely instead of the two elements
             // merely touching at ".eyes"'s bottom edge, as the fixture intends).
-            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
             var forehead = FindByClass(root, "forehead")!;
             var eyes = FindByClass(root, "eyes")!;
             var nose = FindByClass(root, "nose")!;
@@ -274,7 +276,7 @@ namespace PeachPDF.Tests.Integration
             // meant to meet flush, together forming the nose's black diamond outline with no gap - a
             // gap the exact size of ":before"'s own 1em border-bottom left ".nose div div"'s own red
             // "trap" background (meant to always stay hidden) visible as a red band through the middle.
-            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
             var nose = FindByClass(root, "nose")!;
             var noseDivDiv = nose.Boxes.First(b => b.HtmlTag != null).Boxes.First(b => b.HtmlTag != null);
 
@@ -296,7 +298,7 @@ namespace PeachPDF.Tests.Integration
             // ancestor level it wasn't entitled to. This made ".nose div div:before"/".nose div :after"
             // (wrongly) also match nose>div (the MIDDLE div, one level too high), producing a bogus
             // pseudo-element sibling that pushed the real nose>div>div down by exactly its own height.
-            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
             var nose = FindByClass(root, "nose")!;
             var noseDiv = nose.Boxes.First(b => b.HtmlTag != null);
             var noseDivDiv = noseDiv.Boxes.First(b => b.HtmlTag != null);
@@ -337,7 +339,7 @@ namespace PeachPDF.Tests.Integration
             // (Acid2's actual technique) - a bug in ParseToWords (nbsp treated as ordinary collapsible
             // whitespace) combined with an over-broad guard in MarginBottomCollapse previously collapsed
             // this box to (near) zero height, hiding its tiling background entirely behind solid red.
-            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
             var forehead = FindByClass(root, "forehead")!;
 
             var height = forehead.ActualBottom - forehead.Location.Y;
@@ -352,7 +354,7 @@ namespace PeachPDF.Tests.Integration
             // background (written with its "/" characters percent-escaped as "%2F", per the real
             // fixture) silently failed to decode - only the "background: red" color painted, with no
             // image on top of it at all.
-            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
             var forehead = FindByClass(root, "forehead")!;
 
             Assert.NotNull(forehead.BackgroundImages);
@@ -368,7 +370,7 @@ namespace PeachPDF.Tests.Integration
             // its innermost object's real PNG (with 8-bit alpha) is also written with percent-escaped
             // base64. Before the fix, it silently failed to decode, so the whole chain fell back all
             // the way to rendering the literal fallback text "ERROR" instead of the resolved image.
-            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
             var eyesA = FindById(root, "eyes-a")!;
 
             var hasImageWord = false;
@@ -397,7 +399,7 @@ namespace PeachPDF.Tests.Integration
             // "urlImage.Image != null" guard always failed and the tile never painted at all, leaving
             // ".eyes"'s own red background fully exposed across almost the entire eye-icon region
             // instead of interlocking into solid yellow with "#eyes-b"'s matching tile.
-            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
             var eyesA = FindById(root, "eyes-a")!;
 
             CssBox? resolvedObjectWithBackground = null;
@@ -438,11 +440,11 @@ namespace PeachPDF.Tests.Integration
                 "<img id='icon' src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAABnRSTlMAAAAAAABupgeRAAAABmJLR0QA/wD/AP+gvaeTAAAAEUlEQVR42mP4/58BCv7/ZwAAHfAD/abwPj4AAAAASUVORK5CYII=' style='width:24px;height:24px;vertical-align:bottom;'>" +
                 "</div>" +
                 "</body></html>";
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var icon = FindById(root, "icon")!;
 
             var spy = new RecordingGraphics();
-            await icon.Paint(spy);
+            FragmentPaintHarness.PaintBox(container, icon, spy);
 
             Assert.True(spy.DrawImageCallCount > 0,
                 "expected the inline replaced element inside a zero-height container to still paint its image");
@@ -456,7 +458,7 @@ namespace PeachPDF.Tests.Integration
             // "[class~=one].first.one" has "top:0; margin: 36px 0 0 60px;" inside ".picture" (which has
             // a 1em border) - dropping the margin alone landed it at .picture's own border-box top-left
             // corner instead of 36px/60px inside its content (padding-box) edge.
-            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
             var blockquote = FindByClass(root, "first")!;
             var picture = FindByClass(root, "picture")!;
 
@@ -480,7 +482,7 @@ namespace PeachPDF.Tests.Integration
             // of only the widest line's own padding counting - inflating ".eyes" well past its actual
             // content and rendering its red background as a wide, obviously-wrong band instead of a
             // tight accent around the eye icons.
-            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
             var eyes = FindByClass(root, "eyes")!;
             var eyesA = FindById(root, "eyes-a")!;
 
@@ -503,7 +505,7 @@ namespace PeachPDF.Tests.Integration
             // separate block-level siblings' explicit widths instead of taking their max (see
             // PositionAbsoluteAutoWidth_MultipleExplicitWidthSiblings_TakesWidestNotSum in
             // Acid2FeatureVerificationTests.cs for the isolated mechanism test).
-            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
             var eyes = FindByClass(root, "eyes")!;
 
             var eyesWidth = eyes.ActualRight - eyes.Location.X;
@@ -527,7 +529,7 @@ namespace PeachPDF.Tests.Integration
                 "</div>" +
                 "<div id='next'>NEXT</div>" +
                 "</body></html>";
-            var (root, _) = await BuildAndLayout(html);
+            var (root, container) = await BuildAndLayout(html);
             var target = FindById(root, "target")!;
             var next = FindById(root, "next")!;
 
@@ -544,7 +546,7 @@ namespace PeachPDF.Tests.Integration
             // not push "#eyes-b"/"#eyes-c" 24px (its line-height-driven content height) further down
             // than "#eyes-a"'s own top - they must start at the same Y, letting the eye-icon row and
             // the checkerboard/red row occupy the same vertical space the real Acid2 rendering needs.
-            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
             var eyesA = FindById(root, "eyes-a")!;
             var eyesB = FindById(root, "eyes-b")!;
             var eyesC = FindById(root, "eyes-c")!;
@@ -565,7 +567,7 @@ namespace PeachPDF.Tests.Integration
             // "Boxes.Count > 0" guard against misclassifying a genuinely empty block box as an
             // inline-only wrapper - which broke "#eyes-c" (a plain empty block meant to paint
             // bottom-most per Appendix E) into painting in the wrong stacking pass.
-            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
             var eyesC = FindById(root, "eyes-c")!;
 
             Assert.Empty(eyesC.Boxes);
@@ -574,21 +576,21 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Eyes_FloatChild_OrdersLocally_NotHoistedPastNonStackingContextAncestor()
         {
-            // Regression for DomUtils.FlattenStackingContext/SearchForHoistableDescendants: ".eyes"
+            // Regression for StackingOrder.Flatten/SearchForHoistableDescendants: ".eyes"
             // is position:absolute with no z-index, so it does NOT establish its own CSS stacking
             // context - but it's still "positioned", so per Appendix E step 6 it must be its own
             // atomic local-ordering scope for its own float/positioned-without-z-index descendants
             // (like "#eyes-b"), not defer them all the way to the document root. Before this fix,
-            // FlattenStackingContext(".eyes") returned only its plain in-flow children ("#eyes-a"/
+            // StackingOrder.Flatten(".eyes") returned only its plain in-flow children ("#eyes-a"/
             // "#eyes-c") - "#eyes-b" (a float) was entirely absent, hoisted instead to the root's own
             // participant list, painting relative to the root's whole subtree instead of interleaved
             // correctly within ".eyes" itself (see CssBox.PaintImpCore's block/float/inline stacking
-            // loop, which relies on FlattenStackingContext to supply all three locally).
-            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            // loop, which relies on StackingOrder.Flatten to supply all three locally).
+            var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
             var eyes = FindByClass(root, "eyes")!;
             var eyesB = FindById(root, "eyes-b")!;
 
-            var participants = DomUtils.FlattenStackingContext(eyes).ToList();
+            var participants = StackingOrder.Flatten(FragmentPaintHarness.FirstFragmentOf(container, eyes)).ToList();
 
             Assert.Contains(participants, p => p.Box == eyesB);
         }
@@ -601,7 +603,7 @@ namespace PeachPDF.Tests.Integration
             // "* html .parser { background: gray; ... }" (the classic quirks-mode-only hack, which must
             // NEVER match in a standards-mode engine) incorrectly match and override ".parser"'s real
             // "background: yellow" from earlier in the same stylesheet.
-            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
             var parser = FindByClass(root, "parser")!;
 
             Assert.Equal("rgb(255, 255, 0)", parser.BackgroundColor);
@@ -620,7 +622,7 @@ namespace PeachPDF.Tests.Integration
             // that 3em margin-top on the second one - asserting against the box's own resolved
             // ActualMarginTop (rather than a hardcoded pixel/point value) keeps this test independent of
             // this environment's em-to-point conversion specifics.
-            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
             var picture = FindByClass(root, "picture")!;
 
             var paragraphs = new List<CssBox>();
@@ -653,7 +655,7 @@ namespace PeachPDF.Tests.Integration
             // anonymous cell's own intrinsic-width computation found nothing to measure and sized
             // itself to 0 - overlapping/clipping its own child instead of matching "li.first-part"/
             // "li.third-part"'s own real 1em-wide cells for an evenly-spaced row.
-            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
             var firstPart = FindByClass(root, "first-part")!;
             var secondPart = FindByClass(root, "second-part")!;
             var thirdPart = FindByClass(root, "third-part")!;
@@ -689,7 +691,7 @@ namespace PeachPDF.Tests.Integration
             // display: table-cell; height: 0.5em; /* gets stretched to fit row */ }" - per the
             // fixture's own comment - is exactly this: its declared 0.5em is shorter than
             // "li.first-part"'s 1em, so it must still end up exactly as tall as the row.
-            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
             var firstPart = FindByClass(root, "first-part")!;
             var thirdPart = FindByClass(root, "third-part")!;
 
@@ -720,7 +722,7 @@ namespace PeachPDF.Tests.Integration
             // 3. ".smile div"'s { position: relative; bottom: -1em } then shifts the black mouth bar
             //    1em back down, so the mouth's visible top lands exactly at the nose's visible
             //    bottom - see SmileAndChin_MouthBarIsContiguousWithNoseAndChin.
-            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
             var nose = FindByClass(root, "nose")!;
             var eyesB = FindById(root, "eyes-b")!;
             var smile = FindByClass(root, "smile")!;
@@ -756,7 +758,7 @@ namespace PeachPDF.Tests.Integration
             //   height (CssBox.MarginBottomCollapse reading the child's offset ActualBottom instead
             //   of its static position, CSS2.1 §9.4.3) pushed ".chin" a full 1em below the bar's
             //   visible bottom.
-            var (root, _) = await BuildAndLayout(File.ReadAllText(FixturePath));
+            var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
             var nose = FindByClass(root, "nose")!;
             var smile = FindByClass(root, "smile")!;
             var chin = FindByClass(root, "chin")!;

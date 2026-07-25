@@ -22,6 +22,7 @@ using PeachPDF.Utilities;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using PeachPDF.Html.Core.Fragments;
 
 namespace PeachPDF
 {
@@ -43,20 +44,6 @@ namespace PeachPDF
         /// The internal core html container
         /// </summary>
         internal HtmlContainerInt HtmlContainerInt { get; }
-
-        /// <summary>
-        /// The scroll offset of the html.<br/>
-        /// This will adjust the rendered html by the given offset so the content will be "scrolled".<br/>
-        /// </summary>
-        /// <example>
-        /// Element that is rendered at location (50,100) with offset of (0,200) will not be rendered as it
-        /// will be at -100 therefore outside the client rectangle.
-        /// </example>
-        public XPoint ScrollOffset
-        {
-            get => Utils.Convert(HtmlContainerInt.ScrollOffset, PixelsPerPoint);
-            set => HtmlContainerInt.ScrollOffset = Utils.Convert(value, PixelsPerPoint);
-        }
 
         /// <summary>
         /// The top-left most location of the rendered html.<br/>
@@ -233,15 +220,16 @@ namespace PeachPDF
         }
 
         /// <summary>
-        /// Render the html using the given device.
+        /// Render one page of the laid-out html using the given device.
         /// </summary>
         /// <param name="g">the device to use to render</param>
-        public async ValueTask PerformPaint(XGraphics g)
+        /// <param name="fragmentainer">the page to render, from layout's fragment tree</param>
+        internal void PerformPaint(XGraphics g, FragmentainerFragment fragmentainer)
         {
             ArgumentNullException.ThrowIfNull(g);
 
             using var ig = new GraphicsAdapter(HtmlContainerInt.Adapter, g, PixelsPerPoint);
-            await HtmlContainerInt.PerformPaint(ig);
+            HtmlContainerInt.PerformPaint(ig, fragmentainer);
         }
 
         public void Dispose()

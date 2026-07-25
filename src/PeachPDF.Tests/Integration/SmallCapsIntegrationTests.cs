@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
+using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -140,7 +141,7 @@ namespace PeachPDF.Tests.Integration
             var elementBox = FindById(container.Root!, "w")!;
 
             var recorder = new RecordingGraphics(new PdfSharpAdapter());
-            await elementBox.Paint(recorder);
+            FragmentPaintHarness.PaintBox(container, elementBox, recorder);
 
             Assert.Equal(2, recorder.DrawStringCalls.Count);
             Assert.Equal("H", recorder.DrawStringCalls[0].Text);

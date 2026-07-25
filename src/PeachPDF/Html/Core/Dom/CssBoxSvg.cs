@@ -12,8 +12,6 @@
 
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
-using PeachPDF.Html.Core.Handlers;
-using PeachPDF.Html.Core.Utils;
 using PeachPDF.Svg;
 using System;
 using System.Collections.Generic;
@@ -67,43 +65,21 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Paints the fragment
+        /// The phantom word carrying this box's replaced content, whose own rectangle positions the
+        /// rendered SVG within the box. Read by <c>SvgFragmentPainter</c>.
         /// </summary>
-        /// <param name="g">the device to draw to</param>
-        protected override ValueTask PaintImpCore(RGraphics g)
-        {
-            EnsureDocument();
+        internal CssRectSvg SvgWord => _svgWord;
 
-            var rect = CommonUtils.GetFirstValueOrDefault(Rectangles);
-            var offset = RPoint.Empty;
+        /// <summary>
+        /// The built scene graph. Null only if <see cref="EnsureDocument"/> could not build one.
+        /// </summary>
+        internal SvgDocument? Document => _document;
 
-            if (!IsFixed)
-                offset = HtmlContainer!.ScrollOffset;
-
-            rect.Offset(offset);
-
-            var clipped = RenderUtils.ClipGraphicsByOverflow(g, this);
-
-            PaintBackground(g, rect, true);
-            BordersDrawHandler.DrawBoxBorders(g, this, rect, true, true);
-
-            var r = _svgWord.Rectangle;
-            r.Offset(offset);
-            r.Height -= ActualBorderTopWidth + ActualBorderBottomWidth + ActualPaddingTop + ActualPaddingBottom;
-            r.Y += ActualBorderTopWidth + ActualPaddingTop;
-            r.X = Math.Floor(r.X);
-            r.Y = Math.Floor(r.Y);
-
-            // object-fit / object-position honored via the shared replaced-content renderer.
-            ReplacedContentRenderer.Paint(g, r, null, _document, this);
-
-            if (clipped)
-                g.PopClip();
-
-            return ValueTask.CompletedTask;
-        }
-
-        private void EnsureDocument()
+        /// <summary>
+        /// Builds the scene graph from this element's own children, once. Synchronous and idempotent:
+        /// any network <c>&lt;image&gt;</c> hrefs it needs were prefetched during measurement.
+        /// </summary>
+        internal void EnsureDocument()
         {
             if (_document is not null)
                 return;
@@ -121,12 +97,10 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// The built <see cref="SvgDocument"/> and its unshifted (layout-time, not paint-time
-        /// scroll-offset-adjusted) rendered rectangle, for <c>&lt;a&gt;</c> link-annotation discovery
-        /// (see <see cref="SvgRenderer.CollectLinks"/>) - deliberately not reusing <see cref="PaintImpCore"/>'s
-        /// rect computation, since that one applies <see cref="Html.Core.HtmlContainerInt.ScrollOffset"/>,
-        /// which varies per output page during pagination and would need to be un-applied again to get
-        /// back to the single full-document-space rectangle link annotations need.
+        /// The built <see cref="SvgDocument"/> and its rendered rectangle in full document space, for
+        /// <c>&lt;a&gt;</c> link-annotation discovery (see <see cref="SvgRenderer.CollectLinks"/>) -
+        /// deliberately not reusing the painter's own rect, which is local to whichever fragmentainer
+        /// is being painted and would have to be mapped back out again.
         /// </summary>
         internal (SvgDocument Document, RRect Rect)? GetLinkSource()
         {

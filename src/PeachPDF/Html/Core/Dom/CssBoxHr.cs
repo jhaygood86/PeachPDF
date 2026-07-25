@@ -12,7 +12,6 @@
 
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
-using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System.Threading.Tasks;
@@ -88,38 +87,6 @@ namespace PeachPDF.Html.Core.Dom
             Size = new RSize(width, height);
 
             ActualBottom = Location.Y + ActualPaddingTop + ActualPaddingBottom + height;
-
-            return ValueTask.CompletedTask;
-        }
-
-        /// <summary>
-        /// Paints the fragment
-        /// </summary>
-        /// <param name="g">the device to draw to</param>
-        protected override ValueTask PaintImpCore(RGraphics g)
-        {
-            var offset = (HtmlContainer != null && !IsFixed) ? HtmlContainer.ScrollOffset : RPoint.Empty;
-            var rect = new RRect(Bounds.X + offset.X, Bounds.Y + offset.Y, Bounds.Width, Bounds.Height);
-
-            if (rect.Height > 2 && RenderUtils.IsColorVisible(ActualBackgroundColor))
-            {
-                g.DrawRectangle(g.GetSolidBrush(ActualBackgroundColor), rect.X, rect.Y, rect.Width, rect.Height);
-            }
-
-            var b1 = g.GetSolidBrush(ActualBorderTopColor);
-            BordersDrawHandler.DrawBorder(Border.Top, g, this, b1, rect);
-
-            if (rect.Height > 1)
-            {
-                var b2 = g.GetSolidBrush(ActualBorderLeftColor);
-                BordersDrawHandler.DrawBorder(Border.Left, g, this, b2, rect);
-
-                var b3 = g.GetSolidBrush(ActualBorderRightColor);
-                BordersDrawHandler.DrawBorder(Border.Right, g, this, b3, rect);
-
-                var b4 = g.GetSolidBrush(ActualBorderBottomColor);
-                BordersDrawHandler.DrawBorder(Border.Bottom, g, this, b4, rect);
-            }
 
             return ValueTask.CompletedTask;
         }

@@ -39,13 +39,14 @@ namespace PeachPDF.Html.Core.Utils
         /// </summary>
         /// <param name="g">the graphics to clip</param>
         /// <param name="box">the box that is rendered to get containing blocks</param>
+        /// <param name="originY">the document Y of the painted fragment's fragmentainer origin</param>
         /// <returns>true - was clipped, false - not clipped</returns>
-        public static bool ClipGraphicsByOverflow(RGraphics g, CssBox box)
+        public static bool ClipGraphicsByOverflow(RGraphics g, CssBox box, double originY)
         {
             var containingBlock = box.ContainingBlock;
             while (true)
             {
-                if (TryPushOverflowClip(g, containingBlock, box))
+                if (TryPushOverflowClip(g, containingBlock, originY))
                 {
                     return true;
                 }
@@ -59,13 +60,14 @@ namespace PeachPDF.Html.Core.Utils
 
         /// <summary>
         /// Pushes <paramref name="overflowBox"/>'s own clip (padding-edge rect, per CSS spec) if it has
-        /// <c>overflow: hidden</c>, scoped for painting <paramref name="forBox"/> (whose fixed-ness
-        /// determines whether the rect needs the page scroll offset applied). Shared by
+        /// <c>overflow: hidden</c>, mapped into the coordinate space of the fragment being painted by
+        /// subtracting its <paramref name="originY"/> (zero for a fixed fragment, which does not move
+        /// with the page). Shared by
         /// <see cref="ClipGraphicsByOverflow"/> (which walks up a single box's own containing-block
         /// chain looking for the nearest hidden ancestor) and <see cref="PushAncestorOverflowClips"/>
         /// (which already knows the exact ancestor chain to check, with no walking needed).
         /// </summary>
-        private static bool TryPushOverflowClip(RGraphics g, CssBox overflowBox, CssBox forBox)
+        private static bool TryPushOverflowClip(RGraphics g, CssBox overflowBox, double originY)
         {
             if (overflowBox.Overflow != CssConstants.Hidden) return false;
 
@@ -78,8 +80,7 @@ namespace PeachPDF.Html.Core.Utils
             rect.Y -= overflowBox.ActualPaddingTop;
             rect.Height += overflowBox.ActualPaddingTop + overflowBox.ActualPaddingBottom;
 
-            if (!forBox.IsFixed)
-                rect.Offset(forBox.HtmlContainer!.ScrollOffset);
+            rect.Offset(0, -originY);
 
             rect.Intersect(prevClip);
             g.PushClip(rect);
@@ -88,23 +89,23 @@ namespace PeachPDF.Html.Core.Utils
 
         /// <summary>
         /// Pushes the <c>overflow: hidden</c> clip of every box in <paramref name="ancestors"/> that has
-        /// one, in order. Used when painting a box that <see cref="DomUtils.FlattenStackingContext"/>
+        /// one, in order. Used when painting a box that <see cref="Paint.StackingOrder.Flatten"/>
         /// hoisted past one or more plain ancestor boxes for stacking-context z-order purposes - since it
         /// paints via the claiming stacking context's own paint loop rather than those ancestors' own
-        /// (nested) <c>Paint()</c> calls, their overflow clipping isn't already active on the graphics
+        /// (nested) paint calls, their overflow clipping isn't already active on the graphics
         /// clip stack the way it would be for normally-painted content, and must be applied explicitly
         /// here instead. <paramref name="ancestors"/> is the exact, already-known chain of DOM ancestors
         /// between the claiming stacking context and the box being painted (see
-        /// <see cref="DomUtils.StackingParticipant"/>), so - unlike <see cref="ClipGraphicsByOverflow"/> -
+        /// <see cref="Paint.StackingOrder.StackingParticipant"/>), so - unlike <see cref="ClipGraphicsByOverflow"/> -
         /// no containing-block walk/search is needed; each ancestor is checked directly.
         /// </summary>
         /// <returns>the number of clips actually pushed (callers must pop exactly this many afterward)</returns>
-        public static int PushAncestorOverflowClips(RGraphics g, CssBox forBox, IReadOnlyList<CssBox> ancestors)
+        public static int PushAncestorOverflowClips(RGraphics g, IReadOnlyList<CssBox> ancestors, double originY)
         {
             var pushed = 0;
             foreach (var ancestor in ancestors)
             {
-                if (TryPushOverflowClip(g, ancestor, forBox)) pushed++;
+                if (TryPushOverflowClip(g, ancestor, originY)) pushed++;
             }
             return pushed;
         }

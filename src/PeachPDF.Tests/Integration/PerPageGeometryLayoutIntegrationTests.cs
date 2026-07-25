@@ -1,6 +1,7 @@
 using PeachPDF.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
+using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
 using System;
@@ -79,8 +80,7 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(BaseMt + SheetH, cover.ActualBottom, 0.1);
             Assert.Equal(BaseMt + SheetH, after!.Location.Y, 0.1);
 
-            var slots = container.GetPaginationSlots();
-            Assert.Equal([0, 1], slots.Select(s => s.SlotIndex));
+            Assert.Equal([0, 1], container.FragmentTree!.Fragmentainers.Select(f => f.SlotIndex));
         }
 
         [Fact]

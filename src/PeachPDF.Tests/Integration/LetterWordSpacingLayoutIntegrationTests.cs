@@ -131,7 +131,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task LetterSpacing_AdjacentInlineElementsWithNoWhitespace_DoNotOverlap()
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<span id='a' style='letter-spacing:10px'>AAAA</span><span id='b'>BBBB</span>"));
 
             var lineOwner = FindLineBoxOwner(root)!;
@@ -160,11 +160,11 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task LetterSpacing_ProducesSingleDrawStringCall_CarryingResolvedSpacing()
         {
-            var (root, _) = await BuildAndLayout(Wrap("<p id='p' style='letter-spacing:2pt'>AAAA</p>"));
+            var (root, container) = await BuildAndLayout(Wrap("<p id='p' style='letter-spacing:2pt'>AAAA</p>"));
             var p = FindById(root, "p")!;
 
             var g = new TestRecordingGraphics();
-            await p.Paint(g);
+            FragmentPaintHarness.PaintBox(container, p, g);
 
             var call = Assert.Single(g.DrawStringCalls);
             Assert.Equal("AAAA", call.Text);
@@ -174,11 +174,11 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task LetterSpacingNormal_ProducesSingleDrawStringCall_WithZeroSpacing()
         {
-            var (root, _) = await BuildAndLayout(Wrap("<p id='p'>AAAA</p>"));
+            var (root, container) = await BuildAndLayout(Wrap("<p id='p'>AAAA</p>"));
             var p = FindById(root, "p")!;
 
             var g = new TestRecordingGraphics();
-            await p.Paint(g);
+            FragmentPaintHarness.PaintBox(container, p, g);
 
             var call = Assert.Single(g.DrawStringCalls);
             Assert.Equal(0, call.LetterSpacing, 1);
@@ -188,14 +188,14 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<double> FirstWordWidthAsync(string bodyHtml)
         {
-            var (root, _) = await BuildAndLayout(Wrap(bodyHtml));
+            var (root, container) = await BuildAndLayout(Wrap(bodyHtml));
             var p = FindById(root, "p")!;
             return CssBox.FirstWordOccurence(p, p.LineBoxes[0])!.Width;
         }
 
         private static async Task<double> InterWordGapAsync(string bodyHtml)
         {
-            var (root, _) = await BuildAndLayout(Wrap(bodyHtml));
+            var (root, container) = await BuildAndLayout(Wrap(bodyHtml));
             var p = FindById(root, "p")!;
             var words = p.LineBoxes[0].Words.OrderBy(w => w.Left).ToList();
             Assert.Equal(2, words.Count);

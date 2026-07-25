@@ -14,7 +14,7 @@ namespace PeachPDF.Tests.Integration
     /// (page-anchored) on every page"), which was previously only exercised via single-
     /// <c>PerformPaint</c>-call tests (see <c>Acid2FeatureVerificationTests.
     /// PositionedZIndex_PaintsOverFixedPositionedContent</c>). This is the legitimate feature Round 9's
-    /// content-empty-page-skipping change (<see cref="Html.Core.HtmlContainerInt.GetPaginationSlots"/>)
+    /// content-empty-page-skipping change (now the fragment tree's page materialization)
     /// must not disturb - a fixed box must still repeat on every page that IS materialized, exactly as
     /// before.
     /// </summary>

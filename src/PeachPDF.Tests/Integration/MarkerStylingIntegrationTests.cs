@@ -22,13 +22,13 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task MarkerColor_OverridesTextMarkerColor()
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<style>li::marker { color: red } li { color: blue }</style><ol><li id='li'>text</li></ol>"));
             var li = FindById(root, "li")!;
             var marker = li.Boxes.Single(b => b.IsMarkerPseudoElement);
 
             var g = new TestRecordingGraphics();
-            await marker.Paint(g);
+            FragmentPaintHarness.PaintBox(container, marker, g);
 
             var call = Assert.Single(g.DrawStringCalls);
             Assert.Equal(RColor.FromArgb(255, 0, 0), call.Color);
@@ -38,7 +38,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task MarkerFontSize_OverridesTextMarkerFontSize()
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<style>li::marker { font-size: 30pt } li { font-size: 10pt }</style><ol><li id='li'>text</li></ol>"));
             var li = FindById(root, "li")!;
             var marker = (CssBoxMarker)li.Boxes.Single(b => b.IsMarkerPseudoElement);
@@ -47,7 +47,7 @@ namespace PeachPDF.Tests.Integration
             Assert.NotEqual(li.ActualFont.Size, marker.ActualFont.Size);
 
             var g = new TestRecordingGraphics();
-            await marker.Paint(g);
+            FragmentPaintHarness.PaintBox(container, marker, g);
 
             var call = Assert.Single(g.DrawStringCalls);
             Assert.Equal(30, call.Font.Size, 1);
@@ -59,7 +59,7 @@ namespace PeachPDF.Tests.Integration
             // Regression guard: content overrides must work on a <ul> (disc-default list-style-type)
             // just as well as on an <ol> (decimal default) - the override must fully replace the
             // shape branch of ResolveDefaultContent's dispatch, not just the text/counter branch.
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<style>li::marker { content: \"→ \" }</style><ul><li id='li'>text</li></ul>"));
             var li = FindById(root, "li")!;
             var marker = (CssBoxMarker)li.Boxes.Single(b => b.IsMarkerPseudoElement);
@@ -71,7 +71,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task MarkerContentString_OverridesProceduralNumbering()
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<style>li::marker { content: \"→ \" }</style><ol><li id='li'>text</li></ol>"));
             var li = FindById(root, "li")!;
             var marker = (CssBoxMarker)li.Boxes.Single(b => b.IsMarkerPseudoElement);
@@ -83,7 +83,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task MarkerContentNone_SuppressesMarkerEntirely_OnDiscDefaultList()
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<style>li::marker { content: none }</style><ul><li id='li'>text</li></ul>"));
             var li = FindById(root, "li")!;
             var marker = (CssBoxMarker)li.Boxes.Single(b => b.IsMarkerPseudoElement);
@@ -96,7 +96,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task MarkerContentCounter_ResolvesPerItemAgainstListItemCounter()
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<style>li::marker { content: counter(list-item) \") \" }</style>" +
                 "<ol><li id='a'>a</li><li id='b'>b</li><li id='c'>c</li></ol>"));
 
@@ -112,7 +112,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task MarkerContentNone_SuppressesMarkerEntirely()
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<style>#suppressed::marker { content: none }</style>" +
                 "<ol><li id='suppressed'>a</li><li id='normal'>b</li></ol>"));
 
@@ -127,7 +127,7 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal("2.", normal.Text);
 
             var g = new TestRecordingGraphics();
-            await suppressed.Paint(g);
+            FragmentPaintHarness.PaintBox(container, suppressed, g);
             Assert.Empty(g.Log);
         }
 
@@ -148,13 +148,13 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task MarkerDirection_OverridesRtlPainting()
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<style>li::marker { direction: rtl }</style><ol><li id='li' style='direction: ltr'>text</li></ol>"));
             var li = FindById(root, "li")!;
             var marker = li.Boxes.Single(b => b.IsMarkerPseudoElement);
 
             var g = new TestRecordingGraphics();
-            await marker.Paint(g);
+            FragmentPaintHarness.PaintBox(container, marker, g);
 
             var call = Assert.Single(g.DrawStringCalls);
             Assert.True(call.Rtl);
@@ -163,14 +163,14 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task MarkerShapeColor_OverridesDiscColor()
         {
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<style>li::marker { color: green }</style><ul><li id='li'>text</li></ul>"));
             var li = FindById(root, "li")!;
             var marker = (CssBoxMarker)li.Boxes.Single(b => b.IsMarkerPseudoElement);
             Assert.Equal("disc", marker.MarkerShape);
 
             var g = new TestRecordingGraphics();
-            await marker.Paint(g);
+            FragmentPaintHarness.PaintBox(container, marker, g);
 
             var pathCall = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawPathCall>());
             Assert.Equal(RColor.FromArgb(0, 128, 0), pathCall.Color);
@@ -182,7 +182,7 @@ namespace PeachPDF.Tests.Integration
             var svg = "data:image/svg+xml;base64," + System.Convert.ToBase64String(
                 System.Text.Encoding.UTF8.GetBytes("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'><rect width='10' height='10'/></svg>"));
 
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 $"<style>li::marker {{ content: url('{svg}') }}</style><ul><li id='li' style='list-style-type: disc'>text</li></ul>"));
             var li = FindById(root, "li")!;
             var marker = (CssBoxMarker)li.Boxes.Single(b => b.IsMarkerPseudoElement);

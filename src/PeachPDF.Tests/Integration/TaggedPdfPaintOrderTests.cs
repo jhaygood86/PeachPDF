@@ -7,6 +7,7 @@ using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using System.Linq;
 using System.Threading.Tasks;
+using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -138,7 +139,7 @@ namespace PeachPDF.Tests.Integration
             await container.PerformLayout(measureGraphics);
 
             var recorder = new RecordingGraphics(adapter);
-            await container.PerformPaint(recorder);
+            FragmentPaintHarness.PaintPage(container, recorder);
 
             return recorder.Log;
         }

@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 
 namespace PeachPDF.Tests.Integration
 {
-    // Regression for the paint-time scroll offset used for pagination: GetPaginationSlots
+    // Regression for the page-slot walk pagination runs on: it
     // yields slot tops in layout-PIXEL space, but PdfGenerator historically assigned them
     // through the public HtmlContainer.ScrollOffset setter, which treats its input as POINTS
     // and multiplies by PixelsPerPoint to store pixels. Whenever ShrinkToFit actually shrank

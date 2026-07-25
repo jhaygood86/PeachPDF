@@ -8,13 +8,14 @@ using PeachPDF.PdfSharpCore;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration
 {
     /// <summary>
     /// Regression tests for two paint-pipeline fixes:
     ///
-    /// 1. <c>DomUtils.FlattenStackingContext</c> used to recurse into every descendant at every
+    /// 1. <c>StackingOrder.Flatten</c> used to recurse into every descendant at every
     ///    ancestor level (not just direct children), so a box was independently re-painted once per
     ///    ancestor between it and the root. Fixed to only hoist genuinely out-of-flow (floated,
     ///    absolutely positioned, fixed) descendants past normal-flow wrapper boxes; normal content is
@@ -38,7 +39,7 @@ namespace PeachPDF.Tests.Integration
             // Six levels of plain (non-positioned, non-stacking-context) wrapper divs, with a
             // position:absolute box buried at the bottom. Its containing block is the outermost
             // (position:relative) wrapper, not its immediate DOM parent - it must still be discovered
-            // and painted via FlattenStackingContext's out-of-flow hoisting, not silently dropped.
+            // and painted via StackingOrder.Flatten's out-of-flow hoisting, not silently dropped.
             var html = @"
 <!DOCTYPE html>
 <html>
@@ -69,7 +70,7 @@ namespace PeachPDF.Tests.Integration
         {
             // Two position:relative siblings with different z-index values are each their own
             // stacking context (per IsStackingContextBox) - confirm they're still found and painted
-            // (not excluded as "already handled elsewhere") now that FlattenStackingContext no longer
+            // (not excluded as "already handled elsewhere") now that StackingOrder.Flatten no longer
             // blindly recurses through everything.
             var html = @"
 <!DOCTYPE html>
@@ -113,7 +114,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task ManyNestedNormalFlowBoxes_PaintWorkIsIndependentOfNestingDepth()
         {
-            // Deterministic (machine-speed-independent) regression guard for FlattenStackingContext's
+            // Deterministic (machine-speed-independent) regression guard for StackingOrder.Flatten's
             // old O(depth) blowup: with no out-of-flow content anywhere, a single paint pass used to
             // re-paint every box once per ancestor level between it and the root, so the total paint
             // work scaled with nesting depth.
@@ -205,8 +206,7 @@ namespace PeachPDF.Tests.Integration
             var counter = new DrawCountingGraphics(adapter);
             if (container.Root is not null)
             {
-                container.Root.ResetPaint();
-                await container.Root.Paint(counter);
+                FragmentPaintHarness.PaintBox(container, container.Root, counter);
             }
 
             return counter.DrawOperations;

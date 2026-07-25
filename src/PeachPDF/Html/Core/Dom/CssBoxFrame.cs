@@ -12,9 +12,7 @@
 
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
-using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Utils;
-using System;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Dom
@@ -54,54 +52,13 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         public override bool IsClickable => true;
 
+        /// <summary>
+        /// The phantom word carrying this box's replaced content — the embedded video's still image,
+        /// where one was recognized. Read by <c>FrameFragmentPainter</c>.
+        /// </summary>
+        internal CssRectImage ImageWord => _imageWord;
+
         #region Private methods
-
-        /// <summary>
-        /// Paints the fragment
-        /// </summary>
-        /// <param name="g">the device to draw to</param>
-        protected override ValueTask PaintImpCore(RGraphics g)
-        {
-            var rects = CommonUtils.GetFirstValueOrDefault(Rectangles);
-
-            var offset = (HtmlContainer != null && !IsFixed) ? HtmlContainer.ScrollOffset : RPoint.Empty;
-            rects.Offset(offset);
-
-            var clipped = RenderUtils.ClipGraphicsByOverflow(g, this);
-
-            PaintBackground(g, rects, true);
-
-            BordersDrawHandler.DrawBoxBorders(g, this, rects, true, true);
-
-            var word = Words[0];
-            var tmpRect = word.Rectangle;
-            tmpRect.Offset(offset);
-            tmpRect.Height -= ActualBorderTopWidth + ActualBorderBottomWidth + ActualPaddingTop + ActualPaddingBottom;
-            tmpRect.Y += ActualBorderTopWidth + ActualPaddingTop;
-            tmpRect.X = Math.Floor(tmpRect.X);
-            tmpRect.Y = Math.Floor(tmpRect.Y);
-            var rect = tmpRect;
-
-            DrawImage(g, rect);
-
-            if (clipped)
-                g.PopClip();
-
-            return ValueTask.CompletedTask;
-        }
-
-        /// <summary>
-        /// Draw video image over the iframe if found.
-        /// </summary>
-        private void DrawImage(RGraphics g, RRect rect)
-        {
-            if (_imageWord.Image == null) return;
-
-            if (rect is { Width: > 0, Height: > 0 })
-            {
-                g.DrawImage(_imageWord.Image, rect);
-            }
-        }
 
         /// <summary>
         /// Assigns words its width and height

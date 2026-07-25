@@ -63,42 +63,22 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        protected override async ValueTask PaintImpCore(RGraphics g)
-        {
-            await EnsureResolved();
+        /// <summary>
+        /// Whether the <c>data</c> resource resolved to a supported image, making this box a replaced
+        /// element. Resolved during measurement.
+        /// </summary>
+        internal bool IsReplaced => _isReplaced;
 
-            if (!_isReplaced)
-            {
-                await base.PaintImpCore(g);
-                return;
-            }
+        /// <summary>
+        /// The phantom word carrying this box's replaced content, whose own rectangle positions the
+        /// image within the box. Null until (and unless) resolution succeeds.
+        /// </summary>
+        internal CssRectImage? ReplacedWord => _imageWord;
 
-            var rect = CommonUtils.GetFirstValueOrDefault(Rectangles);
-            var offset = RPoint.Empty;
-
-            if (!IsFixed)
-                offset = HtmlContainer!.ScrollOffset;
-
-            rect.Offset(offset);
-
-            var clipped = RenderUtils.ClipGraphicsByOverflow(g, this);
-
-            PaintBackground(g, rect, true);
-            BordersDrawHandler.DrawBoxBorders(g, this, rect, true, true);
-
-            var r = _imageWord!.Rectangle;
-            r.Offset(offset);
-            r.Height -= ActualBorderTopWidth + ActualBorderBottomWidth + ActualPaddingTop + ActualPaddingBottom;
-            r.Y += ActualBorderTopWidth + ActualPaddingTop;
-            r.X = Math.Floor(r.X);
-            r.Y = Math.Floor(r.Y);
-
-            // object-fit / object-position honored via the shared replaced-content renderer.
-            ReplacedContentRenderer.Paint(g, r, _imageWord.Image, _svgDocument, this);
-
-            if (clipped)
-                g.PopClip();
-        }
+        /// <summary>
+        /// The parsed SVG scene graph when the resolved resource was an SVG image, else null.
+        /// </summary>
+        internal SvgDocument? SvgDocument => _svgDocument;
 
         /// <summary>
         /// Resolves whether this object is replaced content (a supported image) or must fall back to

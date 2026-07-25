@@ -7,6 +7,7 @@ using PeachPDF.PdfSharpCore.Drawing;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -67,10 +68,10 @@ namespace PeachPDF.Tests.Integration
                     <div class='title'>Title</div>
                 </div>
                 """);
-            var (root, _) = await BuildAndLayout(html, pageHeight: 1000);
+            var (root, container) = await BuildAndLayout(html, pageHeight: 1000);
 
             var g = new PeachPDF.Tests.TestSupport.TestRecordingGraphics();
-            await root.Paint(g);
+            FragmentPaintHarness.PaintBox(container, root, g);
 
             var call = Assert.Single(g.DrawImageCalls);
             // HTML width/height attributes are px lengths (TranslateAttributes -> "40px"/"30px"),
@@ -87,7 +88,7 @@ namespace PeachPDF.Tests.Integration
                     <div class='item' style='height:20px'></div>
                     <div class='item' style='height:20px'></div>
                 </div>");
-            var (root, _) = await BuildAndLayout(html, pageHeight: 1000);
+            var (root, container) = await BuildAndLayout(html, pageHeight: 1000);
             var items = FindAllByClass(root, "item");
             var mc = FindById(root, "mc")!;
 
@@ -108,7 +109,7 @@ namespace PeachPDF.Tests.Integration
                     <div class='item' style='height:20px'></div>
                     <div class='item' style='height:20px'></div>
                 </div>");
-            var (root, _) = await BuildAndLayout(html, pageHeight: 1000);
+            var (root, container) = await BuildAndLayout(html, pageHeight: 1000);
             var items = FindAllByClass(root, "item");
 
             // 200px / 80px => at most 2 columns fit, even though column-count asked for 5.
@@ -128,7 +129,7 @@ namespace PeachPDF.Tests.Integration
                     <div class='item' style='height:20px'></div>
                     <div class='item' style='height:20px'></div>
                 </div>");
-            var (root, _) = await BuildAndLayout(html, pageHeight: 1000);
+            var (root, container) = await BuildAndLayout(html, pageHeight: 1000);
             var items = FindAllByClass(root, "item");
             var mc = FindById(root, "mc")!;
 
@@ -150,7 +151,7 @@ namespace PeachPDF.Tests.Integration
                     <div class='item' style='height:20px'></div>
                     <div class='item' style='height:20px'></div>
                 </div>");
-            var (root, _) = await BuildAndLayout(html, pageHeight: 1000);
+            var (root, container) = await BuildAndLayout(html, pageHeight: 1000);
             var items = FindAllByClass(root, "item");
 
             // 320px / 100px column-width ≈ 3 columns fit, so each item should land in its own column
@@ -167,7 +168,7 @@ namespace PeachPDF.Tests.Integration
                     <div class='item' style='height:20px'></div>
                     <div class='item' style='height:20px'></div>
                 </div>");
-            var (root, _) = await BuildAndLayout(html, pageHeight: 1000);
+            var (root, container) = await BuildAndLayout(html, pageHeight: 1000);
             var mc = FindById(root, "mc")!;
 
             Assert.NotNull(mc.ColumnRuleSegments);
@@ -186,7 +187,7 @@ namespace PeachPDF.Tests.Integration
                     <div class='item' style='height:20px'></div>
                     <div class='item' style='height:20px'></div>
                 </div>");
-            var (root, _) = await BuildAndLayout(html, pageHeight: 1000);
+            var (root, container) = await BuildAndLayout(html, pageHeight: 1000);
             var mc = FindById(root, "mc")!;
 
             Assert.Equal(0, mc.ActualColumnRuleWidth);
@@ -207,7 +208,7 @@ namespace PeachPDF.Tests.Integration
                     <div class='item' style='height:20px'></div>
                     <div class='item' style='height:20px'></div>
                 </div>");
-            var (root, _) = await BuildAndLayout(html, pageHeight: 1000);
+            var (root, container) = await BuildAndLayout(html, pageHeight: 1000);
             var items = FindAllByClass(root, "item");
             var mc = FindById(root, "mc")!;
 
@@ -234,7 +235,7 @@ namespace PeachPDF.Tests.Integration
                 </div>");
             // Page content height of 100 leaves only ~30px on page 0 for the .mc container to start
             // in - far less than the first item's 80px height.
-            var (root, _) = await BuildAndLayout(html, pageHeight: 100);
+            var (root, container) = await BuildAndLayout(html, pageHeight: 100);
             var items = FindAllByClass(root, "item");
 
             Assert.Equal(5, items.Count);
@@ -251,7 +252,7 @@ namespace PeachPDF.Tests.Integration
                     <div class='item' style='height:10px'></div>
                     <div class='item' style='height:10px'></div>
                 </div>");
-            var (root, _) = await BuildAndLayout(html, pageHeight: 100);
+            var (root, container) = await BuildAndLayout(html, pageHeight: 100);
             var mc = FindById(root, "mc")!;
             var items = FindAllByClass(root, "item");
 
@@ -274,11 +275,11 @@ namespace PeachPDF.Tests.Integration
                     <div class='item' style='height:20px'></div>
                     <div class='item' style='height:20px'></div>
                 </div>");
-            var (root, _) = await BuildAndLayout(html, pageHeight: 1000);
+            var (root, container) = await BuildAndLayout(html, pageHeight: 1000);
             var mc = FindById(root, "mc")!;
 
             var spy = new DrawLineSpyGraphics();
-            await mc.Paint(spy);
+            FragmentPaintHarness.PaintBox(container, mc, spy);
 
             Assert.True(spy.DrawLineCallCount > 0);
         }
@@ -293,11 +294,11 @@ namespace PeachPDF.Tests.Integration
                     <div class='item' style='height:20px'></div>
                     <div class='item' style='height:20px'></div>
                 </div>");
-            var (root, _) = await BuildAndLayout(html, pageHeight: 1000);
+            var (root, container) = await BuildAndLayout(html, pageHeight: 1000);
             var mc = FindById(root, "mc")!;
 
             var spy = new DrawLineSpyGraphics();
-            await mc.Paint(spy);
+            FragmentPaintHarness.PaintBox(container, mc, spy);
 
             Assert.True(spy.DrawLineCallCount > 0);
         }
@@ -323,7 +324,7 @@ namespace PeachPDF.Tests.Integration
                     <div class='item' style='height:40pt'></div>
                     <div class='item' style='height:40pt'></div>
                 </div>");
-            var (root, _) = await BuildAndLayout(html, pageHeight: 1000);
+            var (root, container) = await BuildAndLayout(html, pageHeight: 1000);
             var items = FindAllByClass(root, "item");
 
             Assert.Equal(6, items.Count);
@@ -348,7 +349,7 @@ namespace PeachPDF.Tests.Integration
                     <div class='item' style='height:40pt'></div>
                     <div class='item' style='height:40pt'></div>
                 </div>");
-            var (root, _) = await BuildAndLayout(html, pageHeight: 1000);
+            var (root, container) = await BuildAndLayout(html, pageHeight: 1000);
             var items = FindAllByClass(root, "item");
 
             var expectedHeights = new[] { 50.0, 50.0, 50.0, 40.0, 40.0, 40.0 };
@@ -487,7 +488,7 @@ namespace PeachPDF.Tests.Integration
 
         private async Task<CssBox> FindByIdAsync(string fragment, string id)
         {
-            var (root, _) = await BuildAndLayout(Wrap(fragment), pageHeight: 1000);
+            var (root, container) = await BuildAndLayout(Wrap(fragment), pageHeight: 1000);
             return FindById(root, id)!;
         }
 

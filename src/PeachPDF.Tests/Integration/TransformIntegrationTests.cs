@@ -4,6 +4,7 @@ using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -332,7 +333,7 @@ namespace PeachPDF.Tests.Integration
             var divBox = FindByTag(container.Root!, "div")!;
 
             var spy = new SpyGraphics();
-            await divBox.Paint(spy);
+            FragmentPaintHarness.PaintBox(container, divBox, spy);
 
             Assert.NotNull(spy.LastPushedTransform);
             var pushed = spy.LastPushedTransform!.Value;

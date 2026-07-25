@@ -17,6 +17,8 @@ using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
+using PeachPDF.Html.Core.Fragments;
+using PeachPDF.Html.Core.Paint;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -42,12 +44,6 @@ namespace PeachPDF.Html.Core
     /// The max height does NOT effect layout, but will not render outside it (clip).<br/>
     /// <see cref="ActualSize"/> can be exceed the max size by layout restrictions (unwrap-able line, set image size, etc.).<br/>
     /// Set zero for unlimited (width/height separately).<br/>
-    /// </para>
-    /// <para>
-    /// <b>ScrollOffset:</b><br/>
-    /// This will adjust the rendered html by the given offset so the content will be "scrolled".<br/>
-    /// Element that is rendered at location (50,100) with offset of (0,200) will not be rendered
-    /// at -100, therefore outside the client rectangle.
     /// </para>
     /// </remarks>
     internal sealed class HtmlContainerInt : IDisposable
@@ -185,16 +181,6 @@ namespace PeachPDF.Html.Core
         internal void ClearNamedPageElements() => _namedPageElements.Clear();
 
         /// <summary>
-        /// The scroll offset of the html.<br/>
-        /// This will adjust the rendered html by the given offset so the content will be "scrolled".<br/>
-        /// </summary>
-        /// <example>
-        /// Element that is rendered at location (50,100) with offset of (0,200) will not be rendered as it
-        /// will be at -100 therefore outside the client rectangle.
-        /// </example>
-        public RPoint ScrollOffset { get; set; }
-
-        /// <summary>
         /// When true, <see cref="CssLayoutEngine.FlowBox"/>'s per-word page-break-avoidance check
         /// (<see cref="Dom.CssRect.BreakPage"/>, which permanently jumps a replaced-element word's
         /// <c>Top</c> to the next page) is skipped. Set around a throwaway/measurement-only layout
@@ -242,7 +228,7 @@ namespace PeachPDF.Html.Core
         /// <summary>
         /// Whether any box in the current document is out-of-flow (floated, absolutely positioned, or
         /// fixed). Computed alongside <see cref="HasFloatedBoxes"/> and used by
-        /// <see cref="CssBox.Paint"/> to decide whether Bounds-based page-visibility pruning is safe (an
+        /// <see cref="Paint.FragmentPainter"/> to decide whether Bounds-based page-visibility pruning is safe (an
         /// out-of-flow descendant's visual position can fall outside its "invisible" ancestor's own
         /// Bounds, so that pruning is only safe with none anywhere in the document).
         /// </summary>
@@ -253,7 +239,7 @@ namespace PeachPDF.Html.Core
         /// stacking context (see <see cref="Utils.DomUtils.IsStackingContextBox"/> - position+z-index,
         /// fixed/sticky, a flex item with z-index, opacity &lt; 1, or a non-identity transform). Computed
         /// alongside <see cref="HasFloatedBoxes"/>/<see cref="HasOutOfFlowBoxes"/> and used by
-        /// <see cref="Utils.DomUtils.FlattenStackingContext"/> to skip searching for stacking-context
+        /// <see cref="Paint.StackingOrder.Flatten"/> to skip searching for stacking-context
         /// participants to hoist past normal-flow wrapper boxes entirely when there's nothing to hoist.
         /// </summary>
         internal bool HasStackingHoistCandidates { get; private set; }
@@ -551,7 +537,59 @@ namespace PeachPDF.Html.Core
             // Every box's size is final now, so it's safe to also compute HasStackingHoistCandidates.
             (HasFloatedBoxes, HasOutOfFlowBoxes, HasStackingHoistCandidates) =
                 ComputeFlowFlags(Root, includeStackingHoistCandidates: true);
+
+            // Must precede the fragment-tree build: which page-slots carry printable content depends
+            // on SuppressOwnBackgroundPaint, so a canvas background resolved afterwards would make
+            // the promoted box look like real content spanning the whole document.
+            ResolveCanvasBackground();
+
+            // Layout's final phase: freeze the mutable box geometry above into the immutable fragment
+            // tree everything downstream consumes. Built once, after the reflow loop has settled, so
+            // the tree can never describe an intermediate pass's geometry.
+            FragmentTree = FragmentTreeBuilder.Build(this);
         }
+
+        /// <summary>
+        /// The box whose background fills the whole page canvas, per
+        /// <see href="https://www.w3.org/TR/CSS21/colors.html#background">CSS 2.1 §14.2</see>:
+        /// <c>body</c>'s background if it declares one, else <c>html</c>'s, else none. Null when
+        /// neither declares a background.
+        /// </summary>
+        internal CssBox? CanvasBackgroundBox { get; private set; }
+
+        /// <summary>
+        /// Resolves <see cref="CanvasBackgroundBox"/> and marks the chosen box so its own ordinary
+        /// background pass is suppressed — otherwise the same background would be painted twice, once
+        /// across the page and again at the box's own (possibly much smaller) laid-out rectangle.
+        /// </summary>
+        /// <remarks>
+        /// Purely cascade-driven, so this belongs to layout rather than paint: nothing here reads
+        /// geometry, and the pagination rule that decides which pages exist needs the answer.
+        /// </remarks>
+        private void ResolveCanvasBackground()
+        {
+            var html = DomUtils.GetBoxByTagName(Root, "html");
+            var body = DomUtils.GetBoxByTagName(Root, "body");
+
+            // Cleared first so a re-layout can never leave a previous winner suppressed.
+            if (html is not null) html.SuppressOwnBackgroundPaint = false;
+            if (body is not null) body.SuppressOwnBackgroundPaint = false;
+
+            CanvasBackgroundBox = body is { HasOwnBackground: true } ? body
+                : html is { HasOwnBackground: true } ? html
+                : null;
+
+            if (CanvasBackgroundBox is not null)
+                CanvasBackgroundBox.SuppressOwnBackgroundPaint = true;
+        }
+
+        /// <summary>
+        /// The immutable output of the last <see cref="PerformLayout"/> — the document sliced into
+        /// per-page <see cref="Fragments.BoxFragment"/>s (CSS Fragmentation Level 3 §2). Null until the
+        /// document has been laid out. This is the layout↔paint contract: paint reads geometry from
+        /// here, never from <see cref="Dom.CssBox"/>.
+        /// </summary>
+        internal FragmentTree? FragmentTree { get; private set; }
 
         /// <summary>
         /// Recursively checks whether any box in the tree is floated, out-of-flow, and/or (when
@@ -636,18 +674,16 @@ namespace PeachPDF.Html.Core
         }
 
         /// <summary>
-        /// Per-page paint-window override set by <c>PdfGenerator.AddPdfPages</c>'s page loop (the
-        /// same per-page mutation pattern as <see cref="ScrollOffset"/>) so a page whose margins
-        /// are overridden by a per-page <c>@page</c> rule (e.g. <c>:first { margin: 0 }</c>) gets a
+        /// Per-page paint-window override set by <c>PdfGenerator.AddPdfPages</c>'s page loop, so a
+        /// page whose margins are overridden by a per-page <c>@page</c> rule (e.g. <c>:first { margin: 0 }</c>) gets a
         /// window matching its own margins instead of the base-margin <see cref="PageBoxRect"/>.
         /// <see cref="PerformPaint"/> falls back to <see cref="PageBoxRect"/> when unset.
         /// </summary>
         internal RRect? PageClipOverride { get; set; }
 
         /// <summary>
-        /// The page/viewport rect, in the same per-page paint-time coordinate space every box's
-        /// painted <c>Rectangles</c> use (i.e. independent of <see cref="ScrollOffset"/>, exactly like
-        /// a <c>position: fixed</c> box's own offset override) - the same rect <see cref="PerformPaint"/>
+        /// The page/viewport rect, in the same fragmentainer-local coordinate space every painted
+        /// fragment uses - the same rect <see cref="PerformPaint"/>
         /// pushes as the top-level page clip, also used as the background positioning area for a
         /// <c>background-attachment: fixed</c> layer (CSS Backgrounds 3 §3.9).
         /// </summary>
@@ -661,7 +697,7 @@ namespace PeachPDF.Html.Core
         /// on the "shifted grid" every page-boundary decision needs to agree on: slot <c>k</c> occupies
         /// <c>[k·PageSize.Height + MarginTop, (k+1)·PageSize.Height + MarginTop)</c>. This is the
         /// convention the painter's own per-page clip/translation (<c>PdfGenerator.AddPdfPages</c>) and
-        /// <see cref="GetPaginationSlots"/> already use - <see cref="PageSize"/>'s <c>Height</c> is
+        /// the fragment-tree builder's own slot walk already uses - <see cref="PageSize"/>'s <c>Height</c> is
         /// already margin-free (<c>PdfGenerator.SetContent</c> subtracts both margins from the raw page
         /// height up front), so every page's real content band starts <see cref="MarginTop"/> past each
         /// raw multiple of <see cref="PageSize"/>'s height, not at the raw multiple itself. Callers must
@@ -770,77 +806,20 @@ namespace PeachPDF.Html.Core
         internal double NextPageTopOf(double y) => PageTopOf(PageIndexOf(y) + 1);
 
         /// <summary>
-        /// The page-relative Y ("<c>pageY</c>" in <c>PdfGenerator.AddPdfPages</c>'s own terms - i.e.
-        /// <c>-scrollOffset + MarginTop</c>) of every page-slot that should actually be materialized
-        /// as a real PDF page, per CSS Paged Media Level 3 §3.2: "User agents SHOULD avoid generating
-        /// a large number of content-empty pages". A slot is skipped when no box's own laid-out
-        /// range (see <see cref="DomUtils.CollectPrintableContentRanges"/>) overlaps it - this is what
-        /// lets a document with huge, purely-decorative margins (e.g. Acid2's own "100em" margins on
-        /// "#top"/".picture", meant to be scrolled off-screen in a real, single-viewport browser) skip
-        /// straight past those gaps instead of paginating through several blank pages to reach the
-        /// real content on the far side. Non-destructive: no content is discarded or repositioned,
-        /// only which page-slots get a <c>PdfPage</c> materialized for them changes.
+        /// Paints one fragmentainer — one page. Everything painted comes from
+        /// <paramref name="fragmentainer"/>'s fragment subtree, whose coordinates are already local to
+        /// this page, so the painter never consults the box tree for geometry.
         /// </summary>
-        internal IReadOnlyList<(int SlotIndex, double SlotTop)> GetPaginationSlots()
-        {
-            var slots = new List<(int SlotIndex, double SlotTop)>();
-
-            if (ActualSize.Height <= 0 || Root is null)
-                return slots;
-
-            var printableRanges = DomUtils.CollectPrintableContentRanges(Root);
-            var rangeIndex = 0;
-
-            // Slots are walked by grid index so per-page @page margin overrides can give each slot
-            // its own band top/height (PageTopOf/PageBottomOf consult PageGeometry when overrides
-            // exist). The emitted SlotTop stays in the historical "scrollOffset" convention
-            // (PageTopOf(k) - MarginTop): the painter offsets content so the slot's band top lands
-            // at the BASE content origin, then its per-page delta translate moves it to the page's
-            // own margins. Overlap-testing printable ranges against the true band
-            // [PageTopOf(k), PageBottomOf(k)) also fixes a historical skew where the test window
-            // omitted the MarginTop shift, crediting content in the last MarginTop-px of band k-1
-            // to slot k. The iteration cap is a defensive backstop behind PageGeometryTable's
-            // minimum-band clamp (a degenerate margin override can never make a band non-positive).
-            const int maxSlots = 100_000;
-            for (var k = 0; PageTopOf(k) - MarginTop < ActualSize.Height && k < maxSlots; k++)
-            {
-                var bandTop = PageTopOf(k);
-                var bandBottom = PageBottomOf(k);
-
-                while (rangeIndex < printableRanges.Count && printableRanges[rangeIndex].Bottom < bandTop)
-                    rangeIndex++;
-
-                if (rangeIndex < printableRanges.Count && printableRanges[rangeIndex].Top < bandBottom)
-                    slots.Add((k, bandTop - MarginTop));
-            }
-
-            // Never emit a 0-page PDF for a document that genuinely laid out some non-zero height -
-            // if literally nothing qualified as "printable" (e.g. every box is a whole-page canvas
-            // background, or the printable-content heuristic is simply too conservative for some
-            // edge case), fall back to the first slot rather than producing nothing at all.
-            if (slots.Count == 0)
-                slots.Add((0, 0.0));
-
-            return slots;
-        }
-
-        /// <summary>
-        /// Render the html using the given device.
-        /// </summary>
-        /// <param name="g">the device to use to render</param>
-        public async ValueTask PerformPaint(RGraphics g)
+        /// <param name="g">the device to use</param>
+        /// <param name="fragmentainer">the page to paint</param>
+        public void PerformPaint(RGraphics g, FragmentainerFragment fragmentainer)
         {
             ArgumentNullException.ThrowIfNull(g);
+            ArgumentNullException.ThrowIfNull(fragmentainer);
 
-            g.PushClip(PageClipOverride ?? PageBoxRect);
-
-            if (Root is not null)
-            {
-                Root.ResetPaint();
-                await Root.Paint(g);
-            }
-
-            g.PopClip();
+            // A painter instance owns one page's paint, so all per-page paint state lives and dies
+            // with it rather than on the container or the box tree.
+            new FragmentPainter(this).Paint(g, fragmentainer);
         }
 
         /// <summary>
@@ -876,16 +855,6 @@ namespace PeachPDF.Html.Core
 
 
         #region Private methods
-
-        /// <summary>
-        /// Adjust the offset of the given location by the current scroll offset.
-        /// </summary>
-        /// <param name="location">the location to adjust</param>
-        /// <returns>the adjusted location</returns>
-        private RPoint OffsetByScroll(RPoint location)
-        {
-            return new RPoint(location.X - ScrollOffset.X, location.Y - ScrollOffset.Y);
-        }
 
         /// <summary>
         /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.

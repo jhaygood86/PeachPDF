@@ -138,7 +138,7 @@ namespace PeachPDF.Tests.Integration
             const string html = """
                 <!DOCTYPE html><html><head><style>
                 body { margin: 0; }
-                .filler { height: 350px; }
+                .filler { height: 350px; background: rgb(240,240,240); }
                 .second { page-break-before: always; margin: 0; }
                 </style></head><body>
                 <div class='filler'></div>
@@ -154,8 +154,8 @@ namespace PeachPDF.Tests.Integration
             // land exactly at the page-1 top, not merely somewhere on page 1.
             Assert.Equal(PageHeight, heading!.Location.Y, 0.01);
 
-            var page0 = await PaintPageAsync(container, scrollOffset: 0);
-            var page1 = await PaintPageAsync(container, scrollOffset: -PageHeight);
+            var page0 = await PaintPageAsync(container, page: 0);
+            var page1 = await PaintPageAsync(container, page: 1);
 
             Assert.DoesNotContain(page0.DrawStringCalls, c => c.Text.Contains("RelocatedHeadingMarker"));
             Assert.Contains(page1.DrawStringCalls, c => c.Text.Contains("RelocatedHeadingMarker"));
@@ -167,7 +167,7 @@ namespace PeachPDF.Tests.Integration
             const string html = """
                 <!DOCTYPE html><html><head><style>
                 body { margin: 0; }
-                .filler { height: 380px; }
+                .filler { height: 380px; background: rgb(240,240,240); }
                 .avoid { break-inside: avoid; page-break-inside: avoid; margin: 0; }
                 p { margin: 0; }
                 </style></head><body>
@@ -185,8 +185,8 @@ namespace PeachPDF.Tests.Integration
             Assert.NotNull(avoidBox);
             Assert.Equal(PageHeight, avoidBox!.Location.Y, 0.01);
 
-            var page0 = await PaintPageAsync(container, scrollOffset: 0);
-            var page1 = await PaintPageAsync(container, scrollOffset: -PageHeight);
+            var page0 = await PaintPageAsync(container, page: 0);
+            var page1 = await PaintPageAsync(container, page: 1);
 
             Assert.DoesNotContain(page0.DrawStringCalls, c => c.Text.Contains("AvoidedParagraphMarker"));
             Assert.Contains(page1.DrawStringCalls, c => c.Text.Contains("AvoidedParagraphMarker"));
@@ -212,11 +212,10 @@ namespace PeachPDF.Tests.Integration
             return container;
         }
 
-        private static async Task<TestRecordingGraphics> PaintPageAsync(HtmlContainerInt container, double scrollOffset)
+        private static async Task<TestRecordingGraphics> PaintPageAsync(HtmlContainerInt container, int page)
         {
             var recording = new TestRecordingGraphics();
-            container.ScrollOffset = new PeachPDF.Html.Adapters.Entities.RPoint(0, scrollOffset);
-            await container.PerformPaint(recording);
+            FragmentPaintHarness.PaintPage(container, recording, page);
             return recording;
         }
 

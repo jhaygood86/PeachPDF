@@ -12,7 +12,6 @@
 
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
-using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Utils;
 using System.Threading.Tasks;
 
@@ -20,10 +19,10 @@ namespace PeachPDF.Html.Core.Dom
 {
     /// <summary>
     /// CSS box for a synthesized <c>::marker</c> pseudo-element. Owns its own content resolution,
-    /// sizing, positioning and painting - a real, cascaded box mirroring how <c>::before</c>/
-    /// <c>::after</c> already work, and following the same "replaced-element subclass owns one phantom
-    /// word plus its own <see cref="PerformLayoutImp"/>/<see cref="PaintImpCore"/> overrides" pattern
-    /// as <see cref="CssBoxImage"/>/<see cref="CssBoxSvg"/>.
+    /// sizing and positioning - a real, cascaded box mirroring how <c>::before</c>/<c>::after</c>
+    /// already work, and following the same "replaced-element subclass owns one phantom word plus its
+    /// own <see cref="PerformLayoutImp"/>" pattern as <see cref="CssBoxImage"/>/<see cref="CssBoxSvg"/>.
+    /// Its content is drawn by <c>MarkerFragmentPainter</c>.
     /// </summary>
     internal sealed class CssBoxMarker : CssBox
     {
@@ -31,7 +30,7 @@ namespace PeachPDF.Html.Core.Dom
         /// The default marker shape ("disc"/"circle"/"square") when the effective content is the
         /// procedural default (<c>content: normal</c>) and the owning list item's
         /// <see cref="CssBoxProperties.ListStyleType"/> is one of those three - vector-drawn directly
-        /// by <see cref="PaintImpCore"/>, not literal text. Null for text/image markers.
+        /// by <c>MarkerFragmentPainter</c>, not literal text. Null for text/image markers.
         /// </summary>
         internal string? MarkerShape { get; private set; }
 
@@ -42,8 +41,11 @@ namespace PeachPDF.Html.Core.Dom
         /// not this marker) - set false only by <see cref="ResolveDefaultContent"/>'s procedural
         /// <c>list-style-image</c> case; an author <c>content: url(...)</c> override (resolved by
         /// <see cref="CssContentEngine"/> before this box's own content ever needs to be considered)
-        /// is owned by this box, exactly like <c>::before</c>/<c>::after</c>.
+        /// is owned by this box, exactly like <c>::before</c>/<c>::after</c>. It also decides how the
+        /// image is aligned within the marker box - see <c>MarkerFragmentPainter</c>.
         /// </summary>
+        internal bool OwnsContentImage => _ownsContentImage;
+
         private bool _ownsContentImage = true;
 
         public CssBoxMarker(CssBox parent)
@@ -156,83 +158,6 @@ namespace PeachPDF.Html.Core.Dom
             {
                 word.Left = left;
                 word.Top = top;
-            }
-        }
-
-        protected override async ValueTask PaintImpCore(RGraphics g)
-        {
-            if (ContentImage is not null)
-            {
-                var offset = IsFixed ? RPoint.Empty : HtmlContainer!.ScrollOffset;
-                var rect = Rectangles.Count == 0 ? Bounds : CommonUtils.GetFirstValueOrDefault(Rectangles);
-                rect.Offset(offset);
-                if (rect is { Width: > 0, Height: > 0 })
-                {
-                    PaintMarkerImage(g, rect);
-                }
-
-                return;
-            }
-
-            if (Words.Count == 0) return; // content: none, or list-style-type: none with no image
-
-            var wordOffset = IsFixed ? RPoint.Empty : HtmlContainer!.ScrollOffset;
-            var wordRect = Words[0].Rectangle;
-            wordRect.Offset(wordOffset);
-
-            if (MarkerShape is not null)
-            {
-                PaintShape(g, wordRect);
-            }
-            else
-            {
-                g.DrawString(Text ?? string.Empty, ActualFont, ActualColor,
-                    new RPoint(wordRect.X, wordRect.Y), new RSize(wordRect.Width, wordRect.Height),
-                    Direction == CssConstants.Rtl);
-            }
-
-            await ValueTask.CompletedTask;
-        }
-
-        private void PaintMarkerImage(RGraphics g, RRect rect)
-        {
-            CssImagePainter.Paint(g, ContentImage!, layerIndex: 0, isFirst: true,
-                originRect: rect, clipRect: rect, roundedClipPath: null,
-                // The default (borrowed) list-style-image marker centers the image within its font-
-                // height box, matching today's list-style-image rendering; an author content:url(...)
-                // override (owned) matches ::before/::after's own top-left content-image alignment.
-                positionList: _ownsContentImage ? "0% 0%" : "center",
-                sizeList: CssConstants.Auto, repeatList: "no-repeat",
-                attachmentList: CssConstants.Scroll, viewportRect: rect, box: this,
-                drawBrush: brush =>
-                {
-                    g.DrawRectangle(brush, rect.X, rect.Y, rect.Width, rect.Height);
-                    brush.Dispose();
-                });
-        }
-
-        private void PaintShape(RGraphics g, RRect rect)
-        {
-            if (MarkerShape == CssConstants.Square)
-            {
-                using var brush = g.GetSolidBrush(ActualColor);
-                g.DrawRectangle(brush, rect.X, rect.Y, rect.Width, rect.Height);
-                return;
-            }
-
-            var rx = rect.Width / 2;
-            var ry = rect.Height / 2;
-            using var path = RenderUtils.GetRoundRect(g, rect, rx, ry, rx, ry, rx, ry, rx, ry);
-
-            if (MarkerShape == CssConstants.Disc)
-            {
-                using var brush = g.GetSolidBrush(ActualColor);
-                g.DrawPath(brush, path);
-            }
-            else // circle: hollow ring
-            {
-                var pen = g.GetPen(ActualColor);
-                g.DrawPath(pen, path);
             }
         }
 

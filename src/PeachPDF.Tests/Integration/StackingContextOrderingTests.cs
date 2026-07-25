@@ -15,7 +15,7 @@ namespace PeachPDF.Tests.Integration
     /// convention (see <c>BorderStylePaintIntegrationTests</c>), and specifically to close the gap left
     /// by <c>StackingContextPaintRegressionTests</c>'s existing <c>PageHasContent</c>-only assertions,
     /// which did not actually verify that z-indexed/opacity/transform content painted at all, let alone
-    /// in the right order - see <c>DomUtils.FlattenStackingContext</c>/<c>IsStackingContextBox</c> for
+    /// in the right order - see <c>StackingOrder.Flatten</c>/<c>DomUtils.IsStackingContextBox</c> for
     /// the algorithm these tests exercise.
     /// </summary>
     public class StackingContextOrderingTests
@@ -25,12 +25,12 @@ namespace PeachPDF.Tests.Integration
         {
             // Regression: the old algorithm dropped any box that established its own stacking context
             // (position:relative;z-index here) entirely - it and its subtree never painted at all.
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<div id='back' style='position:relative;z-index:1;width:50px;height:50px;background:rgb(255,0,0);'></div>" +
                 "<div id='front' style='position:relative;z-index:2;width:50px;height:50px;background:rgb(0,0,255);'></div>"));
 
             var g = new TestRecordingGraphics();
-            await root.Paint(g);
+            FragmentPaintHarness.PaintBox(container, root, g);
 
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
             var backIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(255, 0, 0));
@@ -47,14 +47,14 @@ namespace PeachPDF.Tests.Integration
             // Regression: an out-of-flow stacking-context descendant nested a few plain <div>s deep used
             // to be discovered via the ordinary parent-to-child Paint() cascade before its true ancestor
             // stacking context ever reached its own z-index layer - painting as if z-index had no effect.
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<div id='neg' style='position:relative;z-index:-1;width:50px;height:50px;background:rgb(0,128,0);'></div>" +
                 "<div><div><div>" +
                 "<div id='deep' style='position:absolute;z-index:5;top:0;left:0;width:50px;height:50px;background:rgb(255,165,0);'></div>" +
                 "</div></div></div>"));
 
             var g = new TestRecordingGraphics();
-            await root.Paint(g);
+            FragmentPaintHarness.PaintBox(container, root, g);
 
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
             var negIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(0, 128, 0));
@@ -76,14 +76,14 @@ namespace PeachPDF.Tests.Integration
             // position:absolute (bucket 3) so, if the nested box were trapped inside it, it would only
             // ever paint after the position:relative sibling below (bucket 1) - regardless of its own
             // z-index. Escaping to the true root-level z-index:-1 layer must paint it FIRST instead.
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<div id='sibling' style='position:relative;width:50px;height:50px;background:rgb(128,0,128);'></div>" +
                 "<div style='position:absolute;top:0;left:0;width:100px;height:100px;'>" +
                 "<span id='nested' style='position:relative;z-index:-1;width:50px;height:50px;background:rgb(139,69,19);'>x</span>" +
                 "</div>"));
 
             var g = new TestRecordingGraphics();
-            await root.Paint(g);
+            FragmentPaintHarness.PaintBox(container, root, g);
 
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
             var siblingIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(128, 0, 128));
@@ -101,13 +101,13 @@ namespace PeachPDF.Tests.Integration
             // Opacity < 1 now establishes a stacking context (z-index:auto -> stack level 0), so an
             // opacity box with no explicit z-index must still paint between a negative- and a positive-
             // z-index sibling, exactly like any other stack-level-0 content.
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<div id='neg' style='position:relative;z-index:-1;width:50px;height:50px;background:rgb(0,128,0);'></div>" +
                 "<div id='op' style='opacity:0.5;width:50px;height:50px;background:rgb(100,100,100);'></div>" +
                 "<div id='pos' style='position:relative;z-index:1;width:50px;height:50px;background:rgb(0,0,255);'></div>"));
 
             var g = new TestRecordingGraphics();
-            await root.Paint(g);
+            FragmentPaintHarness.PaintBox(container, root, g);
 
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
             var negIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(0, 128, 0));
@@ -124,13 +124,13 @@ namespace PeachPDF.Tests.Integration
         {
             // Same shape as the opacity case, but for the other newly-recognized trigger: a non-
             // identity transform.
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<div id='neg' style='position:relative;z-index:-1;width:50px;height:50px;background:rgb(0,128,0);'></div>" +
                 "<div id='tr' style='transform:rotate(10deg);width:50px;height:50px;background:rgb(100,100,100);'></div>" +
                 "<div id='pos' style='position:relative;z-index:1;width:50px;height:50px;background:rgb(0,0,255);'></div>"));
 
             var g = new TestRecordingGraphics();
-            await root.Paint(g);
+            FragmentPaintHarness.PaintBox(container, root, g);
 
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
             var negIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(0, 128, 0));
@@ -156,14 +156,14 @@ namespace PeachPDF.Tests.Integration
             // than w2 (200x200) in both dimensions, so if only w2's clip were applied (the pre-fix
             // bug), the narrowest clip actually pushed would be bounded by 200/200, not w1's tighter
             // 100/80.
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<div id='w1' style='overflow:hidden;width:100px;height:80px;'>" +
                 "<div id='w2' style='overflow:hidden;width:200px;height:200px;'>" +
                 "<div id='h' style='position:absolute;top:0;left:0;z-index:5;width:300px;height:300px;background:rgb(200,0,0);'></div>" +
                 "</div></div>"));
 
             var g = new TestRecordingGraphics();
-            await root.Paint(g);
+            FragmentPaintHarness.PaintBox(container, root, g);
 
             var drawIndex = g.Log.FindIndex(e =>
                 e is TestRecordingGraphics.DrawRectCall r && r.Color == RColor.FromArgb(200, 0, 0));
@@ -191,13 +191,13 @@ namespace PeachPDF.Tests.Integration
             // overflow:hidden wrapper between a hoisted box and its true stacking context is already
             // handled correctly by the hoisted box's own natural ClipGraphicsByOverflow call (it finds
             // the nearest overflow:hidden ancestor regardless of hoisting) - confirm this still works.
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<div id='w1' style='overflow:hidden;width:100px;height:80px;'>" +
                 "<div id='h' style='position:absolute;top:0;left:0;z-index:5;width:300px;height:300px;background:rgb(200,0,0);'></div>" +
                 "</div>"));
 
             var g = new TestRecordingGraphics();
-            await root.Paint(g);
+            FragmentPaintHarness.PaintBox(container, root, g);
 
             var drawIndex = g.Log.FindIndex(e =>
                 e is TestRecordingGraphics.DrawRectCall r && r.Color == RColor.FromArgb(200, 0, 0));
@@ -213,13 +213,13 @@ namespace PeachPDF.Tests.Integration
             // A float is out-of-flow (NeedsStackingHoist) but not itself a stacking context, so it
             // must still be hoisted through plain wrapper divs like any other out-of-flow content,
             // and paints via PaintImpCore's dedicated float bucket.
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<div><div><div>" +
                 "<div id='f' style='float:left;width:50px;height:50px;background:rgb(10,20,30);'></div>" +
                 "</div></div></div>"));
 
             var g = new TestRecordingGraphics();
-            await root.Paint(g);
+            FragmentPaintHarness.PaintBox(container, root, g);
 
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
             Assert.Contains(rects, r => r.Color == RColor.FromArgb(10, 20, 30));
@@ -231,13 +231,13 @@ namespace PeachPDF.Tests.Integration
             // position:fixed is unconditionally a stacking context, so it gets hoisted through plain
             // wrapper divs like any other stacking-context-establishing content, and paints via
             // PaintImpCore's dedicated fixed bucket.
-            var (root, _) = await BuildAndLayout(Wrap(
+            var (root, container) = await BuildAndLayout(Wrap(
                 "<div><div><div>" +
                 "<div id='fx' style='position:fixed;top:0;left:0;width:50px;height:50px;background:rgb(11,22,33);'></div>" +
                 "</div></div></div>"));
 
             var g = new TestRecordingGraphics();
-            await root.Paint(g);
+            FragmentPaintHarness.PaintBox(container, root, g);
 
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
             Assert.Contains(rects, r => r.Color == RColor.FromArgb(11, 22, 33));
