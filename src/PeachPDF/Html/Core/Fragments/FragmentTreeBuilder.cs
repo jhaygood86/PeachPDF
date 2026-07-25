@@ -135,7 +135,13 @@ namespace PeachPDF.Html.Core.Fragments
 
                 firstCandidate ??= fragmentainer;
 
-                if (hasPrintableContent)
+                // A slot a directional forced break deliberately stepped over is a real page that simply
+                // has no content on it (css-break-3 §3.1's "one or two page breaks"), so it is
+                // materialized even though CSS Paged Media Level 3 §3.2 would otherwise decline to build
+                // a content-empty fragmentainer. It is an ordinary page in every other respect: it takes
+                // its @page context's canvas background and margin boxes, and it counts toward
+                // counter(page)/counter(pages).
+                if (hasPrintableContent || container.IsReservedBlankSlot(slot.Index))
                     fragmentainers.Add(fragmentainer);
             }
 
@@ -153,7 +159,16 @@ namespace PeachPDF.Html.Core.Fragments
         {
             var slots = new List<CandidateSlot>();
 
-            for (var k = 0; container.PageTopOf(k) - container.MarginTop < container.ActualSize.Height && k < MaxSlots; k++)
+            // A blank slot reserved *between* siblings is already inside the height bound by
+            // construction — the box that took the break is placed below it, so the document reaches
+            // past it. A trailing break-after is the case that is not: it reserves a page after all the
+            // content, which no laid-out box extends into.
+            var lastReserved = container.MaxReservedBlankSlot ?? -1;
+
+            for (var k = 0;
+                 (container.PageTopOf(k) - container.MarginTop < container.ActualSize.Height || k <= lastReserved)
+                 && k < MaxSlots;
+                 k++)
             {
                 slots.Add(new CandidateSlot(k, container.PageTopOf(k), container.PageBottomOf(k), container.PageGeometry.GetPage(k)));
             }
