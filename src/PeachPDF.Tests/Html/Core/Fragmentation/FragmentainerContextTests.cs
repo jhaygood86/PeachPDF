@@ -25,7 +25,7 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
             };
 
         private static FragmentainerContext CreateContext(HtmlContainerInt container, int slot = 0) =>
-            new(container, new CssBox(null, null), slot, generation: 1, incomingToken: null);
+            new(container, new CssBox(null, null), slot);
 
         [Theory]
         [InlineData(0)]
@@ -117,17 +117,13 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         }
 
         [Fact]
-        public void RecordBreak_AndNoteProgress_AreTheDriversTwoSignals()
+        public void RecordBreak_IsHowAPassHandsItsResumptionRecordToTheDriver()
         {
             var container = CreateContainer();
             var root = new CssBox(null, null);
-            var context = new FragmentainerContext(container, root, slotIndex: 0, generation: 1, incomingToken: null);
+            var context = new FragmentainerContext(container, root, slotIndex: 0);
 
             Assert.Null(context.OutgoingToken);
-            Assert.False(context.MadeProgress);
-
-            context.NoteProgress();
-            Assert.True(context.MadeProgress);
 
             var token = new BlockBreakToken(root, ResumeSlotIndex: 1, ResumeChildIndex: 2, ChildToken: null, IsBreakBefore: true, ResumeTopOverride: null);
             context.RecordBreak(token);

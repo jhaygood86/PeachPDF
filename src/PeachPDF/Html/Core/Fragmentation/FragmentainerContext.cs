@@ -27,9 +27,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         internal FragmentainerContext(
             HtmlContainerInt container,
             CssBox contextRoot,
-            int slotIndex,
-            int generation,
-            BreakToken? incomingToken)
+            int slotIndex)
         {
             ArgumentNullException.ThrowIfNull(container);
             ArgumentNullException.ThrowIfNull(contextRoot);
@@ -37,8 +35,6 @@ namespace PeachPDF.Html.Core.Fragmentation
             Container = container;
             ContextRoot = contextRoot;
             SlotIndex = slotIndex;
-            Generation = generation;
-            IncomingToken = incomingToken;
 
             // An unpaginated/measurement pass uses the double.MaxValue page-height sentinel; there is no
             // grid to break against, so nothing may fragment. Same guard every existing page-grid caller
@@ -59,13 +55,6 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <summary>The pagination slot this pass is filling.</summary>
         internal int SlotIndex { get; }
 
-        /// <summary>
-        /// Which <c>LayoutDocument</c> invocation this context belongs to. A box carries the generation
-        /// it last laid out in, so state left over from an earlier pass of the unrestricted-width double
-        /// layout or the per-page-width reflow loop is recognised as stale rather than resumed into.
-        /// </summary>
-        internal int Generation { get; }
-
         internal double BandTop => Container.PageTopOf(SlotIndex);
 
         internal double BandBottom => Container.PageBottomOf(SlotIndex);
@@ -83,9 +72,6 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// grid's own epsilons already answer.
         /// </remarks>
         internal double ResumeContentTop => BandTop;
-
-        /// <summary>How this pass resumes, or null when it starts the document from the top.</summary>
-        internal BreakToken? IncomingToken { get; }
 
         /// <summary>Where this pass stopped, or null when the document finished inside this fragmentainer.</summary>
         internal BreakToken? OutgoingToken { get; private set; }
@@ -106,12 +92,6 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// is what makes inline flow genuinely resumable, and is a separate step.
         /// </remarks>
         internal bool IsFragmenting => _fragmenting && !Container.SuppressWordPageBreaks;
-
-        /// <summary>
-        /// Whether this pass placed anything. The driver refuses to open another fragmentainer after a
-        /// pass that made no progress, so a box that can neither fit nor advance cannot loop forever.
-        /// </summary>
-        internal bool MadeProgress { get; private set; }
 
         /// <summary>
         /// Suppresses breaking for the duration of a monolithic subtree — content the spec does not
@@ -138,7 +118,5 @@ namespace PeachPDF.Html.Core.Fragmentation
             ArgumentNullException.ThrowIfNull(token);
             OutgoingToken = token;
         }
-
-        internal void NoteProgress() => MadeProgress = true;
     }
 }

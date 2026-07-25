@@ -12,13 +12,14 @@ namespace PeachPDF.Html.Core.Fragments
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Fragmentation happens after layout, not during it.</b> PeachPDF lays a document out as one
-    /// continuous flow (relocating whole boxes and words that straddle a page as it goes) and this
-    /// builder then slices that flow into fragmentainers. A fully incremental engine would instead
-    /// stop at each break, emit the fragments produced so far, and resume layout in the next
-    /// fragmentainer from a recorded resumption point. The resulting <i>tree</i> is the same shape —
-    /// which is what everything downstream needs — but the production model is not, and converting
-    /// layout itself is tracked separately.
+    /// <b>Fragmentation itself happens during layout.</b> Layout fills one fragmentainer at a time and
+    /// resumes from a recorded <see cref="Fragmentation.BreakToken"/> where content does not fit
+    /// (<c>HtmlContainerInt.LayoutDocument</c>), so this builder no longer decides where breaks fall —
+    /// it turns an already-fragmented result into the immutable tree. What it still does by walking the
+    /// finished box tree, rather than being handed by each pass as that pass ends, is the tree itself
+    /// and each box's first/last fragment span. That span is why: content inside monolithic subtrees —
+    /// a table, a multi-column container — is laid out in a single pass yet can cover several bands, so
+    /// its extent is only knowable geometrically and appears in no break record.
     /// </para>
     /// <para>
     /// The build walks the box tree twice: <see cref="CollectSpans"/> records, for every box, the

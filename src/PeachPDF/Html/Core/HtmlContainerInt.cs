@@ -607,7 +607,7 @@ namespace PeachPDF.Html.Core
 
                 for (var pass = 0; pass < MaxFragmentainers; pass++)
                 {
-                    var context = new FragmentainerContext(this, Root!, slot, LayoutGeneration, token);
+                    var context = new FragmentainerContext(this, Root!, slot);
                     CurrentFragmentainer = context;
 
                     Root!.ResumeAt(token, resumeTopOverride: null);
@@ -626,7 +626,7 @@ namespace PeachPDF.Html.Core
                         // it is what css-break-3 §4.3's own last-resort relaxation amounts to.
                         ReportError(HtmlRenderErrorType.Layout, "Layout could not advance past a fragmentainer boundary");
 
-                        var final = new FragmentainerContext(this, Root, slot, LayoutGeneration, token);
+                        var final = new FragmentainerContext(this, Root, slot);
                         final.EnterMonolithic();
                         CurrentFragmentainer = final;
 

@@ -552,6 +552,14 @@ These properties control how content breaks across PDF pages. Both the legacy `p
 
 **Margin truncation at page breaks:** per [CSS Fragmentation Level 3 §5.2](https://www.w3.org/TR/css-break-3/#break-margins), when a vertical margin between two elements is large enough that it alone would push the following element onto a later page (an *unforced* break — no explicit `break-before`/`break-after`/`page` involved), that margin is discarded entirely and the following element starts flush at the top of the very next page, rather than the margin paginating through as literal blank pages. A margin-top large enough to visually separate content across a deliberate page boundary should use an explicit `break-before: page` (or `page-break-before: always`) instead — margins after a *forced* break are preserved, not truncated, per the same spec section. This currently applies to normal block flow only (not flex/table/multi-column item positioning), and only when the affected element has a preceding sibling in the same containing block.
 
+**A line box is never split across pages** ([CSS Fragmentation Level 3 §4.1](https://www.w3.org/TR/css-break-3/#possible-breaks)). When a line does not fit on the page it started on, the whole line moves to the next one — including any part of it that would have fitted.
+
+> **Migration note:** a line mixing content of different heights — an inline image, or a larger font, beside ordinary text — used to be able to split at a page boundary, with the taller content moving to the next page while the shorter words stayed behind on the page the rest of their line had left. Such a line now moves as a unit. See [Forward compatibility](#forward-compatibility).
+
+**Content continues at the page's content edge.** Where content flows onto a following page it starts at that page's content edge, rather than fractionally below it.
+
+> **Migration note:** continuation content used to begin one layout unit (1/96in) below the content edge, so everything after a page break sat very slightly lower than the page's own top margin implied. It now starts exactly at the edge, which shifts continuation content up by that amount and can let one more line fit on a page. See [Forward compatibility](#forward-compatibility).
+
 ### Tables
 
 | Property | MDN Reference | Notes |
