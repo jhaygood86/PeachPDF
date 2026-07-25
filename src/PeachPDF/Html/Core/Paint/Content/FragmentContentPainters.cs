@@ -8,13 +8,13 @@ namespace PeachPDF.Html.Core.Paint.Content
     /// </summary>
     internal static class FragmentContentPainters
     {
-        private static readonly ImageFragmentPainter Image = new();
-        private static readonly ObjectFragmentPainter Object = new();
-        private static readonly SvgFragmentPainter Svg = new();
-        private static readonly FrameFragmentPainter Frame = new();
-        private static readonly HrFragmentPainter Hr = new();
-        private static readonly MarkerFragmentPainter Marker = new();
-        private static readonly ProxyFragmentPainter Proxy = new();
+        private static readonly ImageFragmentPainter ImagePainter = new();
+        private static readonly ObjectFragmentPainter ObjectPainter = new();
+        private static readonly SvgFragmentPainter SvgPainter = new();
+        private static readonly FrameFragmentPainter FramePainter = new();
+        private static readonly HrFragmentPainter HrPainter = new();
+        private static readonly MarkerFragmentPainter MarkerPainter = new();
+        private static readonly ProxyFragmentPainter ProxyPainter = new();
 
         /// <summary>
         /// The painter for <paramref name="box"/>'s content, or null when the generic box paint applies.
@@ -22,14 +22,14 @@ namespace PeachPDF.Html.Core.Paint.Content
         /// </summary>
         internal static IFragmentContentPainter? For(CssBox box) => box switch
         {
-            CssBoxImage => Image,
+            CssBoxImage => ImagePainter,
             // Also matches CssBoxVideo, which resolves its poster through the same <object> machinery.
-            CssBoxObject => Object,
-            CssBoxSvg => Svg,
-            CssBoxFrame => Frame,
-            CssBoxHr => Hr,
-            CssBoxMarker => Marker,
-            CssProxyBox => Proxy,
+            CssBoxObject => ObjectPainter,
+            CssBoxSvg => SvgPainter,
+            CssBoxFrame => FramePainter,
+            CssBoxHr => HrPainter,
+            CssBoxMarker => MarkerPainter,
+            CssProxyBox => ProxyPainter,
             _ => null,
         };
     }
