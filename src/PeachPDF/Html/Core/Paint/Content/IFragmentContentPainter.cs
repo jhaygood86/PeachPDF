@@ -1,6 +1,5 @@
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core.Fragments;
-using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Paint.Content
 {
@@ -25,6 +24,6 @@ namespace PeachPDF.Html.Core.Paint.Content
         /// <param name="painter">the page's painter, for the shared decoration and child-walk primitives</param>
         /// <param name="g">the device to draw to</param>
         /// <param name="fragment">the fragment being painted</param>
-        ValueTask Paint(FragmentPainter painter, RGraphics g, BoxFragment fragment);
+        void Paint(FragmentPainter painter, RGraphics g, BoxFragment fragment);
     }
 }

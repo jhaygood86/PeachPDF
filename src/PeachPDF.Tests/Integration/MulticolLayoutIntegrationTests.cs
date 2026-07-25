@@ -71,7 +71,7 @@ namespace PeachPDF.Tests.Integration
             var (root, container) = await BuildAndLayout(html, pageHeight: 1000);
 
             var g = new PeachPDF.Tests.TestSupport.TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, root, g);
+            FragmentPaintHarness.PaintBox(container, root, g);
 
             var call = Assert.Single(g.DrawImageCalls);
             // HTML width/height attributes are px lengths (TranslateAttributes -> "40px"/"30px"),
@@ -279,7 +279,7 @@ namespace PeachPDF.Tests.Integration
             var mc = FindById(root, "mc")!;
 
             var spy = new DrawLineSpyGraphics();
-            await FragmentPaintHarness.PaintBox(container, mc, spy);
+            FragmentPaintHarness.PaintBox(container, mc, spy);
 
             Assert.True(spy.DrawLineCallCount > 0);
         }
@@ -298,7 +298,7 @@ namespace PeachPDF.Tests.Integration
             var mc = FindById(root, "mc")!;
 
             var spy = new DrawLineSpyGraphics();
-            await FragmentPaintHarness.PaintBox(container, mc, spy);
+            FragmentPaintHarness.PaintBox(container, mc, spy);
 
             Assert.True(spy.DrawLineCallCount > 0);
         }

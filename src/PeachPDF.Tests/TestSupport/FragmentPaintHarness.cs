@@ -3,7 +3,6 @@ using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Paint;
-using System.Threading.Tasks;
 
 namespace PeachPDF.Tests.TestSupport
 {
@@ -17,14 +16,14 @@ namespace PeachPDF.Tests.TestSupport
         /// <summary>
         /// Paints a whole page.
         /// </summary>
-        internal static ValueTask PaintPage(HtmlContainerInt container, RGraphics g, int page = 0) =>
+        internal static void PaintPage(HtmlContainerInt container, RGraphics g, int page = 0) =>
             container.PerformPaint(g, container.FragmentTree!.Fragmentainers[page]);
 
         /// <summary>
         /// Paints a single box's fragment on <paramref name="page"/>, without the surrounding page
         /// clip. Gets its own painter, so its already-painted set starts clean.
         /// </summary>
-        internal static ValueTask PaintBox(HtmlContainerInt container, CssBox box, RGraphics g, int page = 0) =>
+        internal static void PaintBox(HtmlContainerInt container, CssBox box, RGraphics g, int page = 0) =>
             new FragmentPainter(container).PaintFragment(g, FragmentOf(container, box, page));
 
         /// <summary>

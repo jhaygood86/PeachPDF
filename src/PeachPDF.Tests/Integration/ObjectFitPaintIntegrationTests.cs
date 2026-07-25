@@ -28,7 +28,7 @@ namespace PeachPDF.Tests.Integration
         {
             var (root, container) = await BuildAndLayout(Doc(style));
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, root, g);
+            FragmentPaintHarness.PaintBox(container, root, g);
             return Assert.Single(g.DrawImageCalls).DestRect;
         }
 
@@ -97,7 +97,7 @@ namespace PeachPDF.Tests.Integration
             var (root, container) = await BuildAndLayout(
                 $"<!DOCTYPE html><html><body><img id='i' style='width:12px;height:12px;object-fit:scale-down' src='{Png2To1}'></body></html>");
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, root, g);
+            FragmentPaintHarness.PaintBox(container, root, g);
             var r = Assert.Single(g.DrawImageCalls).DestRect;
             Assert.Equal(9, r.Width, 1);
             Assert.Equal(4.5, r.Height, 1);
@@ -133,7 +133,7 @@ namespace PeachPDF.Tests.Integration
             var html = $"<!DOCTYPE html><html><body><object data='{Png2To1}' style='width:96px;height:96px;object-fit:contain'></object></body></html>";
             var (root, container) = await BuildAndLayout(html);
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, root, g);
+            FragmentPaintHarness.PaintBox(container, root, g);
             var r = Assert.Single(g.DrawImageCalls).DestRect;
             Assert.Equal(72, r.Width, 1);
             Assert.Equal(36, r.Height, 1);
@@ -145,7 +145,7 @@ namespace PeachPDF.Tests.Integration
             var html = $"<!DOCTYPE html><html><body><video poster='{Png2To1}' style='width:96px;height:96px;object-fit:contain'></video></body></html>";
             var (root, container) = await BuildAndLayout(html);
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, root, g);
+            FragmentPaintHarness.PaintBox(container, root, g);
             var r = Assert.Single(g.DrawImageCalls).DestRect;
             Assert.Equal(72, r.Width, 1);
             Assert.Equal(36, r.Height, 1);
@@ -157,7 +157,7 @@ namespace PeachPDF.Tests.Integration
             var html = "<!DOCTYPE html><html><body><video style='width:96px;height:96px'></video></body></html>";
             var (root, container) = await BuildAndLayout(html);
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, root, g);
+            FragmentPaintHarness.PaintBox(container, root, g);
             Assert.Empty(g.DrawImageCalls);
         }
 
@@ -172,7 +172,7 @@ namespace PeachPDF.Tests.Integration
                        "<rect width='20' height='10' fill='red'/></svg></body></html>";
             var (root, container) = await BuildAndLayout(html);
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, root, g);
+            FragmentPaintHarness.PaintBox(container, root, g);
             Assert.Contains(g.Log, o => o is TestRecordingGraphics.PushClipCall c
                 && System.Math.Abs(c.Rect.Width - 72) < 1 && System.Math.Abs(c.Rect.Height - 72) < 1);
         }

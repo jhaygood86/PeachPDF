@@ -24,7 +24,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el")!;
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, el, g);
+            FragmentPaintHarness.PaintBox(container, el, g);
 
             // Exactly one clip pushed (an RGraphicsPath) and one popped.
             Assert.Single(g.ClipPaths);
@@ -52,7 +52,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el")!;
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, el, g);
+            FragmentPaintHarness.PaintBox(container, el, g);
 
             Assert.Single(g.ClipPaths);
             var b = el.Bounds;
@@ -75,7 +75,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el")!;
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, el, g);
+            FragmentPaintHarness.PaintBox(container, el, g);
 
             // An ellipse/circle clip is built as four arc segments — a non-empty clip path is pushed.
             Assert.Single(g.ClipPaths);
@@ -90,7 +90,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el")!;
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, el, g);
+            FragmentPaintHarness.PaintBox(container, el, g);
 
             Assert.Empty(g.ClipPaths);
         }
@@ -105,7 +105,7 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal("none", el.ClipPath);
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, el, g);
+            FragmentPaintHarness.PaintBox(container, el, g);
             Assert.Empty(g.ClipPaths);
         }
 

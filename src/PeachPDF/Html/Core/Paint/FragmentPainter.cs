@@ -9,7 +9,6 @@ using PeachPDF.Html.Core.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Paint
 {
@@ -53,11 +52,11 @@ namespace PeachPDF.Html.Core.Paint
         /// Paints one page: the fragmentainer's whole fragment subtree, clipped to the page's content
         /// window.
         /// </summary>
-        internal async ValueTask Paint(RGraphics g, FragmentainerFragment fragmentainer)
+        internal void Paint(RGraphics g, FragmentainerFragment fragmentainer)
         {
             g.PushClip(container.PageClipOverride ?? container.PageBoxRect);
 
-            await PaintFragment(g, fragmentainer.Root);
+            PaintFragment(g, fragmentainer.Root);
 
             g.PopClip();
         }
@@ -67,7 +66,7 @@ namespace PeachPDF.Html.Core.Paint
         /// Fragmentation Level 3 §2) — establishing the whole-element effects (<c>transform</c>,
         /// <c>clip-path</c>, <c>opacity</c>) around it.
         /// </summary>
-        internal async ValueTask PaintFragment(RGraphics g, BoxFragment fragment)
+        internal void PaintFragment(RGraphics g, BoxFragment fragment)
         {
             var box = fragment.Box;
 
@@ -124,11 +123,11 @@ namespace PeachPDF.Html.Core.Paint
 
                     if (box.IsOpaque)
                     {
-                        await PaintTagged(g, fragment);
+                        PaintTagged(g, fragment);
                     }
                     else
                     {
-                        await PaintWithOpacity(g, fragment);
+                        PaintWithOpacity(g, fragment);
                     }
 
                     if (clipped)
@@ -186,7 +185,7 @@ namespace PeachPDF.Html.Core.Paint
         /// automatically, since PDF's own <c>cm</c> operator concatenates - no separate
         /// transform-folding is needed here.
         /// </remarks>
-        private async ValueTask PaintWithOpacity(RGraphics g, BoxFragment fragment)
+        private void PaintWithOpacity(RGraphics g, BoxFragment fragment)
         {
             var clip = g.GetClip();
             var tileRect = new RRect(0, 0, clip.Right, clip.Bottom);
@@ -196,12 +195,12 @@ namespace PeachPDF.Html.Core.Paint
             {
                 // No page/document context to own a Form XObject in (e.g. a measure-only pass) -
                 // opacity has no visual effect there anyway, so just paint directly.
-                await PaintTagged(g, fragment);
+                PaintTagged(g, fragment);
                 return;
             }
 
             t.Graphics.PushClip(clip);
-            await PaintTagged(t.Graphics, fragment);
+            PaintTagged(t.Graphics, fragment);
             t.Graphics.Dispose();
 
             g.DrawImageWithOpacity(t.Image, tileRect, fragment.Box.ActualOpacity);
@@ -215,7 +214,7 @@ namespace PeachPDF.Html.Core.Paint
         /// When tagging is disabled this adds one null check and otherwise behaves exactly as calling
         /// <see cref="PaintContent"/> directly would.
         /// </summary>
-        private async ValueTask PaintTagged(RGraphics g, BoxFragment fragment)
+        private void PaintTagged(RGraphics g, BoxFragment fragment)
         {
             // Mirrors PaintBoxContent's own early-out: skip classification/tagging entirely for a
             // fragment that has already been painted on this page.
@@ -226,7 +225,7 @@ namespace PeachPDF.Html.Core.Paint
             var builder = box.HtmlContainer?.StructureTagBuilder;
             if (builder == null)
             {
-                await PaintContent(g, fragment);
+                PaintContent(g, fragment);
                 return;
             }
 
@@ -235,25 +234,25 @@ namespace PeachPDF.Html.Core.Paint
             {
                 case StructureTagKind.Artifact:
                     using (builder.OpenArtifact(g))
-                        await PaintContent(g, fragment);
+                        PaintContent(g, fragment);
                     break;
 
                 case StructureTagKind.Grouping when classification.StructureType == Keywords.Li:
-                    await PaintListItem(g, fragment, builder);
+                    PaintListItem(g, fragment, builder);
                     break;
 
                 case StructureTagKind.Grouping:
                     using (builder.OpenGroupingElement(box, classification.StructureType!))
-                        await PaintContent(g, fragment);
+                        PaintContent(g, fragment);
                     break;
 
                 case StructureTagKind.Content:
                     using (builder.OpenContentElement(g, box, classification.StructureType!, classification.AltText))
-                        await PaintContent(g, fragment);
+                        PaintContent(g, fragment);
                     break;
 
                 default:
-                    await PaintContent(g, fragment);
+                    PaintContent(g, fragment);
                     break;
             }
         }
@@ -270,7 +269,7 @@ namespace PeachPDF.Html.Core.Paint
         /// reading order) - the marker's own on-page paint position is unaffected by this call-order
         /// swap, since it's driven entirely by pre-computed layout coordinates, not paint order.
         /// </summary>
-        private async ValueTask PaintListItem(RGraphics g, BoxFragment fragment, StructureTagBuilder builder)
+        private void PaintListItem(RGraphics g, BoxFragment fragment, StructureTagBuilder builder)
         {
             using (builder.OpenGroupingElement(fragment.Box, Keywords.Li))
             {
@@ -281,17 +280,17 @@ namespace PeachPDF.Html.Core.Paint
                     var markerClassification = StructureTagMapper.Classify(markerBox);
                     if (markerClassification.Kind == StructureTagKind.None)
                     {
-                        await PaintContent(g, markerFragment);
+                        PaintContent(g, markerFragment);
                     }
                     else
                     {
                         using (builder.OpenContentElement(g, markerBox, markerClassification.StructureType ?? Keywords.Lbl))
-                            await PaintContent(g, markerFragment);
+                            PaintContent(g, markerFragment);
                     }
                 }
 
                 using (builder.OpenListItemBodyElement(fragment.Box))
-                    await PaintBoxContent(g, fragment, paintMarkers: false);
+                    PaintBoxContent(g, fragment, paintMarkers: false);
             }
         }
 
@@ -314,10 +313,13 @@ namespace PeachPDF.Html.Core.Paint
         /// (<see cref="PaintBoxContent"/>) otherwise. This is the type-dispatch seam that
         /// replaced-element subclasses used to provide by overriding a virtual paint method on the box.
         /// </summary>
-        internal ValueTask PaintContent(RGraphics g, BoxFragment fragment) =>
-            FragmentContentPainters.For(fragment.Box) is { } contentPainter
-                ? contentPainter.Paint(this, g, fragment)
-                : PaintBoxContent(g, fragment);
+        internal void PaintContent(RGraphics g, BoxFragment fragment)
+        {
+            if (FragmentContentPainters.For(fragment.Box) is { } contentPainter)
+                contentPainter.Paint(this, g, fragment);
+            else
+                PaintBoxContent(g, fragment);
+        }
 
         /// <summary>
         /// The generic box paint: this fragment's own decoration rectangles (shadows, background,
@@ -329,7 +331,7 @@ namespace PeachPDF.Html.Core.Paint
         /// false only on the tagged-PDF &lt;li&gt; path, which paints the marker itself as a separate
         /// sibling structure element ("/Lbl") ahead of the list item's body ("/LBody").
         /// </param>
-        internal async ValueTask PaintBoxContent(RGraphics g, BoxFragment fragment, bool paintMarkers = true)
+        internal void PaintBoxContent(RGraphics g, BoxFragment fragment, bool paintMarkers = true)
         {
             var box = fragment.Box;
 
@@ -435,31 +437,31 @@ namespace PeachPDF.Html.Core.Paint
                 foreach (var p in layerBoxes)
                 {
                     if (!StackingOrder.ActsAsInline(p.Box) && p.Box.Position != CssConstants.Absolute && p.Box is { IsFixed: false, IsFloated: false })
-                        await PaintStackingParticipant(g, p);
+                        PaintStackingParticipant(g, p);
                 }
 
                 foreach (var p in layerBoxes)
                 {
                     if (p.Box.IsFloated)
-                        await PaintStackingParticipant(g, p);
+                        PaintStackingParticipant(g, p);
                 }
 
                 foreach (var p in layerBoxes)
                 {
                     if (StackingOrder.ActsAsInline(p.Box) && p.Box.Position != CssConstants.Absolute && p.Box is { IsFixed: false, IsFloated: false })
-                        await PaintStackingParticipant(g, p);
+                        PaintStackingParticipant(g, p);
                 }
 
                 foreach (var p in layerBoxes)
                 {
                     if (p.Box.Position == CssConstants.Absolute)
-                        await PaintStackingParticipant(g, p);
+                        PaintStackingParticipant(g, p);
                 }
 
                 foreach (var p in layerBoxes)
                 {
                     if (p.Box.IsFixed)
-                        await PaintStackingParticipant(g, p);
+                        PaintStackingParticipant(g, p);
                 }
             }
 
@@ -471,7 +473,7 @@ namespace PeachPDF.Html.Core.Paint
                 var markerFragment = FindMarkerFragment(fragment);
                 if (markerFragment != null)
                 {
-                    await PaintContent(g, markerFragment);
+                    PaintContent(g, markerFragment);
                 }
             }
 
@@ -487,12 +489,12 @@ namespace PeachPDF.Html.Core.Paint
         /// never applied on its own. Re-apply it explicitly here instead, scoped to exactly this
         /// participant's own paint call. A no-op for a direct plain child (empty ClipAncestors).
         /// </summary>
-        private async ValueTask PaintStackingParticipant(RGraphics g, StackingOrder.StackingParticipant participant)
+        private void PaintStackingParticipant(RGraphics g, StackingOrder.StackingParticipant participant)
         {
             var fragment = participant.Fragment;
             var pushedClips = RenderUtils.PushAncestorOverflowClips(g, participant.ClipAncestors, fragment.OriginY);
 
-            await PaintFragment(g, fragment);
+            PaintFragment(g, fragment);
 
             for (var i = 0; i < pushedClips; i++)
                 g.PopClip();

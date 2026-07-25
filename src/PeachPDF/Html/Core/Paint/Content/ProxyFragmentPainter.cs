@@ -1,7 +1,6 @@
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
-using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Paint.Content
 {
@@ -20,11 +19,11 @@ namespace PeachPDF.Html.Core.Paint.Content
     /// </remarks>
     internal sealed class ProxyFragmentPainter : IFragmentContentPainter
     {
-        public ValueTask Paint(FragmentPainter painter, RGraphics g, BoxFragment fragment)
+        public void Paint(FragmentPainter painter, RGraphics g, BoxFragment fragment)
         {
             ((CssProxyBox)fragment.Box).ApplySourceGeometry();
 
-            return painter.PaintBoxContent(g, fragment);
+            painter.PaintBoxContent(g, fragment);
         }
     }
 }

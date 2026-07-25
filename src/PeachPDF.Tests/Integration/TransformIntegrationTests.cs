@@ -333,7 +333,7 @@ namespace PeachPDF.Tests.Integration
             var divBox = FindByTag(container.Root!, "div")!;
 
             var spy = new SpyGraphics();
-            await FragmentPaintHarness.PaintBox(container, divBox, spy);
+            FragmentPaintHarness.PaintBox(container, divBox, spy);
 
             Assert.NotNull(spy.LastPushedTransform);
             var pushed = spy.LastPushedTransform!.Value;

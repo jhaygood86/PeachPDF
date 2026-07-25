@@ -223,7 +223,7 @@ namespace PeachPDF.Tests.Integration
             await container.PerformLayout(graphics);
 
             var divBox = FindByTag(container.Root!, "div")!;
-            await FragmentPaintHarness.PaintBox(container, divBox, graphics);
+            FragmentPaintHarness.PaintBox(container, divBox, graphics);
         }
 
         [Fact]
@@ -255,7 +255,7 @@ namespace PeachPDF.Tests.Integration
             await container.PerformLayout(graphics);
 
             var svgBox = FindByTag(container.Root!, "svg")!;
-            await FragmentPaintHarness.PaintBox(container, svgBox, graphics);
+            FragmentPaintHarness.PaintBox(container, svgBox, graphics);
         }
 
         private static async Task<string> GetPdfText(string html)

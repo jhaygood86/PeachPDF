@@ -67,7 +67,7 @@ namespace PeachPDF.Tests.Integration
             var (root, container) = await BuildAndLayout(html);
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, root, g);
+            FragmentPaintHarness.PaintBox(container, root, g);
 
             var call = Assert.Single(g.DrawImageCalls);
             // <img width>/<height> attributes are px (unitless), now laid out at spec-correct
@@ -91,7 +91,7 @@ namespace PeachPDF.Tests.Integration
             var (root, container) = await BuildAndLayout(html);
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, root, g);
+            FragmentPaintHarness.PaintBox(container, root, g);
 
             Assert.Contains(g.DrawStringCalls, c => c.Text.Contains("inline"));
         }
@@ -130,7 +130,7 @@ namespace PeachPDF.Tests.Integration
             var (root, container) = await BuildAndLayout(html);
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, root, g);
+            FragmentPaintHarness.PaintBox(container, root, g);
 
             Assert.Single(g.DrawImageCalls);
             Assert.Contains(g.DrawStringCalls, c => c.Text.Contains("label"));
@@ -147,7 +147,7 @@ namespace PeachPDF.Tests.Integration
             var (root, container) = await BuildAndLayout(html);
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, root, g);
+            FragmentPaintHarness.PaintBox(container, root, g);
 
             var call = Assert.Single(g.DrawImageCalls);
             Assert.True(call.DestRect.Width > 0 && call.DestRect.Height > 0,
@@ -170,7 +170,7 @@ namespace PeachPDF.Tests.Integration
             var (root, container) = await BuildAndLayout(html);
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, root, g);
+            FragmentPaintHarness.PaintBox(container, root, g);
 
             var red = PeachPDF.Html.Adapters.Entities.RColor.FromArgb(255, 0, 0);
             Assert.Contains(g.Log, entry => entry switch

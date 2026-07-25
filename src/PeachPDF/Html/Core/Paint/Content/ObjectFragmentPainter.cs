@@ -1,7 +1,6 @@
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
-using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Paint.Content
 {
@@ -12,9 +11,6 @@ namespace PeachPDF.Html.Core.Paint.Content
     /// </summary>
     internal sealed class ObjectFragmentPainter : ReplacedFragmentPainter
     {
-        protected override ValueTask EnsureContentResolved(CssBox box) =>
-            ((CssBoxObject)box).EnsureResolved();
-
         protected override bool IsReplaced(CssBox box) => ((CssBoxObject)box).IsReplaced;
 
         protected override CssRect? ContentWord(CssBox box) => ((CssBoxObject)box).ReplacedWord;

@@ -164,7 +164,7 @@ namespace PeachPDF.Tests.Integration
             var p = FindById(root, "p")!;
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, p, g);
+            FragmentPaintHarness.PaintBox(container, p, g);
 
             var call = Assert.Single(g.DrawStringCalls);
             Assert.Equal("AAAA", call.Text);
@@ -178,7 +178,7 @@ namespace PeachPDF.Tests.Integration
             var p = FindById(root, "p")!;
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, p, g);
+            FragmentPaintHarness.PaintBox(container, p, g);
 
             var call = Assert.Single(g.DrawStringCalls);
             Assert.Equal(0, call.LetterSpacing, 1);

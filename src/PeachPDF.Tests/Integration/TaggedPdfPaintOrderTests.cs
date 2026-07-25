@@ -139,7 +139,7 @@ namespace PeachPDF.Tests.Integration
             await container.PerformLayout(measureGraphics);
 
             var recorder = new RecordingGraphics(adapter);
-            await FragmentPaintHarness.PaintPage(container, recorder);
+            FragmentPaintHarness.PaintPage(container, recorder);
 
             return recorder.Log;
         }

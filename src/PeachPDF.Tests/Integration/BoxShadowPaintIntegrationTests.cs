@@ -28,7 +28,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el")!;
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, el, g);
+            FragmentPaintHarness.PaintBox(container, el, g);
 
             var shadowIndex = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawRectCall r && IsOpaqueBlack(r.Color));
             var bgIndex = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawRectCall r && IsWhite(r.Color));
@@ -46,7 +46,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el")!;
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, el, g);
+            FragmentPaintHarness.PaintBox(container, el, g);
 
             // A zero-blur shadow is a single solid fill (no gradient falloff bands).
             var shadowRects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().Where(r => IsOpaqueBlack(r.Color)).ToList();
@@ -68,7 +68,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el")!;
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, el, g);
+            FragmentPaintHarness.PaintBox(container, el, g);
 
             var bgIndex = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawRectCall r && IsWhite(r.Color));
             var shadowIndex = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawRectCall r && IsOpaqueBlack(r.Color));
@@ -90,7 +90,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el")!;
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, el, g);
+            FragmentPaintHarness.PaintBox(container, el, g);
 
             // A blurred shadow is approximated by a stack of concentric rounded-rect fills (DrawPath), each a
             // semi-transparent black. So there are several black DrawPath calls with partial alpha - the
@@ -115,7 +115,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el")!;
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, el, g);
+            FragmentPaintHarness.PaintBox(container, el, g);
 
             // The inset falloff is a stack of even-odd ring fills (DrawPath), each a semi-transparent black,
             // all painted after (over) the white background.
@@ -137,7 +137,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el")!;
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, el, g);
+            FragmentPaintHarness.PaintBox(container, el, g);
 
             // A rounded box's inset shadow is clipped to a rounded-rect path (not a plain rect) before the
             // ring layers paint. (The innermost concentric layer of an opaque color is itself opaque, so
@@ -156,7 +156,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el")!;
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, el, g);
+            FragmentPaintHarness.PaintBox(container, el, g);
 
             // A rounded box's zero-blur shadow is a rounded-rect path fill (DrawPath), not a plain rectangle,
             // and it still sits behind the (also rounded, DrawPath) background.
@@ -176,7 +176,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el")!;
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, el, g);
+            FragmentPaintHarness.PaintBox(container, el, g);
 
             var blueIndex = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawRectCall r && r.Color is { R: 0, G: 0, B: 255, A: 255 });
             var redIndex = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawRectCall r && r.Color is { R: 255, G: 0, B: 0, A: 255 });
@@ -193,7 +193,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el")!;
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, el, g);
+            FragmentPaintHarness.PaintBox(container, el, g);
 
             Assert.DoesNotContain(g.Log, c => c is TestRecordingGraphics.DrawRectCall r && IsOpaqueBlack(r.Color));
         }
@@ -207,7 +207,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el")!;
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, el, g);
+            FragmentPaintHarness.PaintBox(container, el, g);
 
             // Only the white background (and text) paint - no additional shadow path fills.
             Assert.DoesNotContain(g.Log, c => c is TestRecordingGraphics.DrawPathCall);

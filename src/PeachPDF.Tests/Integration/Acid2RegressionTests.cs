@@ -444,7 +444,7 @@ namespace PeachPDF.Tests.Integration
             var icon = FindById(root, "icon")!;
 
             var spy = new RecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, icon, spy);
+            FragmentPaintHarness.PaintBox(container, icon, spy);
 
             Assert.True(spy.DrawImageCallCount > 0,
                 "expected the inline replaced element inside a zero-height container to still paint its image");

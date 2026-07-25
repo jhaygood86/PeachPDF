@@ -65,7 +65,7 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// Whether the <c>data</c> resource resolved to a supported image, making this box a replaced
-        /// element. Only meaningful once <see cref="EnsureResolved"/> has run.
+        /// element. Resolved during measurement.
         /// </summary>
         internal bool IsReplaced => _isReplaced;
 
@@ -88,7 +88,7 @@ namespace PeachPDF.Html.Core.Dom
         /// resolution deterministic and independent of network reachability, which matters for the
         /// real Acid2 fixture's intentionally-unreachable middle <c>&lt;object&gt;</c>.
         /// </summary>
-        internal async ValueTask EnsureResolved()
+        private async ValueTask EnsureResolved()
         {
             if (_resolved)
                 return;

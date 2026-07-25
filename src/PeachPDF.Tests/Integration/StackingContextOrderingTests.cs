@@ -30,7 +30,7 @@ namespace PeachPDF.Tests.Integration
                 "<div id='front' style='position:relative;z-index:2;width:50px;height:50px;background:rgb(0,0,255);'></div>"));
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, root, g);
+            FragmentPaintHarness.PaintBox(container, root, g);
 
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
             var backIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(255, 0, 0));
@@ -54,7 +54,7 @@ namespace PeachPDF.Tests.Integration
                 "</div></div></div>"));
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, root, g);
+            FragmentPaintHarness.PaintBox(container, root, g);
 
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
             var negIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(0, 128, 0));
@@ -83,7 +83,7 @@ namespace PeachPDF.Tests.Integration
                 "</div>"));
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, root, g);
+            FragmentPaintHarness.PaintBox(container, root, g);
 
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
             var siblingIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(128, 0, 128));
@@ -107,7 +107,7 @@ namespace PeachPDF.Tests.Integration
                 "<div id='pos' style='position:relative;z-index:1;width:50px;height:50px;background:rgb(0,0,255);'></div>"));
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, root, g);
+            FragmentPaintHarness.PaintBox(container, root, g);
 
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
             var negIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(0, 128, 0));
@@ -130,7 +130,7 @@ namespace PeachPDF.Tests.Integration
                 "<div id='pos' style='position:relative;z-index:1;width:50px;height:50px;background:rgb(0,0,255);'></div>"));
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, root, g);
+            FragmentPaintHarness.PaintBox(container, root, g);
 
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
             var negIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(0, 128, 0));
@@ -163,7 +163,7 @@ namespace PeachPDF.Tests.Integration
                 "</div></div>"));
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, root, g);
+            FragmentPaintHarness.PaintBox(container, root, g);
 
             var drawIndex = g.Log.FindIndex(e =>
                 e is TestRecordingGraphics.DrawRectCall r && r.Color == RColor.FromArgb(200, 0, 0));
@@ -197,7 +197,7 @@ namespace PeachPDF.Tests.Integration
                 "</div>"));
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, root, g);
+            FragmentPaintHarness.PaintBox(container, root, g);
 
             var drawIndex = g.Log.FindIndex(e =>
                 e is TestRecordingGraphics.DrawRectCall r && r.Color == RColor.FromArgb(200, 0, 0));
@@ -219,7 +219,7 @@ namespace PeachPDF.Tests.Integration
                 "</div></div></div>"));
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, root, g);
+            FragmentPaintHarness.PaintBox(container, root, g);
 
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
             Assert.Contains(rects, r => r.Color == RColor.FromArgb(10, 20, 30));
@@ -237,7 +237,7 @@ namespace PeachPDF.Tests.Integration
                 "</div></div></div>"));
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, root, g);
+            FragmentPaintHarness.PaintBox(container, root, g);
 
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
             Assert.Contains(rects, r => r.Color == RColor.FromArgb(11, 22, 33));

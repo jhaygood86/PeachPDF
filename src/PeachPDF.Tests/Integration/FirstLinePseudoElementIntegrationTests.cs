@@ -28,7 +28,7 @@ namespace PeachPDF.Tests.Integration
             var p = FindById(root, "p")!;
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, p, g);
+            FragmentPaintHarness.PaintBox(container, p, g);
 
             var calls = g.DrawStringCalls;
             Assert.True(calls.Count > 1, $"expected multiple draw calls, got {calls.Count}");
@@ -191,7 +191,7 @@ namespace PeachPDF.Tests.Integration
             Assert.All(allWords.Where(w => !w.IsImage), w => Assert.NotNull(w.FirstLineStyle));
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, p, g);
+            FragmentPaintHarness.PaintBox(container, p, g);
             Assert.NotEmpty(g.DrawStringCalls);
             Assert.All(g.DrawStringCalls, c => Assert.Equal(RColor.FromArgb(0, 0, 255), c.Color));
         }
@@ -208,7 +208,7 @@ namespace PeachPDF.Tests.Integration
             Assert.Single(p.LineBoxes);
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, p, g);
+            FragmentPaintHarness.PaintBox(container, p, g);
 
             Assert.NotEmpty(g.DrawStringCalls);
             Assert.All(g.DrawStringCalls, c => Assert.Equal(RColor.FromArgb(0, 128, 0), c.Color));
@@ -227,7 +227,7 @@ namespace PeachPDF.Tests.Integration
             var p = FindById(root, "p")!;
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, p, g);
+            FragmentPaintHarness.PaintBox(container, p, g);
 
             var lines = g.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToList();
             Assert.NotEmpty(lines);
@@ -246,7 +246,7 @@ namespace PeachPDF.Tests.Integration
             var p = FindById(root, "p")!;
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, p, g);
+            FragmentPaintHarness.PaintBox(container, p, g);
 
             var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
             Assert.Contains(rects, r => r.Color == RColor.FromArgb(0, 255, 0));
@@ -317,7 +317,7 @@ namespace PeachPDF.Tests.Integration
             Assert.All(laterWords, w => Assert.Null(w.FirstLineText));
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, p, g);
+            FragmentPaintHarness.PaintBox(container, p, g);
 
             var calls = g.DrawStringCalls;
             var firstLineBottom = p.LineBoxes[0].LineBottom;

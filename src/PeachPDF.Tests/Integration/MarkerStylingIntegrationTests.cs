@@ -28,7 +28,7 @@ namespace PeachPDF.Tests.Integration
             var marker = li.Boxes.Single(b => b.IsMarkerPseudoElement);
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, marker, g);
+            FragmentPaintHarness.PaintBox(container, marker, g);
 
             var call = Assert.Single(g.DrawStringCalls);
             Assert.Equal(RColor.FromArgb(255, 0, 0), call.Color);
@@ -47,7 +47,7 @@ namespace PeachPDF.Tests.Integration
             Assert.NotEqual(li.ActualFont.Size, marker.ActualFont.Size);
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, marker, g);
+            FragmentPaintHarness.PaintBox(container, marker, g);
 
             var call = Assert.Single(g.DrawStringCalls);
             Assert.Equal(30, call.Font.Size, 1);
@@ -127,7 +127,7 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal("2.", normal.Text);
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, suppressed, g);
+            FragmentPaintHarness.PaintBox(container, suppressed, g);
             Assert.Empty(g.Log);
         }
 
@@ -154,7 +154,7 @@ namespace PeachPDF.Tests.Integration
             var marker = li.Boxes.Single(b => b.IsMarkerPseudoElement);
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, marker, g);
+            FragmentPaintHarness.PaintBox(container, marker, g);
 
             var call = Assert.Single(g.DrawStringCalls);
             Assert.True(call.Rtl);
@@ -170,7 +170,7 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal("disc", marker.MarkerShape);
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, marker, g);
+            FragmentPaintHarness.PaintBox(container, marker, g);
 
             var pathCall = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawPathCall>());
             Assert.Equal(RColor.FromArgb(0, 128, 0), pathCall.Color);

@@ -1,7 +1,6 @@
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
-using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Paint.Content
 {
@@ -11,14 +10,6 @@ namespace PeachPDF.Html.Core.Paint.Content
     /// </summary>
     internal sealed class SvgFragmentPainter : ReplacedFragmentPainter
     {
-        protected override ValueTask EnsureContentResolved(CssBox box)
-        {
-            // Building the scene graph is synchronous and idempotent; any network <image> hrefs it
-            // needs were prefetched during measurement.
-            ((CssBoxSvg)box).EnsureDocument();
-            return ValueTask.CompletedTask;
-        }
-
         protected override CssRect ContentWord(CssBox box) => ((CssBoxSvg)box).SvgWord;
 
         protected override void DrawContent(RGraphics g, CssBox box, RRect rect)

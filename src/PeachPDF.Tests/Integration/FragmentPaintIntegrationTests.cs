@@ -25,10 +25,10 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(2, container.FragmentTree!.Fragmentainers.Count);
 
             var page0 = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintPage(container, page0, 0);
+            FragmentPaintHarness.PaintPage(container, page0, 0);
 
             var page1 = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintPage(container, page1, 1);
+            FragmentPaintHarness.PaintPage(container, page1, 1);
 
             Assert.Contains(page0.DrawStringCalls, c => c.Text.Contains("PageOneMarker"));
             Assert.DoesNotContain(page0.DrawStringCalls, c => c.Text.Contains("PageTwoMarker"));
@@ -49,7 +49,7 @@ namespace PeachPDF.Tests.Integration
             for (var page = 0; page < 2; page++)
             {
                 var recording = new TestRecordingGraphics();
-                await FragmentPaintHarness.PaintPage(container, recording, page);
+                FragmentPaintHarness.PaintPage(container, recording, page);
 
                 var fragmentainer = container.FragmentTree!.Fragmentainers[page];
                 var wordRects = WordRects(fragmentainer.Root).ToList();
@@ -80,7 +80,7 @@ namespace PeachPDF.Tests.Integration
             for (var page = 0; page < 2; page++)
             {
                 var recording = new TestRecordingGraphics();
-                await FragmentPaintHarness.PaintPage(container, recording, page);
+                FragmentPaintHarness.PaintPage(container, recording, page);
 
                 // Sliced, not cloned: each fragment paints the whole box's background rectangle and
                 // the page clip does the cutting (box-decoration-break: slice, the initial value).
@@ -106,7 +106,7 @@ namespace PeachPDF.Tests.Integration
             for (var page = 0; page < 2; page++)
             {
                 var recording = new TestRecordingGraphics();
-                await FragmentPaintHarness.PaintPage(container, recording, page);
+                FragmentPaintHarness.PaintPage(container, recording, page);
 
                 painted.Add(Assert.Single(
                     recording.Log.OfType<TestRecordingGraphics.DrawRectCall>(), r => r.Color == RColorOf(1, 2, 3)));
@@ -128,7 +128,7 @@ namespace PeachPDF.Tests.Integration
                     + "</div>"));
 
             var recording = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintPage(container, recording);
+            FragmentPaintHarness.PaintPage(container, recording);
 
             var rects = recording.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
             var red = rects.FindIndex(r => r.Color == RColorOf(255, 0, 0));
@@ -148,7 +148,7 @@ namespace PeachPDF.Tests.Integration
                     "<table><tr><td rowspan='2'>SpannedCell</td><td>A</td></tr><tr><td>B</td></tr></table>"));
 
             var recording = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintPage(container, recording);
+            FragmentPaintHarness.PaintPage(container, recording);
 
             Assert.Contains(recording.DrawStringCalls, c => c.Text.Contains("SpannedCell"));
         }

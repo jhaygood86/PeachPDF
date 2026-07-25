@@ -463,13 +463,13 @@ namespace PeachPDF.Tests.Html.Core.Dom
 
             // Page 0 is an intermediate page - the footer should repeat here.
             var page0Recording = new RecordingGraphics(adapter);
-            await FragmentPaintHarness.PaintPage(container, page0Recording);
+            FragmentPaintHarness.PaintPage(container, page0Recording);
             _output.WriteLine($"Page 0 drawn strings: [{string.Join(", ", page0Recording.DrawnStrings.Select(w => w.Text))}]");
             Assert.Contains(page0Recording.DrawnStrings, w => w.Text.Contains("FOOTERMARKER"));
 
             // The footer must also appear at the end of the table's content on the last page.
             var lastPageRecording = new RecordingGraphics(adapter);
-            await FragmentPaintHarness.PaintPage(container, lastPageRecording, lastPageIndex);
+            FragmentPaintHarness.PaintPage(container, lastPageRecording, lastPageIndex);
             _output.WriteLine($"Last page drawn strings: [{string.Join(", ", lastPageRecording.DrawnStrings.Select(w => w.Text))}]");
             Assert.Contains(lastPageRecording.DrawnStrings, w => w.Text.Contains("FOOTERMARKER"));
         }
@@ -526,7 +526,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             _output.WriteLine($"Injected PageBreakBottoms[0]={injectedY} (below table top by 5 units)");
 
             // PerformPaint must complete without throwing despite the degenerate entry.
-            var ex = await Record.ExceptionAsync(async () => await FragmentPaintHarness.PaintPage(container, graphics));
+            var ex = await Record.ExceptionAsync(async () => FragmentPaintHarness.PaintPage(container, graphics));
             Assert.Null(ex);
         }
 
@@ -569,7 +569,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             // Paint page 0 using the recording graphics adapter (page 0's local Y equals absolute Y).
             var adapter = new PeachPDF.Adapters.PdfSharpAdapter();
             var recording = new RecordingGraphics(adapter);
-            await FragmentPaintHarness.PaintPage(container, recording);
+            FragmentPaintHarness.PaintPage(container, recording);
 
             // The outer table bottom border must be drawn at approximately pageBreakBottom0.
             // DrawBoxBorders renders it at rectForBorders.Bottom - borderWidth/2; use the
@@ -622,7 +622,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
 
             var adapter = new PeachPDF.Adapters.PdfSharpAdapter();
             var recording = new RecordingGraphics(adapter);
-            await FragmentPaintHarness.PaintPage(container, recording, page: 1);
+            FragmentPaintHarness.PaintPage(container, recording, page: 1);
 
             // Page 1's fragments are local to its own band, so the break bottom lands one page up.
             var pageBreakBottomVisual = pageBreakBottom1 - pageHeight;
@@ -675,7 +675,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
 
             var adapter = new PeachPDF.Adapters.PdfSharpAdapter();
             var recording = new RecordingGraphics(adapter);
-            await FragmentPaintHarness.PaintPage(container, recording, lastPageIndex);
+            FragmentPaintHarness.PaintPage(container, recording, lastPageIndex);
 
             _output.WriteLine($"Horizontal lines recorded: [{string.Join(", ", recording.HorizontalLines.Select(y => $"{y:F1}"))}]");
 

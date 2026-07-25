@@ -812,14 +812,14 @@ namespace PeachPDF.Html.Core
         /// </summary>
         /// <param name="g">the device to use</param>
         /// <param name="fragmentainer">the page to paint</param>
-        public ValueTask PerformPaint(RGraphics g, FragmentainerFragment fragmentainer)
+        public void PerformPaint(RGraphics g, FragmentainerFragment fragmentainer)
         {
             ArgumentNullException.ThrowIfNull(g);
             ArgumentNullException.ThrowIfNull(fragmentainer);
 
             // A painter instance owns one page's paint, so all per-page paint state lives and dies
             // with it rather than on the container or the box tree.
-            return new FragmentPainter(this).Paint(g, fragmentainer);
+            new FragmentPainter(this).Paint(g, fragmentainer);
         }
 
         /// <summary>

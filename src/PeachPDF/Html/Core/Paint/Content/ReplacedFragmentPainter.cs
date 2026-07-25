@@ -5,7 +5,6 @@ using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Utils;
 using System;
-using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Paint.Content
 {
@@ -15,19 +14,21 @@ namespace PeachPDF.Html.Core.Paint.Content
     /// into the content box of the phantom word that carries it. Subclasses supply only where the
     /// content comes from and how it is drawn.
     /// </summary>
+    /// <remarks>
+    /// The content itself was resolved during measurement — a replaced element has to be decoded before
+    /// it can be sized — so painting one never fetches anything.
+    /// </remarks>
     internal abstract class ReplacedFragmentPainter : IFragmentContentPainter
     {
-        public async ValueTask Paint(FragmentPainter painter, RGraphics g, BoxFragment fragment)
+        public void Paint(FragmentPainter painter, RGraphics g, BoxFragment fragment)
         {
             var box = fragment.Box;
-
-            await EnsureContentResolved(box);
 
             if (!IsReplaced(box))
             {
                 // An <object> whose data did not resolve to a supported image is not a replaced element
                 // at all: it stays an ordinary container and paints its fallback DOM children.
-                await painter.PaintBoxContent(g, fragment);
+                painter.PaintBoxContent(g, fragment);
                 return;
             }
 
@@ -63,12 +64,6 @@ namespace PeachPDF.Html.Core.Paint.Content
 
             return r;
         }
-
-        /// <summary>
-        /// Resolves the box's content if it has not been resolved already. Content is normally resolved
-        /// during measurement, so this is a no-op by default.
-        /// </summary>
-        protected virtual ValueTask EnsureContentResolved(CssBox box) => ValueTask.CompletedTask;
 
         /// <summary>
         /// Whether this box really is a replaced element. Only <c>&lt;object&gt;</c> can answer no —

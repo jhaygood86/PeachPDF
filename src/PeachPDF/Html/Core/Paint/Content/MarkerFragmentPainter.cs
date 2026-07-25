@@ -4,7 +4,6 @@ using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Utils;
-using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Paint.Content
 {
@@ -15,7 +14,7 @@ namespace PeachPDF.Html.Core.Paint.Content
     /// </summary>
     internal sealed class MarkerFragmentPainter : IFragmentContentPainter
     {
-        public ValueTask Paint(FragmentPainter painter, RGraphics g, BoxFragment fragment)
+        public void Paint(FragmentPainter painter, RGraphics g, BoxFragment fragment)
         {
             var box = (CssBoxMarker)fragment.Box;
 
@@ -27,13 +26,13 @@ namespace PeachPDF.Html.Core.Paint.Content
                     PaintMarkerImage(g, box, rect);
                 }
 
-                return ValueTask.CompletedTask;
+                return;
             }
 
-            if (box.Words.Count == 0) return ValueTask.CompletedTask; // content: none, or list-style-type: none with no image
+            if (box.Words.Count == 0) return; // content: none, or list-style-type: none with no image
 
             // A marker whose own word fell outside this page's band has nothing to draw here.
-            if (!fragment.TryGetWordRect(box.Words[0], out var wordRect)) return ValueTask.CompletedTask;
+            if (!fragment.TryGetWordRect(box.Words[0], out var wordRect)) return;
 
             if (box.MarkerShape is not null)
             {
@@ -45,8 +44,6 @@ namespace PeachPDF.Html.Core.Paint.Content
                     new RPoint(wordRect.X, wordRect.Y), new RSize(wordRect.Width, wordRect.Height),
                     box.Direction == CssConstants.Rtl);
             }
-
-            return ValueTask.CompletedTask;
         }
 
         private static void PaintMarkerImage(RGraphics g, CssBoxMarker box, RRect rect)

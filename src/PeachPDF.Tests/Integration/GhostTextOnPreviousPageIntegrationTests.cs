@@ -215,7 +215,7 @@ namespace PeachPDF.Tests.Integration
         private static async Task<TestRecordingGraphics> PaintPageAsync(HtmlContainerInt container, int page)
         {
             var recording = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintPage(container, recording, page);
+            FragmentPaintHarness.PaintPage(container, recording, page);
             return recording;
         }
 

@@ -37,7 +37,7 @@ namespace PeachPDF.Tests.Integration
             var div = FindById(root, "b")!;
 
             var g = new TestRecordingGraphics();
-            var exception = await Record.ExceptionAsync(async () => await FragmentPaintHarness.PaintBox(container, div, g));
+            var exception = await Record.ExceptionAsync(async () => FragmentPaintHarness.PaintBox(container, div, g));
 
             Assert.Null(exception);
         }
@@ -50,7 +50,7 @@ namespace PeachPDF.Tests.Integration
             var div = FindById(root, "b")!;
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, div, g);
+            FragmentPaintHarness.PaintBox(container, div, g);
 
             var lines = g.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToList();
             Assert.Equal(2, lines.Count);
@@ -76,7 +76,7 @@ namespace PeachPDF.Tests.Integration
             var div = FindById(root, "b")!;
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, div, g);
+            FragmentPaintHarness.PaintBox(container, div, g);
 
             var lines = g.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToList();
             Assert.Equal(2, lines.Count);
@@ -92,14 +92,14 @@ namespace PeachPDF.Tests.Integration
                 "<div id='b' style='border-top-style: groove; border-top-width: 12px; border-top-color: rgb(51,51,51)'>x</div>"));
             var grooveDiv = FindById(grooveRoot, "b")!;
             var grooveG = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, grooveDiv, grooveG);
+            FragmentPaintHarness.PaintBox(container, grooveDiv, grooveG);
             var grooveLines = grooveG.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToList();
 
             var (ridgeRoot, ridgeContainer) = await BuildAndLayout(Wrap(
                 "<div id='b' style='border-top-style: ridge; border-top-width: 12px; border-top-color: rgb(51,51,51)'>x</div>"));
             var ridgeDiv = FindById(ridgeRoot, "b")!;
             var ridgeG = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(ridgeContainer, ridgeDiv, ridgeG);
+            FragmentPaintHarness.PaintBox(ridgeContainer, ridgeDiv, ridgeG);
             var ridgeLines = ridgeG.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToList();
 
             Assert.Equal(2, grooveLines.Count);
@@ -123,7 +123,7 @@ namespace PeachPDF.Tests.Integration
             var div = FindById(root, "b")!;
 
             var g = new TestRecordingGraphics();
-            var exception = await Record.ExceptionAsync(async () => await FragmentPaintHarness.PaintBox(container, div, g));
+            var exception = await Record.ExceptionAsync(async () => FragmentPaintHarness.PaintBox(container, div, g));
 
             Assert.Null(exception);
             Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
@@ -147,7 +147,7 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(CssConstants.Solid, div.BorderLeftStyle);
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, div, g);
+            FragmentPaintHarness.PaintBox(container, div, g);
 
             // Solid borders paint as a mitered quad (BordersDrawHandler.SetInOutsetRectanglePoints),
             // not a single line - see BordersDrawHandler's own doc comment on why (the classic CSS

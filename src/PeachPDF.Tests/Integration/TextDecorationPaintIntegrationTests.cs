@@ -27,7 +27,7 @@ namespace PeachPDF.Tests.Integration
             var s = FindById(root, "s")!;
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, s, g);
+            FragmentPaintHarness.PaintBox(container, s, g);
 
             var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
             Assert.Equal(RColor.FromArgb(0, 0, 255), line.Color);
@@ -45,7 +45,7 @@ namespace PeachPDF.Tests.Integration
             var s = FindById(root, "s")!;
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, s, g);
+            FragmentPaintHarness.PaintBox(container, s, g);
 
             var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
             var rect = s.Rectangles.Values.Single();
@@ -61,7 +61,7 @@ namespace PeachPDF.Tests.Integration
             var s = FindById(root, "s")!;
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, s, g);
+            FragmentPaintHarness.PaintBox(container, s, g);
 
             var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
             var rect = s.Rectangles.Values.Single();
@@ -93,7 +93,7 @@ namespace PeachPDF.Tests.Integration
             var s = FindById(root, "s")!;
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, s, g);
+            FragmentPaintHarness.PaintBox(container, s, g);
 
             var lines = g.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToList();
             Assert.Equal(2, lines.Count);
@@ -115,7 +115,7 @@ namespace PeachPDF.Tests.Integration
             var s = FindById(root, "s")!;
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, s, g);
+            FragmentPaintHarness.PaintBox(container, s, g);
 
             var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
             Assert.Equal(RColor.FromArgb(255, 0, 0), line.Color);
@@ -129,7 +129,7 @@ namespace PeachPDF.Tests.Integration
             var s = FindById(root, "s")!;
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, s, g);
+            FragmentPaintHarness.PaintBox(container, s, g);
 
             Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
         }
@@ -143,7 +143,7 @@ namespace PeachPDF.Tests.Integration
             var s = FindById(root, "s")!;
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, s, g);
+            FragmentPaintHarness.PaintBox(container, s, g);
 
             return Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>()).Y1;
         }

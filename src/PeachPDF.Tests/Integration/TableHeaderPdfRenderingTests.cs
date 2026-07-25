@@ -282,7 +282,7 @@ namespace PeachPDF.Tests.Integration
             await container.PerformLayout(measureGraphics);
 
             var recorder = new DrawStringRecordingGraphics(adapter);
-            await FragmentPaintHarness.PaintPage(container, recorder);
+            FragmentPaintHarness.PaintPage(container, recorder);
 
             Assert.Equal(1, recorder.DrawnStrings.Count(s => s == "Header"));
             Assert.Equal(1, recorder.DrawnStrings.Count(s => s == "Body"));

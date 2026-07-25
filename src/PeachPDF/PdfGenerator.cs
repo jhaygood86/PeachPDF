@@ -364,7 +364,7 @@ namespace PeachPDF
                     (page.Width - mL) * _pdfSharpAdapter.PixelsPerPoint,
                     geom.BandHeight);
 
-                await container.PerformPaint(g, fragmentainer);
+                container.PerformPaint(g, fragmentainer);
 
                 // Restore to pre-content state so margin boxes render in absolute page coordinates
                 g.Restore(preContentState);

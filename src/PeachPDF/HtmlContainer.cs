@@ -224,12 +224,12 @@ namespace PeachPDF
         /// </summary>
         /// <param name="g">the device to use to render</param>
         /// <param name="fragmentainer">the page to render, from layout's fragment tree</param>
-        internal async ValueTask PerformPaint(XGraphics g, FragmentainerFragment fragmentainer)
+        internal void PerformPaint(XGraphics g, FragmentainerFragment fragmentainer)
         {
             ArgumentNullException.ThrowIfNull(g);
 
             using var ig = new GraphicsAdapter(HtmlContainerInt.Adapter, g, PixelsPerPoint);
-            await HtmlContainerInt.PerformPaint(ig, fragmentainer);
+            HtmlContainerInt.PerformPaint(ig, fragmentainer);
         }
 
         public void Dispose()

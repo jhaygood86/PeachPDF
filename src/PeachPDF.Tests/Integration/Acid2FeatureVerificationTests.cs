@@ -678,7 +678,7 @@ namespace PeachPDF.Tests.Integration
                 await container.PerformLayout(measureGraphics);
 
             var recorder = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintPage(container, recorder);
+            FragmentPaintHarness.PaintPage(container, recorder);
 
             var drawRectCalls = recorder.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
             var blackIndex = drawRectCalls.FindIndex(c => c.Color == RColor.FromArgb(255, 0, 0, 0));
@@ -745,7 +745,7 @@ namespace PeachPDF.Tests.Integration
                 await container.PerformLayout(measureGraphics);
 
             var recorder = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintPage(container, recorder);
+            FragmentPaintHarness.PaintPage(container, recorder);
 
             var drawRectCalls = recorder.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
             var blockIndex = drawRectCalls.FindIndex(c => c.Color == RColor.FromArgb(70, 80, 90));
@@ -974,7 +974,7 @@ namespace PeachPDF.Tests.Integration
             Assert.NotNull(beforeBox);
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, div, g);
+            FragmentPaintHarness.PaintBox(container, div, g);
 
             Assert.Contains(g.Log.OfType<TestRecordingGraphics.DrawRectCall>(),
                 r => r.Color == RColor.FromArgb(37, 38, 39));
@@ -998,7 +998,7 @@ namespace PeachPDF.Tests.Integration
             Assert.NotNull(afterBox);
 
             var g = new TestRecordingGraphics();
-            await FragmentPaintHarness.PaintBox(container, div, g);
+            FragmentPaintHarness.PaintBox(container, div, g);
 
             Assert.Contains(g.Log.OfType<TestRecordingGraphics.DrawRectCall>(),
                 r => r.Color == RColor.FromArgb(43, 44, 45));

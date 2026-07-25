@@ -206,7 +206,7 @@ namespace PeachPDF.Tests.Integration
             var counter = new DrawCountingGraphics(adapter);
             if (container.Root is not null)
             {
-                await FragmentPaintHarness.PaintBox(container, container.Root, counter);
+                FragmentPaintHarness.PaintBox(container, container.Root, counter);
             }
 
             return counter.DrawOperations;

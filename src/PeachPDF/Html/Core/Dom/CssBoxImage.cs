@@ -74,19 +74,6 @@ namespace PeachPDF.Html.Core.Dom
         internal SvgDocument? SvgDocument => _svgDocument;
 
         /// <summary>
-        /// Loads the image if measurement never ran. Normally a no-op:
-        /// <see cref="MeasureWordsSize"/> already resolved the source.
-        /// </summary>
-        internal async ValueTask EnsureImageLoaded()
-        {
-            if (_imageLoadHandler != null) return;
-
-            _imageLoadHandler = new ImageLoadHandler(HtmlContainer!);
-            await _imageLoadHandler.LoadImage(ImageSource);
-            OnLoadImageComplete();
-        }
-
-        /// <summary>
         /// Assigns words its width and height
         /// </summary>
         /// <param name="g">the device to use</param>

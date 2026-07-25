@@ -151,7 +151,7 @@ namespace PeachPDF.Tests.Integration
         {
             var recording = new TestRecordingGraphics();
             container.PageClipOverride = clipOverride;
-            await FragmentPaintHarness.PaintPage(container, recording, page);
+            FragmentPaintHarness.PaintPage(container, recording, page);
             return recording;
         }
     }

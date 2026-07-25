@@ -3,7 +3,6 @@ using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Utils;
-using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Paint.Content
 {
@@ -15,7 +14,7 @@ namespace PeachPDF.Html.Core.Paint.Content
     /// </summary>
     internal sealed class HrFragmentPainter : IFragmentContentPainter
     {
-        public ValueTask Paint(FragmentPainter painter, RGraphics g, BoxFragment fragment)
+        public void Paint(FragmentPainter painter, RGraphics g, BoxFragment fragment)
         {
             var box = fragment.Box;
             var rect = fragment.WholeBoxRect;
@@ -39,8 +38,6 @@ namespace PeachPDF.Html.Core.Paint.Content
                 var b4 = g.GetSolidBrush(box.ActualBorderBottomColor);
                 BordersDrawHandler.DrawBorder(Border.Bottom, g, box, b4, rect);
             }
-
-            return ValueTask.CompletedTask;
         }
     }
 }

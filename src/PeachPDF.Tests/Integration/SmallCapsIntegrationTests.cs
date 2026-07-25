@@ -141,7 +141,7 @@ namespace PeachPDF.Tests.Integration
             var elementBox = FindById(container.Root!, "w")!;
 
             var recorder = new RecordingGraphics(new PdfSharpAdapter());
-            await FragmentPaintHarness.PaintBox(container, elementBox, recorder);
+            FragmentPaintHarness.PaintBox(container, elementBox, recorder);
 
             Assert.Equal(2, recorder.DrawStringCalls.Count);
             Assert.Equal("H", recorder.DrawStringCalls[0].Text);
