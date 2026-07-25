@@ -121,6 +121,80 @@ namespace PeachPDF.Tests.Integration
             AssertLinesAreEvenlySpaced(LayoutHarness.FindById(root, "card")!);
         }
 
+        // The keep-with-next pull is the one correction a box cannot carry out for itself: the break
+        // falls before a sibling placed before it, so only the parent's child loop can re-run it.
+        // Whichever way it is carried out, the heading comes along and lands at the destination band's
+        // top with the box below it.
+        [Theory]
+        [InlineData(105)]
+        [InlineData(115)]
+        [InlineData(125)]
+        public async Task PulledRun_MovesTogetherToTheDestinationBandTop(double fillerHeight)
+        {
+            var (heading, card, container) = await PulledRunAsync(fillerHeight);
+
+            // The UA print stylesheet's h1-h6 { page-break-after: avoid } is what chains the two.
+            var headingPage = container.PageIndexOf(heading.Location.Y + HtmlContainerInt.PageBoundaryEpsilon);
+
+            Assert.Equal(headingPage, container.PageIndexOf(card.Location.Y + HtmlContainerInt.PageBoundaryEpsilon));
+            Assert.True(heading.ActualBottom <= card.Location.Y + 1.0,
+                "the heading must still sit above the box it is chained to");
+            Assert.Equal(container.PageTopOf(headingPage), heading.Location.Y, 6);
+        }
+
+        // Where the run is still part of the pass being laid out, it is re-run rather than moved, so
+        // the box that pulled it re-flows at its new position like any other relocated box.
+        [Theory]
+        [InlineData(105)]
+        [InlineData(125)]
+        public async Task PulledRun_IsLaidOutAgain_SoTheBoxHasNoInteriorGap(double fillerHeight)
+        {
+            var (_, card, _) = await PulledRunAsync(fillerHeight);
+
+            AssertLinesAreEvenlySpaced(card);
+        }
+
+        /// <summary>
+        /// The boundary of the run pull: once the pass that placed the run has been left behind, the run
+        /// belongs to a fragmentainer that is already filled and cannot be re-run, so the correction
+        /// degrades to moving the group instead — carrying the page gap into the box, as every one of
+        /// these corrections used to.
+        /// </summary>
+        /// <remarks>
+        /// A structural condition, not a geometric one: the run head's index lies below the index this
+        /// pass resumed at. At 115pt of filler the box's own first line fits on the page and the rest
+        /// does not, so its content breaks and it completes on a later pass — by which time the heading
+        /// above it is settled. Characterized rather than fixed: re-running it needs the driver to
+        /// withdraw a fragmentainer it has already filled.
+        /// </remarks>
+        [Fact]
+        public async Task PulledRun_FromAResumedPass_MovesTheGroupInsteadOfReLayingItOut()
+        {
+            var (heading, card, container) = await PulledRunAsync(115);
+
+            Assert.Equal(
+                container.PageIndexOf(heading.Location.Y + HtmlContainerInt.PageBoundaryEpsilon),
+                container.PageIndexOf(card.Location.Y + HtmlContainerInt.PageBoundaryEpsilon));
+
+            var tops = card.LineBoxes.SelectMany(l => l.Words).Select(w => w.Top).Distinct().Order().ToList();
+            var steps = tops.Zip(tops.Skip(1), (previous, next) => next - previous).ToList();
+
+            Assert.Contains(steps, step => step > LineHeight + 0.5);
+        }
+
+        private static async Task<(CssBox Heading, CssBox Card, HtmlContainerInt Container)> PulledRunAsync(double fillerHeight)
+        {
+            var html = LayoutHarness.Wrap(
+                $"<div style='height:{fillerHeight}pt'>filler</div>"
+                + "<h2 id='heading' style='margin:0;font-size:10pt;line-height:20pt'>Heading</h2>"
+                + $"<div id='card' style='break-inside:avoid;orphans:1;widows:1;line-height:{LineHeight}pt;font-size:10pt;width:60pt'>"
+                + "Aaa Bbb Ccc Ddd Eee Fff Ggg Hhh</div>");
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight, margin: Margin);
+
+            return (LayoutHarness.FindById(root, "heading")!, LayoutHarness.FindById(root, "card")!, container);
+        }
+
         /// <summary>
         /// The gap a translation carries shows up as one line sitting further below its predecessor than
         /// the line height accounts for.
