@@ -1453,6 +1453,78 @@ await SaveShowcaseAsync("paged_media_named_pages", "Paged Media", "Named Pages",
     "Routing content to differently-styled pages with named @page rules and the page property.",
     namedPagesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// ── Directional page breaks showcase ───────────────────────────────────────
+// css-break-3 §3.1's left/right/recto/verso: each chapter opens on a right-hand
+// page, so a chapter whose predecessor ended on one gets a blank verso page
+// inserted ahead of it, and the closing break-after pads the book so the page
+// after it would fall recto too. The folios alternate to the outer edge, which
+// is what makes the left/right rhythm (and the inserted blanks) legible.
+//
+// Deliberately symmetric physical margins: a mirrored binding gutter is the more
+// obvious demo, but per-page left/right margin overrides re-wrap each page to its
+// own measure, which puts the document inside the bounded reflow loop where the
+// page a break lands on can settle on different fixpoints between runs.
+var directionalBreaksHtml =
+    """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    @page {
+      size: A5;
+      margin: 18mm;
+      @bottom-center { content: counter(page); font-size: 9pt; color: #888; }
+    }
+    @page :left {
+      @bottom-center { content: none; }
+      @bottom-left { content: counter(page); font-size: 9pt; color: #888; }
+      @top-left { content: string(chapter); font-size: 8pt; color: #aaa; letter-spacing: 0.08em; }
+    }
+    @page :right {
+      @bottom-center { content: none; }
+      @bottom-right { content: counter(page); font-size: 9pt; color: #888; }
+      @top-right { content: string(chapter); font-size: 8pt; color: #aaa; letter-spacing: 0.08em; }
+    }
+    @page :first { @top-left { content: none; } @top-right { content: none; } }
+    body { font-family: Georgia, 'Times New Roman', serif; font-size: 10.5pt; line-height: 1.55; margin: 0; color: #222; }
+    h1.cover { font-size: 26pt; text-align: center; margin: 40pt 0 6pt; letter-spacing: 0.02em; }
+    p.cover-sub { text-align: center; color: #777; font-size: 11pt; margin: 0; }
+    h2 { font-size: 15pt; margin: 0 0 14pt; color: #1864ab; }
+    h2 .num { display: block; font-size: 8.5pt; letter-spacing: 0.18em; color: #aaa; margin-bottom: 4pt; }
+    p { margin: 0 0 9pt; }
+    section.chapter { break-before: recto; }
+    section.end { break-after: recto; }
+    h2 { string-set: chapter content(); }
+    </style>
+    </head>
+    <body>
+
+    <h1 class="cover">The Recto Rule</h1>
+    <p class="cover-sub">A short book that always opens its chapters on the right</p>
+
+    """
+    + string.Concat(Enumerable.Range(1, 3).Select(i =>
+        $"<section class=\"chapter{(i == 3 ? " end" : "")}\">"
+        + $"<h2><span class=\"num\">CHAPTER {i}</span>Of Pages and Their Sides</h2>"
+        // The last chapter is deliberately short enough to end on a right-hand page, so its
+        // closing break-after: recto has to pad the book with a final blank verso.
+        + string.Concat(Enumerable.Range(1, new[] { 6, 8, 5 }[i - 1]).Select(j =>
+            $"<p>Paragraph {j}. A chapter that must begin on a right-hand page will, when the page "
+            + "before it is itself a right-hand page, leave the intervening left-hand page empty rather "
+            + "than start on the wrong side. That empty page is a real page: it carries the running head "
+            + "and its folio, and it counts toward the total.</p>"))
+        + "</section>"))
+    + """
+
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("paged_media_directional_breaks", "Paged Media", "Directional Page Breaks",
+    "Chapters that always open on a right-hand page: break-before: recto inserts a blank verso page "
+    + "when it needs one, and the outer-edge folios show the left/right alternation.",
+    directionalBreaksHtml, new PdfGenerateConfig { PageSize = PageSize.A5 });
+
 // ── Margin box explicit sizing showcase ────────────────────────────────────
 var marginBoxSizingHtml = """
     <!DOCTYPE html>
