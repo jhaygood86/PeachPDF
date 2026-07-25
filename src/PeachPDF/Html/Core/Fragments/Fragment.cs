@@ -140,6 +140,14 @@ namespace PeachPDF.Html.Core.Fragments
     /// <param name="Lines">this fragment's own decoration rectangles</param>
     /// <param name="Words">the words of this box that fall in this fragmentainer</param>
     /// <param name="Children">the fragments of this box's child boxes in this fragmentainer</param>
+    /// <param name="OverflowClip">
+    /// the padding-edge rectangle of the nearest <c>overflow: hidden</c> box on this box's
+    /// containing-block chain, already in this fragmentainer's local space — or null when no ancestor
+    /// clips. Resolved by the builder rather than looked up from the boxes at paint time, because a box
+    /// shown at several places at once (a repeated table header's shared source subtree) holds only the
+    /// last position layout gave it, and the builder is the only thing that still knows which of them
+    /// this fragment came from.
+    /// </param>
     internal sealed record BoxFragment(
         RRect Rect,
         CssBox Box,
@@ -151,7 +159,8 @@ namespace PeachPDF.Html.Core.Fragments
         bool IsLastFragment,
         IReadOnlyList<LineFragment> Lines,
         IReadOnlyList<TextFragment> Words,
-        IReadOnlyList<BoxFragment> Children) : Fragment(Rect)
+        IReadOnlyList<BoxFragment> Children,
+        RRect? OverflowClip) : Fragment(Rect)
     {
         /// <summary>
         /// This fragment's principal decoration rectangle — the one a replaced element (an image, an

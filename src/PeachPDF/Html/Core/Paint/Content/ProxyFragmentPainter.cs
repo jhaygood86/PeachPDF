@@ -1,5 +1,4 @@
 using PeachPDF.Html.Adapters;
-using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 
 namespace PeachPDF.Html.Core.Paint.Content
@@ -10,19 +9,16 @@ namespace PeachPDF.Html.Core.Paint.Content
     /// generic box paint.
     /// </summary>
     /// <remarks>
-    /// The snapshot is still written back onto the live source boxes first. One source subtree is
-    /// shared by every page's proxy, so those boxes carry only whichever page positioned them last —
-    /// and while paint takes its <i>rectangles</i> from fragments, the <c>overflow: hidden</c> clip
-    /// walk still resolves ancestor client rectangles off the live boxes. Without this, that clip lands
-    /// at another page's position and culls the whole repeated row. Removing this last piece of
-    /// live-geometry coupling is follow-on work.
+    /// Nothing else is needed here. This used to write the proxy's geometry snapshot back onto the live
+    /// source boxes first, because the <c>overflow: hidden</c> clip walk resolved ancestor rectangles
+    /// off them and would otherwise land a page away and cull the whole repeated row. The clip is now
+    /// resolved in the builder, which knows which page's snapshot a fragment came from, so paint no
+    /// longer mutates layout state at all.
     /// </remarks>
     internal sealed class ProxyFragmentPainter : IFragmentContentPainter
     {
         public void Paint(FragmentPainter painter, RGraphics g, BoxFragment fragment)
         {
-            ((CssProxyBox)fragment.Box).ApplySourceGeometry();
-
             painter.PaintBoxContent(g, fragment);
         }
     }

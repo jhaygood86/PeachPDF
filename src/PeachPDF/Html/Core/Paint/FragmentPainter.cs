@@ -338,7 +338,7 @@ namespace PeachPDF.Html.Core.Paint
             if (box.Display == CssConstants.None ||
                 (box.Display == CssConstants.TableCell && box.EmptyCells == CssConstants.Hide && box.IsSpaceOrEmpty)) return;
 
-            var clipped = RenderUtils.ClipGraphicsByOverflow(g, box, fragment.OriginY);
+            var clipped = RenderUtils.ClipGraphicsByOverflow(g, fragment.OverflowClip);
 
             // This fragment's own decoration rectangles - one per line box it spans on this page, or a
             // single whole-border-box rectangle for a block-level box. Already fragmentainer-local.

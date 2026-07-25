@@ -77,33 +77,5 @@ namespace PeachPDF.Html.Core.Fragments
 
         internal bool TryGetGeometry(CssBox box, out BoxGeometry geometry) => _geometry.TryGetValue(box, out geometry!);
 
-        /// <summary>
-        /// Writes the captured geometry back onto the live boxes.
-        /// </summary>
-        internal void Apply(CssBox root)
-        {
-            if (!_geometry.TryGetValue(root, out var geometry)) return;
-
-            root.Location = geometry.Location;
-            root.ActualBottom = geometry.ActualBottom;
-            root.ActualRight = geometry.ActualRight;
-
-            root.Rectangles.Clear();
-            foreach (var (line, rect) in geometry.Rectangles)
-            {
-                root.Rectangles[line] = rect;
-            }
-
-            for (var i = 0; i < Math.Min(root.Words.Count, geometry.WordOrigins.Count); i++)
-            {
-                root.Words[i].Left = geometry.WordOrigins[i].X;
-                root.Words[i].Top = geometry.WordOrigins[i].Y;
-            }
-
-            foreach (var childBox in root.Boxes)
-            {
-                Apply(childBox);
-            }
-        }
     }
 }

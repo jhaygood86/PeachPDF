@@ -33,39 +33,28 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         /// <summary>
-        /// Clip the region the graphics will draw on by the overflow style of the containing block.<br/>
-        /// Recursively travel up the tree to find containing block that has overflow style set to hidden. if not
-        /// block found there will be no clipping and null will be returned.
+        /// Pushes the clip an <c>overflow: hidden</c> ancestor imposes on the fragment being painted, as
+        /// resolved by <see cref="Fragments.FragmentTreeBuilder"/> and carried on
+        /// <see cref="Fragments.BoxFragment.OverflowClip"/>. Already in the fragment's own space, so
+        /// there is nothing here to map.
         /// </summary>
-        /// <param name="g">the graphics to clip</param>
-        /// <param name="box">the box that is rendered to get containing blocks</param>
-        /// <param name="originY">the document Y of the painted fragment's fragmentainer origin</param>
         /// <returns>true - was clipped, false - not clipped</returns>
-        public static bool ClipGraphicsByOverflow(RGraphics g, CssBox box, double originY)
+        public static bool ClipGraphicsByOverflow(RGraphics g, RRect? overflowClip)
         {
-            var containingBlock = box.ContainingBlock;
-            while (true)
-            {
-                if (TryPushOverflowClip(g, containingBlock, originY))
-                {
-                    return true;
-                }
+            if (overflowClip is not { } clip) return false;
 
-                var cBlock = containingBlock.ContainingBlock;
-                if (cBlock == containingBlock)
-                    return false;
-                containingBlock = cBlock;
-            }
+            // Intersecting with what is already on the stack is the one part that cannot be precomputed:
+            // it depends on where in the paint walk this fragment is reached.
+            clip.Intersect(g.GetClip());
+            g.PushClip(clip);
+            return true;
         }
 
         /// <summary>
         /// Pushes <paramref name="overflowBox"/>'s own clip (padding-edge rect, per CSS spec) if it has
         /// <c>overflow: hidden</c>, mapped into the coordinate space of the fragment being painted by
         /// subtracting its <paramref name="originY"/> (zero for a fixed fragment, which does not move
-        /// with the page). Shared by
-        /// <see cref="ClipGraphicsByOverflow"/> (which walks up a single box's own containing-block
-        /// chain looking for the nearest hidden ancestor) and <see cref="PushAncestorOverflowClips"/>
-        /// (which already knows the exact ancestor chain to check, with no walking needed).
+        /// with the page).
         /// </summary>
         private static bool TryPushOverflowClip(RGraphics g, CssBox overflowBox, double originY)
         {
@@ -96,9 +85,15 @@ namespace PeachPDF.Html.Core.Utils
         /// clip stack the way it would be for normally-painted content, and must be applied explicitly
         /// here instead. <paramref name="ancestors"/> is the exact, already-known chain of DOM ancestors
         /// between the claiming stacking context and the box being painted (see
-        /// <see cref="Paint.StackingOrder.StackingParticipant"/>), so - unlike <see cref="ClipGraphicsByOverflow"/> -
-        /// no containing-block walk/search is needed; each ancestor is checked directly.
+        /// <see cref="Paint.StackingOrder.StackingParticipant"/>), so no walk is needed; each ancestor is
+        /// checked directly.
         /// </summary>
+        /// <remarks>
+        /// This one still reads the live boxes, because the chain is discovered during the paint walk
+        /// and so is not available to the builder. That is only wrong for a box shown at several places
+        /// at once — a hoisted stacking participant inside a repeated table header — which is exotic
+        /// enough that no fixture in the suite reaches it.
+        /// </remarks>
         /// <returns>the number of clips actually pushed (callers must pop exactly this many afterward)</returns>
         public static int PushAncestorOverflowClips(RGraphics g, IReadOnlyList<CssBox> ancestors, double originY)
         {

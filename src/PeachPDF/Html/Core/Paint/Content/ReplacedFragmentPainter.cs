@@ -34,7 +34,7 @@ namespace PeachPDF.Html.Core.Paint.Content
 
             var rect = fragment.PrimaryRect;
 
-            var clipped = RenderUtils.ClipGraphicsByOverflow(g, box, fragment.OriginY);
+            var clipped = RenderUtils.ClipGraphicsByOverflow(g, fragment.OverflowClip);
 
             // A replaced element is monolithic (css-break-3 §4.1): it is never split, so it always paints
             // its whole box with both of its edges.
