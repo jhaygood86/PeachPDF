@@ -309,19 +309,24 @@ namespace PeachPDF.CSS
                 {Keywords.ExtraExpanded, FontStretch.ExtraExpanded},
                 {Keywords.UltraExpanded, FontStretch.UltraExpanded}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        /// <summary>css-break-3 §3.1 break-before/break-after. Note "always" is not one of them - it is a legacy page-break-* value only.</summary>
         public static readonly FrozenDictionary<string, BreakMode> BreakModes =
             new Dictionary<string, BreakMode>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Auto, BreakMode.Auto},
-                {Keywords.Always, BreakMode.Always},
                 {Keywords.Avoid, BreakMode.Avoid},
+                {Keywords.AvoidPage, BreakMode.AvoidPage},
+                {Keywords.Page, BreakMode.Page},
                 {Keywords.Left, BreakMode.Left},
                 {Keywords.Right, BreakMode.Right},
-                {Keywords.Page, BreakMode.Page},
+                {Keywords.Recto, BreakMode.Recto},
+                {Keywords.Verso, BreakMode.Verso},
+                {Keywords.AvoidColumn, BreakMode.AvoidColumn},
                 {Keywords.Column, BreakMode.Column},
-                {Keywords.AvoidPage, BreakMode.AvoidPage},
-                {Keywords.AvoidColumn, BreakMode.AvoidColumn}
+                {Keywords.AvoidRegion, BreakMode.AvoidRegion},
+                {Keywords.Region, BreakMode.Region}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        /// <summary>css-break-3 §3.3 legacy page-break-before/page-break-after.</summary>
         public static readonly FrozenDictionary<string, BreakMode> PageBreakModes =
             new Dictionary<string, BreakMode>(StringComparer.OrdinalIgnoreCase)
             {
@@ -331,6 +336,7 @@ namespace PeachPDF.CSS
                 {Keywords.Left, BreakMode.Left},
                 {Keywords.Right, BreakMode.Right}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        /// <summary>css-break-3 §3.2 break-inside.</summary>
         public static readonly FrozenDictionary<string, BreakMode> BreakInsideModes =
             new Dictionary<string, BreakMode>(StringComparer.OrdinalIgnoreCase)
             {
@@ -339,6 +345,13 @@ namespace PeachPDF.CSS
                 {Keywords.AvoidPage, BreakMode.AvoidPage},
                 {Keywords.AvoidColumn, BreakMode.AvoidColumn},
                 {Keywords.AvoidRegion, BreakMode.AvoidRegion}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        /// <summary>css-break-3 §3.3 legacy page-break-inside.</summary>
+        public static readonly FrozenDictionary<string, BreakMode> PageBreakInsideModes =
+            new Dictionary<string, BreakMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Auto, BreakMode.Auto},
+                {Keywords.Avoid, BreakMode.Avoid}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, float> HorizontalModes =
             new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase)

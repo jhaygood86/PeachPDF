@@ -194,6 +194,133 @@ namespace PeachPDF.Tests.CSS
             Assert.Equal("AUTO", concrete.Original);
         }
 
+        // The four break value sets, asserted against the css-break-3 grammar rather than against
+        // whatever the maps happen to hold: §3.1 break-before/break-after, §3.2 break-inside, and the
+        // §3.3 legacy page-break-* aliases (which keep "always" and take none of the modern values).
+        [Theory]
+        [InlineData("break-before")]
+        [InlineData("break-after")]
+        public void BreakBeforeAfter_AcceptsEverySpecValue(string name)
+        {
+            string[] specValues =
+            [
+                "auto", "avoid", "avoid-page", "page", "left", "right",
+                "recto", "verso", "avoid-column", "column", "avoid-region", "region"
+            ];
+
+            foreach (var value in specValues)
+            {
+                var property = ParseDeclaration($"{name}:{value}");
+                Assert.True(property.HasValue, $"{name}:{value} should be valid");
+                Assert.Equal(value, property.Value);
+            }
+        }
+
+        [Theory]
+        [InlineData("break-before")]
+        [InlineData("break-after")]
+        public void BreakBeforeAfter_IsCaseInsensitiveAndKeepsAuthoredText(string name)
+        {
+            var property = ParseDeclaration($"{name}:VeRsO");
+            Assert.True(property.HasValue);
+            Assert.Equal("verso", property.Value);
+            Assert.Equal("VeRsO", property.Original);
+        }
+
+        // "always" and "all" were dropped from break-* by css-break-3; "always" survives only on the
+        // legacy page-break-* aliases (asserted below), so it must not be accepted here.
+        [Theory]
+        [InlineData("break-before", "always")]
+        [InlineData("break-before", "all")]
+        [InlineData("break-after", "always")]
+        [InlineData("break-after", "all")]
+        [InlineData("break-before", "avoid-nothing")]
+        public void BreakBeforeAfter_RejectsNonSpecValue(string name, string value)
+        {
+            var property = ParseDeclaration($"{name}:{value}");
+            Assert.False(property.HasValue);
+        }
+
+        [Theory]
+        [InlineData("auto")]
+        [InlineData("avoid")]
+        [InlineData("avoid-page")]
+        [InlineData("avoid-column")]
+        [InlineData("avoid-region")]
+        public void BreakInside_AcceptsSpecValue(string value)
+        {
+            var property = ParseDeclaration($"break-inside:{value}");
+            Assert.True(property.HasValue);
+            Assert.Equal(value, property.Value);
+        }
+
+        [Theory]
+        [InlineData("page")]
+        [InlineData("column")]
+        [InlineData("region")]
+        [InlineData("left")]
+        [InlineData("recto")]
+        [InlineData("always")]
+        public void BreakInside_RejectsNonSpecValue(string value)
+        {
+            var property = ParseDeclaration($"break-inside:{value}");
+            Assert.False(property.HasValue);
+        }
+
+        [Theory]
+        [InlineData("page-break-before", "auto")]
+        [InlineData("page-break-before", "always")]
+        [InlineData("page-break-before", "avoid")]
+        [InlineData("page-break-before", "left")]
+        [InlineData("page-break-before", "right")]
+        [InlineData("page-break-after", "auto")]
+        [InlineData("page-break-after", "always")]
+        [InlineData("page-break-after", "avoid")]
+        [InlineData("page-break-after", "left")]
+        [InlineData("page-break-after", "right")]
+        public void PageBreakBeforeAfter_AcceptsLegacyValue(string name, string value)
+        {
+            var property = ParseDeclaration($"{name}:{value}");
+            Assert.True(property.HasValue);
+            Assert.Equal(value, property.Value);
+        }
+
+        [Theory]
+        [InlineData("page-break-before", "page")]
+        [InlineData("page-break-before", "recto")]
+        [InlineData("page-break-before", "verso")]
+        [InlineData("page-break-before", "column")]
+        [InlineData("page-break-before", "region")]
+        [InlineData("page-break-after", "page")]
+        [InlineData("page-break-after", "avoid-page")]
+        [InlineData("page-break-after", "verso")]
+        public void PageBreakBeforeAfter_RejectsModernOnlyValue(string name, string value)
+        {
+            var property = ParseDeclaration($"{name}:{value}");
+            Assert.False(property.HasValue);
+        }
+
+        [Theory]
+        [InlineData("auto")]
+        [InlineData("avoid")]
+        public void PageBreakInside_AcceptsLegacyValue(string value)
+        {
+            var property = ParseDeclaration($"page-break-inside:{value}");
+            Assert.True(property.HasValue);
+            Assert.Equal(value, property.Value);
+        }
+
+        [Theory]
+        [InlineData("avoid-page")]
+        [InlineData("avoid-column")]
+        [InlineData("avoid-region")]
+        [InlineData("page")]
+        public void PageBreakInside_RejectsNonLegacyValue(string value)
+        {
+            var property = ParseDeclaration($"page-break-inside:{value}");
+            Assert.False(property.HasValue);
+        }
+
         [Fact]
         public void CssClearLegalLeft()
         {

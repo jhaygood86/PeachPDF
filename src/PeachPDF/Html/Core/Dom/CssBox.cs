@@ -1908,10 +1908,12 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// Returns true if the given break-before or break-after value is a forced page-break value
-        /// per CSS Fragmentation §3.1 (page, always).
+        /// per CSS Fragmentation §3.1. That is <c>page</c> alone: <c>always</c> is not a break-* value,
+        /// only a legacy page-break-* one, and <see cref="CssUtils"/> rewrites it to <c>page</c> on the way in.
+        /// The directional values (left, right, recto, verso) parse but are not yet honored.
         /// </summary>
         private static bool IsForcedBreakValue(string? value) =>
-            value is CssConstants.Page or CssConstants.Always;
+            value is CssConstants.Page;
 
         /// <summary>
         /// Gets the longest word (in width) inside the box, deeply.

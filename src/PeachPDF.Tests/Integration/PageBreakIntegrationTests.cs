@@ -94,6 +94,51 @@ namespace PeachPDF.Tests.Integration
                 $"Bordered box with break-before:page should start on page 2 (y >= {pageHeight}) but starts at y={borderedBox.Location.Y}");
         }
 
+        // The modern spelling of the same forced break: break-before: page is the css-break-3 §3.1 value
+        // "page-break-before: always" is defined (§3.3) to map onto, so both must paginate identically.
+        [Fact]
+        public async Task BreakBeforePage_ForcesBreak()
+        {
+            var (rootBox, container) = await BuildCssBoxTree(ForcedBreakHtml("break-before: page"));
+
+            var second = FindBoxByClass(rootBox, "second");
+            Assert.NotNull(second);
+            Assert.True(second.Location.Y >= container.PageSize.Height,
+                $"break-before: page should start the box on page 2 but it starts at y={second.Location.Y}");
+        }
+
+        // css-break-3 §3.1 dropped "always" from break-before/break-after - it survives only as the legacy
+        // page-break-* value (§3.3). So "break-before: always" is invalid CSS, dropped at parse time, and must
+        // NOT force a break; the same document written with page-break-before: always still does (above).
+        [Fact]
+        public async Task BreakBeforeAlways_IsInvalid_AndDoesNotForceBreak()
+        {
+            var (rootBox, container) = await BuildCssBoxTree(ForcedBreakHtml("break-before: always"));
+
+            var second = FindBoxByClass(rootBox, "second");
+            Assert.NotNull(second);
+            Assert.Equal("auto", second.BreakBefore);
+            Assert.True(second.Location.Y < container.PageSize.Height,
+                $"break-before: always is not a valid break value and must not paginate, but the box starts at y={second.Location.Y}");
+        }
+
+        // Two short blocks that comfortably share page 1, so the only thing that can push the second one
+        // onto page 2 is the break declaration under test.
+        private static string ForcedBreakHtml(string breakDeclaration) => $@"<!DOCTYPE html>
+<html>
+<head>
+<style>
+@page {{ size: A4; margin: 20mm; }}
+.first {{ height: 50pt; }}
+.second {{ height: 50pt; {breakDeclaration}; }}
+</style>
+</head>
+<body>
+<div class='first'>First</div>
+<div class='second'>Second</div>
+</body>
+</html>";
+
         // Verifies that break-inside: avoid repositions a box to the top of the next page
         // (using MarginTop, not MarginBottom) when it would naturally straddle a page boundary.
         [Fact]

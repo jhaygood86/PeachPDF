@@ -11,6 +11,9 @@ namespace PeachPDF.CSS
         Column,
         AvoidPage,
         AvoidColumn,
-        AvoidRegion
+        AvoidRegion,
+        Recto,
+        Verso,
+        Region
     }
 }

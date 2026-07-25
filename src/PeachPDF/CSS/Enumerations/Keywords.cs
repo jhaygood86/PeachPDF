@@ -22,6 +22,9 @@
         public static readonly string AvoidPage = "avoid-page";
         public static readonly string AvoidColumn = "avoid-column";
         public static readonly string AvoidRegion = "avoid-region";
+        public static readonly string Recto = "recto";
+        public static readonly string Verso = "verso";
+        public static readonly string Region = "region";
         public static readonly string Inset = "inset";
         public static readonly string Outset = "outset";
         public static readonly string Ridge = "ridge";

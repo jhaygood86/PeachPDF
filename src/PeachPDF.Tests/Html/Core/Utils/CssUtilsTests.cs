@@ -228,6 +228,8 @@ namespace PeachPDF.Tests.Html.Core.Utils
             ["margin-bottom", "5px"], ["margin-left", "6px"], ["margin-right", "7px"], ["margin-top", "8px"],
             ["padding-bottom", "5px"], ["padding-left", "6px"], ["padding-right", "7px"], ["padding-top", "8px"],
             ["break-after", "avoid"], ["break-before", "avoid"], ["break-inside", "avoid"],
+            // css-break-3 §3.1/§3.2 values beyond the ones layout acts on still have to reach the box verbatim.
+            ["break-before", "recto"], ["break-after", "verso"], ["break-before", "region"], ["break-inside", "avoid-region"],
             ["left", "10px"], ["top", "11px"], ["right", "12px"], ["bottom", "13px"],
             ["width", "100px"], ["max-width", "200px"], ["min-width", "50px"], ["height", "120px"], ["max-height", "240px"], ["min-height", "60px"],
             ["background-color", "rgb(4, 5, 6)"], ["background-position", "center"], ["background-size", "cover"], ["background-repeat", "no-repeat"],
@@ -361,6 +363,65 @@ namespace PeachPDF.Tests.Html.Core.Utils
             CssUtils.SetPropertyValue(parser, box, setName, "always");
 
             Assert.Equal("page", CssUtils.GetPropertyValue(box, getName));
+        }
+
+        // The rest of the css-break-3 §3.3 alias table: every legacy value other than "always" is passed
+        // straight through - in particular "avoid" stays "avoid" and does NOT become "avoid-page".
+        [Theory]
+        [InlineData("page-break-after", "break-after", "avoid")]
+        [InlineData("page-break-after", "break-after", "left")]
+        [InlineData("page-break-after", "break-after", "right")]
+        [InlineData("page-break-after", "break-after", "auto")]
+        [InlineData("page-break-before", "break-before", "avoid")]
+        [InlineData("page-break-before", "break-before", "left")]
+        [InlineData("page-break-before", "break-before", "right")]
+        [InlineData("page-break-inside", "break-inside", "avoid")]
+        public async Task SetPropertyValue_PageBreakLegacyValue_PassesThrough(string setName, string getName, string value)
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, setName, value);
+
+            Assert.Equal(value, CssUtils.GetPropertyValue(box, getName));
+        }
+
+        // The legacy aliases need their own entries in the known-name list and the initial-value store, or
+        // "initial"/"unset"/"revert" silently no-op on the legacy spelling while working on the modern one.
+        [Theory]
+        [InlineData("page-break-after")]
+        [InlineData("page-break-before")]
+        [InlineData("page-break-inside")]
+        public async Task PageBreakAliases_AreSnapshottableAndHaveAnInitialValue(string name)
+        {
+            var (box, _) = await FindDivBoxAndParser("");
+
+            Assert.Contains(name, CssUtils.SnapshotProperties(box).Keys);
+            Assert.Equal(CssConstants.Auto, CssDefaults.GetInitialValue(name));
+        }
+
+        // End-to-end through the real cascade (not the CssUtils setter directly): a css-break-3 §3.1 value
+        // authored in a stylesheet has to survive Layer A's validation and land on the box verbatim, while a
+        // value the spec dropped is rejected at parse time and leaves the property at its initial value.
+        [Theory]
+        [InlineData("break-before: recto", "recto")]
+        [InlineData("break-before: VERSO", "verso")]
+        [InlineData("break-before: region", "region")]
+        [InlineData("break-before: avoid-region", "avoid-region")]
+        [InlineData("break-before: always", "auto")]
+        [InlineData("break-before: all", "auto")]
+        public async Task Cascade_BreakBefore_StoresOnlySpecValues(string css, string expected)
+        {
+            var (box, _) = await FindDivBoxAndParser(css + ";");
+
+            Assert.Equal(expected, box.BreakBefore);
+        }
+
+        [Fact]
+        public async Task Cascade_PageBreakBeforeAlways_StillMapsToPage()
+        {
+            var (box, _) = await FindDivBoxAndParser("page-break-before: always;");
+
+            Assert.Equal(CssConstants.Page, box.BreakBefore);
         }
 
         // The false side of each validation guard: an invalid value must be ignored, leaving the prior value.
