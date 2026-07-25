@@ -271,7 +271,12 @@ namespace PeachPDF.Html.Core.Dom
                 >= container.PageIndexOf(Bottom - HtmlContainerInt.PageBoundaryEpsilon))
                 return false;
 
-            Top = container.NextPageTopOf(Top) + 1;
+            // The fragmentainer's own content edge, per css-break-3 §2. This used to land one unit
+            // below it, purely to keep a relocated word off the exact boundary value - a question the
+            // page grid's own epsilons already answer, and which the band-overlap test in the fragment
+            // builder answers the same way (a rect starting exactly at a band top belongs to that band
+            // and overlaps the previous one by zero).
+            Top = container.NextPageTopOf(Top);
             return true;
         }
     }

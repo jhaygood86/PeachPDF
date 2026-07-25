@@ -2744,7 +2744,7 @@ namespace PeachPDF.Html.Core.Dom
                 >= container.PageIndexOf(ActualBottom - HtmlContainerInt.PageBoundaryEpsilon))
                 return false;
 
-            Location = Location with { Y = container.NextPageTopOf(Location.Y) + 1 };
+            Location = Location with { Y = container.NextPageTopOf(Location.Y) };
 
             return true;
         }

@@ -92,8 +92,11 @@ namespace PeachPDF.Tests.Html.Core
             box.ActualBottom = MarginTop + BandHeight + 50;
 
             Assert.True(box.BreakPage());
-            // The historical "+1" nudge past the slot top is deliberately preserved.
-            Assert.Equal(container.PageTopOf(1) + 1, box.Location.Y);
+            // The slot's own content edge, per css-break-3 §2. This used to land one unit below it,
+            // to keep the relocated box off the exact boundary value - a question PageIndexOf's own
+            // epsilon already answers, as the flush-fit case below shows.
+            Assert.Equal(container.PageTopOf(1), box.Location.Y);
+            Assert.Equal(1, container.PageIndexOf(box.Location.Y));
         }
 
         [Fact]
