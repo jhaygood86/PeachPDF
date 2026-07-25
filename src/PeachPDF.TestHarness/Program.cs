@@ -1574,6 +1574,30 @@ var monolithicHtml = """
     + string.Concat(Enumerable.Range(31, 4).Select(i =>
         $"<p>Trailing paragraph {i}, so the move above has visible content after it.</p>"))
     + """
+    <h1 style="margin-top:1.4em">A relocated box is laid out again, not slid down</h1>
+    <p class="intro">A box that had already begun flowing its own text across the boundary cannot simply be
+    shifted: its later lines were laid out against the next page's top, so moving the box would carry that
+    distance into it as blank space and leave it reporting height it does not use. The card below holds
+    several lines and meets the boundary part-way through them.</p>
+    """
+    + string.Concat(Enumerable.Range(35, 10).Select(i =>
+        $"<p>Filler paragraph {i}. This run positions the multi-line card so the page boundary falls "
+        + "between its own lines rather than above it.</p>"))
+    + """
+    <div class="card clipped">
+      <span class="tag">overflow: hidden &mdash; multi-line</span>
+      <h2>Its lines stay evenly spaced</h2>
+      <p>The page boundary falls part-way through this paragraph, so the box is relocated after some of its
+      text had already been placed on the following page. Because it is laid out again at its destination
+      rather than translated to it, the lines below run on at their normal spacing instead of opening up a
+      band of blank space part-way down the card.</p>
+      <p>A second paragraph, so the break has somewhere to fall between lines and the effect is visible
+      rather than hidden by a lucky alignment of the page grid.</p>
+    </div>
+    """
+    + string.Concat(Enumerable.Range(45, 3).Select(i =>
+        $"<p>Trailing paragraph {i}.</p>"))
+    + """
     </body></html>
     """;
 

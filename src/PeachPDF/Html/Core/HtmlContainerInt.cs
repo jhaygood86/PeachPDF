@@ -147,6 +147,27 @@ namespace PeachPDF.Html.Core
             _namedStrings.Clear();
         }
 
+        /// <summary>
+        /// Withdraws named strings a box registered on an earlier run of its own prologue, so that
+        /// re-running it replaces them rather than registering a second set.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="RegisterNamedString"/> appends, and a box's prologue can legitimately run more
+        /// than once inside a single <see cref="LayoutDocument"/> invocation — a break decision taken
+        /// against a finished box re-lays it out at its new position
+        /// (<c>CssBox.PerformLayoutEpilogue</c>). Only <see cref="ClearNamedStrings"/> stood between
+        /// registrations before, and that runs per invocation, not per re-entry. Removal is by
+        /// reference: <c>CssNamedStringEngine.ApplyStringSet</c> stores one shared instance in both
+        /// this list and the box's own map, which is what lets the box name its own entries.
+        /// </remarks>
+        internal void UnregisterNamedStrings(IEnumerable<NamedString> namedStrings)
+        {
+            foreach (var namedString in namedStrings)
+            {
+                _namedStrings.Remove(namedString);
+            }
+        }
+
         internal IReadOnlyList<NamedPageElement> NamedPageElements => _namedPageElements;
 
         /// <summary>
@@ -177,6 +198,25 @@ namespace PeachPDF.Html.Core
             var oldY = element.Y;
             element.Y = newY;
             PageGeometry.InvalidateFrom(Math.Min(oldY, newY));
+        }
+
+        /// <summary>
+        /// Withdraws a named-page registration a box made on an earlier run of its own prologue.
+        /// </summary>
+        /// <remarks>
+        /// The twin of <see cref="UnregisterNamedStrings"/>, and the more consequential of the two:
+        /// <see cref="ActivePageName"/> reads the <i>last</i> entry, so a stale duplicate left behind by
+        /// a re-entered prologue answers "which named page is in effect" with a position the box no
+        /// longer occupies — which then decides whether the next box forces a page break at all.
+        /// Dropping the box's own reference (as the prologue used to do alone) orphans the entry
+        /// without removing it.
+        /// </remarks>
+        internal void UnregisterNamedPageElement(NamedPageElement element)
+        {
+            if (!_namedPageElements.Remove(element)) return;
+
+            // Same rule as registering one: every slot from here on could have selected differently.
+            PageGeometry.InvalidateFrom(element.Y);
         }
 
         internal void ClearNamedPageElements() => _namedPageElements.Clear();
