@@ -1267,7 +1267,9 @@ namespace PeachPDF.Html.Core.Dom
             // resolution but harmless (it resolves to the same name).
             var pageNameChanged = HtmlContainer is not null && UsedPageName != HtmlContainer.ActivePageName;
             _shouldRegisterPage = HtmlContainer is not null && (hasExplicitPageName || pageNameChanged);
-            _isForcedBreak = IsForcedBreakValue(BreakBefore) || IsForcedBreakValue(previousSiblingForBreak?.BreakAfter) || pageNameChanged;
+            _isForcedBreak = BreakValues.IsForcedPageBreak(BreakBefore)
+                             || BreakValues.IsForcedPageBreak(previousSiblingForBreak?.BreakAfter)
+                             || pageNameChanged;
             if (_isForcedBreak)
             {
                 if (previousSiblingForBreak is not null)
@@ -1796,7 +1798,10 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
-            if (BreakInside is CssConstants.Avoid)
+            // avoid / avoid-page, but not avoid-column or avoid-region: this mover is a page-context
+            // mover by construction (it measures against PageBandHeightOf and relocates to PageTopOf),
+            // so a hint naming a different fragmentation context must not suppress a page break.
+            if (BreakValues.AvoidsPageBreak(BreakInside))
             {
                 // Shifted-grid convention (see HtmlContainer.PageIndexOf) - topRelativeToCurrentPage is
                 // this box's distance from the start of its own page's real content band, not a raw
@@ -2221,15 +2226,6 @@ namespace PeachPDF.Html.Core.Dom
 
             return maxWidth + padding;
         }
-
-        /// <summary>
-        /// Returns true if the given break-before or break-after value is a forced page-break value
-        /// per CSS Fragmentation §3.1. That is <c>page</c> alone: <c>always</c> is not a break-* value,
-        /// only a legacy page-break-* one, and <see cref="CssUtils"/> rewrites it to <c>page</c> on the way in.
-        /// The directional values (left, right, recto, verso) parse but are not yet honored.
-        /// </summary>
-        private static bool IsForcedBreakValue(string? value) =>
-            value is CssConstants.Page;
 
         /// <summary>
         /// Gets the longest word (in width) inside the box, deeply.

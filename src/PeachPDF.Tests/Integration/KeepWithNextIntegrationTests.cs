@@ -250,6 +250,74 @@ h2 { margin: 6pt 0; }
             Assert.Equal(0, headingPage);
         }
 
+        // css-break-3 §3.2: `avoid-page` names the page context explicitly, so it chains exactly as
+        // bare `avoid` does. `avoid-column` and `avoid-region` name other fragmentation contexts and
+        // must not - a multi-column hint has no business dragging a heading across a page boundary.
+        [Theory]
+        [InlineData("break-after: avoid", true)]
+        [InlineData("break-after: avoid-page", true)]
+        [InlineData("break-after: avoid-column", false)]
+        [InlineData("break-after: avoid-region", false)]
+        public async Task KeepWithNext_ChainsOnlyOnPageContextAvoidance(string headingDeclaration, bool shouldChain)
+        {
+            var html = BuildFillerDocument($@"
+<h2 class='heading' style='{headingDeclaration}'>Section heading</h2>
+<div class='keep' style='break-inside: avoid'>
+<div style='height: 150pt'>Keep together</div>
+</div>");
+
+            var (rootBox, container) = await BuildCssBoxTree(html);
+            var pageHeight = container.PageSize.Height;
+
+            var heading = FindBoxByClass(rootBox, "heading");
+            var keep = FindBoxByClass(rootBox, "keep");
+            Assert.NotNull(heading);
+            Assert.NotNull(keep);
+
+            var headingPage = Math.Floor(heading.Location.Y / pageHeight);
+            var keepPage = Math.Floor(keep.Location.Y / pageHeight);
+
+            Assert.True(keepPage >= 1, $"Test setup expects the avoid box to be moved to page 2+, but it is at y={keep.Location.Y}");
+
+            if (shouldChain)
+            {
+                Assert.Equal(keepPage, headingPage);
+            }
+            else
+            {
+                Assert.Equal(0, headingPage);
+            }
+        }
+
+        // The §5.2 forced-break-beats-avoid rule has to know about the directional values too. This is
+        // the pairing that breaks if CssBox's forced-break test is widened but the keep-with-next one
+        // is not: the heading would be dragged along across a break the spec says is never kept together.
+        [Theory]
+        [InlineData("left")]
+        [InlineData("right")]
+        [InlineData("recto")]
+        [InlineData("verso")]
+        public async Task DirectionalForcedBreak_TakesPrecedenceOverAvoid_HeadingIsNotPulled(string value)
+        {
+            var html = BuildFillerDocument($@"
+<h2 class='heading' style='break-after: avoid'>Chapter heading</h2>
+<div class='keep' style='break-before: {value}; break-inside: avoid'>
+<div style='height: 150pt'>chapter opening</div>
+</div>");
+
+            var (rootBox, container) = await BuildCssBoxTree(html);
+            var pageHeight = container.PageSize.Height;
+
+            var heading = FindBoxByClass(rootBox, "heading");
+            var keep = FindBoxByClass(rootBox, "keep");
+            Assert.NotNull(heading);
+            Assert.NotNull(keep);
+
+            Assert.True(Math.Floor(keep.Location.Y / pageHeight) >= 1,
+                $"break-before: {value} should have moved the box off page 1, but it is at y={keep.Location.Y}");
+            Assert.Equal(0, Math.Floor(heading.Location.Y / pageHeight));
+        }
+
         // Unsatisfiable avoid at the break-inside site: heading + keep box taller than one page.
         // The avoid is relaxed - the box relocates alone and the heading stays, as before.
         [Fact]

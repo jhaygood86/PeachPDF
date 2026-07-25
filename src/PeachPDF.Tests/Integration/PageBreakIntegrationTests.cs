@@ -140,18 +140,70 @@ namespace PeachPDF.Tests.Integration
 </body>
 </html>";
 
-        // Verifies that break-inside: avoid repositions a box to the top of the next page
-        // (using MarginTop, not MarginBottom) when it would naturally straddle a page boundary.
-        [Fact]
-        public async Task BreakInside_Avoid_PositionsAtTopOfNextPage()
+        // Verifies that a break-inside value forbidding a *page* break repositions a box to the top of
+        // the next page (using MarginTop, not MarginBottom) when it would naturally straddle a page
+        // boundary. Per css-break-3 §3.2 that is `avoid` (which forbids a break in every fragmentation
+        // context, so including this one) and `avoid-page` (which names it).
+        [Theory]
+        [InlineData("break-inside: avoid; page-break-inside: avoid")]
+        [InlineData("break-inside: avoid-page")]
+        public async Task BreakInside_AvoidingAPageBreak_PositionsAtTopOfNextPage(string declaration)
         {
-            var html = @"<!DOCTYPE html>
+            var (rootBox, container) = await BuildCssBoxTree(BreakInsideHtml(declaration));
+            var pageHeight = container.PageSize.Height;
+            var marginTop = container.MarginTop;
+
+            var avoidBox = FindBoxByClass(rootBox, "avoid");
+            Assert.NotNull(avoidBox);
+
+            // Box must not straddle a page boundary.
+            var boxHeight = avoidBox.ActualBottom - avoidBox.Location.Y;
+            var topRelativeToPage = avoidBox.Location.Y % pageHeight;
+            Assert.True(topRelativeToPage + boxHeight <= pageHeight,
+                $"Box with '{declaration}' (height={boxHeight}) must not be split (topOnPage={topRelativeToPage}, pageHeight={pageHeight})");
+
+            // When relocated to the next page, the box's Y offset within its page should
+            // equal MarginTop (matching the BreakBefore positioning formula), not MarginBottom.
+            Assert.True(avoidBox.Location.Y >= pageHeight,
+                "Test setup expects the avoid box to be relocated to the next page to validate MarginTop positioning.");
+
+            var offsetWithinPage = avoidBox.Location.Y % pageHeight;
+            Assert.True(Math.Abs(offsetWithinPage - marginTop) < 1.0,
+                $"Relocated box should sit at MarginTop ({marginTop}) within its page, but offset is {offsetWithinPage}");
+        }
+
+        // The other half of §3.2: `avoid-column` and `avoid-region` name fragmentation contexts other
+        // than the page, so they must NOT suppress a page break. They are not a weaker `avoid` - a
+        // multi-column hint silently changing pagination is exactly the confusion the value set exists
+        // to avoid. (`page-break-inside` is deliberately absent from these fixtures: its legacy value
+        // set is auto|avoid only, so declaring it would be invalid and would mask the modern property.)
+        [Theory]
+        [InlineData("break-inside: avoid-column")]
+        [InlineData("break-inside: avoid-region")]
+        public async Task BreakInside_AvoidingAnotherContext_DoesNotSuppressAPageBreak(string declaration)
+        {
+            var (rootBox, container) = await BuildCssBoxTree(BreakInsideHtml(declaration));
+            var pageHeight = container.PageSize.Height;
+
+            var avoidBox = FindBoxByClass(rootBox, "avoid");
+            Assert.NotNull(avoidBox);
+
+            // Left exactly where it naturally fell, so it still straddles the boundary - the same
+            // fixture that `avoid`/`avoid-page` relocate above.
+            var boxHeight = avoidBox.ActualBottom - avoidBox.Location.Y;
+            var topRelativeToPage = avoidBox.Location.Y % pageHeight;
+            Assert.True(topRelativeToPage + boxHeight > pageHeight,
+                $"'{declaration}' must not suppress the page break, so the box should still straddle it "
+                + $"(topOnPage={topRelativeToPage}, height={boxHeight}, pageHeight={pageHeight})");
+        }
+
+        private static string BreakInsideHtml(string declaration) => $@"<!DOCTYPE html>
 <html>
 <head>
 <style>
-@page { size: A4; margin: 20mm; }
-.filler { line-height: 2; }
-.avoid { break-inside: avoid; page-break-inside: avoid; border: 1px solid black; padding: 8px; }
+@page {{ size: A4; margin: 20mm; }}
+.filler {{ line-height: 2; }}
+.avoid {{ {declaration}; border: 1px solid black; padding: 8px; }}
 </style>
 </head>
 <body>
@@ -171,29 +223,6 @@ namespace PeachPDF.Tests.Integration
 </div>
 </body>
 </html>";
-
-            var (rootBox, container) = await BuildCssBoxTree(html);
-            var pageHeight = container.PageSize.Height;
-            var marginTop = container.MarginTop;
-
-            var avoidBox = FindBoxByClass(rootBox, "avoid");
-            Assert.NotNull(avoidBox);
-
-            // Box must not straddle a page boundary.
-            var boxHeight = avoidBox.ActualBottom - avoidBox.Location.Y;
-            var topRelativeToPage = avoidBox.Location.Y % pageHeight;
-            Assert.True(topRelativeToPage + boxHeight <= pageHeight,
-                $"Box with break-inside:avoid (height={boxHeight}) must not be split (topOnPage={topRelativeToPage}, pageHeight={pageHeight})");
-
-            // When relocated to the next page, the box's Y offset within its page should
-            // equal MarginTop (matching the BreakBefore positioning formula), not MarginBottom.
-            Assert.True(avoidBox.Location.Y >= pageHeight,
-                "Test setup expects the avoid box to be relocated to the next page to validate MarginTop positioning.");
-
-            var offsetWithinPage = avoidBox.Location.Y % pageHeight;
-            Assert.True(Math.Abs(offsetWithinPage - marginTop) < 1.0,
-                $"Relocated box should sit at MarginTop ({marginTop}) within its page, but offset is {offsetWithinPage}");
-        }
 
         // CSS2.1 §13.2: a page break is forced whenever a box's own explicit `page` value differs
         // from the named page currently active in the document flow - independent of
