@@ -203,6 +203,62 @@ namespace PeachPDF.Tests.Integration
                 container.PageIndexOf(body!.Location.Y));
         }
 
+        // An out-of-flow box is positioned against its containing block, not against the page the flow has
+        // reached, so a break token recorded inside one has no link in the chain to travel up -
+        // CssBox.LayoutOutOfFlowChildren discards whatever a child leaves behind, and with it the content
+        // that record names. That loop is the only way an absolutely-positioned child of a flex, grid or
+        // table container is laid out at all, since those engines place only in-flow items.
+        //
+        // The invariant holds today because the loop runs inside LayoutMonolithicContent's suppressed
+        // scope, so no token is ever recorded there to be dropped. It is pinned here rather than left
+        // implicit because that is a property of the *caller*: narrowing the set of engines that suppress
+        // (#315/#322) removes the thing currently upholding it, and this is what will say so.
+        [Theory]
+        [InlineData("display:flex")]
+        [InlineData("display:grid")]
+        [InlineData("display:table")]
+        public async Task TallOutOfFlowChildOfAnEngineContainer_KeepsAllOfItsContent(string containerStyle)
+        {
+            var lines = string.Join("", Enumerable.Range(0, 20).Select(i => $"Line{i}<br>"));
+            var html = LayoutHarness.Wrap(
+                $"<div style='{containerStyle};position:relative'>" +
+                "<span>in flow</span>" +
+                $"<div id='abs' style='position:absolute;top:0;left:0;width:120pt;line-height:20pt'>{lines}</div>" +
+                "</div>");
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight, margin: Margin);
+
+            var abs = LayoutHarness.FindById(root, "abs");
+            Assert.NotNull(abs);
+
+            // No resumption record was left behind for a box nothing would have resumed.
+            Assert.Null(abs!.PendingBreakToken);
+            Assert.Null(abs.RequestedBreakBeforeTop);
+
+            var placed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => Flatten(f.Root))
+                .SelectMany(f => f.Words)
+                .Select(w => w.Word.Text)
+                .Where(t => t?.StartsWith("Line") == true)
+                .Distinct()
+                .Count();
+
+            Assert.Equal(20, placed);
+        }
+
+        private static IEnumerable<BoxFragment> Flatten(BoxFragment fragment)
+        {
+            yield return fragment;
+
+            foreach (var child in fragment.Children)
+            {
+                foreach (var descendant in Flatten(child))
+                {
+                    yield return descendant;
+                }
+            }
+        }
+
         private static List<int> FragmentSlotsOf(HtmlContainerInt container, CssBox box)
         {
             List<int> slots = [];

@@ -84,14 +84,24 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// not end up at.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// This is deliberately <b>not</b> the gate on the legacy per-word relocation in
-        /// <c>CssLayoutEngine.FlowBox</c>, which still reads
+        /// <c>CssLayoutEngine.FlowBox</c>, which reads
         /// <see cref="HtmlContainerInt.SuppressWordPageBreaks"/> directly. The two answer different
         /// questions: a multi-column container is monolithic to the driver (its engine fragments its own
         /// children) while its content still paginates word by word. Folding the word path into this one
         /// is what makes inline flow genuinely resumable, and is a separate step.
+        /// </para>
+        /// <para>
+        /// This property used to <i>read</i> that flag as well, which welded the two questions together at
+        /// the definition site: breaking could never be enabled for a flex or grid item without also
+        /// enabling the legacy word relocation, so neither engine could be made fragmentable a step at a
+        /// time. The flex and grid measurement re-layouts now enter a monolithic scope of their own
+        /// alongside setting the flag, which is where that suppression belongs and which leaves this
+        /// answering only its own question.
+        /// </para>
         /// </remarks>
-        internal bool IsFragmenting => _fragmenting && !Container.SuppressWordPageBreaks;
+        internal bool IsFragmenting => _fragmenting;
 
         /// <summary>
         /// Suppresses breaking for the duration of a monolithic subtree — content the spec does not
