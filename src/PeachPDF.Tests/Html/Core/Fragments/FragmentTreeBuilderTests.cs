@@ -408,6 +408,39 @@ namespace PeachPDF.Tests.Html.Core.Fragments
         }
 
         [Fact]
+        public async Task DecoratedInlineSpanningAPageBreak_CountsItsLeadingSpacingOnce()
+        {
+            // The same fixture as above with a decorated span. The unbroken box is the span on one
+            // infinitely long line, so its width is the sum of the rectangles' widths - which is only
+            // right if each border and padding is counted once. A resumed pass that re-opened the box
+            // charged the leading set again on the page it resumed on, overshooting the strip and, with
+            // it, a sliced gradient's extent and a rounded inline's radius reduction.
+            var (root, container) = await LayoutHarness.LayoutAsync(SpanningInline(leadingSpacing: true),
+                pageHeight: 200, margin: 20);
+            var (plainRoot, _) = await LayoutHarness.LayoutAsync(SpanningInline(leadingSpacing: false),
+                pageHeight: 200, margin: 20);
+
+            var tree = container.FragmentTree!;
+            Assert.True(tree.Fragmentainers.Count >= 2, "fixture must paginate");
+
+            // ...and genuinely resume, rather than simply flowing on into a later band: only a pass that
+            // re-enters the box can re-open it.
+            Assert.True(container.FragmentainerPasses > 1,
+                $"fixture must resume, but layout took {container.FragmentainerPasses} pass(es)");
+
+            var span = LayoutHarness.FindById(root, "s")!;
+            var lines = LinesOf(tree, "s");
+
+            var total = span.Rectangles.Values.Sum(r => r.Width);
+            Assert.All(lines, line => Assert.Equal(total, line.Slice.UnbrokenStrip.Width, 3));
+
+            // The two fixtures hold the same text, so the whole difference between them is the
+            // decoration - one leading set, counted once however many pages the box spans.
+            var plain = LayoutHarness.FindById(plainRoot, "s")!.Rectangles.Values.Sum(r => r.Width);
+            Assert.Equal(12, total - plain, 2);
+        }
+
+        [Fact]
         public async Task BlockSpanningAPageBreak_CutsItsFragmentRectToEachBand()
         {
             var (root, container) = await LayoutHarness.LayoutAsync(
@@ -557,6 +590,25 @@ namespace PeachPDF.Tests.Html.Core.Fragments
                 .SelectMany(f => f.Lines)
                 .OrderBy(l => l.Rect.Y).ThenBy(l => l.Rect.X)
         ];
+
+        /// <summary>
+        /// A many-line inline, optionally decorated on its leading edge with a 3pt border and 9pt
+        /// padding. The 22pt line height deliberately does not divide the fixture's 160pt band, so a
+        /// line straddles a boundary and the flow genuinely has to stop and resume — content that merely
+        /// flows on into a later band never re-enters the box and would test nothing.
+        /// <para>
+        /// The lines are also wider than the decoration: <c>FlowBox</c>'s "handle width setting" branch
+        /// compares the cursor's advance across the whole box against the box's own width, and with
+        /// <c>&lt;br&gt;</c>s resetting the cursor to the line start that advance is only the last line's,
+        /// so a short final line makes it pad the box out and register an extra rectangle. That is a
+        /// pre-existing defect of its own and not what this test is about.
+        /// </para>
+        /// </summary>
+        private static string SpanningInline(bool leadingSpacing) => LayoutHarness.Wrap(
+            "<div style='font:10pt Arial;line-height:22pt'>" +
+            "<span id='s'" + (leadingSpacing ? " style='border-left:3pt solid #000;padding-left:9pt'" : "") + ">" +
+            string.Join("<br>", Enumerable.Range(0, 20).Select(i => $"Linenumber{i}")) +
+            "</span></div>");
 
         private static string ThreePageBlocks() => string.Concat(
             Enumerable.Range(0, 30).Select(i => $"<p style='margin:0;height:20pt'>line {i}</p>"));

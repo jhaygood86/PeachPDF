@@ -1133,11 +1133,31 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="lineSpacing">Space to use between rows of text</param>
         /// <param name="lineStartX">x starting coordinate for when breaking lines of text</param>
         /// <param name="coordinates">Current coordinates being used</param>
-        private static async ValueTask FlowBox(RGraphics g, CssBox blockBox, CssBox box, double limitRight, double lineSpacing, double lineStartX, CssLineBoxCoordinates coordinates)
+        /// <param name="clonedResumeStart">
+        /// The leading spacing owed to the fragment this pass opens, summed over the ancestors of the
+        /// resume point that were suppressed on the way down because they had already opened in an
+        /// earlier fragmentainer, and that clone their decorations
+        /// (<see href="https://www.w3.org/TR/css-break-3/#break-decoration">css-break-3 §6.2</see>). It
+        /// is spent once, where the flow actually resumes. Always zero on a pass that is not resuming.
+        /// </param>
+        private static async ValueTask FlowBox(RGraphics g, CssBox blockBox, CssBox box, double limitRight, double lineSpacing, double lineStartX, CssLineBoxCoordinates coordinates, double clonedResumeStart = 0)
         {
             var startX = coordinates.CurrentX;
             var startY = coordinates.CurrentY;
-            box.FirstHostingLineBox = coordinates.Line;
+
+            // Since #321 a pass fills one fragmentainer, so a resumed pass re-enters this box from the
+            // top even when its content began pages ago - the words it already placed are skipped by
+            // ordinal below. Read before any of them are visited, this names the ordinal of the box's
+            // own first word, so it says whether this pass is the one opening the box.
+            var startOrdinal = coordinates.WordOrdinal;
+            var opensHere = startOrdinal >= coordinates.ResumeOrdinal;
+
+            // Only a box actually opening here may claim the current line as its first: §6.2 gives a
+            // sliced box its leading border and padding once, at its true start, and
+            // CssLineBox.UpdateRectangle reads this to decide which line gets them. A box whose own
+            // first word is the resume word does open here - the line it was entered on in the earlier
+            // pass is the one CreateLineBoxes discarded.
+            if (opensHere) box.FirstHostingLineBox = coordinates.Line;
 
             // Inline elements (e.g. <b>/<span>) never get their own PerformLayoutImp call - that only
             // happens for block children (CssBox.PerformLayoutImp's childBox.PerformLayout loop), which
@@ -1168,6 +1188,12 @@ namespace PeachPDF.Html.Core.Dom
                 // ordinary inline child, flowed exactly like any other word/box below.
                 if (b is { IsMarkerPseudoElement: true, ListStylePosition: not CssConstants.Inside }) continue;
 
+                // The same question as `opensHere` above, asked of this child: has the walk reached the
+                // resume point yet, or is it still fast-forwarding through content an earlier
+                // fragmentainer placed?
+                var childStartOrdinal = coordinates.WordOrdinal;
+                var childOpensHere = childStartOrdinal >= coordinates.ResumeOrdinal;
+
                 var leftSpacing = (b.Position != CssConstants.Absolute && b.Position != CssConstants.Fixed) ? b.ActualMarginLeft + b.ActualBorderLeftWidth + b.ActualPaddingLeft : 0;
                 var rightSpacing = (b.Position != CssConstants.Absolute && b.Position != CssConstants.Fixed) ? b.ActualMarginRight + b.ActualBorderRightWidth + b.ActualPaddingRight : 0;
 
@@ -1194,7 +1220,22 @@ namespace PeachPDF.Html.Core.Dom
                     b.ApplyFirstLineStyleOverride(g, blockBox.ResolvedFirstLineStyle);
                 }
 
-                coordinates.CurrentX += leftSpacing;
+                // A box whose content began in an earlier fragmentainer is not re-opened here: under
+                // `slice` a continuation carries no leading margin, border or padding at all (§6.2), so
+                // re-adding it both indents this page's text and, with FirstHostingLineBox guarded
+                // above, would leave the rectangle disagreeing with the words inside it. Under `clone`
+                // the box genuinely does re-open - that spacing is carried down and applied once, at
+                // the point the flow resumes, rather than at every box the walk passes through.
+                var childClonedResumeStart = clonedResumeStart;
+
+                if (childOpensHere)
+                {
+                    coordinates.CurrentX += leftSpacing;
+                }
+                else if (b.BoxDecorationBreak == CssConstants.Clone)
+                {
+                    childClonedResumeStart += leftSpacing;
+                }
 
                 var lastLeftIntersectingFloatBox = DomUtils.GetLastLeftIntersectingFloatBox(box, coordinates);
 
@@ -1218,7 +1259,9 @@ namespace PeachPDF.Html.Core.Dom
                             wrapNoWrapBox = true;
                     }
 
-                    if (DomUtils.IsBoxHasWhitespace(b))
+                    // The space belongs before b's first word. If that word was placed in an earlier
+                    // fragmentainer, so was the space.
+                    if (childOpensHere && DomUtils.IsBoxHasWhitespace(b))
                         coordinates.CurrentX += box.ActualWordSpacing;
 
                     for (var wordIndex = 0; wordIndex < b.Words.Count; wordIndex++)
@@ -1321,6 +1364,15 @@ namespace PeachPDF.Html.Core.Dom
                             // First word of the flow's opening line, which was created by the caller
                             // rather than by a wrap.
                             coordinates.LineStartOrdinal = wordOrdinal;
+
+                            // ...and on a resumed flow that word is where the fragment this pass opens
+                            // begins, so it is where every cloning box the break fell inside re-opens
+                            // with its own leading margin, border and padding (§6.2) - the same thing
+                            // the wrap branch above does, for the same reason. The amount was
+                            // accumulated on the way down, so it names exactly the boxes that
+                            // straddle the break rather than every cloning ancestor.
+                            if (wordOrdinal == coordinates.ResumeOrdinal)
+                                coordinates.CurrentX += childClonedResumeStart;
                         }
 
                         coordinates.Line.ReportExistanceOf(word);
@@ -1432,12 +1484,17 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 else
                 {
-                    await FlowBox(g, blockBox, b, limitRight, lineSpacing, lineStartX, coordinates);
+                    await FlowBox(g, blockBox, b, limitRight, lineSpacing, lineStartX, coordinates, childClonedResumeStart);
                     if (coordinates.Break is not null) return;
                     ApplyAtomicInlineVerticalInsets(b, box, coordinates);
                 }
 
-                coordinates.CurrentX += rightSpacing;
+                // A box whose content was all placed in an earlier fragmentainer is not re-closed here
+                // either: its trailing spacing was spent on the page it ended on, and charging it again
+                // shifts everything after it to the right. A box straddling the break does end here,
+                // and does get it.
+                if (coordinates.PlacedSince(childStartOrdinal))
+                    coordinates.CurrentX += rightSpacing;
             }
 
             // handle height setting: the flowed content came out shorter than the box's own
@@ -1465,7 +1522,17 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             // handle width setting
-            if (box.IsInline && 0 <= coordinates.CurrentX - startX && coordinates.CurrentX - startX < box.ActualWidth)
+            //
+            // Only for a box this pass both opened and finished. Whether a box's content came out
+            // narrower than its declared width is a question about the whole box, and `CurrentX - startX`
+            // only measures it when the whole box went through this pass: a box the pass merely walked
+            // through has a delta of zero (its words are skipped, and its spacing is suppressed above),
+            // and one that began pages ago has a delta covering only the part that landed here. Either
+            // way the branch fires spuriously - registering a rectangle at this page's coordinates for a
+            // box whose real extent is elsewhere, which AssignRectanglesToBoxes then merges into the
+            // box's own rectangle for the line. A box that opens here but breaks again never reaches
+            // this point, since FlowBox returns as soon as the break is recorded.
+            if (opensHere && box.IsInline && 0 <= coordinates.CurrentX - startX && coordinates.CurrentX - startX < box.ActualWidth)
             {
                 // hack for actual width handling
                 coordinates.CurrentX += box.ActualWidth - (coordinates.CurrentX - startX);
@@ -1473,7 +1540,7 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             // handle box that is only a whitespace
-            if (box.Text is { Length: > 0 } && string.IsNullOrWhiteSpace(box.Text) && !box.IsImage && box.IsInline && box.Boxes.Count == 0 && box.Words.Count == 0)
+            if (opensHere && box.Text is { Length: > 0 } && string.IsNullOrWhiteSpace(box.Text) && !box.IsImage && box.IsInline && box.Boxes.Count == 0 && box.Words.Count == 0)
             {
                 coordinates.CurrentX += box.ActualWordSpacing;
             }
@@ -1640,9 +1707,18 @@ namespace PeachPDF.Html.Core.Dom
                 foreach (var word in words)
                 {
                     // handle if line is wrapped for the first text element where parent has left margin\padding
+                    //
+                    // This exists for the one case FirstHostingLineBox cannot express: a parent entered
+                    // on one line whose first word wraps to the next, so the leading spacing was applied
+                    // on a line the parent does not really start on. Not when the parent genuinely opens
+                    // on this line - there the spacing is real, it was applied to the words, and
+                    // UpdateRectangle takes it off the rectangle itself. Doing both takes it off twice,
+                    // which is what a resumed pass hit: its opening line is never LineBoxes[0], since
+                    // earlier fragmentainers' lines are kept.
                     var left = word.Left;
 
-                    if (box == box.ParentBox!.Boxes[0] && word == box.Words[0] && word == line.Words[0] && line != line.OwnerBox.LineBoxes[0] && !word.IsLineBreak)
+                    if (box == box.ParentBox!.Boxes[0] && word == box.Words[0] && word == line.Words[0] && line != line.OwnerBox.LineBoxes[0] && !word.IsLineBreak
+                        && !ReferenceEquals(box.ParentBox.FirstHostingLineBox, line))
                         left -= box.ParentBox.ActualMarginLeft + box.ParentBox.ActualBorderLeftWidth + box.ParentBox.ActualPaddingLeft;
 
 
