@@ -1747,6 +1747,14 @@ namespace PeachPDF.Html.Core.Dom
             // Same reasoning as PdfTagType below: not inherited, but a structural duplicate of the same
             // element's box has to carry the element's own resolved value.
             BoxDecorationBreak = p.BoxDecorationBreak;
+            // The break properties are not inherited either (css-break-3 §3.1/§3.2), so they are rightly
+            // absent from the "always" section above - but a structural duplicate is a fragment of the
+            // same element, and §3 attaches these values to the element, not to one of its boxes. Without
+            // this a split block loses its own break-inside: avoid and a repeated <thead> loses its
+            // break-after: avoid, silently, since the initial value is the permissive "auto".
+            BreakBefore = p.BreakBefore;
+            BreakAfter = p.BreakAfter;
+            BreakInside = p.BreakInside;
             // Not a real inherited property (never copied in the "always" section above, so
             // ordinary parent->child cascade seeding never touches it) - but every "everything"
             // call site here (CssProxyBox's repeated-header/footer clone, DomParser's inline/block

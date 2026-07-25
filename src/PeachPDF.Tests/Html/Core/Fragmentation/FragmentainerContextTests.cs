@@ -81,8 +81,13 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
             Assert.False(CreateContext(container).IsFragmenting);
         }
 
+        // "May a break be recorded here?" and "is the legacy per-word relocation suppressed?" are different
+        // questions, and this property used to answer both at once by reading the flag directly. That made
+        // it impossible to enable breaking for a placed flex or grid item without also re-enabling the word
+        // relocation. The engines' measurement re-layouts now enter a monolithic scope of their own
+        // alongside setting the flag, so the two are independent here.
         [Fact]
-        public void IsFragmenting_FollowsSuppressWordPageBreaks()
+        public void IsFragmenting_IsIndependentOfSuppressWordPageBreaks()
         {
             var container = CreateContainer();
             var context = CreateContext(container);
@@ -90,7 +95,7 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
             Assert.True(context.IsFragmenting);
 
             container.SuppressWordPageBreaks = true;
-            Assert.False(context.IsFragmenting);
+            Assert.True(context.IsFragmenting);
 
             container.SuppressWordPageBreaks = false;
             Assert.True(context.IsFragmenting);

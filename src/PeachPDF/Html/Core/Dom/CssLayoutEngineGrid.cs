@@ -1319,12 +1319,19 @@ namespace PeachPDF.Html.Core.Dom
             if (container is not null)
                 container.SuppressWordPageBreaks = true;
 
+            // Same reasoning as the flex engine's twin of this method: a break recorded here would name a
+            // provisional position, so the scope suppresses breaking as well as the word relocation.
+            var fragmentainer = container?.CurrentFragmentainer;
+            var previousFragmenting = fragmentainer?.EnterMonolithic() ?? false;
+
             try
             {
                 await box.PerformLayout(g);
             }
             finally
             {
+                fragmentainer?.ExitMonolithic(previousFragmenting);
+
                 if (container is not null)
                     container.SuppressWordPageBreaks = previousSuppress;
             }

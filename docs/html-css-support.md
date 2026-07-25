@@ -563,6 +563,22 @@ And the side is resolved against the page's position in the full page grid, whil
 
 **Margin truncation at page breaks:** per [CSS Fragmentation Level 3 §5.2](https://www.w3.org/TR/css-break-3/#break-margins), when a vertical margin between two elements is large enough that it alone would push the following element onto a later page (an *unforced* break — no explicit `break-before`/`break-after`/`page` involved), that margin is discarded entirely and the following element starts flush at the top of the very next page, rather than the margin paginating through as literal blank pages. A margin-top large enough to visually separate content across a deliberate page boundary should use an explicit `break-before: page` (or `page-break-before: always`) instead — margins after a *forced* break are preserved, not truncated, per the same spec section. This currently applies to normal block flow only (not flex/table/multi-column item positioning), and only when the affected element has a preceding sibling in the same containing block.
 
+<a id="monolithic-content"></a>
+**Monolithic content moves whole rather than being split** ([CSS Fragmentation Level 3 §2](https://www.w3.org/TR/css-break-3/#monolithic)). Some content may not be broken at all, and where it would straddle a page boundary it is carried onto the next page in one piece. Two kinds qualify:
+
+- **Replaced elements** — `<img>`, `<svg>`, `<iframe>`, and an `<object>`/`<video>` whose resource resolved to an image. These have no inner structure to fragment.
+- **Scroll containers** — any box whose `overflow` is not `visible` or `clip`. The root element is excluded, because its `overflow` propagates to the viewport rather than making it a scroll container ([CSS Overflow Level 3 §3.3](https://www.w3.org/TR/css-overflow-3/#overflow-propagation)); a paginated document has no viewport for it to propagate to, so the common `html { overflow: hidden }` idiom does not declare a whole document unbreakable. `<body>` is excluded on the same grounds, but only while the root's own `overflow` is `visible` — once the root declares one, the body is a scroll container in its own right. (`overflow: clip` is not currently implemented and computes as `visible`, so it is excluded either way.)
+
+Three boundaries are worth knowing.
+
+Content that fits in **no** page at all — a scroll container taller than the page's content band — keeps fragmenting rather than overflowing: the spec would have it overflow the page, but in a paginated document nothing past the first page would then be drawn at all, so PeachPDF prefers splitting such a box to losing most of it.
+
+The rule applies to normal block flow only: a monolithic box positioned by the flex, grid, table or multi-column engines is placed against that engine's own grid, so it can still be split (the same boundary the rest of the break machinery has — see [Multi-column Layout](#multi-column-layout)).
+
+And a box that had already begun flowing its own text across the boundary before it was moved carries the page gap with it, appearing as extra vertical space inside the box rather than being closed up. This is long-standing behavior for `break-inside: avoid`, which uses the same relocation, and monolithic content now shares it.
+
+> **Migration note:** a box with `overflow` other than `visible` — very often a card, panel or figure with `overflow: hidden` — used to be cut in half by a page boundary. It now moves to the next page whole, which leaves a gap where it used to sit and shifts the content after it. See [Forward compatibility](#forward-compatibility).
+
 **A line box is never split across pages** ([CSS Fragmentation Level 3 §4.1](https://www.w3.org/TR/css-break-3/#possible-breaks)). When a line does not fit on the page it started on, the whole line moves to the next one — including any part of it that would have fitted.
 
 > **Migration note:** a line mixing content of different heights — an inline image, or a larger font, beside ordinary text — used to be able to split at a page boundary, with the taller content moving to the next page while the shorter words stayed behind on the page the rest of their line had left. Such a line now moves as a unit. See [Forward compatibility](#forward-compatibility).

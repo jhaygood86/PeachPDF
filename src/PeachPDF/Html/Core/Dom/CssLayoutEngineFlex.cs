@@ -847,12 +847,21 @@ namespace PeachPDF.Html.Core.Dom
             if (container is not null)
                 container.SuppressWordPageBreaks = true;
 
+            // A break token recorded here would name a position this item is about to be translated away
+            // from, so this scope suppresses breaking as well as the legacy word relocation above. The two
+            // used to be one flag, which meant breaking could never be enabled for a placed item without
+            // also re-enabling the relocation - see FragmentainerContext.IsFragmenting.
+            var fragmentainer = container?.CurrentFragmentainer;
+            var previousFragmenting = fragmentainer?.EnterMonolithic() ?? false;
+
             try
             {
                 await box.PerformLayout(g);
             }
             finally
             {
+                fragmentainer?.ExitMonolithic(previousFragmenting);
+
                 if (container is not null)
                     container.SuppressWordPageBreaks = previousSuppress;
             }

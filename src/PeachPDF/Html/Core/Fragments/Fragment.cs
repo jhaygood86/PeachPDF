@@ -137,6 +137,15 @@ namespace PeachPDF.Html.Core.Fragments
     /// disagree with what is painted.
     /// </param>
     /// <param name="IsLastFragment">whether this is the box's last fragment; see <paramref name="IsFirstFragment"/></param>
+    /// <param name="IsMonolithic">
+    /// whether the originating box is monolithic content —
+    /// <see href="https://www.w3.org/TR/css-break-3/#monolithic">§2</see>'s own set, a replaced element or
+    /// a scroll container, as decided by
+    /// <see cref="Fragmentation.MonolithicContent.IsMonolithic"/>. A property of the box rather than of
+    /// this fragment, so every fragment of one box agrees. Recorded here because a consumer reading the
+    /// tree — paint, or a later phase deciding where a break may fall — should not have to re-derive from
+    /// <see cref="Box"/> a fact layout has already settled.
+    /// </param>
     /// <param name="Lines">this fragment's own decoration rectangles</param>
     /// <param name="Words">the words of this box that fall in this fragmentainer</param>
     /// <param name="Children">the fragments of this box's child boxes in this fragmentainer</param>
@@ -157,6 +166,7 @@ namespace PeachPDF.Html.Core.Fragments
         bool IsFixed,
         bool IsFirstFragment,
         bool IsLastFragment,
+        bool IsMonolithic,
         IReadOnlyList<LineFragment> Lines,
         IReadOnlyList<TextFragment> Words,
         IReadOnlyList<BoxFragment> Children,

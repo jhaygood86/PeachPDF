@@ -1,5 +1,6 @@
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Utils;
 using System;
 using System.Collections.Generic;
@@ -183,7 +184,8 @@ namespace PeachPDF.Html.Core.Fragments
         /// </summary>
         private static BoxFragment EmptyRootFragment(CssBox root, int fragmentainerIndex, double localOriginY) =>
             new(RRect.Empty, root, fragmentainerIndex, localOriginY, Localize(root.Bounds, localOriginY),
-                IsFixed: false, IsFirstFragment: true, IsLastFragment: true, [], [], [], OverflowClip: null);
+                IsFixed: false, IsFirstFragment: true, IsLastFragment: true,
+                MonolithicContent.IsMonolithic(root), [], [], [], OverflowClip: null);
 
         /// <summary>
         /// Records, for every box, the exact inclusive range of fragmentainers it emits a fragment in.
@@ -307,6 +309,7 @@ namespace PeachPDF.Html.Core.Fragments
                 isFixed,
                 fragmentainerIndex == span.First,
                 fragmentainerIndex == span.Last,
+                MonolithicContent.IsMonolithic(box),
                 lines,
                 words,
                 children,

@@ -1365,9 +1365,25 @@ namespace PeachPDF.Html.Core.Dom
         /// Places this box and lays out its content — the part of layout a resumed pass re-enters,
         /// picking up where the previous fragmentainer stopped rather than starting over.
         /// </summary>
+        /// <summary>
+        /// Whether <see cref="LayoutContents"/> positions this box itself, via <c>PlaceBlockBox</c>.
+        /// </summary>
+        /// <remarks>
+        /// Everything else falls into that method's else branch, which copies the <i>previous sibling's</i>
+        /// <see cref="CssBoxProperties.Location"/> and <see cref="CssBoxProperties.ActualBottom"/> — a
+        /// <c>display: none</c> box, a <c>table-row</c>, a bare inline. So any later code that measures this
+        /// box's own height, or moves it, has to ask this first: for those boxes the coordinates belong to
+        /// something else and both the measurement and the move are meaningless.
+        /// </remarks>
+        private bool PlacesItselfAsBlockBox =>
+            IsBlock
+            || Display is CssConstants.ListItem or CssConstants.Table or CssConstants.InlineTable
+                       or CssConstants.TableCell or CssConstants.Flex or CssConstants.InlineFlex
+                       or CssConstants.Grid or CssConstants.InlineGrid;
+
         private async ValueTask LayoutContents(RGraphics g, BreakToken? resume)
         {
-            if (IsBlock || Display == CssConstants.ListItem || Display == CssConstants.Table || Display == CssConstants.InlineTable || Display == CssConstants.TableCell || Display == CssConstants.Flex || Display == CssConstants.InlineFlex || Display == CssConstants.Grid || Display == CssConstants.InlineGrid)
+            if (PlacesItselfAsBlockBox)
             {
                 if (resume is null)
                 {
@@ -1378,6 +1394,8 @@ namespace PeachPDF.Html.Core.Dom
                     if (RequestedBreakBeforeTop is not null) return;
                 }
 
+                // The engines MonolithicContent.RunsAnEngineOfItsOwn names, in the same order; this branch
+                // needs to know *which* one, which is why it cannot ask the combined predicate.
                 if (Display is CssConstants.Flex or CssConstants.InlineFlex)
                 {
                     await LayoutMonolithicContent(g, CssLayoutEngineFlex.PerformLayout);
@@ -1445,18 +1463,76 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Whether this box is <see href="https://www.w3.org/TR/css-break-3/#monolithic">§2</see>
+        /// monolithic content that the epilogue's page-context mover may move at all. Whether there is
+        /// somewhere to move it <i>to</i> is a separate question, asked at the call site against the
+        /// destination band.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Two exclusions, each for its own reason. An out-of-flow box is not in the flow this mover shifts
+        /// — a fixed box is emitted in every fragmentainer at identical coordinates, so "the next page"
+        /// names nothing for it. And a box that does not place itself
+        /// (<see cref="PlacesItselfAsBlockBox"/>) holds its <i>previous sibling's</i> coordinates rather
+        /// than its own, so both the measurement and the move would be about the wrong box: a
+        /// <c>display: none</c> panel with <c>overflow: hidden</c> — an ordinary hidden modal or accordion
+        /// body — was relocated on its neighbour's geometry, inflating the document by a page.
+        /// </para>
+        /// <para>
+        /// And the whole question is gated on <see cref="HtmlContainerInt.IsFragmenting"/>, which is what
+        /// keeps this out of subtrees whose placement an engine owns
+        /// (<see cref="MonolithicContent.PaginatesItsOwnContent"/>) and out of measurement passes at
+        /// provisional positions. A scroll container inside a table cell is placed by the table engine
+        /// against its own row grid; shifting it against the <i>page</i> grid from here moves it out from
+        /// under its row — which is exactly what the showcase diff caught. Inside those engines a
+        /// monolithic box degrades to being split, the same boundary the directional-break parity step and
+        /// the rest of the break machinery already have (#166/#308).
+        /// </para>
+        /// <para>
+        /// The <c>break-inside: avoid</c> arm beside this one is deliberately <b>not</b> gated the same
+        /// way: it predates the fragmentation context and its behaviour inside those engines is
+        /// long-standing. This arm opts into the gate from the start rather than inheriting the problem.
+        /// </para>
+        /// </remarks>
+        private bool IsMonolithicBoxThisMoverMayMove() =>
+            !IsOutOfFlow
+            && PlacesItselfAsBlockBox
+            && HtmlContainer is { IsFragmenting: true }
+            && MonolithicContent.IsMonolithic(this);
+
+        /// <summary>
+        /// Whether this box, with the decorations §6.2 makes each fragment re-open and close with, fits
+        /// inside pagination slot <paramref name="slotIndex"/>'s content band.
+        /// </summary>
+        private bool FitsInFragmentainer(int slotIndex)
+        {
+            var container = HtmlContainer!;
+            var (clonedStart, clonedEnd) = MonolithicContent.ClonedBlockInsets(this, container);
+
+            return MonolithicContent.FitsInBand(
+                ActualBottom - Location.Y, clonedStart, clonedEnd, container.PageBandHeightOf(slotIndex));
+        }
+
+        /// <summary>
         /// Runs a layout engine that paginates its own content, with breaking suppressed for the
         /// duration.
         /// </summary>
         /// <remarks>
-        /// Flex, grid, table and multi-column containers are <b>monolithic</b> to the fragmentation
-        /// driver (<see href="https://www.w3.org/TR/css-break-3/#monolithic">css-break-3 §2</see>): each
-        /// lays its subtree out in one go, inside whichever fragmentainer it starts in, and keeps the
-        /// pagination it already does for itself — the table engine's per-row breaks and repeated
-        /// header/footer proxies, the columns engine's re-banding. Suppressing breaks here also stops a
-        /// provisional placement made during those engines' measurement passes from being mistaken for
-        /// a real break decision, which is the hazard <c>SuppressWordPageBreaks</c> was introduced for.
-        /// Making these subtrees genuinely fragmentable is tracked separately.
+        /// <para>
+        /// The set of boxes this covers is
+        /// <see cref="MonolithicContent.PaginatesItsOwnContent"/>: flex, grid, table and multi-column
+        /// containers. Each lays its subtree out in one go, inside whichever fragmentainer it starts in,
+        /// and keeps the pagination it already does for itself — the table engine's per-row breaks and
+        /// repeated header/footer proxies, the columns engine's re-banding. Suppressing breaks here also
+        /// stops a provisional placement made during those engines' measurement passes from being mistaken
+        /// for a real break decision, which is the hazard <c>SuppressWordPageBreaks</c> was introduced for.
+        /// </para>
+        /// <para>
+        /// <b>This is an implementation constraint, not
+        /// <see href="https://www.w3.org/TR/css-break-3/#monolithic">§2</see>'s own set</b> — which is
+        /// <see cref="MonolithicContent.IsMonolithic"/>, and which these boxes need not be members of.
+        /// The two used to be one undifferentiated notion of "monolithic"; see that type.
+        /// </para>
         /// </remarks>
         private async ValueTask LayoutMonolithicContent(
             RGraphics g, Func<RGraphics, CssBox, ValueTask> engine, bool layoutOutOfFlowChildren = true)
@@ -1912,7 +1988,13 @@ namespace PeachPDF.Html.Core.Dom
             // avoid / avoid-page, but not avoid-column or avoid-region: this mover is a page-context
             // mover by construction (it measures against PageBandHeightOf and relocates to PageTopOf),
             // so a hint naming a different fragmentation context must not suppress a page break.
-            if (BreakValues.AvoidsPageBreak(BreakInside))
+            //
+            // Monolithic content (css-break-3 §2 - a replaced element, a scroll container) reaches the same
+            // mover, because "may not be broken" and "asks not to be broken" want the same relocation.
+            var avoidsBreak = BreakValues.AvoidsPageBreak(BreakInside);
+            var monolithic = IsMonolithicBoxThisMoverMayMove();
+
+            if (avoidsBreak || monolithic)
             {
                 // Shifted-grid convention (see HtmlContainer.PageIndexOf) - topRelativeToCurrentPage is
                 // this box's distance from the start of its own page's real content band, not a raw
@@ -1923,12 +2005,20 @@ namespace PeachPDF.Html.Core.Dom
 
                 var bottomRelativeToCurrentPage = topRelativeToCurrentPage + ActualBottom - Location.Y;
 
-                if (bottomRelativeToCurrentPage > HtmlContainer.PageBandHeightOf(currentPageIndex))
+                // The two arms part company on a box that fits in no fragmentainer. An unsatisfiable
+                // `avoid` is relaxed and the box still moves, maximizing what lands on one page (§4.3);
+                // a monolithic box is left exactly where it is, because §2 would have it overflow and
+                // overflowing discards every fragmentainer past the first - so PeachPDF keeps fragmenting
+                // it instead (#350). The question is asked of the *destination* band, which per-page
+                // @page margins can size differently from the current one and from PageSize.Height.
+                if (bottomRelativeToCurrentPage > HtmlContainer.PageBandHeightOf(currentPageIndex)
+                    && (avoidsBreak || FitsInFragmentainer(currentPageIndex + 1)))
                 {
                     var offset = HtmlContainer.PageTopOf(currentPageIndex + 1) - Location.Y;
                     OffsetTopWithKeepWithNextRun(offset, topRelativeToCurrentPage);
                 }
             }
+
 
             // orphans/widows: a paragraph-like box (real line boxes, not multicol's atomic-child model -
             // which never splits a child, so this defect can't occur there in the first place) whose
