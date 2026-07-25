@@ -1064,6 +1064,19 @@ namespace PeachPDF.Html.Core.Dom
         private double? _forcedBreakTop;
 
         /// <summary>
+        /// Whether this box's position was set by a forced break (css-break-3 §3.1).
+        /// </summary>
+        /// <remarks>
+        /// A forced break is a hard positional constraint, not a margin, so such a box anchors what
+        /// follows it even when it is otherwise self-collapsing: <see cref="MarginTopCollapse"/>'s
+        /// walk-back must stop here rather than resolving the next box against an earlier sibling and
+        /// undoing the break. The canonical case is an empty <c>&lt;div class="page-break"&gt;</c>
+        /// marker, which has nothing in it to collapse but everything to say about where the next
+        /// section starts.
+        /// </remarks>
+        internal bool PlacedByForcedBreak { get; private set; }
+
+        /// <summary>
         /// Where this box stopped, when it could not finish inside the fragmentainer the current pass is
         /// filling. Read by the parent's child loop, which wraps it in a link of its own and returns in
         /// turn, so the record unwinds to the fragmentation-context root.
@@ -1290,6 +1303,7 @@ namespace PeachPDF.Html.Core.Dom
             // position, where the break can legitimately land somewhere else. So both the target and
             // this box's blank-slot reservation are retracted here and only re-asserted below.
             _forcedBreakTop = null;
+            PlacedByForcedBreak = false;
             HtmlContainer?.SetBlankSlotReservation(this, null);
 
             if (_isForcedBreak)
@@ -1584,18 +1598,26 @@ namespace PeachPDF.Html.Core.Dom
                         // to this box, rather than by inflating the previous sibling's height to reach
                         // it: that predecessor's own geometry is not the break's to change.
                         //
-                        // The collapsed top margin is carried over deliberately: §5.2 truncates margins
-                        // adjoining an *unforced* break only, so the margin after a forced one is
-                        // preserved. It is read from CollapsedMarginTop, which MarginTopCollapse above
-                        // has just set to the group's value, rather than measured as "top - baseTop":
-                        // where the previous sibling is self-collapsing those two differ, because
-                        // MarginTopCollapse resolves such a box's position against an earlier anchor and
-                        // cancels baseTop back out (CSS2.1 §8.3.1). Taking the difference there would
-                        // land this box at the anchor's offset from the break rather than at the break.
+                        // §5.2 truncates margins adjoining an *unforced* break only, so the margin on
+                        // the new page's side of a forced break survives and opens that page. That is
+                        // this box's own margin collapsed with its adjoining first-child chain - which
+                        // is what MarginTopCollapse computes for a box with no previous sibling, and
+                        // the break makes this box exactly that. The group computed against the real
+                        // previous sibling is the wrong quantity: it also holds that sibling's
+                        // margin-bottom, which belongs to the page being left.
                         _forcedBreakTop = null;
-                        top = forcedTop + CollapsedMarginTop;
+                        PlacedByForcedBreak = true;
+                        top = forcedTop + MarginTopCollapse(null);
                     }
-                    else if (prevSibling is not null && !_isForcedBreak)
+                    // A previous sibling that a forced break placed and that contributes no height of
+                    // its own - the empty "<div class='page-break'>" marker - puts the break
+                    // immediately before this box, so this box's margin adjoins a *forced* break and
+                    // §5.2 preserves it rather than truncating it. Without this the flush-boundary
+                    // convention below reads the marker's position (exactly a slot top, so one epsilon
+                    // earlier is the previous slot) as a boundary this box's margin crossed, and
+                    // discards the margin.
+                    else if (prevSibling is not null && !_isForcedBreak
+                             && !(prevSibling.PlacedByForcedBreak && prevSibling.IsMarginCollapseThrough()))
                     {
                         var pageHeight = HtmlContainer!.PageSize.Height;
                         if (pageHeight > 0)
@@ -2590,7 +2612,11 @@ namespace PeachPDF.Html.Core.Dom
                 // reveals the group's true, larger collapsed value). Bounded defensively (real documents
                 // never have this many consecutive self-collapsing siblings) so any unexpected sibling-
                 // chain quirk degrades to "stop walking back" instead of spinning forever.
-                if (prevSibling.IsMarginCollapseThrough())
+                // A box whose own position was set by a forced break anchors what follows it even when
+                // it is self-collapsing: the break is a positional constraint rather than a margin, so
+                // walking back past it would resolve this box against an earlier sibling and undo the
+                // break outright. An empty "<div class='page-break'>" marker is exactly that box.
+                if (prevSibling.IsMarginCollapseThrough() && !prevSibling.PlacedByForcedBreak)
                 {
                     prevSibling.FoldSelfCollapsingMargins(ref margins);
                 }
@@ -2602,11 +2628,11 @@ namespace PeachPDF.Html.Core.Dom
 
                 var walker = prevSibling;
                 var walkBackSteps = 0;
-                while (walker.IsMarginCollapseThrough() && walkBackSteps++ < 1000)
+                while (walker.IsMarginCollapseThrough() && !walker.PlacedByForcedBreak && walkBackSteps++ < 1000)
                 {
                     var earlierSibling = DomUtils.GetPreviousSibling(walker, false);
                     if (earlierSibling == null || earlierSibling == walker) break;
-                    if (earlierSibling.IsMarginCollapseThrough())
+                    if (earlierSibling.IsMarginCollapseThrough() && !earlierSibling.PlacedByForcedBreak)
                     {
                         earlierSibling.FoldSelfCollapsingMargins(ref margins);
                     }
@@ -2615,7 +2641,7 @@ namespace PeachPDF.Html.Core.Dom
                         margins.Fold(earlierSibling.ActualMarginBottom);
                     }
                     walker = earlierSibling;
-                    if (!walker.IsMarginCollapseThrough()) anchor = walker;
+                    if (!walker.IsMarginCollapseThrough() || walker.PlacedByForcedBreak) anchor = walker;
                 }
             }
 

@@ -184,6 +184,43 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(container.PageTopOf(2), second!.Location.Y, 0.5);
         }
 
+        // The empty-marker idiom: "<div class='page-break'></div>" carries the break and nothing else.
+        // Such a marker is self-collapsing, so margin collapsing would ordinarily resolve the section
+        // after it against the section before it and undo the break - which is what the old mechanism's
+        // stretching of the predecessor accidentally papered over. A box placed by a forced break
+        // anchors what follows it instead.
+        [Theory]
+        [InlineData("break-before: page", 1)]
+        [InlineData("break-before: recto", 2)]
+        public async Task EmptyMarkerCarryingTheBreak_StillPushesTheFollowingSection(string declaration, int expectedSlot)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap($"<div id='first' style='height:50pt'>first</div>"
+                                   + $"<div style='{declaration}'></div>"
+                                   + "<div id='second' style='height:50pt'>second</div>"),
+                pageHeight: PageHeight);
+
+            var second = LayoutHarness.FindById(root, "second");
+            Assert.NotNull(second);
+            Assert.Equal(expectedSlot, SlotOf(container, second!));
+        }
+
+        // And it lands at the new page's content top plus its own collapsed top margin: §5.2 truncates
+        // a margin adjoining an *unforced* break only, so the margin after a forced one is kept.
+        [Fact]
+        public async Task SectionAfterAnEmptyMarker_KeepsItsOwnTopMargin()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap("<div style='height:50pt'>first</div>"
+                                   + "<div style='break-before: page'></div>"
+                                   + "<div id='second' style='margin-top:18pt;height:50pt'>second</div>"),
+                pageHeight: PageHeight);
+
+            var second = LayoutHarness.FindById(root, "second");
+            Assert.NotNull(second);
+            Assert.Equal(container.PageTopOf(1) + 18, second!.Location.Y, 0.5);
+        }
+
         // A directional break-after on the last box of the flow pads the document, so the page that
         // would follow it falls on the requested side - the book idiom, where a volume ends such that
         // the next one opens recto. Content ends on slot 0 (a right page), so the next page is slot 1,
