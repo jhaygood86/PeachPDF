@@ -401,7 +401,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
 
         // End-to-end through the real cascade (not the CssUtils setter directly): a css-break-3 §3.1 value
         // authored in a stylesheet has to survive Layer A's validation and land on the box verbatim, while a
-        // value the spec dropped is rejected at parse time and leaves the property at its initial value.
+        // value outside that set is rejected at parse time and leaves the property at its initial value.
         [Theory]
         [InlineData("break-before: recto", "recto")]
         [InlineData("break-before: VERSO", "verso")]

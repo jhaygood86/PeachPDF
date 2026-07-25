@@ -107,9 +107,10 @@ namespace PeachPDF.Tests.Integration
                 $"break-before: page should start the box on page 2 but it starts at y={second.Location.Y}");
         }
 
-        // css-break-3 §3.1 dropped "always" from break-before/break-after - it survives only as the legacy
-        // page-break-* value (§3.3). So "break-before: always" is invalid CSS, dropped at parse time, and must
-        // NOT force a break; the same document written with page-break-before: always still does (above).
+        // "always" is not in css-break-3 §3.1's break-before/break-after value set (it is a css-break-4
+        // addition); on this axis it exists only as the legacy §3.3 page-break-* value. So
+        // "break-before: always" is invalid CSS, dropped at parse time, and must NOT force a break - while
+        // the same document written with page-break-before: always still does (PageBreakBefore_ForcesBreak).
         [Fact]
         public async Task BreakBeforeAlways_IsInvalid_AndDoesNotForceBreak()
         {
