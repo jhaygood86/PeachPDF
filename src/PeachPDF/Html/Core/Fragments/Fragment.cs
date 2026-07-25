@@ -28,6 +28,44 @@ namespace PeachPDF.Html.Core.Fragments
     internal abstract record Fragment(RRect Rect);
 
     /// <summary>
+    /// What one decoration rectangle needs in order to honour <c>box-decoration-break</c>
+    /// (<see href="https://www.w3.org/TR/css-break-3/#break-decoration">css-break-3 §6.2</see>): the
+    /// unbroken box this rectangle is a slice of, this fragment's own box, and which of its inline-axis
+    /// edges are real box edges rather than fragmentation breaks.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b><paramref name="UnbrokenStrip"/> is per-rectangle, not shared.</b> §6.2's <c>slice</c> means
+    /// "rendered with no breaks present, then sliced by the breaks" — and for an inline box broken across
+    /// lines, the no-breaks rendering is the box on one infinitely long line. Each rectangle therefore
+    /// carries that same strip <i>as seen from its own position</i>: same width, different X. With
+    /// <c>strip.X = rect.X - (width of the rectangles before this one)</c>, the strip's left edge
+    /// coincides with the first rectangle's left and its right edge with the last rectangle's right, so
+    /// resolving a decoration against the strip and clipping it to the rectangle produces rounded corners
+    /// at the true start and end only, square edges at every break, and a background that continues across
+    /// lines — with no per-corner special-casing. Same shape as WebKit's
+    /// <c>InlineFlowBox::paintFillLayer</c>.
+    /// </para>
+    /// <para>
+    /// The two edge flags are <b>physical</b> and derived from the two rectangles, so they cannot disagree
+    /// with the strip and they stay correct when a right-to-left line reverses the inline progression.
+    /// Every consumer is physical too — the left border edge, the left padding inset on an underline.
+    /// </para>
+    /// </remarks>
+    /// <param name="UnbrokenStrip">
+    /// the whole unbroken box as seen from this rectangle — what every <c>slice</c> decoration resolves
+    /// against. Equal to <see cref="Fragment.Rect"/> for a box that is not broken.
+    /// </param>
+    /// <param name="FragmentRect">
+    /// this rectangle cut to its fragmentainer's content band — what every <c>clone</c> decoration
+    /// resolves against, so a box crossing a page boundary gets a closed border at the break rather than
+    /// one the page clip cuts away. Equal to <see cref="Fragment.Rect"/> when the rectangle fits its band.
+    /// </param>
+    /// <param name="HasLeftEdge">whether this rectangle's left edge is the box's own, not a break</param>
+    /// <param name="HasRightEdge">whether this rectangle's right edge is the box's own, not a break</param>
+    internal sealed record SliceGeometry(RRect UnbrokenStrip, RRect FragmentRect, bool HasLeftEdge, bool HasRightEdge);
+
+    /// <summary>
     /// One line's worth of a box's own decoration area — the fragmentainer-local equivalent of a
     /// single <see cref="CssBox.Rectangles"/> entry, which is what backgrounds, borders, and text
     /// decoration are painted over. A block-level box with no line boxes of its own gets exactly one
@@ -37,7 +75,12 @@ namespace PeachPDF.Html.Core.Fragments
     /// </summary>
     /// <param name="Rect">the decoration rectangle, in fragmentainer-local coordinates</param>
     /// <param name="Line">the line box this rectangle belongs to, or null for a whole-box rectangle</param>
-    internal sealed record LineFragment(RRect Rect, CssLineBox? Line) : Fragment(Rect);
+    /// <param name="Slice">
+    /// how this rectangle relates to the unbroken box it came from — the input to
+    /// <c>box-decoration-break</c> (§6.2). Only the builder can compute it: it needs every rectangle the
+    /// box produced across every fragmentainer, and paint only ever sees one fragmentainer's survivors.
+    /// </param>
+    internal sealed record LineFragment(RRect Rect, CssLineBox? Line, SliceGeometry Slice) : Fragment(Rect);
 
     /// <summary>
     /// One laid-out word (or inline replaced run) positioned inside a fragmentainer. Words are
@@ -86,11 +129,14 @@ namespace PeachPDF.Html.Core.Fragments
     /// behaviour that previously fell out of paint suppressing the page scroll offset.
     /// </param>
     /// <param name="IsFirstFragment">
-    /// whether this is the box's first fragment. Together with <paramref name="IsLastFragment"/> this
-    /// identifies the edges a <c>box-decoration-break</c> value applies at
-    /// (<see href="https://www.w3.org/TR/css-break-3/#break-decoration">§6.2</see>).
+    /// whether this is the box's first fragment — informational, and <b>not</b> the edges a
+    /// <c>box-decoration-break</c> value applies at. The span behind it is unioned with every
+    /// descendant's, so a box whose own geometry begins on page 2 still reports
+    /// <c>IsFirstFragment</c> on page 1 when a descendant lands there. Those edges live on
+    /// <see cref="LineFragment.Slice"/>, per rectangle, where they are derived from geometry that cannot
+    /// disagree with what is painted.
     /// </param>
-    /// <param name="IsLastFragment">whether this is the box's last fragment</param>
+    /// <param name="IsLastFragment">whether this is the box's last fragment; see <paramref name="IsFirstFragment"/></param>
     /// <param name="Lines">this fragment's own decoration rectangles</param>
     /// <param name="Words">the words of this box that fall in this fragmentainer</param>
     /// <param name="Children">the fragments of this box's child boxes in this fragmentainer</param>

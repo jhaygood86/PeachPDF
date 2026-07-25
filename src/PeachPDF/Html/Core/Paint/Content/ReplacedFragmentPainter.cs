@@ -36,8 +36,10 @@ namespace PeachPDF.Html.Core.Paint.Content
 
             var clipped = RenderUtils.ClipGraphicsByOverflow(g, box, fragment.OriginY);
 
-            FragmentPainter.PaintBackground(g, box, rect, isFirst: true);
-            BordersDrawHandler.DrawBoxBorders(g, box, rect, true, true);
+            // A replaced element is monolithic (css-break-3 §4.1): it is never split, so it always paints
+            // its whole box with both of its edges.
+            FragmentPainter.PaintBackground(g, box, BoxDecorationGeometry.Unbroken(rect));
+            BordersDrawHandler.DrawBoxBorders(g, box, rect, hasLeftEdge: true, hasRightEdge: true);
 
             DrawContent(g, box, ContentRect(box, fragment, rect));
 

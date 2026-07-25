@@ -47,6 +47,16 @@ namespace PeachPDF.Html.Core.Fragments
         private const double BandOverlapEpsilon = 1e-6;
 
         /// <summary>
+        /// Tolerance for deciding that a decoration rectangle's edge coincides with the unbroken box's own
+        /// edge — that is, that it is a real box edge rather than a fragmentation break
+        /// (<see cref="SliceGeometry.HasLeftEdge"/>). Deliberately <see cref="RRect"/>'s own equality
+        /// tolerance rather than <see cref="BandOverlapEpsilon"/>'s overlap one: paint compares the strip to
+        /// the rectangle with <c>==</c> to decide whether anything needs slicing at all, so a finer tolerance
+        /// here could call an edge broken on a rectangle paint had already judged unbroken.
+        /// </summary>
+        private const double EdgeEpsilon = 0.001;
+
+        /// <summary>
         /// Identifies a box within the walk. A repeating table header's source subtree is reached
         /// through a <see cref="CssProxyBox"/> and appears once per page at a different position each
         /// time, so the same <see cref="CssBox"/> can carry several unrelated spans — the owning proxy
@@ -219,10 +229,15 @@ namespace PeachPDF.Html.Core.Fragments
 
                 if (rectangles.Count > 0)
                 {
+                    // §6.2's geometry is computed from ALL of the box's rectangles, not just the ones
+                    // that survive the band filter below: a decoration a break slices is defined by the
+                    // whole unbroken box, which no single fragmentainer can see.
+                    var slices = SliceGeometriesOf(box, rectangles, isFixed, container, slot, originY);
+
                     foreach (var (line, rect) in rectangles)
                     {
                         if (IntersectsBand(rect, isFixed, container, slot))
-                            lines.Add(new LineFragment(Localize(rect, originY), line));
+                            lines.Add(new LineFragment(Localize(rect, originY), line, slices[line]));
                     }
                 }
                 else
@@ -230,7 +245,16 @@ namespace PeachPDF.Html.Core.Fragments
                     var bounds = BoundsOf(box, snapshot);
 
                     if (IntersectsBand(bounds, isFixed, container, slot))
-                        lines.Add(new LineFragment(Localize(bounds, originY), null));
+                    {
+                        var local = Localize(bounds, originY);
+
+                        // A block-level box is one rectangle: nothing slices it in the inline axis, so
+                        // the strip is the rectangle itself. Its block axis is still fragmented, which is
+                        // what the band-cut FragmentRect carries.
+                        lines.Add(new LineFragment(local, null,
+                            new SliceGeometry(local, Localize(BandCut(bounds, box, isFixed, container, slot), originY),
+                                HasLeftEdge: true, HasRightEdge: true)));
+                    }
                 }
 
                 for (var i = 0; i < box.Words.Count; i++)
@@ -430,17 +454,141 @@ namespace PeachPDF.Html.Core.Fragments
         }
 
         /// <summary>
+        /// <paramref name="slot"/>'s content band in document space. A fixed rectangle is measured against
+        /// the band at its own unshifted position, since it does not move with the page.
+        /// </summary>
+        private static (double Top, double Bottom) BandOf(bool isFixed, HtmlContainerInt container, CandidateSlot slot)
+        {
+            var top = isFixed ? container.MarginTop : slot.BandTop;
+            return (top, top + slot.Geometry.BandHeight);
+        }
+
+        /// <summary>
         /// Whether a document-space rectangle lands in <paramref name="slot"/>'s content band, using
-        /// the same minimum-overlap rule the painter's own visibility test applies. A fixed rectangle
-        /// is tested against the band at its own unshifted position, since it does not move with the
-        /// page.
+        /// the same minimum-overlap rule the painter's own visibility test applies.
         /// </summary>
         private static bool IntersectsBand(RRect rect, bool isFixed, HtmlContainerInt container, CandidateSlot slot)
         {
-            var bandTop = isFixed ? container.MarginTop : slot.BandTop;
-            var bandBottom = bandTop + slot.Geometry.BandHeight;
+            var (bandTop, bandBottom) = BandOf(isFixed, container, slot);
 
             return Math.Min(rect.Bottom, bandBottom) - Math.Max(rect.Top, bandTop) > BandOverlapEpsilon;
+        }
+
+        /// <summary>
+        /// A document-space rectangle cut to <paramref name="slot"/>'s content band — the box fragment
+        /// <c>box-decoration-break: clone</c> wraps with its own border and padding
+        /// (<see href="https://www.w3.org/TR/css-break-3/#break-decoration">§6.2</see>). Rectangles that
+        /// fit inside the band come back unchanged, which is every rectangle of an unfragmented box.
+        /// </summary>
+        /// <remarks>
+        /// A cloning <b>ancestor</b> re-opens with its own border and padding at the band edge, and each
+        /// fragment is wrapped independently — so a nested box's fragment starts inside its ancestors' and the
+        /// band it may occupy is inset by them. Without that inset every level of a nested cloning stack would
+        /// close on the same line, drawing each border over the last, while layout (which reserves the whole
+        /// nested sum) left a gap where the inner borders should have been.
+        /// </remarks>
+        private static RRect BandCut(RRect rect, CssBox box, bool isFixed, HtmlContainerInt container, CandidateSlot slot)
+        {
+            var (bandTop, bandBottom) = BandOf(isFixed, container, slot);
+
+            if (container.HasCloneDecorations)
+            {
+                bandTop += DomUtils.ClonedBlockStart(box.ParentBox);
+                bandBottom -= DomUtils.ClonedBlockEnd(box.ParentBox);
+            }
+
+            var top = Math.Max(rect.Top, bandTop);
+            var bottom = Math.Min(rect.Bottom, bandBottom);
+
+            return bottom > top ? new RRect(rect.X, top, rect.Width, bottom - top) : rect;
+        }
+
+        /// <summary>
+        /// The <see cref="SliceGeometry"/> of each of a box's decoration rectangles — the whole unbroken
+        /// box each one is a slice of, and which of its inline-axis edges are real box edges.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The unbroken box of an inline broken across lines is the box on one infinitely long line, so its
+        /// width is the sum of the rectangles' widths — which is exactly right because
+        /// <see cref="CssLineBox.UpdateRectangle"/> adds the leading spacing only on the box's first
+        /// hosting line and the trailing spacing only on its last, counting each border and padding once.
+        /// Each rectangle then carries that strip positioned so its own slice of it lines up (see
+        /// <see cref="SliceGeometry"/>).
+        /// </para>
+        /// <para>
+        /// Rectangles are ordered by position rather than by line-box index: a box contributes at most one
+        /// rectangle per line box, so no two can tie, and this needs no lookup into the owning block's line
+        /// list. A right-to-left block reverses the inline progression, so the strip extends rightwards
+        /// from each rectangle instead of leftwards.
+        /// </para>
+        /// <para>
+        /// <b>Only a box broken by <i>someone else's</i> line breaks gets a strip.</b> A box that owns the line
+        /// boxes its rectangles are keyed by holds its own text — a <c>display: block</c> or
+        /// <c>inline-block</c> <c>::before</c>, say — so those rectangles are stacked down the block axis
+        /// rather than being slices along the inline one, and concatenating their widths would describe a box
+        /// that does not exist. Each is its own decoration area instead.
+        /// </para>
+        /// </remarks>
+        private static Dictionary<CssLineBox, SliceGeometry> SliceGeometriesOf(
+            CssBox box,
+            IReadOnlyDictionary<CssLineBox, RRect> rectangles,
+            bool isFixed,
+            HtmlContainerInt container,
+            CandidateSlot slot,
+            double originY)
+        {
+            var slices = new Dictionary<CssLineBox, SliceGeometry>(rectangles.Count);
+
+            RRect FragmentRectOf(RRect rect) => Localize(BandCut(rect, box, isFixed, container, slot), originY);
+
+            var ownsItsLines = false;
+            foreach (var line in rectangles.Keys)
+            {
+                ownsItsLines = ReferenceEquals(line.OwnerBox, box);
+                break;
+            }
+
+            if (rectangles.Count == 1 || ownsItsLines)
+            {
+                foreach (var (line, rect) in rectangles)
+                {
+                    var local = Localize(rect, originY);
+                    slices[line] = new SliceGeometry(local, FragmentRectOf(rect), HasLeftEdge: true, HasRightEdge: true);
+                }
+
+                return slices;
+            }
+
+            var ordered = new List<KeyValuePair<CssLineBox, RRect>>(rectangles);
+            ordered.Sort(static (a, b) =>
+            {
+                var byTop = a.Value.Y.CompareTo(b.Value.Y);
+                return byTop != 0 ? byTop : a.Value.X.CompareTo(b.Value.X);
+            });
+
+            var total = 0d;
+            foreach (var (_, rect) in ordered) total += rect.Width;
+
+            var rtl = ordered[0].Key.OwnerBox.Direction == CssConstants.Rtl;
+
+            var preceding = 0d;
+
+            foreach (var (line, rect) in ordered)
+            {
+                var following = total - preceding - rect.Width;
+                var strip = new RRect(rect.X - (rtl ? following : preceding), rect.Y, total, rect.Height);
+
+                slices[line] = new SliceGeometry(
+                    Localize(strip, originY),
+                    FragmentRectOf(rect),
+                    HasLeftEdge: Math.Abs(rect.Left - strip.Left) <= EdgeEpsilon,
+                    HasRightEdge: Math.Abs(rect.Right - strip.Right) <= EdgeEpsilon);
+
+                preceding += rect.Width;
+            }
+
+            return slices;
         }
 
         private static RRect BoundsOf(CssBox box, BoxGeometrySnapshot? snapshot) =>

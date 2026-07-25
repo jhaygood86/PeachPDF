@@ -372,6 +372,110 @@ await SaveShowcaseAsync("box_shadow", "Backgrounds & Borders", "Box Shadow",
     "box-shadow: drop shadows, blur, spread, inset, colored and multiple layered shadows, with border-radius — blur approximated as vector geometry.",
     shadowHtml, pdfConfig);
 
+// --- box-decoration-break showcase ---
+
+const string DecorationBreakCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 9pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10.5pt; margin: 1.1em 0 0.45em; color: #444 }
+    p.intro { color: #555; margin: 0 0 0.8em; line-height: 1.45 }
+    .pair { width: 100%; border-collapse: collapse }
+    .pair td { width: 50%; vertical-align: top; padding: 0 6pt 0 0 }
+    .label { font: bold 8pt Arial; color: #666; margin: 0 0 4pt }
+    .css { font: 7.5pt "Courier New", monospace; color: #888; margin: 4pt 0 0 }
+    .measure { width: 165pt; line-height: 2.4 }
+
+    /* The canonical case: a highlighted inline that wraps. */
+    .pill {
+      background: linear-gradient(to right, #ffd08a, #f2709c);
+      border-radius: 9pt;
+      padding: 3pt 9pt;
+      color: #3a2b1e;
+    }
+    .framed {
+      background: #eaf4ff;
+      border: 2pt solid #2b7cd3;
+      border-radius: 8pt;
+      padding: 2pt 8pt;
+    }
+    /* A hard (unblurred) offset shadow, so which edges carry one is unmistakable. */
+    .shadowed { background: #fff2cc; box-shadow: 3pt 3pt 0 #b08d57; padding: 2pt 8pt }
+    .clone { -webkit-box-decoration-break: clone; box-decoration-break: clone }
+
+    /* Taller than any page band, so each one is guaranteed to cross a page boundary
+       wherever it starts. The second gets a page to itself so both crossings are visible. */
+    .band {
+      border: 3pt solid #2b7cd3;
+      border-radius: 10pt;
+      background: #eaf4ff;
+      padding: 8pt 10pt;
+      height: 880pt;
+      color: #24486b;
+    }
+    .band + .band { break-before: page }
+    </style>
+    """;
+
+var decorationBreakHtml = "<!DOCTYPE html><html><head>" + DecorationBreakCss + "</head><body>" +
+    "<h1>box-decoration-break</h1>" +
+    "<p class=\"intro\">When a break splits a box, <code>box-decoration-break</code> decides whether its border, " +
+    "padding, background, corner radii and shadow belong to the box as a whole or to each piece. " +
+    "<b>slice</b> (the initial value) renders the box as if it were never broken and then cuts it at the break; " +
+    "<b>clone</b> wraps every piece independently. Both apply at line breaks and at page breaks.</p>" +
+
+    "<h2>1 — An inline box wrapping across lines</h2>" +
+    "<table class=\"pair\"><tr>" +
+    "<td><p class=\"label\">slice — one continuous pill, cut at each wrap</p>" +
+    "<div class=\"measure\">The <span class=\"pill\">rounded, gradient-filled highlight runs on across the wrap</span> " +
+    "and only its true ends are rounded.</div>" +
+    "<p class=\"css\">box-decoration-break: slice</p></td>" +
+    "<td><p class=\"label\">clone — a complete pill on every line</p>" +
+    "<div class=\"measure\">The <span class=\"pill clone\">rounded, gradient-filled highlight restarts on each line</span> " +
+    "so every line is closed off.</div>" +
+    "<p class=\"css\">box-decoration-break: clone</p></td>" +
+    "</tr></table>" +
+
+    "<h2>2 — Borders and padding at a line break</h2>" +
+    "<table class=\"pair\"><tr>" +
+    "<td><p class=\"label\">slice — no border or padding inserted at the break</p>" +
+    "<div class=\"measure\">A <span class=\"framed\">framed inline whose box is opened on the first line and closed " +
+    "on the last</span> one.</div>" +
+    "<p class=\"css\">box-decoration-break: slice</p></td>" +
+    "<td><p class=\"label\">clone — every line fully framed</p>" +
+    "<div class=\"measure\">A <span class=\"framed clone\">framed inline whose box is opened and closed on every " +
+    "line it occupies</span> here.</div>" +
+    "<p class=\"css\">box-decoration-break: clone</p></td>" +
+    "</tr></table>" +
+
+    "<h2>3 — box-shadow at a broken edge</h2>" +
+    "<table class=\"pair\"><tr>" +
+    "<td><p class=\"label\">slice — no shadow along the broken edges</p>" +
+    "<div class=\"measure\">This <span class=\"shadowed\">shadowed inline casts a shadow around the outside of the " +
+    "whole box only</span> — nowhere else.</div>" +
+    "<p class=\"css\">box-decoration-break: slice</p></td>" +
+    "<td><p class=\"label\">clone — each line casts its own shadow</p>" +
+    "<div class=\"measure\">This <span class=\"shadowed clone\">shadowed inline casts a separate shadow around each " +
+    "of its own lines</span> — all four sides.</div>" +
+    "<p class=\"css\">box-decoration-break: clone</p></td>" +
+    "</tr></table>" +
+
+    "<h2>4 — A block crossing a page break (see the following pages)</h2>" +
+    "<p class=\"intro\">The same over-tall block twice, each crossing a page boundary. Under <code>slice</code> the " +
+    "border simply runs off the bottom of one page and continues at the top of the next; under <code>clone</code> each " +
+    "page's piece is closed off with its own rounded border.</p>" +
+    "<div class=\"band\">slice — this box is drawn as one unbroken rounded frame and cut by the page edge, so it has " +
+    "no bottom border here and no top border on the next page.</div>" +
+    "<div class=\"band clone\">clone — this box is wrapped independently on each page, so it closes with its own " +
+    "rounded bottom border at the page edge and opens with a new one overleaf.</div>" +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("box_decoration_break", "Backgrounds & Borders", "Box Decoration Break",
+    "box-decoration-break: slice vs clone at both line-box and page breaks — continuous sliced decorations against independently wrapped per-fragment ones, for backgrounds, gradients, border-radius, borders and box-shadow.",
+    decorationBreakHtml, pdfConfig);
+
 // --- background-origin + background-clip showcase ---
 
 const string OriginCss = """

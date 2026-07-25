@@ -351,29 +351,39 @@ namespace PeachPDF.Html.Core.Paint
 
                 if (!IsRectVisible(actualRect, clip)) continue;
 
-                var hasBoxShadow = !string.IsNullOrEmpty(box.BoxShadow) &&
-                                   !string.Equals(box.BoxShadow, CssConstants.None, StringComparison.OrdinalIgnoreCase);
+                // Where this rectangle's decorations resolve, per box-decoration-break (css-break-3 §6.2).
+                // Culling above stays on the rectangle itself: the decoration area may be the whole
+                // unbroken box, which is far wider than what is visible here.
+                var geometry = BoxDecorationGeometry.For(box, lines[i]);
 
                 // Outset (drop) shadows paint BEFORE the background so they sit behind the box
                 // (CSS Backgrounds & Borders 3 §5).
-                if (hasBoxShadow)
-                    PaintBoxShadows(g, box, actualRect, inset: false);
+                if (BoxDecorationGeometry.HasBoxShadow(box))
+                    PaintBoxShadows(g, box, geometry, inset: false);
 
                 // A box whose background was "promoted" to fill the whole page canvas (see
                 // HtmlContainerInt.ResolveCanvasBackground / PaintCanvasBackground) already had it
                 // painted for every page - skip this box's own normal paint pass so it isn't painted
                 // twice.
                 if (!box.SuppressOwnBackgroundPaint)
-                    PaintBackground(g, box, actualRect, i == 0, GetFirstLineStyleForRect(lines[i].Line));
+                {
+                    // A sliced background is painted over the whole unbroken box, so this clip is what
+                    // keeps it out of the space beside this rectangle - which belongs to other content.
+                    if (geometry.NeedsClip) g.PushClip(geometry.ClipRect);
+
+                    PaintBackground(g, box, geometry, GetFirstLineStyleForRect(lines[i].Line));
+
+                    if (geometry.NeedsClip) g.PopClip();
+                }
 
                 // Inset shadows paint AFTER (over) the background, clipped to the padding box.
-                if (hasBoxShadow)
-                    PaintBoxShadows(g, box, actualRect, inset: true);
+                if (BoxDecorationGeometry.HasBoxShadow(box))
+                    PaintBoxShadows(g, box, geometry, inset: true);
 
                 // For multi-page tables, draw the outer bottom border at the page-break Y on
-                // intermediate pages (instead of at actualRect.Bottom which is off-page).
+                // intermediate pages (instead of at the rectangle's bottom, which is off-page).
                 // The page clip already constrains the side-border top to MarginTop.
-                var rectForBorders = actualRect;
+                var rectForBorders = geometry.DecorationRect;
                 if ((box.Display == CssConstants.Table || box.Display == CssConstants.InlineTable)
                     && box.PageBreakBottoms != null && box.HtmlContainer != null)
                 {
@@ -382,18 +392,22 @@ namespace PeachPDF.Html.Core.Paint
                     if (box.PageBreakBottoms.TryGetValue(fragment.FragmentainerIndex, out var pageBreakBottom))
                     {
                         var pageBreakBottomVisual = pageBreakBottom - fragment.OriginY;
-                        if (pageBreakBottomVisual < actualRect.Bottom)
+                        if (pageBreakBottomVisual < rectForBorders.Bottom)
                         {
                             rectForBorders = new RRect(
-                                actualRect.Left,
-                                actualRect.Top,
-                                actualRect.Width,
-                                pageBreakBottomVisual - actualRect.Top);
+                                rectForBorders.Left,
+                                rectForBorders.Top,
+                                rectForBorders.Width,
+                                pageBreakBottomVisual - rectForBorders.Top);
                         }
                     }
                 }
 
-                BordersDrawHandler.DrawBoxBorders(g, box, rectForBorders, i == 0, i == lines.Count - 1);
+                if (geometry.NeedsClip) g.PushClip(geometry.ClipRect);
+
+                BordersDrawHandler.DrawBoxBorders(g, box, rectForBorders, geometry.HasLeftEdge, geometry.HasRightEdge);
+
+                if (geometry.NeedsClip) g.PopClip();
             }
 
             if (box.ColumnRuleSegments is { Count: > 0 } && box.ActualColumnRuleWidth > 0)
@@ -409,7 +423,13 @@ namespace PeachPDF.Html.Core.Paint
 
                 if (IsRectVisible(actualRect, clip))
                 {
-                    PaintDecoration(g, box, actualRect, i == 0, i == lines.Count - 1, GetFirstLineStyleForRect(lines[i].Line));
+                    // Text decoration is drawn over the rectangle itself, never the unbroken box: an
+                    // underline belongs to the line it underlines. Only whether to inset it by the box's own
+                    // padding and border is a §6.2 question, which is what the edge flags answer.
+                    var geometry = BoxDecorationGeometry.For(box, lines[i]);
+
+                    PaintDecoration(g, box, actualRect, geometry.HasLeftEdge, geometry.HasRightEdge,
+                        GetFirstLineStyleForRect(lines[i].Line));
                 }
             }
 

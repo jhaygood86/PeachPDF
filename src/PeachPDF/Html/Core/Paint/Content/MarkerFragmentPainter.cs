@@ -48,7 +48,7 @@ namespace PeachPDF.Html.Core.Paint.Content
 
         private static void PaintMarkerImage(RGraphics g, CssBoxMarker box, RRect rect)
         {
-            CssImagePainter.Paint(g, box.ContentImage!, layerIndex: 0, isFirst: true,
+            CssImagePainter.Paint(g, box.ContentImage!, layerIndex: 0,
                 originRect: rect, clipRect: rect, roundedClipPath: null,
                 // The default (borrowed) list-style-image marker centers the image within its font-
                 // height box, matching today's list-style-image rendering; an author content:url(...)

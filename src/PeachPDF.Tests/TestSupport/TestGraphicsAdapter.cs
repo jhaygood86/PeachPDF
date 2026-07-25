@@ -4,6 +4,7 @@ using PeachPDF.Network;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -176,7 +177,19 @@ namespace PeachPDF.Tests.TestSupport
     {
         public sealed record DrawStringCall(string Text, RFont Font, RColor Color, RPoint Point, RSize Size, bool Rtl, double LetterSpacing = 0);
         public sealed record DrawRectCall(RColor Color, double X, double Y, double Width, double Height);
-        public sealed record DrawPathCall(RColor Color);
+        /// <summary>
+        /// A filled or stroked path. <see cref="Points"/> is the path's recorded geometry, which is the only
+        /// way to assert on a rounded shape: a <c>border-radius</c> background takes this route rather than
+        /// <see cref="DrawRectCall"/>, so its rectangle would otherwise be invisible to a test. Copied at
+        /// record time — <see cref="TestGraphicsPath.Transform"/> mutates in place.
+        /// </summary>
+        public sealed record DrawPathCall(RColor Color, IReadOnlyList<RPoint> Points)
+        {
+            /// <summary>The axis-aligned bounds of the recorded points, or empty when there are none.</summary>
+            public RRect Bounds => Points.Count == 0
+                ? RRect.Empty
+                : RRect.FromLTRB(Points.Min(p => p.X), Points.Min(p => p.Y), Points.Max(p => p.X), Points.Max(p => p.Y));
+        }
         public sealed record DrawLineCall(RColor Color, double Width, RDashStyle DashStyle, double X1, double Y1, double X2, double Y2);
         public sealed record DrawPolygonCall(RColor Color, RPoint[] Points);
         public sealed record PushClipCall(RRect Rect);
@@ -214,13 +227,16 @@ namespace PeachPDF.Tests.TestSupport
 
         public override void DrawPath(RBrush brush, RGraphicsPath path)
         {
-            Log.Add(new DrawPathCall(brush is TestBrush tb ? tb.Color : RColor.Empty));
+            Log.Add(new DrawPathCall(brush is TestBrush tb ? tb.Color : RColor.Empty, PointsOf(path)));
         }
 
         public override void DrawPath(RPen pen, RGraphicsPath path)
         {
-            Log.Add(new DrawPathCall(pen is TestPen tp ? tp.Color : RColor.Empty));
+            Log.Add(new DrawPathCall(pen is TestPen tp ? tp.Color : RColor.Empty, PointsOf(path)));
         }
+
+        private static IReadOnlyList<RPoint> PointsOf(RGraphicsPath path) =>
+            path is TestGraphicsPath testPath ? testPath.Points.ToArray() : [];
 
         public override void PushTransform(RMatrix matrix) { }
         public override void PopTransform() { }

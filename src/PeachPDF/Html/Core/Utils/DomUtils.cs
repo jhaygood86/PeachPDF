@@ -627,6 +627,110 @@ namespace PeachPDF.Html.Core.Utils
         // rather than duplicating it, alongside Paint.StackingOrder, which owns the ordering walk.
         internal static bool NeedsStackingHoist(CssBox box) => box.IsOutOfFlow || IsStackingContextBox(box);
 
+        /// <summary>
+        /// Whether any box in <paramref name="box"/>'s subtree asks for its decorations to be cloned at a
+        /// fragmentation break. Layout only has to make room for cloned borders and padding when something
+        /// actually wants them, and the answer depends on cascaded style alone, so it is settled once before
+        /// layout starts rather than re-derived per word.
+        /// </summary>
+        internal static bool AnyBoxClonesDecorations(CssBox box)
+        {
+            if (box.BoxDecorationBreak == CssConstants.Clone) return true;
+
+            foreach (var child in box.Boxes)
+            {
+                if (AnyBoxClonesDecorations(child)) return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// The block-start border and padding that <c>box-decoration-break: clone</c> re-inserts when a
+        /// fragmentation break lands inside a box
+        /// (<see href="https://www.w3.org/TR/css-break-3/#break-decoration">css-break-3 §6.2</see>): each
+        /// fragment is wrapped independently, so the one starting in the new fragmentainer opens with its own
+        /// border and padding, and content has to start below them. Summed over <paramref name="box"/> and
+        /// every ancestor, since a break inside a nested box breaks all of them at once.
+        /// <para>
+        /// Margin is excluded, unlike on the inline axis (<see cref="ClonedInlineStart"/>): a margin adjoining an
+        /// unforced break is truncated to zero by
+        /// <see href="https://www.w3.org/TR/css-break-3/#break-margins">§5.2</see>, so at a page break there is
+        /// no margin left for §6.2 to clone.
+        /// </para>
+        /// </summary>
+        internal static double ClonedBlockStart(CssBox? box)
+        {
+            var total = 0d;
+
+            for (var current = box; current is not null; current = current.ParentBox)
+            {
+                if (current.BoxDecorationBreak == CssConstants.Clone)
+                    total += current.ActualBorderTopWidth + current.ActualPaddingTop;
+            }
+
+            return total;
+        }
+
+        /// <summary>
+        /// The block-end counterpart of <see cref="ClonedBlockStart"/> — the border and padding the fragment
+        /// being left behind closes with, and which content therefore has to stop short of.
+        /// </summary>
+        internal static double ClonedBlockEnd(CssBox? box)
+        {
+            var total = 0d;
+
+            for (var current = box; current is not null; current = current.ParentBox)
+            {
+                if (current.BoxDecorationBreak == CssConstants.Clone)
+                    total += current.ActualBorderBottomWidth + current.ActualPaddingBottom;
+            }
+
+            return total;
+        }
+
+        /// <summary>
+        /// The inline-start margin, border and padding cloned fragments re-insert after a line break, summed
+        /// over the inline boxes from <paramref name="from"/> up to — but not including —
+        /// <paramref name="stopAt"/>, the block whose lines are being built.
+        /// </summary>
+        /// <remarks>
+        /// Margin is included, as §6.2 says ("wrapped with the border, padding, and margin"), and to match what
+        /// a box's <i>own</i> leading spacing does when it starts on a line — that is the same margin+border+
+        /// padding sum. Only the block axis leaves margin out, because there
+        /// <see href="https://www.w3.org/TR/css-break-3/#break-margins">§5.2</see> truncates a margin adjoining
+        /// an unforced break to zero, which is the opposite instruction.
+        /// </remarks>
+        internal static double ClonedInlineStart(CssBox? from, CssBox stopAt)
+        {
+            var total = 0d;
+
+            for (var current = from; current is not null && !ReferenceEquals(current, stopAt); current = current.ParentBox)
+            {
+                if (current.BoxDecorationBreak == CssConstants.Clone)
+                    total += current.ActualMarginLeft + current.ActualBorderLeftWidth + current.ActualPaddingLeft;
+            }
+
+            return total;
+        }
+
+        /// <summary>
+        /// The inline-end counterpart of <see cref="ClonedInlineStart"/> — what the fragment ending at a line
+        /// break closes with, and which the wrap decision therefore has to leave room for.
+        /// </summary>
+        internal static double ClonedInlineEnd(CssBox? from, CssBox stopAt)
+        {
+            var total = 0d;
+
+            for (var current = from; current is not null && !ReferenceEquals(current, stopAt); current = current.ParentBox)
+            {
+                if (current.BoxDecorationBreak == CssConstants.Clone)
+                    total += current.ActualMarginRight + current.ActualBorderRightWidth + current.ActualPaddingRight;
+            }
+
+            return total;
+        }
+
         public static bool IsStackingContextBox(CssBox box)
         {
             if (box.IsRoot)

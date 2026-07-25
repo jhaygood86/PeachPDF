@@ -12,6 +12,7 @@
 
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.Html.Core.Utils;
 using System.Collections.Generic;
 
 namespace PeachPDF.Html.Core.Dom
@@ -263,23 +264,36 @@ namespace PeachPDF.Html.Core.Dom
         /// one predicate both the resumable inline flow and the legacy relocation below decide on.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// A word taller than a whole band never counts as straddling: there is no fragmentainer it
         /// could fit in, so moving it would only repeat the question on the next one. That makes it
         /// monolithic content in the sense of
         /// <see href="https://www.w3.org/TR/css-break-3/#monolithic">css-break-3 §2</see> — it overflows
         /// rather than being split.
+        /// </para>
+        /// <para>
+        /// Where an enclosing box asks for <c>box-decoration-break: clone</c>, the fragment being left behind
+        /// closes with its own bottom border and padding, and §6.2 requires room to be reserved for them. So
+        /// the word has to clear that much more than its own depth to still count as fitting.
+        /// </para>
         /// </remarks>
         public bool WouldStraddleFragmentainer()
         {
             var container = OwnerBox.HtmlContainer;
 
-            if (Height >= container!.PageSize.Height)
+            var clonedTop = container!.HasCloneDecorations ? DomUtils.ClonedBlockStart(OwnerBox) : 0;
+            var clonedBottom = container.HasCloneDecorations ? DomUtils.ClonedBlockEnd(OwnerBox) : 0;
+
+            // The cloned insets count towards "too tall to fit anywhere": a resumed pass re-opens with the top
+            // set and still has to clear the bottom one, so if the word cannot fit between them it never will,
+            // and calling it a straddle would break to a fresh fragmentainer for every fragmentainer there is.
+            if (Height + clonedTop + clonedBottom >= container.PageSize.Height)
                 return false;
 
             // The epsilons make a line ending exactly ON a slot boundary a non-break (it fits wholly in
             // the earlier slot).
             return container.PageIndexOf(Top + HtmlContainerInt.PageBoundaryEpsilon)
-                   < container.PageIndexOf(Bottom - HtmlContainerInt.PageBoundaryEpsilon);
+                   < container.PageIndexOf(Bottom + clonedBottom - HtmlContainerInt.PageBoundaryEpsilon);
         }
 
         public bool BreakPage()
