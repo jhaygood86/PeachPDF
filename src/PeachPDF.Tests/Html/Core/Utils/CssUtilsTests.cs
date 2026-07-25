@@ -424,6 +424,32 @@ namespace PeachPDF.Tests.Html.Core.Utils
             Assert.Equal(CssConstants.Page, box.BreakBefore);
         }
 
+        // The CSS-wide keywords have to work on the legacy spelling too - this is what the known-name and
+        // initial-value entries above are for. Driven through the real cascade rather than asserted on the
+        // registry, so it also covers the Layer-A side (each page-break-* converter's OrGlobalValue chain):
+        // lose that and the declaration is dropped at parse time, silently resurrecting the no-op.
+        [Theory]
+        [InlineData("initial")]
+        [InlineData("unset")]
+        [InlineData("revert")]
+        [InlineData("revert-layer")]
+        public async Task Cascade_PageBreakBeforeGlobalKeyword_ResetsTheBreak(string keyword)
+        {
+            var (box, _) = await FindDivBoxAndParser($"break-before: page; page-break-before: {keyword};");
+
+            Assert.Equal(CssConstants.Auto, box.BreakBefore);
+        }
+
+        [Theory]
+        [InlineData("page-break-after", "break-after")]
+        [InlineData("page-break-inside", "break-inside")]
+        public async Task Cascade_PageBreakInitial_ResetsTheSharedField(string legacyName, string modernName)
+        {
+            var (box, _) = await FindDivBoxAndParser($"{modernName}: avoid; {legacyName}: initial;");
+
+            Assert.Equal(CssConstants.Auto, CssUtils.GetPropertyValue(box, modernName));
+        }
+
         // The false side of each validation guard: an invalid value must be ignored, leaving the prior value.
         [Theory]
         [InlineData("width", "not-a-length", "40px")]

@@ -290,6 +290,8 @@ namespace PeachPDF.Html.Core
             { "padding-top", "0" },
             // css-break-3 §3.3: the legacy page-break-* aliases share their break-* counterparts'
             // storage, but need their own entries so "initial"/"unset"/"revert" resolve on either spelling.
+            // They must stay equal to the break-* entries above - the seed loop writes both to the same
+            // CssBox field in unspecified dictionary order, so a divergent pair would pick a winner at random.
             { "page-break-after", CssConstants.Auto },
             { "page-break-before", CssConstants.Auto },
             { "page-break-inside", CssConstants.Auto },

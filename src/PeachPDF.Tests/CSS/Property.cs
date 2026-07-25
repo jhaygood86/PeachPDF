@@ -227,8 +227,8 @@ namespace PeachPDF.Tests.CSS
             Assert.Equal("VeRsO", property.Original);
         }
 
-        // "always" and "all" were dropped from break-* by css-break-3; "always" survives only on the
-        // legacy page-break-* aliases (asserted below), so it must not be accepted here.
+        // "always" and "all" are css-break-4 additions, outside the §3.1 value set PeachPDF implements.
+        // On break-* they are not accepted; "always" is only a legacy page-break-* value (asserted below).
         [Theory]
         [InlineData("break-before", "always")]
         [InlineData("break-before", "all")]
