@@ -1525,6 +1525,63 @@ await SaveShowcaseAsync("paged_media_directional_breaks", "Paged Media", "Direct
     + "when it needs one, and the outer-edge folios show the left/right alternation.",
     directionalBreaksHtml, new PdfGenerateConfig { PageSize = PageSize.A5 });
 
+// ── Monolithic content showcase ────────────────────────────────────────────
+var monolithicHtml = """
+    <!DOCTYPE html>
+    <html><head><style>
+    @page { size: a5; margin: 14mm }
+    body { font: 9pt Helvetica, Arial, sans-serif; margin: 0; color: #1f2937; orphans: 1; widows: 1 }
+    h1 { font-size: 13pt; margin: 0 0 0.4em }
+    p.intro { color: #6b7280; font-size: 8pt; margin: 0 0 1.2em }
+    p { margin: 0 0 0.7em; line-height: 1.5 }
+    .card {
+      border: 1px solid #94a3b8; border-radius: 6px; padding: 10px 12px; margin: 0 0 0.9em;
+      background: linear-gradient(160deg, #eff6ff, #dbeafe);
+    }
+    .card h2 { font-size: 10pt; margin: 0 0 0.3em; color: #1d4ed8 }
+    .card p { margin: 0; font-size: 8.5pt }
+    .clipped { overflow: hidden }
+    .tag { font-size: 7pt; letter-spacing: .04em; text-transform: uppercase; color: #64748b }
+    </style></head><body>
+    <h1>Monolithic content at a page break</h1>
+    <p class="intro">CSS Fragmentation Level 3 &sect;2 makes a scroll container &mdash; any box with
+    <code>overflow</code> other than <code>visible</code> &mdash; monolithic: it may not be split, so where it
+    would straddle a page boundary it moves to the next page whole. The two cards below are identical apart
+    from that one declaration.</p>
+    """
+    + string.Concat(Enumerable.Range(1, 14).Select(i =>
+        $"<p>Filler paragraph {i}. This body copy pushes the cards down the page so that each one meets the "
+        + "page boundary rather than sitting comfortably inside a single page.</p>"))
+    + """
+    <div class="card">
+      <span class="tag">overflow: visible</span>
+      <h2>This card is split</h2>
+      <p>Nothing forbids a break inside it, so the page boundary cuts straight through: its border and its
+      gradient background end on one page and resume on the next.</p>
+    </div>
+    """
+    + string.Concat(Enumerable.Range(15, 16).Select(i =>
+        $"<p>Filler paragraph {i}. The same run of body copy again, so the second card meets the following "
+        + "page boundary at the same place its twin met the first one.</p>"))
+    + """
+    <div class="card clipped">
+      <span class="tag">overflow: hidden</span>
+      <h2>This card moves whole</h2>
+      <p>Being a scroll container makes it monolithic, so rather than being cut in half it is carried
+      wholesale onto the next page, leaving the gap above it.</p>
+    </div>
+    """
+    + string.Concat(Enumerable.Range(31, 4).Select(i =>
+        $"<p>Trailing paragraph {i}, so the move above has visible content after it.</p>"))
+    + """
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("paged_media_monolithic_content", "Paged Media", "Monolithic Content",
+    "A box with overflow: hidden is a scroll container, which CSS Fragmentation §2 forbids breaking: it "
+    + "moves to the next page whole instead of being cut in half by the page boundary.",
+    monolithicHtml, new PdfGenerateConfig { PageSize = PageSize.A5 });
+
 // ── Margin box explicit sizing showcase ────────────────────────────────────
 var marginBoxSizingHtml = """
     <!DOCTYPE html>

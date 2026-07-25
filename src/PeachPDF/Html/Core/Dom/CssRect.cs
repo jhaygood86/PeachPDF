@@ -12,6 +12,7 @@
 
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Utils;
 using System.Collections.Generic;
 
@@ -281,13 +282,12 @@ namespace PeachPDF.Html.Core.Dom
         {
             var container = OwnerBox.HtmlContainer;
 
-            var clonedTop = container!.HasCloneDecorations ? DomUtils.ClonedBlockStart(OwnerBox) : 0;
-            var clonedBottom = container.HasCloneDecorations ? DomUtils.ClonedBlockEnd(OwnerBox) : 0;
+            var (clonedTop, clonedBottom) = MonolithicContent.ClonedBlockInsets(OwnerBox, container!);
 
             // The cloned insets count towards "too tall to fit anywhere": a resumed pass re-opens with the top
             // set and still has to clear the bottom one, so if the word cannot fit between them it never will,
             // and calling it a straddle would break to a fresh fragmentainer for every fragmentainer there is.
-            if (Height + clonedTop + clonedBottom >= container.PageSize.Height)
+            if (MonolithicContent.FitsNoFragmentainer(Height, clonedTop, clonedBottom, container!))
                 return false;
 
             // The epsilons make a line ending exactly ON a slot boundary a non-break (it fits wholly in
