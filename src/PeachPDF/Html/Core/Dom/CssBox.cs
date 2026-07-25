@@ -1264,16 +1264,33 @@ namespace PeachPDF.Html.Core.Dom
                 await MeasureWordsSize(g);
             }
 
+            // Both registrations below append, and this prologue can run more than once inside a
+            // single LayoutDocument invocation (a break decision taken against a finished box
+            // re-lays it out at its new position - see PerformLayoutEpilogue). So withdraw what an
+            // earlier run of *this* prologue registered before registering again; otherwise the box
+            // accumulates one entry per re-entry, each recording a position it no longer occupies.
+            // Across invocations PerformLayout's own ClearNamedStrings/ClearNamedPageElements still
+            // does the wholesale job, which is why this went unnoticed.
+            if (NamedStrings.Count > 0)
+            {
+                HtmlContainer?.UnregisterNamedStrings(NamedStrings.Values);
+                NamedStrings.Clear();
+            }
+
             // Apply named strings if string-set property is present
             if (!string.IsNullOrEmpty(StringSet) && StringSet != CssConstants.None)
             {
                 CssNamedStringEngine.ApplyStringSet(this);
             }
 
-            // A previous layout pass's registration was orphaned wholesale by PerformLayout's
-            // ClearNamedPageElements - drop the stale reference so this pass's registration logic
-            // (early for block containers below, tail sync/fallback at the end of this method)
-            // starts clean instead of silently "syncing" an element no longer in the registry.
+            if (RegisteredNamedPageElement is { } staleRegistration)
+            {
+                HtmlContainer?.UnregisterNamedPageElement(staleRegistration);
+            }
+
+            // Whether or not the registry still held it, this pass's registration logic (early for
+            // block containers below, tail sync/fallback at the end of PerformLayoutEpilogue) starts
+            // clean rather than silently "syncing" an element it no longer owns.
             RegisteredNamedPageElement = null;
 
             // Spec (css-break §3.1): a forced break occurs at a class A break point if
