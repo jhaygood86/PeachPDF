@@ -205,6 +205,14 @@ namespace PeachPDF.Html.Core
         private readonly Dictionary<CssBox, int> _reservedBlankSlots = [];
 
         /// <summary>
+        /// The slot a trailing directional <c>break-after</c> pads the document with, if any. Held
+        /// separately from <see cref="_reservedBlankSlots"/> rather than under the last box's key: that
+        /// box may itself have taken a <c>break-before</c> and reserved a slot, and one key per box
+        /// would silently drop whichever reservation was made second.
+        /// </summary>
+        private int? _trailingBlankSlot;
+
+        /// <summary>
         /// Records (or, with a null <paramref name="slotIndex"/>, retracts) the blank slot
         /// <paramref name="owner"/>'s forced break steps over.
         /// </summary>
@@ -220,7 +228,8 @@ namespace PeachPDF.Html.Core
         /// Whether some directional forced break deliberately left slot <paramref name="slotIndex"/>
         /// empty, so the fragment tree must materialize it as a real (blank) page.
         /// </summary>
-        internal bool IsReservedBlankSlot(int slotIndex) => _reservedBlankSlots.ContainsValue(slotIndex);
+        internal bool IsReservedBlankSlot(int slotIndex) =>
+            _trailingBlankSlot == slotIndex || _reservedBlankSlots.ContainsValue(slotIndex);
 
         /// <summary>
         /// The last deliberately-blank slot, or null when there is none. A trailing
@@ -228,9 +237,15 @@ namespace PeachPDF.Html.Core
         /// builder's slot walk cannot be bounded by the document height alone.
         /// </summary>
         internal int? MaxReservedBlankSlot =>
-            _reservedBlankSlots.Count == 0 ? null : _reservedBlankSlots.Values.Max();
+            _reservedBlankSlots.Count == 0
+                ? _trailingBlankSlot
+                : Math.Max(_reservedBlankSlots.Values.Max(), _trailingBlankSlot ?? -1);
 
-        internal void ClearBlankSlotReservations() => _reservedBlankSlots.Clear();
+        internal void ClearBlankSlotReservations()
+        {
+            _reservedBlankSlots.Clear();
+            _trailingBlankSlot = null;
+        }
 
         /// <summary>
         /// When true, <see cref="CssLayoutEngine.FlowBox"/>'s per-word page-break-avoidance check
@@ -680,7 +695,7 @@ namespace PeachPDF.Html.Core
             var lastSlot = PageIndexOf(MarginTop + ActualSize.Height - PageBoundaryEpsilon);
 
             if (!BreakValues.SlotIsOn(lastSlot + 1, side))
-                SetBlankSlotReservation(last ?? Root, lastSlot + 1);
+                _trailingBlankSlot = lastSlot + 1;
         }
 
         /// <summary>

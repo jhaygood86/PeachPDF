@@ -1064,6 +1064,13 @@ namespace PeachPDF.Html.Core.Dom
         private double? _forcedBreakTop;
 
         /// <summary>
+        /// The side css-break-3 §3.1 requires the page after this box's forced break to fall on, or
+        /// <see cref="PageSide.Any"/>. Resolved by <see cref="PerformLayoutPrologue"/> and acted on when
+        /// the box is placed, once its preserved top margin is known.
+        /// </summary>
+        private PageSide _forcedBreakSide;
+
+        /// <summary>
         /// Whether this box's position was set by a forced break (css-break-3 §3.1).
         /// </summary>
         /// <remarks>
@@ -1303,6 +1310,7 @@ namespace PeachPDF.Html.Core.Dom
             // position, where the break can legitimately land somewhere else. So both the target and
             // this box's blank-slot reservation are retracted here and only re-asserted below.
             _forcedBreakTop = null;
+            _forcedBreakSide = PageSide.Any;
             PlacedByForcedBreak = false;
             HtmlContainer?.SetBlankSlotReservation(this, null);
 
@@ -1327,33 +1335,28 @@ namespace PeachPDF.Html.Core.Dom
                     // boundary (the consecutive-forced-breaks case - it was itself relocated there
                     // by its own preceding break) occupies the LATER slot, so the break between it
                     // and this box still pushes past it, preserving the intentional blank page.
+                    // StaticBottom, and the previous sibling's static top, throughout: a relative offset
+                    // moves a box visually without affecting the layout of anything around it
+                    // (CSS 2.1 §9.4.3), so it must not decide which slot the break lands in either.
                     var container = HtmlContainer!;
-                    var prevBottom = previousSiblingForBreak.ActualBottom;
+                    var prevBottom = previousSiblingForBreak.StaticBottom;
+                    var prevTop = previousSiblingForBreak.Location.Y - previousSiblingForBreak.RelativeOffsetY;
                     var slot = container.PageIndexOf(prevBottom - HtmlContainerInt.PageBoundaryEpsilon) + 1;
-                    if (previousSiblingForBreak.Location.Y >= container.PageTopOf(slot) - HtmlContainerInt.PageBoundaryEpsilon)
+                    if (prevTop >= container.PageTopOf(slot) - HtmlContainerInt.PageBoundaryEpsilon)
                     {
-                        slot = container.PageIndexOf(
-                            previousSiblingForBreak.Location.Y + HtmlContainerInt.PageBoundaryEpsilon) + 1;
-                    }
-
-                    // css-break-3 §3.1: left/right/recto/verso force one *or two* page breaks, so that
-                    // the content after the break begins on a page of the required side. The slot
-                    // stepped over becomes a deliberately-blank page.
-                    //
-                    // Gated on IsFragmenting because inside monolithic content (multicol's virtual
-                    // single-column first pass, and the flex/grid/table engines) and during a
-                    // measurement pass at a provisional position, this box's coordinates are not where
-                    // it ends up - a reservation made from them would materialize a blank page nowhere
-                    // near the real content. A directional break degrades to a plain page break there,
-                    // the same engine-independence boundary the other break machinery already has.
-                    var side = BreakValues.RequiredSide(BreakBefore, previousSiblingForBreak.BreakAfter);
-                    if (side is not PageSide.Any && container.IsFragmenting && !BreakValues.SlotIsOn(slot, side))
-                    {
-                        container.SetBlankSlotReservation(this, slot);
-                        slot++;
+                        slot = container.PageIndexOf(prevTop + HtmlContainerInt.PageBoundaryEpsilon) + 1;
                     }
 
                     _forcedBreakTop = container.PageTopOf(slot);
+
+                    // Which side the content after the break has to begin on (css-break-3 §3.1's
+                    // left/right/recto/verso, which force one *or two* page breaks). Resolved here but
+                    // acted on in PlaceBlockBox: only that knows this box's preserved top margin, which
+                    // can itself carry the box past the slot the break landed in, and only boxes that
+                    // reach it take the break at all - a display:none or out-of-flow box runs this
+                    // prologue but is never placed, so reserving a blank page here would manufacture
+                    // one for a break that is never taken.
+                    _forcedBreakSide = BreakValues.RequiredSide(BreakBefore, previousSiblingForBreak.BreakAfter);
                 }
             }
         }
@@ -1607,7 +1610,38 @@ namespace PeachPDF.Html.Core.Dom
                         // margin-bottom, which belongs to the page being left.
                         _forcedBreakTop = null;
                         PlacedByForcedBreak = true;
-                        top = forcedTop + MarginTopCollapse(null);
+
+                        var forcedBreakMargin = MarginTopCollapse(null);
+                        top = forcedTop + forcedBreakMargin;
+
+                        // §3.1's "one or two page breaks": the content after the break has to *begin*
+                        // on a page of the requested side, so the side is checked against where this
+                        // box actually lands - which the preserved margin above can carry past the slot
+                        // the break itself reached. The slot stepped over becomes a deliberately-blank
+                        // page.
+                        //
+                        // Gated on IsFragmenting because inside monolithic content (multicol's virtual
+                        // single-column first pass, and the flex/grid/table engines) and during a
+                        // measurement pass at a provisional position, this box's coordinates are not
+                        // where it ends up - a reservation made from them would materialize a blank
+                        // page nowhere near the real content. A directional break degrades to a plain
+                        // page break there, the same engine-independence boundary the other break
+                        // machinery already has.
+                        // The margin travels with the box across the step, so it is preserved on
+                        // whichever page the box ends up opening. Bounded rather than a plain "if"
+                        // because a margin taller than a band can carry the box past the slot the step
+                        // just chose; two rounds settle every case a single alternation can produce,
+                        // and the small cap keeps a degenerate band from spinning.
+                        for (var guard = 0; _forcedBreakSide is not PageSide.Any && HtmlContainer!.IsFragmenting && guard < 4; guard++)
+                        {
+                            var landing = HtmlContainer.PageIndexOf(top + HtmlContainerInt.PageBoundaryEpsilon);
+
+                            if (BreakValues.SlotIsOn(landing, _forcedBreakSide))
+                                break;
+
+                            HtmlContainer.SetBlankSlotReservation(this, landing);
+                            top = HtmlContainer.PageTopOf(landing + 1) + forcedBreakMargin;
+                        }
                     }
                     // A previous sibling that a forced break placed and that contributes no height of
                     // its own - the empty "<div class='page-break'>" marker - puts the break

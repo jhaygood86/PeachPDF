@@ -96,17 +96,16 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         public void SlotIsOn_AlternatesFromARightFirstPage(int slotIndex, string side, bool expected) =>
             Assert.Equal(expected, BreakValues.SlotIsOn(slotIndex, Side(side)));
 
-        // The load-bearing one: a directional break targets exactly the pages the `@page` selector of
-        // the same name styles. If these two ever disagreed, `break-before: right` would land content
-        // on a page `@page :right` did not match.
-        [Fact]
-        public void SlotIsOn_AgreesWithThePageSelectorParity()
-        {
-            for (var slot = 0; slot < 6; slot++)
-            {
-                Assert.Equal(PageRuleResolver.IsRightPage(slot + 1), BreakValues.SlotIsOn(slot, PageSide.Right));
-                Assert.Equal(!PageRuleResolver.IsRightPage(slot + 1), BreakValues.SlotIsOn(slot, PageSide.Left));
-            }
-        }
+        // The parity itself, stated independently of the helper it is implemented over: page 1 is a
+        // right page and the sides alternate from there, which is what `@page :left`/`:right` mean and
+        // therefore what a directional break has to target.
+        [Theory]
+        [InlineData(1, true)]
+        [InlineData(2, false)]
+        [InlineData(3, true)]
+        [InlineData(4, false)]
+        [InlineData(11, true)]
+        public void IsRightPage_AlternatesFromARightFirstPage(int pageNumber, bool expected) =>
+            Assert.Equal(expected, PageRuleResolver.IsRightPage(pageNumber));
     }
 }

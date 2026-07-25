@@ -47,11 +47,13 @@ namespace PeachPDF.Tests.Integration
 
             var second = LayoutHarness.FindById(root, "second");
             Assert.NotNull(second);
-            Assert.Equal(expectedSlot, SlotOf(container, second!));
 
-            // ... and the page it landed on really is one the matching @page selector would style.
+            var slot = SlotOf(container, second!);
+            Assert.Equal(expectedSlot, slot);
+
+            // ... and the page it actually landed on is one the matching @page selector would style.
             var wantsRight = declaration.Contains("right") || declaration.Contains("recto");
-            Assert.Equal(wantsRight, PageRuleResolver.IsRightPage(expectedSlot + 1));
+            Assert.Equal(wantsRight, PageRuleResolver.IsRightPage(slot + 1));
         }
 
         // The same break stated on the trailing side of the earlier box.
@@ -169,19 +171,83 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(container.PageTopOf(2), second!.Location.Y, 0.5);
         }
 
-        // CSS 2.1 §9.4.3: a relative offset never moves following content, so it must not move the
-        // break either. The old mechanism read the predecessor's StaticBottom, which folded the offset
-        // back out again by subtraction rather than never letting it in.
-        [Fact]
-        public async Task RelativelyPositionedPreviousSibling_DoesNotSkewTheTarget()
+        // CSS 2.1 §9.4.3: a relative offset never moves following content, so it must not decide which
+        // slot the break lands in either. The predecessor is deliberately tall enough that a 40pt
+        // visual offset would carry its bottom over a slot boundary and change the answer - with a
+        // short one the whole document stays inside slot 0 and the assertion proves nothing.
+        [Theory]
+        [InlineData("")]
+        [InlineData("position:relative;top:40pt;")]
+        public async Task RelativelyPositionedPreviousSibling_DoesNotSkewTheTarget(string offset)
         {
             var (root, container) = await LayoutHarness.LayoutAsync(
-                Document("break-before: right", firstStyle: "position:relative;top:20pt;"),
+                LayoutHarness.Wrap($"<div id='first' style='height:240pt;{offset}'>first</div>"
+                                   + "<div id='second' style='height:50pt;break-before: right'>second</div>"),
                 pageHeight: PageHeight);
 
             var second = LayoutHarness.FindById(root, "second");
             Assert.NotNull(second);
-            Assert.Equal(container.PageTopOf(2), second!.Location.Y, 0.5);
+            Assert.Equal(2, SlotOf(container, second!));
+            Assert.Equal([0, 1, 2], container.FragmentTree!.Fragmentainers.Select(f => f.SlotIndex));
+        }
+
+        // A box that never gets placed never takes the break, so it must not reserve a page for one.
+        // The prologue runs for every box, including these; only PlaceBlockBox knows the break was
+        // actually taken.
+        [Theory]
+        [InlineData("display:none")]
+        [InlineData("position:absolute")]
+        public async Task UnplacedBoxCarryingADirectionalBreak_ManufacturesNoPage(string declaration)
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap("<div style='height:50pt'>first</div>"
+                                   + $"<div style='{declaration}; break-before: right'>hidden</div>"
+                                   + "<div style='height:50pt'>second</div>"),
+                pageHeight: PageHeight);
+
+            Assert.Equal([0], container.FragmentTree!.Fragmentainers.Select(f => f.SlotIndex));
+        }
+
+        // The step to the required side happens after the preserved margin is applied, so the box both
+        // keeps its margin and opens a page of the right side - the two requirements are not traded
+        // off against each other.
+        [Fact]
+        public async Task MarginAndSide_AreBothHonoured()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                Document("break-before: right; margin-top: 30pt"), pageHeight: PageHeight);
+
+            var second = LayoutHarness.FindById(root, "second");
+            Assert.NotNull(second);
+            Assert.Equal(container.PageTopOf(2) + 30, second!.Location.Y, 0.5);
+            Assert.True(PageRuleResolver.IsRightPage(SlotOf(container, second) + 1));
+        }
+
+        // A margin big enough to carry the box past the slot the break reached must not leave it on
+        // the wrong side: the side is checked against where the box actually lands.
+        [Fact]
+        public async Task MarginTallerThanABand_StillLandsOnTheRequiredSide()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                Document("break-before: right; margin-top: 300pt"), pageHeight: PageHeight);
+
+            var second = LayoutHarness.FindById(root, "second");
+            Assert.NotNull(second);
+            Assert.True(PageRuleResolver.IsRightPage(SlotOf(container, second!) + 1),
+                $"box landed on slot {SlotOf(container, second)}, which is not a right page");
+        }
+
+        // Both reservations belong to the same box here - a break-before that steps over a page and a
+        // trailing break-after that pads one. Keyed per box, the second would silently replace the first.
+        [Fact]
+        public async Task BreakBeforeAndTrailingBreakAfter_OnOneBox_BothReservePages()
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap("<div style='height:50pt'>first</div>"
+                                   + "<div style='height:50pt; break-before: right; break-after: recto'>second</div>"),
+                pageHeight: PageHeight);
+
+            Assert.Equal([0, 1, 2, 3], container.FragmentTree!.Fragmentainers.Select(f => f.SlotIndex));
         }
 
         // The empty-marker idiom: "<div class='page-break'></div>" carries the break and nothing else.
