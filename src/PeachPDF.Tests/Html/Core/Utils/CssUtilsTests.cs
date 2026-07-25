@@ -221,7 +221,8 @@ namespace PeachPDF.Tests.Html.Core.Utils
             ["border-bottom-style", "dashed"], ["border-left-style", "dotted"], ["border-right-style", "double"], ["border-top-style", "groove"],
             ["border-bottom-color", "rgb(1, 2, 3)"], ["border-left-color", "rgb(4, 5, 6)"], ["border-right-color", "rgb(7, 8, 9)"], ["border-top-color", "rgb(10, 11, 12)"],
             ["border-spacing", "3px"], ["border-collapse", "collapse"], ["box-sizing", "border-box"],
-            ["box-decoration-break", "clone"], ["box-decoration-break", "slice"],
+            // "clone" only - a "slice" row would pass with the setter deleted, since slice is the default.
+            ["box-decoration-break", "clone"],
             ["border-top-left-radius", "1px"], ["border-top-right-radius", "2px"], ["border-bottom-right-radius", "3px"], ["border-bottom-left-radius", "4px"],
             ["transform", "rotate(10deg)"], ["transform-origin", "left top"], ["opacity", "0.5"],
             ["counter-increment", "c 1"], ["counter-reset", "c 0"], ["counter-set", "c 2"], ["string-set", "none"],

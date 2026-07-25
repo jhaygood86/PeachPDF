@@ -1,8 +1,6 @@
-using PeachPDF.Adapters;
-using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -10,7 +8,8 @@ namespace PeachPDF.Tests.Integration
     /// End-to-end cascade coverage for <c>box-decoration-break</c>
     /// (<see href="https://www.w3.org/TR/css-break-3/#break-decoration">css-break-3 §6.2</see>): an authored
     /// declaration has to survive Layer A's validation and land on the box, the CSS-wide keywords have to
-    /// resolve against the initial-value store, and the value has to survive a structural clone of the box.
+    /// resolve against the initial-value store and the revert snapshot, and the value has to survive a
+    /// structural clone of the box.
     /// <para>
     /// Everything here is driven through the real cascade rather than the <see cref="CssUtils"/> setter, so a
     /// missing registry entry or a lost global-keyword chain in the converter fails loudly. Paint is out of
@@ -56,34 +55,40 @@ namespace PeachPDF.Tests.Integration
         [InlineData("revert-layer")]
         public async Task Cascade_GlobalKeyword_ResetsToSlice(string keyword)
         {
-            var html = $$"""
-                <!DOCTYPE html><html><head><style>
-                  div { box-decoration-break: clone; }
-                  #target { box-decoration-break: {{keyword}}; }
-                </style></head><body><div id="target">text</div></body></html>
-                """;
+            var box = await FindTargetBox($"box-decoration-break: {keyword}", lowerPriorityCss: "box-decoration-break: clone");
 
-            var box = FindById(await BuildBoxTree(html), "target");
-
-            Assert.NotNull(box);
-            Assert.Equal(CssConstants.Slice, box!.BoxDecorationBreak);
+            Assert.Equal(CssConstants.Slice, box.BoxDecorationBreak);
         }
 
-        // The companion direction: the lower-specificity "clone" really is what the keyword rolls back, so
-        // the test above is not passing merely because nothing ever set the property.
+        // The companion direction: the lower-priority "clone" really is what the keyword rolls back, so the
+        // theory above is not passing merely because nothing ever set the property.
         [Fact]
-        public async Task Cascade_LowerSpecificityRule_SetsCloneWhenNotReset()
+        public async Task Cascade_LowerPriorityRule_SetsCloneWhenNotReset()
+        {
+            var box = await FindTargetBox("", lowerPriorityCss: "box-decoration-break: clone");
+
+            Assert.Equal(CssConstants.Clone, box.BoxDecorationBreak);
+        }
+
+        // What distinguishes the _knownPropertyNames entry from the initial-value entry: revert-layer rolls
+        // back to the *snapshot* taken before the winning layer, not to the initial value. Without the
+        // known-name entry there is no snapshot to find, DomParser falls back to the initial value, and this
+        // resolves to "slice" instead of the lower layer's "clone" - which the two theories above cannot
+        // tell apart, since for them both paths land on "slice" anyway.
+        [Fact]
+        public async Task RevertLayer_RollsBackToTheLowerLayer_NotTheInitialValue()
         {
             var html = """
                 <!DOCTYPE html><html><head><style>
-                  div { box-decoration-break: clone; }
+                  @layer base, override;
+                  @layer base { #target { box-decoration-break: clone } }
+                  @layer override { #target { box-decoration-break: revert-layer } }
                 </style></head><body><div id="target">text</div></body></html>
                 """;
 
-            var box = FindById(await BuildBoxTree(html), "target");
+            var box = await FindById(html, "target");
 
-            Assert.NotNull(box);
-            Assert.Equal(CssConstants.Clone, box!.BoxDecorationBreak);
+            Assert.Equal(CssConstants.Clone, box.BoxDecorationBreak);
         }
 
         // box-decoration-break is not inherited, so an explicit "inherit" is the only way a child picks up
@@ -91,36 +96,30 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Inherit_ForcesChildToPickUpParentValue()
         {
-            var html = """
-                <!DOCTYPE html><html><body>
+            var html = LayoutHarness.Wrap("""
                 <div id="parent" style="box-decoration-break: clone">
                   <div id="child" style="box-decoration-break: inherit">text</div>
                 </div>
-                </body></html>
-                """;
+                """);
 
-            var child = FindById(await BuildBoxTree(html), "child");
+            var child = await FindById(html, "child");
 
-            Assert.NotNull(child);
-            Assert.Equal(CssConstants.Clone, child!.BoxDecorationBreak);
+            Assert.Equal(CssConstants.Clone, child.BoxDecorationBreak);
         }
 
         // ...and without one it stays at the initial value, however the parent is styled.
         [Fact]
         public async Task NoDeclaration_UnderACloneParent_IsNotInherited()
         {
-            var html = """
-                <!DOCTYPE html><html><body>
+            var html = LayoutHarness.Wrap("""
                 <div id="parent" style="box-decoration-break: clone">
                   <div id="child">text</div>
                 </div>
-                </body></html>
-                """;
+                """);
 
-            var child = FindById(await BuildBoxTree(html), "child");
+            var child = await FindById(html, "child");
 
-            Assert.NotNull(child);
-            Assert.Equal(CssConstants.Slice, child!.BoxDecorationBreak);
+            Assert.Equal(CssConstants.Slice, child.BoxDecorationBreak);
         }
 
         // ── the two structural-clone call sites ────────────────────────────────
@@ -146,8 +145,8 @@ namespace PeachPDF.Tests.Integration
                 </body></html>
                 """;
 
-            var root = await BuildBoxTree(html, pageHeight: 300);
-            var table = Descendants(root).FirstOrDefault(b => b.HtmlTag?.Name == "table");
+            var (root, _) = await LayoutHarness.LayoutAsync(html, pageHeight: 300);
+            var table = LayoutHarness.Descendants(root).FirstOrDefault(b => b.HtmlTag?.Name == "table");
             Assert.NotNull(table);
 
             var proxies = table!.Boxes.OfType<CssProxyBox>().ToList();
@@ -161,14 +160,11 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task BlockInsideInlineSplit_EveryFragmentCarriesTheValue()
         {
-            var html = """
-                <!DOCTYPE html><html><body>
-                <span style="box-decoration-break: clone">before<div>block</div>after</span>
-                </body></html>
-                """;
+            var html = LayoutHarness.Wrap(
+                """<span style="box-decoration-break: clone">before<div>block</div>after</span>""");
 
-            var root = await BuildBoxTree(html);
-            var spanBoxes = Descendants(root).Where(b => b.HtmlTag?.Name == "span").ToList();
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var spanBoxes = LayoutHarness.Descendants(root).Where(b => b.HtmlTag?.Name == "span").ToList();
 
             // The correction really did split the span, rather than leaving a single box.
             Assert.True(spanBoxes.Count > 1, $"expected the span to be split, found {spanBoxes.Count} box(es)");
@@ -177,49 +173,29 @@ namespace PeachPDF.Tests.Integration
 
         // ── helpers ───────────────────────────────────────────────────────────
 
-        private static async Task<CssBox> FindTargetBox(string css)
+        /// <summary>
+        /// Lays out a single <c>#target</c> div whose declarations come from an <c>#target</c> rule, optionally
+        /// preceded by a lower-priority (bare type selector) rule the CSS-wide keywords can roll back to.
+        /// </summary>
+        private static async Task<CssBox> FindTargetBox(string css, string lowerPriorityCss = "")
         {
             var html = $$"""
                 <!DOCTYPE html><html><head><style>
+                  div { {{lowerPriorityCss}} }
                   #target { width: 200px; height: 100px; {{css}} }
                 </style></head><body><div id="target">text</div></body></html>
                 """;
 
-            var box = FindById(await BuildBoxTree(html), "target");
+            return await FindById(html, "target");
+        }
+
+        private static async Task<CssBox> FindById(string html, string id)
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var box = LayoutHarness.FindById(root, id);
+
             Assert.NotNull(box);
             return box!;
         }
-
-        private static async Task<CssBox> BuildBoxTree(string html, double pageHeight = 842)
-        {
-            var adapter = new PdfSharpAdapter();
-            var container = new HtmlContainerInt(adapter);
-            await container.SetHtml(html, null);
-
-            var size = new XSize(595, pageHeight);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-
-            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
-            await container.PerformLayout(graphics);
-
-            Assert.NotNull(container.Root);
-            return container.Root!;
-        }
-
-        private static IEnumerable<CssBox> Descendants(CssBox box)
-        {
-            yield return box;
-
-            foreach (var child in box.Boxes)
-                foreach (var descendant in Descendants(child))
-                    yield return descendant;
-        }
-
-        private static CssBox? FindById(CssBox root, string id) =>
-            Descendants(root).FirstOrDefault(b =>
-                b.HtmlTag?.Attributes?.TryGetValue("id", out var boxId) == true
-                && string.Equals(boxId, id, StringComparison.OrdinalIgnoreCase));
     }
 }

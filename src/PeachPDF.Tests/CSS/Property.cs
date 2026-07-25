@@ -1089,9 +1089,12 @@ namespace PeachPDF.Tests.CSS
         public void CssBoxDecorationBreakGlobalKeywordLegal(string keyword)
         {
             var property = ParseDeclaration($"box-decoration-break:{keyword}");
+            Assert.Equal("box-decoration-break", property.Name);
             Assert.IsType<BoxDecorationBreak>(property);
-            Assert.True(property.HasValue);
-            Assert.Equal(keyword, property.Value);
+            var concrete = (BoxDecorationBreak)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal(keyword, concrete.Value);
         }
 
         // slice/clone is the whole value set - anything else is invalid CSS and dropped at parse time.
@@ -1102,8 +1105,11 @@ namespace PeachPDF.Tests.CSS
         public void CssBoxDecorationBreakRejectsNonSpecValue(string value)
         {
             var property = ParseDeclaration($"box-decoration-break:{value}");
+            Assert.Equal("box-decoration-break", property.Name);
             Assert.IsType<BoxDecorationBreak>(property);
-            Assert.False(property.HasValue);
+            var concrete = (BoxDecorationBreak)property;
+            Assert.False(concrete.IsInherited);
+            Assert.False(concrete.HasValue);
         }
 
         [Fact]
