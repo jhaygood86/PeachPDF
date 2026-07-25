@@ -1235,7 +1235,7 @@ namespace PeachPDF.Html.Core.Dom
                         word.Left = coordinates.CurrentX;
                         word.Top = coordinates.CurrentY;
 
-                        if (box is { IsFixed: false, IsTableCell: false } && box.HtmlContainer?.SuppressWordPageBreaks != true)
+                        if (box is { IsFixed: false, IsTableCell: false } && box.HtmlContainer?.IsFragmenting != false)
                         {
                             word.BreakPage();
                         }
@@ -1481,7 +1481,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 word.Top += amount;
 
-                if (breakPages && box.HtmlContainer?.SuppressWordPageBreaks != true)
+                if (breakPages && box.HtmlContainer?.IsFragmenting != false)
                 {
                     word.BreakPage();
                 }

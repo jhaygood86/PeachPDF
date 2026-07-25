@@ -1027,6 +1027,26 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private bool _keepWithNextRetried;
 
+        /// <summary>
+        /// Whether a forced break falls before this box, resolved by <see cref="PerformLayoutPrologue"/>
+        /// and read by the placement code. A field rather than a local because the two now run in
+        /// separate methods — and, once a box can be laid out across several fragmentainer passes, in
+        /// separate passes: the prologue runs only on the pass that first enters the box.
+        /// </summary>
+        private bool _isForcedBreak;
+
+        /// <summary>
+        /// Whether this box registers a named-page entry, resolved by
+        /// <see cref="PerformLayoutPrologue"/> and read by both registration sites.
+        /// </summary>
+        /// <remarks>
+        /// This must be carried rather than re-derived: the early registration mutates
+        /// <see cref="HtmlContainerInt.ActivePageName"/>, so a fresh
+        /// <c>UsedPageName != ActivePageName</c> comparison would read false for an already-registered
+        /// box and silently skip its Y-drift re-sync.
+        /// </remarks>
+        private bool _shouldRegisterPage;
+
         #region Private Methods
 
         /// <summary>
@@ -1062,6 +1082,24 @@ namespace PeachPDF.Html.Core.Dom
             Console.WriteLine($"layout start: {ToString()}");
 #endif
 
+            await PerformLayoutPrologue(g);
+            await LayoutContents(g);
+            await PerformLayoutEpilogue(g);
+        }
+
+        /// <summary>
+        /// Everything that must happen exactly once for this box, before any of its content is placed:
+        /// measuring its words, applying <c>string-set</c>, resolving its used page name, and taking any
+        /// forced break that falls before it.
+        /// </summary>
+        /// <remarks>
+        /// Split out because it is precisely the part a <i>resumed</i> layout pass must not repeat —
+        /// <see cref="RectanglesReset"/> would discard geometry already emitted into an earlier
+        /// fragmentainer, <see cref="MeasureWordsSize"/> is expensive and resolves images, applying
+        /// <c>string-set</c> is not idempotent, and a forced break must not fire a second time.
+        /// </remarks>
+        private async ValueTask PerformLayoutPrologue(RGraphics g)
+        {
             if (Display != CssConstants.None)
             {
                 RectanglesReset();
@@ -1105,9 +1143,9 @@ namespace PeachPDF.Html.Core.Dom
             // has a registration entry the tail can re-sync; that registration is redundant for name
             // resolution but harmless (it resolves to the same name).
             var pageNameChanged = HtmlContainer is not null && UsedPageName != HtmlContainer.ActivePageName;
-            var shouldRegisterPage = HtmlContainer is not null && (hasExplicitPageName || pageNameChanged);
-            var isForcedBreak = IsForcedBreakValue(BreakBefore) || IsForcedBreakValue(previousSiblingForBreak?.BreakAfter) || pageNameChanged;
-            if (isForcedBreak)
+            _shouldRegisterPage = HtmlContainer is not null && (hasExplicitPageName || pageNameChanged);
+            _isForcedBreak = IsForcedBreakValue(BreakBefore) || IsForcedBreakValue(previousSiblingForBreak?.BreakAfter) || pageNameChanged;
+            if (_isForcedBreak)
             {
                 if (previousSiblingForBreak is not null)
                 {
@@ -1141,7 +1179,14 @@ namespace PeachPDF.Html.Core.Dom
                     previousSiblingForBreak.ActualBottom = target;
                 }
             }
+        }
 
+        /// <summary>
+        /// Places this box and lays out its content — the part of layout a resumed pass re-enters,
+        /// picking up where the previous fragmentainer stopped rather than starting over.
+        /// </summary>
+        private async ValueTask LayoutContents(RGraphics g)
+        {
             if (IsBlock || Display == CssConstants.ListItem || Display == CssConstants.Table || Display == CssConstants.InlineTable || Display == CssConstants.TableCell || Display == CssConstants.Flex || Display == CssConstants.InlineFlex || Display == CssConstants.Grid || Display == CssConstants.InlineGrid)
             {
                 // Because their width and height are set by CssTable, CssLayoutEngineFlex or CssLayoutEngineGrid
@@ -1192,7 +1237,7 @@ namespace PeachPDF.Html.Core.Dom
                         // truncated (only the margin BEFORE a forced break is - already handled above by
                         // bumping previousSiblingForBreak.ActualBottom to the next page's top) - so this
                         // only applies when this box's own placement isn't already forced-break-governed.
-                        if (prevSibling is not null && !isForcedBreak)
+                        if (prevSibling is not null && !_isForcedBreak)
                         {
                             var pageHeight = HtmlContainer!.PageSize.Height;
                             if (pageHeight > 0)
@@ -1340,7 +1385,7 @@ namespace PeachPDF.Html.Core.Dom
                 // through OffsetTop, which keeps the registration in sync via MoveNamedPageElement;
                 // engines that relocate this box directly (e.g. CssLayoutEngineTable's whole-table
                 // pre-check) are re-synced by the tail check.
-                if (shouldRegisterPage)
+                if (_shouldRegisterPage)
                 {
                     RegisteredNamedPageElement = HtmlContainer!.RegisterNamedPageElement(UsedPageName, NamedPageRegistrationY());
                 }
@@ -1406,7 +1451,20 @@ namespace PeachPDF.Html.Core.Dom
                     ActualBottom = prevSibling.ActualBottom;
                 }
             }
+        }
 
+        /// <summary>
+        /// Everything that must happen exactly once, after this box's content is complete: resolving its
+        /// height, and the corrections that can only be judged against a finished box — the
+        /// keep-with-next first-line retry, <c>break-inside: avoid</c>, <c>orphans</c>/<c>widows</c>, the
+        /// absolute right/bottom fallbacks, and the named-page/named-string bookkeeping.
+        /// </summary>
+        /// <remarks>
+        /// A box that stopped part-way through a fragmentainer has none of this settled yet, so a
+        /// resumed pass runs it only once the box actually completes.
+        /// </remarks>
+        private async ValueTask PerformLayoutEpilogue(RGraphics g)
+        {
             CssLayoutEngine.ApplyHeight(this);
             CssLayoutEngine.ApplyParentHeight(this);
 
@@ -1598,7 +1656,7 @@ namespace PeachPDF.Html.Core.Dom
             // be re-derived here: the early registration above mutates HtmlContainer.ActivePageName,
             // so a fresh UsedPageName != ActivePageName comparison would now read false for an
             // already-registered box and skip its Y-drift re-sync.
-            if (shouldRegisterPage)
+            if (_shouldRegisterPage)
             {
                 var registrationY = NamedPageRegistrationY();
                 if (RegisteredNamedPageElement is null)
