@@ -97,22 +97,22 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         }
 
         [Fact]
-        public void PushMonolithic_SuppressesFragmenting_AndRestoresOnDispose()
+        public void EnterMonolithic_SuppressesFragmenting_AndRestoresOnExit()
         {
             var context = CreateContext(CreateContainer());
 
             Assert.True(context.IsFragmenting);
 
-            var outer = context.PushMonolithic();
+            var outer = context.EnterMonolithic();
             Assert.False(context.IsFragmenting);
 
             // Nested monolithic content composes: the inner scope restores to "still monolithic".
-            var inner = context.PushMonolithic();
+            var inner = context.EnterMonolithic();
             Assert.False(context.IsFragmenting);
-            inner.Dispose();
+            context.ExitMonolithic(inner);
             Assert.False(context.IsFragmenting);
 
-            outer.Dispose();
+            context.ExitMonolithic(outer);
             Assert.True(context.IsFragmenting);
         }
 
@@ -135,16 +135,12 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         }
 
         [Fact]
-        public void ContainerIsFragmenting_FallsBackToSuppressWordPageBreaks_OutsideAPass()
+        public void ContainerIsFragmenting_IsFalse_OutsideALayoutPass()
         {
             var container = CreateContainer();
 
-            // No LayoutDocument pass is running, so there is no fragmentainer to break against and the
-            // question reduces to the flag the individual break sites used to read directly.
+            // No LayoutDocument pass is running, so there is no fragmentainer to break against.
             Assert.Null(container.CurrentFragmentainer);
-            Assert.True(container.IsFragmenting);
-
-            container.SuppressWordPageBreaks = true;
             Assert.False(container.IsFragmenting);
         }
     }

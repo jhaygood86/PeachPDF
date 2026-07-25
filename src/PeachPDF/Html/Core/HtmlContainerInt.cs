@@ -207,16 +207,11 @@ namespace PeachPDF.Html.Core
         internal FragmentainerContext? CurrentFragmentainer { get; private set; }
 
         /// <summary>
-        /// Whether break decisions are live for the content being laid out right now — the single
-        /// question every fragmentation site asks. False during a measurement pass at a provisional
-        /// position, and inside monolithic content.
+        /// Whether a break may be taken for the content being laid out right now. False during a
+        /// measurement pass at a provisional position, inside monolithic content, and outside a
+        /// <see cref="LayoutDocument"/> pass, where there is no fragmentainer to break against.
         /// </summary>
-        /// <remarks>
-        /// Outside a <see cref="LayoutDocument"/> pass there is no fragmentainer to break against, so
-        /// this falls back to <see cref="SuppressWordPageBreaks"/> alone — which is what the individual
-        /// break sites used to consult directly.
-        /// </remarks>
-        internal bool IsFragmenting => CurrentFragmentainer?.IsFragmenting ?? !SuppressWordPageBreaks;
+        internal bool IsFragmenting => CurrentFragmentainer?.IsFragmenting ?? false;
 
         /// <summary>
         /// Increments once per <see cref="LayoutDocument"/> invocation. A box records the generation it
@@ -225,6 +220,13 @@ namespace PeachPDF.Html.Core
         /// re-layout — is recognised as stale instead of being resumed into.
         /// </summary>
         internal int LayoutGeneration { get; private set; }
+
+        /// <summary>
+        /// How many fragmentainer passes the last <see cref="LayoutDocument"/> ran — one, plus one per
+        /// break it had to resume from. A document whose content never overflows a fragmentainer takes a
+        /// single pass, which is what keeps the common case as cheap as the old single-flow model.
+        /// </summary>
+        internal int FragmentainerPasses { get; private set; }
 
         /// <summary>
         /// Defensive backstop on the driver loop, mirroring the cap the fragment-tree slot walk uses.
@@ -589,6 +591,7 @@ namespace PeachPDF.Html.Core
         private async ValueTask LayoutDocument(RGraphics g)
         {
             LayoutGeneration++;
+            FragmentainerPasses = 0;
 
             // Registrations append (they aren't idempotent), so without this each re-layout accumulated
             // duplicates and began with a stale ActivePageName from the PREVIOUS invocation's last
@@ -596,12 +599,43 @@ namespace PeachPDF.Html.Core
             ClearNamedPageElements();
             PageGeometry.Reset();
 
-            var context = new FragmentainerContext(this, Root!, slotIndex: 0, LayoutGeneration, incomingToken: null);
-            CurrentFragmentainer = context;
+            BreakToken? token = null;
 
             try
             {
-                await Root!.PerformLayout(g);
+                for (var slot = 0; slot < MaxFragmentainers; slot++)
+                {
+                    var context = new FragmentainerContext(this, Root!, slot, LayoutGeneration, token);
+                    CurrentFragmentainer = context;
+
+                    Root!.ResumeAt(token, resumeTopOverride: null);
+                    await Root.PerformLayout(g);
+                    FragmentainerPasses++;
+
+                    var next = context.OutgoingToken;
+
+                    if (next is null) break;
+
+                    if (next == token)
+                    {
+                        // The pass reproduced the record it was handed, so re-entering would resume at
+                        // the same point forever. Lay the remainder out monolithically instead: an
+                        // overflowing fragmentainer is a far better outcome than dropped content, and
+                        // it is what css-break-3 §4.3's own last-resort relaxation amounts to.
+                        ReportError(HtmlRenderErrorType.Layout, "Layout could not advance past a fragmentainer boundary");
+
+                        var final = new FragmentainerContext(this, Root, slot, LayoutGeneration, token);
+                        final.EnterMonolithic();
+                        CurrentFragmentainer = final;
+
+                        Root.ResumeAt(token, resumeTopOverride: null);
+                        await Root.PerformLayout(g);
+                        FragmentainerPasses++;
+                        break;
+                    }
+
+                    token = next;
+                }
             }
             finally
             {

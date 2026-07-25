@@ -15,6 +15,7 @@ using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Entities;
+using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Paint;
 using PeachPDF.Html.Core.Parse;
@@ -1047,6 +1048,48 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private bool _shouldRegisterPage;
 
+        /// <summary>
+        /// Where this box stopped, when it could not finish inside the fragmentainer the current pass is
+        /// filling. Read by the parent's child loop, which wraps it in a link of its own and returns in
+        /// turn, so the record unwinds to the fragmentation-context root.
+        /// </summary>
+        internal BreakToken? PendingBreakToken { get; private set; }
+
+        /// <summary>
+        /// The document Y this box asked to be placed at in a later fragmentainer, when the placement
+        /// code decided the break falls <i>before</i> it. Distinct from
+        /// <see cref="PendingBreakToken"/> because the box cannot name itself in a token — only its
+        /// parent knows its index — so the parent converts this into a break-before link.
+        /// </summary>
+        internal double? RequestedBreakBeforeTop { get; private set; }
+
+        /// <summary>
+        /// How this box resumes on the current pass, or null when it is being laid out from the start.
+        /// </summary>
+        private BreakToken? _incomingToken;
+
+        /// <summary>
+        /// The placement this box was granted when its parent broke before it — the already-computed
+        /// target the margin-truncation and keep-with-next paths worked out, which must be used as-is
+        /// rather than re-derived (re-deriving it would reach the same "does not fit" conclusion and
+        /// break again, forever).
+        /// </summary>
+        private double? _resumeTopOverride;
+
+        /// <summary>
+        /// Whether <see cref="PerformLayoutPrologue"/> has already run for this box in the current
+        /// layout. It runs once per box per layout, not once per fragmentainer pass.
+        /// </summary>
+        private bool _prologueDone;
+
+        /// <summary>
+        /// The <see cref="HtmlContainerInt.LayoutGeneration"/> this box last laid out in. Resumption
+        /// state left behind by an earlier layout — the unrestricted-width double layout, the
+        /// per-page-width reflow loop, <c>ShrinkToFit</c>'s re-layout — is recognised as stale by this
+        /// and discarded, rather than being resumed into.
+        /// </summary>
+        private int _layoutGeneration;
+
         #region Private Methods
 
         /// <summary>
@@ -1082,9 +1125,81 @@ namespace PeachPDF.Html.Core.Dom
             Console.WriteLine($"layout start: {ToString()}");
 #endif
 
-            await PerformLayoutPrologue(g);
-            await LayoutContents(g);
+            var resume = BeginLayoutPass();
+
+            // Once per box per layout, never once per fragmentainer pass - see the method's own remarks
+            // for what re-running it would destroy.
+            if (!_prologueDone)
+            {
+                _prologueDone = true;
+                await PerformLayoutPrologue(g);
+            }
+
+            await LayoutContents(g, resume);
+
+            if (PendingBreakToken is not null || RequestedBreakBeforeTop is not null)
+            {
+                // This box did not finish in this fragmentainer. Its epilogue judges a *complete* box,
+                // so it waits for the pass that completes it; the record unwinds from here.
+                PublishBreakToTheContextRoot();
+                return;
+            }
+
             await PerformLayoutEpilogue(g);
+        }
+
+        /// <summary>
+        /// Picks up this box's resumption state for the pass that is starting, discarding anything left
+        /// over from an earlier layout.
+        /// </summary>
+        private BreakToken? BeginLayoutPass()
+        {
+            var generation = HtmlContainer?.LayoutGeneration ?? 0;
+
+            if (_layoutGeneration != generation)
+            {
+                _layoutGeneration = generation;
+                _prologueDone = false;
+                _incomingToken = null;
+                _resumeTopOverride = null;
+            }
+
+            var resume = _incomingToken;
+            _incomingToken = null;
+            PendingBreakToken = null;
+            RequestedBreakBeforeTop = null;
+            return resume;
+        }
+
+        /// <summary>
+        /// Hands the resumption record to the fragmentation context once it has unwound all the way to
+        /// the context root, which is where the driver reads it.
+        /// </summary>
+        private void PublishBreakToTheContextRoot()
+        {
+            if (HtmlContainer?.CurrentFragmentainer is not { } context || !ReferenceEquals(this, context.ContextRoot))
+                return;
+
+            // The root itself has no parent to wrap a break-before request, so it stands in as one.
+            context.RecordBreak(PendingBreakToken
+                                ?? new BlockBreakToken(this, 0, null, IsBreakBefore: true, RequestedBreakBeforeTop));
+        }
+
+        /// <summary>
+        /// Records that the break falls before this box: it produces no fragment in the fragmentainer it
+        /// is leaving, and resumes at <paramref name="top"/> in the next one
+        /// (<see href="https://www.w3.org/TR/css-break-3/#break-between">css-break-3 §4.4</see>).
+        /// </summary>
+        private void RequestBreakBefore(double top) => RequestedBreakBeforeTop = top;
+
+        /// <summary>
+        /// Seeds this box's resumption state for the pass about to run. Called by the parent's child
+        /// loop immediately before it re-enters the child it stopped at.
+        /// </summary>
+        internal void ResumeAt(BreakToken? incomingToken, double? resumeTopOverride)
+        {
+            _incomingToken = incomingToken;
+            _resumeTopOverride = resumeTopOverride;
         }
 
         /// <summary>
@@ -1185,225 +1300,30 @@ namespace PeachPDF.Html.Core.Dom
         /// Places this box and lays out its content — the part of layout a resumed pass re-enters,
         /// picking up where the previous fragmentainer stopped rather than starting over.
         /// </summary>
-        private async ValueTask LayoutContents(RGraphics g)
+        private async ValueTask LayoutContents(RGraphics g, BreakToken? resume)
         {
             if (IsBlock || Display == CssConstants.ListItem || Display == CssConstants.Table || Display == CssConstants.InlineTable || Display == CssConstants.TableCell || Display == CssConstants.Flex || Display == CssConstants.InlineFlex || Display == CssConstants.Grid || Display == CssConstants.InlineGrid)
             {
-                // Because their width and height are set by CssTable, CssLayoutEngineFlex or CssLayoutEngineGrid
-                if (Display != CssConstants.TableCell && Display != CssConstants.Table && Display != CssConstants.Flex && Display != CssConstants.InlineFlex && Display != CssConstants.Grid && Display != CssConstants.InlineGrid)
+                if (resume is null)
                 {
-                    var width = await CssLayoutEngine.GetBoxWidth(g, this);
-                    ActualRight = Location.X + width + ActualBoxSizeIncludedWidth;
-                }
+                    await PlaceBlockBox(g);
 
-                if (Display != CssConstants.TableCell)
-                {
-                    if (Position is CssConstants.Static or CssConstants.Relative)
-                    {
-                        var prevSibling = DomUtils.GetPreviousSibling(this, false);
-
-                        var left = ContainingBlock.ClientLeft;
-                        // prevSibling.ActualBottom is already the outer border-box edge (CssBoxProperties.
-                        // ActualBottom = Location.Y + content height + padding + border, per its own
-                        // getter/ApplyHeight/MarginBottomCollapse - all three fold border-bottom in
-                        // exactly once) - adding prevSibling.ActualBorderBottomWidth again here double-
-                        // counted it, pushing every box that follows a bordered sibling an extra
-                        // border-bottom-width too far down. MarginTopCollapse's own internal bookkeeping
-                        // (anchor.ActualBottom + anchor.ActualBorderBottomWidth, then subtracting
-                        // prevSibling's own equivalent) is unaffected by this fix: those two terms already
-                        // cancel out exactly when anchor == prevSibling (the common case), and a
-                        // self-collapsing prevSibling always has zero border by definition
-                        // (IsMarginCollapseThrough requires it), so the residual term vanishes there too.
-                        // StaticBottom (not ActualBottom) so a relatively-positioned previous sibling's
-                        // visual offset doesn't shift this box - CSS 2.1 §9.4.3, relative offsets never
-                        // affect the layout of following content.
-                        var baseTop = (prevSibling == null ? ContainingBlock.ClientTop : ParentBox == null ? Location.Y : 0) + (prevSibling?.StaticBottom ?? 0);
-                        var top = baseTop + MarginTopCollapse(prevSibling);
-
-                        // CSS Fragmentation Level 3 §5.2: "When an unforced break occurs before or
-                        // after a block-level box, any margins adjoining the break are truncated to
-                        // zero." A margin big enough to push this box across one or more page
-                        // boundaries by itself (as opposed to actual content straddling a boundary,
-                        // which BreakInside/orphans-widows handles separately, later in this method) is
-                        // exactly that case - real UAs (and Prince, which this mirrors) discard the
-                        // whole margin and start the box flush at the very next page boundary rather
-                        // than paginating through a wall of blank pages. Acid2's own
-                        // "#top { margin-top: 100em }" is the canonical example: that margin alone
-                        // spans several page heights with no real content in it at all. A negative
-                        // collapsed margin can never trigger this (it only pulls top backward, never
-                        // forward across a new boundary), and an ordinary margin that stays within the
-                        // same page as prevSibling's bottom is completely unaffected. Per the same spec
-                        // section, a margin AFTER a *forced* break is explicitly preserved, not
-                        // truncated (only the margin BEFORE a forced break is - already handled above by
-                        // bumping previousSiblingForBreak.ActualBottom to the next page's top) - so this
-                        // only applies when this box's own placement isn't already forced-break-governed.
-                        if (prevSibling is not null && !_isForcedBreak)
-                        {
-                            var pageHeight = HtmlContainer!.PageSize.Height;
-                            if (pageHeight > 0)
-                            {
-                                // Same shifted grid the fragment builder/the forced-break logic above use
-                                // (see HtmlContainer.PageIndexOf's own doc comment) - matching
-                                // BreakInside_Avoid_PositionsAtTopOfNextPage's already-established
-                                // convention. The epsilons attribute a value flush ON a boundary to
-                                // the earlier slot (a sibling ending exactly at a slot boundary is
-                                // wholly inside it), mirroring the forced-break flush-fit rule above.
-                                var prevSlot = HtmlContainer.PageIndexOf(baseTop - HtmlContainerInt.PageBoundaryEpsilon);
-                                var naturalSlot = HtmlContainer.PageIndexOf(top - HtmlContainerInt.PageBoundaryEpsilon);
-                                if (naturalSlot > prevSlot)
-                                {
-                                    var newTop = HtmlContainer.PageTopOf(prevSlot + 1);
-
-                                    // css-break §3.1 keep-with-next: this box is about to relocate to
-                                    // the next page's content top, which would otherwise strand a
-                                    // preceding break-after/break-before: avoid run (e.g. the UA default
-                                    // `h1-h6 { page-break-after: avoid }`) alone at the bottom of the
-                                    // page it's leaving - see CssLayoutEngineTable's identical whole-table
-                                    // pre-check (LayoutCells) and OffsetTopWithKeepWithNextRun, which this
-                                    // mirrors. Pull the run along when it starts on this same page and its
-                                    // own height still fits the destination page's band; an unsatisfiable
-                                    // avoid is relaxed per spec and this box moves alone, exactly as
-                                    // before. Unlike those two siblings' guards, this one doesn't also
-                                    // require this box's own (not-yet-laid-out) content to fit alongside
-                                    // the run: a break-inside:avoid/orphans-widows box must land whole or
-                                    // the move is pointless, but this box is free to fragment across
-                                    // further pages on its own afterward (a table re-applies its per-row
-                                    // break logic, an ordinary block just keeps flowing) - only the run
-                                    // needs a page to itself.
-                                    var keepWithNextRun = DomUtils.GetPrecedingKeepWithNextRun(this);
-                                    if (keepWithNextRun.Count > 0)
-                                    {
-                                        var runTop = keepWithNextRun[0].Location.Y;
-                                        var extraAbove = top - runTop;
-                                        var runStartsOnSamePage =
-                                            HtmlContainer.PageIndexOf(runTop - HtmlContainerInt.PageBoundaryEpsilon) == prevSlot;
-
-                                        if (extraAbove > 0 && runStartsOnSamePage
-                                            && extraAbove <= HtmlContainer.PageBandHeightOf(prevSlot + 1))
-                                        {
-                                            var groupOffset = newTop - runTop;
-
-                                            foreach (var member in keepWithNextRun)
-                                            {
-                                                member.OffsetTop(groupOffset);
-                                            }
-
-                                            newTop += extraAbove;
-                                        }
-                                    }
-
-                                    top = newTop;
-                                }
-                            }
-                        }
-
-                        Location = new RPoint(left + ActualMarginLeft, top);
-                        ActualBottom = top;
-
-
-                        CssLayoutEngine.FloatBox(this);
-                    }
-
-                    if (Position is CssConstants.Relative)
-                    {
-                        // CSS 2.1 §9.4.3: for each axis, the "near" offset (left/top) wins when set; if
-                        // it's auto and the "far" offset (right/bottom) isn't, the far offset applies
-                        // with its sign flipped (moving the box the opposite direction from that edge);
-                        // if both are auto, the offset is 0. Previously only left/top were ever read, so
-                        // e.g. "bottom: -1em" with left/top both auto/unset was a silent no-op.
-                        //
-                        // The offsets are recorded (not just applied) because, per the same section,
-                        // relative positioning is purely visual: following siblings and the parent's own
-                        // content-driven height must lay out against the box's STATIC position, which
-                        // StaticBottom recovers by backing RelativeOffsetY out again. Acid2's
-                        // ".smile div { position: relative; bottom: -1em }" is exactly this: the mouth
-                        // bar paints 1em lower, but ".chin"'s position must not move with it.
-                        var offsetX = Left is not CssConstants.Auto || Right is CssConstants.Auto
-                            ? CssValueParser.ParseLength(Left, ActualWidth, this)
-                            : -CssValueParser.ParseLength(Right, ActualWidth, this);
-                        var offsetY = Top is not CssConstants.Auto || Bottom is CssConstants.Auto
-                            ? CssValueParser.ParseLength(Top, ActualHeight, this)
-                            : -CssValueParser.ParseLength(Bottom, ActualHeight, this);
-
-                        RelativeOffsetX = offsetX;
-                        RelativeOffsetY = offsetY;
-                        Location = new RPoint(Location.X + offsetX, Location.Y + offsetY);
-                        ActualBottom = Location.Y;
-                    }
-
-                    if (Position is CssConstants.Absolute)
-                    {
-                        var nearestPositionedAncestor = DomUtils.GetNearestPositionedAncestor(this);
-
-                        // CSS 2.1 §10.3.7: `left`/`top` on an absolutely positioned box are measured
-                        // from the containing block's PADDING edge (ClientLeft/ClientTop - inside the
-                        // border), not its border-box edge (Location.X/Y) - and, like every other
-                        // positioning scheme, the box's own margin still applies on top of that offset
-                        // (previously dropped entirely here, unlike the static/relative branch above
-                        // which already adds ActualMarginLeft). Acid2's own
-                        // "[class~=one].first.one { position:absolute; margin: 36px 0 0 60px; }" inside
-                        // ".picture" (which has a 1em border) exercises both of these: the missing
-                        // margin alone lands the box ~36px/60px off, on top of the next sibling.
-                        var left = nearestPositionedAncestor.ClientLeft + ActualMarginLeft +
-                                   CssValueParser.ParseLength(Left, nearestPositionedAncestor.ActualWidth, this);
-
-                        var top = nearestPositionedAncestor.ClientTop + ActualMarginTop +
-                                  CssValueParser.ParseLength(Top, nearestPositionedAncestor.ActualHeight, this);
-
-                        Location = new RPoint(left, top);
-                    }
-
-                    if (Position is CssConstants.Fixed)
-                    {
-                        // Like every other positioning scheme (see the Absolute branch above, fixed for
-                        // the same omission), the box's own margin still applies on top of the left/top
-                        // offset - previously dropped entirely here. Acid2's own
-                        // ".picture p + table + p { margin-top: 3em; }" (which legitimately matches the
-                        // fixture's second, HTML4-DTD-auto-closed <p> - see Acid2RegressionTests) relies
-                        // on this to shift that fixed-position paragraph down from underneath the first
-                        // one's own fixed black bar. Percentages resolve against the page/viewport size
-                        // (CSS2.1 §10.1: the initial containing block), not ScrollOffset (a scroll
-                        // position, not a size) - not exercised by this fixture (uses em, not %) but
-                        // wrong regardless.
-                        var left = ActualMarginLeft + CssValueParser.ParseLength(Left, HtmlContainer!.PageSize.Width, this);
-                        var top = ActualMarginTop + CssValueParser.ParseLength(Top, HtmlContainer!.PageSize.Height, this);
-                        Location = new RPoint(left, top);
-                    }
-                }
-
-                // Register the used page name BEFORE any child lays out: descendants' page-break
-                // decisions consult the per-page geometry table, whose slot bands from this box's
-                // page onward depend on this name being visible (PageRuleResolver.
-                // ActiveNameAtSlotStart) - registering only after child layout (this method's tail,
-                // formerly the sole registration point) let a multi-page named element's own content
-                // paginate against the PREVIOUS name's bands. We register the *used* name whenever this
-                // box either carries its own explicit name or is a used-name transition (see
-                // shouldRegisterPage) - crucially including a reversion whose UsedPageName is empty or
-                // an outer named page, which is what stops a named page's margins/margin-boxes from
-                // leaking onto later default pages. Movers that can still run after this point
-                // (BreakInside: avoid, orphans/widows, the absolute bottom-edge fallback) all route
-                // through OffsetTop, which keeps the registration in sync via MoveNamedPageElement;
-                // engines that relocate this box directly (e.g. CssLayoutEngineTable's whole-table
-                // pre-check) are re-synced by the tail check.
-                if (_shouldRegisterPage)
-                {
-                    RegisteredNamedPageElement = HtmlContainer!.RegisterNamedPageElement(UsedPageName, NamedPageRegistrationY());
+                    // Placement decided the break falls before this box, so it contributes nothing to
+                    // the fragmentainer being filled and its content waits for the next pass.
+                    if (RequestedBreakBeforeTop is not null) return;
                 }
 
                 if (Display is CssConstants.Flex or CssConstants.InlineFlex)
                 {
-                    await CssLayoutEngineFlex.PerformLayout(g, this);
-                    await LayoutOutOfFlowChildren(g);
+                    await LayoutMonolithicContent(g, CssLayoutEngineFlex.PerformLayout);
                 }
                 else if (Display is CssConstants.Grid or CssConstants.InlineGrid)
                 {
-                    await CssLayoutEngineGrid.PerformLayout(g, this);
-                    await LayoutOutOfFlowChildren(g);
+                    await LayoutMonolithicContent(g, CssLayoutEngineGrid.PerformLayout);
                 }
                 else if (Display is CssConstants.Table or CssConstants.InlineTable)
                 {
-                    await CssLayoutEngineTable.PerformLayout(g, this);
-                    await LayoutOutOfFlowChildren(g);
+                    await LayoutMonolithicContent(g, CssLayoutEngineTable.PerformLayout);
                 }
                 else
                 {
@@ -1423,14 +1343,11 @@ namespace PeachPDF.Html.Core.Dom
                     }
                     else if (EstablishesMultiColumnContext && Boxes.Count > 0)
                     {
-                        await CssLayoutEngineColumns.PerformLayout(g, this);
+                        await LayoutMonolithicContent(g, CssLayoutEngineColumns.PerformLayout, layoutOutOfFlowChildren: false);
                     }
                     else if (Boxes.Count > 0)
                     {
-                        foreach (var childBox in Boxes)
-                        {
-                            await childBox.PerformLayout(g);
-                        }
+                        if (await LayoutBlockChildren(g, resume)) return;
 
                         ActualRight = CalculateActualRight();
 
@@ -1450,6 +1367,320 @@ namespace PeachPDF.Html.Core.Dom
                         Location = prevSibling.Location;
                     ActualBottom = prevSibling.ActualBottom;
                 }
+            }
+        }
+
+        /// <summary>
+        /// Runs a layout engine that paginates its own content, with breaking suppressed for the
+        /// duration.
+        /// </summary>
+        /// <remarks>
+        /// Flex, grid, table and multi-column containers are <b>monolithic</b> to the fragmentation
+        /// driver (<see href="https://www.w3.org/TR/css-break-3/#monolithic">css-break-3 §2</see>): each
+        /// lays its subtree out in one go, inside whichever fragmentainer it starts in, and keeps the
+        /// pagination it already does for itself — the table engine's per-row breaks and repeated
+        /// header/footer proxies, the columns engine's re-banding. Suppressing breaks here also stops a
+        /// provisional placement made during those engines' measurement passes from being mistaken for
+        /// a real break decision, which is the hazard <c>SuppressWordPageBreaks</c> was introduced for.
+        /// Making these subtrees genuinely fragmentable is tracked separately.
+        /// </remarks>
+        private async ValueTask LayoutMonolithicContent(
+            RGraphics g, Func<RGraphics, CssBox, ValueTask> engine, bool layoutOutOfFlowChildren = true)
+        {
+            var context = HtmlContainer?.CurrentFragmentainer;
+            var previous = context?.EnterMonolithic() ?? false;
+
+            try
+            {
+                await engine(g, this);
+
+                // The multi-column engine lays out every child itself, including out-of-flow ones; the
+                // flex/table/grid engines deliberately place only in-flow items.
+                if (layoutOutOfFlowChildren) await LayoutOutOfFlowChildren(g);
+            }
+            finally
+            {
+                context?.ExitMonolithic(previous);
+            }
+        }
+
+        /// <summary>
+        /// Lays this box's block-level children into the fragmentainer the current pass is filling,
+        /// resuming at the child the previous pass stopped at.
+        /// </summary>
+        /// <returns>
+        /// true when a child could not finish, in which case this box has recorded where to pick up and
+        /// stops. The children after that point are not laid out at all on this pass — which is what
+        /// makes a break before a box produce no fragment for it in the fragmentainer it is leaving
+        /// (<see href="https://www.w3.org/TR/css-break-3/#break-between">css-break-3 §4.4</see>).
+        /// </returns>
+        private async ValueTask<bool> LayoutBlockChildren(RGraphics g, BreakToken? resume)
+        {
+            var resumeAt = resume as BlockBreakToken;
+            var start = resumeAt?.ResumeChildIndex ?? 0;
+
+            for (var i = start; i < Boxes.Count; i++)
+            {
+                var childBox = Boxes[i];
+
+                // Only the child the previous pass stopped at resumes; everything after it is laid out
+                // from the start, having never been reached.
+                if (i == start && resumeAt is not null)
+                {
+                    childBox.ResumeAt(resumeAt.ChildToken, resumeAt.ResumeTopOverride);
+                }
+
+                await childBox.PerformLayout(g);
+
+                if (childBox.PendingBreakToken is { } childToken)
+                {
+                    PendingBreakToken = new BlockBreakToken(this, i, childToken, IsBreakBefore: false, null);
+                    return true;
+                }
+
+                if (childBox.RequestedBreakBeforeTop is { } childTop)
+                {
+                    // The child cannot name itself in a token - only this box knows its index - so it
+                    // asked, and this is where the ask becomes a link in the chain.
+                    PendingBreakToken = new BlockBreakToken(this, i, null, IsBreakBefore: true, childTop);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Resolves this box's own inline size and position, and registers its used page name.
+        /// </summary>
+        /// <remarks>
+        /// Runs on the pass that first places the box and never again: a resumed pass continues the
+        /// box's <i>content</i>, and re-deriving its top from the previous sibling would now read the
+        /// end of the whole flow. Skipping it is also what keeps a box that spans a fragmentainer
+        /// boundary on one inline size across its fragments, per CSS Fragmentation Level 3 §2.
+        /// </remarks>
+        private async ValueTask PlaceBlockBox(RGraphics g)
+        {
+            // Because their width and height are set by CssTable, CssLayoutEngineFlex or CssLayoutEngineGrid
+            if (Display != CssConstants.TableCell && Display != CssConstants.Table && Display != CssConstants.Flex && Display != CssConstants.InlineFlex && Display != CssConstants.Grid && Display != CssConstants.InlineGrid)
+            {
+                var width = await CssLayoutEngine.GetBoxWidth(g, this);
+                ActualRight = Location.X + width + ActualBoxSizeIncludedWidth;
+            }
+
+            if (Display != CssConstants.TableCell)
+            {
+                if (Position is CssConstants.Static or CssConstants.Relative)
+                {
+                    var prevSibling = DomUtils.GetPreviousSibling(this, false);
+
+                    var left = ContainingBlock.ClientLeft;
+                    // prevSibling.ActualBottom is already the outer border-box edge (CssBoxProperties.
+                    // ActualBottom = Location.Y + content height + padding + border, per its own
+                    // getter/ApplyHeight/MarginBottomCollapse - all three fold border-bottom in
+                    // exactly once) - adding prevSibling.ActualBorderBottomWidth again here double-
+                    // counted it, pushing every box that follows a bordered sibling an extra
+                    // border-bottom-width too far down. MarginTopCollapse's own internal bookkeeping
+                    // (anchor.ActualBottom + anchor.ActualBorderBottomWidth, then subtracting
+                    // prevSibling's own equivalent) is unaffected by this fix: those two terms already
+                    // cancel out exactly when anchor == prevSibling (the common case), and a
+                    // self-collapsing prevSibling always has zero border by definition
+                    // (IsMarginCollapseThrough requires it), so the residual term vanishes there too.
+                    // StaticBottom (not ActualBottom) so a relatively-positioned previous sibling's
+                    // visual offset doesn't shift this box - CSS 2.1 §9.4.3, relative offsets never
+                    // affect the layout of following content.
+                    var baseTop = (prevSibling == null ? ContainingBlock.ClientTop : ParentBox == null ? Location.Y : 0) + (prevSibling?.StaticBottom ?? 0);
+                    var top = baseTop + MarginTopCollapse(prevSibling);
+
+                    // CSS Fragmentation Level 3 §5.2: "When an unforced break occurs before or
+                    // after a block-level box, any margins adjoining the break are truncated to
+                    // zero." A margin big enough to push this box across one or more page
+                    // boundaries by itself (as opposed to actual content straddling a boundary,
+                    // which BreakInside/orphans-widows handles separately, later in this method) is
+                    // exactly that case - real UAs (and Prince, which this mirrors) discard the
+                    // whole margin and start the box flush at the very next page boundary rather
+                    // than paginating through a wall of blank pages. Acid2's own
+                    // "#top { margin-top: 100em }" is the canonical example: that margin alone
+                    // spans several page heights with no real content in it at all. A negative
+                    // collapsed margin can never trigger this (it only pulls top backward, never
+                    // forward across a new boundary), and an ordinary margin that stays within the
+                    // same page as prevSibling's bottom is completely unaffected. Per the same spec
+                    // section, a margin AFTER a *forced* break is explicitly preserved, not
+                    // truncated (only the margin BEFORE a forced break is - already handled above by
+                    // bumping previousSiblingForBreak.ActualBottom to the next page's top) - so this
+                    // only applies when this box's own placement isn't already forced-break-governed.
+                    if (_resumeTopOverride is { } resumedTop)
+                    {
+                        // The break before this box was taken on an earlier pass, which already worked
+                        // out where it lands and already pulled any keep-with-next run along. This pass
+                        // places it there. Re-deriving the decision instead would reach the same
+                        // "does not fit" conclusion and break again, forever.
+                        _resumeTopOverride = null;
+                        top = resumedTop;
+                    }
+                    else if (prevSibling is not null && !_isForcedBreak)
+                    {
+                        var pageHeight = HtmlContainer!.PageSize.Height;
+                        if (pageHeight > 0)
+                        {
+                            // Same shifted grid the fragment builder/the forced-break logic above use
+                            // (see HtmlContainer.PageIndexOf's own doc comment) - matching
+                            // BreakInside_Avoid_PositionsAtTopOfNextPage's already-established
+                            // convention. The epsilons attribute a value flush ON a boundary to
+                            // the earlier slot (a sibling ending exactly at a slot boundary is
+                            // wholly inside it), mirroring the forced-break flush-fit rule above.
+                            var prevSlot = HtmlContainer.PageIndexOf(baseTop - HtmlContainerInt.PageBoundaryEpsilon);
+                            var naturalSlot = HtmlContainer.PageIndexOf(top - HtmlContainerInt.PageBoundaryEpsilon);
+                            if (naturalSlot > prevSlot)
+                            {
+                                var newTop = HtmlContainer.PageTopOf(prevSlot + 1);
+
+                                // css-break §3.1 keep-with-next: this box is about to relocate to
+                                // the next page's content top, which would otherwise strand a
+                                // preceding break-after/break-before: avoid run (e.g. the UA default
+                                // `h1-h6 { page-break-after: avoid }`) alone at the bottom of the
+                                // page it's leaving - see CssLayoutEngineTable's identical whole-table
+                                // pre-check (LayoutCells) and OffsetTopWithKeepWithNextRun, which this
+                                // mirrors. Pull the run along when it starts on this same page and its
+                                // own height still fits the destination page's band; an unsatisfiable
+                                // avoid is relaxed per spec and this box moves alone, exactly as
+                                // before. Unlike those two siblings' guards, this one doesn't also
+                                // require this box's own (not-yet-laid-out) content to fit alongside
+                                // the run: a break-inside:avoid/orphans-widows box must land whole or
+                                // the move is pointless, but this box is free to fragment across
+                                // further pages on its own afterward (a table re-applies its per-row
+                                // break logic, an ordinary block just keeps flowing) - only the run
+                                // needs a page to itself.
+                                var keepWithNextRun = DomUtils.GetPrecedingKeepWithNextRun(this);
+                                if (keepWithNextRun.Count > 0)
+                                {
+                                    var runTop = keepWithNextRun[0].Location.Y;
+                                    var extraAbove = top - runTop;
+                                    var runStartsOnSamePage =
+                                        HtmlContainer.PageIndexOf(runTop - HtmlContainerInt.PageBoundaryEpsilon) == prevSlot;
+
+                                    if (extraAbove > 0 && runStartsOnSamePage
+                                        && extraAbove <= HtmlContainer.PageBandHeightOf(prevSlot + 1))
+                                    {
+                                        var groupOffset = newTop - runTop;
+
+                                        foreach (var member in keepWithNextRun)
+                                        {
+                                            member.OffsetTop(groupOffset);
+                                        }
+
+                                        newTop += extraAbove;
+                                    }
+                                }
+
+                                // The margin pushed this box out of the fragmentainer being filled, so
+                                // the break falls *before* it: it produces no fragment here at all, and
+                                // resumes at newTop in the next one (css-break-3 §4.4). Where breaking
+                                // is not live - a measurement pass, or monolithic content - the box is
+                                // simply placed at that target, exactly as it was before this became a
+                                // break decision.
+                                if (HtmlContainer.IsFragmenting)
+                                {
+                                    RequestBreakBefore(newTop);
+                                    return;
+                                }
+
+                                top = newTop;
+                            }
+                        }
+                    }
+
+                    Location = new RPoint(left + ActualMarginLeft, top);
+                    ActualBottom = top;
+
+
+                    CssLayoutEngine.FloatBox(this);
+                }
+
+                if (Position is CssConstants.Relative)
+                {
+                    // CSS 2.1 §9.4.3: for each axis, the "near" offset (left/top) wins when set; if
+                    // it's auto and the "far" offset (right/bottom) isn't, the far offset applies
+                    // with its sign flipped (moving the box the opposite direction from that edge);
+                    // if both are auto, the offset is 0. Previously only left/top were ever read, so
+                    // e.g. "bottom: -1em" with left/top both auto/unset was a silent no-op.
+                    //
+                    // The offsets are recorded (not just applied) because, per the same section,
+                    // relative positioning is purely visual: following siblings and the parent's own
+                    // content-driven height must lay out against the box's STATIC position, which
+                    // StaticBottom recovers by backing RelativeOffsetY out again. Acid2's
+                    // ".smile div { position: relative; bottom: -1em }" is exactly this: the mouth
+                    // bar paints 1em lower, but ".chin"'s position must not move with it.
+                    var offsetX = Left is not CssConstants.Auto || Right is CssConstants.Auto
+                        ? CssValueParser.ParseLength(Left, ActualWidth, this)
+                        : -CssValueParser.ParseLength(Right, ActualWidth, this);
+                    var offsetY = Top is not CssConstants.Auto || Bottom is CssConstants.Auto
+                        ? CssValueParser.ParseLength(Top, ActualHeight, this)
+                        : -CssValueParser.ParseLength(Bottom, ActualHeight, this);
+
+                    RelativeOffsetX = offsetX;
+                    RelativeOffsetY = offsetY;
+                    Location = new RPoint(Location.X + offsetX, Location.Y + offsetY);
+                    ActualBottom = Location.Y;
+                }
+
+                if (Position is CssConstants.Absolute)
+                {
+                    var nearestPositionedAncestor = DomUtils.GetNearestPositionedAncestor(this);
+
+                    // CSS 2.1 §10.3.7: `left`/`top` on an absolutely positioned box are measured
+                    // from the containing block's PADDING edge (ClientLeft/ClientTop - inside the
+                    // border), not its border-box edge (Location.X/Y) - and, like every other
+                    // positioning scheme, the box's own margin still applies on top of that offset
+                    // (previously dropped entirely here, unlike the static/relative branch above
+                    // which already adds ActualMarginLeft). Acid2's own
+                    // "[class~=one].first.one { position:absolute; margin: 36px 0 0 60px; }" inside
+                    // ".picture" (which has a 1em border) exercises both of these: the missing
+                    // margin alone lands the box ~36px/60px off, on top of the next sibling.
+                    var left = nearestPositionedAncestor.ClientLeft + ActualMarginLeft +
+                               CssValueParser.ParseLength(Left, nearestPositionedAncestor.ActualWidth, this);
+
+                    var top = nearestPositionedAncestor.ClientTop + ActualMarginTop +
+                              CssValueParser.ParseLength(Top, nearestPositionedAncestor.ActualHeight, this);
+
+                    Location = new RPoint(left, top);
+                }
+
+                if (Position is CssConstants.Fixed)
+                {
+                    // Like every other positioning scheme (see the Absolute branch above, fixed for
+                    // the same omission), the box's own margin still applies on top of the left/top
+                    // offset - previously dropped entirely here. Acid2's own
+                    // ".picture p + table + p { margin-top: 3em; }" (which legitimately matches the
+                    // fixture's second, HTML4-DTD-auto-closed <p> - see Acid2RegressionTests) relies
+                    // on this to shift that fixed-position paragraph down from underneath the first
+                    // one's own fixed black bar. Percentages resolve against the page/viewport size
+                    // (CSS2.1 §10.1: the initial containing block), not ScrollOffset (a scroll
+                    // position, not a size) - not exercised by this fixture (uses em, not %) but
+                    // wrong regardless.
+                    var left = ActualMarginLeft + CssValueParser.ParseLength(Left, HtmlContainer!.PageSize.Width, this);
+                    var top = ActualMarginTop + CssValueParser.ParseLength(Top, HtmlContainer!.PageSize.Height, this);
+                    Location = new RPoint(left, top);
+                }
+            }
+
+            // Register the used page name BEFORE any child lays out: descendants' page-break
+            // decisions consult the per-page geometry table, whose slot bands from this box's
+            // page onward depend on this name being visible (PageRuleResolver.
+            // ActiveNameAtSlotStart) - registering only after child layout (this method's tail,
+            // formerly the sole registration point) let a multi-page named element's own content
+            // paginate against the PREVIOUS name's bands. We register the *used* name whenever this
+            // box either carries its own explicit name or is a used-name transition (see
+            // shouldRegisterPage) - crucially including a reversion whose UsedPageName is empty or
+            // an outer named page, which is what stops a named page's margins/margin-boxes from
+            // leaking onto later default pages. Movers that can still run after this point
+            // (BreakInside: avoid, orphans/widows, the absolute bottom-edge fallback) all route
+            // through OffsetTop, which keeps the registration in sync via MoveNamedPageElement;
+            // engines that relocate this box directly (e.g. CssLayoutEngineTable's whole-table
+            // pre-check) are re-synced by the tail check.
+            if (_shouldRegisterPage)
+            {
+                RegisteredNamedPageElement = HtmlContainer!.RegisterNamedPageElement(UsedPageName, NamedPageRegistrationY());
             }
         }
 
@@ -1523,6 +1754,13 @@ namespace PeachPDF.Html.Core.Dom
                             }
 
                             _keepWithNextRetried = true;
+
+                            // The retry re-runs this box from scratch, prologue included: it is a fresh
+                            // layout of the same box at a new position, not a continuation, so its
+                            // per-line rectangles must be reset and its words re-measured. (A resumed
+                            // fragmentainer pass is the opposite case and deliberately keeps them.)
+                            _prologueDone = false;
+
                             try
                             {
                                 await PerformLayoutImp(g);

@@ -91,10 +91,20 @@ namespace PeachPDF.Html.Core.Fragmentation
         internal BreakToken? OutgoingToken { get; private set; }
 
         /// <summary>
-        /// Whether break decisions are live. False for a measurement pass at a provisional position and
-        /// inside monolithic content, where a break decision would be made against coordinates the box
-        /// does not actually end up at.
+        /// Whether a break may be taken here — that is, whether layout may stop and record a
+        /// <see cref="BreakToken"/> rather than placing content in this fragmentainer regardless. False
+        /// for an unpaginated pass, inside monolithic content, and during a measurement pass at a
+        /// provisional position, where a break decision would be made against coordinates the box does
+        /// not end up at.
         /// </summary>
+        /// <remarks>
+        /// This is deliberately <b>not</b> the gate on the legacy per-word relocation in
+        /// <c>CssLayoutEngine.FlowBox</c>, which still reads
+        /// <see cref="HtmlContainerInt.SuppressWordPageBreaks"/> directly. The two answer different
+        /// questions: a multi-column container is monolithic to the driver (its engine fragments its own
+        /// children) while its content still paginates word by word. Folding the word path into this one
+        /// is what makes inline flow genuinely resumable, and is a separate step.
+        /// </remarks>
         internal bool IsFragmenting => _fragmenting && !Container.SuppressWordPageBreaks;
 
         /// <summary>
@@ -106,9 +116,22 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <summary>
         /// Suppresses breaking for the duration of a monolithic subtree — content the spec does not
         /// allow to be split (<see href="https://www.w3.org/TR/css-break-3/#monolithic">§2</see>), which
-        /// here also covers the layout engines that paginate their own content.
+        /// here also covers the layout engines that paginate their own content. Returns the previous
+        /// state to hand back to <see cref="ExitMonolithic"/>, so nested monolithic subtrees compose.
         /// </summary>
-        internal MonolithicScope PushMonolithic() => new(this);
+        /// <remarks>
+        /// A save/restore pair rather than a disposable scope because every call site is an
+        /// <c>async</c> method, where a <c>ref struct</c> cannot live across an <c>await</c>. This
+        /// mirrors the <c>previousSuppress</c> idiom the flex and grid engines already use.
+        /// </remarks>
+        internal bool EnterMonolithic()
+        {
+            var previous = _fragmenting;
+            _fragmenting = false;
+            return previous;
+        }
+
+        internal void ExitMonolithic(bool previous) => _fragmenting = previous;
 
         internal void RecordBreak(BreakToken token)
         {
@@ -117,23 +140,5 @@ namespace PeachPDF.Html.Core.Fragmentation
         }
 
         internal void NoteProgress() => MadeProgress = true;
-
-        /// <summary>
-        /// Restores the enclosing fragmenting state on disposal, so nested monolithic subtrees compose.
-        /// </summary>
-        internal readonly ref struct MonolithicScope
-        {
-            private readonly FragmentainerContext _context;
-            private readonly bool _previous;
-
-            internal MonolithicScope(FragmentainerContext context)
-            {
-                _context = context;
-                _previous = context._fragmenting;
-                context._fragmenting = false;
-            }
-
-            internal void Dispose() => _context._fragmenting = _previous;
-        }
     }
 }
