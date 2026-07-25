@@ -14,7 +14,7 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         {
             var box = new CssBox(null, null);
 
-            var token = new BlockBreakToken(box, ResumeChildIndex: 3, ChildToken: null, IsBreakBefore: true, ResumeTopOverride: null);
+            var token = new BlockBreakToken(box, ResumeSlotIndex: 1, ResumeChildIndex: 3, ChildToken: null, IsBreakBefore: true, ResumeTopOverride: null);
 
             // A break *before* a child means the child was never entered, so there is nothing inside it
             // to resume - this is what makes "no fragment in the earlier fragmentainer" structural.
@@ -30,8 +30,8 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
             var parent = new CssBox(null, null);
             var child = new CssBox(null, null);
 
-            var childToken = new BlockBreakToken(child, ResumeChildIndex: 1, ChildToken: null, IsBreakBefore: true, ResumeTopOverride: null);
-            var token = new BlockBreakToken(parent, ResumeChildIndex: 0, ChildToken: childToken, IsBreakBefore: false, ResumeTopOverride: null);
+            var childToken = new BlockBreakToken(child, ResumeSlotIndex: 1, ResumeChildIndex: 1, ChildToken: null, IsBreakBefore: true, ResumeTopOverride: null);
+            var token = new BlockBreakToken(parent, ResumeSlotIndex: 1, ResumeChildIndex: 0, ChildToken: childToken, IsBreakBefore: false, ResumeTopOverride: null);
 
             Assert.False(token.IsBreakBefore);
             Assert.Same(childToken, token.ChildToken);
@@ -44,9 +44,9 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
             var middle = new CssBox(null, null);
             var leaf = new CssBox(null, null);
 
-            var leafToken = new InlineBreakToken(leaf, ResumePath: [0, 2], ResumeWordIndex: 5, CompletedLineCount: 4);
-            var middleToken = new BlockBreakToken(middle, ResumeChildIndex: 1, leafToken, IsBreakBefore: false, ResumeTopOverride: null);
-            var rootToken = new BlockBreakToken(root, ResumeChildIndex: 2, middleToken, IsBreakBefore: false, ResumeTopOverride: null);
+            var leafToken = new InlineBreakToken(leaf, ResumeSlotIndex: 1, ResumePath: [0, 2], ResumeWordIndex: 5, CompletedLineCount: 4);
+            var middleToken = new BlockBreakToken(middle, ResumeSlotIndex: 1, ResumeChildIndex: 1, ChildToken: leafToken, IsBreakBefore: false, ResumeTopOverride: null);
+            var rootToken = new BlockBreakToken(root, ResumeSlotIndex: 1, ResumeChildIndex: 2, ChildToken: middleToken, IsBreakBefore: false, ResumeTopOverride: null);
 
             // Walking the chain down from the root is exactly how a resumed pass re-enters each ancestor
             // mid-flight while leaving boxes off the path alone.
@@ -62,7 +62,7 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         {
             var box = new CssBox(null, null);
 
-            var token = new BlockBreakToken(box, ResumeChildIndex: 0, ChildToken: null, IsBreakBefore: true, ResumeTopOverride: 1234.5);
+            var token = new BlockBreakToken(box, ResumeSlotIndex: 1, ResumeChildIndex: 0, ChildToken: null, IsBreakBefore: true, ResumeTopOverride: 1234.5);
 
             // Margin truncation and the keep-with-next pull have already worked out where the box goes;
             // the resumed pass must use that value rather than re-deriving it.
@@ -74,7 +74,7 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         {
             var box = new CssBox(null, null);
 
-            var token = new InlineBreakToken(box, ResumePath: [1, 0, 4], ResumeWordIndex: 2, CompletedLineCount: 7);
+            var token = new InlineBreakToken(box, ResumeSlotIndex: 1, ResumePath: [1, 0, 4], ResumeWordIndex: 2, CompletedLineCount: 7);
 
             Assert.Equal([1, 0, 4], token.ResumePath);
             Assert.Equal(2, token.ResumeWordIndex);

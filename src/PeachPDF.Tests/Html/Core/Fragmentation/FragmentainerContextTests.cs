@@ -129,7 +129,7 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
             context.NoteProgress();
             Assert.True(context.MadeProgress);
 
-            var token = new BlockBreakToken(root, ResumeChildIndex: 2, ChildToken: null, IsBreakBefore: true, ResumeTopOverride: null);
+            var token = new BlockBreakToken(root, ResumeSlotIndex: 1, ResumeChildIndex: 2, ChildToken: null, IsBreakBefore: true, ResumeTopOverride: null);
             context.RecordBreak(token);
             Assert.Same(token, context.OutgoingToken);
         }

@@ -603,7 +603,9 @@ namespace PeachPDF.Html.Core
 
             try
             {
-                for (var slot = 0; slot < MaxFragmentainers; slot++)
+                var slot = 0;
+
+                for (var pass = 0; pass < MaxFragmentainers; pass++)
                 {
                     var context = new FragmentainerContext(this, Root!, slot, LayoutGeneration, token);
                     CurrentFragmentainer = context;
@@ -635,6 +637,7 @@ namespace PeachPDF.Html.Core
                     }
 
                     token = next;
+                    slot = next.ResumeSlotIndex;
                 }
             }
             finally

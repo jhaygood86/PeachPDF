@@ -1063,6 +1063,9 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         internal double? RequestedBreakBeforeTop { get; private set; }
 
+        /// <summary>The pagination slot <see cref="RequestedBreakBeforeTop"/> falls in.</summary>
+        internal int RequestedBreakBeforeSlot { get; private set; }
+
         /// <summary>
         /// How this box resumes on the current pass, or null when it is being laid out from the start.
         /// </summary>
@@ -1182,7 +1185,8 @@ namespace PeachPDF.Html.Core.Dom
 
             // The root itself has no parent to wrap a break-before request, so it stands in as one.
             context.RecordBreak(PendingBreakToken
-                                ?? new BlockBreakToken(this, 0, null, IsBreakBefore: true, RequestedBreakBeforeTop));
+                                ?? new BlockBreakToken(this, RequestedBreakBeforeSlot, 0, null,
+                                    IsBreakBefore: true, RequestedBreakBeforeTop));
         }
 
         /// <summary>
@@ -1190,7 +1194,11 @@ namespace PeachPDF.Html.Core.Dom
         /// is leaving, and resumes at <paramref name="top"/> in the next one
         /// (<see href="https://www.w3.org/TR/css-break-3/#break-between">css-break-3 §4.4</see>).
         /// </summary>
-        private void RequestBreakBefore(double top) => RequestedBreakBeforeTop = top;
+        private void RequestBreakBefore(double top)
+        {
+            RequestedBreakBeforeTop = top;
+            RequestedBreakBeforeSlot = HtmlContainer!.PageIndexOf(top + HtmlContainerInt.PageBoundaryEpsilon);
+        }
 
         /// <summary>
         /// Seeds this box's resumption state for the pass about to run. Called by the parent's child
@@ -1330,8 +1338,17 @@ namespace PeachPDF.Html.Core.Dom
                     //If there's just inline boxes, create LineBoxes
                     if (DomUtils.ContainsInlinesOnly(this))
                     {
-                        ActualBottom = Location.Y;
-                        await CssLayoutEngine.CreateLineBoxes(g, this); //This will automatically set the bottom of this block
+                        if (resume is null) ActualBottom = Location.Y;
+
+                        //This will automatically set the bottom of this block
+                        var stopped = await CssLayoutEngine.CreateLineBoxes(g, this, resume as InlineBreakToken);
+
+                        if (stopped is not null)
+                        {
+                            // This block's remaining lines belong to the next fragmentainer.
+                            PendingBreakToken = stopped;
+                            return;
+                        }
 
 #if DEBUG
                         foreach (var lineBox in LineBoxes)
@@ -1434,15 +1451,18 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (childBox.PendingBreakToken is { } childToken)
                 {
-                    PendingBreakToken = new BlockBreakToken(this, i, childToken, IsBreakBefore: false, null);
+                    PendingBreakToken = new BlockBreakToken(
+                        this, childToken.ResumeSlotIndex, i, childToken, IsBreakBefore: false, null);
                     return true;
                 }
 
                 if (childBox.RequestedBreakBeforeTop is { } childTop)
                 {
                     // The child cannot name itself in a token - only this box knows its index - so it
-                    // asked, and this is where the ask becomes a link in the chain.
-                    PendingBreakToken = new BlockBreakToken(this, i, null, IsBreakBefore: true, childTop);
+                    // asked, and this is where the ask becomes a link in the chain. The slot travels up
+                    // unchanged: every link in a chain resumes in the same fragmentainer.
+                    PendingBreakToken = new BlockBreakToken(
+                        this, childBox.RequestedBreakBeforeSlot, i, null, IsBreakBefore: true, childTop);
                     return true;
                 }
             }

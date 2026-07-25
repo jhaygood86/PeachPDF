@@ -1,4 +1,5 @@
 ﻿using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Fragmentation;
 
 namespace PeachPDF.Html.Core.Entities
 {
@@ -13,5 +14,49 @@ namespace PeachPDF.Html.Core.Entities
         public required double MaxRight { get; set; }
 
         public required double MaxBottom { get; set; }
+
+        /// <summary>
+        /// The fragmentainer this flow is filling, or null when nothing may break — an unpaginated
+        /// pass, or inline content inside monolithic content.
+        /// </summary>
+        public FragmentainerContext? Fragmentainer { get; init; }
+
+        /// <summary>
+        /// How many words the walk has visited so far. <see cref="CssLayoutEngine.FlowBox"/> descends
+        /// the inline box tree in a fixed order, so this ordinal names a position in that walk without
+        /// having to carry a path — which is what lets a resumed pass fast-forward to where the previous
+        /// fragmentainer stopped.
+        /// </summary>
+        public int WordOrdinal { get; set; }
+
+        /// <summary>
+        /// Words below this ordinal were placed in an earlier fragmentainer and are skipped: their
+        /// geometry and their line boxes already exist and must not be rebuilt.
+        /// </summary>
+        public int ResumeOrdinal { get; init; }
+
+        /// <summary>
+        /// The ordinal of the first word on the line being built. A line box is monolithic
+        /// (<see href="https://www.w3.org/TR/css-break-3/#monolithic">css-break-3 §4.1</see>), so when
+        /// content cannot fit, the break is taken here rather than part-way through the line.
+        /// </summary>
+        public int LineStartOrdinal { get; set; }
+
+        /// <summary>
+        /// Set while a resumed flow's opening line is still empty. The first word of such a flow may ask
+        /// to wrap — it is a <c>&lt;br&gt;</c>, or it no longer fits — but there is nothing to wrap away
+        /// from, and honouring it would consume a blank line's height at the top of the fragmentainer.
+        /// </summary>
+        /// <remarks>
+        /// Only a resumed flow suppresses this. A flow starting from the top genuinely does produce a
+        /// leading blank line for content beginning with <c>&lt;br&gt;</c>, which is what a browser
+        /// shows.
+        /// </remarks>
+        public bool SuppressLeadingWrap { get; set; }
+
+        /// <summary>
+        /// Where this flow stopped, or null while it is still filling the current fragmentainer.
+        /// </summary>
+        public InlineBreakToken? Break { get; set; }
     }
 }

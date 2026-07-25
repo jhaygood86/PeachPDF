@@ -22,7 +22,13 @@ namespace PeachPDF.Html.Core.Fragmentation
     /// </para>
     /// </remarks>
     /// <param name="Box">the box this link of the chain resumes into</param>
-    internal abstract record BreakToken(CssBox Box);
+    /// <param name="ResumeSlotIndex">
+    /// the pagination slot to resume in. Derived from where the break actually fell, never from
+    /// "the pass after this one": a box can be placed far down the document — past a tall spacer, or by
+    /// an engine that positions its own children — so the fragmentainer it overflows is not in general
+    /// the one after the fragmentainer the pass nominally started in.
+    /// </param>
+    internal abstract record BreakToken(CssBox Box, int ResumeSlotIndex);
 
     /// <summary>
     /// A block container stopped part-way through its in-flow children.
@@ -47,10 +53,11 @@ namespace PeachPDF.Html.Core.Fragmentation
     /// </param>
     internal sealed record BlockBreakToken(
         CssBox Box,
+        int ResumeSlotIndex,
         int ResumeChildIndex,
         BreakToken? ChildToken,
         bool IsBreakBefore,
-        double? ResumeTopOverride) : BreakToken(Box);
+        double? ResumeTopOverride) : BreakToken(Box, ResumeSlotIndex);
 
     /// <summary>
     /// A block container's inline flow stopped part-way through its content.
@@ -72,7 +79,8 @@ namespace PeachPDF.Html.Core.Fragmentation
     /// </param>
     internal sealed record InlineBreakToken(
         CssBox Box,
+        int ResumeSlotIndex,
         IReadOnlyList<int> ResumePath,
         int ResumeWordIndex,
-        int CompletedLineCount) : BreakToken(Box);
+        int CompletedLineCount) : BreakToken(Box, ResumeSlotIndex);
 }
