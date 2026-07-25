@@ -8,8 +8,7 @@ namespace PeachPDF.Html.Core.Fragments
     /// The immutable output of layout: one piece of laid-out content positioned inside exactly one
     /// fragmentainer (<see href="https://www.w3.org/TR/css-break-3/#fragmentainer">CSS Fragmentation
     /// Level 3 §2</see>). A fragment owns <b>geometry only</b> — style is read through the originating
-    /// <see cref="BoxFragment.Box"/>, mirroring Chromium LayoutNG's
-    /// <c>NGPhysicalFragment</c> → <c>LayoutObject</c> back-pointer.
+    /// <see cref="BoxFragment.Box"/>, so fragments stay cheap and style keeps a single home.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -57,7 +56,7 @@ namespace PeachPDF.Html.Core.Fragments
     /// <remarks>
     /// The three child collections deliberately mirror what <c>CssBox.PaintImpCore</c> paints — its own
     /// decoration rectangles, then its own words, then its stacking-ordered child boxes — rather than
-    /// LayoutNG's strict box → line-box → text nesting. PeachPDF's inline model keeps a box's words and
+    /// nesting text strictly inside line boxes inside the box. PeachPDF's inline model keeps a box's words and
     /// its per-line decoration rectangles in two parallel collections
     /// (<see cref="CssBox.Words"/> / <see cref="CssBox.Rectangles"/>), and flattening that into a
     /// nested line-box tree would be a separate change with no consumer today.

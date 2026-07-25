@@ -14,10 +14,11 @@ namespace PeachPDF.Html.Core.Fragments
     /// <para>
     /// <b>Fragmentation happens after layout, not during it.</b> PeachPDF lays a document out as one
     /// continuous flow (relocating whole boxes and words that straddle a page as it goes) and this
-    /// builder then slices that flow into fragmentainers. Chromium's LayoutNG instead resumes layout
-    /// in the next fragmentainer from a break token, producing fragments incrementally. The resulting
-    /// <i>tree</i> is the same shape — which is what everything downstream needs — but the production
-    /// model is not, and converting layout itself is tracked separately.
+    /// builder then slices that flow into fragmentainers. A fully incremental engine would instead
+    /// stop at each break, emit the fragments produced so far, and resume layout in the next
+    /// fragmentainer from a recorded resumption point. The resulting <i>tree</i> is the same shape —
+    /// which is what everything downstream needs — but the production model is not, and converting
+    /// layout itself is tracked separately.
     /// </para>
     /// <para>
     /// The build walks the box tree twice: <see cref="CollectSpans"/> records, for every box, the

@@ -411,11 +411,11 @@ After layout every `CssBox` has a final bounding rectangle and each `CssLineBox`
 
 **Key types:** `FragmentTree` / `FragmentainerFragment` / `BoxFragment` ([Html/Core/Fragments/Fragment.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Fragments/Fragment.cs)), `FragmentTreeBuilder` ([Html/Core/Fragments/FragmentTreeBuilder.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Fragments/FragmentTreeBuilder.cs))
 
-The phases above compute geometry *on* the box tree; this phase freezes it into an immutable **fragment tree**, which is what layout actually hands downstream. It implements the box-fragment model of [CSS Fragmentation Module Level 3 §2](https://www.w3.org/TR/css-break-3/), and is the same shape as the fragment tree in Chromium's LayoutNG.
+The phases above compute geometry *on* the box tree; this phase freezes it into an immutable **fragment tree**, which is what layout actually hands downstream. It implements the box-fragment model of [CSS Fragmentation Module Level 3 §2](https://www.w3.org/TR/css-break-3/).
 
 ### The model
 
-A **fragmentainer** is one slot content flows into — for PeachPDF, one page. It is not a DOM element. A **box fragment** is the portion of one box that lives in one fragmentainer: a box crossing a page boundary produces one fragment per page it appears on. Each fragment owns its geometry and keeps a read-only reference to its `CssBox` for style and paint-handler dispatch, mirroring LayoutNG's `NGPhysicalFragment` → `LayoutObject` link.
+A **fragmentainer** is one slot content flows into — for PeachPDF, one page. It is not a DOM element. A **box fragment** is the portion of one box that lives in one fragmentainer: a box crossing a page boundary produces one fragment per page it appears on. Each fragment owns its geometry and keeps a read-only reference to its `CssBox` for style and paint-handler dispatch, so fragments stay cheap and style keeps a single home.
 
 | Type | What it is |
 |---|---|
@@ -443,7 +443,7 @@ Two box kinds are not reachable by walking `CssBox.Boxes` and get explicit struc
 
 Pagination used to be a paint-time effect: layout produced one tall strip, page count was rediscovered geometrically afterwards by intersecting a page grid against a list of printable Y-ranges, and the painter re-walked the same mutable box tree once per page with a per-page scroll offset written onto the container between paints. Fragments make which pages exist, and where content sits on each, facts produced by layout rather than reconstructed by paint.
 
-**Fragmentation still happens after layout, not during it.** PeachPDF lays a document out as one continuous flow — relocating whole boxes and words that straddle a page as it goes — and this builder slices that flow into fragmentainers. LayoutNG instead resumes layout in the next fragmentainer from a break token, producing fragments incrementally. The resulting tree is the same shape, which is what everything downstream needs; converting layout itself is separate work.
+**Fragmentation still happens after layout, not during it.** PeachPDF lays a document out as one continuous flow — relocating whole boxes and words that straddle a page as it goes — and this builder slices that flow into fragmentainers. A fully incremental engine would instead stop at each break, emit the fragments produced so far, and resume layout in the next fragmentainer from a recorded resumption point. The resulting tree is the same shape, which is what everything downstream needs; converting layout itself is separate work.
 
 ---
 
