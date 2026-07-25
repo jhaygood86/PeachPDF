@@ -63,15 +63,7 @@ namespace PeachPDF.Html.Core.Fragments
     /// </param>
     /// <param name="HasLeftEdge">whether this rectangle's left edge is the box's own, not a break</param>
     /// <param name="HasRightEdge">whether this rectangle's right edge is the box's own, not a break</param>
-    internal sealed record SliceGeometry(RRect UnbrokenStrip, RRect FragmentRect, bool HasLeftEdge, bool HasRightEdge)
-    {
-        /// <summary>
-        /// A rectangle that is not a slice of anything: every decoration resolves against the rectangle
-        /// itself and both of its inline-axis edges are real. The shape of every block-level box, every
-        /// replaced element, and the page canvas.
-        /// </summary>
-        internal static SliceGeometry Unbroken(RRect rect) => new(rect, rect, true, true);
-    }
+    internal sealed record SliceGeometry(RRect UnbrokenStrip, RRect FragmentRect, bool HasLeftEdge, bool HasRightEdge);
 
     /// <summary>
     /// One line's worth of a box's own decoration area — the fragmentainer-local equivalent of a

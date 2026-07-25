@@ -568,9 +568,11 @@ When a break splits a box, `box-decoration-break` ([CSS Fragmentation Level 3 §
 
 `clone` wraps every piece independently: its own border on all four sides, its own padding, its own radii and shadow, and its own background, so a `no-repeat` background image is drawn once **per piece** rather than once per box. This is what to reach for when every line of a highlighted inline should be a self-contained rounded pill, or when a block crossing a page boundary should be closed off with its own border on each page. Space is reserved for the cloned border and padding, so they push the box's content rather than overlapping it.
 
-Two limitations:
+Limitations, all of them on `clone`'s space reservation rather than on what gets painted:
 
-- Under `clone`, the extra border and padding are reserved in normal block and inline flow only. Inside a flex, grid, table or multi-column container, whose own engine positions its children, a cloned decoration at a break is painted but no room is made for it, so it can overlap content.
+- Room is reserved in normal block and inline flow only. Inside a flex, grid, table or multi-column container, whose own engine positions its children, a cloned decoration at a break is painted but no room is made for it, so it can overlap content.
+- A page break is decided against the text itself, so a large `line-height`'s own leading below the last line on a page is not counted. A cloned bottom border can therefore sit within that leading — at most `line-height` minus the text's own height. Ordinary line heights leave this invisible.
+- A column break in a multi-column container never clones, since PeachPDF's columns engine re-flows whole children rather than treating each column as a fragmentation context.
 - `border-image` is parsed but never painted, so §6.2's treatment of it has no visible effect either way. A replaced element (an image, an inline `<svg>`, an `<iframe>`) is never split at all, so it always paints its whole box regardless of the value.
 
 > **Migration note:** a wrapping inline box whose background is a gradient, or which has `border-radius` or a `box-shadow`, used to be painted independently on each line — a separate full gradient, its own four rounded corners, and a shadow along every wrap. That is `clone`'s behavior, and it was applied whatever the declared value was. Such a box now renders as `slice` unless `box-decoration-break: clone` is set, which is both the spec's initial value and what browsers draw. Add `box-decoration-break: clone` to keep the previous appearance. See [Forward compatibility](#forward-compatibility).
