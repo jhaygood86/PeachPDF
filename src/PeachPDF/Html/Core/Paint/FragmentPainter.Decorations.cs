@@ -179,6 +179,16 @@ namespace PeachPDF.Html.Core.Paint
             var layers = BoxShadowGrammar.TryParse(CssValueParser.GetCssTokens(box.BoxShadow));
             if (layers is null || layers.Count == 0) return;
 
+            // Both kinds are painted in separate passes over the same layer list, so a box carrying only the
+            // other kind has nothing to do here - and must not push a clip around it.
+            var paints = false;
+            foreach (var layer in layers)
+            {
+                if (layer.Inset == inset) { paints = true; break; }
+            }
+
+            if (!paints) return;
+
             var borderBox = geometry.DecorationRect;
             var sliced = PushBreakEdgeClip(g, box, geometry, layers);
 
