@@ -182,6 +182,28 @@ namespace PeachPDF.Tests.Integration
             Assert.Contains(steps, step => step > LineHeight + 0.5);
         }
 
+        /// <summary>
+        /// A box whose subtree contains a table that repeats a header keeps the old translation, because
+        /// laying such a table out a second time does not reproduce the first result: the repeating
+        /// group is detached from the tree and replaced by one proxy per page, and a second run finds
+        /// neither. The box must still be relocated — only the way it gets there changes.
+        /// </summary>
+        [Fact]
+        public async Task BoxContainingARepeatingTable_IsStillRelocated()
+        {
+            var rows = string.Concat(Enumerable.Range(0, 4).Select(i => $"<tr><td>Row {i}</td></tr>"));
+            var html = LayoutHarness.Wrap(
+                "<div style='height:120pt'>filler</div>"
+                + "<div id='card' style='break-inside:avoid;orphans:1;widows:1;font-size:10pt;line-height:20pt'>"
+                + $"<table><thead><tr><th>Heading</th></tr></thead><tbody>{rows}</tbody></table></div>");
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight, margin: Margin);
+            var card = LayoutHarness.FindById(root, "card")!;
+
+            Assert.Equal(1, container.PageIndexOf(card.Location.Y + HtmlContainerInt.PageBoundaryEpsilon));
+            Assert.Equal(container.PageTopOf(1), card.Location.Y, 6);
+        }
+
         private static async Task<(CssBox Heading, CssBox Card, HtmlContainerInt Container)> PulledRunAsync(double fillerHeight)
         {
             var html = LayoutHarness.Wrap(
