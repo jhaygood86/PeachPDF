@@ -32,7 +32,7 @@ namespace PeachPDF.Tests.Integration
             var (root, container) = await BuildAndLayout(Wrap("<ul><li id='li'>text</li></ul>"));
             var li = FindById(root, "li")!;
 
-            var flattened = PeachPDF.Html.Core.Utils.DomUtils.FlattenStackingContext(FragmentPaintHarness.FragmentOf(container, li)).ToList();
+            var flattened = PeachPDF.Html.Core.Paint.StackingOrder.Flatten(FragmentPaintHarness.FragmentOf(container, li)).ToList();
             Assert.DoesNotContain(flattened, p => p.Box.IsMarkerPseudoElement);
         }
 

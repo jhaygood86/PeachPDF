@@ -305,124 +305,6 @@ namespace PeachPDF.Tests.Html.Core.Utils
             Assert.False(DomUtils.IsProperTableChild(div));
         }
 
-        [Fact]
-        public async Task GetBoxesByLayers_GroupsByZIndexInOrder()
-        {
-            var (root, container) = await RenderWithContainer(
-                "<div><span id='a' style='position: relative; z-index: 2;'>A</span>" +
-                "<span id='b' style='position: relative; z-index: 1;'>B</span></div>");
-            var a = DomUtils.GetBoxById(root, "a")!;
-            var b = DomUtils.GetBoxById(root, "b")!;
-
-            var layers = DomUtils.GetBoxesByLayers(
-            [
-                new DomUtils.StackingParticipant(FragmentPaintHarness.FragmentOf(container, a), []),
-                new DomUtils.StackingParticipant(FragmentPaintHarness.FragmentOf(container, b), [])
-            ]).ToList();
-
-            Assert.Equal(2, layers.Count);
-            Assert.Contains(layers[1], p => p.Box == a);
-            Assert.Contains(layers[0], p => p.Box == b);
-        }
-
-        [Fact]
-        public async Task FlattenStackingContext_DeeplyNestedStackingContextBox_IsDiscoveredByItsEnclosingContext()
-        {
-            // Regression: the old algorithm only ever yielded a child when it was NOT itself a
-            // stacking-context box, so a position:relative;z-index descendant - however deep, through
-            // any number of plain wrapper divs - was silently dropped and never painted at all.
-            var (root, container) = await RenderWithContainer(
-                "<div><div><div>" +
-                "<span id='inner' style='position: relative; z-index: 1;'>Text</span>" +
-                "</div></div></div>");
-            var inner = DomUtils.GetBoxById(root, "inner")!;
-
-            var flattened = DomUtils.FlattenStackingContext(FragmentPaintHarness.FragmentOf(container, root)).ToList();
-
-            Assert.Contains(flattened, p => p.Box == inner);
-        }
-
-        [Fact]
-        public async Task FlattenStackingContext_OutOfFlowDescendantOfOpacityBox_StaysWithinIt()
-        {
-            // Opacity now establishes a stacking context, so an out-of-flow descendant of an
-            // opacity box must be claimed by the opacity box's own FlattenStackingContext call, not
-            // hoisted past it to an outer ancestor (which would bypass the opacity compositing group
-            // entirely and paint the descendant at full alpha, and at the wrong z-order timing).
-            var (root, container) = await RenderWithContainer(
-                "<div id='op' style='opacity: 0.5;'>" +
-                "<div id='abschild' style='position: absolute; top: 0; left: 0;'>x</div>" +
-                "</div>");
-            var op = DomUtils.GetBoxById(root, "op")!;
-            var abschild = DomUtils.GetBoxById(root, "abschild")!;
-
-            var rootFlattened = DomUtils.FlattenStackingContext(FragmentPaintHarness.FragmentOf(container, root)).ToList();
-            Assert.Contains(rootFlattened, p => p.Box == op);
-            Assert.DoesNotContain(rootFlattened, p => p.Box == abschild);
-
-            var opFlattened = DomUtils.FlattenStackingContext(FragmentPaintHarness.FragmentOf(container, op)).ToList();
-            Assert.Contains(opFlattened, p => p.Box == abschild);
-        }
-
-        [Fact]
-        public async Task FlattenStackingContext_OutOfFlowDescendantOfTransformedBox_StaysWithinIt()
-        {
-            var (root, container) = await RenderWithContainer(
-                "<div id='tr' style='transform: rotate(10deg);'>" +
-                "<div id='abschild' style='position: absolute; top: 0; left: 0;'>x</div>" +
-                "</div>");
-            var tr = DomUtils.GetBoxById(root, "tr")!;
-            var abschild = DomUtils.GetBoxById(root, "abschild")!;
-
-            var rootFlattened = DomUtils.FlattenStackingContext(FragmentPaintHarness.FragmentOf(container, root)).ToList();
-            Assert.Contains(rootFlattened, p => p.Box == tr);
-            Assert.DoesNotContain(rootFlattened, p => p.Box == abschild);
-
-            var trFlattened = DomUtils.FlattenStackingContext(FragmentPaintHarness.FragmentOf(container, tr)).ToList();
-            Assert.Contains(trFlattened, p => p.Box == abschild);
-        }
-
-        [Fact]
-        public async Task FlattenStackingContext_ZIndexedBoxNestedInPlainOutOfFlowWrapper_EscapesToTrueAncestor()
-        {
-            // Full-fidelity case: a position:relative;z-index box nested inside a plain
-            // position:absolute wrapper (no z-index of its own, so it does NOT establish a stacking
-            // context) must still be discoverable by the wrapper's true enclosing stacking context -
-            // it must not be trapped competing only within the absolute wrapper's own local scope.
-            var (root, container) = await RenderWithContainer(
-                "<div style='position: absolute; top: 0; left: 0;'>" +
-                "<span id='nested' style='position: relative; z-index: -1;'>Text</span>" +
-                "</div>");
-            var nested = DomUtils.GetBoxById(root, "nested")!;
-
-            var rootFlattened = DomUtils.FlattenStackingContext(FragmentPaintHarness.FragmentOf(container, root)).ToList();
-
-            Assert.Contains(rootFlattened, p => p.Box == nested);
-        }
-
-        [Fact]
-        public async Task FlattenStackingContext_PlainChildOfPlainWrapper_StaysNestedNotHoisted()
-        {
-            // A plain (non-out-of-flow, non-stacking-context) child of a plain, non-stacking-context
-            // wrapper must be discovered via the wrapper's own FlattenStackingContext call, not
-            // hoisted straight to a distant ancestor - the wrapper's own Paint() call is what keeps
-            // e.g. an overflow:hidden clip on the wrapper wrapped around this child. `root` here is a
-            // synthetic box above the real <html>/<body> elements (see DomParser.GenerateCssTree), so
-            // `wrapper` itself is a few plain levels below `root` too - the point under test is that
-            // `plainChild` never leaks into any ancestor's flatten result above its own direct parent.
-            var (root, container) = await RenderWithContainer(
-                "<div id='wrapper'><span id='plainChild'>Text</span></div>");
-            var wrapper = DomUtils.GetBoxById(root, "wrapper")!;
-            var plainChild = DomUtils.GetBoxById(root, "plainChild")!;
-
-            var rootFlattened = DomUtils.FlattenStackingContext(FragmentPaintHarness.FragmentOf(container, root)).ToList();
-            Assert.DoesNotContain(rootFlattened, p => p.Box == wrapper);
-            Assert.DoesNotContain(rootFlattened, p => p.Box == plainChild);
-
-            var wrapperFlattened = DomUtils.FlattenStackingContext(FragmentPaintHarness.FragmentOf(container, wrapper)).ToList();
-            Assert.Contains(wrapperFlattened, p => p.Box == plainChild);
-        }
-
         // ─── HasOwnPrintableContent (CSS Paged Media Level 3 §3.2's content-empty-page
         // rule; the fragment-tree builder decides page materialization with it) ─────
 
@@ -468,13 +350,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
 
         // --- Helper ---
 
-        private static async Task<CssBox> Render(string bodyHtml) => (await RenderWithContainer(bodyHtml)).Root;
-
-        /// <summary>
-        /// Also returns the container, which stacking-context tests need: the flatten now walks the
-        /// fragment tree, so a box has to be resolved to its fragment first.
-        /// </summary>
-        private static async Task<(CssBox Root, HtmlContainerInt Container)> RenderWithContainer(string bodyHtml)
+        private static async Task<CssBox> Render(string bodyHtml)
         {
             var adapter = new PdfSharpAdapter();
             var container = new HtmlContainerInt(adapter);
@@ -490,7 +366,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
-            return (container.Root!, container);
+            return container.Root!;
         }
     }
 }

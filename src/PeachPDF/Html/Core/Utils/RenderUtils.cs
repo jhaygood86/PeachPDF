@@ -89,14 +89,14 @@ namespace PeachPDF.Html.Core.Utils
 
         /// <summary>
         /// Pushes the <c>overflow: hidden</c> clip of every box in <paramref name="ancestors"/> that has
-        /// one, in order. Used when painting a box that <see cref="DomUtils.FlattenStackingContext"/>
+        /// one, in order. Used when painting a box that <see cref="Paint.StackingOrder.Flatten"/>
         /// hoisted past one or more plain ancestor boxes for stacking-context z-order purposes - since it
         /// paints via the claiming stacking context's own paint loop rather than those ancestors' own
-        /// (nested) <c>Paint()</c> calls, their overflow clipping isn't already active on the graphics
+        /// (nested) paint calls, their overflow clipping isn't already active on the graphics
         /// clip stack the way it would be for normally-painted content, and must be applied explicitly
         /// here instead. <paramref name="ancestors"/> is the exact, already-known chain of DOM ancestors
         /// between the claiming stacking context and the box being painted (see
-        /// <see cref="DomUtils.StackingParticipant"/>), so - unlike <see cref="ClipGraphicsByOverflow"/> -
+        /// <see cref="Paint.StackingOrder.StackingParticipant"/>), so - unlike <see cref="ClipGraphicsByOverflow"/> -
         /// no containing-block walk/search is needed; each ancestor is checked directly.
         /// </summary>
         /// <returns>the number of clips actually pushed (callers must pop exactly this many afterward)</returns>

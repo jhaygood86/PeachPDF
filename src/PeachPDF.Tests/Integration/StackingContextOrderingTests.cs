@@ -15,7 +15,7 @@ namespace PeachPDF.Tests.Integration
     /// convention (see <c>BorderStylePaintIntegrationTests</c>), and specifically to close the gap left
     /// by <c>StackingContextPaintRegressionTests</c>'s existing <c>PageHasContent</c>-only assertions,
     /// which did not actually verify that z-indexed/opacity/transform content painted at all, let alone
-    /// in the right order - see <c>DomUtils.FlattenStackingContext</c>/<c>IsStackingContextBox</c> for
+    /// in the right order - see <c>StackingOrder.Flatten</c>/<c>DomUtils.IsStackingContextBox</c> for
     /// the algorithm these tests exercise.
     /// </summary>
     public class StackingContextOrderingTests

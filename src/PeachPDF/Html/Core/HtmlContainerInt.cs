@@ -238,7 +238,7 @@ namespace PeachPDF.Html.Core
         /// stacking context (see <see cref="Utils.DomUtils.IsStackingContextBox"/> - position+z-index,
         /// fixed/sticky, a flex item with z-index, opacity &lt; 1, or a non-identity transform). Computed
         /// alongside <see cref="HasFloatedBoxes"/>/<see cref="HasOutOfFlowBoxes"/> and used by
-        /// <see cref="Utils.DomUtils.FlattenStackingContext"/> to skip searching for stacking-context
+        /// <see cref="Paint.StackingOrder.Flatten"/> to skip searching for stacking-context
         /// participants to hoist past normal-flow wrapper boxes entirely when there's nothing to hoist.
         /// </summary>
         internal bool HasStackingHoistCandidates { get; private set; }

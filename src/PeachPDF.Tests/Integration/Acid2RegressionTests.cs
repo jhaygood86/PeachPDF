@@ -4,6 +4,7 @@ using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Paint;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore;
 using PeachPDF.PdfSharpCore.Pdf;
@@ -575,21 +576,21 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Eyes_FloatChild_OrdersLocally_NotHoistedPastNonStackingContextAncestor()
         {
-            // Regression for DomUtils.FlattenStackingContext/SearchForHoistableDescendants: ".eyes"
+            // Regression for StackingOrder.Flatten/SearchForHoistableDescendants: ".eyes"
             // is position:absolute with no z-index, so it does NOT establish its own CSS stacking
             // context - but it's still "positioned", so per Appendix E step 6 it must be its own
             // atomic local-ordering scope for its own float/positioned-without-z-index descendants
             // (like "#eyes-b"), not defer them all the way to the document root. Before this fix,
-            // FlattenStackingContext(".eyes") returned only its plain in-flow children ("#eyes-a"/
+            // StackingOrder.Flatten(".eyes") returned only its plain in-flow children ("#eyes-a"/
             // "#eyes-c") - "#eyes-b" (a float) was entirely absent, hoisted instead to the root's own
             // participant list, painting relative to the root's whole subtree instead of interleaved
             // correctly within ".eyes" itself (see CssBox.PaintImpCore's block/float/inline stacking
-            // loop, which relies on FlattenStackingContext to supply all three locally).
+            // loop, which relies on StackingOrder.Flatten to supply all three locally).
             var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
             var eyes = FindByClass(root, "eyes")!;
             var eyesB = FindById(root, "eyes-b")!;
 
-            var participants = DomUtils.FlattenStackingContext(FragmentPaintHarness.FirstFragmentOf(container, eyes)).ToList();
+            var participants = StackingOrder.Flatten(FragmentPaintHarness.FirstFragmentOf(container, eyes)).ToList();
 
             Assert.Contains(participants, p => p.Box == eyesB);
         }

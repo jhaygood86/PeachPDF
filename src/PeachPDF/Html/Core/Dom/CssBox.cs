@@ -16,6 +16,7 @@ using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Handlers;
+using PeachPDF.Html.Core.Paint;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System;
@@ -3065,9 +3066,9 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
-            var stackingContextBoxes = DomUtils.FlattenStackingContext(fragment);
+            var stackingContextBoxes = StackingOrder.Flatten(fragment);
 
-            foreach (var layerBoxes in DomUtils.GetBoxesByLayers(stackingContextBoxes))
+            foreach (var layerBoxes in StackingOrder.ByLayers(stackingContextBoxes))
             {
                 // Split paint to handle z-order, per CSS2.1 Appendix E's within-a-stacking-context
                 // order: in-flow block-level descendants, then non-positioned floats, then in-flow
@@ -3079,18 +3080,18 @@ namespace PeachPDF.Html.Core.Dom
                 //
                 // A plain (non-inline-itself) box whose entire content is inline - e.g. Acid2's own
                 // "#eyes-a" div, a block wrapper around nothing but its resolved inline <object> image -
-                // is treated as belonging to the inline pass too, via ActsAsInline below. Its own
-                // recursive Paint() call is what actually paints its inline child (through ITS OWN
+                // is treated as belonging to the inline pass too, via StackingOrder.ActsAsInline. Its
+                // own recursive Paint() call is what actually paints its inline child (through ITS OWN
                 // nested stacking loop), so deferring that whole call to this stacking context's inline
                 // pass is what makes the child paint after this context's float pass, matching Appendix
                 // E, without needing to hoist the descendant out of its normal DOM position/ancestor at
-                // all (unlike the out-of-flow float/absolute/fixed hoisting FlattenStackingContext
+                // all (unlike the out-of-flow float/absolute/fixed hoisting StackingOrder.Flatten
                 // already does - that mechanism moves a box's paint call across ancestor boundaries
                 // entirely, which isn't needed or wanted here since "#eyes-a" itself already belongs to
                 // this stacking context's own direct children).
                 foreach (var p in layerBoxes)
                 {
-                    if (!ActsAsInline(p.Box) && p.Box.Position != CssConstants.Absolute && p.Box is { IsFixed: false, IsFloated: false })
+                    if (!StackingOrder.ActsAsInline(p.Box) && p.Box.Position != CssConstants.Absolute && p.Box is { IsFixed: false, IsFloated: false })
                         await PaintStackingParticipant(g, p);
                 }
 
@@ -3102,7 +3103,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 foreach (var p in layerBoxes)
                 {
-                    if (ActsAsInline(p.Box) && p.Box.Position != CssConstants.Absolute && p.Box is { IsFixed: false, IsFloated: false })
+                    if (StackingOrder.ActsAsInline(p.Box) && p.Box.Position != CssConstants.Absolute && p.Box is { IsFixed: false, IsFloated: false })
                         await PaintStackingParticipant(g, p);
                 }
 
@@ -3135,27 +3136,15 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Whether <paramref name="box"/> belongs in the "inline" paint pass of the block/float/inline
-        /// ordering in <see cref="PaintImpCore(RGraphics, BoxFragment)"/>: either it's genuinely inline-level itself, or it's a
-        /// plain block-level box whose entire content is inline (an "invisible" wrapper carrying only
-        /// inline content, own box aside - e.g. Acid2's own "#eyes-a", a div around nothing but its
-        /// resolved inline &lt;object&gt; image). <c>Boxes.Count > 0</c> guards against misclassifying a
-        /// genuinely empty block box as inline (<see cref="System.Linq.Enumerable.All{T}"/> on an empty
-        /// sequence is vacuously true).
-        /// </summary>
-        private static bool ActsAsInline(CssBox box) =>
-            box.IsInline || (box.Boxes.Count > 0 && box.Boxes.All(b => b.IsInline));
-
-        /// <summary>
-        /// Paints one stacking-context participant discovered by <see cref="DomUtils.FlattenStackingContext"/>.
-        /// A hoisted participant (non-empty <see cref="DomUtils.StackingParticipant.ClipAncestors"/>)
+        /// Paints one stacking-context participant discovered by <see cref="StackingOrder.Flatten"/>.
+        /// A hoisted participant (non-empty <see cref="StackingOrder.StackingParticipant.ClipAncestors"/>)
         /// paints via this box's own paint loop rather than the ordinary nested parent-to-child
         /// <see cref="Paint"/> cascade, so its ancestors' own <c>overflow: hidden</c> clipping - normally
         /// picked up "for free" from still being active on the graphics clip stack during natural nested
         /// painting - is never applied on its own. Re-apply it explicitly here instead, scoped to exactly
         /// this participant's own paint call. A no-op for a direct plain child (empty ClipAncestors).
         /// </summary>
-        private static async ValueTask PaintStackingParticipant(RGraphics g, DomUtils.StackingParticipant participant)
+        private static async ValueTask PaintStackingParticipant(RGraphics g, StackingOrder.StackingParticipant participant)
         {
             var fragment = participant.Fragment;
             var pushedClips = RenderUtils.PushAncestorOverflowClips(g, participant.ClipAncestors, fragment.OriginY);
