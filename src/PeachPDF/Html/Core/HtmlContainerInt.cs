@@ -262,6 +262,14 @@ namespace PeachPDF.Html.Core
         internal bool HasFloatedBoxes { get; private set; }
 
         /// <summary>
+        /// Whether any box in the current document asks for <c>box-decoration-break: clone</c>. Reserving room
+        /// for a cloned border and padding at a break (css-break-3 §6.2) means asking, for a great many words,
+        /// what a box's ancestors declared; this settles the answer once so a document that clones nothing —
+        /// almost every document — never pays for the walk.
+        /// </summary>
+        internal bool HasCloneDecorations { get; private set; }
+
+        /// <summary>
         /// Whether any box in the current document is out-of-flow (floated, absolutely positioned, or
         /// fixed). Computed alongside <see cref="HasFloatedBoxes"/> and used by
         /// <see cref="Paint.FragmentPainter"/> to decide whether Bounds-based page-visibility pruning is safe (an
@@ -512,6 +520,10 @@ namespace PeachPDF.Html.Core
             // (this box never gets asked for its transform again once the cache is populated) - see the
             // "actualTransformComputed" cache in CssBoxProperties.ActualTransformMatrix.
             (HasFloatedBoxes, HasOutOfFlowBoxes, _) = ComputeFlowFlags(Root, includeStackingHoistCandidates: false);
+
+            // Depends on cascaded style only, and layout itself consults it, so it has to be settled before
+            // the first pass rather than alongside the post-layout flags below.
+            HasCloneDecorations = DomUtils.AnyBoxClonesDecorations(Root);
 
             // if width is not restricted we set it to large value to get the actual later
             Root.Size = new RSize(MaxSize.Width > 0 ? MaxSize.Width : PageSize.Width, 0);

@@ -11,6 +11,7 @@
 // "The Art of War"
 
 using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.Html.Core.Utils;
 using System;
 using System.Collections.Generic;
 
@@ -138,9 +139,15 @@ namespace PeachPDF.Html.Core.Dom
             var topSpacing = box.ActualBorderTopWidth + box.ActualPaddingTop;
             var bottomSpacing = box.ActualBorderBottomWidth + box.ActualPaddingBottom;
 
-            if ((box.FirstHostingLineBox != null && box.FirstHostingLineBox.Equals(this)) || box.IsImage)
+            // Under box-decoration-break: clone every fragment is wrapped independently, so each line's
+            // rectangle covers its own leading and trailing border and padding rather than only the ones at
+            // the box's true ends (css-break-3 §6.2). CssLayoutEngine.FlowBox reserves the matching room, so
+            // the rectangle and the content inside it agree.
+            var clonesDecorations = box.BoxDecorationBreak == CssConstants.Clone;
+
+            if (clonesDecorations || (box.FirstHostingLineBox != null && box.FirstHostingLineBox.Equals(this)) || box.IsImage)
                 x -= leftSpacing;
-            if ((box.LastHostingLineBox != null && box.LastHostingLineBox.Equals(this)) || box.IsImage)
+            if (clonesDecorations || (box.LastHostingLineBox != null && box.LastHostingLineBox.Equals(this)) || box.IsImage)
                 r += rightSpacing;
 
             if (!box.IsImage)

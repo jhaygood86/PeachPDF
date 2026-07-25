@@ -278,9 +278,14 @@ namespace PeachPDF.Html.Core.Dom
             //Get the start x and y of the blockBox
             var startX = blockBox.ClientLeft;
 
-            // Resumed content starts at the new fragmentainer's own content edge. `text-indent` applies
-            // to the first formatted line only (CSS Text §5), so it is not re-applied here.
-            var startY = resume is not null && context is not null ? context.ResumeContentTop : blockBox.ClientTop;
+            // Resumed content starts at the new fragmentainer's own content edge, below any border and padding
+            // a `box-decoration-break: clone` box re-opens with there (css-break-3 §6.2). `text-indent`
+            // applies to the first formatted line only (CSS Text §5), so it is not re-applied here.
+            var startY = resume is not null && context is not null
+                ? context.ResumeContentTop + (blockBox.HtmlContainer is { HasCloneDecorations: true }
+                    ? DomUtils.ClonedBlockStart(blockBox)
+                    : 0)
+                : blockBox.ClientTop;
 
             var seedLine = new CssLineBox(blockBox);
 
@@ -1166,6 +1171,14 @@ namespace PeachPDF.Html.Core.Dom
                 var leftSpacing = (b.Position != CssConstants.Absolute && b.Position != CssConstants.Fixed) ? b.ActualMarginLeft + b.ActualBorderLeftWidth + b.ActualPaddingLeft : 0;
                 var rightSpacing = (b.Position != CssConstants.Absolute && b.Position != CssConstants.Fixed) ? b.ActualMarginRight + b.ActualBorderRightWidth + b.ActualPaddingRight : 0;
 
+                // Room for the border and padding a `box-decoration-break: clone` ancestor re-inserts at each
+                // line break (css-break-3 §6.2), which the wrap decision has to leave for the fragment it
+                // closes and the flow has to skip past on the fragment it opens. b's own trailing spacing is
+                // already reserved on every line by `rightSpacing` below, so only its ancestors are counted
+                // here; its own leading spacing is handled at the wrap itself.
+                var clonesDecorations = b.HtmlContainer is { HasCloneDecorations: true };
+                var clonedTrailing = clonesDecorations ? DomUtils.ClonedInlineEnd(b.ParentBox, blockBox) : 0;
+
                 // A resumed flow is continuing this block, so the per-line rectangles bubbled into
                 // inline boxes by the fragmentainers already filled must survive - resetting them here
                 // would blank out their backgrounds, borders and text decoration on those pages.
@@ -1231,7 +1244,7 @@ namespace PeachPDF.Html.Core.Dom
                         }
 
                         var overflows = b.WhiteSpace != CssConstants.NoWrap && b.WhiteSpace != CssConstants.Pre
-                                         && coordinates.CurrentX + word.Width + rightSpacing > actualLimitRight
+                                         && coordinates.CurrentX + word.Width + rightSpacing + clonedTrailing > actualLimitRight
                                          && (b.WhiteSpace != CssConstants.PreWrap || !word.IsSpaces);
 
                         // hyphens:auto/manual: before giving up and wrapping the whole word, see if a
@@ -1240,7 +1253,7 @@ namespace PeachPDF.Html.Core.Dom
                         // fit in the space remaining on the current line instead.
                         if (!word.SuppressWrapBefore && overflows && !word.IsLineBreak && !wrapNoWrapBox &&
                             word.HyphenationCandidates is { Count: > 0 } &&
-                            TryHyphenateWord(g, b, word, actualLimitRight - coordinates.CurrentX - rightSpacing, out var prefixWord, out var suffixWord))
+                            TryHyphenateWord(g, b, word, actualLimitRight - coordinates.CurrentX - rightSpacing - clonedTrailing, out var prefixWord, out var suffixWord))
                         {
                             b.Words[wordIndex] = prefixWord!;
                             b.Words.Insert(wordIndex + 1, suffixWord!);
@@ -1289,7 +1302,18 @@ namespace PeachPDF.Html.Core.Dom
 
                             if (word.IsImage || word.Equals(b.FirstWord))
                             {
+                                // b's own box starts on this new line, so its full leading spacing applies
+                                // however its decorations break; only its cloning ancestors re-open here.
                                 coordinates.CurrentX += leftSpacing;
+
+                                if (clonesDecorations)
+                                    coordinates.CurrentX += DomUtils.ClonedInlineStart(b.ParentBox, blockBox);
+                            }
+                            else if (clonesDecorations)
+                            {
+                                // The break fell inside b: every cloning box it is part of, itself included,
+                                // re-opens with its own leading border and padding on this line (§6.2).
+                                coordinates.CurrentX += DomUtils.ClonedInlineStart(b, blockBox);
                             }
                         }
                         else if (coordinates.Line.Words.Count == 0)
