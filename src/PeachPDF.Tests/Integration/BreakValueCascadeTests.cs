@@ -18,7 +18,7 @@ namespace PeachPDF.Tests.Integration
     /// </para>
     /// <para>
     /// These tests assert storage. What the stored value then does to pagination is
-    /// <see cref="RepeatedTableHeaderBreakValueIntegrationTests"/> and the existing page-break suites.
+    /// <see cref="StructuralCloneBreakValueBehaviourTests"/> and the existing page-break suites.
     /// </para>
     /// </summary>
     public class BreakValueCascadeTests

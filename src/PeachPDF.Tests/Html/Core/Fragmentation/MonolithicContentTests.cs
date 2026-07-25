@@ -73,19 +73,48 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         [InlineData("body")]
         public async Task ViewportPropagationSource_IsNotAScrollContainer(string tag)
         {
-            var html = $$"""
-                <!DOCTYPE html><html><head><style>
-                  {{tag}} { overflow: hidden }
-                </style></head><body><div>text</div></body></html>
-                """;
-
-            var (root, _) = await LayoutHarness.LayoutAsync(html);
-            var box = LayoutHarness.Descendants(root).First(b =>
-                string.Equals(b.HtmlTag?.Name, tag, StringComparison.OrdinalIgnoreCase));
+            var box = await BoxOfTag($"{tag} {{ overflow: hidden }}", tag);
 
             Assert.Equal(CssConstants.Hidden, box.Overflow);
             Assert.False(MonolithicContent.IsScrollContainer(box));
             Assert.False(MonolithicContent.IsMonolithic(box));
+        }
+
+        // The other half of §3.3, which the theory above cannot see because it never sets both: the body's
+        // value propagates only while the root's own is `visible`. Once the root has declared one it took
+        // the propagation, and the body is a scroll container in its own right.
+        [Fact]
+        public async Task Body_UnderARootThatAlreadyDeclaredOverflow_IsAScrollContainer()
+        {
+            var box = await BoxOfTag("html { overflow: hidden } body { overflow: auto }", "body");
+
+            Assert.True(MonolithicContent.IsScrollContainer(box));
+            Assert.True(MonolithicContent.IsMonolithic(box));
+        }
+
+        // ...and the companion direction, so the test above is not passing merely because `auto` is set.
+        [Fact]
+        public async Task Body_UnderAVisibleRoot_PropagatesAndIsNotAScrollContainer()
+        {
+            var box = await BoxOfTag("html { overflow: visible } body { overflow: auto }", "body");
+
+            Assert.False(MonolithicContent.IsScrollContainer(box));
+        }
+
+        // A stray element that happens to be named "body" but is not the root's own child gets no
+        // propagation - §3.3 is about the document's body element, not the tag name.
+        [Fact]
+        public async Task NestedElementNamedBody_IsAnOrdinaryScrollContainer()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap("<div><body id='t' style='overflow:hidden'>text</body></div>"));
+
+            var box = LayoutHarness.FindById(root, "t");
+
+            // The parser may or may not keep such an element; the assertion only means anything if it did.
+            if (box is null || box.ParentBox is null || box.ParentBox.HtmlTag?.Name is "html") return;
+
+            Assert.True(MonolithicContent.IsScrollContainer(box));
         }
 
         // ── the engine constraint, which is a different question ──────────────
@@ -135,7 +164,35 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
                 MonolithicContent.FitsNoFragmentainer(height, clonedStart, clonedEnd, container));
         }
 
+        // The companion question, and deliberately not the negation of the one above: "will it fit *there*"
+        // is asked of one specific band, where a box exactly as tall as the band plainly does fit. The
+        // relocation asks this one, so a band-tall box has somewhere to go.
+        [Theory]
+        [InlineData(100, 0, 0, 160, true)]
+        [InlineData(160, 0, 0, 160, true)]
+        [InlineData(161, 0, 0, 160, false)]
+        [InlineData(150, 5, 5, 160, true)]
+        [InlineData(151, 5, 5, 160, false)]
+        public void FitsInBand_TreatsAnExactFitAsFitting(
+            double height, double clonedStart, double clonedEnd, double bandHeight, bool expected)
+        {
+            Assert.Equal(expected, MonolithicContent.FitsInBand(height, clonedStart, clonedEnd, bandHeight));
+        }
+
         // ── helpers ───────────────────────────────────────────────────────────
+
+        private static async Task<CssBox> BoxOfTag(string css, string tag)
+        {
+            var html = $$"""
+                <!DOCTYPE html><html><head><style>{{css}}</style></head>
+                <body><div>text</div></body></html>
+                """;
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+
+            return LayoutHarness.Descendants(root).First(b =>
+                string.Equals(b.HtmlTag?.Name, tag, StringComparison.OrdinalIgnoreCase));
+        }
 
         private static async Task<CssBox> BoxOf(string markup)
         {

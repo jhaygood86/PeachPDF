@@ -280,14 +280,14 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         public bool WouldStraddleFragmentainer()
         {
-            var container = OwnerBox.HtmlContainer;
+            var container = OwnerBox.HtmlContainer!;
 
-            var (clonedTop, clonedBottom) = MonolithicContent.ClonedBlockInsets(OwnerBox, container!);
+            var (clonedTop, clonedBottom) = MonolithicContent.ClonedBlockInsets(OwnerBox, container);
 
             // The cloned insets count towards "too tall to fit anywhere": a resumed pass re-opens with the top
             // set and still has to clear the bottom one, so if the word cannot fit between them it never will,
             // and calling it a straddle would break to a fresh fragmentainer for every fragmentainer there is.
-            if (MonolithicContent.FitsNoFragmentainer(Height, clonedTop, clonedBottom, container!))
+            if (MonolithicContent.FitsNoFragmentainer(Height, clonedTop, clonedBottom, container))
                 return false;
 
             // The epsilons make a line ending exactly ON a slot boundary a non-break (it fits wholly in

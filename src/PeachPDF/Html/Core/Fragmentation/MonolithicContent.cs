@@ -57,12 +57,19 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </summary>
         /// <remarks>
         /// <para>
-        /// The root element and <c>&lt;body&gt;</c> are excluded: their <c>overflow</c> propagates to the
-        /// viewport rather than making them scroll containers
+        /// The root element is excluded: its <c>overflow</c> propagates to the viewport rather than making
+        /// it a scroll container
         /// (<see href="https://www.w3.org/TR/css-overflow-3/#overflow-propagation">CSS Overflow 3 §3.3</see>).
         /// A paginated renderer has no viewport for it to propagate to, so the declaration simply has no
         /// scroll container to name — which is also what stops the near-universal
         /// <c>html { overflow: hidden }</c> idiom from declaring a whole document unbreakable.
+        /// </para>
+        /// <para>
+        /// <c>&lt;body&gt;</c> is excluded only <b>conditionally</b>, which §3.3 is specific about: the
+        /// body's value propagates just when the root's own computed <c>overflow</c> is <c>visible</c>. If
+        /// the root already declared one, the root took the propagation and the body is a scroll container
+        /// in its own right — so <c>html { overflow: hidden } body { overflow: auto }</c> makes the body
+        /// monolithic, where excluding it unconditionally would not.
         /// </para>
         /// <para>
         /// §2's <c>clip</c> exception is satisfied vacuously rather than deliberately: <c>Map.OverflowModes</c>
@@ -74,11 +81,22 @@ namespace PeachPDF.Html.Core.Fragmentation
         internal static bool IsScrollContainer(CssBox box) =>
             box.Overflow != CssConstants.Visible && !IsViewportPropagationSource(box);
 
-        // Same three boxes CssLayoutEngine.IsMainColumnBox names, and by the same literals.
-        private static bool IsViewportPropagationSource(CssBox box) =>
-            box.IsRoot
-            || string.Equals(box.HtmlTag?.Name, "html", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(box.HtmlTag?.Name, "body", StringComparison.OrdinalIgnoreCase);
+        private static bool IsViewportPropagationSource(CssBox box)
+        {
+            if (IsRootElement(box)) return true;
+
+            // §3.3 propagates from the root's own body child only, and only while the root has not already
+            // declared an overflow of its own.
+            if (!IsNamed(box, "body") || box.ParentBox is not { } parent || !IsRootElement(parent))
+                return false;
+
+            return parent.Overflow == CssConstants.Visible;
+        }
+
+        private static bool IsRootElement(CssBox box) => box.IsRoot || IsNamed(box, "html");
+
+        private static bool IsNamed(CssBox box, string name) =>
+            string.Equals(box.HtmlTag?.Name, name, StringComparison.OrdinalIgnoreCase);
 
         // ── PeachPDF's own constraint, deliberately NOT §2 ────────────────────
 
@@ -96,11 +114,19 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// the one member expected to stay: <c>CssLayoutEngineTable.LayoutCells</c> is itself a page-aware
         /// fragmentation driver, so removing it is a rewrite rather than a narrowing.
         /// </remarks>
+        /// <seealso cref="RunsAnEngineOfItsOwn"/>
         internal static bool PaginatesItsOwnContent(CssBox box) =>
-            box.Display is CssConstants.Flex or CssConstants.InlineFlex
-                        or CssConstants.Grid or CssConstants.InlineGrid
-                        or CssConstants.Table or CssConstants.InlineTable
-            || box.EstablishesMultiColumnContext;
+            RunsAnEngineOfItsOwn(box.Display) || box.EstablishesMultiColumnContext;
+
+        /// <summary>
+        /// The display-value half of <see cref="PaginatesItsOwnContent"/>, which
+        /// <c>CssBox.LayoutContents</c> dispatches on directly — it needs to know <i>which</i> engine, so it
+        /// cannot ask the combined question. Kept here so the two cannot name different sets.
+        /// </summary>
+        internal static bool RunsAnEngineOfItsOwn(string? display) =>
+            display is CssConstants.Flex or CssConstants.InlineFlex
+                    or CssConstants.Grid or CssConstants.InlineGrid
+                    or CssConstants.Table or CssConstants.InlineTable;
 
         // ── §2's "overflows rather than being sliced", as a fitting question ──
 
@@ -127,5 +153,20 @@ namespace PeachPDF.Html.Core.Fragmentation
         internal static bool FitsNoFragmentainer(
             double height, double clonedStart, double clonedEnd, HtmlContainerInt container) =>
             height + clonedStart + clonedEnd >= container.PageSize.Height;
+
+        /// <summary>
+        /// Whether content <paramref name="height"/> tall, plus its cloned decorations, fits inside a
+        /// content band <paramref name="bandHeight"/> tall.
+        /// </summary>
+        /// <remarks>
+        /// Note this is <b>not</b> the negation of <see cref="FitsNoFragmentainer"/>. That one asks
+        /// "could this ever fit anywhere?" against the nominal page height and treats an exact fit as not
+        /// fitting — a boundary inherited from the per-word relocation it was extracted from, preserved
+        /// because widening it there would change where words land. This one asks "will it fit
+        /// <i>there</i>?" about one specific band, where an exact fit plainly does.
+        /// </remarks>
+        internal static bool FitsInBand(
+            double height, double clonedStart, double clonedEnd, double bandHeight) =>
+            height + clonedStart + clonedEnd <= bandHeight;
     }
 }

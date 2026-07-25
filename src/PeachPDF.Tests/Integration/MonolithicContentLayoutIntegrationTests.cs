@@ -53,6 +53,43 @@ namespace PeachPDF.Tests.Integration
             Assert.True(bottom > top, "fixture must straddle a page boundary when nothing forbids it");
         }
 
+        // Characterization of a boundary the headline test's own fixture hides. Where the box was already
+        // split by a *word-level* break before the epilogue ran, the mover shifts it uniformly - but the
+        // resumed lines were laid out at the next band's top rather than continuing from the previous
+        // page's last line, so the shift carries that fragmentainer gap along as a hole inside the box,
+        // and leaves its height inflated by the same amount. 140pt of filler happens to be the one
+        // alignment in this range where the gap is zero; 130 and 150 are not.
+        //
+        // Pre-existing, and not introduced here: `break-inside: avoid` reproduces it identically, and did
+        // so before monolithic content reached this mover. Recorded as an accepted gap rather than fixed,
+        // since fixing it means re-flowing the relocated box rather than translating it.
+        [Theory]
+        [InlineData(130)]
+        [InlineData(140)]
+        [InlineData(150)]
+        public async Task RelocatedBox_MatchesWhatBreakInsideAvoidAlreadyDoes(double fillerHeight)
+        {
+            var (monolithic, _) = await LayoutHarness.LayoutAsync(
+                GapDocument(fillerHeight, "overflow:hidden"), pageHeight: PageHeight, margin: Margin);
+            var (avoid, _) = await LayoutHarness.LayoutAsync(
+                GapDocument(fillerHeight, "break-inside:avoid"), pageHeight: PageHeight, margin: Margin);
+
+            var a = LayoutHarness.FindById(monolithic, "card")!;
+            var b = LayoutHarness.FindById(avoid, "card")!;
+
+            Assert.Equal(b.Location.Y, a.Location.Y, 6);
+            Assert.Equal(b.ActualBottom, a.ActualBottom, 6);
+            Assert.Equal(
+                b.LineBoxes.SelectMany(l => l.Words).Select(w => w.Top),
+                a.LineBoxes.SelectMany(l => l.Words).Select(w => w.Top));
+        }
+
+        private static string GapDocument(double fillerHeight, string cardCss) =>
+            LayoutHarness.Wrap(
+                $"<div style='height:{fillerHeight}pt'>filler</div>" +
+                $"<div id='card' style='{cardCss};orphans:1;widows:1;line-height:20pt;font-size:10pt;width:60pt'>" +
+                "Aaa Bbb Ccc Ddd Eee Fff Ggg Hhh</div>");
+
         [Theory]
         [InlineData("overflow: scroll")]
         [InlineData("overflow: auto")]
@@ -128,6 +165,80 @@ namespace PeachPDF.Tests.Integration
             LayoutHarness.Wrap(
                 "<div style='height:400pt'>filler</div><div>tail</div>" +
                 $"<div id='card' style='position:fixed;top:140pt;left:0;width:60pt;height:60pt;{cardCss}'>x</div>");
+
+        // A display:none box is never placed: LayoutContents copies its *previous sibling's* Location and
+        // ActualBottom instead. Measuring "its" height therefore measures the sibling, and moving it moves
+        // coordinates that belong to something else - which inflated the document by a whole page, since
+        // ActualSize.Height bounds the fragment builder's slot walk. A hidden panel with overflow: hidden
+        // is an ordinary modal or accordion body, not an exotic shape.
+        [Fact]
+        public async Task HiddenScrollContainer_IsNotRelocated()
+        {
+            var html = LayoutHarness.Wrap(
+                "<div style='height:20pt'>s</div>" +
+                "<div id='tall' style='height:150pt'>tall</div>" +
+                "<div id='ghost' style='display:none;overflow:hidden'></div>");
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight, margin: Margin);
+
+            var tall = LayoutHarness.FindById(root, "tall")!;
+            var ghost = LayoutHarness.FindById(root, "ghost")!;
+
+            // The fixture's point: #tall really does straddle, so the mover is live on this document.
+            Assert.True(
+                container.PageIndexOf(tall.ActualBottom - HtmlContainerInt.PageBoundaryEpsilon)
+                > container.PageIndexOf(tall.Location.Y + HtmlContainerInt.PageBoundaryEpsilon));
+
+            // Untouched: the else branch's copy of its previous sibling's coordinates, exactly as before.
+            Assert.Equal(tall.Location.Y, ghost.Location.Y, 6);
+            Assert.Equal(tall.ActualBottom, ghost.ActualBottom, 6);
+
+            // And the document is not a page taller than its content, which is what the relocation cost.
+            Assert.Equal(tall.ActualBottom - Margin, container.ActualSize.Height, 6);
+        }
+
+        // A box exactly as tall as the content band fits a page perfectly, so there is somewhere to move it
+        // to. The fits-nowhere exclusion asked ">= the nominal page height" against the wrong band and
+        // wrong boundary, and left such a box straddling.
+        [Fact]
+        public async Task ScrollContainerExactlyAsTallAsTheBand_StillMovesWhole()
+        {
+            var band = PageHeight - 2 * Margin;
+            var html = LayoutHarness.Wrap(
+                "<div style='height:60pt'>filler</div>" +
+                $"<div id='card' style='overflow:hidden;height:{band}pt'>card</div>");
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight, margin: Margin);
+            var card = LayoutHarness.FindById(root, "card")!;
+
+            Assert.Equal(
+                container.PageIndexOf(card.Location.Y + HtmlContainerInt.PageBoundaryEpsilon),
+                container.PageIndexOf(card.ActualBottom - HtmlContainerInt.PageBoundaryEpsilon));
+        }
+
+        // The replaced half of §2 reaches the same outcome by a different route: an <img> is forced inline
+        // (DomParser.CorrectReplacedElementBoxes), so it never runs the epilogue's mover at all - its whole
+        // word is relocated by CssRect.BreakPage instead. Worth pinning, because the predicate's
+        // CssBoxImage/CssBoxSvg arms are unreachable from the mover and it would be easy to read that as
+        // the rule not being delivered.
+        [Fact]
+        public async Task StraddlingImage_MovesWholeThroughTheWordPath()
+        {
+            var html = LayoutHarness.Wrap(
+                "<div style='height:140pt'>filler</div>" +
+                "<p id='p' style='margin:0;orphans:1;widows:1'><img src='data:image/gif;base64," +
+                "R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==' " +
+                "style='width:20pt;height:60pt'></p>");
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight, margin: Margin);
+
+            // The word belongs to the <img>'s own box, not to the paragraph that flows it.
+            var word = LayoutHarness.Descendants(root).SelectMany(b => b.Words).Single(w => w.IsImage);
+
+            Assert.Equal(
+                container.PageIndexOf(word.Top + HtmlContainerInt.PageBoundaryEpsilon),
+                container.PageIndexOf(word.Bottom - HtmlContainerInt.PageBoundaryEpsilon));
+        }
 
         // ── the fact on the fragment ──────────────────────────────────────────
 
