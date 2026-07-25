@@ -168,7 +168,7 @@ namespace PeachPDF.Html.Core.Fragments
         /// </summary>
         private static BoxFragment EmptyRootFragment(CssBox root, int fragmentainerIndex, double localOriginY) =>
             new(RRect.Empty, root, fragmentainerIndex, localOriginY, Localize(root.Bounds, localOriginY),
-                IsFixed: false, IsFirstFragment: true, IsLastFragment: true, [], [], []);
+                IsFixed: false, IsFirstFragment: true, IsLastFragment: true, [], [], [], OverflowClip: null);
 
         /// <summary>
         /// Records, for every box, the exact inclusive range of fragmentainers it emits a fragment in.
@@ -294,8 +294,55 @@ namespace PeachPDF.Html.Core.Fragments
                 fragmentainerIndex == span.Last,
                 lines,
                 words,
-                children);
+                children,
+                OverflowClipOf(box, snapshot, originY));
         }
+
+        /// <summary>
+        /// The clip an <c>overflow: hidden</c> ancestor imposes on <paramref name="box"/>, in this
+        /// fragment's local space, or null when nothing on its containing-block chain clips.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The chain is walked here rather than at paint time for one reason: a box can be shown at more
+        /// than one place in a document. A repeated table header is one source subtree standing in for
+        /// every page's <see cref="CssProxyBox"/>, so its live boxes carry only whichever page positioned
+        /// them last, and a clip read off them lands a page away and culls the whole repeated row. The
+        /// builder holds that page's own <see cref="BoxGeometrySnapshot"/>, so it can resolve the clip
+        /// against the position this fragment was actually built at.
+        /// </para>
+        /// <para>
+        /// A box outside the snapshot is read live, which is correct: the only boxes whose live geometry
+        /// is stale are the ones inside a proxied subtree, and those are exactly the ones the snapshot
+        /// holds. That is also all the walk can reach — <c>CssLayoutEngineTable.RemoveHeaderFooterFromTree</c>
+        /// detaches the source row-group, so the chain ends there and never leaves the subtree.
+        /// </para>
+        /// <para>
+        /// </para>
+        /// </remarks>
+        private static RRect? OverflowClipOf(CssBox box, BoxGeometrySnapshot? snapshot, double originY)
+        {
+            var containingBlock = box.ContainingBlock;
+
+            while (true)
+            {
+                if (containingBlock.Overflow == CssConstants.Hidden)
+                    return Localize(PaddingEdgeOf(containingBlock, snapshot), originY);
+
+                var next = containingBlock.ContainingBlock;
+                if (ReferenceEquals(next, containingBlock)) return null;
+                containingBlock = next;
+            }
+        }
+
+        /// <summary>
+        /// A box's padding-edge rectangle at the position <paramref name="snapshot"/> recorded for it, or
+        /// its live one. Border widths are page-invariant, so only the box's extent comes from the
+        /// snapshot — the geometry itself is <see cref="RenderUtils.PaddingEdgeOf"/>, shared with the one
+        /// remaining box-based clip caller so the two cannot drift apart.
+        /// </summary>
+        private static RRect PaddingEdgeOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
+            RenderUtils.PaddingEdgeOf(box, BoundsOf(box, snapshot));
 
         /// <summary>
         /// A box's children for fragment-building purposes. This is <see cref="CssBox.Boxes"/> for

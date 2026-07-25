@@ -415,8 +415,17 @@ const string DecorationBreakCss = """
       color: #24486b;
     }
     .band + .band { break-before: page }
+
+    /* Section 5: enough short lines inside one inline that it runs off the bottom of a page
+       and continues on the next, so the break it is cut by is a page boundary. */
+    .onpage { break-before: page }
+    .runon { width: 300pt; line-height: 2.4 }
     </style>
     """;
+
+// The section-5 fixture's lines: short enough not to wrap, and enough of them that the inline runs off
+// the bottom of its page and continues on the next, so the break cutting it is a page boundary.
+var crossingPageLines = string.Join("<br>", Enumerable.Range(1, 100).Select(i => $"highlighted line {i}"));
 
 var decorationBreakHtml = "<!DOCTYPE html><html><head>" + DecorationBreakCss + "</head><body>" +
     "<h1>box-decoration-break</h1>" +
@@ -469,6 +478,18 @@ var decorationBreakHtml = "<!DOCTYPE html><html><head>" + DecorationBreakCss + "
     "no bottom border here and no top border on the next page.</div>" +
     "<div class=\"band clone\">clone — this box is wrapped independently on each page, so it closes with its own " +
     "rounded bottom border at the page edge and opens with a new one overleaf.</div>" +
+
+    "<h2 class=\"onpage\">5 — An inline box crossing a page break</h2>" +
+    "<p class=\"intro\">The inline-axis counterpart of section 4, and the same distinction as section 2 — except that " +
+    "the break here is a page boundary rather than a line wrap. Under <code>slice</code> the highlight is opened once, " +
+    "on its first line, and the lines continuing overleaf carry no leading border or padding of their own — they " +
+    "resume flush against the block's content edge. Under <code>clone</code> the fragment opening on the new page " +
+    "opens with a fresh set, exactly as it would after a wrap. Each runs onto the following page.</p>" +
+    "<p class=\"label\">slice — the continuation resumes flush at the content edge</p>" +
+    "<div class=\"runon\"><span class=\"framed\">" + crossingPageLines + "</span></div>" +
+    "<h2 class=\"onpage\">5b — the same inline, cloning</h2>" +
+    "<p class=\"label\">clone — the continuation re-opens with its own frame</p>" +
+    "<div class=\"runon\"><span class=\"framed clone\">" + crossingPageLines + "</span></div>" +
 
     "</body></html>";
 

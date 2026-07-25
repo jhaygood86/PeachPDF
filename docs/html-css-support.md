@@ -579,6 +579,8 @@ Limitations, all of them on `clone`'s space reservation rather than on what gets
 
 > **Migration note:** a wrapping inline box whose background is a gradient, or which has `border-radius` or a `box-shadow`, used to be painted independently on each line — a separate full gradient, its own four rounded corners, and a shadow along every wrap. That is `clone`'s behavior, and it was applied whatever the declared value was. Such a box now renders as `slice` unless `box-decoration-break: clone` is set, which is both the spec's initial value and what browsers draw. Add `box-decoration-break: clone` to keep the previous appearance. See [Forward compatibility](#forward-compatibility).
 
+> **Migration note:** an inline box with a leading margin, border or padding that crosses a page break used to have that leading spacing re-inserted on each page it continued onto — an indent before the first word overleaf, and a matching pad on its background and border. Under `slice` (the initial value) a box's leading spacing belongs at its true start only, so a continuation now resumes flush against the block's content edge, exactly as it already did after a line wrap. Content following such a box on the continuing page shifts left correspondingly. `clone` is unaffected: there each fragment does open with its own spacing, on both axes. See [Forward compatibility](#forward-compatibility).
+
 ### Tables
 
 | Property | MDN Reference | Notes |

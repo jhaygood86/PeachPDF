@@ -36,6 +36,19 @@ namespace PeachPDF.Html.Core.Entities
         public int ResumeOrdinal { get; init; }
 
         /// <summary>
+        /// Whether the content visited since <paramref name="fromOrdinal"/> is being placed by this
+        /// pass rather than skipped past — true when it begins at or after the resume point, and true
+        /// when the walk reached that point somewhere inside it (a box straddling the break).
+        /// </summary>
+        /// <remarks>
+        /// The first disjunct is what makes a box that visits no words at all come out right, and it is
+        /// what makes this inert when <see cref="ResumeOrdinal"/> is 0: a bare
+        /// <c>WordOrdinal &gt; ResumeOrdinal</c> would read false for a block's first child on an
+        /// ordinary pass, and quietly stop giving it its trailing spacing.
+        /// </remarks>
+        public bool PlacedSince(int fromOrdinal) => fromOrdinal >= ResumeOrdinal || WordOrdinal > ResumeOrdinal;
+
+        /// <summary>
         /// The ordinal of the first word on the line being built. A line box is monolithic
         /// (<see href="https://www.w3.org/TR/css-break-3/#monolithic">css-break-3 §4.1</see>), so when
         /// content cannot fit, the break is taken here rather than part-way through the line.

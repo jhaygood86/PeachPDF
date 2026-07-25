@@ -14,7 +14,6 @@ namespace PeachPDF.Html.Core.Paint.Content
         private static readonly FrameFragmentPainter FramePainter = new();
         private static readonly HrFragmentPainter HrPainter = new();
         private static readonly MarkerFragmentPainter MarkerPainter = new();
-        private static readonly ProxyFragmentPainter ProxyPainter = new();
 
         /// <summary>
         /// The painter for <paramref name="box"/>'s content, or null when the generic box paint applies.
@@ -29,7 +28,6 @@ namespace PeachPDF.Html.Core.Paint.Content
             CssBoxFrame => FramePainter,
             CssBoxHr => HrPainter,
             CssBoxMarker => MarkerPainter,
-            CssProxyBox => ProxyPainter,
             _ => null,
         };
     }

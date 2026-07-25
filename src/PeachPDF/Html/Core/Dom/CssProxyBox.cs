@@ -113,16 +113,5 @@ namespace PeachPDF.Html.Core.Dom
 
             await ValueTask.CompletedTask;
         }
-
-        /// <summary>
-        /// Writes this proxy's captured geometry back onto the live source boxes. One source subtree
-        /// is shared by every page's proxy, so those boxes carry only whichever page positioned them
-        /// last — and while paint takes its <i>rectangles</i> from fragments, the
-        /// <c>overflow: hidden</c> clip walk still resolves ancestor client rectangles off the live
-        /// boxes. Without this, that clip lands at another page's position and culls the whole
-        /// repeated row. Removing this last piece of live-geometry coupling is follow-on work; see
-        /// <c>ProxyFragmentPainter</c>, the only caller.
-        /// </summary>
-        internal void ApplySourceGeometry() => _snapshot?.Apply(_sourceBox);
     }
 }
