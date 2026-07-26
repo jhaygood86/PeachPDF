@@ -1191,6 +1191,20 @@ namespace PeachPDF.Html.Core.Dom
         private bool _earlyBreakTaken;
 
         /// <summary>
+        /// Whether the break before this box has already been moved once for <c>orphans</c> in this layout.
+        /// </summary>
+        /// <remarks>
+        /// Per <i>layout</i>, not per fragmentainer pass, and that is the point: the decision is taken by the
+        /// parent's child loop, which runs again on every pass, and moving the box forward can perfectly well
+        /// leave it in the same position relative to the next boundary — most easily when the keep-with-next
+        /// run travels with it, since the box then lands the same distance below the fragmentainer top it did
+        /// before. Repeated, that walks the box down the document one pass per page, and the driver's own cap
+        /// is 100,000 passes (#332 measured exactly this shape). One correction, then the box takes whatever
+        /// geometry gives it — which is <see cref="Fragmentation.BreakRelaxation"/>'s fourth tier.
+        /// </remarks>
+        private bool _orphansBreakTaken;
+
+        /// <summary>
         /// A break decision a child discovered that falls before one of <i>this</i> box's earlier
         /// children — the keep-with-next run pull, which is the one correction a box cannot carry out
         /// for itself.
@@ -1314,6 +1328,7 @@ namespace PeachPDF.Html.Core.Dom
                 _prologueDone = false;
                 _incomingToken = null;
                 _resumeTopOverride = null;
+                _orphansBreakTaken = false;
             }
 
             var resume = _incomingToken;
@@ -1853,6 +1868,29 @@ namespace PeachPDF.Html.Core.Dom
             && box.Location.Y > context.BandTop + HtmlContainerInt.PageBoundaryEpsilon;
 
         /// <summary>
+        /// Whether a break may be moved for <c>orphans</c> at all in this document — false while per-page
+        /// horizontal reflow is still settling which page each box is on.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A document with per-page left/right <c>@page</c> margins is laid out several times over
+        /// (<c>HtmlContainerInt.PerformLayout</c>'s bounded reflow loop): a box's width is resolved before its
+        /// position is known, so each pass re-wraps every box against the page it turned out to land on, and
+        /// the loop runs until the box→page assignment stops changing. A box's page is therefore
+        /// <b>provisional</b> during that loop, and a break moved from a provisional assignment feeds back
+        /// into the very thing the loop is trying to settle — observed as a document that no longer converges
+        /// within the loop's cap, leaving a paragraph wrapped to a neighbouring page's measure, which is far
+        /// more visible than the orphan it was avoiding.
+        /// </para>
+        /// <para>
+        /// The same reasoning as the <see cref="HtmlContainerInt.IsFragmenting"/> gates: a decision taken
+        /// against coordinates the box does not end up at is not a decision. <c>widows</c>' retroactive push
+        /// is unaffected — it runs after the box is complete and does not change any box's width.
+        /// </para>
+        /// </remarks>
+        private bool OrphansMayMoveABreak => HtmlContainer is { UseVariablePageWidth: false };
+
+        /// <summary>
         /// Lays this box's out-of-flow children out again, for an engine that narrowed its own inline
         /// extent while filling fragmentainers and so resolved them against the wrong containing block.
         /// </summary>
@@ -1951,8 +1989,12 @@ namespace PeachPDF.Html.Core.Dom
                         // acted on pointlessly - and it is what keeps a band too small for `orphans` lines
                         // from walking the box down the document.
                         if (KeepsFewerLinesThanOrphans(childToken, childBox) && i > start
+                            && OrphansMayMoveABreak
+                            && !childBox._orphansBreakTaken
                             && HasRoomAboveInThisFragmentainer(childBox))
                         {
+                            childBox._orphansBreakTaken = true;
+
                             // The target has to travel with the break. A break-before whose top is left to
                             // be re-derived places the child at its natural position again - which for a box
                             // that kept a line or two is still inside the fragmentainer being left, so the

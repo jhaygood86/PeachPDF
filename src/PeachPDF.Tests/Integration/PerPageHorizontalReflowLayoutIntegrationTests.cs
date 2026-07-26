@@ -210,6 +210,37 @@ namespace PeachPDF.Tests.Integration
                 "the full-bleed first page should reflow wider than the base-margin later pages");
         }
 
+        // A box's page is provisional while the reflow loop is still settling which page each box is on, so
+        // the orphans mover is inert in such a document (see CssBox.OrphansMayMoveABreak). Pinned here
+        // rather than only in the orphans tests, because the failure mode belongs to *this* feature: a break
+        // moved from a provisional assignment feeds back into the loop, and the fixture above stopped
+        // converging within its cap - leaving a paragraph wrapped to a neighbouring page's measure.
+        [Fact]
+        public async Task OrphansViolation_DoesNotMoveABreak_WhilePageWidthsAreStillSettling()
+        {
+            var paragraphs = string.Concat(Enumerable.Range(1, 40).Select(i =>
+                $"<p class='b'>Block {i}: lorem ipsum dolor sit amet consectetur adipiscing elit sed " +
+                "do eiusmod tempor incididunt ut labore et dolore magna aliqua ut enim ad minim.</p>"));
+
+            var container = await BuildLayoutAsync($$"""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 200pt; }
+                @page :first { margin: 0; }
+                body { margin: 0; }
+                p { margin: 0; orphans: 4; widows: 4 }
+                </style></head><body>{{paragraphs}}</body></html>
+                """);
+
+            var blocks = new List<CssBox>();
+            CollectByClass(container.Root!, "b", blocks);
+
+            Assert.True(container.UseVariablePageWidth, "fixture must exercise per-page reflow");
+
+            // The invariant the reflow loop exists for still holds, which is what the gate protects.
+            foreach (var block in blocks)
+                Assert.Equal(container.PageContentRightOf(block.Location.Y), block.ActualRight, 0.5);
+        }
+
         [Fact]
         public async Task ConstrainedBody_ExplicitWidth_DoesNotReflow()
         {

@@ -187,6 +187,27 @@ namespace PeachPDF.Tests.Integration
             Assert.True(container.FragmentainerPasses <= 4, $"expected a bounded pass count, got {container.FragmentainerPasses}");
         }
 
+        // One correction per box per layout, not per pass. The decision is taken by the parent's child loop,
+        // which runs again on every pass, and a box that travels with its keep-with-next run lands the same
+        // distance below the fragmentainer top it did before - so repeated, this walks the box down the
+        // document one pass per page, against a driver cap of 100,000 passes.
+        [Fact]
+        public async Task Orphans2_HeadingAndParagraph_AreCorrectedOnceRatherThanWalkingTheDocument()
+        {
+            var html = "<!DOCTYPE html><html><head></head><body style='margin:0'>" +
+                       "<div style='height:70pt'></div>" +
+                       "<h2 style='margin:0;font-size:10pt'>Heading</h2>" +
+                       "<p id='p' style='width:200pt;line-height:20pt;margin:0;padding:0'>" +
+                       "L1<br>L2<br>L3<br>L4<br>L5<br>L6<br>L7<br>L8</p>" +
+                       "</body></html>";
+
+            var (root, container) = await BuildAndLayoutPaged(html, pageHeight: 100);
+
+            Assert.NotNull(FindById(root, "p"));
+            Assert.True(container.FragmentainerPasses <= 8,
+                $"expected a bounded pass count, got {container.FragmentainerPasses}");
+        }
+
         [Fact]
         public async Task Widows2_ParagraphStartingOnSecondPage_StillNudgedCorrectly()
         {
