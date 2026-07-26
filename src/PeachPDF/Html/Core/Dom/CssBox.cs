@@ -1903,8 +1903,16 @@ namespace PeachPDF.Html.Core.Dom
                     // convention below reads the marker's position (exactly a slot top, so one epsilon
                     // earlier is the previous slot) as a boundary this box's margin crossed, and
                     // discards the margin.
-                    else if (prevSibling is not null && !_isForcedBreak
-                             && !(prevSibling.PlacedByForcedBreak && prevSibling.IsMarginCollapseThrough()))
+                    //
+                    // A *first* in-flow child has no previous sibling to resolve against, but the break
+                    // point before it is a real one all the same: baseTop is already defined for it
+                    // (the containing block's own content top, above) and the boundary test below reads
+                    // nothing else from the sibling, so the arithmetic needs no predecessor. Only the
+                    // root is excluded - it has nothing before it for a break to fall between, and a
+                    // break-before published from the context root would have no parent link to travel
+                    // up (see PublishBreakToTheContextRoot).
+                    else if (!_isForcedBreak && ParentBox is not null
+                             && !(prevSibling is { PlacedByForcedBreak: true } marker && marker.IsMarginCollapseThrough()))
                     {
                         var pageHeight = HtmlContainer!.PageSize.Height;
                         if (pageHeight > 0)
