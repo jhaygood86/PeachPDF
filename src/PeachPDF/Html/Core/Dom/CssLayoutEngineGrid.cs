@@ -374,7 +374,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 var forced = boxes.Any(b => BreakValues.IsForcedPageBreak(b.BreakBefore));
                 var straddles = bottom - HtmlContainerInt.PageBoundaryEpsilon > container.PageBottomOf(slot)
-                                && boxes.Any(b => BreakValues.AvoidsPageBreak(b.BreakInside)
+                                && boxes.Any(b => BreakValues.AvoidsBreak(b.BreakInside, FragmentationContext.Page)
                                                   || MonolithicContent.IsMonolithic(b));
 
                 if (!forced && !straddles) continue;

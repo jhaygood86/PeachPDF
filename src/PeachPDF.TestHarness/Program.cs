@@ -3254,6 +3254,18 @@ static string McEntries(int count, string prefix = "entry") =>
     string.Concat(Enumerable.Range(1, count).Select(i =>
         McEntry($"{prefix}-{i}", $"a short definition for {prefix} number {i}, just long enough to wrap onto a second line in a narrow column.")));
 
+// The same content in the same box twice, differing only in the break-inside value, so the effect of
+// the value is the whole of the difference between the two halves.
+static string AvoidColumnPanel(string label, string breakInside) =>
+    "<div class=\"frame\"><div class=\"label\">" + label + "</div>" +
+    "<div class=\"mc\" style=\"columns:2;column-gap:20px;column-rule:0.5pt solid #000\">" +
+    McEntries(1, "lead") +
+    "<div style=\"" + breakInside + "background:#fdf3e3;border:0.5pt solid #d68910;padding:3pt;margin:0\">" +
+    "<b>Panel</b> &mdash; a block with a border and a background of its own, holding enough text that it " +
+    "cannot finish in the column it starts in: four lines against the two the first column has left for " +
+    "it once the entry above has taken its share of the height." +
+    "</div></div></div>";
+
 const string MulticolCss = """
     <style>
     @page { size: a4; margin: 15mm }
@@ -3313,6 +3325,22 @@ var multicolHtml = "<!DOCTYPE html><html><head>" + MulticolCss + "</head><body>"
         "<div class=\"frame\"><div class=\"label\">columns: 3; entries tall enough that the balance search retries, in a container that resumes onto the next page</div>" +
         "<div class=\"mc\" style=\"columns:3;column-rule:0.5pt solid #7f8c8d;column-gap:14px\">" +
         McEntries(60, "term") + "</div></div>") +
+
+    // The two break values that name the column fragmentation context. `break-before: column` puts the
+    // heading at the top of the next column with the first column left short; `break-inside:
+    // avoid-column` keeps a panel whole rather than letting it split at the boundary the way the
+    // paragraph in section 6 does. Neither has any effect outside a multi-column container, and neither
+    // may disturb pagination: `avoid-page` on the same panel would not keep it together here.
+    McSection("8 &mdash; forced column breaks and avoid-column",
+        "<div class=\"frame\"><div class=\"label\">columns: 2; column-fill: auto; h3 { break-before: column } on the second heading &mdash; the first column is left short</div>" +
+        "<div class=\"mc\" style=\"columns:2;column-gap:20px;column-fill:auto;column-rule:0.5pt solid #000\">" +
+        "<h3 style=\"font-size:9pt;margin:0 0 0.3em\">Kept in column one</h3>" +
+        McEntries(2, "before") +
+        "<h3 style=\"font-size:9pt;margin:0 0 0.3em;break-before:column\">Forced into column two</h3>" +
+        McEntries(2, "after") +
+        "</div></div>" +
+        AvoidColumnPanel("break-inside: auto &mdash; the panel splits at the column boundary, its border and background cut in two", "") +
+        AvoidColumnPanel("break-inside: avoid-column &mdash; the same panel, moved whole to the next column", "break-inside:avoid-column;")) +
 
     "</body></html>";
 
