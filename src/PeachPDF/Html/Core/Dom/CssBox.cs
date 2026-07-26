@@ -1140,6 +1140,78 @@ namespace PeachPDF.Html.Core.Dom
             NotifyGeometryChanged(OwnGeometryTop(), 0);
 
             _prologueDone = false;
+
+            AwaitPlacementAgain();
+        }
+
+        /// <summary>
+        /// Marks every word in this subtree as belonging to the next fragmentainer, so that only the ones
+        /// the layout about to run actually places can be claimed by it.
+        /// </summary>
+        /// <remarks>
+        /// A discarded attempt leaves its words where it put them, and the attempt that replaces it need not
+        /// reach all of them again — a shorter column stops sooner. Cleared per word by being positioned
+        /// (<see cref="CssRect.Top"/>'s setter), so what survives is exactly what this layout did not place:
+        /// the same rule §4.1's own discarded line already follows, applied to a discarded fill.
+        /// </remarks>
+        private void AwaitPlacementAgain()
+        {
+            foreach (var word in Words)
+            {
+                word.AwaitsTheNextFragmentainer = true;
+            }
+
+            foreach (var childBox in Boxes)
+            {
+                childBox.AwaitPlacementAgain();
+            }
+        }
+
+        /// <summary>
+        /// Drops the line boxes this box's inline flow produced from <paramref name="firstLine"/> on, for a
+        /// fill attempt that is being abandoned and run again.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The narrower half of <see cref="ResetForRefill"/>, and the only thing a <i>resumed</i> box can be
+        /// given. Its prologue must not run — <see cref="RectanglesReset"/> would blank the fragment an
+        /// earlier fragmentainer already holds — but the lines the abandoned attempt added must still go, or
+        /// the retry hands them to <see cref="CssLineBox.AssignRectanglesToBoxes"/> a second time and the
+        /// per-line rectangle they already carry throws. <c>CssLayoutEngine.CreateLineBoxes</c> finalizes
+        /// from <c>InlineBreakToken.CompletedLineCount</c>, so that is the index to undo from and no new
+        /// accounting is needed.
+        /// </para>
+        /// <para>
+        /// The boxes a line assigned rectangles to are exactly its own <see cref="CssLineBox.Rectangles"/>
+        /// keys, so the removal reaches every descendant the line reached — including the inline boxes whose
+        /// rectangles a resumed flow deliberately does not reset.
+        /// </para>
+        /// <para>
+        /// A word on a discarded line is left where the abandoned attempt put it, so it is marked as
+        /// belonging to the next fragmentainer for the same reason §4.1's discarded line's words are: the
+        /// position it carries describes nothing. Being positioned again by the retry clears it.
+        /// </para>
+        /// </remarks>
+        internal void DiscardLineBoxesFrom(int firstLine)
+        {
+            var first = Math.Max(0, firstLine);
+
+            for (var i = LineBoxes.Count - 1; i >= first; i--)
+            {
+                var line = LineBoxes[i];
+
+                foreach (var hosted in line.Rectangles.Keys)
+                {
+                    hosted.Rectangles.Remove(line);
+                }
+
+                foreach (var word in line.Words)
+                {
+                    word.AwaitsTheNextFragmentainer = true;
+                }
+
+                LineBoxes.RemoveAt(i);
+            }
         }
 
         /// <summary>
