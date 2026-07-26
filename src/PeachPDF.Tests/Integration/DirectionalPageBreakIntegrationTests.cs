@@ -452,11 +452,13 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(container.PageTopOf(1) + 30, only!.Location.Y, 3);
         }
 
-        // Another characterized boundary: inside content an engine paginates itself, this box's
-        // coordinates during layout are provisional, so the parity step (and its reservation) is not
-        // taken and the break degrades to a plain page break.
+        // Another characterized boundary. A multi-column container fills fragmentainers of its own, so
+        // a box inside one is being placed into a *column* - and which side of the sheet a page falls on
+        // is not a question a column can answer. The parity step and its reservation are therefore not
+        // taken, and the break degrades to a column break: the box moves to the next column, and no
+        // blank page is manufactured for a side that was never resolved.
         [Fact]
-        public async Task DirectionalBreakInsideMulticol_DegradesToAPlainPageBreak_KnownBoundary()
+        public async Task DirectionalBreakInsideMulticol_DegradesToAColumnBreak_KnownBoundary()
         {
             var (_, container) = await LayoutHarness.LayoutAsync(
                 LayoutHarness.Wrap(

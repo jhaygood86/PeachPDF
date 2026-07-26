@@ -1091,6 +1091,40 @@ namespace PeachPDF.Html.Core.Dom
         internal BreakToken? PendingBreakToken { get; private set; }
 
         /// <summary>
+        /// Takes this box's resumption record, clearing it — how an engine driving fragmentainers of its
+        /// own reads back where a column stopped before opening the next one.
+        /// </summary>
+        /// <remarks>
+        /// The ordinary path never needs this: a parent's child loop reads a <i>child's</i> record and
+        /// wraps it in a link of its own. A columns engine is reading its own, because it is standing in
+        /// for the driver rather than for a parent.
+        /// </remarks>
+        internal BreakToken? TakePendingBreakToken()
+        {
+            var token = PendingBreakToken;
+            PendingBreakToken = null;
+            return token;
+        }
+
+        /// <summary>
+        /// Records that this box could not finish the fragmentainer it is filling, for an engine that
+        /// drives its own and has to hand the remainder back to the page driver.
+        /// </summary>
+        internal void SetPendingBreakToken(BreakToken? token) => PendingBreakToken = token;
+
+        /// <summary>
+        /// Lets this box's prologue run again, for a caller that is about to lay it out from scratch
+        /// rather than continue it.
+        /// </summary>
+        /// <remarks>
+        /// The prologue is once-per-box-per-layout and owns <c>RectanglesReset</c> plus word measurement,
+        /// so a second real layout of the same box needs it back. Deliberately narrow: it does <b>not</b>
+        /// touch the resumption record or the §4.3 latch, which belong to the pass rather than to the box
+        /// being re-laid-out. Same reopening the keep-with-next retry performs on itself.
+        /// </remarks>
+        internal void ResetForRefill() => _prologueDone = false;
+
+        /// <summary>
         /// The document Y this box asked to be placed at in a later fragmentainer, when the placement
         /// code decided the break falls <i>before</i> it. Distinct from
         /// <see cref="PendingBreakToken"/> because the box cannot name itself in a token — only its
@@ -1561,7 +1595,12 @@ namespace PeachPDF.Html.Core.Dom
                     }
                     else if (EstablishesMultiColumnContext && Boxes.Count > 0)
                     {
-                        await LayoutMonolithicContent(g, CssLayoutEngineColumns.PerformLayout, layoutOutOfFlowChildren: false);
+                        // Not monolithic any more: a column is a fragmentainer, and this engine drives its
+                        // own. It is handed the resumption record so a container continuing on a later page
+                        // picks up where its last column stopped instead of starting over.
+                        await CssLayoutEngineColumns.PerformLayout(g, this, resume);
+
+                        if (PendingBreakToken is not null) return;
                     }
                     else if (Boxes.Count > 0)
                     {
@@ -1690,6 +1729,34 @@ namespace PeachPDF.Html.Core.Dom
         /// makes a break before a box produce no fragment for it in the fragmentainer it is leaving
         /// (<see href="https://www.w3.org/TR/css-break-3/#break-between">css-break-3 §4.4</see>).
         /// </returns>
+        /// <summary>
+        /// Whether <paramref name="token"/> says the box it names produced nothing at all in the
+        /// fragmentainer being left — an inline flow that kept no line.
+        /// </summary>
+        /// <remarks>
+        /// It is a column that makes this visible rather than a column that makes it true. On the page
+        /// grid an empty box left at the foot of a page is easy to miss; a column is sized to its content,
+        /// so the same box is a hole at the foot of one column with its text at the head of the next —
+        /// the shape multi-column layout exists to avoid. The rule is §4.4's either way, so it is not
+        /// gated on being in a column, and the full suite is unchanged by it.
+        /// </remarks>
+        private static bool KeptNothingInThisFragmentainer(BreakToken token) =>
+            token is InlineBreakToken { CompletedLineCount: 0 };
+
+        /// <summary>
+        /// Runs the block-children loop for a layout engine that drives fragmentainers of its own, so it
+        /// fills each one through the same path ordinary block flow does rather than a parallel copy.
+        /// </summary>
+        /// <remarks>
+        /// The multi-column engine is the caller: a column is a fragmentainer
+        /// (<see href="https://www.w3.org/TR/css-break-3/#fragmentainer">§2</see>), and filling one is
+        /// exactly "lay out children until one does not fit, then record where to pick up". Everything
+        /// that makes that work — the resumption record, the keep-with-next restart, a child's own break
+        /// before it — is this loop's, and duplicating it is how the two would drift apart.
+        /// </remarks>
+        internal ValueTask<bool> FillFragmentainerWithBlockChildren(RGraphics g, BreakToken? resume) =>
+            LayoutBlockChildren(g, resume);
+
         private async ValueTask<bool> LayoutBlockChildren(RGraphics g, BreakToken? resume)
         {
             var resumeAt = resume as BlockBreakToken;
@@ -1732,8 +1799,38 @@ namespace PeachPDF.Html.Core.Dom
 
                     if (childBox.PendingBreakToken is { } childToken)
                     {
+                        // A child that kept nothing here has no fragment in this fragmentainer, so the
+                        // break falls *before* it rather than inside it (§4.4). Left as a break inside,
+                        // it leaves an empty box behind - which on the page grid is invisible, and in a
+                        // column is a hole the next column's content cannot fill.
+                        if (KeptNothingInThisFragmentainer(childToken) && i > start)
+                        {
+                            PendingBreakToken = new BlockBreakToken(
+                                this, childToken.ResumeSlotIndex, i, null, IsBreakBefore: true, null);
+                            return true;
+                        }
+
                         PendingBreakToken = new BlockBreakToken(
                             this, childToken.ResumeSlotIndex, i, childToken, IsBreakBefore: false, null);
+                        return true;
+                    }
+
+                    // Filling a fragmentainer of its own - a column - means a child that does not fit
+                    // starts the next one. On the page grid nothing asks this: a block whose content is
+                    // inline stops at the line that does not fit and records its own token, and one that
+                    // does not (an explicit height, a replaced element) simply overflows the page. A
+                    // column cannot afford that second answer; not flowing on is the whole point of it.
+                    //
+                    // Only a child with something above it in this column may move: one that overflows a
+                    // column it already starts has nowhere better to be, and breaking before it would ask
+                    // the same question of every column in turn.
+                    if (i > start
+                        && childBox.PlacesItselfAsBlockBox
+                        && HtmlContainer?.CurrentFragmentainer is { HasOwnBand: true } columnBand
+                        && childBox.ActualBottom > columnBand.BandBottom)
+                    {
+                        PendingBreakToken = new BlockBreakToken(
+                            this, columnBand.SlotIndex, i, null, IsBreakBefore: true, null);
                         return true;
                     }
 
@@ -1926,7 +2023,18 @@ namespace PeachPDF.Html.Core.Dom
                         // because a margin taller than a band can carry the box past the slot the step
                         // just chose; two rounds settle every case a single alternation can produce,
                         // and the small cap keeps a degenerate band from spinning.
-                        for (var guard = 0; _forcedBreakSide is not PageSide.Any && HtmlContainer!.IsFragmenting && guard < 4; guard++)
+                        // Also excluded while filling a column, and for the same reason one step further
+                        // in: the fragmentainer this box is being placed into is a column, so where it
+                        // ends up is a question about columns, not about which side of the sheet a page
+                        // falls on. Reserving a page from here manufactured a blank one while the box
+                        // itself simply moved to the next column - honouring half of a decision. Inside a
+                        // multi-column container a forced page break degrades to a column break.
+                        for (var guard = 0;
+                             _forcedBreakSide is not PageSide.Any
+                             && HtmlContainer!.IsFragmenting
+                             && HtmlContainer.CurrentFragmentainer is not { HasOwnBand: true }
+                             && guard < 4;
+                             guard++)
                         {
                             var landing = HtmlContainer.PageIndexOf(top + HtmlContainerInt.PageBoundaryEpsilon);
 
@@ -2115,6 +2223,16 @@ namespace PeachPDF.Html.Core.Dom
             // pre-check) are re-synced by the tail check.
             if (_shouldRegisterPage)
             {
+                // Registration appends, and this box can be placed more than once inside one layout: a
+                // break before it is taken on a later pass, or a column driver re-places it in the next
+                // column. Withdraw what the previous placement registered rather than accumulating one
+                // entry per position it has occupied - the same leak the prologue's own withdrawal
+                // closes for the paths that do re-run it.
+                if (RegisteredNamedPageElement is { } stale)
+                {
+                    HtmlContainer!.UnregisterNamedPageElement(stale);
+                }
+
                 RegisteredNamedPageElement = HtmlContainer!.RegisterNamedPageElement(UsedPageName, NamedPageRegistrationY());
             }
         }

@@ -24,10 +24,13 @@ namespace PeachPDF.Html.Core.Fragmentation
     {
         private bool _fragmenting;
 
+        private readonly (double Top, double Bottom)? _ownBand;
+
         internal FragmentainerContext(
             HtmlContainerInt container,
             CssBox contextRoot,
-            int slotIndex)
+            int slotIndex,
+            (double Top, double Bottom)? ownBand = null)
         {
             ArgumentNullException.ThrowIfNull(container);
             ArgumentNullException.ThrowIfNull(contextRoot);
@@ -35,6 +38,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             Container = container;
             ContextRoot = contextRoot;
             SlotIndex = slotIndex;
+            _ownBand = ownBand;
 
             // An unpaginated/measurement pass uses the double.MaxValue page-height sentinel; there is no
             // grid to break against, so nothing may fragment. Same guard every existing page-grid caller
@@ -54,11 +58,27 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <summary>The pagination slot this pass is filling.</summary>
         internal int SlotIndex { get; }
 
-        internal double BandTop => Container.PageTopOf(SlotIndex);
+        /// <summary>
+        /// Whether this context names a fragmentainer of its own rather than a page — a multi-column
+        /// column, per <see href="https://www.w3.org/TR/css-break-3/#fragmentainer">§2</see>'s "a column
+        /// in multi-column layout, or a page in paged media".
+        /// </summary>
+        /// <remarks>
+        /// A column band is a <i>sub-band</i> of the page band it lives in, so the page grid can no
+        /// longer answer where this fragmentainer ends — which is the one thing a break decision needs
+        /// to know. Everything else about the page grid stays true and stays in use: the column is still
+        /// placed in one continuous document space, and <see cref="SlotIndex"/> still names the page it
+        /// sits on, so a break that escapes the column resumes against the ordinary grid.
+        /// </remarks>
+        internal bool HasOwnBand => _ownBand is not null;
 
-        internal double BandBottom => Container.PageBottomOf(SlotIndex);
+        internal double BandTop => _ownBand?.Top ?? Container.PageTopOf(SlotIndex);
 
-        internal double BandHeight => Container.PageBandHeightOf(SlotIndex);
+        internal double BandBottom => _ownBand?.Bottom ?? Container.PageBottomOf(SlotIndex);
+
+        internal double BandHeight => _ownBand is { } band
+            ? band.Bottom - band.Top
+            : Container.PageBandHeightOf(SlotIndex);
 
         /// <summary>
         /// Where a resumed pass starts flowing: this fragmentainer's own content edge, per

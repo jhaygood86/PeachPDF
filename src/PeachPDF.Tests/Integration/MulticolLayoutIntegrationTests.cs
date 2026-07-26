@@ -363,7 +363,7 @@ namespace PeachPDF.Tests.Integration
         // ─── Phase-1/Phase-2 side-effect tracking (regression for stale Y after re-banding) ─
 
         [Fact]
-        public async Task NamedString_Y_TracksRealPositionAfterRebanding()
+        public async Task NamedString_Y_TracksTheColumnItLandsIn()
         {
             // Same re-banding shape as OversizedForcedChild_DoesNotOverlapSubsequentContent: item i1
             // alone claims column 1 (too tall to share), forcing i2/i3 into column 2 - a real move away
@@ -390,7 +390,7 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task NamedPageElement_Y_TracksRealPositionAfterRebanding()
+        public async Task NamedPageElement_RegistersOnceForTheColumnItLandsIn()
         {
             var html = Wrap(@"
                 <div id='mc' style='columns:2; column-gap:0; width:200px'>
@@ -402,10 +402,17 @@ namespace PeachPDF.Tests.Integration
             var mc = FindById(root, "mc")!;
             var i2 = FindById(root, "i2")!;
 
-            Assert.True(i2.Location.X > mc.ClientLeft + 50, "expected i2 to be re-banded into column 2");
+            Assert.True(i2.Location.X > mc.ClientLeft + 50, "expected i2 to be placed in column 2");
 
+            // Exactly one entry is the regression guard. The box is laid out twice - once by the
+            // measurement pass that sizes the fill, once for real - and once more again if a column
+            // break re-places it, and each placement registers. Its Y is the top of the pagination slot
+            // the box lands on, which is the attribution NamedPageRegistrationY defines rather than the
+            // box's own coordinate.
             var registered = Assert.Single(container.NamedPageElements, e => e.Name == "chapter");
-            Assert.Equal(i2.Location.Y, registered.Y, 1);
+            Assert.Equal(
+                container.PageTopOf(container.PageIndexOf(i2.Location.Y + HtmlContainerInt.PageBoundaryEpsilon)),
+                registered.Y, 1);
         }
 
         [Fact]

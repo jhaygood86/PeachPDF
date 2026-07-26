@@ -150,9 +150,20 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// question on the next fragmentainer, so every pass breaks again on the page it has just resumed
         /// on — which was verified to produce a zero-page document when a cloned inset exceeded the band.
         /// </remarks>
+        /// <remarks>
+        /// Inside a multi-column column the fragmentainer is the column, not the page
+        /// (<see href="https://www.w3.org/TR/css-break-3/#fragmentainer">§2</see>), so "anywhere" is
+        /// measured against the column's own band. Outside one this is
+        /// <see cref="HtmlContainerInt.PageSize"/>'s height exactly as before.
+        /// </remarks>
+        private static double FragmentainerExtent(HtmlContainerInt container) =>
+            container.CurrentFragmentainer is { HasOwnBand: true } column
+                ? column.BandHeight
+                : container.PageSize.Height;
+
         internal static bool FitsNoFragmentainer(
             double height, double clonedStart, double clonedEnd, HtmlContainerInt container) =>
-            height + clonedStart + clonedEnd >= container.PageSize.Height;
+            height + clonedStart + clonedEnd >= FragmentainerExtent(container);
 
         /// <summary>
         /// Whether content <paramref name="height"/> tall, plus its cloned decorations, fits inside a

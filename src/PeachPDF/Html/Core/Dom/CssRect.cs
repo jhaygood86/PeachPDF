@@ -290,6 +290,13 @@ namespace PeachPDF.Html.Core.Dom
             if (MonolithicContent.FitsNoFragmentainer(Height, clonedTop, clonedBottom, container))
                 return false;
 
+            // A column is a fragmentainer too (§2), and it is a *sub-band* of the page band it sits in,
+            // so the page grid cannot answer where it ends. Inside one the question is simply whether
+            // this word clears the column's own bottom: there is exactly one fragmentainer here, and the
+            // engine driving the columns is what opens the next one.
+            if (container.CurrentFragmentainer is { HasOwnBand: true } column)
+                return Bottom + clonedBottom - HtmlContainerInt.PageBoundaryEpsilon > column.BandBottom;
+
             // The epsilons make a line ending exactly ON a slot boundary a non-break (it fits wholly in
             // the earlier slot).
             return container.PageIndexOf(Top + HtmlContainerInt.PageBoundaryEpsilon)
