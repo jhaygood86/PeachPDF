@@ -1,6 +1,7 @@
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
 using System.Linq;
@@ -241,7 +242,93 @@ namespace PeachPDF.Tests.Integration
                 $"expected clone to fit fewer lines than slice on page 1, got {clonePage} vs {slicePage}");
         }
 
+        // ── the column axis ───────────────────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// A column is a fragmentainer too, so the reservation applies at a column boundary as it does at a
+        /// page one. The band arithmetic is the same — every column of a container shares one page band, and
+        /// <c>CssRect.WouldStraddleFragmentainer</c> asks the question against the column's own extent — so
+        /// what is asserted here is that the column fill reaches it at all.
+        /// </summary>
+        [Fact]
+        public async Task Clone_SplitAtAColumnBoundary_StopsShortOfItsOwnBottomBorder()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                ColumnSplitBlock(clone: true), pageHeight: 200, margin: 0);
+
+            var block = LayoutHarness.FindById(root, "b")!;
+            var fragments = FragmentsOf(container, block);
+
+            Assert.True(fragments.Count >= 2, $"expected a fragment per column, got {fragments.Count}");
+
+            foreach (var fragment in fragments.Take(fragments.Count - 1))
+            {
+                var words = Flatten(fragment).SelectMany(f => f.Words).ToList();
+                var decoration = fragment.Lines[0].Slice.FragmentRect;
+
+                // The room is left below the content...
+                Assert.True(words.Max(w => w.Rect.Bottom) <= decoration.Bottom - BorderBottom - PaddingBlock + 0.01,
+                    $"expected content to stop before the cloned bottom border ({decoration.Bottom - BorderBottom - PaddingBlock}), " +
+                    $"got {words.Max(w => w.Rect.Bottom)}");
+
+                // ...and the fragment claims it, so the border is drawn in the room rather than over the last
+                // line. A page fragment gets this from being cut to its band; a column fragment's extent is
+                // its own, measured from the content it holds, so the reserved room has to be added back.
+                Assert.Equal(words.Max(w => w.Rect.Bottom) + BorderBottom + PaddingBlock, decoration.Bottom, 0);
+            }
+        }
+
+        /// <summary>
+        /// The <c>slice</c> control: nothing is reserved and nothing is added to the fragment, so its
+        /// decoration area ends exactly at the content it holds.
+        /// </summary>
+        [Fact]
+        public async Task Slice_SplitAtAColumnBoundary_EndsAtItsContent()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                ColumnSplitBlock(clone: false), pageHeight: 200, margin: 0);
+
+            var block = LayoutHarness.FindById(root, "b")!;
+            var fragments = FragmentsOf(container, block);
+
+            Assert.True(fragments.Count >= 2, $"expected a fragment per column, got {fragments.Count}");
+
+            var leading = fragments[0];
+            var words = Flatten(leading).SelectMany(f => f.Words).ToList();
+
+            Assert.Equal(words.Max(w => w.Rect.Bottom), leading.Lines[0].Slice.FragmentRect.Bottom, 0);
+        }
+
         // ── helpers ───────────────────────────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// A decorated block long enough to leave the column it starts in — the column-axis counterpart of
+        /// <see cref="PaginatingBlock"/>.
+        /// </summary>
+        private static string ColumnSplitBlock(bool clone) => LayoutHarness.Wrap(
+            "<div style='columns:2;column-gap:20pt;column-fill:auto;font:10pt Arial'>" +
+            $"<div id='b' style='line-height:14pt;border-top:{BorderTop}pt solid #000;" +
+            $"border-bottom:{BorderBottom}pt solid #000;padding:{PaddingBlock}pt 0" +
+            (clone ? ";box-decoration-break:clone" : "") + "'>" +
+            string.Join(" ", Enumerable.Range(0, 300).Select(i => $"word{i}")) + "</div></div>");
+
+        private static List<BoxFragment> FragmentsOf(HtmlContainerInt container, CssBox box) =>
+        [
+            .. container.FragmentTree!.Fragmentainers
+                .SelectMany(f => Flatten(f.Root))
+                .Where(f => ReferenceEquals(f.Box, box) && f.Lines.Count > 0)
+                .OrderBy(f => f.FragmentainerIndex).ThenBy(f => f.Rect.X)
+        ];
+
+        private static IEnumerable<BoxFragment> Flatten(BoxFragment fragment)
+        {
+            yield return fragment;
+
+            foreach (var child in fragment.Children)
+            {
+                foreach (var descendant in Flatten(child)) yield return descendant;
+            }
+        }
 
         private static string MarginedInline(double margin) => LayoutHarness.Wrap(
             "<div id='d' style='width:170pt;font:10pt Arial'>" +

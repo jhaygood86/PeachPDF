@@ -728,12 +728,26 @@ namespace PeachPDF.Html.Core.Utils
 
             for (var current = box; current is not null; current = current.ParentBox)
             {
-                if (current.BoxDecorationBreak == CssConstants.Clone)
-                    total += current.ActualBorderBottomWidth + current.ActualPaddingBottom;
+                total += OwnClonedBlockEnd(current);
             }
 
             return total;
         }
+
+        /// <summary>
+        /// <paramref name="box"/>'s own share of <see cref="ClonedBlockEnd"/> — what the box itself closes a
+        /// fragment with, without its ancestors' own share.
+        /// </summary>
+        /// <remarks>
+        /// The chain sum answers "how much must content stop short of the fragmentainer edge", which is a
+        /// question about every box the break falls inside at once. This one answers "how much of that room
+        /// belongs to <i>this</i> box's fragment", which is what tells a fragment's decoration area from the
+        /// content it holds — each level of a nested cloning stack closes inside its ancestors' own close.
+        /// </remarks>
+        internal static double OwnClonedBlockEnd(CssBox box) =>
+            box.BoxDecorationBreak == CssConstants.Clone
+                ? box.ActualBorderBottomWidth + box.ActualPaddingBottom
+                : 0;
 
         /// <summary>
         /// The inline-start margin, border and padding cloned fragments re-insert after a line break, summed
