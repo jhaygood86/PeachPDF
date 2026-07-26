@@ -210,13 +210,14 @@ namespace PeachPDF.Tests.Integration
                 "the full-bleed first page should reflow wider than the base-margin later pages");
         }
 
-        // A box's page is provisional while the reflow loop is still settling which page each box is on, so
-        // the orphans mover is inert in such a document (see CssBox.OrphansMayMoveABreak). Pinned here
-        // rather than only in the orphans tests, because the failure mode belongs to *this* feature: a break
-        // moved from a provisional assignment feeds back into the loop, and the fixture above stopped
-        // converging within its cap - leaving a paragraph wrapped to a neighbouring page's measure.
+        // A box's page is provisional while the reflow loop is settling which page each box is on, so §5.4's
+        // two line minimums are decided in one final layout entered once it has settled
+        // (HtmlContainerInt.PageWidthsSettled). Pinned here rather than only in the orphans tests, because
+        // the failure mode belongs to *this* feature: a break moved from a provisional assignment feeds back
+        // into the loop, and the fixture above stopped converging within its cap - leaving a paragraph
+        // wrapped to a neighbouring page's measure, which is a worse defect than the orphan it avoided.
         [Fact]
-        public async Task OrphansViolation_DoesNotMoveABreak_WhilePageWidthsAreStillSettling()
+        public async Task OrphansAndWidows_AreEnforced_WithoutDisturbingThePerPageMeasure()
         {
             var paragraphs = string.Concat(Enumerable.Range(1, 40).Select(i =>
                 $"<p class='b'>Block {i}: lorem ipsum dolor sit amet consectetur adipiscing elit sed " +
@@ -236,9 +237,119 @@ namespace PeachPDF.Tests.Integration
 
             Assert.True(container.UseVariablePageWidth, "fixture must exercise per-page reflow");
 
-            // The invariant the reflow loop exists for still holds, which is what the gate protects.
+            // The invariant the reflow loop exists for still holds — the corrections are taken against the
+            // settled assignment, so no block is left carrying a neighbouring page's width.
             foreach (var block in blocks)
                 Assert.Equal(container.PageContentRightOf(block.Location.Y), block.ActualRight, 0.5);
+
+            // And the minimums are genuinely enforced, which they were not while the gate was unconditional:
+            // no block straddles a boundary keeping fewer than four lines on either side of it. Pages 1 and
+            // up share one measure here, so every correction the fixture asks for is one that may be taken.
+            foreach (var block in blocks.Where(b => container.PageIndexOf(b.Location.Y) >= 1))
+            {
+                var split = LinesEitherSideOfABoundary(container, block);
+
+                if (split is not { } straddle) continue;
+
+                Assert.True(straddle.Before >= 4 && straddle.After >= 4,
+                    $"block at {block.Location.Y} splits {straddle.Before}/{straddle.After} across a boundary");
+            }
+        }
+
+        // The per-line half of §5.4, which is what the gate actually costs a document: without it a widows
+        // violation degrades to the retroactive whole-box push, which relocates the paragraph entirely and
+        // leaves the foot of its page blank. With it, the pass that placed the first fragment is re-entered
+        // with a smaller line budget and only the line it takes is moved. The geometry is the one
+        // OrphansWidowsIntegrationTests calibrates against, on a small sheet.
+        //
+        // The `@page :left` rule restates the base margins rather than changing them: that is enough to put
+        // the document on the per-page reflow path — which is what this test is about — while leaving every
+        // page the same measure, so the correction is one that may be taken (see the test below).
+        [Fact]
+        public async Task WidowsViolation_MovesTheLinesItTakes_RatherThanTheWholeParagraph()
+        {
+            var container = await BuildSmallPageLayoutAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 0 8pt; }
+                @page :left { margin-left: 8pt; margin-right: 8pt }
+                p { margin: 0; padding: 0; width: 200pt; line-height: 20pt }
+                </style></head><body style='margin:8pt'>
+                <div style='height:30pt'></div>
+                <p id='p'>L1<br>L2<br>L3<br>L4</p>
+                </body></html>
+                """);
+
+            Assert.True(container.UseVariablePageWidth, "fixture must exercise per-page reflow");
+            Assert.True(container.MeasureIsSharedBetween(0, 1));
+
+            var paragraph = FindById(container.Root!, "p")!;
+            var boundary = container.PageTopOf(1);
+
+            // The paragraph stays where ordinary flow put it — the whole-box push, which is what this
+            // document had before, would have moved it down to the boundary itself.
+            Assert.Equal(38, paragraph.Location.Y, 1);
+
+            var words = new List<CssRect>();
+            CollectWords(paragraph, words);
+            var tops = words.Select(w => w.Top).Distinct().OrderBy(t => t).ToList();
+
+            // Its natural split was 3-before/1-after, violating the default widows: 2. One line moved.
+            Assert.Equal(2, tops.Count(t => t < boundary));
+            Assert.Equal(2, tops.Count(t => t >= boundary));
+        }
+
+        // The final layout keys every width off the settled assignment, so it cannot re-wrap what it
+        // moves: a correction that moved a box onto a page of a *different* measure would leave it wrapped
+        // for the page it left. That is declined instead — §4.3's own last rung, the constraint given up
+        // rather than traded for a worse violation.
+        //
+        // This guard was written, argued away on the grounds that the retroactive whole-box push makes the
+        // same trade already, and put back when CI failed on windows-latest with exactly the defect this
+        // file's other tests exist to catch: a block wrapped to the full-bleed first page's 812pt measure,
+        // sitting on a 412pt page.
+        [Fact]
+        public async Task ACorrectionOntoAPageOfADifferentMeasure_IsDeclined()
+        {
+            var container = await BuildLayoutAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 200pt; }
+                @page :first { margin: 0; }
+                body { margin: 0; }
+                p { margin: 0; orphans: 4; widows: 4; line-height: 20pt }
+                </style></head><body>
+                <div style='height:640pt'></div>
+                <p id='p'>L1<br>L2<br>L3<br>L4<br>L5<br>L6<br>L7<br>L8</p>
+                </body></html>
+                """);
+
+            Assert.True(container.UseVariablePageWidth, "fixture must exercise per-page reflow");
+
+            // The full-bleed first page and the base-margin second do not share a measure, so no §5.4
+            // correction may move content between them.
+            Assert.False(container.MeasureIsSharedBetween(0, 1));
+
+            // What that protects: the paragraph carries the measure of the page it is on, whichever page
+            // that turns out to be. Left ungated, it was moved to page 1 while still wrapped for page 0.
+            var paragraph = FindById(container.Root!, "p")!;
+            Assert.Equal(container.PageContentRightOf(paragraph.Location.Y), paragraph.ActualRight, 0.5);
+        }
+
+        /// <summary>
+        /// How <paramref name="block"/>'s lines fall either side of the page boundary it crosses, or null
+        /// when it crosses none.
+        /// </summary>
+        private static (int Before, int After)? LinesEitherSideOfABoundary(HtmlContainerInt container, CssBox block)
+        {
+            var words = new List<CssRect>();
+            CollectWords(block, words);
+
+            var tops = words.Select(w => w.Top).Distinct().OrderBy(t => t).ToList();
+            if (tops.Count == 0) return null;
+
+            var boundary = container.PageTopOf(container.PageIndexOf(tops[0]) + 1);
+            var after = tops.Count(t => t >= boundary);
+
+            return after == 0 ? null : (tops.Count - after, after);
         }
 
         [Fact]
@@ -360,6 +471,31 @@ namespace PeachPDF.Tests.Integration
             var measure = XGraphics.CreateMeasureContext(
                 new XSize(container.PageSize.Width, container.PageSize.Height), XGraphicsUnit.Point, XPageDirection.Downwards);
             using var graphics = new GraphicsAdapter(adapter, measure, ppp);
+            await container.PerformLayout(graphics);
+
+            Assert.NotNull(container.Root);
+            return container;
+        }
+
+        /// <summary>
+        /// The same harness on a 400x100 sheet — small enough to place a page boundary inside a
+        /// four-line paragraph, which is what tells a per-line correction from a whole-box push.
+        /// </summary>
+        private static async Task<HtmlContainerInt> BuildSmallPageLayoutAsync(string html)
+        {
+            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var container = new HtmlContainerInt(adapter);
+            await container.SetHtml(html, null);
+
+            container.PageSize = new RSize(
+                400 - container.MarginLeft - container.MarginRight,
+                100 - container.MarginTop - container.MarginBottom);
+            container.Location = new RPoint(container.MarginLeft, container.MarginTop);
+            container.MaxSize = new RSize(container.PageSize.Width, 0);
+
+            var measure = XGraphics.CreateMeasureContext(
+                new XSize(container.PageSize.Width, container.PageSize.Height), XGraphicsUnit.Point, XPageDirection.Downwards);
+            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
