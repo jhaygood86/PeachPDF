@@ -1740,6 +1740,15 @@ namespace PeachPDF.Html.Core.Dom
             resumeFrom = Boxes.IndexOf(restart.BeforeBox);
             if (resumeFrom < start || resumeFrom > raisedAt) return false;
 
+            // Asked of every index about to be replayed, not just of the box that raised this. The run
+            // is found by walking siblings, which skips display:none, floated and out-of-flow ones, so
+            // the range re-run is wider than the run itself — and a table in it that repeats a header
+            // would not survive being laid out a second time.
+            for (var j = resumeFrom; j <= raisedAt; j++)
+            {
+                if (ContainsARepeatingTable(Boxes[j])) return false;
+            }
+
             restartedHeads ??= [];
 
             if (!restartedHeads.Add(resumeFrom)) return false;
@@ -3352,10 +3361,11 @@ namespace PeachPDF.Html.Core.Dom
             // The break falls before an earlier sibling, so this box cannot carry it out: only the
             // parent's child loop can re-run something placed before the box it is currently laying
             // out. Hand it over, and stop - what follows would measure a position about to change.
+            // Whether the boxes a restart would re-run can survive it is the parent's question, not
+            // this one's: only the child loop knows which indices it is about to replay.
             if (decision.BeforeBox != this
                 && ParentBox is { _canRestartChildLoop: true } parent
-                && HtmlContainer is { IsFragmenting: true }
-                && !ContainsARepeatingTable(this))
+                && HtmlContainer is { IsFragmenting: true })
             {
                 parent._requestedChildRestart = decision;
                 _earlyBreakTaken = true;
