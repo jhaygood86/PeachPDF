@@ -718,7 +718,7 @@ namespace PeachPDF.Html.Core
         /// </remarks>
         private void ReserveTrailingDirectionalBreak()
         {
-            if (Root is null || PageSize.Height <= 0 || PageSize.Height >= double.MaxValue - 1)
+            if (Root is null || !HasRealPageGrid)
                 return;
 
             var last = LastInFlowDescendant(Root);
@@ -1014,7 +1014,7 @@ namespace PeachPDF.Html.Core
         /// historical arithmetic eliminates any float-drift risk for the overwhelmingly common case.
         /// </summary>
         private bool UseVariablePageGeometry =>
-            PageSize.Height > 0 && PageSize.Height < double.MaxValue - 1 && PageGeometry.HasVerticalMarginOverrides;
+            HasRealPageGrid && PageGeometry.HasVerticalMarginOverrides;
 
         /// <summary>
         /// The horizontal analogue of <see cref="UseVariablePageGeometry"/>: whether layout should

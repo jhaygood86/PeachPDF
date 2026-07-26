@@ -546,6 +546,57 @@ body { margin: 0; }
             Assert.Equal(outer!.ClientTop + 40, first!.Location.Y, 3);
         }
 
+        // A known boundary, characterized rather than left silent. css-break §3.1 keep-with-next chains a
+        // heading to what follows it, but the run is walked over *siblings*: here the heading is a
+        // sibling of the container whose first child moves, so nothing is found and the heading stays on
+        // the page its content left. Continuing the walk out through the container was tried and is not
+        // sound - the members of a run are moved, and moving the container's predecessor while the
+        // container itself stays put drove the pass driver into its own no-progress backstop. Pulling a
+        // run across a container needs the container to travel with it, which is §3.1 propagation.
+        [Fact]
+        public async Task FirstChildRelocation_DoesNotPullTheRunAcrossTheContainer_KnownBoundary()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div id='lead' style='height:150pt'>lead</div>"
+                    + "<h2 id='head' style='page-break-after: avoid'>Head</h2>"
+                    + "<div id='wrap' style='border-top:1pt solid black'>"
+                    + "<div id='body' style='margin-top:200pt;height:40pt'>body</div>"
+                    + "</div>"),
+                pageHeight: FirstChildPageHeight);
+
+            var head = LayoutHarness.FindById(root, "head");
+            var body = LayoutHarness.FindById(root, "body");
+            Assert.NotNull(head);
+            Assert.NotNull(body);
+
+            Assert.True(
+                container.PageIndexOf(head!.Location.Y + HtmlContainerInt.PageBoundaryEpsilon)
+                < container.PageIndexOf(body!.Location.Y + HtmlContainerInt.PageBoundaryEpsilon),
+                "the heading is expected to stay behind - if it now travels with the body, this boundary "
+                + "has been closed and the test should become the invariant it was written against");
+        }
+
+        // A stated choice rather than a side effect: a box carrying a forced break that is *not* taken -
+        // because nothing precedes it in the flow - still counts as forced-break-governed, so §5.2 leaves
+        // its margin alone. There is no break point in front of it for a margin to adjoin.
+        [Fact]
+        public async Task FirstBoxInTheFlow_CarryingAnUntakenForcedBreak_KeepsItsMargin()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div id='wrap' style='border-top:1pt solid black'>"
+                    + "<div id='only' style='break-before:page;margin-top:500pt;height:40pt'>only</div>"
+                    + "</div>"),
+                pageHeight: FirstChildPageHeight);
+
+            var wrap = LayoutHarness.FindById(root, "wrap");
+            var only = LayoutHarness.FindById(root, "only");
+            Assert.NotNull(only);
+
+            Assert.Equal(wrap!.ClientTop + 500, only!.Location.Y, 3);
+        }
+
         // A known boundary, characterized rather than left silent. With nothing on the ancestor chain to
         // block collapse-through, the margin is not the first child's any more - it collapses all the
         // way up and is carried by the root box, which has no containing block for a break to fall at

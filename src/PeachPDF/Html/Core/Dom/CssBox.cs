@@ -1460,9 +1460,8 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// The nearest preceding in-flow box a forced break before this box falls after, when this box
-        /// is the first in-flow child of its container and so has no predecessor of its own. Null when
-        /// nothing at all precedes this box in the flow.
+        /// The nearest preceding in-flow box a forced break before this box falls after, looking out
+        /// through any containers this box begins. Null when nothing precedes it in the flow.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -1485,19 +1484,8 @@ namespace PeachPDF.Html.Core.Dom
         /// §3.1 propagation proper, which is a separate question.
         /// </para>
         /// </remarks>
-        private CssBox? PredecessorOfEnclosingFirstChildChain()
-        {
-            var origin = this;
-
-            while (DomUtils.GetPreviousSibling(origin, false) is null)
-            {
-                if (origin.ParentBox is not { } parent) return null;
-
-                origin = parent;
-            }
-
-            return DomUtils.GetPreviousSibling(origin, false);
-        }
+        private CssBox? PredecessorOfEnclosingFirstChildChain() =>
+            DomUtils.PrecedingBoxAcrossFirstChildChain(this);
 
         /// <summary>
         /// Places this box and lays out its content — the part of layout a resumed pass re-enters,
@@ -3339,7 +3327,7 @@ namespace PeachPDF.Html.Core.Dom
         private double NamedPageRegistrationY()
         {
             var container = HtmlContainer!;
-            return container.PageSize.Height > 0 && container.PageSize.Height < double.MaxValue - 1
+            return container.HasRealPageGrid
                 ? container.PageTopOf(container.PageIndexOf(Location.Y + HtmlContainerInt.PageBoundaryEpsilon))
                 : Location.Y;
         }
