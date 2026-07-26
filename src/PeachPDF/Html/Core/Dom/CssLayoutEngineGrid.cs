@@ -2,6 +2,7 @@ using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Entities;
+using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System;
@@ -310,6 +311,10 @@ namespace PeachPDF.Html.Core.Dom
             // baseline items in the row share a common first baseline.
             AlignRowBaselines(placements);
 
+            // ── The break points between rows are real ones now that the items sit where they will
+            // finally sit - see RelocateRowsAcrossFragmentainers.
+            RelocateRowsAcrossFragmentainers(placements);
+
             // ── Container size when auto.
             var gridHeight = rows.Sum(t => t.Size) + (rowCount > 1 ? rowGap * (rowCount - 1) : 0);
             if (!hasDefiniteHeight)
@@ -329,6 +334,71 @@ namespace PeachPDF.Html.Core.Dom
         // ─── Placement ──────────────────────────────────────────────────────────────
 
         /// <summary>A resolved grid item placement in 0-based track coordinates (end exclusive via span).</summary>
+        /// <summary>
+        /// Moves a grid row onto the next fragmentainer where it would otherwise be cut by the boundary,
+        /// and honours the break values declared on its items.
+        /// </summary>
+        /// <remarks>
+        /// The grid twin of <c>CssLayoutEngineFlex.RelocateLinesAcrossFragmentainers</c>, and for the
+        /// same reasons — see its remarks for why this pass has to run here rather than during placement,
+        /// why a whole <b>row</b> moves rather than the item that asked, and why the row is translated
+        /// rather than laid out again. An item spanning several rows travels with the first of them, so
+        /// the rows it spans are not pulled apart.
+        /// </remarks>
+        private void RelocateRowsAcrossFragmentainers(List<Placement> placements)
+        {
+            var container = _gridBox.HtmlContainer;
+
+            if (container is null || !container.HasRealPageGrid || placements.Count == 0
+                || !container.IsFragmenting
+                || _gridBox.Display == CssConstants.InlineGrid)
+            {
+                return;
+            }
+
+            var rows = placements
+                .GroupBy(p => p.RowStart)
+                .OrderBy(group => group.Key)
+                .ToList();
+
+            double shift = 0;
+
+            foreach (var row in rows)
+            {
+                var boxes = row.Select(p => p.Box).ToList();
+
+                var top = boxes.Min(b => b.Location.Y) + shift;
+                var bottom = boxes.Max(b => b.ActualBottom) + shift;
+
+                var slot = container.PageIndexOf(top + HtmlContainerInt.PageBoundaryEpsilon);
+
+                var forced = boxes.Any(b => BreakValues.IsForcedPageBreak(b.BreakBefore));
+                var straddles = bottom - HtmlContainerInt.PageBoundaryEpsilon > container.PageBottomOf(slot)
+                                && boxes.Any(b => BreakValues.AvoidsPageBreak(b.BreakInside)
+                                                  || MonolithicContent.IsMonolithic(b));
+
+                if (!forced && !straddles) continue;
+
+                if (!forced && bottom - top > container.PageBandHeightOf(slot + 1)) continue;
+
+                var delta = container.PageTopOf(slot + 1) - top;
+
+                if (delta <= 0) continue;
+
+                shift += delta;
+
+                foreach (var box in boxes)
+                {
+                    box.OffsetTop(delta);
+                }
+            }
+
+            if (shift > 0)
+            {
+                _gridBox.ActualBottom += shift;
+            }
+        }
+
         private sealed class Placement
         {
             public required CssBox Box { get; init; }

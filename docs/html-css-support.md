@@ -585,6 +585,13 @@ Two limits are worth knowing, and both come from the same place — **only the e
 
 Moving the container along with the break is what [§3.1](https://www.w3.org/TR/css-break-3/#break-between) calls propagation, and it is not implemented.
 
+<a id="breaks-in-flex-and-grid-containers"></a>
+**Breaks in flex and grid containers.** A flex container's break points are between its **lines**, and a grid container's between its **rows** ([CSS Fragmentation Level 3 §3.1](https://www.w3.org/TR/css-break-3/#break-between)) — not between the items sharing one, which the cross-axis alignment holds together. So `break-before` on an item, and `break-inside: avoid` (or `avoid-page`) or [monolithic content](#monolithic-content) among its items, move the **whole line or row** to the next page rather than the item that asked. An item spanning several grid rows travels with the first of them.
+
+An item with no break value of its own is left where it is, and the page boundary cuts it — the same answer ordinary block content gets when it has no line to break at. A line or row taller than a whole page is also left alone, since moving it could not help.
+
+Two limits are worth knowing. A flex or grid container **inside a table** is positioned against the table's own row grid, so its lines are left to the table engine rather than moved against the page grid. And an `inline-flex` or `inline-grid` box is an atomic inline — where it sits is the line it is on to decide. Item *content* is also not fragmented: an item is moved whole or cut, never continued on the next page.
+
 <a id="monolithic-content"></a>
 **Monolithic content moves whole rather than being split** ([CSS Fragmentation Level 3 §2](https://www.w3.org/TR/css-break-3/#monolithic)). Some content may not be broken at all, and where it would straddle a page boundary it is carried onto the next page in one piece. Two kinds qualify:
 
@@ -595,7 +602,7 @@ Three boundaries are worth knowing.
 
 Content that fits in **no** page at all — a scroll container taller than the page's content band — keeps fragmenting rather than overflowing: the spec would have it overflow the page, but in a paginated document nothing past the first page would then be drawn at all, so PeachPDF prefers splitting such a box to losing most of it.
 
-The rule applies to normal block flow, and inside a multi-column container, whose columns are fragmentainers. A monolithic box positioned by the flex, grid or table engines is placed against that engine's own grid, so it can still be split — the same boundary the rest of the break machinery has.
+The rule applies to normal block flow, and inside a multi-column container, whose columns are fragmentainers. Inside a flex or grid container it applies to the whole **line** or **row** the box is in — see [Breaks in flex and grid containers](#breaks-in-flex-and-grid-containers). A monolithic box inside a table is placed against the table's own row grid, so it can still be split.
 
 A box that had already begun flowing its own text across the boundary is **laid out again** at its new position rather than moved to it, so it reads exactly as it would have if it had started there — no blank band inside it, and no unused height. The same is true of every relocation described in this section: `break-inside: avoid`, monolithic content, and the `orphans`/`widows` push below all share one mechanism.
 

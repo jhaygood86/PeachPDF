@@ -2,6 +2,7 @@ using PeachPDF;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Entities;
+using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System;
@@ -182,6 +183,10 @@ namespace PeachPDF.Html.Core.Dom
 
             // Phase 9: assign final locations
             AssignLocations(lines);
+
+            // Phase 9b: the break points between lines are real ones now that the items sit where they
+            // will finally sit - see RelocateLinesAcrossFragmentainers.
+            RelocateLinesAcrossFragmentainers(lines);
 
             // Phase 10: update container size if auto.
             // Use Max across all lines because wrap-reverse can make the last line have the smallest offset.
@@ -740,6 +745,136 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
         }
+
+        // ─── Phase 9b: fragmentation ──────────────────────────────────────────────
+
+        /// <summary>
+        /// Moves a flex line onto the next fragmentainer where it would otherwise be cut by the boundary,
+        /// and honours the break values declared on its items.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This is the pass this engine did not have.</b> Every earlier phase lays an item out at the
+        /// container's content origin purely to <i>measure</i> it, and
+        /// <see cref="AssignLocations"/> translates it into place afterwards — so a break decision taken
+        /// during any of them names a position the item is about to be moved away from, which is why they
+        /// run with breaking suppressed. Only here are the items where they will finally be, and only
+        /// here can the question "does this fit in the fragmentainer?" be asked of the right coordinates.
+        /// </para>
+        /// <para>
+        /// A <b>flex line</b> is what moves, not an item. The line is the row of items laid out together;
+        /// moving one of them alone would break the alignment the cross-axis phases just established, and
+        /// <see href="https://www.w3.org/TR/css-break-3/#break-between">§3.1</see>'s break points in a
+        /// flex container are between lines rather than between the items sharing one. In a single-line
+        /// container that is every item at once, which is the right answer there too: they are aligned
+        /// against each other.
+        /// </para>
+        /// <para>
+        /// The line is <i>translated</i> rather than laid out again, which is the choice
+        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/332">#332</see> made the other way for
+        /// block flow. It has to be: an item's position is not derived from its own layout but assigned by
+        /// the engine, so re-flowing it at a new position would change the measurement the container's own
+        /// size was computed from. The cost is the one #332 documents — an item whose text had already
+        /// crossed the boundary carries the gap with it — and it is why an item that does not fit in a
+        /// fragmentainer at all is left alone rather than moved forever.
+        /// </para>
+        /// </remarks>
+        private void RelocateLinesAcrossFragmentainers(List<FlexLine> lines)
+        {
+            var container = _flexBox.HtmlContainer;
+
+            // Only where breaking is actually live. Inside a table cell, or during another engine's
+            // measurement, this container's own coordinates are provisional and belong to that engine's
+            // grid - shifting a line against the *page* grid from here moves it out from under the row
+            // that is placing it, which is the defect the monolithic mover had to be gated for too.
+            // An inline-flex is excluded on the same grounds: it is an atomic inline, and where it sits
+            // is the line it is on to decide.
+            if (container is null || !container.HasRealPageGrid || lines.Count == 0
+                || !container.IsFragmenting
+                || _flexBox.Display == CssConstants.InlineFlex)
+            {
+                return;
+            }
+
+            double shift = 0;
+
+            foreach (var line in lines)
+            {
+                if (LineBounds(line) is not { } bounds) continue;
+
+                var (top, bottom) = (bounds.Top + shift, bounds.Bottom + shift);
+
+                var slot = container.PageIndexOf(top + HtmlContainerInt.PageBoundaryEpsilon);
+                var slotBottom = container.PageBottomOf(slot);
+
+                var forced = LineTakesAForcedBreak(line);
+                var straddles = bottom - HtmlContainerInt.PageBoundaryEpsilon > slotBottom
+                                && LineMayNotBeCut(line);
+
+                if (!forced && !straddles) continue;
+
+                var target = container.PageTopOf(slot + 1);
+
+                // A line taller than a whole band has nowhere better to be, and moving it would ask the
+                // same question again on the next fragmentainer, forever.
+                if (!forced && bottom - top > container.PageBandHeightOf(slot + 1)) continue;
+
+                var delta = target - top;
+
+                if (delta <= 0) continue;
+
+                shift += delta;
+
+                foreach (var item in line.Items)
+                {
+                    item.Box.OffsetTop(delta);
+                }
+            }
+
+            if (shift > 0)
+            {
+                _flexBox.ActualBottom += shift;
+            }
+        }
+
+        /// <summary>The document-space extent of a line's items, or null when it holds none.</summary>
+        private static (double Top, double Bottom)? LineBounds(FlexLine line)
+        {
+            if (line.Items.Count == 0) return null;
+
+            var top = double.MaxValue;
+            var bottom = double.MinValue;
+
+            foreach (var item in line.Items)
+            {
+                top = Math.Min(top, item.Box.Location.Y);
+                bottom = Math.Max(bottom, item.Box.ActualBottom);
+            }
+
+            return (top, bottom);
+        }
+
+        /// <summary>
+        /// Whether a forced break falls before this line — <c>break-before</c> on any of its items, since
+        /// the line is what moves and they begin it together.
+        /// </summary>
+        private static bool LineTakesAForcedBreak(FlexLine line) =>
+            line.Items.Any(i => BreakValues.IsForcedPageBreak(i.Box.BreakBefore));
+
+        /// <summary>
+        /// Whether anything in this line may not be cut by a fragmentainer boundary: an item asking not
+        /// to be broken, or one <see href="https://www.w3.org/TR/css-break-3/#monolithic">§2</see> says
+        /// no user agent may break.
+        /// </summary>
+        /// <remarks>
+        /// An item that neither asks nor forbids is left where it is, and the boundary cuts it — the same
+        /// answer ordinary block content gets when it has no line to break at. Moving every straddling
+        /// line regardless would paginate a flex container quite differently from how it renders now,
+        /// which is a larger behaviour change than the break values themselves ask for.
+        /// </remarks>
+        private static bool LineMayNotBeCut(FlexLine line) =>
+            line.Items.Any(i => BreakValues.AvoidsPageBreak(i.Box.BreakInside)
+                                || MonolithicContent.IsMonolithic(i.Box));
 
         // ─── Direction / wrap parsing ─────────────────────────────────────────────
 

@@ -1558,11 +1558,11 @@ namespace PeachPDF.Html.Core.Dom
                 // needs to know *which* one, which is why it cannot ask the combined predicate.
                 if (Display is CssConstants.Flex or CssConstants.InlineFlex)
                 {
-                    await LayoutMonolithicContent(g, CssLayoutEngineFlex.PerformLayout);
+                    await LayoutEngineContent(g, CssLayoutEngineFlex.PerformLayout);
                 }
                 else if (Display is CssConstants.Grid or CssConstants.InlineGrid)
                 {
-                    await LayoutMonolithicContent(g, CssLayoutEngineGrid.PerformLayout);
+                    await LayoutEngineContent(g, CssLayoutEngineGrid.PerformLayout);
                 }
                 else if (Display is CssConstants.Table or CssConstants.InlineTable)
                 {
@@ -1699,6 +1699,43 @@ namespace PeachPDF.Html.Core.Dom
         /// The two used to be one undifferentiated notion of "monolithic"; see that type.
         /// </para>
         /// </remarks>
+        /// <summary>
+        /// Runs a layout engine that positions its own children, leaving breaking live for it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Flex and grid, as against <see cref="LayoutMonolithicContent"/>'s table. Their items are still
+        /// <i>measured</i> with breaking suppressed — every measurement lays an item out at the
+        /// container's content origin, and a break decided there names a position the item is about to be
+        /// translated away from — but the engine itself needs to know whether breaking is live at all, so
+        /// that the pass it runs once its items are finally placed can tell "this container is being
+        /// paginated" from "this container is inside something that is measuring it".
+        /// </para>
+        /// <para>
+        /// <see cref="LayoutOutOfFlowChildren"/> keeps a suppressed scope of its own, and that is not
+        /// incidental: it <b>discards</b> any resumption record a child leaves behind, and it is the only
+        /// way an absolutely-positioned child of one of these containers is laid out at all. Dropping a
+        /// token there drops the content it names. It used to be safe because its caller suppressed;
+        /// making that explicit is what keeps it safe now that the caller does not.
+        /// </para>
+        /// </remarks>
+        private async ValueTask LayoutEngineContent(RGraphics g, Func<RGraphics, CssBox, ValueTask> engine)
+        {
+            await engine(g, this);
+
+            var context = HtmlContainer?.CurrentFragmentainer;
+            var previous = context?.EnterMonolithic() ?? false;
+
+            try
+            {
+                await LayoutOutOfFlowChildren(g);
+            }
+            finally
+            {
+                context?.ExitMonolithic(previous);
+            }
+        }
+
         private async ValueTask LayoutMonolithicContent(
             RGraphics g, Func<RGraphics, CssBox, ValueTask> engine, bool layoutOutOfFlowChildren = true)
         {
@@ -1742,6 +1779,12 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private static bool KeptNothingInThisFragmentainer(BreakToken token) =>
             token is InlineBreakToken { CompletedLineCount: 0 };
+
+        /// <summary>
+        /// Lays this box's out-of-flow children out again, for an engine that narrowed its own inline
+        /// extent while filling fragmentainers and so resolved them against the wrong containing block.
+        /// </summary>
+        internal ValueTask LayoutOutOfFlowChildrenAgain(RGraphics g) => LayoutOutOfFlowChildren(g);
 
         /// <summary>
         /// Runs the block-children loop for a layout engine that drives fragmentainers of its own, so it
@@ -1826,6 +1869,8 @@ namespace PeachPDF.Html.Core.Dom
                     // the same question of every column in turn.
                     if (i > start
                         && childBox.PlacesItselfAsBlockBox
+                        && !childBox.IsOutOfFlow
+                        && childBox.Display != CssConstants.None
                         && HtmlContainer?.CurrentFragmentainer is { HasOwnBand: true } columnBand
                         && childBox.ActualBottom > columnBand.BandBottom)
                     {
