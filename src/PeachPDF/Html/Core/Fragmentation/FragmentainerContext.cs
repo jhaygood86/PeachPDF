@@ -39,8 +39,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             // An unpaginated/measurement pass uses the double.MaxValue page-height sentinel; there is no
             // grid to break against, so nothing may fragment. Same guard every existing page-grid caller
             // already applies before touching PageIndexOf.
-            _fragmenting = container.PageSize.Height > 0
-                           && container.PageSize.Height < double.MaxValue - 1;
+            _fragmenting = container.HasRealPageGrid;
         }
 
         internal HtmlContainerInt Container { get; }
