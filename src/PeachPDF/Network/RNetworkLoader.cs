@@ -9,8 +9,10 @@ namespace PeachPDF.Network
     /// dictionary, etc.). PeachPDF ships four concrete implementations: <see cref="DataUriNetworkLoader"/>
     /// (the default when none is configured), <see cref="FileUriNetworkLoader"/> for local files,
     /// <see cref="MimeKitNetworkLoader"/> for MHTML archives, and <see cref="HttpClientNetworkLoader"/> for
-    /// HTTP(S) sources. <c>data:</c> and <c>file:</c> URIs are always handled internally regardless of which
-    /// loader is configured.
+    /// HTTP(S) sources. <c>data:</c> URIs are always handled internally regardless of which loader is
+    /// configured, as are <c>file:</c> URIs unless
+    /// <see cref="PeachPDF.PdfGenerateConfig.AllowLocalFileAccess"/> is set to <c>false</c>, which refuses
+    /// them outright.
     /// </summary>
     public abstract class RNetworkLoader
     {

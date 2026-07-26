@@ -118,6 +118,27 @@ jobs:
           source: ./docs
           destination: ./_site
 
+      # The in-browser demo, dropped into the built site at /demo/. It goes in after Jekyll rather
+      # than through it: the app is already a finished static site, and Jekyll would try to process
+      # its assets.
+      - name: Publish the in-browser demo
+        run: |
+          dotnet publish src/PeachPDF.Demo.BlazorWasm/PeachPDF.Demo.BlazorWasm.csproj \
+            --configuration Release -o demo-publish
+
+          # Blazor resolves every asset against <base href>, so this has to match where the app is
+          # actually served from. Fail loudly if the template ever stops matching - a silent no-op
+          # here would publish a demo that 404s every one of its own files.
+          grep -q '<base href="/" />' demo-publish/wwwroot/index.html
+          sed -i 's|<base href="/" />|<base href="/demo/" />|' demo-publish/wwwroot/index.html
+
+          mkdir -p _site/demo
+          cp -r demo-publish/wwwroot/. _site/demo/
+
+          # Blazor's boot files live under _framework, and an underscore-prefixed directory is
+          # exactly what a Jekyll pass would drop.
+          touch _site/.nojekyll
+
       - uses: actions/upload-pages-artifact@v3
 
   deploy:

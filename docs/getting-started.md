@@ -4,6 +4,8 @@ PeachPDF is a pure .NET HTML → PDF rendering library. It doesn't shell out to 
 
 **.NET support.** PeachPDF runs on every currently-supported version of .NET — **.NET 8 and newer** — following [Microsoft's .NET support policy](https://dotnet.microsoft.com/platform/support/policy/dotnet-core). The NuGet package builds against the Long-Term-Support targets (`net8.0` and `net10.0`); the Standard-Term-Support releases in between (such as .NET 9) aren't separate build targets but are fully supported — the `net8.0` build runs on them unchanged.
 
+**Try it first.** [Render an HTML file to PDF in your browser](demo/) — no install, no server. The demo is PeachPDF itself running on WebAssembly, so what it produces is what the library produces.
+
 ## Quick Start
 
 Install the PeachPDF package from nuget.org:

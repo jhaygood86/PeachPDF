@@ -7,6 +7,12 @@ public class CliRunnerIntegrationTests
     private static bool IsPdf(byte[] bytes) =>
         bytes.Length > 4 && bytes[0] == '%' && bytes[1] == 'P' && bytes[2] == 'D' && bytes[3] == 'F';
 
+    // A real, loadable 1x1 pixel PNG.
+    private const string PngBase64 =
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+    private static string PdfText(byte[] pdf) => System.Text.Encoding.Latin1.GetString(pdf);
+
     [Fact]
     public async Task FileInput_WritesPdfToOutputFile()
     {
@@ -141,21 +147,69 @@ public class CliRunnerIntegrationTests
         }
     }
 
-    [Fact]
-    public async Task NoLocalFiles_BlocksResourcesButStillRenders()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task NoLocalFiles_BlocksResourcesButStillRenders(bool noLocalFiles)
     {
+        // The image really exists, so the allowed case proves the fixture works and the refused case is a
+        // genuine refusal rather than a missing file.
         var dir = CreateTempDir();
         try
         {
             var htmlPath = Path.Combine(dir, "doc.html");
             var outPath = Path.Combine(dir, "doc.pdf");
-            File.WriteAllText(htmlPath, "<html><body><img src='missing.png'><p>Text</p></body></html>");
+            File.WriteAllBytes(Path.Combine(dir, "pic.png"), Convert.FromBase64String(PngBase64));
+            File.WriteAllText(htmlPath, "<html><body><img src='pic.png'><p>Text</p></body></html>");
 
-            var options = ArgumentParser.Parse([htmlPath, "--no-local-files", "-o", outPath]);
-            var exit = await CliRunner.RunAsync(options, TextReader.Null, Stream.Null);
+            string[] args = noLocalFiles
+                ? [htmlPath, "--no-local-files", "-o", outPath]
+                : [htmlPath, "-o", outPath];
+
+            var exit = await CliRunner.RunAsync(ArgumentParser.Parse(args), TextReader.Null, Stream.Null);
 
             Assert.Equal(0, exit);
-            Assert.True(IsPdf(File.ReadAllBytes(outPath)));
+            var pdf = File.ReadAllBytes(outPath);
+            Assert.True(IsPdf(pdf));
+            Assert.Equal(!noLocalFiles, PdfText(pdf).Contains("/Subtype /Image"));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task NoLocalFiles_AppliesToMhtmlInputToo(bool noLocalFiles)
+    {
+        // MHTML is rendered through a bare MimeKitNetworkLoader, which never saw --no-local-files while
+        // that option lived on the CLI's own loader - so a file: reference inside an archive reached the
+        // disk regardless. Enforcing it on the config covers every input kind.
+        var dir = CreateTempDir();
+        try
+        {
+            var imagePath = Path.Combine(dir, "pic.png");
+            File.WriteAllBytes(imagePath, Convert.FromBase64String(PngBase64));
+
+            var mhtPath = Path.Combine(dir, "page.mht");
+            var outPath = Path.Combine(dir, "page.pdf");
+            File.WriteAllText(mhtPath,
+                "Content-Type: multipart/related; boundary=\"B\"\r\n\r\n" +
+                "--B\r\nContent-Type: text/html\r\nContent-Location: http://x/index.html\r\n\r\n" +
+                $"<html><body><img src='{new Uri(imagePath).AbsoluteUri}'><p>Text</p></body></html>\r\n--B--\r\n");
+
+            string[] args = noLocalFiles
+                ? [mhtPath, "--no-local-files", "-o", outPath]
+                : [mhtPath, "-o", outPath];
+
+            var exit = await CliRunner.RunAsync(ArgumentParser.Parse(args), TextReader.Null, Stream.Null);
+
+            Assert.Equal(0, exit);
+            var pdf = File.ReadAllBytes(outPath);
+            Assert.True(IsPdf(pdf));
+            Assert.Equal(!noLocalFiles, PdfText(pdf).Contains("/Subtype /Image"));
         }
         finally
         {

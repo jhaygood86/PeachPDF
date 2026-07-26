@@ -141,5 +141,30 @@ namespace PeachPDF.Tests.Text
 
             Assert.Contains(1, points);
         }
+
+        [Fact]
+        public void LoadPatternSet_HostWithoutABrotliDecoder_YieldsNoPatternsRatherThanThrowing()
+        {
+            // The pattern resources are Brotli-compressed, and not every host can decode them - a
+            // WebAssembly runtime that has not been natively relinked throws PlatformNotSupportedException
+            // from BrotliStream's constructor. Automatic hyphenation is a typographic refinement, so the
+            // text has to lay out unhyphenated rather than the whole render failing over it.
+            var patterns = HyphenationEngine.LoadPatternSet(
+                "af", static _ => throw new PlatformNotSupportedException("no brotli here"));
+
+            Assert.Null(patterns);
+        }
+
+        [Fact]
+        public void LoadPatternSet_WithAWorkingDecoder_ReturnsPatterns()
+        {
+            // The twin of the test above: proves "af" really does have patterns to load, so the null
+            // result there is the platform guard doing its job and not an empty resource.
+            var patterns = HyphenationEngine.LoadPatternSet(
+                "af", static compressed => new System.IO.Compression.BrotliStream(
+                    compressed, System.IO.Compression.CompressionMode.Decompress));
+
+            Assert.NotNull(patterns);
+        }
     }
 }

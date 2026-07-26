@@ -16,7 +16,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [Fact]
         public void DetermineDefaultFont_Windows_ReturnsSegoeUi()
         {
-            var result = CssConstants.DetermineDefaultFont(isWindows: true, isMacOS: false, isLinux: false, isAndroid: false);
+            var result = CssConstants.DetermineDefaultFont(isWindows: true, isMacOS: false, isLinux: false, isAndroid: false, isBrowser: false);
 
             Assert.Equal("Segoe UI", result);
         }
@@ -24,7 +24,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [Fact]
         public void DetermineDefaultFont_MacOS_ReturnsArial()
         {
-            var result = CssConstants.DetermineDefaultFont(isWindows: false, isMacOS: true, isLinux: false, isAndroid: false);
+            var result = CssConstants.DetermineDefaultFont(isWindows: false, isMacOS: true, isLinux: false, isAndroid: false, isBrowser: false);
 
             Assert.Equal("Arial", result);
         }
@@ -34,7 +34,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             // Exercises the real (non-forced) GetInstalledFontFamilyNames/FontResolver.SupportedFonts
             // path directly, regardless of which OS the test itself runs on.
-            var result = CssConstants.DetermineDefaultFont(isWindows: false, isMacOS: false, isLinux: true, isAndroid: false);
+            var result = CssConstants.DetermineDefaultFont(isWindows: false, isMacOS: false, isLinux: true, isAndroid: false, isBrowser: false);
 
             Assert.NotEmpty(result);
         }
@@ -44,7 +44,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             // Exercises the real (non-forced) GetInstalledFontFamilyNames/FontResolver.SupportedFonts
             // path directly, regardless of which OS the test itself runs on.
-            var result = CssConstants.DetermineDefaultFont(isWindows: false, isMacOS: false, isLinux: false, isAndroid: true);
+            var result = CssConstants.DetermineDefaultFont(isWindows: false, isMacOS: false, isLinux: false, isAndroid: true, isBrowser: false);
 
             Assert.NotEmpty(result);
         }
@@ -54,8 +54,8 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             // Guards against a regression where Android would be routed into the Linux
             // picker instead of its own, since isLinux may also be true on Android.
-            var androidOnly = CssConstants.DetermineDefaultFont(isWindows: false, isMacOS: false, isLinux: false, isAndroid: true);
-            var androidAndLinux = CssConstants.DetermineDefaultFont(isWindows: false, isMacOS: false, isLinux: true, isAndroid: true);
+            var androidOnly = CssConstants.DetermineDefaultFont(isWindows: false, isMacOS: false, isLinux: false, isAndroid: true, isBrowser: false);
+            var androidAndLinux = CssConstants.DetermineDefaultFont(isWindows: false, isMacOS: false, isLinux: true, isAndroid: true, isBrowser: false);
 
             Assert.Equal(androidOnly, androidAndLinux);
         }
@@ -63,9 +63,51 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [Fact]
         public void DetermineDefaultFont_UnknownPlatform_FallsBackToSegoeUi()
         {
-            var result = CssConstants.DetermineDefaultFont(isWindows: false, isMacOS: false, isLinux: false, isAndroid: false);
+            var result = CssConstants.DetermineDefaultFont(isWindows: false, isMacOS: false, isLinux: false, isAndroid: false, isBrowser: false);
 
             Assert.Equal("Segoe UI", result);
+        }
+
+        [Fact]
+        public void DetermineDefaultFont_Browser_ReturnsNonEmptyPickFromInstalledFonts()
+        {
+            // Exercises the real (non-forced) GetInstalledFontFamilyNames/FontResolver.SupportedFonts
+            // path directly, regardless of which OS the test itself runs on.
+            var result = CssConstants.DetermineDefaultFont(isWindows: false, isMacOS: false, isLinux: false, isAndroid: false, isBrowser: true);
+
+            Assert.NotEmpty(result);
+        }
+
+        [Fact]
+        public void DetermineDefaultFont_Browser_DoesNotFallBackToSegoeUi()
+        {
+            // The whole point of the browser branch: without it a WebAssembly host lands on the
+            // unknown-platform "Segoe UI" fallback, which nothing there can possibly satisfy, and
+            // CssBoxProperties.ActualFont throws rather than rendering.
+            var result = CssConstants.PickBrowserDefaultFont([]);
+
+            Assert.Equal("Liberation Sans", result);
+        }
+
+        [Theory]
+        [InlineData(new[] { "Liberation Sans", "Liberation Serif" }, "Liberation Sans")]
+        [InlineData(new[] { "DejaVu Sans", "DejaVu Serif" }, "DejaVu Sans")]
+        [InlineData(new[] { "Noto Sans", "Noto Serif" }, "Noto Sans")]
+        public void PickBrowserDefaultFont_PrefersKnownArialAlternative(string[] installed, string expected)
+        {
+            var result = CssConstants.PickBrowserDefaultFont(installed);
+
+            Assert.Equal(expected, result);
+        }
+
+        [Fact]
+        public void PickBrowserDefaultFont_NoKnownAlternative_FallsBackToFirstInstalled()
+        {
+            var installed = new[] { "Some Obscure Font", "Another Font" };
+
+            var result = CssConstants.PickBrowserDefaultFont(installed);
+
+            Assert.Equal("Some Obscure Font", result);
         }
 
         [Fact]

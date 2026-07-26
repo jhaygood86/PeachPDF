@@ -108,17 +108,25 @@ namespace PeachPDF.Adapters
 
         public RNetworkLoader NetworkLoader { get; set; } = new DataUriNetworkLoader();
 
+        // Mirrors PdfGenerateConfig.AllowLocalFileAccess, assigned per render in PdfGenerator.AddPdfPages.
+        public bool AllowLocalFileAccess { get; set; } = true;
+
         // Serves file: URIs (and supplies the default working-directory base URI) whenever the configured
         // NetworkLoader isn't itself a FileUriNetworkLoader - mirroring how data: URIs are always handled
         // internally regardless of which loader is configured. Lazily created so its Directory.GetCurrentDirectory()
-        // snapshot isn't taken until a file: resource (or the fallback base URI) is actually needed.
+        // snapshot isn't taken until a file: resource (or the fallback base URI) is actually needed - which is
+        // also why AllowLocalFileAccess is checked before every use: with it off, a host that has no file
+        // system to snapshot (browser/WebAssembly) never constructs this at all.
         private FileUriNetworkLoader? _internalFileLoader;
         private FileUriNetworkLoader InternalFileLoader => _internalFileLoader ??= new FileUriNetworkLoader();
 
         // When the configured loader has no base URI of its own (e.g. the default DataUriNetworkLoader), relative
         // references resolve against the current working directory as a file: URI - preserving the historical
         // implicit "load relative paths from disk" behavior now that it flows through FileUriNetworkLoader.
-        public override RUri? BaseUri => NetworkLoader.BaseUri ?? InternalFileLoader.BaseUri;
+        // With local file access denied there is nothing to resolve them against, so this reports null and
+        // relative references stay relative (see GetResourceStream's guard).
+        public override RUri? BaseUri =>
+            NetworkLoader.BaseUri ?? (AllowLocalFileAccess ? InternalFileLoader.BaseUri : null);
 
         /// <summary>
         /// the amount of pixels per point
@@ -127,14 +135,31 @@ namespace PeachPDF.Adapters
 
         public override async Task<RNetworkResponse?> GetResourceStream(RUri uri)
         {
-            if (uri.IsAbsoluteUri && uri.Scheme is "data")
+            // BaseUri is normally never null, so every reference resolves to an absolute URI and loaders have
+            // only ever been handed those - RUri.Scheme throws on a relative URI, and neither
+            // DataUriNetworkLoader nor HttpClientNetworkLoader checks. Denying local file access is what makes
+            // BaseUri nullable, so a relative reference can now survive resolution; answer "unresolved" for it
+            // here rather than handing a loader a URI it cannot inspect.
+            if (!uri.IsAbsoluteUri)
+            {
+                return null;
+            }
+
+            if (uri.Scheme is "data")
             {
                 var dataLoader = NetworkLoader as DataUriNetworkLoader ?? new DataUriNetworkLoader();
                 return await dataLoader.GetResourceStream(uri);
             }
 
-            if (uri.IsAbsoluteUri && uri.Scheme is "file")
+            if (uri.Scheme is "file")
             {
+                // Checked ahead of the configured loader, so a deny holds even when that loader is itself a
+                // FileUriNetworkLoader - the two settings contradict each other, and refusing is the safe read.
+                if (!AllowLocalFileAccess)
+                {
+                    return null;
+                }
+
                 var fileLoader = NetworkLoader as FileUriNetworkLoader ?? InternalFileLoader;
                 return await fileLoader.GetResourceStream(uri);
             }
@@ -165,9 +190,41 @@ namespace PeachPDF.Adapters
 
             AddFontFamily(new FontFamilyAdapter(new XFontFamily(fontFamilyName)));
 
+            AdoptDefaultFontIfMissing(CssConstants.DefaultFont, fontFamilyName, IsFontExists(CssConstants.DefaultFont));
+
             convertedStream.Seek(0, SeekOrigin.Begin);
 
             _fontResolver.AddFont(convertedStream, fontFamilyName, weightOverride, isItalicOverride, stretchOverride, unicodeRanges);
+        }
+
+        /// <summary>
+        /// Points <see cref="CssConstants.DefaultFont"/> at <paramref name="registeredFamily"/> when nothing
+        /// currently resolves it. On a host with no discoverable system fonts (browser/WebAssembly) the
+        /// default names a family that nothing satisfies until the caller registers one - and it is the
+        /// engine's last resort, so <c>CssBoxProperties.ActualFont</c> throws outright rather than rendering
+        /// when it resolves to nothing.
+        /// <para>
+        /// This latches on its own, giving "the first font registered wins": <c>IsFontExists</c> follows one
+        /// mapping hop, so once the mapping is in place the caller's next answer is <c>true</c> and a later
+        /// registration cannot steal the default. A family whose real name IS the default still takes
+        /// precedence whenever it is registered, because <c>FontsHandler.GetCachedFont</c> consults the
+        /// registered families before the mapping table.
+        /// </para>
+        /// </summary>
+        /// <param name="defaultFontFamily">The engine's default font, i.e. <see cref="CssConstants.DefaultFont"/>.</param>
+        /// <param name="registeredFamily">The family just registered.</param>
+        /// <param name="defaultFontExists">
+        /// Whether <paramref name="defaultFontFamily"/> already resolves. Both it and the family name are
+        /// passed in rather than read from <see cref="CssConstants"/> here - mirroring
+        /// <see cref="CssConstants.DetermineDefaultFont"/>'s own precedent - so the rule stays unit-testable
+        /// on a host whose default font genuinely is installed, which is every desktop CI runner.
+        /// </param>
+        internal void AdoptDefaultFontIfMissing(string defaultFontFamily, string registeredFamily, bool defaultFontExists)
+        {
+            if (!defaultFontExists)
+            {
+                AddFontFamilyMapping(defaultFontFamily, registeredFamily);
+            }
         }
 
         protected override RColor GetColorInt(string colorName)

@@ -52,30 +52,33 @@ Portions of PeachPDF are sourced from third parties and are licensed under alter
 | Core HTML rendering engine lineage | Derived from [HtmlRenderer](https://github.com/ArthurHub/HTML-Renderer) (José Manuel Menéndez Poo, Arthur Teplitzki) | BSD 3-Clause (the license above) |
 | Hyphenation pattern data (`hyphens: auto`) | CTAN's [hyph-utf8](https://ctan.org/pkg/hyph-utf8) package | A mix of permissive licenses including MIT and LPPL, plus BSD-style and public-domain patterns. Pattern files under copyleft (GPL/LGPL) or missing license terms are deliberately **not** shipped — see [`hyphens: auto` language coverage](html-css-support.md#hyphens-auto-language-coverage) |
 
-### Test-suite font assets (not distributed)
+### Font assets
 
-The following fonts are embedded in the `PeachPDF.Tests` project **solely as test assets** — so the test suite can exercise font matching, `unicode-range` selection, subsetting/embedding, monochrome-emoji (astral / `cmap` format-12), and color-glyph (`COLR`/`CPAL`) rendering against real font files rather than depending on whatever fonts happen to be installed on the machine running the tests. They are **not shipped in the PeachPDF library or its NuGet package**, and impose no obligation on applications that consume PeachPDF. The OFL-licensed fonts are each under the [SIL Open Font License 1.1](https://openfontlicense.org/):
+Every font the repository bundles lives in one place — the `assets/fonts/` directory — shared by the test suite, the showcase harness and the browser demo, with each font's original license notice kept intact beside it in an accompanying `.LICENSE.txt`.
 
-| Font | License |
-|---|---|
-| Noto Emoji (subset; © 2013 Google LLC) — see `src/PeachPDF.Tests/NotoEmoji-Regular.LICENSE.txt` | [SIL OFL 1.1](https://openfontlicense.org/) |
-| Noto Color Emoji (COLR v1 subset; © 2013 Google LLC) — see `src/PeachPDF.Tests/NotoColorEmoji-Subset.LICENSE.txt` | [SIL OFL 1.1](https://openfontlicense.org/) |
-| Nabla (COLR v1 subset; © 2022 The Nabla Project Authors) — a 7-palette color font for `font-palette` tests; see `src/PeachPDF.Tests/NablaSubset.LICENSE.txt` | [SIL OFL 1.1](https://openfontlicense.org/) |
-| Inter | [SIL OFL 1.1](https://openfontlicense.org/) |
-| Source Code Pro | [SIL OFL 1.1](https://openfontlicense.org/) |
-| Source Sans 3 | [SIL OFL 1.1](https://openfontlicense.org/) |
+**None of these fonts is shipped in the PeachPDF library or its NuGet package**, and none imposes any obligation on applications that consume PeachPDF. They exist so the test suite can exercise font matching, `unicode-range` selection, subsetting/embedding, monochrome-emoji (astral / `cmap` format-12) and color-glyph (`COLR`/`CPAL`) rendering against real font files instead of depending on whatever happens to be installed on the machine running the tests; so the showcase can demonstrate color fonts; and — for the Liberation family only — so the [in-browser demo](getting-started.md) has fonts at all, since a WebAssembly host has no discoverable system fonts. The Liberation fonts are the one exception to "not distributed": they are served as static assets by the demo page.
 
-The two hand-authored `COLR` color-glyph fixtures used by the color-font tests (`ColorTestV0.ttf` / `ColorTestV1.ttf`) contain no third-party font data and are released into the public domain (CC0); see `src/PeachPDF.Tests/TestSupport/Fonts/ColorTestFonts.LICENSE.txt`.
+| Font | Used by | License |
+|---|---|---|
+| Liberation Sans, Liberation Serif, Liberation Mono 2.1.5 (© 2012 Red Hat, Inc.) — see `assets/fonts/LiberationFonts.LICENSE.txt` | Browser demo, showcase | [SIL OFL 1.1](https://openfontlicense.org/) |
+| Noto Emoji (subset; © 2013 Google LLC) — see `assets/fonts/NotoEmoji-Regular.LICENSE.txt` | Tests | [SIL OFL 1.1](https://openfontlicense.org/) |
+| Noto Color Emoji (COLR v1 subset; © 2013 Google LLC) — the real color-emoji font in the [Color Fonts showcase](showcase.html); see `assets/fonts/NotoColorEmoji-Subset.LICENSE.txt` | Tests, showcase | [SIL OFL 1.1](https://openfontlicense.org/) |
+| Nabla (COLR v1 subset; © 2022 The Nabla Project Authors) — the 7-palette color font behind `font-palette` support and the [font-palette showcase](showcase.html); see `assets/fonts/NablaSubset.LICENSE.txt` | Tests, showcase | [SIL OFL 1.1](https://openfontlicense.org/) |
+| Inter | Tests | [SIL OFL 1.1](https://openfontlicense.org/) |
+| Source Code Pro | Tests | [SIL OFL 1.1](https://openfontlicense.org/) |
+| Source Sans 3 | Tests | [SIL OFL 1.1](https://openfontlicense.org/) |
+
+The two hand-authored `COLR` color-glyph fixtures used by the color-font tests (`ColorTestV0.ttf` / `ColorTestV1.ttf`) contain no third-party font data and are released into the public domain (CC0); see `assets/fonts/ColorTestFonts.LICENSE.txt`.
+
+**A note on the Liberation WOFF files.** The bundled Liberation fonts are format-converted from the upstream TrueType release ([liberation-fonts 2.1.5](https://github.com/liberationfonts/liberation-fonts)) to WOFF 1.0, which roughly halves the demo's download. The Liberation license declares a Reserved Font Name, and the OFL's definition of a "Modified Version" includes changing formats — so under [the SIL OFL FAQ](https://openfontlicense.org/documents/OFL-FAQ.txt) §2.2.1 the name may only be retained when the original font data is unchanged apart from WOFF compression and no conflicting WOFF metadata is added. The conversion satisfies both conditions: it is a lossless recompression with no subsetting and no WOFF metadata block, and it is verified after the fact — outlines, metrics, character mapping and the copyright/license name records are all compared against the source. The script that performs and checks it is `assets/fonts/convert_liberation_webfonts.py`, which also explains why the format is WOFF 1.0 rather than the smaller WOFF2.
 
 ### Showcase assets (not distributed)
 
-The following assets are embedded in the `PeachPDF.TestHarness` project **solely to render a showcase** — they are **not shipped in the PeachPDF library or its NuGet package**, and impose no obligation on applications that consume PeachPDF. Each original license notice is kept intact in the file header and/or an accompanying `LICENSE.txt`:
+The following non-font assets are embedded in the `PeachPDF.TestHarness` project **solely to render a showcase** — they are **not shipped in the PeachPDF library or its NuGet package**, and impose no obligation on applications that consume PeachPDF. Each original license notice is kept intact in the file header and/or an accompanying `LICENSE.txt`:
 
 | Asset | License |
 |---|---|
 | [Charts.css](https://chartscss.org) v1.2.0 (© 2020 Rami Yushuvaev) — the pure-CSS charting framework used by the [Charts.css showcase](showcase.html); see `src/PeachPDF.TestHarness/charts.css.LICENSE.txt` | [MIT](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF.TestHarness/charts.css.LICENSE.txt) |
-| Noto Color Emoji (COLR v1 subset; © 2013 Google LLC) — the real color-emoji font in the [Color Fonts showcase](showcase.html); see `src/PeachPDF.TestHarness/NotoColorEmoji-Subset.LICENSE.txt` | [SIL OFL 1.1](https://openfontlicense.org/) |
-| Nabla (COLR v1 subset; © 2022 The Nabla Project Authors) — the 7-palette color font in the [font-palette showcase](showcase.html); see `src/PeachPDF.TestHarness/NablaSubset.LICENSE.txt` | [SIL OFL 1.1](https://openfontlicense.org/) |
 
 ## License FAQ
 

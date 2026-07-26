@@ -4271,15 +4271,15 @@ await SaveShowcaseAsync("print_catalog", "Real-World Documents", "Print Catalog"
 // @font-face unicode-range: font matching is per-character. The monospaced webfont is declared only
 // for the digit range (U+0030-0039), so digits render in it while letters in the same run fall back to
 // the serif family - a per-character split within one text run, honoring the unicode-range descriptor.
-var monoDigitsFontUri = "data:font/truetype;base64," +
-    Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "LiberationMono-Regular.ttf")));
+var monoDigitsFontUri = "data:font/woff;base64," +
+    Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "LiberationMono-Regular.woff")));
 var unicodeRangeHtml = $$"""
     <html>
     <head>
     <style>
         @font-face {
             font-family: 'MonoDigits';
-            src: url('{{monoDigitsFontUri}}') format('truetype');
+            src: url('{{monoDigitsFontUri}}') format('woff');
             unicode-range: U+0030-0039;
         }
         body { font-family: serif; margin: 40px; }

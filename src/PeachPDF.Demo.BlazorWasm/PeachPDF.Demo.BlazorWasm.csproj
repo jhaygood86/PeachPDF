@@ -1,0 +1,69 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <!--
+    The in-browser demo: PeachPDF renders HTML/MHTML/ZIP uploads to PDF entirely client-side, with no
+    server round-trip. Single-TFM net10.0, overriding the net8.0;net10.0 default from
+    src/Directory.Build.props (same pattern as PeachPDF.Cli.csproj) - a Blazor WebAssembly app targets one
+    framework at a time.
+  -->
+  <PropertyGroup>
+    <TargetFrameworks></TargetFrameworks>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+    <!--
+      A Blazor WebAssembly app otherwise adopts the *browser's* locale, and a few numeric parses in the
+      rendering pipeline are culture-sensitive - so a visitor whose browser is set to, say, de-DE would
+      have a CSS length of "1.5" read as 15. CSS is invariant by definition, and this is the way to say so:
+      Blazor refuses a culture assigned at startup unless the whole ICU database is downloaded, which would
+      cost far more than it is worth here. It also drops that database from the payload.
+    -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.10" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.10" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PeachPDF\PeachPDF.csproj" />
+  </ItemGroup>
+
+  <!--
+    The Liberation fonts, shared from the repository-root assets/fonts/ directory with PeachPDF.Tests and
+    PeachPDF.TestHarness rather than checked in again here. A browser has no discoverable system fonts, so
+    the app fetches these from its own origin and registers them before rendering; the license travels with
+    them, as the OFL requires. WOFF 1.0 rather than WOFF2 - roughly 55% of the TTF size, where WOFF2 would
+    manage 40%, but WOFF2 is Brotli-compressed and a browser/WebAssembly host cannot decode Brotli at all.
+    See assets/fonts/convert_liberation_webfonts.py for the conversion, that measurement, and the OFL
+    conditions the conversion has to satisfy to keep the Liberation name.
+  -->
+  <ItemGroup>
+    <SharedFontAsset Include="..\..\assets\fonts\Liberation*.woff" />
+    <SharedFontAsset Include="..\..\assets\fonts\LiberationFonts.LICENSE.txt" />
+
+    <!--
+      Declared as static web assets under wwwroot/fonts, and staged there physically by the target below.
+      Both halves are needed: the LinkBase is what registers the routes, but it also makes the asset
+      manifest record the file as living in wwwroot/fonts - so the dev server looks there and serves
+      nothing unless the file really is there. (`dotnet publish` copies them anyway, which is why only
+      `dotnet run` shows the difference.) The staged copies are build output, not source, so the wwwroot
+      glob must not pick them up as well or every route would be declared twice.
+    -->
+    <Content Remove="wwwroot\fonts\**" />
+    <Content Include="@(SharedFontAsset)" LinkBase="wwwroot\fonts" />
+  </ItemGroup>
+
+  <Target Name="StageSharedFontAssets"
+          BeforeTargets="ResolveStaticWebAssetsInputs;BeforeBuild"
+          Inputs="@(SharedFontAsset)"
+          Outputs="@(SharedFontAsset->'$(MSBuildProjectDirectory)\wwwroot\fonts\%(Filename)%(Extension)')">
+    <Copy SourceFiles="@(SharedFontAsset)"
+          DestinationFolder="$(MSBuildProjectDirectory)\wwwroot\fonts"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

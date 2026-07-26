@@ -76,6 +76,12 @@ jobs:
       if: runner.os == 'Linux' && steps.changes.outputs.src == 'true'
       run: dotnet build src/PeachPDF.TestHarness/PeachPDF.TestHarness.csproj --configuration Release
 
+    # The in-browser demo published to peachpdf.net/demo by pages.yml. Building it here keeps a
+    # library change that breaks the WebAssembly target from being discovered on release day.
+    - name: Build Blazor WebAssembly demo
+      if: runner.os == 'Linux' && steps.changes.outputs.src == 'true'
+      run: dotnet build src/PeachPDF.Demo.BlazorWasm/PeachPDF.Demo.BlazorWasm.csproj --configuration Release
+
     - name: Install Playwright browsers
       if: steps.changes.outputs.src == 'true'
       run: |
