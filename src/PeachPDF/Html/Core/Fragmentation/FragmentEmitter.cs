@@ -124,7 +124,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         private readonly HashSet<(FragmentKey Key, int Slot)> _continuedFrom = [];
         private readonly HashSet<(FragmentKey Key, int Slot)> _continuesInto = [];
         private readonly Dictionary<FragmentKey, Dictionary<CssLineBox, RRect>> _rectangles = [];
-        private readonly HashSet<CssBox> _frozen = new(ReferenceEqualityComparer.Instance as IEqualityComparer<CssBox>);
+        private readonly HashSet<CssBox> _frozen = new(ReferenceEqualityComparer.Instance);
         private readonly SortedSet<int> _stale = [];
         private int _lastEmittedSlot = -1;
 
