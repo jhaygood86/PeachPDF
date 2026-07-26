@@ -260,6 +260,10 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         /// <param name="g"></param>
         /// <param name="blockBox"></param>
+        /// <param name="resume">
+        /// where an earlier fragmentainer's flow stopped, or null to lay the block's inline content out
+        /// from the start.
+        /// </param>
         public static async ValueTask<InlineBreakToken?> CreateLineBoxes(RGraphics g, CssBox blockBox, InlineBreakToken? resume = null)
         {
             ArgumentNullException.ThrowIfNull(g);

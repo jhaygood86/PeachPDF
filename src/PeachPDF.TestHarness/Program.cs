@@ -1709,6 +1709,48 @@ await SaveShowcaseAsync("paged_media_orphans_widows", "Paged Media", "Orphans an
     + "break point, so too few lines before it makes the break fall before the paragraph instead.",
     orphansWidowsHtml, new PdfGenerateConfig { PageSize = PageSize.A5 });
 
+// ── keep-with-next showcase ────────────────────────────────────────────────
+// A heading chained to the paragraph below it by break-after: avoid (the UA print default for h1-h6),
+// positioned so the paragraph's own text breaks across the page boundary. The paragraph therefore
+// completes on a *later* fragmentainer pass than the one that placed the heading, so the correction
+// has to reach back into a fragmentainer the driver has already filled: the pass that placed the
+// heading is re-entered and the group is laid out again at the top of the next page. Carried out by
+// moving the group instead - which is all that was possible before - the paragraph arrives with the
+// page gap still inside it, as blank space between two of its own lines.
+static string KeepWithNextSection(double fillerHeight) =>
+    "<h1 style=\"break-before:page\">Keep-with-next across a page boundary</h1>"
+    + "<p class=\"intro\">The heading below declares nothing of its own: <code>h1&ndash;h6 { break-after: "
+    + "avoid }</code> is the user-agent print default. Its section body asks not to be broken and starts "
+    + $"a line above the page boundary, with {fillerHeight:0}pt of filler above it.</p>"
+    + $"<div class=\"filler\" style=\"height:{fillerHeight:0}pt\">Filler</div>"
+    + "<h2>A heading that must not be stranded</h2>"
+    + "<p class=\"marked\">"
+    + string.Concat(Enumerable.Range(1, 5).Select(i =>
+        $"Sentence {i} of the section body, long enough to occupy a line of its own. "))
+    + "</p>";
+
+var keepWithNextHtml = """
+    <!DOCTYPE html>
+    <html><head><style>
+    @page { size: a5; margin: 14mm }
+    body { font: 9pt Helvetica, Arial, sans-serif; margin: 0; color: #1f2937 }
+    h1 { font-size: 12pt; margin: 0 0 0.4em }
+    h2 { font-size: 10pt; margin: 0 0 0.4em; color: #1e3a8a }
+    p { margin: 0 0 0.6em; line-height: 1.6 }
+    p.intro { color: #6b7280; font-size: 8pt; margin-bottom: 1em }
+    div.filler { color: #9ca3af; background: #f3f4f6; font-size: 8pt }
+    p.marked { background: #eff6ff; border-left: 2pt solid #2563eb; padding: 2pt 6pt; color: #1e3a8a;
+               width: 200pt; break-inside: avoid; orphans: 1; widows: 1 }
+    </style></head><body>
+    """
+    + KeepWithNextSection(410)
+    + "</body></html>";
+
+await SaveShowcaseAsync("paged_media_keep_with_next", "Paged Media", "Keep With Next",
+    "CSS Fragmentation §3.1's break-after: avoid, honored even where the heading was placed in a "
+    + "fragmentainer the layout driver had already finished with.",
+    keepWithNextHtml, new PdfGenerateConfig { PageSize = PageSize.A5 });
+
 // ── Margin box explicit sizing showcase ────────────────────────────────────
 var marginBoxSizingHtml = """
     <!DOCTYPE html>
@@ -2155,6 +2197,15 @@ var transformHtml = "<!DOCTYPE html><html><head>" + TransformCss + "</head><body
             "<div class=\"css\">transform: rotate(12deg)</div>" +
         "</td>",
         TransformSwatch("multi-function chain", "translate(10px, 0) rotate(20deg) scale(1.2)")
+    ) +
+
+    "<h2>7 — Radial Gradients Under a Transform</h2>" +
+    "<p class=\"intro\">An <b>elliptical</b> radial gradient is the one gradient shape whose PDF shading is written as a unit circle plus a matrix, so it is also the one that has to carry the element's transform through that matrix. The first two swatches are the same gradient with and without a transform; if the transform were dropped, the second would lose its highlight and fill flat with the gradient's outer color.</p>" +
+    Row(
+        TransformSwatch("elliptical radial, no transform", "none", "background: radial-gradient(ellipse, #fff9c4, #f57f17);"),
+        TransformSwatch("elliptical radial + rotate/scale", "rotate(-12deg) scale(1.25)", "background: radial-gradient(ellipse, #fff9c4, #f57f17);"),
+        TransformSwatch("circular radial + rotate/scale", "rotate(-12deg) scale(1.25)", "background: radial-gradient(circle, #fff9c4, #f57f17);"),
+        TransformSwatch("off-center ellipse + skew", "skew(12deg, 4deg)", "background: radial-gradient(ellipse at 30% 35%, #e0f7fa, #006064);")
     ) +
 
     "</body></html>";
@@ -2610,11 +2661,18 @@ var svgHtml = "<!DOCTYPE html><html><head>" + SvgShowcaseCss + "</head><body>" +
         SvgSwatch("HTML &lt;style&gt; cascades into SVG",
             """<style>svg.svgCascadeDemo circle{fill:#8e44ad}</style><svg class="svgCascadeDemo" viewBox="0 0 100 100" width="80" height="80"><circle cx="50" cy="50" r="35"/></svg>""",
             "a document-level rule matching SVG shapes applies (SVG 2 §6)"),
+        // Both of these <style> rules are scoped through a class on their own <svg>, exactly as the
+        // "HTML <style> cascades into SVG" swatch beside them is. A <style> element inside an inline
+        // <svg> is NOT scoped to that <svg> - in an HTML document it is a document-level stylesheet
+        // like any other (SVG 2 §6), which browsers agree on. Written as the bare type selectors
+        // "circle" and "g rect", they therefore matched every <circle>/<g> <rect> on this page and
+        // repainted the gradient swatches above (and both peach illustrations) a flat #d35400 -
+        // correct cascading, but it silently destroyed what the rest of the page is here to show.
         SvgSwatch("combinator selector",
-            """<svg viewBox="0 0 100 100" width="80" height="80"><style>g rect{fill:#16a085}</style><g><rect x="20" y="20" width="60" height="60"/></g></svg>""",
+            """<svg class="combinatorDemo" viewBox="0 0 100 100" width="80" height="80"><style>.combinatorDemo g rect{fill:#16a085}</style><g><rect x="20" y="20" width="60" height="60"/></g></svg>""",
             "\"g rect\" descendant combinator, via the full selector engine"),
         SvgSwatch("var() custom property",
-            """<svg viewBox="0 0 100 100" width="80" height="80"><style>:root{--c:#d35400}circle{fill:var(--c)}</style><circle cx="50" cy="50" r="35"/></svg>""",
+            """<svg class="varDemo" viewBox="0 0 100 100" width="80" height="80"><style>:root{--c:#d35400}.varDemo circle{fill:var(--c)}</style><circle cx="50" cy="50" r="35"/></svg>""",
             "fill:var(--c) resolves through the CSS cascade")
     ) +
 
@@ -3254,6 +3312,34 @@ static string McEntries(int count, string prefix = "entry") =>
     string.Concat(Enumerable.Range(1, count).Select(i =>
         McEntry($"{prefix}-{i}", $"a short definition for {prefix} number {i}, just long enough to wrap onto a second line in a narrow column.")));
 
+// The same content in the same box twice, differing only in the break-inside value, so the effect of
+// the value is the whole of the difference between the two halves.
+static string AvoidColumnPanel(string label, string breakInside) =>
+    "<div class=\"frame\"><div class=\"label\">" + label + "</div>" +
+    "<div class=\"mc\" style=\"columns:2;column-gap:20px;column-rule:0.5pt solid #000\">" +
+    McEntries(1, "lead") +
+    "<div style=\"" + breakInside + "background:#fdf3e3;border:0.5pt solid #d68910;padding:3pt;margin:0\">" +
+    "<b>Panel</b> &mdash; a block with a border and a background of its own, holding enough text that it " +
+    "cannot finish in the column it starts in: four lines against the two the first column has left for " +
+    "it once the entry above has taken its share of the height." +
+    "</div></div></div>";
+
+// The same paragraph in the same box twice, differing only in box-decoration-break. A vertical
+// gradient and a large border-radius are the two decorations defined over the whole box, so where
+// each one starts and where it rounds is the whole of the difference between the two halves.
+static string DecorationBreakPanel(string label, string decorationBreak) =>
+    "<div class=\"frame\"><div class=\"label\">" + label + "</div>" +
+    // An entry above the panel, as in section 8: it takes part of the first column's balanced share, so
+    // the panel below it cannot finish there and splits at the boundary.
+    "<div class=\"mc\" style=\"columns:2;column-gap:20px\">" +
+    McEntries(1, "lead") +
+    "<p style=\"box-decoration-break:" + decorationBreak + ";" +
+    "background:linear-gradient(to bottom,#2980b9,#ecf0f1);border:1pt solid #1b4f72;" +
+    "border-radius:10pt;padding:4pt;margin:0;text-align:justify\">" +
+    string.Join(" ", Enumerable.Range(1, 16).Select(i =>
+        $"clause&nbsp;{i} of a paragraph long enough to leave the column it starts in,")) +
+    " and to finish in the next one.</p></div></div>";
+
 const string MulticolCss = """
     <style>
     @page { size: a4; margin: 15mm }
@@ -3313,6 +3399,31 @@ var multicolHtml = "<!DOCTYPE html><html><head>" + MulticolCss + "</head><body>"
         "<div class=\"frame\"><div class=\"label\">columns: 3; entries tall enough that the balance search retries, in a container that resumes onto the next page</div>" +
         "<div class=\"mc\" style=\"columns:3;column-rule:0.5pt solid #7f8c8d;column-gap:14px\">" +
         McEntries(60, "term") + "</div></div>") +
+
+    // The two break values that name the column fragmentation context. `break-before: column` puts the
+    // heading at the top of the next column with the first column left short; `break-inside:
+    // avoid-column` keeps a panel whole rather than letting it split at the boundary the way the
+    // paragraph in section 6 does. Neither has any effect outside a multi-column container, and neither
+    // may disturb pagination: `avoid-page` on the same panel would not keep it together here.
+    McSection("8 &mdash; forced column breaks and avoid-column",
+        "<div class=\"frame\"><div class=\"label\">columns: 2; column-fill: auto; h3 { break-before: column } on the second heading &mdash; the first column is left short</div>" +
+        "<div class=\"mc\" style=\"columns:2;column-gap:20px;column-fill:auto;column-rule:0.5pt solid #000\">" +
+        "<h3 style=\"font-size:9pt;margin:0 0 0.3em\">Kept in column one</h3>" +
+        McEntries(2, "before") +
+        "<h3 style=\"font-size:9pt;margin:0 0 0.3em;break-before:column\">Forced into column two</h3>" +
+        McEntries(2, "after") +
+        "</div></div>" +
+        AvoidColumnPanel("break-inside: auto &mdash; the panel splits at the column boundary, its border and background cut in two", "") +
+        AvoidColumnPanel("break-inside: avoid-column &mdash; the same panel, moved whole to the next column", "break-inside:avoid-column;")) +
+
+    // box-decoration-break at a column boundary, for the decorations that are defined over the *whole*
+    // box rather than edge by edge. `slice` renders the box with no breaks present and cuts it
+    // afterwards, so the gradient runs once from the top of the first fragment to the bottom of the last
+    // and the corners round only at the box's true ends; `clone` wraps each fragment, so both restart in
+    // every column. The two panels hold the same text in the same box and differ only in the value.
+    McSection("9 &mdash; whole-box decorations at a column break",
+        DecorationBreakPanel("box-decoration-break: slice (initial) &mdash; one gradient and one pair of rounded ends across both fragments", "slice") +
+        DecorationBreakPanel("box-decoration-break: clone &mdash; the same panel, each fragment decorated in full", "clone")) +
 
     "</body></html>";
 

@@ -21,6 +21,27 @@ namespace PeachPDF.Html.Core.Fragmentation
     }
 
     /// <summary>
+    /// Which kind of fragmentainer a break question is being asked about, per
+    /// <see href="https://www.w3.org/TR/css-break-3/#fragmentainer">§2</see>'s "a column in multi-column
+    /// layout, or a page in paged media".
+    /// </summary>
+    /// <remarks>
+    /// Every break value names the context it speaks for — <c>column</c> and <c>avoid-column</c> say
+    /// nothing about pages, and <c>avoid-page</c> says nothing about columns — so a value cannot be
+    /// classified without knowing which fragmentainer is being filled. There is no <c>Region</c> member
+    /// because PeachPDF establishes no region context, which is what makes <c>region</c>/<c>avoid-region</c>
+    /// inert by construction rather than by omission.
+    /// </remarks>
+    internal enum FragmentationContext
+    {
+        /// <summary>A page in paged media — the document's own fragmentation context.</summary>
+        Page,
+
+        /// <summary>A column of a multi-column container.</summary>
+        Column
+    }
+
+    /// <summary>
     /// Classifies a cascaded <c>break-before</c>/<c>break-after</c>/<c>break-inside</c> value, per
     /// <see href="https://www.w3.org/TR/css-break-3/#break-between">CSS Fragmentation Level 3 §3.1/§3.2</see>.
     /// </summary>
@@ -45,6 +66,25 @@ namespace PeachPDF.Html.Core.Fragmentation
         internal static bool IsForcedPageBreak(string? value) =>
             value is CssConstants.Page or CssConstants.Left or CssConstants.Right
                   or CssConstants.Recto or CssConstants.Verso;
+
+        /// <summary>
+        /// Whether <paramref name="value"/> forces a break in <paramref name="context"/> (§3.1).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A page break is also a column break — a column cannot span pages — so every value
+        /// <see cref="IsForcedPageBreak"/> accepts forces one in either context. The reverse does not
+        /// hold: <c>column</c> forces a break only where a column fragmentation context is actually being
+        /// filled, and is otherwise ignored, since there is no column boundary for it to name.
+        /// </para>
+        /// <para>
+        /// <c>region</c> is forced in no context PeachPDF establishes, so it stays inert here rather than
+        /// being special-cased away.
+        /// </para>
+        /// </remarks>
+        internal static bool IsForcedBreak(string? value, FragmentationContext context) =>
+            IsForcedPageBreak(value)
+            || (context is FragmentationContext.Column && value is CssConstants.Column);
 
         /// <summary>
         /// The side <paramref name="value"/> demands on its own, or <see cref="PageSide.Any"/>.
@@ -76,17 +116,22 @@ namespace PeachPDF.Html.Core.Fragmentation
             SideOf(breakBefore) is var own && own is not PageSide.Any ? own : SideOf(previousBreakAfter);
 
         /// <summary>
-        /// Whether <paramref name="value"/> forbids a break in the <i>page</i> fragmentation context
+        /// Whether <paramref name="value"/> forbids a break in <paramref name="context"/>
         /// (§3.1 for <c>break-before</c>/<c>break-after</c>, §3.2 for <c>break-inside</c>).
         /// </summary>
         /// <remarks>
-        /// <c>avoid</c> forbids a break in every context, so it covers this one; <c>avoid-page</c> names
-        /// it. <c>avoid-column</c> and <c>avoid-region</c> name other contexts and must <b>not</b>
-        /// suppress a page break — a hint about column breaks silently changing pagination is exactly
-        /// the defect this predicate exists to prevent.
+        /// <c>avoid</c> forbids a break in every context, so it covers both; the targeted values cover
+        /// exactly the one they name. Asking this of the wrong context is the defect the predicate exists
+        /// to prevent: a hint about <i>column</i> breaks must never suppress a page break, which is what
+        /// made <c>avoid-column</c> deliberately inert for as long as the only fragmentainer modelled was
+        /// the page. <c>avoid-region</c> names a context PeachPDF does not establish, so it forbids
+        /// nothing here.
         /// </remarks>
-        internal static bool AvoidsPageBreak(string? value) =>
-            value is CssConstants.Avoid or CssConstants.AvoidPage;
+        internal static bool AvoidsBreak(string? value, FragmentationContext context) => context switch
+        {
+            FragmentationContext.Column => value is CssConstants.Avoid or CssConstants.AvoidColumn,
+            _ => value is CssConstants.Avoid or CssConstants.AvoidPage
+        };
 
         /// <summary>
         /// Whether pagination slot <paramref name="slotIndex"/> prints on <paramref name="side"/>.

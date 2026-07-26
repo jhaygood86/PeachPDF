@@ -34,6 +34,7 @@ namespace PeachPDF.Html.Core.Fragmentation
     /// A block container stopped part-way through its in-flow children.
     /// </summary>
     /// <param name="Box">the block container to resume</param>
+    /// <param name="ResumeSlotIndex">the pagination slot the resumed pass fills</param>
     /// <param name="ResumeChildIndex">the index into <see cref="CssBox.Boxes"/> to resume the child loop at</param>
     /// <param name="ChildToken">
     /// how to resume that child, or null when the child has not been entered at all
@@ -70,6 +71,7 @@ namespace PeachPDF.Html.Core.Fragmentation
     /// hyphenation as it goes).
     /// </remarks>
     /// <param name="Box">the block container whose inline flow stopped</param>
+    /// <param name="ResumeSlotIndex">the pagination slot the resumed pass fills</param>
     /// <param name="ResumePath">child indices from <paramref name="Box"/> down to the inline box owning the word</param>
     /// <param name="ResumeWordIndex">the index into that box's <see cref="CssBox.Words"/> to resume at</param>
     /// <param name="CompletedLineCount">

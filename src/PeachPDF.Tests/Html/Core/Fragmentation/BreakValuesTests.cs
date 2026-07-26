@@ -81,8 +81,39 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         [InlineData("column", false)]
         [InlineData("region", false)]
         [InlineData(null, false)]
-        public void AvoidsPageBreak_CoversOnlyThePageContext(string? value, bool expected) =>
-            Assert.Equal(expected, BreakValues.AvoidsPageBreak(value));
+        public void AvoidsBreak_InThePageContext_CoversOnlyThePageValues(string? value, bool expected) =>
+            Assert.Equal(expected, BreakValues.AvoidsBreak(value, FragmentationContext.Page));
+
+        // The mirror image, which is the whole of what makes `avoid-column` mean anything: it forbids a
+        // column break and nothing else, and `avoid-page` forbids nothing here.
+        [Theory]
+        [InlineData("avoid", true)]
+        [InlineData("avoid-column", true)]
+        [InlineData("avoid-page", false)]
+        [InlineData("avoid-region", false)]
+        [InlineData("auto", false)]
+        [InlineData("column", false)]
+        [InlineData(null, false)]
+        public void AvoidsBreak_InTheColumnContext_CoversOnlyTheColumnValues(string? value, bool expected) =>
+            Assert.Equal(expected, BreakValues.AvoidsBreak(value, FragmentationContext.Column));
+
+        // A page break is also a column break - a column cannot span pages - so every value that forces a
+        // page break forces one in either context. The reverse does not hold: `column` names a boundary
+        // the page grid does not have.
+        [Theory]
+        [InlineData("page", true, true)]
+        [InlineData("left", true, true)]
+        [InlineData("recto", true, true)]
+        [InlineData("column", false, true)]
+        [InlineData("region", false, false)]
+        [InlineData("avoid", false, false)]
+        [InlineData("auto", false, false)]
+        [InlineData(null, false, false)]
+        public void IsForcedBreak_IsAskedOfTheContextBeingFilled(string? value, bool inPage, bool inColumn)
+        {
+            Assert.Equal(inPage, BreakValues.IsForcedBreak(value, FragmentationContext.Page));
+            Assert.Equal(inColumn, BreakValues.IsForcedBreak(value, FragmentationContext.Column));
+        }
 
         // Slot k is page k+1, and the first page is a right page.
         [Theory]

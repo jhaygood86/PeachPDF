@@ -72,9 +72,19 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             {
                 shading.SetupFromBrush(brush, renderer);
                 Elements[Keys.Shading] = shading;
-                // For elliptical radial gradients the shading is defined in a unit-circle space;
-                // use the precomputed ellipse matrix instead of the default view matrix.
-                Elements.SetMatrix(Keys.Matrix, shading.EllipsePatternMatrix ?? matrix);
+
+                // An elliptical radial shading states its /Coords as the unit circle at the origin and
+                // carries the ellipse's real size and position in EllipsePatternMatrix instead (see
+                // PdfShading.SetupRadialMultiStop). That matrix maps the unit circle into exactly the
+                // space a circular shading writes its /Coords in - it does NOT reach page space on its
+                // own - so it composes with the view matrix rather than replacing it. Replacing it
+                // dropped the CTM, which is identity only while nothing is transformed; under an SVG
+                // viewBox scale or a CSS transform it placed the shading in raw page coordinates,
+                // usually off the page entirely, leaving the shape filled with the flat /Extend color.
+                if (shading.EllipsePatternMatrix is { } ellipseMatrix)
+                    matrix.Prepend(ellipseMatrix);
+
+                Elements.SetMatrix(Keys.Matrix, matrix);
             }
 
             AlphaExtGState = shading.AlphaExtGState;

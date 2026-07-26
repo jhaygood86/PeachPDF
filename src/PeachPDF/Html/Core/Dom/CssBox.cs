@@ -1591,12 +1591,19 @@ namespace PeachPDF.Html.Core.Dom
             // *container*, so both sides of this break point are read through the chains of boxes they
             // begin and end - and a box whose own value travels outward that way does not take the break
             // itself, because the container it began does, and carries it along.
+            // Asked in the page context, because this is the page vehicle: everything below realizes the
+            // break by *placement*, putting the box at the next page's content top and leaving the
+            // emitter's slot walk to cover what was stepped over. §3.1's `column` value cannot be carried
+            // that way at all - every column of a container shares one block-axis band, so no coordinate
+            // means "the next column" - and it is raised as a break decision by the parent's child loop
+            // instead (CssBox.ForcedColumnBreakFallsBefore). A page break needs nothing there: it forces a
+            // column break too, and reaching the next page ends every column on this one.
             var propagatesOutward = BreakPropagation.PropagatesBreakBeforeOutward(this);
-            var ownForcedBefore = BreakPropagation.ForcedBreakBeforeAt(this);
+            var ownForcedBefore = BreakPropagation.ForcedBreakBeforeAt(this, FragmentationContext.Page);
             var forcedBefore = propagatesOutward ? null : ownForcedBefore;
             var forcedAfter = previousSiblingForBreak is null
                 ? null
-                : BreakPropagation.ForcedBreakAfterAt(previousSiblingForBreak);
+                : BreakPropagation.ForcedBreakAfterAt(previousSiblingForBreak, FragmentationContext.Page);
 
             _isForcedBreak = forcedBefore is not null || forcedAfter is not null || pageNameChanged;
 
@@ -2093,6 +2100,29 @@ namespace PeachPDF.Html.Core.Dom
                         TranslateForEarlyBreak(restart);
                     }
 
+                    // §3.1's `column` forced break, and §3.2's `avoid-column`. Both are questions about the
+                    // fragmentainer being filled, so both are asked here, where a column is what that is -
+                    // and both are answered the same way, by breaking *before* the child, because a column
+                    // has no coordinate of its own to place a box at.
+                    //
+                    // The `i > start` guard is what keeps both decisions terminating, and it is exactly
+                    // the guard the column-overflow arm below already uses: a child moved to the next
+                    // column becomes the child that column's fill *starts* at, so the question is not put
+                    // to it a second time. A box that asks not to be broken and does not fit a whole
+                    // column is therefore split rather than walked from column to column - §4.3's fourth
+                    // tier, where the constraint is given up rather than acted on pointlessly.
+                    if (i > start
+                        && HtmlContainer?.CurrentFragmentainer is { HasOwnBand: true } columnContext
+                        && (ForcedColumnBreakFallsBefore(childBox) || AvoidsBreakingAcrossThisColumn(childBox)))
+                    {
+                        // No target: every column of a container begins at the same block-axis coordinate,
+                        // and the columns engine restates the record in the next column's terms
+                        // (CssLayoutEngineColumns.ResumeInTheNextColumn).
+                        PendingBreakToken = new BlockBreakToken(
+                            this, columnContext.SlotIndex, i, null, IsBreakBefore: true, null);
+                        return true;
+                    }
+
                     if (childBox.PendingBreakToken is { } childToken)
                     {
                         // css-break-3 §3.1 propagation: a break before a container's own first in-flow
@@ -2212,6 +2242,63 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Whether <see href="https://www.w3.org/TR/css-break-3/#break-between">§3.1</see>'s <c>column</c>
+        /// forced break falls at the break point immediately before <paramref name="childBox"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Both sides of the break point are read through the chains they begin and end, by the same
+        /// <see cref="BreakPropagation"/> the page vehicle uses — only the context differs, which is the
+        /// whole of what makes <c>column</c> visible here and invisible in
+        /// <see cref="PerformLayoutPrologue"/>. A value travelling outward is not acted on here either:
+        /// the break point before a container's first in-flow child is the container's, so the container
+        /// is the box the break falls before.
+        /// </para>
+        /// <para>
+        /// A value that forces a <i>page</i> break is left alone. It is the page vehicle's, which has
+        /// already placed the box at the next page's content top; converting it into a column break here
+        /// would honour half of a stated choice.
+        /// </para>
+        /// </remarks>
+        private static bool ForcedColumnBreakFallsBefore(CssBox childBox)
+        {
+            if (BreakPropagation.PropagatesBreakBeforeOutward(childBox)) return false;
+
+            var before = BreakPropagation.ForcedBreakBeforeAt(childBox, FragmentationContext.Column);
+
+            if (before is not null && !BreakValues.IsForcedPageBreak(before)) return true;
+
+            var previous = DomUtils.GetPreviousSibling(childBox, false);
+            var after = previous is null
+                ? null
+                : BreakPropagation.ForcedBreakAfterAt(previous, FragmentationContext.Column);
+
+            return after is not null && !BreakValues.IsForcedPageBreak(after);
+        }
+
+        /// <summary>
+        /// Whether <paramref name="childBox"/> has begun splitting across the column boundary being filled
+        /// while asking not to be broken by one
+        /// (<see href="https://www.w3.org/TR/css-break-3/#break-within">§3.2</see>).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A pending record <i>is</i> the statement that the child did not finish in this fragmentainer, so
+        /// it is what the question is asked of: the box is about to be broken, and the answer is to break
+        /// before it instead so it is laid out whole in the next column.
+        /// </para>
+        /// <para>
+        /// Nothing was needed for a child that does not fragment internally — one that simply overflows
+        /// the column is already moved whole by the arm below, which asks no break value at all — so this
+        /// is only reachable at all because a child can genuinely split across a column, and it is why
+        /// <c>avoid-column</c> was a no-op to implement before that was true.
+        /// </para>
+        /// </remarks>
+        private static bool AvoidsBreakingAcrossThisColumn(CssBox childBox) =>
+            childBox.PendingBreakToken is not null
+            && BreakValues.AvoidsBreak(childBox.BreakInside, FragmentationContext.Column);
+
+        /// <summary>
         /// Re-runs this box's children from the head of a keep-with-next run, so the run and everything
         /// after it is laid out at its final position rather than moved there.
         /// </summary>
@@ -2233,15 +2320,28 @@ namespace PeachPDF.Html.Core.Dom
         private bool TryRestartAt(EarlyBreak restart, int start, int raisedAt, ref HashSet<int>? restartedHeads, out int resumeFrom)
         {
             resumeFrom = Boxes.IndexOf(restart.BeforeBox);
-            if (resumeFrom < start || resumeFrom > raisedAt) return false;
+            if (resumeFrom < 0 || resumeFrom > raisedAt) return false;
 
             // Asked of every index about to be replayed, not just of the box that raised this. The run
             // is found by walking siblings, which skips display:none, floated and out-of-flow ones, so
             // the range re-run is wider than the run itself — and a table in it that repeats a header
-            // would not survive being laid out a second time.
+            // would not survive being laid out a second time. Asked before the range test below so that
+            // such a table declines the driver's replay too, not only this loop's.
             for (var j = resumeFrom; j <= raisedAt; j++)
             {
                 if (ContainsARepeatingTable(Boxes[j])) return false;
+            }
+
+            // Below the index this pass began at, the head belongs to a fragmentainer the driver has
+            // already filled — nothing this loop can re-run, but something the driver can, by re-entering
+            // the pass that filled it. Asked here rather than at the call site so that "this head cannot
+            // be re-run from here" keeps one home, with every guard above it applying to both answers.
+            // A granted request makes everything this pass produces moot, so the loop simply carries on:
+            // resuming one past the box that raised the decision is what "carry on" is spelt as here.
+            if (resumeFrom < start)
+            {
+                resumeFrom = raisedAt + 1;
+                return HtmlContainer!.RequestPassRewind(restart.BeforeBox, restart.Top);
             }
 
             restartedHeads ??= [];
@@ -2746,7 +2846,7 @@ namespace PeachPDF.Html.Core.Dom
             //
             // Monolithic content (css-break-3 §2 - a replaced element, a scroll container) reaches the same
             // mover, because "may not be broken" and "asks not to be broken" want the same relocation.
-            var avoidsBreak = BreakValues.AvoidsPageBreak(BreakInside);
+            var avoidsBreak = BreakValues.AvoidsBreak(BreakInside, FragmentationContext.Page);
             var monolithic = IsMonolithicBoxThisMoverMayMove();
 
             // One correction per box per pass (_earlyBreakTaken). Where the box was laid out again

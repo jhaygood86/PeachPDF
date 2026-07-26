@@ -1011,6 +1011,226 @@ namespace PeachPDF.Tests.Integration
             Assert.Null(mc.ColumnRuleSegments);
         }
 
+        // ─── Break values in the column context (css-break-3 §3.1 `column`, §3.2 `avoid-column`) ──────
+
+        /// <summary>
+        /// The column an author asks for. A forced column break cannot be realized the way a page break
+        /// is — by placing the box lower — because every column of a container shares one block-axis
+        /// band, so it is a break decision instead.
+        /// </summary>
+        [Theory]
+        [InlineData("break-before: column", "")]
+        [InlineData("", "break-after: column")]
+        public async Task ForcedColumnBreak_StartsTheNextColumn(string onSecond, string onFirst)
+        {
+            var html = Wrap($@"
+                <div id='mc' style='columns:2; column-gap:0; width:200px; column-fill:auto'>
+                    <div id='a' style='height:20px; {onFirst}'>A</div>
+                    <div id='b' style='height:20px; {onSecond}'>B</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 200);
+
+            var mc = FindById(root, "mc")!;
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            Assert.True(a.Location.X < mc.ClientLeft + 50,
+                $"the first box must stay in column 1, it is at x={a.Location.X}");
+            Assert.True(b.Location.X > mc.ClientLeft + 50,
+                $"expected the forced break to start the next column, the box is at x={b.Location.X}");
+
+            // Every column shares one band, so the box begins where the first column began rather than
+            // below where its content ended.
+            Assert.Equal(a.Location.Y, b.Location.Y, 1);
+        }
+
+        /// <summary>
+        /// Both boxes fit column 1 with room to spare, so without the break there is no boundary at all —
+        /// which is what makes the assertion above about the break rather than about the packing.
+        /// </summary>
+        [Fact]
+        public async Task WithoutTheForcedBreak_BothBoxesShareOneColumn()
+        {
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:200px; column-fill:auto'>
+                    <div id='a' style='height:20px'>A</div>
+                    <div id='b' style='height:20px'>B</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 200);
+
+            var mc = FindById(root, "mc")!;
+
+            Assert.True(FindById(root, "b")!.Location.X < mc.ClientLeft + 50);
+        }
+
+        /// <summary>
+        /// <c>column</c> names a fragmentation context, and outside one there is no column boundary for it
+        /// to force. Honouring it as a page break would be a hint about columns silently changing
+        /// pagination — the defect the context-aware predicate exists to prevent.
+        /// </summary>
+        [Theory]
+        [InlineData("break-before: column")]
+        [InlineData("break-inside: avoid-column")]
+        public async Task ColumnBreakValues_OutsideAMulticolContainer_ChangeNothing(string declaration)
+        {
+            var html = Wrap($@"
+                <div id='a' style='height:20px'>A</div>
+                <div id='b' style='height:20px; {declaration}'>B</div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 200);
+
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            Assert.Equal(container.PageIndexOf(a.Location.Y), container.PageIndexOf(b.Location.Y));
+            Assert.True(b.Location.Y > a.Location.Y, "the second box must still follow the first");
+        }
+
+        /// <summary>
+        /// A value that forces a <i>page</i> break is left to the page vehicle rather than converted here.
+        /// Inside a multi-column container that vehicle degrades to a column break — which column the
+        /// content lands in is a question the container answers — so the box does start the next column;
+        /// what this pins is that it gets there once, by one decision.
+        /// </summary>
+        [Fact]
+        public async Task AForcedPageBreak_InsideAColumn_StartsTheNextColumn()
+        {
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:200px; column-fill:auto'>
+                    <div id='a' style='height:20px'>A</div>
+                    <div id='b' style='height:20px; break-before:page'>B</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 200);
+
+            var mc = FindById(root, "mc")!;
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            Assert.True(a.Location.X < mc.ClientLeft + 50);
+            Assert.True(b.Location.X > mc.ClientLeft + 50,
+                $"expected the box to start the next column, it is at x={b.Location.X}");
+        }
+
+        /// <summary>
+        /// §3.1's break point before a container's first in-flow child <i>is</i> the break point before the
+        /// container, so a <c>break-before: column</c> there moves the container — the same propagation the
+        /// page vehicle applies, asked in the column context.
+        /// </summary>
+        [Fact]
+        public async Task ForcedColumnBreak_OnAContainersFirstChild_MovesTheContainer()
+        {
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:200px; column-fill:auto'>
+                    <div id='a' style='height:20px'>A</div>
+                    <div id='wrap'><div id='b' style='height:20px; break-before:column'>B</div></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 200);
+
+            var mc = FindById(root, "mc")!;
+            var wrap = FindById(root, "wrap")!;
+            var b = FindById(root, "b")!;
+
+            Assert.True(wrap.Location.X > mc.ClientLeft + 50,
+                $"the container must travel with the break, it is at x={wrap.Location.X}");
+            Assert.True(b.Location.X > mc.ClientLeft + 50);
+        }
+
+        /// <summary>
+        /// §3.2 in the column context. Only observable at all because a child can genuinely split across a
+        /// column: until it could, "do not break me by a column" named nothing that happened.
+        /// </summary>
+        [Theory]
+        [InlineData("avoid-column")]
+        [InlineData("avoid")]
+        public async Task AvoidColumnBreak_MovesTheWholeBoxToTheNextColumn(string value)
+        {
+            var (root, mc, longBox, _) = await SplittingParagraphAsync($"break-inside:{value}");
+
+            var words = LayoutHarness.Descendants(longBox).SelectMany(b => b.Words).ToList();
+
+            Assert.NotEmpty(words);
+            Assert.All(words, w => Assert.True(w.Left >= mc.ClientLeft + 100,
+                $"every word must be in the second column, one is at x={w.Left}"));
+            Assert.NotNull(FindById(root, "top"));
+        }
+
+        /// <summary>
+        /// The control, and the point of the context: <c>avoid-page</c> names the page context and must not
+        /// suppress a <i>column</i> break, so the same paragraph still splits.
+        /// </summary>
+        [Theory]
+        [InlineData("break-inside:avoid-page")]
+        [InlineData("break-inside:auto")]
+        public async Task APageContextAvoidValue_DoesNotSuppressAColumnBreak(string declaration)
+        {
+            var (_, mc, longBox, _) = await SplittingParagraphAsync(declaration);
+
+            var words = LayoutHarness.Descendants(longBox).SelectMany(b => b.Words).ToList();
+
+            Assert.Contains(words, w => w.Left < mc.ClientLeft + 100);
+            Assert.Contains(words, w => w.Left >= mc.ClientLeft + 100);
+        }
+
+        /// <summary>
+        /// §4.3's fourth tier: a box that asks not to be broken and fits no column is split rather than
+        /// walked from column to column. The <c>i &gt; start</c> guard is what expresses it — a box moved to
+        /// the next column becomes the child that column's fill starts at, so it is not asked again.
+        /// </summary>
+        [Fact]
+        public async Task ABoxThatAvoidsButFitsNoColumn_IsStillSplit()
+        {
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:300px; column-fill:auto'>
+                    <div id='top' style='height:40pt'>Top</div>
+                    <p id='long' style='break-inside:avoid-column; margin:0; font-size:10pt; line-height:20pt'>
+                    L1<br>L2<br>L3<br>L4<br>L5<br>L6</p>
+                </div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 100);
+
+            var mc = FindById(root, "mc")!;
+            var placed = LayoutHarness.Descendants(FindById(root, "long")!).SelectMany(b => b.Words).ToList();
+
+            Assert.Contains(placed, w => w.Left < mc.ClientLeft + 100);
+            Assert.Contains(placed, w => w.Left >= mc.ClientLeft + 100);
+        }
+
+        /// <summary>
+        /// The workhorse invariant for anything that relocates content between fragmentainers: every word
+        /// the document authored is claimed by exactly one fragment. It fails one way if the abandoned
+        /// attempt leaves a ghost behind in the column the box left, and the other way if moving the box
+        /// drops what it had already placed.
+        /// </summary>
+        [Fact]
+        public async Task AvoidColumnBreak_KeepsEveryWordExactlyOnce()
+        {
+            var (_, _, _, container) = await SplittingParagraphAsync("break-inside:avoid-column");
+
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => FlattenFragments(f.Root))
+                .SelectMany(f => f.Words)
+                .Select(w => w.Word)
+                .ToList();
+
+            Assert.NotEmpty(claimed);
+            Assert.Equal(claimed.Count, claimed.Distinct().Count());
+        }
+
+        private static async Task<(CssBox Root, CssBox Mc, CssBox LongBox, HtmlContainerInt Container)>
+            SplittingParagraphAsync(string declaration)
+        {
+            // 40pt of content above a paragraph that is 80pt tall, in a 100pt column: it cannot stay
+            // where it is, and it fits a column of its own exactly - so which of the two happens says
+            // which break value was honoured, with no dependence on font metrics.
+            var html = Wrap($@"
+                <div id='mc' style='columns:2; column-gap:0; width:300px; column-fill:auto'>
+                    <div id='top' style='height:40pt'>Top</div>
+                    <p id='long' style='{declaration}; margin:0; font-size:10pt; line-height:20pt'>
+                    L1<br>L2<br>L3<br>L4</p>
+                </div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 100);
+
+            return (root, FindById(root, "mc")!, FindById(root, "long")!, container);
+        }
+
         /// <summary>
         /// Asserts no two boxes' bounding rectangles overlap — the structural invariant a
         /// two-axis (page, column) fragmentation engine must never violate, since an overlap

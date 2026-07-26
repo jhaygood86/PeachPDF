@@ -119,12 +119,20 @@ namespace PeachPDF.Html.Core.Utils
         /// Collects the maximal run of preceding in-flow siblings chained to <paramref name="box"/> by
         /// break avoidance (css-break §3.1, class A break points): for each consecutive pair, the earlier
         /// sibling's break-after or the later sibling's break-before forbids a page break
-        /// (<see cref="BreakValues.AvoidsPageBreak"/> — <c>avoid</c> or <c>avoid-page</c>, but not
+        /// (<see cref="BreakValues.AvoidsBreak"/> — <c>avoid</c> or <c>avoid-page</c>, but not
         /// <c>avoid-column</c>/<c>avoid-region</c>, which name other fragmentation contexts).
         /// Returned in top-to-bottom document order; empty when no avoid chain exists. Callers use this
         /// to pull e.g. an <c>h2 { break-after: avoid }</c> heading (the UA default for h1-h6 under
         /// @media print) along whenever they move <paramref name="box"/> to the next page.
         /// </summary>
+        /// <remarks>
+        /// The <i>page</i> question, asked unconditionally, because every caller is a page-context mover:
+        /// the two in <c>CssBox</c>'s placement and word-flow paths relocate to <c>PageTopOf</c>, the
+        /// table engine's does the same, and <see cref="Fragmentation.EarlyBreak.Discover"/> measures a
+        /// destination page band. A run is <i>moved</i>, and inside a column there is no lower coordinate
+        /// to move it to — which is why the column-context break decisions deliberately do not collect
+        /// one.
+        /// </remarks>
         public static List<CssBox> GetPrecedingKeepWithNextRun(CssBox box)
         {
             var run = new List<CssBox>();
@@ -149,14 +157,17 @@ namespace PeachPDF.Html.Core.Utils
                 // over a break-avoidance value on the other - such a pair is never kept together. Both
                 // sides are read through the chains they end and begin, for the same reason the break
                 // point itself is (BreakPropagation).
-                if (BreakPropagation.ForcedBreakAfterAt(prev) is not null
-                    || BreakPropagation.ForcedBreakBeforeAt(current) is not null)
+                if (BreakPropagation.ForcedBreakAfterAt(prev, FragmentationContext.Page) is not null
+                    || BreakPropagation.ForcedBreakBeforeAt(current, FragmentationContext.Page) is not null)
                 {
                     break;
                 }
 
-                if (!BreakValues.AvoidsPageBreak(prev.BreakAfter) && !BreakValues.AvoidsPageBreak(current.BreakBefore))
+                if (!BreakValues.AvoidsBreak(prev.BreakAfter, FragmentationContext.Page)
+                    && !BreakValues.AvoidsBreak(current.BreakBefore, FragmentationContext.Page))
+                {
                     break;
+                }
 
                 run.Insert(0, prev);
                 current = prev;
@@ -717,12 +728,26 @@ namespace PeachPDF.Html.Core.Utils
 
             for (var current = box; current is not null; current = current.ParentBox)
             {
-                if (current.BoxDecorationBreak == CssConstants.Clone)
-                    total += current.ActualBorderBottomWidth + current.ActualPaddingBottom;
+                total += OwnClonedBlockEnd(current);
             }
 
             return total;
         }
+
+        /// <summary>
+        /// <paramref name="box"/>'s own share of <see cref="ClonedBlockEnd"/> — what the box itself closes a
+        /// fragment with, without its ancestors' own share.
+        /// </summary>
+        /// <remarks>
+        /// The chain sum answers "how much must content stop short of the fragmentainer edge", which is a
+        /// question about every box the break falls inside at once. This one answers "how much of that room
+        /// belongs to <i>this</i> box's fragment", which is what tells a fragment's decoration area from the
+        /// content it holds — each level of a nested cloning stack closes inside its ancestors' own close.
+        /// </remarks>
+        internal static double OwnClonedBlockEnd(CssBox box) =>
+            box.BoxDecorationBreak == CssConstants.Clone
+                ? box.ActualBorderBottomWidth + box.ActualPaddingBottom
+                : 0;
 
         /// <summary>
         /// The inline-start margin, border and padding cloned fragments re-insert after a line break, summed

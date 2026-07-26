@@ -240,6 +240,25 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </summary>
         private readonly Dictionary<(CssBox Box, CssProxyBox? Owner),
             ((int Slot, int Instance) First, (int Slot, int Instance) Last)> _fragmentRange = [];
+
+        /// <summary>
+        /// Every fragment of a box, in fill order — what §6.2's <b>block-axis</b> strip is the concatenation
+        /// of inside a nested fragmentainer. Kept as drafts rather than as extents so the measurement can be
+        /// taken lazily: an extent is a question about a draft's whole subtree, and the subtree is complete
+        /// only once every slot has been emitted.
+        /// </summary>
+        private readonly Dictionary<(CssBox Box, CssProxyBox? Owner), List<Draft>> _fragmentsOf = [];
+
+        /// <summary>
+        /// Memoized document-space extents and fragmentainer-local rectangles, one per draft. Both are
+        /// computed over the <i>draft</i> tree rather than over materialized fragments, which is what makes
+        /// the whole set available before the first fragment is built — the concatenated strip needs the
+        /// extent of a box's other fragments, and those are materialized later in the same walk.
+        /// </summary>
+        private readonly Dictionary<Draft, RRect> _extents = new(ReferenceEqualityComparer.Instance);
+
+        /// <inheritdoc cref="_extents"/>
+        private readonly Dictionary<Draft, RRect> _rects = new(ReferenceEqualityComparer.Instance);
         private readonly HashSet<(FragmentKey Key, int Slot)> _continuedFrom = [];
         private readonly HashSet<(FragmentKey Key, int Slot)> _continuesInto = [];
         private readonly Dictionary<FragmentKey, Dictionary<CssLineBox, RRect>> _rectangles = [];
@@ -407,6 +426,9 @@ namespace PeachPDF.Html.Core.Fragmentation
             _spans.Clear();
             _rectangles.Clear();
             _fragmentRange.Clear();
+            _fragmentsOf.Clear();
+            _extents.Clear();
+            _rects.Clear();
             foreach (var (_, root, _) in _emitted.Values)
             {
                 RecordSpansAndRectangles(root);
@@ -476,6 +498,15 @@ namespace PeachPDF.Html.Core.Fragmentation
                    IsBefore(range.Last, position) ? position : range.Last)
                 : (position, position);
 
+            if (!_fragmentsOf.TryGetValue(boxKey, out var fragments))
+            {
+                _fragmentsOf[boxKey] = fragments = [];
+            }
+
+            // Slot order is the walk's own (_emitted is sorted), and a slot's nested fragmentainers yield
+            // their children in fill order, so appending here is already fill order.
+            fragments.Add(draft);
+
             foreach (var (line, rect) in draft.Lines)
             {
                 if (!_rectangles.TryGetValue(draft.Key, out var rectangles))
@@ -541,11 +572,11 @@ namespace PeachPDF.Html.Core.Fragmentation
             }
 
             var span = _spans[draft.Key];
-            var bounds = BoundsOf(draft, children);
+            var bounds = ExtentOf(draft);
             var lines = LinesOf(draft, bounds);
 
             return new BoxFragment(
-                UnionRects(lines, children),
+                RectOf(draft),
                 draft.Box,
                 draft.Slot.Index,
                 draft.OriginY,
@@ -591,12 +622,12 @@ namespace PeachPDF.Html.Core.Fragmentation
                 {
                     var local = Localize(bounds, draft.OriginY);
 
-                    // One rectangle: nothing slices it in the inline axis, so the strip is the rectangle
-                    // itself. Its block axis is still fragmented, which is what the band-cut FragmentRect
-                    // and the two block-axis edge flags carry.
+                    // One rectangle: nothing slices it in the inline axis, so the strip is as wide as the
+                    // rectangle. Its block axis is the fragmented one, which is what the concatenated strip,
+                    // the band-cut FragmentRect and the two block-axis edge flags carry between them.
                     lines.Add(new LineFragment(local, null,
                         new SliceGeometry(
-                            local,
+                            Localize(UnbrokenBlockStripOf(draft, bounds), draft.OriginY),
                             Localize(BandCut(bounds, draft.Box, draft.Region), draft.OriginY),
                             HasLeftEdge: true, HasRightEdge: true,
                             HasTopEdge: !ResumesAnEarlierFragment(draft),
@@ -1064,6 +1095,59 @@ namespace PeachPDF.Html.Core.Fragmentation
         }
 
         /// <summary>
+        /// The whole unbroken box this fragment is a block-axis slice of — §6.2's <c>slice</c> rendering
+        /// "with no breaks present", measured in the axis the break actually falls in.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The page grid and a nested fragmentainer need different inputs, and one rule cannot serve
+        /// both.</b> On the page grid every fragment of a box already reports the box's <i>whole</i> bounds —
+        /// nothing cuts them until paint, where the page clip does it — so the strip is the bounds and summing
+        /// the fragments would describe a box N pages tall. In a nested fragmentainer each fragment reports
+        /// <i>its own</i> extent, because two columns of one page share a band and the extent is the only
+        /// thing that tells them apart, so there the strip is exactly the concatenation.
+        /// </para>
+        /// <para>
+        /// Positioned per fragment, the transpose of the inline rule (<see cref="SliceGeometriesOf"/>): with
+        /// <c>strip.Y = rect.Y - (height of the fragments before this one)</c>, the strip's top edge coincides
+        /// with the first fragment's top and its bottom edge with the last fragment's bottom, so a
+        /// <c>border-radius</c>, a background layer or a <c>box-shadow</c> resolved against the strip and
+        /// clipped to the fragment rounds, positions and casts at the box's true ends only.
+        /// </para>
+        /// </remarks>
+        private RRect UnbrokenBlockStripOf(Draft draft, RRect bounds)
+        {
+            if (draft.Region.Left is null) return bounds;
+
+            if (!_fragmentsOf.TryGetValue((draft.Key.Box, draft.Key.Owner), out var fragments)
+                || fragments.Count < 2)
+            {
+                return bounds;
+            }
+
+            var total = 0d;
+            var preceding = 0d;
+            var reached = false;
+
+            foreach (var fragment in fragments)
+            {
+                // A box with fragments on both the page grid and inside a nested fragmentainer would be
+                // mixing the two rules above; layout places a box into one or the other, so this is a
+                // guard rather than a case.
+                if (fragment.Region.Left is null) return bounds;
+
+                var height = ExtentOf(fragment).Height;
+
+                if (ReferenceEquals(fragment, draft)) reached = true;
+                else if (!reached) preceding += height;
+
+                total += height;
+            }
+
+            return new RRect(bounds.X, bounds.Y - preceding, bounds.Width, total);
+        }
+
+        /// <summary>
         /// This fragment's own border box, in document space.
         /// </summary>
         /// <remarks>
@@ -1076,32 +1160,86 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// this fragment actually holds.
         /// </para>
         /// <para>
-        /// Measured from the materialized children rather than from the box, because that is the geometry the
-        /// fragmentainer's own capture selected: a child in a neighbouring column has already been filtered
-        /// out by then.
+        /// Measured over the <i>draft</i> tree rather than over materialized fragments, and memoized. Both
+        /// follow from <see cref="UnbrokenBlockStripOf"/>: it needs every fragment's extent before the first
+        /// of them is built, which a measurement taken during materialization cannot offer.
         /// </para>
         /// </remarks>
-        private static RRect BoundsOf(Draft draft, List<BoxFragment> children)
+        private RRect ExtentOf(Draft draft)
         {
+            if (_extents.TryGetValue(draft, out var cached)) return cached;
+
             var bounds = BoundsOf(draft.Box, draft.Snapshot);
 
-            if (!draft.BoundsEndAtItsContent) return bounds;
-
-            var bottom = bounds.Bottom;
-
-            foreach (var word in draft.Words)
+            if (draft.BoundsEndAtItsContent)
             {
-                bottom = Math.Max(bottom, word.Rect.Bottom + draft.OriginY);
+                var bottom = bounds.Bottom;
+
+                foreach (var word in draft.Words)
+                {
+                    bottom = Math.Max(bottom, word.Rect.Bottom + draft.OriginY);
+                }
+
+                foreach (var child in draft.Children)
+                {
+                    bottom = Math.Max(bottom, RectOf(child).Bottom + child.OriginY);
+                }
+
+                // Under `clone` this fragment closes with its own bottom border and padding (§6.2), and
+                // layout has already stopped its content short of the fragmentainer edge by that much
+                // (CssRect.WouldStraddleFragmentainer). Measured from the content alone the fragment would
+                // end at the last line, and the closing border would be drawn over it rather than in the
+                // room reserved for it. Only this box's own share: each level of a nested cloning stack
+                // closes inside its ancestors', whose own fragments are measured from this one.
+                if (container.HasCloneDecorations) bottom += DomUtils.OwnClonedBlockEnd(draft.Box);
+
+                if (bottom > bounds.Bottom)
+                    bounds = RRect.FromLTRB(bounds.Left, bounds.Top, bounds.Right, bottom);
             }
 
-            foreach (var child in children)
+            _extents[draft] = bounds;
+            return bounds;
+        }
+
+        /// <summary>
+        /// The union of this fragment's own painted geometry — its decoration rectangles, else its
+        /// children's — in fragmentainer-local space. The value <see cref="Fragment.Rect"/> carries,
+        /// computed from the drafts so <see cref="ExtentOf"/> can ask it before anything is materialized.
+        /// </summary>
+        private RRect RectOf(Draft draft)
+        {
+            if (_rects.TryGetValue(draft, out var cached)) return cached;
+
+            RRect? union = null;
+
+            if (draft.UsesOwnBounds)
             {
-                bottom = Math.Max(bottom, child.Rect.Bottom + child.OriginY);
+                var bounds = ExtentOf(draft);
+
+                if (draft.Region.Contains(bounds)) union = Localize(bounds, draft.OriginY);
+            }
+            else
+            {
+                foreach (var (_, rect) in draft.Lines)
+                {
+                    var local = Localize(rect, draft.OriginY);
+                    union = union is null ? local : RRect.Union(union.Value, local);
+                }
             }
 
-            return bottom > bounds.Bottom
-                ? RRect.FromLTRB(bounds.Left, bounds.Top, bounds.Right, bottom)
-                : bounds;
+            if (union is null)
+            {
+                foreach (var child in draft.Children)
+                {
+                    var childRect = RectOf(child);
+                    union = union is null ? childRect : RRect.Union(union.Value, childRect);
+                }
+            }
+
+            var fragmentRect = union ?? RRect.Empty;
+            _rects[draft] = fragmentRect;
+
+            return fragmentRect;
         }
 
         private static RRect BoundsOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
@@ -1137,24 +1275,5 @@ namespace PeachPDF.Html.Core.Fragmentation
 
         private static RRect Localize(RRect rect, double originY) =>
             new(rect.X, rect.Y - originY, rect.Width, rect.Height);
-
-        private static RRect UnionRects(List<LineFragment> lines, List<BoxFragment> children)
-        {
-            RRect? union = null;
-
-            foreach (var line in lines)
-            {
-                union = union is null ? line.Rect : RRect.Union(union.Value, line.Rect);
-            }
-
-            if (union is not null) return union.Value;
-
-            foreach (var child in children)
-            {
-                union = union is null ? child.Rect : RRect.Union(union.Value, child.Rect);
-            }
-
-            return union ?? RRect.Empty;
-        }
     }
 }
