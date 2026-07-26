@@ -1,5 +1,6 @@
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Utils;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration
@@ -202,6 +203,46 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Equal(1, container.PageIndexOf(card.Location.Y + HtmlContainerInt.PageBoundaryEpsilon));
             Assert.Equal(container.PageTopOf(1), card.Location.Y, 6);
+        }
+
+        /// <summary>
+        /// The repeating-table exclusion has to be asked of every box a restart would replay, not only
+        /// of the one that raised it: the run is found by walking siblings, so the index range re-run is
+        /// wider than the run, and a table in it that repeats a header does not survive a second layout.
+        /// </summary>
+        /// <remarks>
+        /// Asserted as an invariant of the table rather than of the relocation, because whether this
+        /// particular fixture reaches the restart at all depends on where the page grid falls: what must
+        /// hold either way is that the table still repeats exactly one header group, once per page it
+        /// spans, with no stale proxy left behind.
+        /// </remarks>
+        [Theory]
+        [InlineData(60)]
+        [InlineData(80)]
+        [InlineData(100)]
+        public async Task RunHeadContainingARepeatingTable_KeepsItsHeaderIntact(double fillerHeight)
+        {
+            var rows = string.Concat(Enumerable.Range(0, 6).Select(i => $"<tr><td>Row {i}</td></tr>"));
+            var html = LayoutHarness.Wrap(
+                $"<div style='height:{fillerHeight}pt'>filler</div>"
+                + "<div id='head' style='break-after:avoid;font-size:10pt;line-height:20pt'>"
+                + $"<table><thead><tr><th>H</th></tr></thead><tbody>{rows}</tbody></table></div>"
+                + $"<div id='card' style='break-inside:avoid;orphans:1;widows:1;line-height:{LineHeight}pt;font-size:10pt;width:60pt'>"
+                + "Aaa Bbb Ccc Ddd Eee Fff Ggg Hhh</div>");
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight, margin: Margin);
+
+            var table = LayoutHarness.Descendants(LayoutHarness.FindById(root, "head")!)
+                .First(b => b.Display == CssConstants.Table);
+            var proxies = table.Boxes.OfType<CssProxyBox>().ToList();
+
+            Assert.NotEmpty(proxies);
+            Assert.Single(proxies.Select(p => p.SourceBox).Distinct());
+            Assert.All(proxies, p => Assert.Equal(CssConstants.TableHeaderGroup, p.SourceBox.Display));
+
+            // Every proxy must sit on a page of its own — a stale one left by a discarded layout would
+            // duplicate a position.
+            Assert.Equal(proxies.Count, proxies.Select(p => Math.Round(p.Location.Y, 3)).Distinct().Count());
         }
 
         private static async Task<(CssBox Heading, CssBox Card, HtmlContainerInt Container)> PulledRunAsync(double fillerHeight)
