@@ -3228,6 +3228,17 @@ var multicolHtml = "<!DOCTYPE html><html><head>" + MulticolCss + "</head><body>"
         "<h2 style=\"font-size:28pt;text-align:center;margin:0 0 0.2em;border:none\">A</h2>" +
         McEntries(14, "word") + "</div></div>") +
 
+    // One long paragraph continuing from one column into the next, with a background and border so
+    // both fragments' own decoration areas are visible: a column is a fragmentainer that differs
+    // from its neighbours in the inline axis, so each fragment carries geometry of its own.
+    McSection("6 &mdash; a paragraph continuing across a column break",
+        "<div class=\"frame\"><div class=\"label\">columns: 2; one paragraph balanced across both columns, split at the boundary - background and border on each fragment</div>" +
+        "<div class=\"mc\" style=\"columns:2;column-gap:20px\">" +
+        "<p style=\"background:#eef4fb;border:0.5pt solid #2980b9;padding:3pt;margin:0;text-align:justify\">" +
+        string.Join(" ", Enumerable.Range(1, 14).Select(i =>
+            $"clause&nbsp;{i} of one paragraph that keeps flowing until the column runs out,")) +
+        " and then stops.</p></div></div>") +
+
     "</body></html>";
 
 await SaveShowcaseAsync("multicol", "Layout", "Multi-column Layout",

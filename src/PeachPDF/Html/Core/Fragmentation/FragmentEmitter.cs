@@ -75,7 +75,12 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// disambiguates them. <see cref="BoxFragment"/> itself does not record the proxy, which is why the
         /// association has to be carried here deliberately rather than recovered later.
         /// </summary>
-        private readonly record struct FragmentKey(CssBox Box, CssProxyBox? Owner);
+        /// <remarks>
+        /// <see cref="Instance"/> names which of a slot's nested fragmentainers the fragment belongs to, 0
+        /// for the page itself. Two columns of one page are two fragmentainers of the same slot, so a box
+        /// appearing in both produces two fragments that a (box, slot) pair alone could not tell apart.
+        /// </remarks>
+        private readonly record struct FragmentKey(CssBox Box, CssProxyBox? Owner, int Instance);
 
         /// <summary>
         /// One emitted pagination slot: its index and the document-space band layout paginated against.
@@ -86,19 +91,104 @@ namespace PeachPDF.Html.Core.Fragmentation
             int Index, double BandTop, double BandBottom, PageBandGeometry Geometry, double LocalOriginY);
 
         /// <summary>
+        /// The area of one fragmentainer that geometry is measured against — the question "does this
+        /// rectangle belong here?", which is what separates one fragment of a box from another.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A page asks it of the block axis alone, and a column of both.</b> Every fragmentainer of the
+        /// page grid differs from the last in the block axis only — CSS Fragmentation Level 3 §2 shares one
+        /// inline size and position across a box's fragments — so <see cref="Left"/>/<see cref="Right"/> are
+        /// null for a page and the test reduces exactly to the band-overlap rule the emitter has always
+        /// used. A multi-column column is a fragmentainer that differs from its neighbours in the
+        /// <i>inline</i> axis while sitting inside one page band, so for it the block axis cannot answer at
+        /// all and both are needed.
+        /// </para>
+        /// <para>
+        /// The block-axis rule is a minimum-overlap one, matching <c>CssBox.IsRectVisible</c>'s epsilon so
+        /// the tree holds exactly the rectangles the painter would draw. The inline-axis rule adds a
+        /// degenerate case the block axis never had to consider: a zero-width rectangle overlaps nothing, so
+        /// it is placed by its own left edge instead. Columns are disjoint and content is laid out inside
+        /// one, so no rectangle is claimed twice unless it genuinely spills across a column gap.
+        /// </para>
+        /// </remarks>
+        private readonly record struct FragmentRegion(double Top, double Bottom, double? Left, double? Right)
+        {
+            internal bool Contains(RRect rect) =>
+                Math.Min(rect.Bottom, Bottom) - Math.Max(rect.Top, Top) > BandOverlapEpsilon
+                && ContainsInlineAxis(rect);
+
+            private bool ContainsInlineAxis(RRect rect)
+            {
+                if (Left is not { } left || Right is not { } right) return true;
+
+                return rect.Width > BandOverlapEpsilon
+                    ? Math.Min(rect.Right, right) - Math.Max(rect.Left, left) > BandOverlapEpsilon
+                    : rect.Left >= left - EdgeEpsilon && rect.Left <= right + EdgeEpsilon;
+            }
+
+            /// <summary>This region's block-axis extent, with <paramref name="rect"/>'s inline axis kept.</summary>
+            internal RRect BlockCut(RRect rect, double topInset, double bottomInset)
+            {
+                var top = Math.Max(rect.Top, Top + topInset);
+                var bottom = Math.Min(rect.Bottom, Bottom - bottomInset);
+
+                return bottom > top ? new RRect(rect.X, top, rect.Width, bottom - top) : rect;
+            }
+        }
+
+        /// <summary>
+        /// One nested fragmentainer's geometry, handed over by the engine that filled it — a multi-column
+        /// column (<see href="https://www.w3.org/TR/css-break-3/#fragmentainer">§2</see>: "a column in
+        /// multi-column layout, or a page in paged media").
+        /// </summary>
+        /// <remarks>
+        /// This is layout <i>telling</i> the emitter where the content it placed went, rather than the
+        /// emitter reading where the boxes currently are. It has to be: a box continuing from one column
+        /// into the next is laid out again at the next column's inline position, so by the end of the page
+        /// pass its live geometry describes only its last fragment. The captured snapshot is the geometry
+        /// as it stood when that column was filled, and <see cref="FragmentRegion"/> is what tells the
+        /// column's own rectangles from the ones a neighbouring column contributed to the same box.
+        /// </remarks>
+        /// <remarks>
+        /// <see cref="Continuing"/> holds the boxes that did not finish here and carry on into the next one.
+        /// Their own height has not been applied at capture time — a box only reaches its epilogue on the pass
+        /// that completes it — so their decoration area is the content they placed here rather than the
+        /// zero-height box they still report. The page grid needs no equivalent: there a continuing box's
+        /// bounds are cut to the band, which is exactly what cannot separate two fragmentainers sharing one.
+        /// </remarks>
+        private readonly record struct NestedFragmentainer(
+            FragmentRegion Region, BoxGeometrySnapshot Geometry, IReadOnlySet<CssBox> Continuing);
+
+        /// <summary>
         /// A fragment before its first/last flags are known — which cannot be until every slot has been
         /// emitted, so the tree is collected as mutable drafts and materialized once at the end.
         /// </summary>
-        private sealed class Draft(FragmentKey key, CssBox box, Slot slot, BoxGeometrySnapshot? snapshot, double originY)
+        private sealed class Draft(
+            FragmentKey key, CssBox box, Slot slot, FragmentRegion region, BoxGeometrySnapshot? snapshot, double originY)
         {
             internal FragmentKey Key { get; } = key;
             internal CssBox Box { get; } = box;
             internal Slot Slot { get; } = slot;
+
+            /// <summary>
+            /// The fragmentainer area this fragment's geometry belongs to — the page band, or the column
+            /// band and inline span of the nested fragmentainer it was captured in.
+            /// </summary>
+            internal FragmentRegion Region { get; } = region;
+
             internal BoxGeometrySnapshot? Snapshot { get; } = snapshot;
             internal double OriginY { get; } = originY;
 
             internal bool IsFixed { get; set; }
             internal bool IsMonolithic { get; set; }
+
+            /// <summary>
+            /// Whether the box continues past this fragmentainer without having had its own height applied,
+            /// so its decoration area runs to the bottom of what it placed here rather than to the bottom it
+            /// currently reports. See <see cref="NestedFragmentainer.Continuing"/>.
+            /// </summary>
+            internal bool BoundsEndAtItsContent { get; set; }
 
             /// <summary>
             /// Whether the box's own decoration area is its border box rather than a set of per-line
@@ -126,7 +216,65 @@ namespace PeachPDF.Html.Core.Fragmentation
         private readonly Dictionary<FragmentKey, Dictionary<CssLineBox, RRect>> _rectangles = [];
         private readonly HashSet<CssBox> _frozen = new(ReferenceEqualityComparer.Instance);
         private readonly SortedSet<int> _stale = [];
+        private readonly Dictionary<(CssBox Root, int Slot), List<NestedFragmentainer>> _nested = [];
         private int _lastEmittedSlot = -1;
+
+        /// <summary>
+        /// Hands over one nested fragmentainer <paramref name="contextRoot"/> has just finished filling
+        /// inside pagination slot <paramref name="slot"/>.
+        /// </summary>
+        /// <param name="contextRoot">the box that owns the nested fragmentation context</param>
+        /// <param name="slot">the pagination slot the nested fragmentainer sits in</param>
+        /// <param name="band">its block-axis extent in document space</param>
+        /// <param name="inline">its inline-axis extent in document space</param>
+        /// <param name="geometry">
+        /// the subtree's geometry as it stood when the fragmentainer was filled, which is the only point at
+        /// which it can be recorded — content continuing into the next one is laid out again there.
+        /// </param>
+        /// <param name="continuing">the boxes that carry on into the next fragmentainer</param>
+        internal void RecordNestedFragmentainer(
+            CssBox contextRoot,
+            int slot,
+            (double Top, double Bottom) band,
+            (double Left, double Right) inline,
+            BoxGeometrySnapshot geometry,
+            IReadOnlySet<CssBox> continuing)
+        {
+            if (!_nested.TryGetValue((contextRoot, slot), out var fragmentainers))
+            {
+                _nested[(contextRoot, slot)] = fragmentainers = [];
+            }
+
+            fragmentainers.Add(new NestedFragmentainer(
+                new FragmentRegion(band.Top, band.Bottom, inline.Left, inline.Right), geometry, continuing));
+        }
+
+        /// <summary>
+        /// Discards the nested fragmentainers <paramref name="contextRoot"/> recorded in
+        /// <paramref name="slot"/>, or — with no slot — in every slot, for a fill that is being attempted
+        /// afresh.
+        /// </summary>
+        /// <remarks>
+        /// Both forms are needed and they are not the same question. A container re-fills its columns
+        /// several times inside one pass (<c>column-fill: balance</c> re-balances, and an under-shooting
+        /// estimate is grown and re-run), which invalidates that slot alone. A container laid out again from
+        /// the start — a §4.3 mover relocating it — may land in a different slot altogether, and the
+        /// fragmentainers it recorded in the slot it has left describe geometry that no longer exists
+        /// anywhere.
+        /// </remarks>
+        internal void ClearNestedFragmentainers(CssBox contextRoot, int? slot = null)
+        {
+            if (slot is { } only)
+            {
+                _nested.Remove((contextRoot, only));
+                return;
+            }
+
+            foreach (var key in new List<(CssBox Root, int Slot)>(_nested.Keys))
+            {
+                if (ReferenceEquals(key.Root, contextRoot)) _nested.Remove(key);
+            }
+        }
 
         /// <summary>
         /// Freezes every slot the pass that has just ended filled, inclusive of both bounds.
@@ -170,6 +318,14 @@ namespace PeachPDF.Html.Core.Fragmentation
         }
 
         /// <summary>
+        /// Whether any frozen fragmentainer holds a fragment for <paramref name="box"/> — asked before the
+        /// slot a relocation would invalidate is worked out at all, since a box no frozen fragmentainer holds
+        /// has nothing to un-freeze. That is the whole reason ordinary forward layout, where every box is
+        /// placed for the first time, never re-emits anything.
+        /// </summary>
+        internal bool HoldsFragmentsFor(CssBox box) => _frozen.Contains(box);
+
+        /// <summary>
         /// Drops every frozen slot from <paramref name="fromSlot"/> on, so it is emitted again once layout
         /// has settled.
         /// </summary>
@@ -184,14 +340,6 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// itself filling or anything after it, since those are not frozen yet, so ordinary forward layout
         /// never re-emits anything.
         /// </remarks>
-        /// <summary>
-        /// Whether any frozen fragmentainer holds a fragment for <paramref name="box"/> — asked before the
-        /// slot a relocation would invalidate is worked out at all, since a box no frozen fragmentainer holds
-        /// has nothing to un-freeze. That is the whole reason ordinary forward layout, where every box is
-        /// placed for the first time, never re-emits anything.
-        /// </summary>
-        internal bool HoldsFragmentsFor(CssBox box) => _frozen.Contains(box);
-
         internal void InvalidateFrom(int fromSlot)
         {
             if (fromSlot > _lastEmittedSlot) return;
@@ -313,7 +461,8 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             var root = container.Root!;
             var hasPrintableContent = false;
-            var draft = BuildDraft(root, owner: null, snapshot: null, slot, ref hasPrintableContent)
+            var draft = BuildDraft(root, owner: null, snapshot: null, slot,
+                            nested: null, instance: 0, ref hasPrintableContent)
                         ?? EmptyRootDraft(root, slot);
 
             // A slot can legitimately be emitted twice: the driver's no-progress backstop lays the
@@ -329,7 +478,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         {
             for (var link = token; link is not null;)
             {
-                into.Add((new FragmentKey(link.Box, null), slot));
+                into.Add((new FragmentKey(link.Box, null, 0), slot));
                 link = link is BlockBreakToken { ChildToken: { } child } ? child : null;
             }
         }
@@ -344,14 +493,15 @@ namespace PeachPDF.Html.Core.Fragmentation
             }
 
             var span = _spans[draft.Key];
-            var lines = LinesOf(draft);
+            var bounds = BoundsOf(draft, children);
+            var lines = LinesOf(draft, bounds);
 
             return new BoxFragment(
                 UnionRects(lines, children),
                 draft.Box,
                 draft.Slot.Index,
                 draft.OriginY,
-                Localize(BoundsOf(draft.Box, draft.Snapshot), draft.OriginY),
+                Localize(bounds, draft.OriginY),
                 draft.IsFixed,
                 draft.Slot.Index == span.First
                     && !_continuedFrom.Contains((draft.Key, draft.Slot.Index)),
@@ -383,15 +533,13 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// intermediate fragment of a multi-page block lost its background and borders entirely.
         /// </para>
         /// </remarks>
-        private List<LineFragment> LinesOf(Draft draft)
+        private List<LineFragment> LinesOf(Draft draft, RRect bounds)
         {
             var lines = new List<LineFragment>(draft.Lines.Count + 1);
 
             if (draft.UsesOwnBounds)
             {
-                var bounds = BoundsOf(draft.Box, draft.Snapshot);
-
-                if (IntersectsBand(bounds, draft.IsFixed, draft.Slot))
+                if (draft.Region.Contains(bounds))
                 {
                     var local = Localize(bounds, draft.OriginY);
 
@@ -401,7 +549,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                     lines.Add(new LineFragment(local, null,
                         new SliceGeometry(
                             local,
-                            Localize(BandCut(bounds, draft.Box, draft.IsFixed, draft.Slot), draft.OriginY),
+                            Localize(BandCut(bounds, draft.Box, draft.Region), draft.OriginY),
                             HasLeftEdge: true, HasRightEdge: true)));
                 }
 
@@ -411,7 +559,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             if (draft.Lines.Count == 0) return lines;
 
             var slices = SliceGeometriesOf(
-                draft.Box, _rectangles[draft.Key], draft.IsFixed, draft.Slot, draft.OriginY);
+                draft.Box, _rectangles[draft.Key], draft.Region, draft.OriginY);
 
             foreach (var (line, rect) in draft.Lines)
             {
@@ -428,7 +576,9 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </summary>
         private Draft EmptyRootDraft(CssBox root, Slot slot)
         {
-            var draft = new Draft(new FragmentKey(root, null), root, slot, snapshot: null, slot.LocalOriginY);
+            var draft = new Draft(
+                new FragmentKey(root, null, 0), root, slot, PageRegionOf(isFixed: false, slot),
+                snapshot: null, slot.LocalOriginY);
 
             draft.IsMonolithic = MonolithicContent.IsMonolithic(root);
 
@@ -440,6 +590,8 @@ namespace PeachPDF.Html.Core.Fragmentation
             CssProxyBox? owner,
             BoxGeometrySnapshot? snapshot,
             Slot slot,
+            NestedFragmentainer? nested,
+            int instance,
             ref bool hasPrintableContent)
         {
             // A display:none subtree paints nothing at all, so it produces no fragments either.
@@ -450,6 +602,11 @@ namespace PeachPDF.Html.Core.Fragmentation
             // block is the page box itself).
             var isFixed = box.IsFixed;
             var originY = isFixed ? 0 : slot.LocalOriginY;
+
+            // A fixed box belongs to the page rather than to any nested fragmentainer inside it: it is
+            // emitted in every fragmentainer at identical coordinates, so a column's own extent says
+            // nothing about where it lands.
+            var region = isFixed || nested is null ? PageRegionOf(isFixed, slot) : nested.Value.Region;
 
             List<(CssLineBox Line, RRect Rect)> lines = [];
             List<TextFragment> words = [];
@@ -466,7 +623,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                 {
                     foreach (var (line, rect) in rectangles)
                     {
-                        if (IntersectsBand(rect, isFixed, slot)) lines.Add((line, rect));
+                        if (region.Contains(rect)) lines.Add((line, rect));
                     }
                 }
                 else
@@ -482,18 +639,20 @@ namespace PeachPDF.Html.Core.Fragmentation
                     // position it is still carrying from the attempt that was abandoned.
                     if (box.Words[i].AwaitsTheNextFragmentainer) continue;
 
-                    var rect = WordRectOf(box, i, snapshot);
+                    if (!TryGetWordRect(box, i, snapshot, out var rect)) continue;
 
-                    if (IntersectsBand(rect, isFixed, slot))
+                    if (region.Contains(rect))
                         words.Add(new TextFragment(Localize(rect, originY), box.Words[i]));
                 }
             }
 
             List<Draft> children = [];
 
-            foreach (var (childBox, childOwner, childSnapshot) in ChildrenOf(box, owner, snapshot))
+            foreach (var (childBox, childOwner, childSnapshot, childNested, childInstance)
+                     in ChildrenOf(box, owner, snapshot, slot, nested, instance))
             {
-                var childDraft = BuildDraft(childBox, childOwner, childSnapshot, slot, ref hasPrintableContent);
+                var childDraft = BuildDraft(
+                    childBox, childOwner, childSnapshot, slot, childNested, childInstance, ref hasPrintableContent);
 
                 if (childDraft is not null)
                     children.Add(childDraft);
@@ -505,7 +664,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             // height is not settled is one that continues into a later fragmentainer, which by construction has
             // content of its own in this one.
             if (lines.Count == 0 && words.Count == 0 && children.Count == 0
-                && !(usesOwnBounds && IntersectsBand(BoundsOf(box, snapshot), isFixed, slot)))
+                && !(usesOwnBounds && region.Contains(BoundsOf(box, snapshot))))
             {
                 return null;
             }
@@ -515,7 +674,7 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             _frozen.Add(box);
 
-            var draft = new Draft(new FragmentKey(box, owner), box, slot, snapshot, originY);
+            var draft = new Draft(new FragmentKey(box, owner, instance), box, slot, region, snapshot, originY);
 
             draft.Lines.AddRange(lines);
             draft.Words.AddRange(words);
@@ -523,6 +682,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             draft.IsFixed = isFixed;
             draft.IsMonolithic = MonolithicContent.IsMonolithic(box);
             draft.UsesOwnBounds = usesOwnBounds;
+            draft.BoundsEndAtItsContent = nested is { } fragmentainer && fragmentainer.Continuing.Contains(box);
 
             return draft;
         }
@@ -578,13 +738,30 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// subtree can be repeated on many pages. Descending into it through the proxy's own captured
         /// geometry is what puts a repeating table header into the fragment tree.
         /// </summary>
-        private static IEnumerable<(CssBox Box, CssProxyBox? Owner, BoxGeometrySnapshot? Snapshot)> ChildrenOf(
-            CssBox box, CssProxyBox? owner, BoxGeometrySnapshot? snapshot)
+        /// <remarks>
+        /// <para>
+        /// <b>A box that owns nested fragmentainers yields its children once per fragmentainer</b>, each with
+        /// that one's captured geometry and its own <see cref="FragmentRegion"/>. This is what lets a box
+        /// split across two multi-column columns produce two fragments: the two differ in the inline axis,
+        /// which the box's own single <c>Location</c> cannot express and the captures can.
+        /// </para>
+        /// <para>
+        /// Nested contexts are consulted at one level only — a container already inside a nested
+        /// fragmentainer reads through the enclosing capture instead, so a multi-column container inside
+        /// another one splits at the outer level alone. The reason is that a box's captures are keyed by
+        /// pagination slot, and the inner container's columns are re-filled once per <i>outer</i> column, so
+        /// two outer columns' worth of inner captures would be indistinguishable from each other.
+        /// </para>
+        /// </remarks>
+        private IEnumerable<(CssBox Box, CssProxyBox? Owner, BoxGeometrySnapshot? Snapshot,
+            NestedFragmentainer? Nested, int Instance)> ChildrenOf(
+            CssBox box, CssProxyBox? owner, BoxGeometrySnapshot? snapshot, Slot slot,
+            NestedFragmentainer? nested, int instance)
         {
             if (box is CssProxyBox proxy)
             {
                 if (proxy.SourceGeometry is { } proxyGeometry)
-                    yield return (proxy.SourceBox, proxy, proxyGeometry);
+                    yield return (proxy.SourceBox, proxy, proxyGeometry, nested, instance);
 
                 yield break;
             }
@@ -593,11 +770,39 @@ namespace PeachPDF.Html.Core.Fragmentation
             // That cell therefore appears in the tree once per row it spans - the fragments are
             // distinct objects, so each is painted in its own place.
             if (box is CssSpacingBox spacing)
-                yield return (spacing.ExtendedBox, owner, snapshot);
+                yield return (spacing.ExtendedBox, owner, snapshot, nested, instance);
+
+            if (nested is null
+                && _nested.TryGetValue((box, slot.Index), out var fragmentainers)
+                && fragmentainers.Count > 0)
+            {
+                for (var i = 0; i < fragmentainers.Count; i++)
+                {
+                    var fragmentainer = fragmentainers[i];
+
+                    foreach (var childBox in box.Boxes)
+                    {
+                        if (fragmentainer.Geometry.Holds(childBox))
+                            yield return (childBox, owner, fragmentainer.Geometry, fragmentainer, i + 1);
+                    }
+                }
+
+                // A child no fragmentainer holds was not placed into one — an out-of-flow child, which
+                // css-multicol resolves against the container rather than a column, and which the columns
+                // engine lays out once at the end. It is read live and belongs to the page, exactly as it
+                // did before nested fragmentainers existed.
+                foreach (var childBox in box.Boxes)
+                {
+                    if (!HeldByAny(fragmentainers, childBox))
+                        yield return (childBox, owner, snapshot, null, instance);
+                }
+
+                yield break;
+            }
 
             foreach (var childBox in box.Boxes)
             {
-                yield return (childBox, owner, snapshot);
+                yield return (childBox, owner, snapshot, nested, instance);
             }
         }
 
@@ -638,25 +843,17 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <paramref name="slot"/>'s content band in document space. A fixed rectangle is measured against
         /// the band at its own unshifted position, since it does not move with the page.
         /// </summary>
-        private (double Top, double Bottom) BandOf(bool isFixed, Slot slot)
+        private FragmentRegion PageRegionOf(bool isFixed, Slot slot)
         {
             var top = isFixed ? container.MarginTop : slot.BandTop;
-            return (top, top + slot.Geometry.BandHeight);
+
+            // Left/Right null: the page grid's fragmentainers differ in the block axis only, so the inline
+            // axis is not a membership question there (§2 shares one inline size across a box's fragments).
+            return new FragmentRegion(top, top + slot.Geometry.BandHeight, null, null);
         }
 
         /// <summary>
-        /// Whether a document-space rectangle lands in <paramref name="slot"/>'s content band, using
-        /// the same minimum-overlap rule the painter's own visibility test applies.
-        /// </summary>
-        private bool IntersectsBand(RRect rect, bool isFixed, Slot slot)
-        {
-            var (bandTop, bandBottom) = BandOf(isFixed, slot);
-
-            return Math.Min(rect.Bottom, bandBottom) - Math.Max(rect.Top, bandTop) > BandOverlapEpsilon;
-        }
-
-        /// <summary>
-        /// A document-space rectangle cut to <paramref name="slot"/>'s content band — the box fragment
+        /// A document-space rectangle cut to <paramref name="region"/>'s content band — the box fragment
         /// <c>box-decoration-break: clone</c> wraps with its own border and padding
         /// (<see href="https://www.w3.org/TR/css-break-3/#break-decoration">§6.2</see>). Rectangles that
         /// fit inside the band come back unchanged, which is every rectangle of an unfragmented box.
@@ -668,21 +865,10 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// close on the same line, drawing each border over the last, while layout (which reserves the whole
         /// nested sum) left a gap where the inner borders should have been.
         /// </remarks>
-        private RRect BandCut(RRect rect, CssBox box, bool isFixed, Slot slot)
-        {
-            var (bandTop, bandBottom) = BandOf(isFixed, slot);
-
-            if (container.HasCloneDecorations)
-            {
-                bandTop += DomUtils.ClonedBlockStart(box.ParentBox);
-                bandBottom -= DomUtils.ClonedBlockEnd(box.ParentBox);
-            }
-
-            var top = Math.Max(rect.Top, bandTop);
-            var bottom = Math.Min(rect.Bottom, bandBottom);
-
-            return bottom > top ? new RRect(rect.X, top, rect.Width, bottom - top) : rect;
-        }
+        private RRect BandCut(RRect rect, CssBox box, FragmentRegion region) =>
+            container.HasCloneDecorations
+                ? region.BlockCut(rect, DomUtils.ClonedBlockStart(box.ParentBox), DomUtils.ClonedBlockEnd(box.ParentBox))
+                : region.BlockCut(rect, 0, 0);
 
         /// <summary>
         /// The <see cref="SliceGeometry"/> of each of a box's decoration rectangles — the whole unbroken
@@ -714,13 +900,12 @@ namespace PeachPDF.Html.Core.Fragmentation
         private Dictionary<CssLineBox, SliceGeometry> SliceGeometriesOf(
             CssBox box,
             IReadOnlyDictionary<CssLineBox, RRect> rectangles,
-            bool isFixed,
-            Slot slot,
+            FragmentRegion region,
             double originY)
         {
             var slices = new Dictionary<CssLineBox, SliceGeometry>(rectangles.Count);
 
-            RRect FragmentRectOf(RRect rect) => Localize(BandCut(rect, box, isFixed, slot), originY);
+            RRect FragmentRectOf(RRect rect) => Localize(BandCut(rect, box, region), originY);
 
             var ownsItsLines = false;
             foreach (var line in rectangles.Keys)
@@ -771,13 +956,67 @@ namespace PeachPDF.Html.Core.Fragmentation
             return slices;
         }
 
+        private static bool HeldByAny(List<NestedFragmentainer> fragmentainers, CssBox box)
+        {
+            foreach (var fragmentainer in fragmentainers)
+            {
+                if (fragmentainer.Geometry.Holds(box)) return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// This fragment's own border box, in document space.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A box that continues past this fragmentainer has not had its height applied — the epilogue that
+        /// resolves it runs only on the pass that <i>completes</i> the box — so what it reports here is a
+        /// zero-height box at its own top. On the page grid that is harmless: the bounds are cut to the band,
+        /// and the box's later fragments are separated by the band anyway. In a nested fragmentainer, whose
+        /// neighbours share one band, the block extent is all there is, so it has to come from the content
+        /// this fragment actually holds.
+        /// </para>
+        /// <para>
+        /// Measured from the materialized children rather than from the box, because that is the geometry the
+        /// fragmentainer's own capture selected: a child in a neighbouring column has already been filtered
+        /// out by then.
+        /// </para>
+        /// </remarks>
+        private static RRect BoundsOf(Draft draft, List<BoxFragment> children)
+        {
+            var bounds = BoundsOf(draft.Box, draft.Snapshot);
+
+            if (!draft.BoundsEndAtItsContent) return bounds;
+
+            var bottom = bounds.Bottom;
+
+            foreach (var word in draft.Words)
+            {
+                bottom = Math.Max(bottom, word.Rect.Bottom + draft.OriginY);
+            }
+
+            foreach (var child in children)
+            {
+                bottom = Math.Max(bottom, child.Rect.Bottom + child.OriginY);
+            }
+
+            return bottom > bounds.Bottom
+                ? RRect.FromLTRB(bounds.Left, bounds.Top, bounds.Right, bottom)
+                : bounds;
+        }
+
         private static RRect BoundsOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
             snapshot is not null && snapshot.TryGetGeometry(box, out var geometry) ? geometry.Bounds : box.Bounds;
 
         private static IReadOnlyDictionary<CssLineBox, RRect> RectanglesOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
             snapshot is not null && snapshot.TryGetGeometry(box, out var geometry) ? geometry.Rectangles : box.Rectangles;
 
-        private static RRect WordRectOf(CssBox box, int index, BoxGeometrySnapshot? snapshot)
+        /// <summary>
+        /// Where a word sits in this fragmentainer, or false when it belongs to a later one.
+        /// </summary>
+        private static bool TryGetWordRect(CssBox box, int index, BoxGeometrySnapshot? snapshot, out RRect rect)
         {
             var word = box.Words[index];
 
@@ -785,11 +1024,18 @@ namespace PeachPDF.Html.Core.Fragmentation
             // are the very same CssRect objects, measured once.
             if (snapshot is not null && snapshot.TryGetGeometry(box, out var geometry) && index < geometry.WordOrigins.Count)
             {
-                var origin = geometry.WordOrigins[index];
-                return new RRect(origin.X, origin.Y, word.Width, word.Height);
+                if (geometry.WordOrigins[index] is not { } origin)
+                {
+                    rect = RRect.Empty;
+                    return false;
+                }
+
+                rect = new RRect(origin.X, origin.Y, word.Width, word.Height);
+                return true;
             }
 
-            return word.Rectangle;
+            rect = word.Rectangle;
+            return true;
         }
 
         private static RRect Localize(RRect rect, double originY) =>

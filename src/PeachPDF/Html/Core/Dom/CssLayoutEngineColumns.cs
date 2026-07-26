@@ -3,6 +3,7 @@ using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Html.Core.Fragmentation;
+using PeachPDF.Html.Core.Fragments;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -198,6 +199,11 @@ namespace PeachPDF.Html.Core.Dom
             // mid-document rather than as balancing. Where that happens the target is grown and the fill
             // run again, up to the page's own budget, which is the point at which balancing has given up
             // and the content genuinely does not fit this fragment.
+            // A container laid out again from the start may land in a different slot than the one it recorded
+            // its columns in, so what it recorded anywhere describes geometry that no longer exists. A
+            // resumed one is the opposite case: the columns it filled on earlier pages are still there.
+            htmlContainer.ClearNestedFragmentainers(columnsBox, resume is null ? null : startSlot);
+
             for (var attempt = 0; ; attempt++)
             {
                 (carry, contentBottom, filledColumns) =
@@ -230,6 +236,9 @@ namespace PeachPDF.Html.Core.Dom
                 }
 
                 ResetChildrenForRefill(children, resume);
+
+                // The attempt being discarded recorded columns of its own.
+                htmlContainer.ClearNestedFragmentainers(columnsBox, startSlot);
             }
 
             // One rule per gap between the columns actually used, spanning the content they hold.
@@ -290,18 +299,33 @@ namespace PeachPDF.Html.Core.Dom
                 bool stopped;
                 var columnBottom = boxTop;
 
-                var columnStart = FirstChildIndexOf(carry);
+                var columnStart = FirstChildIndexOf(carry, children);
+                var columnInlineLeft = columnLeft + col * pitch;
 
                 try
                 {
                     columnsBox.ActualBottom = boxTop;
-                    PlaceColumn(columnsBox, columnLeft + col * pitch, columnWidth);
+                    PlaceColumn(columnsBox, columnInlineLeft, columnWidth);
 
                     stopped = await columnsBox.FillFragmentainerWithBlockChildren(g, carry);
 
                     // A child the fill decided to break *before* was laid out here and is about to be
                     // laid out again in the next column, so its geometry is not this column's.
-                    columnBottom = MaxBottomOf(children, PlacedBelow(columnsBox.PendingBreakToken, children));
+                    var placedBelow = PlacedBelow(columnsBox.PendingBreakToken, children);
+
+                    columnBottom = MaxBottomOf(children, placedBelow);
+
+                    // This column's geometry, handed over while the boxes still hold it. A child
+                    // continuing into the next column is laid out again there, at that column's own
+                    // inline position, so nothing read afterwards could tell the two fragments apart -
+                    // a box carries one Location, and both halves sit in the same page band (#366).
+                    htmlContainer.RecordNestedFragmentainer(
+                        columnsBox,
+                        startSlot,
+                        (boxTop, boxTop + target),
+                        (columnInlineLeft, columnInlineLeft + columnWidth),
+                        BoxGeometrySnapshot.Capture(ChildrenIn(children, columnStart, placedBelow)),
+                        ContinuingPast(columnsBox.PendingBreakToken));
                 }
                 finally
                 {
@@ -318,10 +342,51 @@ namespace PeachPDF.Html.Core.Dom
                     break;
                 }
 
-                carry = ResumeInTheNextColumn(columnsBox, boxTop, columnStart);
+                carry = ResumeInTheNextColumn(columnsBox, boxTop, startSlot);
             }
 
             return (carry, contentBottom, filledColumns);
+        }
+
+        /// <summary>
+        /// The boxes <paramref name="token"/> says continue past this column — the chain from the container
+        /// down to the box that stopped, minus the container itself, which is not a fragment of this column.
+        /// </summary>
+        /// <remarks>
+        /// Read off the break record rather than inferred from geometry, because that is what the record is:
+        /// css-break-3's own statement of which boxes carry on into the next fragmentainer. A box in it has
+        /// not run its epilogue, so its height is unresolved and the emitter has to take its fragment's
+        /// extent from the content it placed here instead.
+        /// </remarks>
+        private static IReadOnlySet<CssBox> ContinuingPast(BreakToken? token)
+        {
+            var continuing = new HashSet<CssBox>();
+
+            for (var link = token is BlockBreakToken block ? block.ChildToken : null; link is not null;)
+            {
+                continuing.Add(link.Box);
+                link = link is BlockBreakToken { ChildToken: { } child } ? child : null;
+            }
+
+            return continuing;
+        }
+
+        /// <summary>
+        /// The children one column holds: from the one its fill began at, up to (but not including) the one
+        /// the break falls before.
+        /// </summary>
+        /// <remarks>
+        /// The lower bound matters as much as the upper one. Children below it belong to earlier columns and
+        /// still hold that column's geometry; the one <i>at</i> it is included, because a child resuming here
+        /// is genuinely in both this column and the previous one — which is the whole case per-fragment
+        /// geometry exists for.
+        /// </remarks>
+        private static IEnumerable<CssBox> ChildrenIn(List<CssBox> children, int from, int through)
+        {
+            for (var i = Math.Max(0, from); i < through && i < children.Count; i++)
+            {
+                yield return children[i];
+            }
         }
 
         /// <summary>Lets every child's prologue run again, for a fill that is being attempted afresh.</summary>
@@ -357,10 +422,51 @@ namespace PeachPDF.Html.Core.Dom
 
             for (var i = 0; i < children.Count && i < limit; i++)
             {
-                bottom = Math.Max(bottom, children[i].ActualBottom);
+                bottom = Math.Max(bottom, DeepestBottomOf(children[i]));
             }
 
             return bottom is double.MinValue ? 0 : bottom;
+        }
+
+        /// <summary>
+        /// How far down a subtree's geometry actually reaches.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Deeper than <see cref="CssBoxProperties.ActualBottom"/> for a box that continues into the next
+        /// column: its height is resolved by the epilogue, which runs only on the pass that <i>completes</i>
+        /// it, so mid-flow it still reports the zero-height box it was placed as. Reading that alone sizes the
+        /// container to less than the column really holds, and everything after it overlaps the overflow.
+        /// </para>
+        /// <para>
+        /// <b>The line boxes the pass kept are the honest source, and its words are not.</b> A flow that stops
+        /// re-places only the words up to the break; every word after it still carries the position the
+        /// measurement pass gave it, one tall virtual column down the document — so measuring words sized the
+        /// container to the whole flow's height and left a column's worth of blank space below the content.
+        /// <c>CreateLineBoxes</c> discards the line it stopped in, so what remains in
+        /// <see cref="CssBox.LineBoxes"/> is exactly what this fragmentainer holds.
+        /// </para>
+        /// <para>
+        /// Only a box that positions itself owns its <see cref="CssBoxProperties.ActualBottom"/>: an inline or
+        /// bare text box holds either its previous sibling's coordinates or a line-local value layout never
+        /// finished with, so asking one how far down it reaches names the wrong box.
+        /// </para>
+        /// </remarks>
+        private static double DeepestBottomOf(CssBox box)
+        {
+            var bottom = box.PlacesItselfAsBlockBox ? box.ActualBottom : double.MinValue;
+
+            foreach (var line in box.LineBoxes)
+            {
+                bottom = Math.Max(bottom, line.LineBottom);
+            }
+
+            foreach (var childBox in box.Boxes)
+            {
+                bottom = Math.Max(bottom, DeepestBottomOf(childBox));
+            }
+
+            return bottom;
         }
 
         /// <summary>
@@ -395,9 +501,14 @@ namespace PeachPDF.Html.Core.Dom
             // reached, which still carry the measurement pass's tall-single-column geometry: the very
             // inflation this method exists to avoid. How many real children precede the boundary is the
             // answer either way.
-            var precedingIndex = block.Box.Boxes.IndexOf(boundary);
+            return PrecedingRealChildren(block, boundary, children);
+        }
 
-            return children.Count(c => block.Box.Boxes.IndexOf(c) < precedingIndex);
+        private static int PrecedingRealChildren(BlockBreakToken token, CssBox boundary, List<CssBox> children)
+        {
+            var precedingIndex = token.Box.Boxes.IndexOf(boundary);
+
+            return children.Count(c => token.Box.Boxes.IndexOf(c) < precedingIndex);
         }
 
         /// <summary>
@@ -412,37 +523,49 @@ namespace PeachPDF.Html.Core.Dom
         /// replaced with.
         /// </para>
         /// <para>
-        /// <b>And a break <i>inside</i> a child becomes a break before it, so no child ever occupies two
-        /// columns at once.</b> This is a real limit rather than a simplification, and it is the same one
-        /// the whole-child model had: a box carries a single <c>Location</c>, which can describe its
-        /// position in one column only. Columns sit side by side inside one page band, so a box split
-        /// across two of them has both halves at the same document Y and one X — its continuation lines
-        /// are laid out over the ones already there, and the fragment builder, whose band membership is a
-        /// question about Y alone, cannot tell the halves apart to draw its background in both. Splitting
-        /// a child across columns needs geometry held per fragment rather than per box, which is
-        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/331">#331</see>.
+        /// <b>And a break <i>inside</i> a child stands, so a child genuinely continues into the next
+        /// column.</b> It used to be rewritten as a break before that child, because a box carries a single
+        /// <c>Location</c> and columns sit side by side inside one page band — so a box split across two of
+        /// them had both halves at the same document Y <i>and</i> the same X, with its continuation lines
+        /// laid out over the ones already there and its background drawable in one column only. What makes
+        /// it work now is that a fragment carries geometry of its own
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/366">#366</see>): each column hands the
+        /// emitter the geometry its content had while it was being filled, and the resumed box is re-placed
+        /// in the inline axis rather than keeping the position of the column it has left.
         /// </para>
         /// <para>
-        /// A child that begins this column and still does not fit is left alone: it has nowhere better to
-        /// be, and breaking before it would ask the same question of every column in turn.
+        /// The slot is restated as this container's own. A break decided inside a column was worked out
+        /// against the page grid, whose next slot is the next <i>page</i> — the next column is on this one.
         /// </para>
         /// </remarks>
-        private static BreakToken? ResumeInTheNextColumn(CssBox columnsBox, double bandTop, int columnStart)
+        private static BreakToken? ResumeInTheNextColumn(CssBox columnsBox, double bandTop, int startSlot)
         {
             if (columnsBox.TakePendingBreakToken() is not BlockBreakToken token) return null;
 
-            if (token.IsBreakBefore) return token with { ResumeTopOverride = bandTop };
+            if (token.IsBreakBefore)
+                return token with { ResumeSlotIndex = startSlot, ResumeTopOverride = bandTop };
 
-            if (token.ResumeChildIndex <= columnStart) return token;
-
-            return new BlockBreakToken(
-                token.Box, token.ResumeSlotIndex, token.ResumeChildIndex, null,
-                IsBreakBefore: true, bandTop);
+            return token with { ResumeSlotIndex = startSlot };
         }
 
-        /// <summary>The child index a column's fill begins at.</summary>
-        private static int FirstChildIndexOf(BreakToken? carry) =>
-            carry is BlockBreakToken block ? block.ResumeChildIndex : 0;
+        /// <summary>
+        /// The child a column's fill begins at, as an index into <paramref name="children"/>.
+        /// </summary>
+        /// <remarks>
+        /// A token's own <c>ResumeChildIndex</c> is an index into the container's whole <c>Boxes</c> list,
+        /// which also holds the out-of-flow and <c>display: none</c> boxes this engine filtered out — so it
+        /// cannot be used against the filtered list directly, which is the same mapping
+        /// <see cref="PlacedBelow"/> performs at the other end of the range.
+        /// </remarks>
+        private static int FirstChildIndexOf(BreakToken? carry, List<CssBox> children)
+        {
+            if (carry is not BlockBreakToken block) return 0;
+
+            var boundary = block.Box.Boxes[block.ResumeChildIndex];
+            var index = children.IndexOf(boundary);
+
+            return index >= 0 ? index : PrecedingRealChildren(block, boundary, children);
+        }
 
         /// <summary>
         /// Restates a column-relative resumption record in page terms, for the content the last column
@@ -485,6 +608,14 @@ namespace PeachPDF.Html.Core.Dom
             if (targetCount == 0)
                 return pageBudget; // nothing fits even at the full budget - let the caller's forced-fit branch handle it
 
+            // An even share of the content is the floor, and it is what makes balancing mean anything for
+            // content the fill can divide. The whole-child packing below answers "how tall must a column be
+            // for this many *whole* children to fit", which for a container holding one long child is
+            // vacuous - a child alone in a column always fits, so the search converges on nothing at all and
+            // the container renders as one tall column. The two combine rather than compete: unsplittable
+            // children can force a column taller than the even share, never shorter.
+            var evenShare = (children[^1].ActualBottom - children[startIndex].Location.Y) / columnCount;
+
             var lo = 1.0;
             var hi = pageBudget;
 
@@ -500,7 +631,7 @@ namespace PeachPDF.Html.Core.Dom
                     lo = mid;
             }
 
-            return hi;
+            return Math.Min(pageBudget, Math.Max(hi, evenShare));
         }
 
         /// <summary>
@@ -531,23 +662,32 @@ namespace PeachPDF.Html.Core.Dom
                 var naturalBottom = child.ActualBottom;
                 var height = naturalBottom - naturalTop;
 
+                // The gap this child inherits from the one above it - its own margin, or whatever
+                // separated them naturally - counts towards whether it fits, exactly as it does in the real
+                // fill. Asking about the height alone lets a child exceed the target by that gap, so the
+                // estimate under-shoots what the fill really needs by one gap per column. While a child was
+                // atomic per column that was invisible: the real fill simply placed one child fewer, the
+                // growth loop below bumped the target by 20%, and the slack it left was unusable. Now that
+                // content genuinely splits, a line moves into that slack and the columns read as unbalanced.
+                var gapAbove = previousChildNaturalBottom.HasValue
+                    ? naturalTop - previousChildNaturalBottom.Value
+                    : 0;
+
                 var remaining = colTop + rowTarget - colY;
                 var columnEmpty = Math.Abs(colY - colTop) < 0.01;
 
-                if (!columnEmpty && height > remaining)
+                if (!columnEmpty && gapAbove + height > remaining)
                 {
                     col++;
                     if (col >= columnCount)
                         break; // this row is full at this target height - child i belongs to the next row
 
                     colY = colTop;
+                    gapAbove = 0;
                     previousChildNaturalBottom = null;
                 }
 
-                if (previousChildNaturalBottom.HasValue)
-                    colY += naturalTop - previousChildNaturalBottom.Value;
-
-                colY += height;
+                colY += gapAbove + height;
                 previousChildNaturalBottom = naturalBottom;
                 maxColumnHeight = Math.Max(maxColumnHeight, colY - colTop);
             }
