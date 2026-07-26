@@ -2,6 +2,7 @@ using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -486,6 +487,84 @@ body { margin: 0; }
             // second's own 50pt margin-top should be added normally on top of that, not truncated away.
             Assert.Equal(pageHeight + marginTop + 50, second.Location.Y, 0.5);
         }
+
+        #region Margin truncation before a container's first child (css-break-3 §5.2)
+
+        // §5.2's break point before a container's *first* in-flow child is a real one, but it has no
+        // preceding sibling for the margin to be resolved against. These use the shared LayoutHarness
+        // rather than this file's own sheet-sized BuildCssBoxTree, so the asserted coordinates are the
+        // content band's and read directly against PageTopOf.
+        private const double FirstChildPageHeight = 300;
+
+        private static string FirstChildDocument(string outerStyle, string margin = "500pt") =>
+            LayoutHarness.Wrap(
+                $"<div id='outer' style='{outerStyle}'>"
+                + $"<div id='first' style='margin-top:{margin};height:50pt'>first</div>"
+                + "</div>");
+
+        // Either a border or padding on the container blocks margin-collapse-through, so the margin is
+        // the first child's own and the break falls before it.
+        [Theory]
+        [InlineData("border-top:1pt solid black")]
+        [InlineData("padding-top:1pt")]
+        public async Task FirstChildOfACollapseBlockingContainer_HasItsOversizedMarginTruncated(string outerStyle)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                FirstChildDocument(outerStyle), pageHeight: FirstChildPageHeight);
+
+            var first = LayoutHarness.FindById(root, "first");
+            Assert.NotNull(first);
+
+            // Flush at the very next slot's content top - never wherever the untruncated margin reached.
+            Assert.Equal(container.PageTopOf(1), first!.Location.Y, 3);
+        }
+
+        // The margin is taken as a break *before* the box, so the box contributes nothing to the
+        // fragmentainer it leaves and the document really does resume in the next one.
+        [Fact]
+        public async Task TruncatedFirstChildMargin_IsTakenAsABreakBefore()
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(
+                FirstChildDocument("border-top:1pt solid black"), pageHeight: FirstChildPageHeight);
+
+            Assert.Equal(2, container.FragmentainerPasses);
+        }
+
+        // A margin that stays inside its own slot is untouched, exactly as for a box with a sibling.
+        [Fact]
+        public async Task FirstChildMargin_StayingWithinItsOwnSlot_IsNotTruncated()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(
+                FirstChildDocument("border-top:1pt solid black", margin: "40pt"),
+                pageHeight: FirstChildPageHeight);
+
+            var outer = LayoutHarness.FindById(root, "outer");
+            var first = LayoutHarness.FindById(root, "first");
+            Assert.NotNull(outer);
+            Assert.NotNull(first);
+
+            Assert.Equal(outer!.ClientTop + 40, first!.Location.Y, 3);
+        }
+
+        // A known boundary, characterized rather than left silent. With nothing on the ancestor chain to
+        // block collapse-through, the margin is not the first child's any more - it collapses all the
+        // way up and is carried by the root box, which has no containing block for a break to fall at
+        // the top of and no parent link for a break-before to travel up. So the truncation this fixes
+        // does not reach that shape, and the margin still paginates as blank space.
+        [Fact]
+        public async Task FirstChildMarginCollapsingToTheRoot_IsNotTruncated_KnownBoundary()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                FirstChildDocument(""), pageHeight: FirstChildPageHeight);
+
+            var first = LayoutHarness.FindById(root, "first");
+            Assert.NotNull(first);
+
+            Assert.True(first!.Location.Y > container.PageTopOf(1),
+                $"expected the untruncated margin to carry the box past slot 1's top, was {first.Location.Y}");
+        }
+
+        #endregion
 
         #region Helpers
 

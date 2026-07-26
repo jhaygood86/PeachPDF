@@ -1494,6 +1494,10 @@ var directionalBreaksHtml =
     p { margin: 0 0 9pt; }
     section.chapter { break-before: recto; }
     section.end { break-after: recto; }
+    /* The `section > heading` idiom: the break is declared on the *first child* of its container
+       rather than on the container itself, so it has no preceding sibling of its own to be resolved
+       against and is resolved against the wrapper's instead. */
+    div.part > h2 { break-before: recto; }
     h2 { string-set: chapter content(); }
     </style>
     </head>
@@ -1516,13 +1520,25 @@ var directionalBreaksHtml =
         + "</section>"))
     + """
 
+    <div class="part">
+    <h2><span class="num">COLOPHON</span>Where the Break Is Declared</h2>
+    <p>This heading opens on a right-hand page like every chapter before it, but the rule that puts it
+    there is written on the heading rather than on the division that contains it. A heading is the first
+    thing in its division, so there is no earlier sibling for the break to fall after; the break point
+    before it is the same break point as the one before the division, and it is resolved there.</p>
+    <p>A break declared on the very first thing in a document is a different matter. Nothing precedes it,
+    so there is nothing to break from, and no page is manufactured in front of it.</p>
+    </div>
+
     </body>
     </html>
     """;
 
 await SaveShowcaseAsync("paged_media_directional_breaks", "Paged Media", "Directional Page Breaks",
     "Chapters that always open on a right-hand page: break-before: recto inserts a blank verso page "
-    + "when it needs one, and the outer-edge folios show the left/right alternation.",
+    + "when it needs one, and the outer-edge folios show the left/right alternation. The closing "
+    + "colophon declares its break on the heading rather than the division, so it is resolved against "
+    + "the division's own predecessor.",
     directionalBreaksHtml, new PdfGenerateConfig { PageSize = PageSize.A5 });
 
 // ── Monolithic content showcase ────────────────────────────────────────────

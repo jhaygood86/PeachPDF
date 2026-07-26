@@ -1072,6 +1072,18 @@ namespace PeachPDF.Html.Core
         internal const double PageBoundaryEpsilon = 0.5;
 
         /// <summary>
+        /// Whether the page grid describes real fragmentainers, as against the
+        /// <see cref="double.MaxValue"/> page-height sentinel an unpaginated measurement pass uses.
+        /// </summary>
+        /// <remarks>
+        /// The "same sentinel caveat" the grid accessors above each mention, stated once. Every caller
+        /// that turns a coordinate into a slot and back — rather than merely reading a slot's geometry —
+        /// has to ask this first: under the sentinel every Y maps to slot 0, so
+        /// <see cref="PageTopOf"/><c>(1)</c> is not a coordinate any box can be placed at.
+        /// </remarks>
+        internal bool HasRealPageGrid => PageSize.Height is > 0 and < double.MaxValue - 1;
+
+        /// <summary>
         /// The content-band height of pagination slot <paramref name="pageIndex"/>. On the uniform
         /// grid every slot's band is <see cref="PageSize"/>'s <c>Height</c>; kept as a per-slot lookup
         /// so per-page <c>@page</c> margin geometry has a single seam to vary it through. Same
