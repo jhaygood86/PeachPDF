@@ -2,6 +2,8 @@ using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.Tests.TestSupport;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Tests.Integration
@@ -74,6 +76,10 @@ namespace PeachPDF.Tests.Integration
         // is pinned to 8pt (the value the UA default `body { margin: 8px }` resolved to when these
         // positions were calibrated, before px became 0.75pt), so the empirical numbers stay exact.
 
+        private const string EightLineParagraph =
+            "<p id='p' style='width:200pt;line-height:20pt;margin:0;padding:0'>" +
+            "L1<br>L2<br>L3<br>L4<br>L5<br>L6<br>L7<br>L8</p>";
+
         private const string FourLineParagraph =
             "<p id='p' style='width:200pt;line-height:20pt;margin:0;padding:0'>Line1<br>Line2<br>Line3<br>Line4</p>";
 
@@ -123,6 +129,85 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(38, box.Location.Y, 1);
         }
 
+        // orphans decided at the break point rather than afterwards (css-break-3 §5.4). This is the case
+        // the whole-box push deliberately skips - moving a paragraph taller than the band cannot help,
+        // because it would recreate the violation on the next page - but the *break before it* can fall
+        // earlier perfectly well, and with a single line above the boundary orphans:2 says it must.
+        [Fact]
+        public async Task Orphans2_ParagraphTallerThanTheBand_BreaksBeforeItselfRatherThanStrandingOneLine()
+        {
+            var box = await FindByIdInPagedDocAsync(70, EightLineParagraph);
+
+            // Nothing of it is left on the first page: it begins at the second page's content top.
+            Assert.Equal(100, box.Location.Y, 1);
+            Assert.All(WordsOf(box), word => Assert.True(word.Top >= 100, $"word at {word.Top} stayed behind"));
+        }
+
+        // The author's own relaxation of the same constraint: orphans:1 permits a single-line fragment, so
+        // the paragraph stays exactly where ordinary flow put it and its first line stays on page one.
+        [Fact]
+        public async Task Orphans1_ParagraphTallerThanTheBand_KeepsItsSingleLineFragment()
+        {
+            var box = await FindByIdInPagedDocAsync(
+                70, EightLineParagraph.Replace("margin:0", "margin:0;orphans:1"));
+
+            Assert.Equal(78, box.Location.Y, 1);
+            Assert.Contains(WordsOf(box), word => word.Top < 100);
+        }
+
+        // Where the fragment being left already satisfies orphans, nothing moves - the same paragraph one
+        // line higher keeps its three lines on the first page and continues on the second.
+        [Fact]
+        public async Task Orphans2_SatisfiedByTheNaturalBreak_LeavesTheParagraphWhereItIs()
+        {
+            var box = await FindByIdInPagedDocAsync(30, EightLineParagraph);
+
+            Assert.Equal(38, box.Location.Y, 1);
+            Assert.True(WordsOf(box).Count(word => word.Top < 100) >= 2, "expected at least orphans:2 lines to stay");
+        }
+
+        // The ladder's fourth tier: with nothing above it in the fragmentainer, moving the box cannot give
+        // it more room, so the constraint is given up rather than acted on - which is also what keeps a band
+        // too small for `orphans` lines from walking the box down the document one page at a time.
+        [Fact]
+        public async Task Orphans2_NothingAboveItInTheFragmentainer_IsLeftWhereItIs()
+        {
+            // A band of 30pt against 20pt lines: wherever this paragraph starts it can only ever keep one
+            // line, and it starts at the very top of the band. The zero-height sibling above it is what makes
+            // this reachable at all - a box that is its fragmentainer's first child is excluded already.
+            var html = "<!DOCTYPE html><html><head></head><body style='margin:0'>" +
+                       "<div style='height:0'></div>" +
+                       "<p id='p' style='width:200pt;line-height:20pt;margin:0;padding:0'>L1<br>L2<br>L3</p>" +
+                       "</body></html>";
+
+            var (root, container) = await BuildAndLayoutPaged(html, pageHeight: 30);
+            var box = FindById(root, "p")!;
+
+            Assert.Equal(0, box.Location.Y, 1);
+            Assert.True(container.FragmentainerPasses <= 4, $"expected a bounded pass count, got {container.FragmentainerPasses}");
+        }
+
+        // One correction per box per layout, not per pass. The decision is taken by the parent's child loop,
+        // which runs again on every pass, and a box that travels with its keep-with-next run lands the same
+        // distance below the fragmentainer top it did before - so repeated, this walks the box down the
+        // document one pass per page, against a driver cap of 100,000 passes.
+        [Fact]
+        public async Task Orphans2_HeadingAndParagraph_AreCorrectedOnceRatherThanWalkingTheDocument()
+        {
+            var html = "<!DOCTYPE html><html><head></head><body style='margin:0'>" +
+                       "<div style='height:70pt'></div>" +
+                       "<h2 style='margin:0;font-size:10pt'>Heading</h2>" +
+                       "<p id='p' style='width:200pt;line-height:20pt;margin:0;padding:0'>" +
+                       "L1<br>L2<br>L3<br>L4<br>L5<br>L6<br>L7<br>L8</p>" +
+                       "</body></html>";
+
+            var (root, container) = await BuildAndLayoutPaged(html, pageHeight: 100);
+
+            Assert.NotNull(FindById(root, "p"));
+            Assert.True(container.FragmentainerPasses <= 8,
+                $"expected a bounded pass count, got {container.FragmentainerPasses}");
+        }
+
         [Fact]
         public async Task Widows2_ParagraphStartingOnSecondPage_StillNudgedCorrectly()
         {
@@ -154,6 +239,14 @@ namespace PeachPDF.Tests.Integration
         {
             var html = $"<!DOCTYPE html><html><head></head><body style='margin:8pt'><div style='height:{fillerHeightPt}pt'></div>{paragraphHtml}</body></html>";
 
+            var (root, _) = await BuildAndLayoutPaged(html, pageHeight: 100);
+
+            return FindById(root, "p")!;
+        }
+
+        private static async Task<(CssBox root, HtmlContainerInt container)> BuildAndLayoutPaged(
+            string html, double pageHeight)
+        {
             var adapter = new PdfSharpAdapter();
             adapter.PixelsPerPoint = 1.0;
             var container = new HtmlContainerInt(adapter);
@@ -163,7 +256,7 @@ namespace PeachPDF.Tests.Integration
             container.MarginBottom = 0;
             await container.SetHtml(html, null);
 
-            var size = new XSize(400, 100);
+            var size = new XSize(400, pageHeight);
             container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
 
@@ -172,8 +265,12 @@ namespace PeachPDF.Tests.Integration
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
-            return FindById(container.Root!, "p")!;
+            return (container.Root!, container);
         }
+
+        /// <summary>Every word in a box's subtree — a paragraph's text lives in its child boxes.</summary>
+        private static System.Collections.Generic.List<CssRect> WordsOf(CssBox box) =>
+            [.. LayoutHarness.Descendants(box).SelectMany(b => b.Words)];
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
 

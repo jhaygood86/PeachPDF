@@ -701,6 +701,38 @@ namespace PeachPDF.Tests.Html.Core.Fragments
             Assert.All(fragments, fragment => Assert.NotEmpty(fragment.Lines));
         }
 
+        /// <summary>
+        /// A box whose break moved because it would have left fewer lines than <c>orphans</c> behind must
+        /// leave no fragment in the fragmentainer it broke from either — the pass that froze that slot had
+        /// already placed the line, so the re-layout has to reach back and un-freeze it.
+        /// </summary>
+        [Fact]
+        public async Task AnOrphanedFirstLine_LeavesNoFragmentOnThePageItBrokeFrom()
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    // A background on the filler so the page it occupies is materialized at all - a
+                    // content-empty slot is never built (§3.2), and the assertion below is about a page that
+                    // exists.
+                    "<div style='height:170pt;background:#eee'></div>" +
+                    "<p id='p' style='margin:0;font:10pt Arial;line-height:20pt'>" +
+                    string.Join("<br>", Enumerable.Range(1, 12).Select(i => $"Line{i}")) + "</p>"),
+                pageHeight: 200, margin: 0);
+
+            var fragments = FragmentsOf(container.FragmentTree!, "p");
+
+            Assert.NotEmpty(fragments);
+            Assert.DoesNotContain(0, fragments.Select(f => f.FragmentainerIndex));
+
+            // And no word of it is claimed by the page it broke from, which is the ghost this pins
+            // against: the pass that froze that slot had already placed the line there.
+            var slotZero = container.FragmentTree!.Fragmentainers.Single(f => f.SlotIndex == 0);
+
+            Assert.DoesNotContain(
+                Flatten(slotZero.Root).SelectMany(f => f.Words),
+                word => word.Word.Text?.StartsWith("Line") == true);
+        }
+
         // ─── A fragment's own geometry (§2, nested fragmentainers) ─────────────────
 
         /// <summary>

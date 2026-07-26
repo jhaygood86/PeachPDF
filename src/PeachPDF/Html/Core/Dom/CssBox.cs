@@ -1191,6 +1191,20 @@ namespace PeachPDF.Html.Core.Dom
         private bool _earlyBreakTaken;
 
         /// <summary>
+        /// Whether the break before this box has already been moved once for <c>orphans</c> in this layout.
+        /// </summary>
+        /// <remarks>
+        /// Per <i>layout</i>, not per fragmentainer pass, and that is the point: the decision is taken by the
+        /// parent's child loop, which runs again on every pass, and moving the box forward can perfectly well
+        /// leave it in the same position relative to the next boundary — most easily when the keep-with-next
+        /// run travels with it, since the box then lands the same distance below the fragmentainer top it did
+        /// before. Repeated, that walks the box down the document one pass per page, and the driver's own cap
+        /// is 100,000 passes (#332 measured exactly this shape). One correction, then the box takes whatever
+        /// geometry gives it — which is <see cref="Fragmentation.BreakRelaxation"/>'s fourth tier.
+        /// </remarks>
+        private bool _orphansBreakTaken;
+
+        /// <summary>
         /// A break decision a child discovered that falls before one of <i>this</i> box's earlier
         /// children — the keep-with-next run pull, which is the one correction a box cannot carry out
         /// for itself.
@@ -1314,6 +1328,7 @@ namespace PeachPDF.Html.Core.Dom
                 _prologueDone = false;
                 _incomingToken = null;
                 _resumeTopOverride = null;
+                _orphansBreakTaken = false;
             }
 
             var resume = _incomingToken;
@@ -1809,18 +1824,71 @@ namespace PeachPDF.Html.Core.Dom
         /// (<see href="https://www.w3.org/TR/css-break-3/#break-between">css-break-3 §4.4</see>).
         /// </returns>
         /// <summary>
-        /// Whether <paramref name="token"/> says the box it names produced nothing at all in the
-        /// fragmentainer being left — an inline flow that kept no line.
+        /// Whether <paramref name="token"/> says the fragment being left holds fewer line boxes than
+        /// <paramref name="box"/>'s <c>orphans</c> minimum — in which case the break belongs <i>before</i>
+        /// the box rather than inside it, so those lines travel with the rest
+        /// (<see href="https://www.w3.org/TR/css-break-3/#widows-orphans">§5.4</see>,
+        /// <see href="https://www.w3.org/TR/css-break-3/#break-between">§4.4</see>).
         /// </summary>
         /// <remarks>
-        /// It is a column that makes this visible rather than a column that makes it true. On the page
-        /// grid an empty box left at the foot of a page is easy to miss; a column is sized to its content,
-        /// so the same box is a hole at the foot of one column with its text at the head of the next —
-        /// the shape multi-column layout exists to avoid. The rule is §4.4's either way, so it is not
-        /// gated on being in a column, and the full suite is unchanged by it.
+        /// <para>
+        /// <b>This is <c>orphans</c> decided at the break point, which is the only place it can be decided
+        /// forward.</b> How many lines fall <i>before</i> a break is known the moment the break is taken;
+        /// how many fall after it is not, since the rest of the content has yet to be flowed. So the
+        /// epilogue's retroactive whole-box push stays for <c>widows</c>, and the orphans half becomes a
+        /// break decision like any other — which also brings the case that push deliberately skips into
+        /// scope: a block taller than a band cannot be helped by moving it whole, but the break before it
+        /// can perfectly well fall earlier.
+        /// </para>
+        /// <para>
+        /// Keeping <i>no</i> line is the degenerate case (any <c>orphans</c> value is at least 1), and it
+        /// is §4.4's own rule rather than §5.4's: a box with no fragment here should not be left as an
+        /// empty stub. It is a column that makes that visible rather than a column that makes it true — on
+        /// the page grid an empty box at the foot of a page is easy to miss, while a column is sized to its
+        /// content, so the same box is a hole at the foot of one column with its text at the head of the
+        /// next.
+        /// </para>
         /// </remarks>
-        private static bool KeptNothingInThisFragmentainer(BreakToken token) =>
-            token is InlineBreakToken { CompletedLineCount: 0 };
+        private static bool KeepsFewerLinesThanOrphans(BreakToken token, CssBox box) =>
+            token is InlineBreakToken inline && inline.LinesKeptHere < OrphansOf(box);
+
+        /// <summary>
+        /// <paramref name="box"/>'s <c>orphans</c> minimum, never below 1 — a block that keeps no line at
+        /// all has no fragment here whatever the property says.
+        /// </summary>
+        private static int OrphansOf(CssBox box) =>
+            int.TryParse(box.Orphans, out var orphans) && orphans > 1 ? orphans : 1;
+
+        /// <summary>
+        /// Whether anything precedes <paramref name="box"/> inside the fragmentainer being filled — the
+        /// question "would starting it in the next one give it any more room than it has here?".
+        /// </summary>
+        private bool HasRoomAboveInThisFragmentainer(CssBox box) =>
+            HtmlContainer?.CurrentFragmentainer is { } context
+            && box.Location.Y > context.BandTop + HtmlContainerInt.PageBoundaryEpsilon;
+
+        /// <summary>
+        /// Whether a break may be moved for <c>orphans</c> at all in this document — false while per-page
+        /// horizontal reflow is still settling which page each box is on.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A document with per-page left/right <c>@page</c> margins is laid out several times over
+        /// (<c>HtmlContainerInt.PerformLayout</c>'s bounded reflow loop): a box's width is resolved before its
+        /// position is known, so each pass re-wraps every box against the page it turned out to land on, and
+        /// the loop runs until the box→page assignment stops changing. A box's page is therefore
+        /// <b>provisional</b> during that loop, and a break moved from a provisional assignment feeds back
+        /// into the very thing the loop is trying to settle — observed as a document that no longer converges
+        /// within the loop's cap, leaving a paragraph wrapped to a neighbouring page's measure, which is far
+        /// more visible than the orphan it was avoiding.
+        /// </para>
+        /// <para>
+        /// The same reasoning as the <see cref="HtmlContainerInt.IsFragmenting"/> gates: a decision taken
+        /// against coordinates the box does not end up at is not a decision. <c>widows</c>' retroactive push
+        /// is unaffected — it runs after the box is complete and does not change any box's width.
+        /// </para>
+        /// </remarks>
+        private bool OrphansMayMoveABreak => HtmlContainer is { UseVariablePageWidth: false };
 
         /// <summary>
         /// Lays this box's out-of-flow children out again, for an engine that narrowed its own inline
@@ -1911,14 +1979,46 @@ namespace PeachPDF.Html.Core.Dom
                             return true;
                         }
 
-                        // A child that kept nothing here has no fragment in this fragmentainer, so the
-                        // break falls *before* it rather than inside it (§4.4). Left as a break inside,
-                        // it leaves an empty box behind - which on the page grid is invisible, and in a
-                        // column is a hole the next column's content cannot fill.
-                        if (KeptNothingInThisFragmentainer(childToken) && i > start)
+                        // A child that kept too few lines here to satisfy its own orphans minimum - none
+                        // at all being the degenerate case - has the break fall *before* it rather than
+                        // inside it (§5.4, §4.4), so those lines travel with the rest of its content
+                        // instead of being stranded at the foot of the fragmentainer being left.
+                        // Nothing above it in this fragmentainer means moving it cannot help: it would keep
+                        // the same too-few lines at the top of the next one, and ask again. That is the
+                        // ladder's fourth tier (see BreakRelaxation) - the constraint is given up rather than
+                        // acted on pointlessly - and it is what keeps a band too small for `orphans` lines
+                        // from walking the box down the document.
+                        if (KeepsFewerLinesThanOrphans(childToken, childBox) && i > start
+                            && OrphansMayMoveABreak
+                            && !childBox._orphansBreakTaken
+                            && HasRoomAboveInThisFragmentainer(childBox))
                         {
+                            childBox._orphansBreakTaken = true;
+
+                            // The target has to travel with the break. A break-before whose top is left to
+                            // be re-derived places the child at its natural position again - which for a box
+                            // that kept a line or two is still inside the fragmentainer being left, so the
+                            // resumed pass reaches the same conclusion and the driver's no-progress backstop
+                            // is what ends it. Flush at the destination's content top, per §5.2: the margin
+                            // adjoining an unforced break is truncated.
+                            var orphanTarget = HtmlContainer!.PageTopOf(childToken.ResumeSlotIndex);
+
+                            // And a run chained to it by `avoid` travels too, exactly as it does when the
+                            // epilogue's own orphans/widows mover relocates the box: the reason the break
+                            // moved is different, but "do not strand the heading above it" is the same
+                            // requirement (§3.1), and this is the only level the run's members are siblings
+                            // at.
+                            if (HtmlContainer.CurrentFragmentainer is not { HasOwnBand: true }
+                                && EarlyBreak.Discover(childBox, orphanTarget, EarlyBreakReason.OrphansWidows)
+                                    is { KeepWithNextRun.Count: > 0 } orphanPull
+                                && TryRestartAt(orphanPull, start, i, ref restartedHeads, out var orphanFrom))
+                            {
+                                i = orphanFrom - 1;
+                                continue;
+                            }
+
                             PendingBreakToken = new BlockBreakToken(
-                                this, childToken.ResumeSlotIndex, i, null, IsBreakBefore: true, null);
+                                this, childToken.ResumeSlotIndex, i, null, IsBreakBefore: true, orphanTarget);
                             return true;
                         }
 
@@ -2061,9 +2161,13 @@ namespace PeachPDF.Html.Core.Dom
         /// otherwise its continuation is laid out over the fragment it just left.
         /// </para>
         /// <para>
-        /// The block axis moves too, and to the containing block's own content top rather than to the
-        /// fragmentainer's: for a top-level child of the container the two are the same, and for anything
-        /// deeper the containing block has already been re-placed here, so its content edge is inside its own
+        /// The block axis moves too, to whichever of the fragmentainer's own content edge and the containing
+        /// block's is lower. Neither alone is right: the containing block of a top-level child is the
+        /// multi-column container itself, and a container spanning pages keeps the top it was placed at on
+        /// the page it <i>began</i> — so its content edge names a coordinate a column several bands further
+        /// down does not reach, and reading it moved a continuation back to the container's first column.
+        /// The fragmentainer's edge answers that case; the containing block's answers the deeper one, where
+        /// it has already been re-placed inside this fragmentainer and its content edge sits inside its own
         /// border and padding. This box begins the fragmentainer, so it has no predecessor to resolve
         /// against, and §5.2 truncates the margin adjoining the unforced break that put it here.
         /// </para>
@@ -2078,14 +2182,16 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private void ResumeInTheNextFragmentainer()
         {
-            if (HtmlContainer?.CurrentFragmentainer is not { HasOwnBand: true }) return;
+            if (HtmlContainer?.CurrentFragmentainer is not { HasOwnBand: true } fragmentainer) return;
             if (Display is CssConstants.TableCell || Position is not (CssConstants.Static or CssConstants.Relative))
                 return;
 
             // Moving Location is the whole translation: ActualRight and ActualBottom are derived from it
             // (Location plus the box-sizing extent), so the inline size this box was measured at on the pass
             // that placed it survives untouched - which is precisely §2's one-inline-size rule.
-            Location = new RPoint(ContainingBlock.ClientLeft + ActualMarginLeft, ContainingBlock.ClientTop);
+            var top = Math.Max(fragmentainer.ResumeContentTop, ContainingBlock.ClientTop);
+
+            Location = new RPoint(ContainingBlock.ClientLeft + ActualMarginLeft, top);
             ActualBottom = Location.Y;
         }
 
