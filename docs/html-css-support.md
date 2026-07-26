@@ -498,10 +498,15 @@ CSS Multi-column Layout (`column-count`/`column-width`/`columns`) is supported, 
 - [Monolithic content](#monolithic-content) — a replaced element or a scroll container — moves whole to the next column rather than being cut by the boundary.
 - `orphans`/`widows` and [margin truncation](#page-breaks) apply at a column boundary the same way they apply at a page boundary.
 - A container whose content outlasts its columns continues on the next page, resuming where its last column stopped rather than starting over, and balances the fragment that holds the end of the flow.
+- A child continues **into** the next column rather than moving to it whole: a paragraph's first lines stay in one column and the rest flow into the next, each fragment carrying its own background, border and padding.
 
-**One deliberate simplification remains: children are fragmented at whole-child granularity.** A single paragraph moves to the next column as one unit rather than having some of its lines flow into one column and the rest into the next, and one too tall for its column overflows rather than splitting. This is not a tuning choice — a box carries a single position, and columns sit side by side within one page band, so a box split across two of them would have both halves at the same vertical position and the same horizontal one, drawing over each other. For content made of many short block-level children (dictionary entries, list items, cards — the common real-world shape), this produces correct column geometry.
+`column-fill: balance` (the default) aims for equal-height columns, and `column-fill: auto` fills each column before starting the next.
+
+**Migration note.** Before content could split at a column boundary, a child was atomic per column — a paragraph that did not fit moved to the next column whole, and one too tall for any column overflowed it. Documents relying on that (a container sized so that exactly one child fit per column, say) may now paginate differently, because the boundary is a real break point rather than a whole-child packing decision. See [Forward compatibility](#forward-compatibility).
 
 A multi-column container whose content is only text, with no block-level child of its own, is not columnized at all — its content needs a block box to be moved between columns as.
+
+Two limitations at a column boundary specifically: a box split across it draws a closed border on both fragments rather than leaving the break edge open the way `box-decoration-break: slice` asks for (a page break gets this right, because the page clip cuts the border away), and a multi-column container nested inside another one splits its children at the outer level only.
 
 | Property | MDN Reference | Notes |
 |----------|--------------|-------|

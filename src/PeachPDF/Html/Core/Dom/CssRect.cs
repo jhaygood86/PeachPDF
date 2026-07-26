@@ -309,14 +309,15 @@ namespace PeachPDF.Html.Core.Dom
             if (MonolithicContent.FitsNoFragmentainer(Height, clonedTop, clonedBottom, container))
                 return false;
 
-            // Inside a multi-column column, never. A column is a fragmentainer (§2), but the engine
-            // driving them moves whole children between columns rather than splitting one across two -
-            // a box carries a single Location, and columns sit side by side inside one page band, so a
-            // box in two of them would have both halves at the same document Y and one X. Answering yes
-            // here would split a child anyway, behind the driver's back, and the two halves would be
-            // drawn on top of each other. A child too tall for its column overflows it instead.
-            if (container.CurrentFragmentainer is { HasOwnBand: true })
-                return false;
+            // Inside a multi-column column the question is about that column's own band, not the page grid's:
+            // every column shares one page band, so the grid cannot say a word has left one column for the
+            // next. The same "fits nowhere" exemption applies one size down — a word too tall for any column
+            // overflows the one it is in rather than breaking to a fresh column for every column there is.
+            if (container.CurrentFragmentainer is { HasOwnBand: true } columnBand)
+            {
+                return MonolithicContent.FitsInBand(Height, clonedTop, clonedBottom, columnBand.BandHeight)
+                       && Bottom + clonedBottom - HtmlContainerInt.PageBoundaryEpsilon > columnBand.BandBottom;
+            }
 
             // The epsilons make a line ending exactly ON a slot boundary a non-break (it fits wholly in
             // the earlier slot).

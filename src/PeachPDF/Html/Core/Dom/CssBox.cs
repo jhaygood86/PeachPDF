@@ -1573,7 +1573,7 @@ namespace PeachPDF.Html.Core.Dom
         /// box's own height, or moves it, has to ask this first: for those boxes the coordinates belong to
         /// something else and both the measurement and the move are meaningless.
         /// </remarks>
-        private bool PlacesItselfAsBlockBox =>
+        internal bool PlacesItselfAsBlockBox =>
             IsBlock
             || Display is CssConstants.ListItem or CssConstants.Table or CssConstants.InlineTable
                        or CssConstants.TableCell or CssConstants.Flex or CssConstants.InlineFlex
@@ -1590,6 +1590,10 @@ namespace PeachPDF.Html.Core.Dom
                     // Placement decided the break falls before this box, so it contributes nothing to
                     // the fragmentainer being filled and its content waits for the next pass.
                     if (RequestedBreakBeforeTop is not null) return;
+                }
+                else
+                {
+                    ResumeInTheNextFragmentainer();
                 }
 
                 // The engines MonolithicContent.RunsAnEngineOfItsOwn names, in the same order; this branch
@@ -2043,6 +2047,48 @@ namespace PeachPDF.Html.Core.Dom
         /// end of the whole flow. Skipping it is also what keeps a box that spans a fragmentainer
         /// boundary on one inline size across its fragments, per CSS Fragmentation Level 3 §2.
         /// </remarks>
+        /// <summary>
+        /// Moves this box to the origin of the fragmentainer a resumed pass is filling, where that
+        /// fragmentainer is one of its own rather than a page — a multi-column column.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Every fragmentainer of the page grid shares one inline position, which is why
+        /// <see cref="PlaceBlockBox"/> deliberately does not run again on a resumed pass: CSS Fragmentation
+        /// Level 3 §2 gives a box one inline size across all of its fragments, and re-deriving its top from
+        /// the previous sibling would read the end of the whole flow. A column differs from its neighbours in
+        /// exactly the axis that rule holds constant, so a box continuing into one has to be moved there —
+        /// otherwise its continuation is laid out over the fragment it just left.
+        /// </para>
+        /// <para>
+        /// The block axis moves too, and to the containing block's own content top rather than to the
+        /// fragmentainer's: for a top-level child of the container the two are the same, and for anything
+        /// deeper the containing block has already been re-placed here, so its content edge is inside its own
+        /// border and padding. This box begins the fragmentainer, so it has no predecessor to resolve
+        /// against, and §5.2 truncates the margin adjoining the unforced break that put it here.
+        /// </para>
+        /// <para>
+        /// Only this box moves, not its subtree. Its already-placed descendants belong to the fragmentainer
+        /// being left and keep the geometry that one's own fragment was built from
+        /// (<c>FragmentEmitter.RecordNestedFragmentainer</c>); the content this pass places derives from the
+        /// new <see cref="CssBoxProperties.ClientLeft"/> as it flows. The inline <i>size</i> is preserved —
+        /// every column is the same width, so the box is translated rather than re-measured, which keeps §2's
+        /// one-inline-size rule intact.
+        /// </para>
+        /// </remarks>
+        private void ResumeInTheNextFragmentainer()
+        {
+            if (HtmlContainer?.CurrentFragmentainer is not { HasOwnBand: true }) return;
+            if (Display is CssConstants.TableCell || Position is not (CssConstants.Static or CssConstants.Relative))
+                return;
+
+            // Moving Location is the whole translation: ActualRight and ActualBottom are derived from it
+            // (Location plus the box-sizing extent), so the inline size this box was measured at on the pass
+            // that placed it survives untouched - which is precisely §2's one-inline-size rule.
+            Location = new RPoint(ContainingBlock.ClientLeft + ActualMarginLeft, ContainingBlock.ClientTop);
+            ActualBottom = Location.Y;
+        }
+
         private async ValueTask PlaceBlockBox(RGraphics g)
         {
             // Because their width and height are set by CssTable, CssLayoutEngineFlex or CssLayoutEngineGrid

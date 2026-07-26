@@ -701,6 +701,99 @@ namespace PeachPDF.Tests.Html.Core.Fragments
             Assert.All(fragments, fragment => Assert.NotEmpty(fragment.Lines));
         }
 
+        // ─── A fragment's own geometry (§2, nested fragmentainers) ─────────────────
+
+        /// <summary>
+        /// A multi-column column is a fragmentainer that differs from its neighbours in the <b>inline</b>
+        /// axis, so a box split across two of them produces two fragments with the same Y range and
+        /// different X. Nothing read off the box could say that: a <c>CssBox</c> carries one
+        /// <c>Location</c>, which is why the fragmentainer's geometry is captured while it is being filled
+        /// rather than re-read afterwards.
+        /// </summary>
+        [Fact]
+        public async Task ABoxSplitAcrossColumns_ProducesAFragmentPerColumnAtItsOwnInlinePosition()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(SplitAcrossColumns(), pageHeight: 200, margin: 0);
+
+            var mc = LayoutHarness.FindById(root, "mc")!;
+            var fragments = FragmentsOf(container.FragmentTree!, "long");
+
+            Assert.True(fragments.Count >= 2, $"expected a fragment per column, got {fragments.Count}");
+
+            var first = fragments.OrderBy(f => f.Rect.X).First();
+            var second = fragments.OrderBy(f => f.Rect.X).Last();
+
+            // Two fragments of one box, in one page band, told apart by the inline axis alone.
+            Assert.Equal(mc.ClientLeft, first.Rect.X, 1);
+            Assert.True(second.Rect.X > first.Rect.Right,
+                $"expected the continuation in the next column, got {second.Rect.X} against {first.Rect.Right}");
+
+            // Each carries a decoration rectangle of its own, which is what a background or border paints
+            // over - the half the box's single Location could never describe.
+            Assert.NotEmpty(first.Lines);
+            Assert.NotEmpty(second.Lines);
+            Assert.Equal(first.Rect.X, first.Lines[0].Rect.X, 1);
+            Assert.Equal(second.Rect.X, second.Lines[0].Rect.X, 1);
+
+            // And §2's one inline size across a box's fragments still holds.
+            Assert.Equal(first.Lines[0].Rect.Width, second.Lines[0].Rect.Width, 1);
+        }
+
+        /// <summary>
+        /// The words of each fragment are its own: a column's region is a question about both axes, so a
+        /// rectangle a neighbouring column contributed to the same box is not claimed here.
+        /// </summary>
+        [Fact]
+        public async Task EachColumnFragment_ClaimsOnlyTheWordsPlacedInIt()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(SplitAcrossColumns(), pageHeight: 200, margin: 0);
+
+            var mc = LayoutHarness.FindById(root, "mc")!;
+            var fragments = FragmentsOf(container.FragmentTree!, "long");
+
+            foreach (var fragment in fragments)
+            {
+                var words = Flatten(fragment).SelectMany(f => f.Words).ToList();
+
+                Assert.NotEmpty(words);
+                Assert.All(words, word => Assert.InRange(
+                    word.Rect.X, fragment.Rect.X - 1, fragment.Rect.X + mc.ActualWidth));
+            }
+
+            // No word is claimed twice, which a Y-only membership test could not prevent.
+            var claimed = fragments.SelectMany(f => Flatten(f)).SelectMany(f => f.Words).Select(w => w.Word).ToList();
+            Assert.Equal(claimed.Count, claimed.Distinct().Count());
+        }
+
+        /// <summary>
+        /// A box that continues into the next column has not had its height applied — its epilogue runs only
+        /// on the pass that completes it — so its fragment's decoration area comes from the content it placed
+        /// here. Read off the box, the earlier column's fragment is zero-height and paints nothing.
+        /// </summary>
+        [Fact]
+        public async Task AContinuingColumnFragment_IsAsTallAsTheContentItHolds()
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(SplitAcrossColumns(), pageHeight: 200, margin: 0);
+
+            var first = FragmentsOf(container.FragmentTree!, "long").OrderBy(f => f.Rect.X).First();
+
+            var line = Assert.Single(first.Lines);
+            var words = Flatten(first).SelectMany(f => f.Words).ToList();
+
+            Assert.True(line.Rect.Height > 0, "the leading fragment must have a real decoration area");
+            Assert.True(line.Rect.Bottom >= words.Max(w => w.Rect.Bottom) - 1,
+                $"decoration {line.Rect.Bottom} must cover its content {words.Max(w => w.Rect.Bottom)}");
+        }
+
+        /// <summary>
+        /// A paragraph long enough to fill one column and continue into the next, in a container whose
+        /// columns are the only thing separating the two fragments.
+        /// </summary>
+        private static string SplitAcrossColumns() => LayoutHarness.Wrap(
+            "<div id='mc' style='columns:2; column-gap:20pt; column-fill:auto; font:10pt Arial'>" +
+            $"<p id='long' style='margin:0; background:#eee'>{Words(300)}</p>" +
+            "</div>");
+
         private static string ManyWords() => Words(400);
 
         private static string Words(int count) =>

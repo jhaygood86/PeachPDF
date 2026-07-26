@@ -203,8 +203,10 @@ namespace PeachPDF.Html.Core.Fragments
     /// One fragmentainer — for PeachPDF, one materialized PDF page. Per
     /// <see href="https://www.w3.org/TR/css-break-3/#fragmentainer">CSS Fragmentation Level 3 §2</see>
     /// a fragmentainer is not a DOM element; it is a slot in a fragmentation context that content
-    /// flows into. Multi-column columns are also fragmentainers per spec, but PeachPDF only models
-    /// pages here — its columns engine still re-bands whole children itself.
+    /// flows into. Multi-column columns are fragmentainers too, and content genuinely splits across
+    /// them — but a column is not a <i>page</i>, so its fragments are ordinary
+    /// <see cref="BoxFragment"/>s inside the page that holds them, each carrying the geometry the
+    /// column it was filled in gave it.
     /// </summary>
     /// <param name="Rect">the fragmentainer's own content band, in its own local coordinates</param>
     /// <param name="SlotIndex">

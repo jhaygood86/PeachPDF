@@ -898,7 +898,7 @@ namespace PeachPDF.Html.Core
         /// <summary>
         /// Un-freezes every already-emitted fragmentainer from the one containing <paramref name="documentY"/>
         /// on, because <paramref name="box"/>'s geometry there is about to change — see
-        /// <see cref="FragmentEmitter.InvalidateFor"/>. A no-op in the ordinary forward case, and during an
+        /// <see cref="FragmentEmitter.InvalidateFrom"/>. A no-op in the ordinary forward case, and during an
         /// unpaginated/measurement pass, which has no grid to name a slot against.
         /// </summary>
         internal void InvalidateEmittedFragmentsFor(CssBox box, double documentY)
@@ -910,6 +910,33 @@ namespace PeachPDF.Html.Core
 
             _emitter.InvalidateFrom(PageIndexOf(documentY));
         }
+
+        /// <summary>
+        /// Hands one nested fragmentainer — a multi-column column,
+        /// <see href="https://www.w3.org/TR/css-break-3/#fragmentainer">§2</see>'s other kind — over to the
+        /// emitter, with the geometry the subtree had while it was being filled.
+        /// </summary>
+        /// <remarks>
+        /// The one place layout <i>states</i> a fragment's geometry rather than leaving the emitter to read
+        /// it off the boxes. It has to, because a nested fragmentainer differs from its neighbours in the
+        /// <b>inline</b> axis: a box continuing into the next column is laid out again at that column's own
+        /// position, so its live geometry describes only the last fragment it produced.
+        /// </remarks>
+        internal void RecordNestedFragmentainer(
+            CssBox contextRoot,
+            int slot,
+            (double Top, double Bottom) band,
+            (double Left, double Right) inline,
+            BoxGeometrySnapshot geometry,
+            IReadOnlySet<CssBox> continuing) =>
+            _emitter?.RecordNestedFragmentainer(contextRoot, slot, band, inline, geometry, continuing);
+
+        /// <summary>
+        /// Discards what <paramref name="contextRoot"/> recorded in <paramref name="slot"/> — or, with no
+        /// slot, in every slot — for a fill being attempted afresh.
+        /// </summary>
+        internal void ClearNestedFragmentainers(CssBox contextRoot, int? slot = null) =>
+            _emitter?.ClearNestedFragmentainers(contextRoot, slot);
 
         /// <summary>
         /// The box whose background fills the whole page canvas, per

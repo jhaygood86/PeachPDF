@@ -29,7 +29,21 @@ namespace PeachPDF.Html.Core.Fragments
             internal double ActualRight { get; init; }
             internal double ActualBottom { get; init; }
             internal Dictionary<CssLineBox, RRect> Rectangles { get; } = [];
-            internal List<RPoint> WordOrigins { get; } = [];
+
+            /// <summary>
+            /// Where each of the box's words sat, or null for one that belongs to the <i>next</i>
+            /// fragmentainer.
+            /// </summary>
+            /// <remarks>
+            /// A line box never straddles a fragmentainer (css-break-3 §4.1), so a flow that stops mid-line
+            /// discards the line being built — but its words keep the position of that abandoned attempt
+            /// until the resumed pass re-places them. Captured as-is they are ghosts at the foot of the
+            /// fragmentainer they had left, which is exactly what
+            /// <see cref="CssRect.AwaitsTheNextFragmentainer"/> exists to say. It cannot be read at emission
+            /// time instead: by then the resumed pass has re-placed the word and cleared the flag, while this
+            /// snapshot still holds where it used to be.
+            /// </remarks>
+            internal List<RPoint?> WordOrigins { get; } = [];
 
             internal RRect Bounds => RRect.FromLTRB(Location.X, Location.Y, ActualRight, ActualBottom);
         }
@@ -45,6 +59,28 @@ namespace PeachPDF.Html.Core.Fragments
 
             var snapshot = new BoxGeometrySnapshot();
             snapshot.CaptureBox(root);
+            return snapshot;
+        }
+
+        /// <summary>
+        /// Captures the current geometry of each of <paramref name="roots"/> and their descendants.
+        /// </summary>
+        /// <remarks>
+        /// The subtree-set form exists for a nested fragmentainer, which holds <i>some</i> of a container's
+        /// children rather than all of them: the ones a column's fill never reached still carry the
+        /// measurement pass's geometry, and capturing that would describe content in a column it is not in.
+        /// </remarks>
+        internal static BoxGeometrySnapshot Capture(IEnumerable<CssBox> roots)
+        {
+            ArgumentNullException.ThrowIfNull(roots);
+
+            var snapshot = new BoxGeometrySnapshot();
+
+            foreach (var root in roots)
+            {
+                snapshot.CaptureBox(root);
+            }
+
             return snapshot;
         }
 
@@ -64,7 +100,8 @@ namespace PeachPDF.Html.Core.Fragments
 
             foreach (var word in box.Words)
             {
-                geometry.WordOrigins.Add(new RPoint(word.Left, word.Top));
+                geometry.WordOrigins.Add(
+                    word.AwaitsTheNextFragmentainer ? null : new RPoint(word.Left, word.Top));
             }
 
             _geometry[box] = geometry;
@@ -76,5 +113,11 @@ namespace PeachPDF.Html.Core.Fragments
         }
 
         internal bool TryGetGeometry(CssBox box, out BoxGeometry geometry) => _geometry.TryGetValue(box, out geometry!);
+
+        /// <summary>
+        /// Whether this snapshot captured <paramref name="box"/> at all — the question "was this box placed
+        /// in the fragmentainer this snapshot describes?", which is not the same as whether it has geometry.
+        /// </summary>
+        internal bool Holds(CssBox box) => _geometry.ContainsKey(box);
     }
 }

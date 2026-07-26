@@ -647,29 +647,58 @@ namespace PeachPDF.Tests.Integration
             Assert.All(placed, b => Assert.True(b.ActualBottom > b.Location.Y, "every item keeps a height"));
         }
 
-        // A known boundary, characterized rather than left silent. A box carries one Location, and
-        // columns sit side by side inside a single page band - so a box split across two of them would
-        // have both halves at the same document Y and one X, with its continuation lines laid out over
-        // the ones already there. A top-level child is therefore atomic per column, exactly as it was
-        // before columns became fragmentainers. Closing this needs geometry held per fragment.
+        // The invariant this was drafted as, and characterized as a boundary until a fragment carried
+        // geometry of its own: a child continues into the next column rather than moving to it whole. What
+        // used to make that impossible is that a box carries one Location, and columns sit side by side
+        // inside a single page band - so both halves had the same document Y *and* the same X, with the
+        // continuation's lines laid out over the ones already there.
         [Fact]
-        public async Task AChildIsStillAtomicPerColumn_KnownBoundary()
+        public async Task AChildSplitsAcrossColumns_ItsLinesLandingInEach()
         {
             var html = Wrap(@"
-                <div id='mc' style='columns:2; column-gap:0; width:300px'>
-                    <div class='item' style='height:40px'></div>
+                <div id='mc' style='columns:2; column-gap:0; width:300px; column-fill:auto'>
+                    <p id='long'>One two three four five six seven eight nine ten eleven twelve thirteen
+                    fourteen fifteen sixteen seventeen eighteen nineteen twenty twenty-one twenty-two
+                    twenty-three twenty-four twenty-five twenty-six twenty-seven twenty-eight twenty-nine
+                    thirty thirty-one thirty-two thirty-three thirty-four thirty-five thirty-six.</p>
+                </div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 100);
+
+            var mc = FindById(root, "mc")!;
+            var longBox = FindById(root, "long")!;
+            var words = LayoutHarness.Descendants(longBox).SelectMany(b => b.Words).ToList();
+
+            var inFirstColumn = words.Where(w => w.Left < mc.ClientLeft + 100).ToList();
+            var inSecondColumn = words.Where(w => w.Left >= mc.ClientLeft + 100).ToList();
+
+            Assert.NotEmpty(inFirstColumn);
+            Assert.NotEmpty(inSecondColumn);
+
+            // The continuation starts at the top of its column rather than below where the first fragment
+            // ended - each column is a fragmentainer, and a resumed fragment begins at its content edge.
+            Assert.True(inSecondColumn.Min(w => w.Top) < inFirstColumn.Max(w => w.Top),
+                "expected the continuation to start above the point the first column reached");
+        }
+
+        // The other half of splitting: the box itself moves to the column it continues in, and keeps the
+        // inline size it was measured at (css-break-3 §2 gives a box one inline size across its fragments).
+        [Fact]
+        public async Task AChildContinuingIntoTheNextColumn_IsPlacedAtThatColumnsOrigin()
+        {
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:20px; width:300px; column-fill:auto'>
                     <p id='long'>One two three four five six seven eight nine ten eleven twelve thirteen
                     fourteen fifteen sixteen seventeen eighteen nineteen twenty twenty-one twenty-two.</p>
                 </div>");
-            var (root, _) = await BuildAndLayout(html, pageHeight: 120);
+            var (root, _) = await BuildAndLayout(html, pageHeight: 100);
 
+            var mc = FindById(root, "mc")!;
             var longBox = FindById(root, "long")!;
-            var xs = LayoutHarness.Descendants(longBox).SelectMany(b => b.Words).Select(w => System.Math.Round(w.Left)).Distinct().ToList();
 
-            // Every one of its words sits in a single column: if this ever spans two, the boundary has
-            // been closed and this should become the invariant it was drafted as.
-            Assert.True(xs.Max() - xs.Min() < 150,
-                $"expected one column's worth of X positions, got {xs.Min()}..{xs.Max()}");
+            // columns:2 over a 225pt content box with a 15pt gap: 105pt columns, the second at +120pt.
+            Assert.Equal(mc.ClientLeft + 120, longBox.Location.X, 1);
+            Assert.Equal(105, longBox.ActualWidth, 1);
+            Assert.Equal(mc.ClientTop, longBox.Location.Y, 1);
         }
 
         // column-fill: auto fills each column before starting the next, so the first column runs to the
