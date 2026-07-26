@@ -400,6 +400,46 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(2, vertical);
         }
 
+        // ── the column axis ───────────────────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// A column boundary is the one break with no clip behind it: two columns of a page share its band,
+        /// so the border a fragment draws at the break is a border that is really there. §6.2's
+        /// <c>slice</c> says it is not — the box is rendered unbroken and then cut — so however many
+        /// fragments the paragraph ends up in, exactly one top edge and one bottom edge are drawn.
+        /// </summary>
+        [Fact]
+        public async Task Slice_BlockSplitAtAColumnBoundary_DrawsNoBorderAtTheBreak()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                SplitAcrossColumns("border:2pt solid #00f"), pageHeight: 200, margin: 0);
+
+            var fragments = FragmentCountOf(container, LayoutHarness.FindById(root, "long")!);
+            Assert.True(fragments > 2, $"expected the paragraph to split across columns, got {fragments} fragments");
+
+            Assert.Equal(2, CountBlueEdges(container, vertical: false));
+
+            // Its own two sides are drawn once per fragment either way - they are not what a block-axis
+            // break cuts.
+            Assert.Equal(2 * fragments, CountBlueEdges(container, vertical: true));
+        }
+
+        /// <summary>
+        /// <c>clone</c> is the value that <i>does</i> close the box at a column break, and it is only
+        /// distinguishable from <c>slice</c> there now that <c>slice</c> stopped doing it too.
+        /// </summary>
+        [Fact]
+        public async Task Clone_BlockSplitAtAColumnBoundary_ClosesEveryFragment()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                SplitAcrossColumns("border:2pt solid #00f;box-decoration-break:clone"), pageHeight: 200, margin: 0);
+
+            var fragments = FragmentCountOf(container, LayoutHarness.FindById(root, "long")!);
+            Assert.True(fragments > 2, $"expected the paragraph to split across columns, got {fragments} fragments");
+
+            Assert.Equal(2 * fragments, CountBlueEdges(container, vertical: false));
+        }
+
         // ── the equivalence short circuit ─────────────────────────────────────────────────────────────
 
         [Fact]
@@ -452,6 +492,54 @@ namespace PeachPDF.Tests.Integration
         }
 
         // ── helpers ───────────────────────────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// A paragraph long enough to outlast the columns of a 200pt page, so it splits at column
+        /// boundaries and at a page boundary — every block-axis break there is.
+        /// </summary>
+        private static string SplitAcrossColumns(string style) => LayoutHarness.Wrap(
+            "<div style='columns:2;column-gap:20pt;column-fill:auto;font:10pt Arial'>" +
+            $"<p id='long' style='margin:0;{style}'>" +
+            string.Join(" ", Enumerable.Range(0, 300).Select(i => $"word{i}")) +
+            "</p></div>");
+
+        /// <summary>How many fragments <paramref name="box"/> produced across the whole document.</summary>
+        private static int FragmentCountOf(PeachPDF.Html.Core.HtmlContainerInt container, CssBox box) =>
+            container.FragmentTree!.Fragmentainers
+                .SelectMany(f => Flatten(f.Root))
+                .Count(f => ReferenceEquals(f.Box, box));
+
+        /// <summary>
+        /// Every blue border trapezoid the whole document paints, on one axis. Painting page by page is
+        /// what the production loop does, and it is also the only way to see a fragment that shares a page
+        /// with another fragment of the same box.
+        /// </summary>
+        private static int CountBlueEdges(PeachPDF.Html.Core.HtmlContainerInt container, bool vertical)
+        {
+            var blue = RColor.FromArgb(0, 0, 255);
+            var count = 0;
+
+            for (var page = 0; page < container.FragmentTree!.Fragmentainers.Count; page++)
+            {
+                var g = new TestRecordingGraphics();
+                FragmentPaintHarness.PaintPage(container, g, page);
+
+                count += g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>()
+                    .Count(p => p.Color == blue && IsVerticalEdge(p.Points) == vertical);
+            }
+
+            return count;
+        }
+
+        private static IEnumerable<BoxFragment> Flatten(BoxFragment fragment)
+        {
+            yield return fragment;
+
+            foreach (var child in fragment.Children)
+            {
+                foreach (var descendant in Flatten(child)) yield return descendant;
+            }
+        }
 
         /// <summary>A 1×1 PNG as a data URI - enough to be a real background image layer.</summary>
         private const string TinyPng =
