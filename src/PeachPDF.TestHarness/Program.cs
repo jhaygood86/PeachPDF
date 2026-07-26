@@ -1614,12 +1614,33 @@ var monolithicHtml = """
     + string.Concat(Enumerable.Range(45, 3).Select(i =>
         $"<p>Trailing paragraph {i}.</p>"))
     + """
+    <h1>Inside a flex or grid container</h1>
+    <p>A flex line and a grid row are break points too. The row below asks not to be broken, so it moves
+    to the next page as a unit &mdash; every item in it, not only the one that asked, because the
+    cross-axis alignment holds them together.</p>
+    """
+    + string.Concat(Enumerable.Range(55, 10).Select(i =>
+        $"<p>Filler paragraph {i}. This run puts the row below at the foot of its page.</p>"))
+    + """
+    <div style="display:flex; gap:8pt; break-inside:avoid">
+      <div class="card"><span class="tag">flex item</span><h2>One</h2>
+        <p>Its line meets the page boundary, so the whole line moves.</p></div>
+      <div class="card"><span class="tag">flex item</span><h2>Two</h2>
+        <p>It moves with its neighbour rather than being left behind.</p></div>
+    </div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8pt; break-inside:avoid; margin-top:10pt">
+      <div class="card"><span class="tag">grid item</span><h2>Three</h2>
+        <p>A grid row travels together for the same reason.</p></div>
+      <div class="card"><span class="tag">grid item</span><h2>Four</h2>
+        <p>An item spanning several rows travels with the first of them.</p></div>
+    </div>
     </body></html>
     """;
 
 await SaveShowcaseAsync("paged_media_monolithic_content", "Paged Media", "Monolithic Content",
     "A box with overflow: hidden is a scroll container, which CSS Fragmentation §2 forbids breaking: it "
-    + "moves to the next page whole instead of being cut in half by the page boundary.",
+    + "moves to the next page whole instead of being cut in half by the page boundary. A flex line and a "
+    + "grid row that ask not to be broken move as a unit for the same reason.",
     monolithicHtml, new PdfGenerateConfig { PageSize = PageSize.A5 });
 
 // ── Margin box explicit sizing showcase ────────────────────────────────────
