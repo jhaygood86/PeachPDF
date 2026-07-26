@@ -1133,7 +1133,14 @@ namespace PeachPDF.Html.Core.Dom
         /// touch the resumption record or the §4.3 latch, which belong to the pass rather than to the box
         /// being re-laid-out. Same reopening the keep-with-next retry performs on itself.
         /// </remarks>
-        internal void ResetForRefill() => _prologueDone = false;
+        internal void ResetForRefill()
+        {
+            // The columns engine calls this before the real fill lays the same boxes out again from scratch,
+            // which on a resumed pass includes boxes a frozen fragmentainer already holds.
+            NotifyGeometryChanged(OwnGeometryTop(), 0);
+
+            _prologueDone = false;
+        }
 
         /// <summary>
         /// The document Y this box asked to be placed at in a later fragmentainer, when the placement
@@ -3565,6 +3572,12 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="amount"></param>
         internal void OffsetTop(double amount)
         {
+            // A relocation that reaches back into a fragmentainer an earlier pass already froze has to
+            // un-freeze it, or the frozen copy keeps painting this box where it no longer is. Asked of this
+            // box's own geometry rather than of Location alone, because an inline box's rectangles and words
+            // move while its Location stays at a line-local value.
+            NotifyGeometryChanged(OwnGeometryTop(), amount);
+
             List<CssLineBox> lines = [];
             foreach (var line in Rectangles.Keys)
                 lines.Add(line);
@@ -3627,6 +3640,14 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private bool TakeEarlyBreak(EarlyBreak decision)
         {
+            // A box only reaches its epilogue on the pass that *completes* it, which for a box spanning
+            // several fragmentainers is later than the pass that placed it - so this decision can relocate
+            // content out of a fragmentainer already frozen. Un-freeze it here rather than at the (three
+            // different) places the move is finally carried out.
+            HtmlContainer?.InvalidateEmittedFragmentsFor(
+                decision.Subject,
+                Math.Min(decision.Top, Math.Min(decision.BeforeBox.Location.Y, decision.Subject.Location.Y)));
+
             if (decision.BeforeBox == this && CanBeLaidOutAgain(decision))
             {
                 _earlyBreakRetryTop = decision.Top;
@@ -3810,8 +3831,43 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         internal void RectanglesReset()
         {
+            // Discarding the rectangles is how a re-layout of this box begins, so anything already emitted
+            // from them describes geometry that is about to be replaced.
+            if (Rectangles.Count > 0) NotifyGeometryChanged(OwnGeometryTop(), 0);
+
             Rectangles.Clear();
         }
+
+        /// <summary>
+        /// Un-freezes any fragmentainer already emitted for this box, because its geometry from
+        /// <paramref name="fromY"/> down is about to change by <paramref name="amount"/>.
+        /// </summary>
+        /// <remarks>
+        /// The emitter ignores this for a box it has not frozen anywhere, which is what keeps ordinary
+        /// forward layout - where every box is placed for the first time - from re-emitting anything.
+        /// </remarks>
+        private void NotifyGeometryChanged(double fromY, double amount) =>
+            HtmlContainer?.InvalidateEmittedFragmentsFor(this, Math.Min(fromY, fromY + amount));
+
+        /// <summary>
+        /// The topmost document Y this box's own geometry occupies. Its per-line rectangles and words where
+        /// it has them, since an inline box's own <see cref="CssBoxProperties.Location"/> stays at a
+        /// line-local value layout never updates.
+        /// </summary>
+        private double OwnGeometryTop()
+        {
+            if (Rectangles.Count == 0 && Words.Count == 0) return Location.Y;
+
+            var top = double.MaxValue;
+
+            foreach (var rect in Rectangles.Values) top = Math.Min(top, rect.Top);
+            foreach (var word in Words) top = Math.Min(top, word.Top);
+
+            return top;
+        }
+
+        protected override void OnBlockAxisRelocated(double fromY, double toY) =>
+            NotifyGeometryChanged(Math.Min(fromY, toY), 0);
 
         protected override RFont? GetCachedFont(string fontFamily, double fsize, RFontStyle st, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null)
         {

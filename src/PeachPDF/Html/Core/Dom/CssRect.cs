@@ -77,8 +77,27 @@ namespace PeachPDF.Html.Core.Dom
         public double Top
         {
             get => _rect.Y;
-            set => _rect.Y = value;
+            set
+            {
+                // Being positioned is what makes a word this fragmentainer's again.
+                AwaitsTheNextFragmentainer = false;
+                _rect.Y = value;
+            }
         }
+
+        /// <summary>
+        /// Whether this word is on a line the current fragmentainer pass discarded, so it belongs to the
+        /// <i>next</i> fragmentainer and no fragment of this one may claim it
+        /// (<see href="https://www.w3.org/TR/css-break-3/#possible-breaks">css-break-3 §4.1</see>: a line box
+        /// never straddles a fragmentainer).
+        /// </summary>
+        /// <remarks>
+        /// It is a flag rather than a parked coordinate because the position the word will end up at is not
+        /// knowable yet — a resumed pass may place it at the next fragmentainer's content top, or, where the
+        /// break is a directional one that steps over a page, several bands further on. Parking it at the band
+        /// edge put it at the top of a page it never appeared on.
+        /// </remarks>
+        internal bool AwaitsTheNextFragmentainer { get; set; }
 
         /// <summary>
         /// Width of the rectangle
