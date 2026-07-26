@@ -701,6 +701,35 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(mc.ClientTop, longBox.Location.Y, 1);
         }
 
+        // A container that spans pages keeps the top it was placed at on the page it began, so its own
+        // content edge names a coordinate the columns of a later page do not reach. Read as the destination
+        // for a box continuing into the next column, it sent that continuation back to the container's very
+        // first column - landing it on top of whatever legitimately sits there, which is what makes this an
+        // overlap rather than a merely-misplaced box.
+        [Fact]
+        public async Task AChildContinuingIntoTheNextColumn_OnAPageAfterTheContainersFirst_StaysInThatPagesBand()
+        {
+            var items = string.Concat(Enumerable.Range(1, 12)
+                .Select(i => $"<div class='item' id='i{i}'>Item {i} with a little text of its own</div>"));
+            var html = Wrap($"<div id='mc' style='columns:2; column-gap:0; width:200px'>{items}</div>");
+
+            var (root, container) = await BuildAndLayout(html, pageHeight: 100);
+
+            var placed = FindAllByClass(root, "item");
+            Assert.Equal(12, placed.Count);
+            AssertNoOverlaps(placed);
+
+            // Every item sits inside the band of the page it was laid out on - the check the overlap above
+            // is a symptom of, stated directly, so a future regression names the cause rather than a
+            // coincidence of which two boxes happened to collide.
+            Assert.All(placed, box =>
+            {
+                var slot = container.PageIndexOf(box.Location.Y);
+                Assert.InRange(box.Location.Y,
+                    container.PageTopOf(slot) - 0.5, container.PageBottomOf(slot) + 0.5);
+            });
+        }
+
         // column-fill: auto fills each column before starting the next, so the first column runs to the
         // page budget rather than to an even share - the branch that skips the balance estimate entirely.
         [Fact]

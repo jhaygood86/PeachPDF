@@ -2161,9 +2161,13 @@ namespace PeachPDF.Html.Core.Dom
         /// otherwise its continuation is laid out over the fragment it just left.
         /// </para>
         /// <para>
-        /// The block axis moves too, and to the containing block's own content top rather than to the
-        /// fragmentainer's: for a top-level child of the container the two are the same, and for anything
-        /// deeper the containing block has already been re-placed here, so its content edge is inside its own
+        /// The block axis moves too, to whichever of the fragmentainer's own content edge and the containing
+        /// block's is lower. Neither alone is right: the containing block of a top-level child is the
+        /// multi-column container itself, and a container spanning pages keeps the top it was placed at on
+        /// the page it <i>began</i> — so its content edge names a coordinate a column several bands further
+        /// down does not reach, and reading it moved a continuation back to the container's first column.
+        /// The fragmentainer's edge answers that case; the containing block's answers the deeper one, where
+        /// it has already been re-placed inside this fragmentainer and its content edge sits inside its own
         /// border and padding. This box begins the fragmentainer, so it has no predecessor to resolve
         /// against, and §5.2 truncates the margin adjoining the unforced break that put it here.
         /// </para>
@@ -2178,14 +2182,16 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private void ResumeInTheNextFragmentainer()
         {
-            if (HtmlContainer?.CurrentFragmentainer is not { HasOwnBand: true }) return;
+            if (HtmlContainer?.CurrentFragmentainer is not { HasOwnBand: true } fragmentainer) return;
             if (Display is CssConstants.TableCell || Position is not (CssConstants.Static or CssConstants.Relative))
                 return;
 
             // Moving Location is the whole translation: ActualRight and ActualBottom are derived from it
             // (Location plus the box-sizing extent), so the inline size this box was measured at on the pass
             // that placed it survives untouched - which is precisely §2's one-inline-size rule.
-            Location = new RPoint(ContainingBlock.ClientLeft + ActualMarginLeft, ContainingBlock.ClientTop);
+            var top = Math.Max(fragmentainer.ResumeContentTop, ContainingBlock.ClientTop);
+
+            Location = new RPoint(ContainingBlock.ClientLeft + ActualMarginLeft, top);
             ActualBottom = Location.Y;
         }
 
