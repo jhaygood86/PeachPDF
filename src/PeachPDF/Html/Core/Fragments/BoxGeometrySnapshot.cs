@@ -12,7 +12,7 @@ namespace PeachPDF.Html.Core.Fragments
     /// </summary>
     /// <remarks>
     /// This is the narrow, pre-existing precedent for the fragment tree: "one box, N positions".
-    /// <see cref="FragmentTreeBuilder"/> reads a snapshot to build the source subtree's fragments at
+    /// <see cref="Fragmentation.FragmentEmitter"/> reads a snapshot to build the source subtree's fragments at
     /// each proxy's own position, which is what lets a repeated header appear in the fragment tree at
     /// all — <see cref="CssProxyBox.SourceBox"/> is deliberately not part of the live box tree.
     /// </remarks>

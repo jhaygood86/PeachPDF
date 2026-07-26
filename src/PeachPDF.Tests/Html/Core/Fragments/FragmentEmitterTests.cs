@@ -11,11 +11,13 @@ namespace PeachPDF.Tests.Html.Core.Fragments
 {
     /// <summary>
     /// Geometry and structure of the fragment tree — layout's immutable output (CSS Fragmentation
-    /// Level 3 §2). The parity tests here are the load-bearing ones: the fragment tree must describe
-    /// exactly the pages, and exactly the paint-time coordinates, the pre-fragment-tree pipeline
-    /// produced, since introducing it is meant to be rendering-identical.
+    /// Level 3 §2), now collected by <c>FragmentEmitter</c> as each fragmentainer pass ends. The parity
+    /// tests here are the load-bearing ones twice over: the tree must describe exactly the pages, and
+    /// exactly the paint-time coordinates, that the pre-fragment-tree pipeline produced — and moving
+    /// emission into layout was meant to change <i>when</i> the tree is built without changing what it
+    /// says. The theory pinning exact materialized slot sets is the strongest guarantee available for that.
     /// </summary>
-    public class FragmentTreeBuilderTests
+    public class FragmentEmitterTests
     {
         // ─── Fragmentainers ────────────────────────────────────────────────────────
 
@@ -580,6 +582,129 @@ namespace PeachPDF.Tests.Html.Core.Fragments
                 .SelectMany(f => f.Lines)
                 .OrderBy(l => l.Rect.Y).ThenBy(l => l.Rect.X)
         ];
+
+        // ─── Emission is driven by the passes, not by a geometric slot walk ────────
+
+        /// <summary>
+        /// The slot list is now a structural fact of the driver, so a document that paginates purely by
+        /// overflow — no break token anywhere, one single pass — still has to reach every band its geometry
+        /// touches. That is the one geometric question the model still asks, and only after the final pass.
+        /// </summary>
+        [Fact]
+        public async Task ContentThatOverflowsWithoutBreaking_StillReachesEveryBandItTouches()
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap("<p>top</p><div style='height:900pt'></div><p>far below</p>"),
+                pageHeight: 200);
+
+            Assert.Equal("0,6", string.Join(",", container.FragmentTree!.Fragmentainers.Select(f => f.SlotIndex)));
+        }
+
+        /// <summary>
+        /// A box only reaches its epilogue on the pass that <i>completes</i> it, so <c>break-inside: avoid</c>
+        /// can relocate a box out of a fragmentainer an earlier pass already froze. The frozen fragments have
+        /// to be dropped and emitted again, or the box keeps painting where it no longer is.
+        /// </summary>
+        [Fact]
+        public async Task ABoxRelocatedAfterItsFragmentainerWasFrozen_LeavesNoFragmentBehind()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:285pt;background:#eee'></div>"
+                    + "<div id='avoid' style='break-inside:avoid;font:10pt Arial;line-height:22pt'>"
+                    + $"<p style='margin:0'>{Words(30)}</p><p style='margin:0'>{Words(30)}</p>"
+                    + $"<p style='margin:0'>{Words(30)}</p>"
+                    + "</div>"),
+                pageHeight: 400, margin: 0);
+
+            // The box's content breaks in the first pass, so its epilogue - and the relocation it decides -
+            // only runs on the pass that completes it, after the fragmentainer it started in was frozen.
+            Assert.True(container.FragmentainerPasses > 1);
+
+            var avoid = LayoutHarness.FindById(root, "avoid");
+            Assert.NotNull(avoid);
+
+            // The relocation is what makes this a real test of re-emission rather than of ordinary layout.
+            Assert.True(container.PageIndexOf(avoid!.Location.Y) > 0);
+
+            Assert.All(
+                FragmentsOf(container.FragmentTree!, "avoid"),
+                fragment => Assert.NotEqual(0, fragment.FragmentainerIndex));
+        }
+
+        /// <summary>
+        /// css-break-3 §4.1: a line box never straddles a fragmentainer, so the line being built when a break
+        /// is taken belongs to the next one. Its words keep the position of the abandoned attempt until the
+        /// resumed pass re-places them, and the fragmentainer being left is frozen in between — so a fragment
+        /// of that fragmentainer must not claim them, wherever they currently sit.
+        /// </summary>
+        [Fact]
+        public async Task AWordOnADiscardedLine_IsClaimedByNoFragmentOfTheFragmentainerItLeft()
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap($"<div style='font:10pt Arial;line-height:22pt'>{ManyWords()}</div>"),
+                pageHeight: 160);
+
+            var tree = container.FragmentTree!;
+            Assert.True(tree.Fragmentainers.Count > 2, "fixture must paginate");
+
+            // Every word is claimed by exactly one fragmentainer, and by the one its own document position
+            // falls in - the two can only disagree where a stale position was frozen.
+            foreach (var fragmentainer in tree.Fragmentainers)
+            {
+                foreach (var fragment in Flatten(fragmentainer.Root))
+                {
+                    foreach (var word in fragment.Words)
+                    {
+                        Assert.Equal(
+                            fragmentainer.SlotIndex,
+                            container.PageIndexOf(word.Word.Rectangle.Y + HtmlContainerInt.PageBoundaryEpsilon));
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// §6.2's unbroken box is the sum of <i>every</i> rectangle the box produces, which for an inline
+        /// crossing a page break includes ones a later pass has yet to add — so the strip cannot be computed
+        /// when a slot is frozen.
+        /// </summary>
+        [Fact]
+        public async Task TheUnbrokenStrip_SpansRectanglesFromEveryPass()
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(SpanningInline(leadingSpacing: false), pageHeight: 160);
+
+            var lines = LinesOf(container.FragmentTree!, "s");
+            Assert.True(lines.Count > 4, "fixture must produce several rectangles across pages");
+
+            var total = lines.Sum(l => l.Rect.Width);
+
+            Assert.All(lines, line => Assert.Equal(total, line.Slice.UnbrokenStrip.Width, 3));
+        }
+
+        /// <summary>
+        /// A block-level box's decoration area is its own border box, and a box that continues into a later
+        /// fragmentainer has not had its height applied yet on the pass that freezes this slot. Read then,
+        /// every intermediate fragment of a multi-page block lost its background and borders.
+        /// </summary>
+        [Fact]
+        public async Task AMultiPageBlock_KeepsItsDecorationOnEveryPageItSpans()
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    $"<div id='wrap' style='background:#eee;font:10pt Arial;line-height:22pt'>{ManyWords()}</div>"),
+                pageHeight: 160);
+
+            var fragments = FragmentsOf(container.FragmentTree!, "wrap");
+            Assert.True(fragments.Count > 2, "fixture must paginate");
+
+            Assert.All(fragments, fragment => Assert.NotEmpty(fragment.Lines));
+        }
+
+        private static string ManyWords() => Words(400);
+
+        private static string Words(int count) =>
+            string.Join(" ", Enumerable.Range(0, count).Select(i => $"word{i}"));
 
         /// <summary>The same, for a box with no <c>id</c> to find it by — a generated-content box.</summary>
         private static List<LineFragment> LinesOf(FragmentTree tree, CssBox box) =>

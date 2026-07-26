@@ -31,7 +31,7 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// This proxy's captured geometry for its <see cref="SourceBox"/> subtree — where that subtree
-        /// sits on <i>this</i> proxy's page. <see cref="FragmentTreeBuilder"/> reads it to build the
+        /// sits on <i>this</i> proxy's page. <see cref="Fragmentation.FragmentEmitter"/> reads it to build the
         /// repeated header/footer's fragments, since the source subtree is not reachable by walking
         /// <see cref="CssBox.Boxes"/>. Null before this proxy has been laid out.
         /// </summary>

@@ -1037,6 +1037,17 @@ namespace PeachPDF.Html.Core.Dom
         private bool _isForcedBreak;
 
         /// <summary>
+        /// Whether the break point before this box carries a forced break value at all, whether or not
+        /// <i>this</i> box is the one that takes it. Wider than <see cref="_isForcedBreak"/> by exactly the
+        /// §3.1 propagation case: a first in-flow child's own <c>break-before</c> is taken by the container
+        /// it begins, so the child does not take one — but the author did declare a break at that point in
+        /// the flow, so
+        /// <see href="https://www.w3.org/TR/css-break-3/#break-margins">§5.2</see>'s truncation of margins
+        /// adjoining an <i>unforced</i> break still must not reach this box's margin.
+        /// </summary>
+        private bool _adjoinsForcedBreakPoint;
+
+        /// <summary>
         /// Whether this box registers a named-page entry, resolved by
         /// <see cref="PerformLayoutPrologue"/> and read by both registration sites.
         /// </summary>
@@ -1122,7 +1133,14 @@ namespace PeachPDF.Html.Core.Dom
         /// touch the resumption record or the §4.3 latch, which belong to the pass rather than to the box
         /// being re-laid-out. Same reopening the keep-with-next retry performs on itself.
         /// </remarks>
-        internal void ResetForRefill() => _prologueDone = false;
+        internal void ResetForRefill()
+        {
+            // The columns engine calls this before the real fill lays the same boxes out again from scratch,
+            // which on a resumed pass includes boxes a frozen fragmentainer already holds.
+            NotifyGeometryChanged(OwnGeometryTop(), 0);
+
+            _prologueDone = false;
+        }
 
         /// <summary>
         /// The document Y this box asked to be placed at in a later fragmentainer, when the placement
@@ -1421,9 +1439,26 @@ namespace PeachPDF.Html.Core.Dom
             // resolution but harmless (it resolves to the same name).
             var pageNameChanged = HtmlContainer is not null && UsedPageName != HtmlContainer.ActivePageName;
             _shouldRegisterPage = HtmlContainer is not null && (hasExplicitPageName || pageNameChanged);
-            _isForcedBreak = BreakValues.IsForcedPageBreak(BreakBefore)
-                             || BreakValues.IsForcedPageBreak(previousSiblingForBreak?.BreakAfter)
-                             || pageNameChanged;
+
+            // css-break-3 §3.1 combination and propagation. A break-before on a container's first in-flow
+            // child, and a break-after on its last, are values at the break point before or after the
+            // *container*, so both sides of this break point are read through the chains of boxes they
+            // begin and end - and a box whose own value travels outward that way does not take the break
+            // itself, because the container it began does, and carries it along.
+            var propagatesOutward = BreakPropagation.PropagatesBreakBeforeOutward(this);
+            var ownForcedBefore = BreakPropagation.ForcedBreakBeforeAt(this);
+            var forcedBefore = propagatesOutward ? null : ownForcedBefore;
+            var forcedAfter = previousSiblingForBreak is null
+                ? null
+                : BreakPropagation.ForcedBreakAfterAt(previousSiblingForBreak);
+
+            _isForcedBreak = forcedBefore is not null || forcedAfter is not null || pageNameChanged;
+
+            // The value still governs this break point even where the container is what acts on it, so §5.2
+            // leaves this box's margin alone either way. Without this, hoisting the break changed a stated
+            // choice as a side effect: a box carrying a break that cannot be taken at all - because nothing
+            // precedes the container in the flow - kept its margin before propagation and lost it after.
+            _adjoinsForcedBreakPoint = _isForcedBreak || (propagatesOutward && ownForcedBefore is not null);
             // Every run of this prologue re-decides from scratch: the keep-with-next retry at the end of
             // PerformLayoutEpilogue clears _prologueDone and re-enters layout for this box at a new
             // position, where the break can legitimately land somewhere else. So both the target and
@@ -1484,11 +1519,14 @@ namespace PeachPDF.Html.Core.Dom
                     // reach it take the break at all - a display:none or out-of-flow box runs this
                     // prologue but is never placed, so reserving a blank page here would manufacture
                     // one for a break that is never taken.
-                    // The side comes from this box's own break-before and its *immediate* predecessor's
-                    // break-after, never the climbed anchor's: a break-after states something about the
-                    // break point after that box, and for a first child the anchor's break point is
-                    // several levels out. RequiredSide already accepts a null second value.
-                    _forcedBreakSide = BreakValues.RequiredSide(BreakBefore, previousSiblingForBreak?.BreakAfter);
+                    // The side comes from the two values resolved at *this* break point above - this box's
+                    // own break-before read through the chain it begins, and its immediate predecessor's
+                    // break-after read through the chain that one ends. Never the climbed anchor's: a
+                    // break-after states something about the break point after that box, and for a first
+                    // child the anchor's break point is several levels out. RequiredSide already accepts a
+                    // null second value, and resolves a conflict the way §3.1 does - to the value on the
+                    // latest element in flow.
+                    _forcedBreakSide = BreakValues.RequiredSide(forcedBefore, forcedAfter);
                 }
             }
         }
@@ -1837,11 +1875,38 @@ namespace PeachPDF.Html.Core.Dom
                         }
 
                         // Nothing could be re-run, so the decision has to be carried out the other way.
-                        childBox.TranslateForEarlyBreak(restart);
+                        TranslateForEarlyBreak(restart);
                     }
 
                     if (childBox.PendingBreakToken is { } childToken)
                     {
+                        // css-break-3 §3.1 propagation: a break before a container's own first in-flow
+                        // child is the break point before the container, so the container travels with it
+                        // instead of being left spanning the boundary with an empty stub of its chrome on
+                        // the page its content just left.
+                        //
+                        // This is also the only place the keep-with-next run for such a break can be
+                        // collected: the run's members are siblings of the container, so they are in *this*
+                        // box's Boxes and nowhere reachable from the box that actually broke.
+                        if (i > start && EarlyBreak.NamesAPropagatingBreakBefore(childToken, childBox))
+                        {
+                            var propagatedTop = ((BlockBreakToken)childToken).ResumeTopOverride;
+
+                            if (propagatedTop is { } runTarget
+                                && HtmlContainer?.CurrentFragmentainer is not { HasOwnBand: true }
+                                && EarlyBreak.Discover(childBox, runTarget, EarlyBreakReason.KeepWithNext)
+                                    is { KeepWithNextRun.Count: > 0 } pull
+                                && TryRestartAt(pull, start, i, ref restartedHeads, out var pulledFrom))
+                            {
+                                i = pulledFrom - 1;
+                                continue;
+                            }
+
+                            PendingBreakToken = new BlockBreakToken(
+                                this, childToken.ResumeSlotIndex, i, null, IsBreakBefore: true, propagatedTop);
+                            return true;
+                        }
+
                         // A child that kept nothing here has no fragment in this fragmentainer, so the
                         // break falls *before* it rather than inside it (§4.4). Left as a break inside,
                         // it leaves an empty box behind - which on the page grid is invisible, and in a
@@ -1946,10 +2011,16 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Carries out <paramref name="decision"/> by moving this box and its run, for the callers that
+        /// Carries out <paramref name="decision"/> by moving its subject and its run, for the callers that
         /// cannot re-run anything — see <see cref="CanBeLaidOutAgain"/> for when that applies.
         /// </summary>
-        internal void TranslateForEarlyBreak(EarlyBreak decision)
+        /// <remarks>
+        /// Static, and reading the boxes to move off the decision rather than off a receiver, because the box
+        /// that travels is not always the one that discovered the decision: §3.1 propagation can put it on a
+        /// container the discovering box begins, and <see cref="OffsetTop"/> is deep, so moving the container
+        /// moves the box inside it exactly once.
+        /// </remarks>
+        internal static void TranslateForEarlyBreak(EarlyBreak decision)
         {
             // The run's head lands on the decision's target and everything below it keeps its distance,
             // so the spacing inside the group survives the move.
@@ -1960,7 +2031,7 @@ namespace PeachPDF.Html.Core.Dom
                 member.OffsetTop(offset);
             }
 
-            OffsetTop(offset);
+            decision.Subject.OffsetTop(offset);
         }
 
         /// <summary>
@@ -2105,7 +2176,7 @@ namespace PeachPDF.Html.Core.Dom
                     // root is excluded - it has nothing before it for a break to fall between, and a
                     // break-before published from the context root would have no parent link to travel
                     // up (see PublishBreakToTheContextRoot).
-                    else if (!_isForcedBreak && ParentBox is not null
+                    else if (!_adjoinsForcedBreakPoint && ParentBox is not null
                              && !(prevSibling is { PlacedByForcedBreak: true } marker && marker.IsMarginCollapseThrough()))
                     {
                         var pageHeight = HtmlContainer!.PageSize.Height;
@@ -3501,6 +3572,12 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="amount"></param>
         internal void OffsetTop(double amount)
         {
+            // A relocation that reaches back into a fragmentainer an earlier pass already froze has to
+            // un-freeze it, or the frozen copy keeps painting this box where it no longer is. Asked of this
+            // box's own geometry rather than of Location alone, because an inline box's rectangles and words
+            // move while its Location stays at a line-local value.
+            NotifyGeometryChanged(OwnGeometryTop(), amount);
+
             List<CssLineBox> lines = [];
             foreach (var line in Rectangles.Keys)
                 lines.Add(line);
@@ -3563,6 +3640,14 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private bool TakeEarlyBreak(EarlyBreak decision)
         {
+            // A box only reaches its epilogue on the pass that *completes* it, which for a box spanning
+            // several fragmentainers is later than the pass that placed it - so this decision can relocate
+            // content out of a fragmentainer already frozen. Un-freeze it here rather than at the (three
+            // different) places the move is finally carried out.
+            HtmlContainer?.InvalidateEmittedFragmentsFor(
+                decision.Subject,
+                Math.Min(decision.Top, Math.Min(decision.BeforeBox.Location.Y, decision.Subject.Location.Y)));
+
             if (decision.BeforeBox == this && CanBeLaidOutAgain(decision))
             {
                 _earlyBreakRetryTop = decision.Top;
@@ -3575,11 +3660,17 @@ namespace PeachPDF.Html.Core.Dom
             // out. Hand it over, and stop - what follows would measure a position about to change.
             // Whether the boxes a restart would re-run can survive it is the parent's question, not
             // this one's: only the child loop knows which indices it is about to replay.
+            //
+            // The loop to hand it to is the one that owns the box the break falls before, which is this
+            // box's own parent for a plain sibling run and an ancestor's parent where §3.1 propagation
+            // moved the decision onto a container this box begins. Handing it to the immediate parent
+            // regardless would name a box that parent's Boxes does not contain, and the restart would be
+            // refused and degrade to translating the wrong box.
             if (decision.BeforeBox != this
-                && ParentBox is { _canRestartChildLoop: true } parent
+                && decision.BeforeBox.ParentBox is { _canRestartChildLoop: true } owner
                 && HtmlContainer is { IsFragmenting: true })
             {
-                parent._requestedChildRestart = decision;
+                owner._requestedChildRestart = decision;
                 _earlyBreakTaken = true;
                 return true;
             }
@@ -3740,8 +3831,43 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         internal void RectanglesReset()
         {
+            // Discarding the rectangles is how a re-layout of this box begins, so anything already emitted
+            // from them describes geometry that is about to be replaced.
+            if (Rectangles.Count > 0) NotifyGeometryChanged(OwnGeometryTop(), 0);
+
             Rectangles.Clear();
         }
+
+        /// <summary>
+        /// Un-freezes any fragmentainer already emitted for this box, because its geometry from
+        /// <paramref name="fromY"/> down is about to change by <paramref name="amount"/>.
+        /// </summary>
+        /// <remarks>
+        /// The emitter ignores this for a box it has not frozen anywhere, which is what keeps ordinary
+        /// forward layout - where every box is placed for the first time - from re-emitting anything.
+        /// </remarks>
+        private void NotifyGeometryChanged(double fromY, double amount) =>
+            HtmlContainer?.InvalidateEmittedFragmentsFor(this, Math.Min(fromY, fromY + amount));
+
+        /// <summary>
+        /// The topmost document Y this box's own geometry occupies. Its per-line rectangles and words where
+        /// it has them, since an inline box's own <see cref="CssBoxProperties.Location"/> stays at a
+        /// line-local value layout never updates.
+        /// </summary>
+        private double OwnGeometryTop()
+        {
+            if (Rectangles.Count == 0 && Words.Count == 0) return Location.Y;
+
+            var top = double.MaxValue;
+
+            foreach (var rect in Rectangles.Values) top = Math.Min(top, rect.Top);
+            foreach (var word in Words) top = Math.Min(top, word.Top);
+
+            return top;
+        }
+
+        protected override void OnBlockAxisRelocated(double fromY, double toY) =>
+            NotifyGeometryChanged(Math.Min(fromY, toY), 0);
 
         protected override RFont? GetCachedFont(string fontFamily, double fsize, RFontStyle st, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null)
         {

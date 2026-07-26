@@ -34,7 +34,7 @@ namespace PeachPDF.Html.Core.Utils
 
         /// <summary>
         /// Pushes the clip an <c>overflow: hidden</c> ancestor imposes on the fragment being painted, as
-        /// resolved by <see cref="Fragments.FragmentTreeBuilder"/> and carried on
+        /// resolved by <see cref="Fragmentation.FragmentEmitter"/> and carried on
         /// <see cref="Fragments.BoxFragment.OverflowClip"/>. Already in the fragment's own space, so
         /// there is nothing here to map.
         /// </summary>

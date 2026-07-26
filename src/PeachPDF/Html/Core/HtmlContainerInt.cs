@@ -236,7 +236,7 @@ namespace PeachPDF.Html.Core
         /// </para>
         /// <para>
         /// Write-only during layout: nothing layout does reads this, and its sole consumer is
-        /// <see cref="Fragments.FragmentTreeBuilder"/>, which runs once after the last
+        /// <see cref="FragmentEmitter.Finish"/>, which runs once after the last
         /// <see cref="LayoutDocument"/>. So it can never feed back into box positions, and cannot
         /// destabilise the per-page-width reflow loop — it annotates the final layout rather than
         /// informing it.
@@ -655,6 +655,13 @@ namespace PeachPDF.Html.Core
             // the first pass rather than alongside the post-layout flags below.
             HasCloneDecorations = DomUtils.AnyBoxClonesDecorations(Root);
 
+            // Also purely cascade-driven, and also needed *during* the passes now that fragments are emitted
+            // as each one ends: CSS Paged Media 3 §3.2's content-empty-page rule reads
+            // SuppressOwnBackgroundPaint, and resolving the canvas background afterwards would make the
+            // promoted root background look like real content spanning the whole document. (Acid2 grew 2->3
+            // pages the last time the ordering of these two was wrong.)
+            ResolveCanvasBackground();
+
             // if width is not restricted we set it to large value to get the actual later
             Root.Size = new RSize(MaxSize.Width > 0 ? MaxSize.Width : PageSize.Width, 0);
             Root.Location = Location;
@@ -705,19 +712,17 @@ namespace PeachPDF.Html.Core
             (HasFloatedBoxes, HasOutOfFlowBoxes, HasStackingHoistCandidates) =
                 ComputeFlowFlags(Root, includeStackingHoistCandidates: true);
 
-            // Must precede the fragment-tree build: which page-slots carry printable content depends
-            // on SuppressOwnBackgroundPaint, so a canvas background resolved afterwards would make
-            // the promoted box look like real content spanning the whole document.
-            ResolveCanvasBackground();
-
-            // Also before the build, and only once the reflow loop has settled, since it reads the
-            // final document height.
+            // Only once the reflow loop has settled, since it reads the final document height.
             ReserveTrailingDirectionalBreak();
 
-            // Layout's final phase: freeze the mutable box geometry above into the immutable fragment
-            // tree everything downstream consumes. Built once, after the reflow loop has settled, so
-            // the tree can never describe an intermediate pass's geometry.
-            FragmentTree = FragmentTreeBuilder.Build(this);
+            // A trailing break-after reserves a page past everything layout reached, so it is the one slot
+            // no pass could have stated.
+            _emitter?.EmitReservedBlankSlots();
+
+            // Layout's final phase: materialize the fragments the passes emitted into the immutable tree
+            // everything downstream consumes. Only the last LayoutDocument invocation's emitter survives the
+            // reflow loop, so the tree can never describe an intermediate invocation's geometry.
+            FragmentTree = _emitter?.Finish() ?? new FragmentTree([]);
         }
 
         /// <summary>
@@ -813,6 +818,11 @@ namespace PeachPDF.Html.Core
             PageGeometry.Reset();
             ClearBlankSlotReservations();
 
+            // Each invocation re-decides the whole document, so the fragments an earlier one emitted
+            // describe a layout that no longer exists.
+            var emitter = new FragmentEmitter(this);
+            _emitter = emitter;
+
             BreakToken? token = null;
 
             try
@@ -830,7 +840,11 @@ namespace PeachPDF.Html.Core
 
                     var next = context.OutgoingToken;
 
-                    if (next is null) break;
+                    if (next is null)
+                    {
+                        emitter.EmitPass(slot, LastSlotAnyGeometryTouches(slot), token, null);
+                        break;
+                    }
 
                     if (next == token)
                     {
@@ -847,8 +861,15 @@ namespace PeachPDF.Html.Core
                         Root.ResumeAt(token, resumeTopOverride: null);
                         await Root.PerformLayout(g);
                         FragmentainerPasses++;
+                        emitter.EmitPass(slot, LastSlotAnyGeometryTouches(slot), token, null);
                         break;
                     }
+
+                    // The gap between the slot this pass started filling and the one the next resumes in.
+                    // It is not always empty: a monolithic subtree is laid out in a single pass and can
+                    // cover bands past the one it started in, and a box placed far down the document means
+                    // the next pass's slot is not this one plus one.
+                    emitter.EmitPass(slot, Math.Max(slot, next.ResumeSlotIndex - 1), token, next);
 
                     token = next;
                     slot = next.ResumeSlotIndex;
@@ -858,6 +879,36 @@ namespace PeachPDF.Html.Core
             {
                 CurrentFragmentainer = null;
             }
+        }
+
+        /// <summary>
+        /// The highest pagination slot any of the document's geometry reaches, never below
+        /// <paramref name="from"/>. The one geometric question the emission model still has to ask, and only
+        /// after the final pass: content that no break record names — a monolithic subtree, a box that simply
+        /// overflows its page — extends past the slot the pass that laid it out was filling.
+        /// </summary>
+        private int LastSlotAnyGeometryTouches(int from) =>
+            Math.Max(from, PageIndexOf(MarginTop + ActualSize.Height - PageBoundaryEpsilon));
+
+        /// <summary>
+        /// The fragments the current (or last) <see cref="LayoutDocument"/> invocation's passes emitted.
+        /// </summary>
+        private FragmentEmitter? _emitter;
+
+        /// <summary>
+        /// Un-freezes every already-emitted fragmentainer from the one containing <paramref name="documentY"/>
+        /// on, because <paramref name="box"/>'s geometry there is about to change — see
+        /// <see cref="FragmentEmitter.InvalidateFor"/>. A no-op in the ordinary forward case, and during an
+        /// unpaginated/measurement pass, which has no grid to name a slot against.
+        /// </summary>
+        internal void InvalidateEmittedFragmentsFor(CssBox box, double documentY)
+        {
+            // The box question first, deliberately: this runs on every block-axis reposition in the document,
+            // and PageIndexOf under a per-page @page geometry table is a forward-incremental walk rather than
+            // arithmetic. Nothing should be asked of the page grid for a box that cannot need re-emitting.
+            if (_emitter is null || !_emitter.HoldsFragmentsFor(box) || !HasRealPageGrid) return;
+
+            _emitter.InvalidateFrom(PageIndexOf(documentY));
         }
 
         /// <summary>

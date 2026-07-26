@@ -546,15 +546,13 @@ body { margin: 0; }
             Assert.Equal(outer!.ClientTop + 40, first!.Location.Y, 3);
         }
 
-        // A known boundary, characterized rather than left silent. css-break §3.1 keep-with-next chains a
-        // heading to what follows it, but the run is walked over *siblings*: here the heading is a
-        // sibling of the container whose first child moves, so nothing is found and the heading stays on
-        // the page its content left. Continuing the walk out through the container was tried and is not
-        // sound - the members of a run are moved, and moving the container's predecessor while the
-        // container itself stays put drove the pass driver into its own no-progress backstop. Pulling a
-        // run across a container needs the container to travel with it, which is §3.1 propagation.
+        // css-break-3 §3.1 keep-with-next across a container. The heading is a sibling of the *container*
+        // whose first in-flow child relocates, so the run cannot be found by walking the breaking box's own
+        // siblings - it is found at the box's propagation anchor, and it is the container that travels, which
+        // is what makes moving the run a state layout settles into. Drafted as a characterization of the
+        // stranded heading and promoted to the invariant it was written against.
         [Fact]
-        public async Task FirstChildRelocation_DoesNotPullTheRunAcrossTheContainer_KnownBoundary()
+        public async Task FirstChildRelocation_PullsTheRunAcrossTheContainer()
         {
             var (root, container) = await LayoutHarness.LayoutAsync(
                 LayoutHarness.Wrap(
@@ -566,15 +564,50 @@ body { margin: 0; }
                 pageHeight: FirstChildPageHeight);
 
             var head = LayoutHarness.FindById(root, "head");
+            var wrap = LayoutHarness.FindById(root, "wrap");
             var body = LayoutHarness.FindById(root, "body");
             Assert.NotNull(head);
+            Assert.NotNull(wrap);
             Assert.NotNull(body);
 
-            Assert.True(
-                container.PageIndexOf(head!.Location.Y + HtmlContainerInt.PageBoundaryEpsilon)
-                < container.PageIndexOf(body!.Location.Y + HtmlContainerInt.PageBoundaryEpsilon),
-                "the heading is expected to stay behind - if it now travels with the body, this boundary "
-                + "has been closed and the test should become the invariant it was written against");
+            // The run's head lands on the destination band's own content top, and the container follows it
+            // rather than being left spanning the boundary.
+            Assert.Equal(container.PageTopOf(1), head!.Location.Y, 3);
+
+            Assert.Equal(
+                container.PageIndexOf(head.Location.Y + HtmlContainerInt.PageBoundaryEpsilon),
+                container.PageIndexOf(wrap!.Location.Y + HtmlContainerInt.PageBoundaryEpsilon));
+
+            Assert.Equal(
+                container.PageIndexOf(head.Location.Y + HtmlContainerInt.PageBoundaryEpsilon),
+                container.PageIndexOf(body!.Location.Y + HtmlContainerInt.PageBoundaryEpsilon));
+        }
+
+        // The structurally equivalent document, with the paragraph as the heading's own next sibling. The two
+        // shapes used to disagree; this pins that they no longer do.
+        [Fact]
+        public async Task FirstChildRelocation_MatchesTheEquivalentSiblingShape()
+        {
+            static string Document(string open, string close) =>
+                LayoutHarness.Wrap(
+                    "<div id='lead' style='height:150pt'>lead</div>"
+                    + "<h2 id='head' style='page-break-after: avoid'>Head</h2>"
+                    + open
+                    + "<div id='body' style='margin-top:200pt;height:40pt'>body</div>"
+                    + close);
+
+            var (nested, container) = await LayoutHarness.LayoutAsync(
+                Document("<div id='wrap'>", "</div>"), pageHeight: FirstChildPageHeight);
+            var (flat, _) = await LayoutHarness.LayoutAsync(Document("", ""), pageHeight: FirstChildPageHeight);
+
+            var nestedHead = LayoutHarness.FindById(nested, "head");
+            var flatHead = LayoutHarness.FindById(flat, "head");
+            Assert.NotNull(nestedHead);
+            Assert.NotNull(flatHead);
+
+            Assert.Equal(
+                container.PageIndexOf(flatHead!.Location.Y + HtmlContainerInt.PageBoundaryEpsilon),
+                container.PageIndexOf(nestedHead!.Location.Y + HtmlContainerInt.PageBoundaryEpsilon));
         }
 
         // A stated choice rather than a side effect: a box carrying a forced break that is *not* taken -

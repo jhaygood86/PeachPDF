@@ -320,6 +320,16 @@ namespace PeachPDF.Html.Core.Dom
                 // straddles a fragmentainer (css-break-3 §4.1). Everything still in the list is
                 // complete, which is what the resumed pass must not re-finalize.
                 blockBox.LineBoxes.Remove(coordinates.Line);
+
+                // Discarding the line leaves its words where they were being built, which is inside the
+                // fragmentainer being left - and that fragmentainer's fragments are frozen at the end of this
+                // pass, before the resumed pass re-places them. §4.1 has already decided they belong to the
+                // next fragmentainer, so mark them as such; being positioned again clears it.
+                foreach (var word in coordinates.Line.Words)
+                {
+                    word.AwaitsTheNextFragmentainer = true;
+                }
+
                 FinalizeLineBoxes(blockBox, completedLines);
                 return stopped with { CompletedLineCount = blockBox.LineBoxes.Count };
             }

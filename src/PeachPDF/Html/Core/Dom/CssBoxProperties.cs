@@ -585,10 +585,29 @@ namespace PeachPDF.Html.Core.Dom
 
         #endregion CSS Propertier
 
+        private RPoint _location;
+
         /// <summary>
         /// Gets or sets the location of the box
         /// </summary>
-        public RPoint Location { get; set; }
+        public RPoint Location
+        {
+            get => _location;
+            set
+            {
+                if (value.Y != _location.Y) OnBlockAxisRelocated(_location.Y, value.Y);
+                _location = value;
+            }
+        }
+
+        /// <summary>
+        /// Called whenever this box's block-axis position changes. Overridden by <c>CssBox</c> to un-freeze
+        /// any fragment already emitted for the box at its old position — see
+        /// <c>FragmentEmitter.InvalidateFrom</c>.
+        /// </summary>
+        protected virtual void OnBlockAxisRelocated(double fromY, double toY)
+        {
+        }
 
         /// <summary>
         /// Gets or sets the size of the box
