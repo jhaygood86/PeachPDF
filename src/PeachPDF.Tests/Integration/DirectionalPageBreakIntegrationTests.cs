@@ -365,15 +365,19 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(expectedSlot, SlotOf(container, only!));
         }
 
-        // §4.4's "no empty fragmentainer for a single forced break at a boundary", in the shape a first
-        // child takes it: a box that would already begin flush at a slot top has satisfied the break, so
-        // it must stay put rather than be pushed a page further. This is what keeps a break-before on
-        // the very first thing in a document from manufacturing a blank first page.
-        [Fact]
-        public async Task ForcedBreakBefore_OnAFirstChildAlreadyAtASlotTop_TakesNoBreak()
+        // Nothing at all precedes this box in the flow - the climb out through its containers reaches the
+        // root - so the break has nothing to break from and is not taken. That is what keeps a break on
+        // the first thing in a document from manufacturing a blank page in front of it, and it holds
+        // whichever side the value names, since no break means no side to satisfy.
+        [Theory]
+        [InlineData("break-before: page")]
+        [InlineData("break-before: right")]
+        [InlineData("break-before: left")]
+        [InlineData("page-break-before: always")]
+        public async Task ForcedBreakBefore_OnTheFirstBoxInTheFlow_TakesNoBreak(string declaration)
         {
             var (root, container) = await LayoutHarness.LayoutAsync(
-                LayoutHarness.Wrap("<div id='wrap'><div id='only' style='break-before: page'>only</div></div>"),
+                LayoutHarness.Wrap($"<div id='wrap'><div id='only' style='{declaration}'>only</div></div>"),
                 pageHeight: PageHeight);
 
             var only = LayoutHarness.FindById(root, "only");
@@ -382,19 +386,43 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal([0], container.FragmentTree!.Fragmentainers.Select(f => f.SlotIndex));
         }
 
-        // The directional half of the same rule: slot 0 is a right page, so a first child already at its
-        // top satisfies `right` outright and no page is manufactured for it either.
+        // §4.4's "no empty fragmentainer for a single forced break at a boundary", reached through the
+        // climb: the predecessor ends flush on a slot top, so the break is already satisfied there and
+        // must not manufacture a page. The filler is exactly one band tall, so it ends on PageTopOf(1).
         [Fact]
-        public async Task DirectionalBreakBefore_OnAFirstChildAlreadyOnTheRequiredSide_ManufacturesNoPage()
+        public async Task ForcedBreakBefore_OnAFirstChildWhosePredecessorEndsOnASlotTop_ManufacturesNoPage()
         {
             var (root, container) = await LayoutHarness.LayoutAsync(
-                LayoutHarness.Wrap("<div id='wrap'><div id='only' style='break-before: right'>only</div></div>"),
+                LayoutHarness.Wrap(
+                    $"<div id='first' style='height:{PageHeight - 40}pt'>first</div>"
+                    + "<div id='wrap'><div id='only' style='break-before: page'>only</div></div>"),
                 pageHeight: PageHeight);
 
             var only = LayoutHarness.FindById(root, "only");
             Assert.NotNull(only);
-            Assert.Equal(0, SlotOf(container, only!));
-            Assert.Equal([0], container.FragmentTree!.Fragmentainers.Select(f => f.SlotIndex));
+            Assert.Equal(1, SlotOf(container, only!));
+            Assert.Equal([0, 1], container.FragmentTree!.Fragmentainers.Select(f => f.SlotIndex));
+        }
+
+        // The same flush predecessor, but the slot it lands in is the wrong side, so the parity walk
+        // steps over it - proving the climbed anchor reaches the directional machinery and not just the
+        // plain-page path.
+        [Fact]
+        public async Task DirectionalBreakBefore_OnAFirstChildLandingOnTheWrongSide_StepsOverTheSlot()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    $"<div id='first' style='height:{PageHeight - 40}pt'>first</div>"
+                    + "<div id='wrap'><div id='only' style='break-before: right'>only</div></div>"),
+                pageHeight: PageHeight);
+
+            var only = LayoutHarness.FindById(root, "only");
+            Assert.NotNull(only);
+
+            // Slot 1 is page 2, a left page; `right` therefore steps to slot 2 and leaves slot 1 blank.
+            Assert.Equal(2, SlotOf(container, only!));
+            Assert.Equal([0, 1, 2], container.FragmentTree!.Fragmentainers.Select(f => f.SlotIndex));
+            Assert.Empty(WordsIn(container.FragmentTree.Fragmentainers[1].Root));
         }
 
         // The slot a first child's directional break steps over is reserved and materialized, exactly as
@@ -424,15 +452,13 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(container.PageTopOf(1) + 30, only!.Location.Y, 3);
         }
 
-        // Another characterized boundary: inside content an engine paginates itself, this box's
-        // coordinates during layout are provisional, so the parity step (and its reservation) is not
-        // taken and the break degrades to a plain page break.
-
-        // Another characterized boundary: inside content an engine paginates itself, this box's
-        // coordinates during layout are provisional, so the parity step (and its reservation) is not
-        // taken and the break degrades to a plain page break.
+        // Another characterized boundary. A multi-column container fills fragmentainers of its own, so
+        // a box inside one is being placed into a *column* - and which side of the sheet a page falls on
+        // is not a question a column can answer. The parity step and its reservation are therefore not
+        // taken, and the break degrades to a column break: the box moves to the next column, and no
+        // blank page is manufactured for a side that was never resolved.
         [Fact]
-        public async Task DirectionalBreakInsideMulticol_DegradesToAPlainPageBreak_KnownBoundary()
+        public async Task DirectionalBreakInsideMulticol_DegradesToAColumnBreak_KnownBoundary()
         {
             var (_, container) = await LayoutHarness.LayoutAsync(
                 LayoutHarness.Wrap(

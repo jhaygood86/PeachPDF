@@ -132,6 +132,13 @@ namespace PeachPDF.Html.Core.Utils
 
             while (true)
             {
+                // Siblings only, deliberately. The break point before a container's first in-flow child
+                // is the container's own (§3.1), so the run "ought" to continue out through it - but the
+                // members of a run are *moved*, and moving a container's predecessor while the container
+                // itself stays put is not a state layout can settle into: it was measured driving the
+                // pass driver into its own no-progress backstop. Pulling the run across a container needs
+                // the container to travel with it, which is §3.1 propagation proper and is not
+                // implemented. See PageBreakIntegrationTests' characterization of the stranded heading.
                 var prev = GetPreviousSibling(current, false);
 
                 if (prev is null)
@@ -150,6 +157,25 @@ namespace PeachPDF.Html.Core.Utils
             }
 
             return run;
+        }
+
+        /// <summary>
+        /// The nearest in-flow box preceding <paramref name="box"/> in the flow, looking out through any
+        /// containers <paramref name="box"/> begins. Null when nothing precedes it at all.
+        /// </summary>
+        /// <remarks>
+        /// The same rule <c>CssBox.PerformLayoutPrologue</c> resolves a forced break's target with, and
+        /// for the same reason: a first in-flow child has no predecessor of its own, but the break point
+        /// before it is its container's, which does.
+        /// </remarks>
+        public static CssBox? PrecedingBoxAcrossFirstChildChain(CssBox box)
+        {
+            for (var origin = box; origin is not null; origin = origin.ParentBox)
+            {
+                if (GetPreviousSibling(origin, false) is { } predecessor) return predecessor;
+            }
+
+            return null;
         }
 
         public static IEnumerable<CssBox> GetFollowingSiblings(CssBox box, Predicate<CssBox> matcher, bool isConsecutive)

@@ -363,7 +363,7 @@ namespace PeachPDF.Tests.Integration
         // ─── Phase-1/Phase-2 side-effect tracking (regression for stale Y after re-banding) ─
 
         [Fact]
-        public async Task NamedString_Y_TracksRealPositionAfterRebanding()
+        public async Task NamedString_Y_TracksTheColumnItLandsIn()
         {
             // Same re-banding shape as OversizedForcedChild_DoesNotOverlapSubsequentContent: item i1
             // alone claims column 1 (too tall to share), forcing i2/i3 into column 2 - a real move away
@@ -390,7 +390,7 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task NamedPageElement_Y_TracksRealPositionAfterRebanding()
+        public async Task NamedPageElement_RegistersOnceForTheColumnItLandsIn()
         {
             var html = Wrap(@"
                 <div id='mc' style='columns:2; column-gap:0; width:200px'>
@@ -402,10 +402,17 @@ namespace PeachPDF.Tests.Integration
             var mc = FindById(root, "mc")!;
             var i2 = FindById(root, "i2")!;
 
-            Assert.True(i2.Location.X > mc.ClientLeft + 50, "expected i2 to be re-banded into column 2");
+            Assert.True(i2.Location.X > mc.ClientLeft + 50, "expected i2 to be placed in column 2");
 
+            // Exactly one entry is the regression guard. The box is laid out twice - once by the
+            // measurement pass that sizes the fill, once for real - and once more again if a column
+            // break re-places it, and each placement registers. Its Y is the top of the pagination slot
+            // the box lands on, which is the attribution NamedPageRegistrationY defines rather than the
+            // box's own coordinate.
             var registered = Assert.Single(container.NamedPageElements, e => e.Name == "chapter");
-            Assert.Equal(i2.Location.Y, registered.Y, 1);
+            Assert.Equal(
+                container.PageTopOf(container.PageIndexOf(i2.Location.Y + HtmlContainerInt.PageBoundaryEpsilon)),
+                registered.Y, 1);
         }
 
         [Fact]
@@ -542,6 +549,235 @@ namespace PeachPDF.Tests.Integration
                 results.Add(box);
             foreach (var child in box.Boxes)
                 FindAllByClassRecursive(child, className, results);
+        }
+
+        // ─── A column as a real fragmentainer (css-break-3 §2) ─────────────────────
+
+        // The whole point of the change: a column is a fragmentainer, so the break machinery inside one
+        // asks the column rather than the page. Without that, break-inside had nothing to avoid a break
+        // *in* - a column boundary was not a break at all - and the box was placed wherever the packing
+        // loop put it.
+        [Theory]
+        [InlineData("break-inside: avoid")]
+        [InlineData("break-inside: avoid-page")]
+        public async Task BreakInsideAvoid_IsHonouredAtAColumnBoundary(string declaration)
+        {
+            var html = Wrap($@"
+                <div id='mc' style='columns:2; column-gap:0; width:200px'>
+                    <div class='item' style='height:60px'></div>
+                    <div class='item' id='keep' style='height:60px; {declaration}'>
+                        <div style='height:30px'></div>
+                        <div style='height:30px'></div>
+                    </div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 120);
+
+            var mc = FindById(root, "mc")!;
+            var keep = FindById(root, "keep")!;
+
+            // It could not stay in column 1 without straddling its bottom, so it starts column 2 whole.
+            Assert.True(keep.Location.X > mc.ClientLeft + 50,
+                $"expected the avoid box to start the next column, it is at x={keep.Location.X}");
+        }
+
+        // §2 monolithic content - a scroll container - may not be broken by any user agent, and a column
+        // boundary is a break like any other.
+        [Fact]
+        public async Task MonolithicContent_MovesWholeToTheNextColumn()
+        {
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:200px'>
+                    <div class='item' style='height:60px'></div>
+                    <div class='item' id='card' style='height:60px; overflow:hidden'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 120);
+
+            var mc = FindById(root, "mc")!;
+            var card = FindById(root, "card")!;
+
+            Assert.True(card.Location.X > mc.ClientLeft + 50,
+                $"expected the scroll container to move whole to the next column, it is at x={card.Location.X}");
+        }
+
+        // Every column shares one band, so a child starting a later column starts at the same top the
+        // first column did rather than continuing below where the previous column ended.
+        [Fact]
+        public async Task AChildStartingALaterColumn_StartsAtTheColumnTop()
+        {
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:200px'>
+                    <div class='item' id='a' style='height:60px'></div>
+                    <div class='item' id='b' style='height:60px'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 120);
+
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            Assert.Equal(a.Location.Y, b.Location.Y, 1);
+            Assert.True(b.Location.X > a.Location.X, "expected the second child in the next column");
+        }
+
+        // What the last column cannot hold is not dropped: it travels up the ordinary chain and the page
+        // driver opens the next page, where the container resumes rather than starting over.
+        [Fact]
+        public async Task ContentBeyondTheLastColumn_ResumesOnTheNextPage()
+        {
+            // Real text in each, so every page they land on carries printable content and is
+            // materialized - an empty box makes its page content-empty and CSS Paged Media 3 §3.2 drops
+            // it, which says nothing about whether the column driver placed it there.
+            var items = string.Concat(Enumerable.Range(1, 12)
+                .Select(i => $"<div class='item' id='i{i}' style='height:40px'>Item {i}</div>"));
+            var html = Wrap($"<div id='mc' style='columns:2; column-gap:0; width:200px'>{items}</div>");
+
+            var (root, container) = await BuildAndLayout(html, pageHeight: 120);
+
+            var placed = FindAllByClass(root, "item");
+            Assert.Equal(12, placed.Count);
+            AssertNoOverlaps(placed);
+
+            // More than one page, and every item still somewhere in the tree with real geometry.
+            Assert.True(container.FragmentTree!.Fragmentainers.Count > 1,
+                "expected the container to span more than one page");
+            Assert.True(container.FragmentainerPasses > 1, "expected it to have resumed rather than overflowed");
+
+            // Two columns on every page it occupies, not one tall column on a later one.
+            var xs = placed.Select(b => System.Math.Round(b.Location.X)).Distinct().ToList();
+            Assert.Equal(2, xs.Count);
+            Assert.All(placed, b => Assert.True(b.ActualBottom > b.Location.Y, "every item keeps a height"));
+        }
+
+        // A known boundary, characterized rather than left silent. A box carries one Location, and
+        // columns sit side by side inside a single page band - so a box split across two of them would
+        // have both halves at the same document Y and one X, with its continuation lines laid out over
+        // the ones already there. A top-level child is therefore atomic per column, exactly as it was
+        // before columns became fragmentainers. Closing this needs geometry held per fragment.
+        [Fact]
+        public async Task AChildIsStillAtomicPerColumn_KnownBoundary()
+        {
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:300px'>
+                    <div class='item' style='height:40px'></div>
+                    <p id='long'>One two three four five six seven eight nine ten eleven twelve thirteen
+                    fourteen fifteen sixteen seventeen eighteen nineteen twenty twenty-one twenty-two.</p>
+                </div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 120);
+
+            var longBox = FindById(root, "long")!;
+            var xs = LayoutHarness.Descendants(longBox).SelectMany(b => b.Words).Select(w => System.Math.Round(w.Left)).Distinct().ToList();
+
+            // Every one of its words sits in a single column: if this ever spans two, the boundary has
+            // been closed and this should become the invariant it was drafted as.
+            Assert.True(xs.Max() - xs.Min() < 150,
+                $"expected one column's worth of X positions, got {xs.Min()}..{xs.Max()}");
+        }
+
+        // column-fill: auto fills each column before starting the next, so the first column runs to the
+        // page budget rather than to an even share - the branch that skips the balance estimate entirely.
+        [Fact]
+        public async Task ColumnFillAuto_FillsTheFirstColumnBeforeStartingTheNext()
+        {
+            var items = string.Concat(Enumerable.Range(1, 6)
+                .Select(i => $"<div class='item' id='a{i}' style='height:40px'>Item {i}</div>"));
+            var html = Wrap($"<div id='mc' style='columns:2; column-gap:0; width:200px; column-fill:auto'>{items}</div>");
+
+            var (root, _) = await BuildAndLayout(html, pageHeight: 200);
+            var placed = FindAllByClass(root, "item");
+            var mc = FindById(root, "mc")!;
+
+            // Filling means column 1 takes as many as its budget allows, so it holds strictly more than
+            // an even split of six would.
+            var inFirstColumn = placed.Count(b => System.Math.Abs(b.Location.X - mc.ClientLeft) < 0.5);
+            Assert.True(inFirstColumn > 3, $"expected the first column to be filled, it holds {inFirstColumn}");
+        }
+
+        // The estimator searches for the tightest height that still packs as many children as the full
+        // budget would. With unevenly-sized children an even split of the total is not that height, so
+        // this pins that the search runs rather than a closed form.
+        [Fact]
+        public async Task ColumnFillBalance_WithUnevenChildren_UsesNoMoreColumnsThanTheBudgetWould()
+        {
+            var heights = new[] { 70, 70, 70, 30, 30, 30 };
+            var items = string.Concat(heights.Select((h, i) =>
+                $"<div class='item' id='u{i}' style='height:{h}px'>Item {i}</div>"));
+            var html = Wrap($"<div id='mc' style='columns:3; column-gap:0; width:300px'>{items}</div>");
+
+            var (root, _) = await BuildAndLayout(html, pageHeight: 400);
+            var placed = FindAllByClass(root, "item");
+
+            AssertNoOverlaps(placed);
+            Assert.Equal(6, placed.Count);
+
+            // Balanced across all three columns rather than poured into the first.
+            var xs = placed.Select(b => System.Math.Round(b.Location.X)).Distinct().ToList();
+            Assert.Equal(3, xs.Count);
+        }
+
+        // A child taller than any column claims one on its own and overflows it, rather than being split
+        // - the case the estimator's monotonicity argument turns on.
+        [Fact]
+        public async Task AChildTallerThanItsColumn_ClaimsOneAndOverflows()
+        {
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:200px'>
+                    <div class='item' id='tall' style='height:300px'>Tall</div>
+                    <div class='item' id='after' style='height:20px'>After</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 200);
+
+            var mc = FindById(root, "mc")!;
+            var tall = FindById(root, "tall")!;
+            var after = FindById(root, "after")!;
+
+            // It is not split: one box, its full height, in the first column.
+            Assert.Equal(225, tall.ActualBottom - tall.Location.Y, 1);
+            Assert.Equal(mc.ClientLeft, tall.Location.X, 1);
+            Assert.True(after.Location.X > mc.ClientLeft + 50, "the next child starts the next column");
+        }
+
+        // The multicol dispatch no longer routes through LayoutMonolithicContent, which used to be what
+        // ran the out-of-flow children of every engine container. The columns engine lays out its own, so
+        // an absolutely-positioned child must still be placed and keep its content.
+        [Fact]
+        public async Task OutOfFlowChild_IsStillLaidOut()
+        {
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:200px; position:relative'>
+                    <div class='item' style='height:40px'>One</div>
+                    <div class='item' style='height:40px'>Two</div>
+                    <div id='abs' style='position:absolute; top:5px; left:5px'>Absolute</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 400);
+
+            var abs = FindById(root, "abs")!;
+            Assert.True(abs.ActualBottom > abs.Location.Y,
+                $"expected the absolutely-positioned child to have been laid out, it is {abs.Location.Y}..{abs.ActualBottom}");
+            Assert.NotEmpty(LayoutHarness.Descendants(abs).SelectMany(b => b.Words));
+        }
+
+        // A known boundary, pre-existing and characterized here rather than left silent. CssBox's own
+        // content dispatch tests ContainsInlinesOnly *before* EstablishesMultiColumnContext, and
+        // ContainsInlinesOnly is "every child is inline" - vacuously true of a box whose children are all
+        // text. So a multi-column container holding nothing but text takes the inline branch and never
+        // reaches this engine at all. Columnizing it needs its inline content wrapped in an anonymous
+        // block first, which is a box-generation question rather than a fragmentation one.
+        [Fact]
+        public async Task InlineOnlyContent_DoesNotColumnize_KnownBoundary()
+        {
+            var html = Wrap("<div id='mc' style='columns:2; column-gap:0; width:200px'>"
+                            + "Plain text with no block child of its own, long enough that two columns "
+                            + "would be visibly different from one.</div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 400);
+
+            var mc = FindById(root, "mc")!;
+            var xs = LayoutHarness.Descendants(mc).SelectMany(b => b.Words)
+                .Select(w => System.Math.Round(w.Left)).DefaultIfEmpty(0).ToList();
+
+            // The text uses the container's whole width rather than a column's - two columns of a 150pt
+            // container would each be ~75pt wide. And no rule is drawn, because no column was made.
+            Assert.True(xs.Max() - xs.Min() > 100,
+                $"expected the text to span the whole container rather than one column, got X {xs.Min()}..{xs.Max()}");
+            Assert.Null(mc.ColumnRuleSegments);
         }
 
         /// <summary>

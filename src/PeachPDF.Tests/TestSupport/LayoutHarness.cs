@@ -58,6 +58,60 @@ namespace PeachPDF.Tests.TestSupport
         }
 
         /// <summary>
+        /// Lays <paramref name="html"/> out <paramref name="passes"/> times over the <i>same</i> box tree,
+        /// taking <paramref name="snapshot"/> after each pass.
+        /// </summary>
+        /// <remarks>
+        /// Whether laying the same subtree out again reproduces the first result is a real question about
+        /// a layout engine, not a theoretical one: a repeating table <c>&lt;thead&gt;</c> is detached and
+        /// replaced by per-page proxies that nothing removes, so a second run over the same table measures
+        /// taller. Any engine that is to be re-entered by a resumed fragmentainer pass has to be checked
+        /// the same way, which is what this exists for.
+        /// </remarks>
+        internal static async Task<IReadOnlyList<T>> LayoutRepeatedlyAsync<T>(
+            string html,
+            int passes,
+            Func<CssBox, HtmlContainerInt, T> snapshot,
+            double pageWidth = 595,
+            double pageHeight = 842,
+            double margin = 20)
+        {
+            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var container = new HtmlContainerInt(adapter)
+            {
+                MarginTop = margin,
+                MarginBottom = margin,
+                MarginLeft = margin,
+                MarginRight = margin
+            };
+
+            var sheet = new XSize(pageWidth, pageHeight);
+            container.PageSize = Utilities.Utils.Convert(sheet, 1.0);
+
+            await container.SetHtml(html, null);
+
+            var band = new XSize(pageWidth - container.MarginLeft - container.MarginRight,
+                                 pageHeight - container.MarginTop - container.MarginBottom);
+            container.PageSize = Utilities.Utils.Convert(band, 1.0);
+            container.MaxSize = Utilities.Utils.Convert(band, 1.0);
+            container.Location = Utilities.Utils.Convert(new XPoint(container.MarginLeft, container.MarginTop), 1.0);
+
+            var measure = XGraphics.CreateMeasureContext(sheet, XGraphicsUnit.Point, XPageDirection.Downwards);
+            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+
+            var results = new List<T>(passes);
+
+            for (var pass = 0; pass < passes; pass++)
+            {
+                await container.PerformLayout(graphics);
+                Assert.NotNull(container.Root);
+                results.Add(snapshot(container.Root!, container));
+            }
+
+            return results;
+        }
+
+        /// <summary>
         /// Wraps a body fragment in a minimal document, so a test can state only the markup it cares about.
         /// </summary>
         internal static string Wrap(string body) =>

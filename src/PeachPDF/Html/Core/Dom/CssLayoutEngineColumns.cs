@@ -2,6 +2,7 @@ using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
+using PeachPDF.Html.Core.Fragmentation;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,28 +12,37 @@ namespace PeachPDF.Html.Core.Dom
 {
     /// <summary>
     /// Lays out a CSS Multi-column Layout container (<c>column-count</c>/<c>column-width</c>/<c>columns</c>).
-    ///
-    /// v1 scope: children are laid out once as a single tall flow at the resolved column width (reusing
-    /// ordinary block layout unchanged), then whole top-level children are reassigned — atomically, never
-    /// split — to (page, column) slots by height, and moved into place. This means a single child (e.g. one
-    /// paragraph) never itself splits across a column or page boundary the way plain block content already
-    /// does elsewhere in this engine (which relies on the paint phase's per-page clipping, not real
-    /// fragmentation, to split a tall paragraph's lines across pages) — only a whole child moves as a unit.
-    /// For content made of many short block children (the common real-world case: dictionary entries, list
-    /// items, cards) this produces correct-looking column geometry. <c>column-fill: balance</c> is solved
-    /// per row via a binary search (<see cref="BinarySearchRowTarget"/>) for the minimum column height
-    /// that still packs as many children into the row as the full page budget would — tighter than a
-    /// single closed-form estimate, especially with unevenly-sized children. True inline-level
-    /// fragmentation (splitting a single child's own lines across a column/page boundary) is not
-    /// implemented; see docs/html-css-support.md.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A column is a fragmentainer (<see href="https://www.w3.org/TR/css-break-3/#fragmentainer">§2</see>:
+    /// "a column in multi-column layout, or a page in paged media"), so this engine is a <b>driver over
+    /// its own fragmentainers</b>, in the same shape as <c>HtmlContainerInt.LayoutDocument</c>: it
+    /// establishes a fragmentation context per column, fills it through the ordinary block-children loop
+    /// (<see cref="CssBox.FillFragmentainerWithBlockChildren"/>), reads back a break token, and opens the
+    /// next column at that point. Content therefore splits inside a child — a paragraph continues into
+    /// the next column rather than moving to it whole.
+    /// </para>
+    /// <para>
+    /// The <b>measurement pass</b> is kept, and is the reason this is not simply a loop.
+    /// <c>column-fill: balance</c> has to know how tall the content is before it can choose a column
+    /// height, and the only way to know that is to lay it out; bisecting over real per-column driver runs
+    /// is not an acceptable cost. So every child is still laid out once as a single tall virtual column,
+    /// with breaking suppressed, purely to size the fill — and then laid out again for real.
+    /// </para>
+    /// <para>
+    /// Every column shares one band, <c>[containerTop, containerTop + target)</c>: columns differ in the
+    /// inline axis, not the block axis. That is what lets the block-axis machinery be reused untouched —
+    /// a resumed column starts at the same <c>ResumeContentTop</c> a resumed page would.
+    /// </para>
+    /// </remarks>
     internal static class CssLayoutEngineColumns
     {
-        public static async ValueTask PerformLayout(RGraphics g, CssBox columnsBox)
+        public static async ValueTask PerformLayout(RGraphics g, CssBox columnsBox, BreakToken? resume = null)
         {
             try
             {
-                await Layout(g, columnsBox);
+                await Layout(g, columnsBox, resume);
             }
             catch (Exception ex)
             {
@@ -40,7 +50,7 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        private static async ValueTask Layout(RGraphics g, CssBox columnsBox)
+        private static async ValueTask Layout(RGraphics g, CssBox columnsBox, BreakToken? resume)
         {
             var htmlContainer = columnsBox.HtmlContainer!;
 
@@ -90,10 +100,11 @@ namespace PeachPDF.Html.Core.Dom
                 return;
             }
 
-            // Phase 1: lay out every child as one tall, single virtual column at the resolved column
-            // width, reusing ordinary block layout untouched. This gives each child its correct natural
-            // height (and the natural collapsed-margin gap to the next child) without reimplementing
-            // line/box measurement.
+            // Phase 1 (measurement): lay out every child as one tall, single virtual column at the
+            // resolved column width, reusing ordinary block layout untouched. Breaking stays suppressed
+            // here - these are provisional positions spanning many page bands, and a token recorded
+            // against them would name a place nothing ends up. Its only product is how tall the content
+            // is, which is what column-fill: balance needs before it can pick a column height.
             var originalRight = columnsBox.ActualRight;
             columnsBox.ActualRight = columnsBox.Location.X + columnWidth + columnsBox.ActualBoxSizeIncludedWidth;
             columnsBox.ActualBottom = columnsBox.Location.Y;
@@ -106,145 +117,324 @@ namespace PeachPDF.Html.Core.Dom
             // phantom trailing pages. Snapshot/restore around the virtual pass so only Phase 2's real,
             // re-banded geometry (via columnsBox's own ActualBottom below, which flows into ActualSize
             // normally once this method returns) can grow it.
-            var actualSizeBeforeVirtualPass = htmlContainer.ActualSize;
-
-            foreach (var childBox in children)
+            // Only on the pass that starts this container. A resumed one continues children the earlier
+            // fragment already measured, and re-measuring them would overwrite the geometry it placed.
+            if (resume is null)
             {
-                await childBox.PerformLayout(g);
-            }
+                var actualSizeBeforeVirtualPass = htmlContainer.ActualSize;
 
-            htmlContainer.ActualSize = actualSizeBeforeVirtualPass;
+                foreach (var childBox in children)
+                {
+                    await childBox.PerformLayout(g);
+                }
+
+                htmlContainer.ActualSize = actualSizeBeforeVirtualPass;
+            }
 
             columnsBox.ActualRight = originalRight;
 
-            // Phase 2: re-band each child from its virtual single-column position into its real
-            // (page, column) slot, preserving the natural gap the virtual pass already computed between
-            // consecutive children that stay in the same column.
-            var pageHeight = htmlContainer.PageSize.Height;
-            var boxTop = columnsBox.ClientTop;
+            // Phase 2: fill each column as a real fragmentainer, in the same shape LayoutDocument
+            // fills pages - establish a context, run the ordinary block-children loop into it, read back
+            // where it stopped, open the next one there.
+            // A continuation starts at the fragmentainer it resumed into, not at the container's own top,
+            // which is back on the page this one is continuing from.
+            var boxTop = resume is not null && htmlContainer.CurrentFragmentainer is { } resumed
+                ? resumed.ResumeContentTop
+                : columnsBox.ClientTop;
 
             var columnLeft = columnsBox.ClientLeft;
             var pitch = columnWidth + gap;
 
-            // Which document-wide page (0-based) the container's own top falls on.
-            var startPage = pageHeight > 0 ? htmlContainer.PageIndexOf(boxTop) : 0;
+            var startSlot = htmlContainer.HasRealPageGrid ? htmlContainer.PageIndexOf(boxTop) : 0;
 
-            // Top of the content area of the page `startPage + row` places rows on.
-            double PageContentTopOf(int row) => htmlContainer.PageTopOf(startPage + row);
+            // What is left of this container's own page. A column can never be taller than that, so it
+            // is the ceiling on every target below.
+            var pageBudget = htmlContainer.HasRealPageGrid
+                ? htmlContainer.PageBottomOf(startSlot) - boxTop
+                : double.MaxValue / 4;
 
-            // Row 0 starts wherever the container itself starts (which may be partway down its page);
-            // every later row starts at the top of its page's content area.
-            double RowTop(int row) => row == 0 ? boxTop : PageContentTopOf(row);
-            // Every row's usable space ends at the top of the *next* row's page, regardless of row 0's
-            // partial-page start.
-            double RowBottom(int row) => PageContentTopOf(row + 1);
+            // column-fill: balance (the default) aims for equal-height columns rather than filling each
+            // one before starting the next. An even share of the measured height is the ideal, but it is
+            // only reachable where the content can actually be divided that finely: a child with no
+            // internal break point of its own - an explicit height, a replaced element - claims its whole
+            // depth wherever it lands. So the target is searched for rather than computed, against a
+            // whole-child packing of the measurement pass. That estimate is deliberately pessimistic now
+            // that content genuinely splits: anything the real fill can divide only packs tighter than
+            // the estimate assumed, never looser, so the target is never too small.
+            // Balancing applies to the fragment that holds the *end* of the flow; one that overflows into
+            // another fills its columns instead. Which of the two this is cannot be known before filling
+            // it, so the first fragment starts from the estimate (its measurement pass has just said how
+            // tall everything is) and a continuation starts from the full budget and is re-balanced below
+            // once the fill has shown that the remainder ends here.
+            var balances = columnsBox.ColumnFill != CssConstants.Auto;
 
-            // column-fill: balance (the spec default, used whenever it isn't explicitly "auto") aims for
-            // equal-height columns rather than filling one column all the way before starting the next.
-            // Solved per row via BinarySearchRowTarget below: the minimum column height that still packs
-            // as many of this row's remaining children into `columnCount` columns as the full page
-            // budget would — tighter than a single closed-form estimate, especially with unevenly-sized
-            // children, while still preserving the "whole child, never split" model (only ever moves
-            // entire children between (page, column) slots, exactly like the non-balanced case).
-            var balanceFill = columnsBox.ColumnFill != CssConstants.Auto;
-
-            // effectiveTop is RowTop(r), except when a taller-than-budget forced child (see columnEmpty
-            // below) on an earlier row overran its nominal page boundary — then it's that overrun bottom,
-            // so this row starts after the earlier overflow instead of visually colliding with it.
-            double RowTarget(int r, double effectiveTop, int remainingStartIndex)
-            {
-                var pageBudget = RowBottom(r) - effectiveTop;
-                if (!balanceFill) return pageBudget;
-
-                return BinarySearchRowTarget(children, remainingStartIndex, columnCount, pageBudget);
-            }
-
-            var row = 0;
-            var col = 0;
-            var colTop = RowTop(0);
-            var colY = colTop;
-            var rowTarget = RowTarget(0, colTop, 0);
+            var target = balances && resume is null
+                ? EstimateBalancedColumnHeight(children, 0, columnCount, pageBudget)
+                : pageBudget;
 
             var ruleSegments = new List<(double X, double Top, double Bottom)>();
-            var rowMaxBottoms = new Dictionary<int, double>();
-            var rowActualTops = new Dictionary<int, double> { [0] = colTop };
 
-            double? previousChildNaturalBottom = null;
+            // The measurement pass ran every child's prologue, which is once-per-box and owns
+            // RectanglesReset. The real fill lays the same boxes out again from scratch, so it has to be
+            // let back in - the same thing the keep-with-next retry does before re-entering a box.
+            ResetChildrenForRefill(children, resume);
 
-            for (var childIndex = 0; childIndex < children.Count; childIndex++)
+            BreakToken? carry;
+            double contentBottom;
+            int filledColumns;
+            var rebalanced = false;
+
+            // The estimate above packs whole children, so it can land a little under what the real fill
+            // needs and spill the tail onto the next page - which reads as a column count that changed
+            // mid-document rather than as balancing. Where that happens the target is grown and the fill
+            // run again, up to the page's own budget, which is the point at which balancing has given up
+            // and the content genuinely does not fit this fragment.
+            for (var attempt = 0; ; attempt++)
             {
-                var child = children[childIndex];
-                var naturalTop = child.Location.Y;
-                var naturalBottom = child.ActualBottom;
-                var height = naturalBottom - naturalTop;
+                (carry, contentBottom, filledColumns) =
+                    await FillColumns(g, columnsBox, children, resume, boxTop, target, columnLeft, pitch,
+                        columnWidth, containerWidth, columnCount, startSlot, htmlContainer);
 
-                var remaining = colTop + rowTarget - colY;
-                var columnEmpty = Math.Abs(colY - colTop) < 0.01;
+                if (attempt >= MaxFillAttempts) break;
 
-                if (!columnEmpty && height > remaining && pageHeight > 0)
+                if (carry is not null)
                 {
-                    // Doesn't fit in the current column — advance to the next column, or (once every
-                    // column on this page-row is used) the next page-row's first column.
-                    col++;
-                    if (col >= columnCount)
-                    {
-                        col = 0;
-                        row++;
+                    if (target >= pageBudget) break;
 
-                        var nominalTop = RowTop(row);
-                        colTop = rowMaxBottoms.TryGetValue(row - 1, out var previousRowOverflow)
-                            ? Math.Max(nominalTop, previousRowOverflow)
-                            : nominalTop;
-                        rowActualTops[row] = colTop;
-                        rowTarget = RowTarget(row, colTop, childIndex);
-                    }
-
-                    colY = colTop;
-                    previousChildNaturalBottom = null;
+                    target = Math.Min(pageBudget, target * TargetGrowthPerAttempt + 1);
+                }
+                else if (balances && !rebalanced && filledColumns < columnCount && contentBottom > boxTop)
+                {
+                    // The remainder ended here, so this is the fragment that balances - but it was filled
+                    // at the full budget and poured everything into the first column. Now that its real
+                    // height is known, an even share of it is the target.
+                    rebalanced = true;
+                    target = Math.Max(1, (contentBottom - boxTop) / columnCount);
+                }
+                else
+                {
+                    break;
                 }
 
-                // Preserve the virtual pass's natural (collapsed-margin) gap only when staying in the
-                // same column right after the previous child; a fragmentation break never carries a
-                // leading gap, matching CSS Fragmentation behavior.
-                if (previousChildNaturalBottom.HasValue)
-                {
-                    colY += naturalTop - previousChildNaturalBottom.Value;
-                }
-
-                var finalX = columnLeft + col * pitch;
-                var finalY = colY;
-
-                var deltaX = finalX - child.Location.X;
-                var deltaY = finalY - naturalTop;
-
-                if (Math.Abs(deltaX) > 0.001) child.OffsetLeft(deltaX);
-                if (Math.Abs(deltaY) > 0.001) child.OffsetTop(deltaY);
-
-                colY = finalY + height;
-                previousChildNaturalBottom = naturalBottom;
-
-                rowMaxBottoms[row] = rowMaxBottoms.TryGetValue(row, out var existing) ? Math.Max(existing, colY) : colY;
-            }
-
-            // Column-rule segments: one per gap, spanning the tallest column actually used on each
-            // page-row this container occupies.
-            foreach (var (r, rowBottom) in rowMaxBottoms)
-            {
-                var rowTop = rowActualTops[r];
-
-                for (var c = 1; c < columnCount; c++)
-                {
-                    var ruleX = columnLeft + c * pitch - gap / 2;
-                    ruleSegments.Add((ruleX, rowTop, rowBottom));
-                }
+                ResetChildrenForRefill(children, resume);
             }
 
             columnsBox.ColumnRuleSegments = ruleSegments;
-            columnsBox.ActualBottom = rowMaxBottoms.Values.DefaultIfEmpty(boxTop).Max();
+
+            // One rule per gap between the columns actually used, spanning the content they hold.
+            for (var c = 1; c < filledColumns; c++)
+            {
+                ruleSegments.Add((columnLeft + c * pitch - gap / 2, boxTop, contentBottom));
+            }
+
+            columnsBox.ActualBottom = Math.Max(boxTop, contentBottom);
+
+            // Content the last column could not hold belongs to the next page, and this container is not
+            // the fragmentation context root - so the token travels up the ordinary chain and the page
+            // driver opens it, exactly as it would for any other block box that did not finish.
+            if (carry is not null)
+            {
+                columnsBox.SetPendingBreakToken(RetargetToTheNextPage(carry, htmlContainer, startSlot));
+            }
+        }
+
+        private const int MaxFillAttempts = 4;
+        private const double TargetGrowthPerAttempt = 1.2;
+
+        /// <summary>
+        /// Fills this container's columns once at <paramref name="target"/>, returning what would not fit,
+        /// how far down the content reached, and how many columns it took.
+        /// </summary>
+        private static async ValueTask<(BreakToken? Carry, double ContentBottom, int FilledColumns)> FillColumns(
+            RGraphics g, CssBox columnsBox, List<CssBox> children, BreakToken? resume,
+            double boxTop, double target, double columnLeft, double pitch, double columnWidth,
+            double containerWidth, int columnCount, int startSlot, HtmlContainerInt htmlContainer)
+        {
+            var carry = resume;
+            var contentBottom = boxTop;
+            var filledColumns = 0;
+
+            for (var col = 0; col < columnCount; col++)
+            {
+                // Every column shares one band: columns differ in the inline axis, not the block axis.
+                // A column's own inline span is applied by placing it, below.
+                var column = new FragmentainerContext(
+                    htmlContainer, columnsBox, startSlot, (boxTop, boxTop + target));
+
+                var previousContext = htmlContainer.EnterNestedFragmentainer(column);
+
+                bool stopped;
+                var columnBottom = boxTop;
+
+                var columnStart = FirstChildIndexOf(carry);
+
+                try
+                {
+                    columnsBox.ActualBottom = boxTop;
+                    PlaceColumn(columnsBox, columnLeft + col * pitch, columnWidth);
+
+                    stopped = await columnsBox.FillFragmentainerWithBlockChildren(g, carry);
+
+                    // A child the fill decided to break *before* was laid out here and is about to be
+                    // laid out again in the next column, so its geometry is not this column's.
+                    columnBottom = MaxBottomOf(children, PlacedBelow(columnsBox.PendingBreakToken, children));
+                }
+                finally
+                {
+                    htmlContainer.LeaveNestedFragmentainer(previousContext);
+                    PlaceColumn(columnsBox, columnLeft, containerWidth);
+                }
+
+                filledColumns = col + 1;
+                contentBottom = Math.Max(contentBottom, columnBottom);
+
+                if (!stopped)
+                {
+                    carry = null;
+                    break;
+                }
+
+                carry = ResumeInTheNextColumn(columnsBox, boxTop, columnStart);
+            }
+
+            return (carry, contentBottom, filledColumns);
+        }
+
+        /// <summary>Lets every child's prologue run again, for a fill that is being attempted afresh.</summary>
+        private static void ResetChildrenForRefill(List<CssBox> children, BreakToken? resume)
+        {
+            if (resume is not null) return;
+
+            foreach (var child in children)
+            {
+                child.ResetForRefill();
+            }
         }
 
         /// <summary>
-        /// Finds the minimum column height (between 1 and <paramref name="pageBudget"/>) that still
+        /// Narrows the container's own inline extent to one column, so children lay out at that column's
+        /// X rather than being translated there afterwards.
+        /// </summary>
+        /// <remarks>
+        /// A translation cannot work once content genuinely splits: a box that continues from one column
+        /// into the next is a single <c>CssBox</c> whose earlier lines are already placed, and
+        /// <c>OffsetLeft</c> would move those too. Laying each column out at its own X is what keeps a
+        /// continuation's lines where they belong.
+        /// </remarks>
+        private static void PlaceColumn(CssBox columnsBox, double left, double width)
+        {
+            columnsBox.Location = columnsBox.Location with { X = left - columnsBox.ActualPaddingLeft - columnsBox.ActualBorderLeftWidth };
+            columnsBox.ActualRight = columnsBox.Location.X + width + columnsBox.ActualBoxSizeIncludedWidth;
+        }
+
+        private static double MaxBottomOf(List<CssBox> children, int limit)
+        {
+            var bottom = double.MinValue;
+
+            for (var i = 0; i < children.Count && i < limit; i++)
+            {
+                bottom = Math.Max(bottom, children[i].ActualBottom);
+            }
+
+            return bottom is double.MinValue ? 0 : bottom;
+        }
+
+        /// <summary>
+        /// How many of <paramref name="children"/> this column really holds.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Load-bearing, and not merely a tidy-up. Children the fill never reached still carry the
+        /// geometry the <i>measurement</i> pass gave them — one tall virtual column — so asking all of
+        /// them how far down they go reports the height of the whole flow rather than of this column.
+        /// That inflates the container to a full page, which then makes it escape to the next one, which
+        /// is how a document that fits in two pages became six.
+        /// </para>
+        /// <para>
+        /// A break <i>before</i> a child means that child is not here; a break <i>inside</i> one means it
+        /// is, up to the point it stopped. The token's index is into the container's own <c>Boxes</c>,
+        /// which also holds the out-of-flow and <c>display: none</c> boxes this engine filtered out, so it
+        /// is mapped back through the filtered list rather than used directly.
+        /// </para>
+        /// </remarks>
+        private static int PlacedBelow(BreakToken? token, List<CssBox> children)
+        {
+            if (token is not BlockBreakToken block) return children.Count;
+
+            var index = children.IndexOf(block.Box.Boxes[block.ResumeChildIndex]);
+
+            if (index < 0) return children.Count;
+
+            return block.IsBreakBefore ? index : index + 1;
+        }
+
+        /// <summary>
+        /// The record the next column resumes from: the one this column produced, restated in the next
+        /// column's terms.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Two restatements. A break-before carries the target the deciding site worked out, and inside a
+        /// column that site worked it out against the <i>page</i> grid — the next page's top, which is not
+        /// where the next column starts. Every column begins at the same place, so that is what it is
+        /// replaced with.
+        /// </para>
+        /// <para>
+        /// <b>And a break <i>inside</i> a child becomes a break before it, so no child ever occupies two
+        /// columns at once.</b> This is a real limit rather than a simplification, and it is the same one
+        /// the whole-child model had: a box carries a single <c>Location</c>, which can describe its
+        /// position in one column only. Columns sit side by side inside one page band, so a box split
+        /// across two of them has both halves at the same document Y and one X — its continuation lines
+        /// are laid out over the ones already there, and the fragment builder, whose band membership is a
+        /// question about Y alone, cannot tell the halves apart to draw its background in both. Splitting
+        /// a child across columns needs geometry held per fragment rather than per box, which is
+        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/331">#331</see>.
+        /// </para>
+        /// <para>
+        /// A child that begins this column and still does not fit is left alone: it has nowhere better to
+        /// be, and breaking before it would ask the same question of every column in turn.
+        /// </para>
+        /// </remarks>
+        private static BreakToken? ResumeInTheNextColumn(CssBox columnsBox, double bandTop, int columnStart)
+        {
+            if (columnsBox.TakePendingBreakToken() is not BlockBreakToken token) return null;
+
+            if (token.IsBreakBefore) return token with { ResumeTopOverride = bandTop };
+
+            if (token.ResumeChildIndex <= columnStart) return token;
+
+            return new BlockBreakToken(
+                token.Box, token.ResumeSlotIndex, token.ResumeChildIndex, null,
+                IsBreakBefore: true, bandTop);
+        }
+
+        /// <summary>The child index a column's fill begins at.</summary>
+        private static int FirstChildIndexOf(BreakToken? carry) =>
+            carry is BlockBreakToken block ? block.ResumeChildIndex : 0;
+
+        /// <summary>
+        /// Restates a column-relative resumption record in page terms, for the content the last column
+        /// could not hold.
+        /// </summary>
+        private static BreakToken? RetargetToTheNextPage(
+            BreakToken carry, HtmlContainerInt container, int startSlot)
+        {
+            if (carry is not BlockBreakToken block) return carry;
+
+            var nextSlot = startSlot + 1;
+
+            return block with
+            {
+                ResumeSlotIndex = nextSlot,
+                ResumeTopOverride = block.IsBreakBefore && container.HasRealPageGrid
+                    ? container.PageTopOf(nextSlot)
+                    : block.ResumeTopOverride
+            };
+        }
+
+        /// <summary>
+        /// Estimates a column height for <c>column-fill: balance</c>: the minimum (between 1 and
+        /// <paramref name="pageBudget"/>) that still
         /// packs as many of the children starting at <paramref name="startIndex"/> into
         /// <paramref name="columnCount"/> columns as using the full <paramref name="pageBudget"/> would —
         /// i.e. the tightest height that doesn't force this row to hold fewer children than it
@@ -254,12 +444,12 @@ namespace PeachPDF.Html.Core.Dom
         /// including the forced-oversized-child-alone-in-a-column case (that child always claims exactly
         /// one column regardless of budget, so it doesn't break monotonicity).
         /// </summary>
-        private static double BinarySearchRowTarget(List<CssBox> children, int startIndex, int columnCount, double pageBudget)
+        private static double EstimateBalancedColumnHeight(List<CssBox> children, int startIndex, int columnCount, double pageBudget)
         {
             if (pageBudget <= 1 || startIndex >= children.Count)
                 return Math.Max(1, pageBudget);
 
-            var (targetCount, _) = SimulateRowPacking(children, startIndex, columnCount, pageBudget);
+            var (targetCount, _) = SimulateWholeChildPacking(children, startIndex, columnCount, pageBudget);
             if (targetCount == 0)
                 return pageBudget; // nothing fits even at the full budget - let the caller's forced-fit branch handle it
 
@@ -271,7 +461,7 @@ namespace PeachPDF.Html.Core.Dom
             for (var i = 0; i < 30; i++)
             {
                 var mid = (lo + hi) / 2;
-                var (count, _) = SimulateRowPacking(children, startIndex, columnCount, mid);
+                var (count, _) = SimulateWholeChildPacking(children, startIndex, columnCount, mid);
                 if (count >= targetCount)
                     hi = mid;
                 else
@@ -292,7 +482,7 @@ namespace PeachPDF.Html.Core.Dom
         /// mutates any child — only reads each child's <c>Location</c>/<c>ActualBottom</c>, already fixed
         /// by this class's earlier real (single-virtual-column) layout pass.
         /// </summary>
-        private static (int PlacedCount, double MaxColumnHeight) SimulateRowPacking(
+        private static (int PlacedCount, double MaxColumnHeight) SimulateWholeChildPacking(
             List<CssBox> children, int startIndex, int columnCount, double rowTarget)
         {
             var col = 0;

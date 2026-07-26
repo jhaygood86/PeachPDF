@@ -313,6 +313,28 @@ namespace PeachPDF.Html.Core
         internal FragmentainerContext? CurrentFragmentainer { get; private set; }
 
         /// <summary>
+        /// Makes <paramref name="nested"/> the fragmentainer being filled, returning the one it displaces
+        /// for the caller to hand back to <see cref="LeaveNestedFragmentainer"/>.
+        /// </summary>
+        /// <remarks>
+        /// A multi-column column is a fragmentainer in its own right
+        /// (<see href="https://www.w3.org/TR/css-break-3/#fragmentainer">§2</see>), established by the
+        /// columns engine inside the page the container sits on. A save/restore pair rather than a
+        /// disposable scope for the same reason <c>FragmentainerContext.EnterMonolithic</c> is one: every
+        /// call site is an <c>async</c> method, where a <c>ref struct</c> cannot live across an
+        /// <c>await</c>.
+        /// </remarks>
+        internal FragmentainerContext? EnterNestedFragmentainer(FragmentainerContext nested)
+        {
+            var previous = CurrentFragmentainer;
+            CurrentFragmentainer = nested;
+            return previous;
+        }
+
+        internal void LeaveNestedFragmentainer(FragmentainerContext? previous) =>
+            CurrentFragmentainer = previous;
+
+        /// <summary>
         /// Whether a break may be taken for the content being laid out right now. False during a
         /// measurement pass at a provisional position, inside monolithic content, and outside a
         /// <see cref="LayoutDocument"/> pass, where there is no fragmentainer to break against.
@@ -718,7 +740,7 @@ namespace PeachPDF.Html.Core
         /// </remarks>
         private void ReserveTrailingDirectionalBreak()
         {
-            if (Root is null || PageSize.Height <= 0 || PageSize.Height >= double.MaxValue - 1)
+            if (Root is null || !HasRealPageGrid)
                 return;
 
             var last = LastInFlowDescendant(Root);
@@ -1014,7 +1036,7 @@ namespace PeachPDF.Html.Core
         /// historical arithmetic eliminates any float-drift risk for the overwhelmingly common case.
         /// </summary>
         private bool UseVariablePageGeometry =>
-            PageSize.Height > 0 && PageSize.Height < double.MaxValue - 1 && PageGeometry.HasVerticalMarginOverrides;
+            HasRealPageGrid && PageGeometry.HasVerticalMarginOverrides;
 
         /// <summary>
         /// The horizontal analogue of <see cref="UseVariablePageGeometry"/>: whether layout should
