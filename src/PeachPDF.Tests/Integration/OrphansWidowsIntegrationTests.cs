@@ -166,6 +166,27 @@ namespace PeachPDF.Tests.Integration
             Assert.True(WordsOf(box).Count(word => word.Top < 100) >= 2, "expected at least orphans:2 lines to stay");
         }
 
+        // The ladder's fourth tier: with nothing above it in the fragmentainer, moving the box cannot give
+        // it more room, so the constraint is given up rather than acted on - which is also what keeps a band
+        // too small for `orphans` lines from walking the box down the document one page at a time.
+        [Fact]
+        public async Task Orphans2_NothingAboveItInTheFragmentainer_IsLeftWhereItIs()
+        {
+            // A band of 30pt against 20pt lines: wherever this paragraph starts it can only ever keep one
+            // line, and it starts at the very top of the band. The zero-height sibling above it is what makes
+            // this reachable at all - a box that is its fragmentainer's first child is excluded already.
+            var html = "<!DOCTYPE html><html><head></head><body style='margin:0'>" +
+                       "<div style='height:0'></div>" +
+                       "<p id='p' style='width:200pt;line-height:20pt;margin:0;padding:0'>L1<br>L2<br>L3</p>" +
+                       "</body></html>";
+
+            var (root, container) = await BuildAndLayoutPaged(html, pageHeight: 30);
+            var box = FindById(root, "p")!;
+
+            Assert.Equal(0, box.Location.Y, 1);
+            Assert.True(container.FragmentainerPasses <= 4, $"expected a bounded pass count, got {container.FragmentainerPasses}");
+        }
+
         [Fact]
         public async Task Widows2_ParagraphStartingOnSecondPage_StillNudgedCorrectly()
         {
@@ -197,6 +218,14 @@ namespace PeachPDF.Tests.Integration
         {
             var html = $"<!DOCTYPE html><html><head></head><body style='margin:8pt'><div style='height:{fillerHeightPt}pt'></div>{paragraphHtml}</body></html>";
 
+            var (root, _) = await BuildAndLayoutPaged(html, pageHeight: 100);
+
+            return FindById(root, "p")!;
+        }
+
+        private static async Task<(CssBox root, HtmlContainerInt container)> BuildAndLayoutPaged(
+            string html, double pageHeight)
+        {
             var adapter = new PdfSharpAdapter();
             adapter.PixelsPerPoint = 1.0;
             var container = new HtmlContainerInt(adapter);
@@ -206,7 +235,7 @@ namespace PeachPDF.Tests.Integration
             container.MarginBottom = 0;
             await container.SetHtml(html, null);
 
-            var size = new XSize(400, 100);
+            var size = new XSize(400, pageHeight);
             container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
 
@@ -215,7 +244,7 @@ namespace PeachPDF.Tests.Integration
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
-            return FindById(container.Root!, "p")!;
+            return (container.Root!, container);
         }
 
         /// <summary>Every word in a box's subtree — a paragraph's text lives in its child boxes.</summary>

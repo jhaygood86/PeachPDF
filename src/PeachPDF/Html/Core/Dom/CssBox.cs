@@ -1845,6 +1845,14 @@ namespace PeachPDF.Html.Core.Dom
             int.TryParse(box.Orphans, out var orphans) && orphans > 1 ? orphans : 1;
 
         /// <summary>
+        /// Whether anything precedes <paramref name="box"/> inside the fragmentainer being filled — the
+        /// question "would starting it in the next one give it any more room than it has here?".
+        /// </summary>
+        private bool HasRoomAboveInThisFragmentainer(CssBox box) =>
+            HtmlContainer?.CurrentFragmentainer is { } context
+            && box.Location.Y > context.BandTop + HtmlContainerInt.PageBoundaryEpsilon;
+
+        /// <summary>
         /// Lays this box's out-of-flow children out again, for an engine that narrowed its own inline
         /// extent while filling fragmentainers and so resolved them against the wrong containing block.
         /// </summary>
@@ -1937,7 +1945,13 @@ namespace PeachPDF.Html.Core.Dom
                         // at all being the degenerate case - has the break fall *before* it rather than
                         // inside it (§5.4, §4.4), so those lines travel with the rest of its content
                         // instead of being stranded at the foot of the fragmentainer being left.
-                        if (KeepsFewerLinesThanOrphans(childToken, childBox) && i > start)
+                        // Nothing above it in this fragmentainer means moving it cannot help: it would keep
+                        // the same too-few lines at the top of the next one, and ask again. That is the
+                        // ladder's fourth tier (see BreakRelaxation) - the constraint is given up rather than
+                        // acted on pointlessly - and it is what keeps a band too small for `orphans` lines
+                        // from walking the box down the document.
+                        if (KeepsFewerLinesThanOrphans(childToken, childBox) && i > start
+                            && HasRoomAboveInThisFragmentainer(childBox))
                         {
                             // The target has to travel with the break. A break-before whose top is left to
                             // be re-derived places the child at its natural position again - which for a box
