@@ -62,6 +62,16 @@ dotnet test --collect:"XPlat Code Coverage" --settings PeachPDF.Tests/coverlet.r
 
 Before considering any non-trivial code change complete, run the command above and check diff coverage on the lines you changed. If new/changed code falls short of the 90% diff-coverage threshold CI enforces, add tests to close the gap before finishing — don't leave it for CI to catch.
 
+### Build warnings
+
+**Before opening a pull request, the whole solution must build with zero warnings.** Not just the projects you touched — a warning anywhere is a warning the next change has to read past, and the ones that accumulate here (`CS1573` missing `<param>` tags, `CS8602` possible null dereference) are exactly the ones that make a real defect invisible in the noise.
+
+```
+dotnet build PeachPDF.slnx -t:Rebuild
+```
+
+Rebuild rather than a plain `build`: an incremental build skips up-to-date projects and reports their warnings not at all, so a clean-looking `dotnet build` can hide every warning in the solution. Fix what you find, including warnings you did not introduce — the doc comment or null annotation is a two-line fix, and leaving it is what got it there.
+
 Avoid writing tests against `PeachPDF.Fonts.FontFactory` (and OpenType neighbors) without care — it caches resolved fonts in `static readonly Dictionary` fields shared process-wide, and xUnit's parallel test-class execution makes new tests here a real order-dependent-flakiness risk against the rest of the suite.
 
 ## Post-change review pass
@@ -154,6 +164,16 @@ Report findings the same way `/code-review` does; fix what's actually wrong, and
   **The showcase half is not an engine bug and was the louder symptom.** Section 13's `var()` swatch was written `<svg><style>:root{--c:#d35400}circle{fill:var(--c)}</style>`. A `<style>` inside an inline `<svg>` is **not** scoped to that `<svg>` — in an HTML document it is an ordinary document-level stylesheet (SVG 2 §6) — so the bare type selector matched **every `<circle>` on the page** and repainted the gradient swatches and both peach illustrations flat `#d35400`, overriding their `fill="url(#…)"` presentation attributes. Chromium does the identical thing, so the cascade was right and the demo was wrong; both it and the neighbouring `g rect` swatch are now scoped through a class on their own `<svg>`, as the "HTML `<style>` cascades into SVG" swatch beside them already was. Worth remembering when authoring showcases: a bare type selector in an inline `<svg><style>` is page-wide, and it silently invalidates whatever else the page is verifying.
 
   Tests: `RadialGradientIntegrationTests` (+4 — the pattern matrix scaling with a CSS `transform`, its center staying on the page, the circular case still getting the plain view matrix, and the SVG `gradientTransform`-in-a-scaled-viewport case asserting the composed 24×12pt radii). Each was verified load-bearing by reverting the one-line fix — all 4 fail, the 32 pre-existing pass either way. Full net8.0 suite green (6369), CLI suite green (93); **100% diff coverage**. **63 of 65 showcases are pixel-identical in PDFium**, the expected result — none had an elliptical radial under a transform. `svg` changes (both halves), and `transform` gained section 7, which puts the same elliptical gradient in the same box with and without a transform; **on the unfixed build the transformed one loses its highlight and fills flat**. Verified in both PDFium and MuPDF, and section 3 and the peach illustrations now match Chromium.
+
+- **A `clone` fragment at a column break claims the room layout reserved for it** ([issue #335](https://github.com/jhaygood86/PeachPDF/issues/335)'s multicol half, [CSS Fragmentation 3 §6.2](https://www.w3.org/TR/css-break-3/#break-decoration)). §6.2 requires room to be reserved for a cloned decoration when working out how much of a fragmentainer is left.
+
+  **The load-bearing discovery is that layout already reserves it, and the fragment does not claim it.** `CssRect.WouldStraddleFragmentainer` has asked its question against the *column's* own band since #366, cloned insets included, so a `clone` box's content genuinely stops short of the column edge by its own border and padding — measured, not assumed. What was wrong is one level on: a continuing box's fragment extent is measured *from the content it holds* (`BoundsEndAtItsContent`, #366), so the fragment ended at the last line and `clone` drew the closing border **over that line**, in the middle of the room reserved for it. A *page* fragment never had this, because its bounds are cut to the band rather than derived from content.
+
+  So the fix is to add the box's **own** share back (`DomUtils.OwnClonedBlockEnd`, factored out of `ClonedBlockEnd`, which is now its sum over the chain). Own share, not the chain sum, is what composes: each level of a nested cloning stack closes inside its ancestors', and an ancestor's own fragment is measured from this one, so the chain sum would count every ancestor once per level.
+
+  **The layout half needed nothing, and that is worth not re-deriving** — the arithmetic in `WouldStraddleFragmentainer` and `CreateLineBoxes`' resume top is band-relative, and a column's band is the page's band with a different bottom, so both were already right once a column became a real `FragmentainerContext`.
+
+  Tests: `BoxDecorationBreakLayoutIntegrationTests` (+2 — the content stopping short *and* the fragment claiming exactly that much, with `slice` as the control that ends at its content). Full net8.0 suite green (6367); **100% diff coverage**. **64 of 65 showcases are pixel-identical**; `multicol`'s new section 9 differs, and it differs by the clone panel's closing border no longer being drawn across its own last line. **Boundary, not fixed here:** a box in a multicol whose content is *blocks* rather than text is not split at a column boundary at all — it neither moves nor breaks, and overflows its page ([#387](https://github.com/jhaygood86/PeachPDF/issues/387)) — so there is no break inside it to reserve at. The flex/grid/table half of #335 is unchanged, still waiting on item content being fragmented at all.
 
 - **A whole-box `slice` decoration is measured against the concatenation of a box's column fragments** ([issue #376](https://github.com/jhaygood86/PeachPDF/issues/376), [CSS Fragmentation 3 §6.2](https://www.w3.org/TR/css-break-3/#break-decoration)). #368 gave `SliceGeometry` its block-axis *edges*; what it did not change is the rectangle the rest of the decoration is resolved against. `border-radius`, a gradient/image background layer and a `box-shadow` still measured from the fragment's own block extent at a column break — `clone`'s rendering under the `slice` value.
 

@@ -668,7 +668,7 @@ Margin is cloned at a line break, alongside the border and padding, so each line
 
 Limitations:
 
-- Room is reserved for `clone`'s border and padding in normal block and inline flow only. Inside a flex, grid, table or multi-column container, whose own engine positions its children, a cloned decoration at a break is painted but no room is made for it, so it can overlap content.
+- Room is reserved for `clone`'s border and padding in normal block and inline flow, and at a column break for a box whose own content is text. Inside a flex, grid or table, whose own engine positions its children, a cloned decoration at a break is painted but no room is made for it, so it can overlap content. The same is true of a box in a multi-column container whose content is blocks rather than text, since such a box is not split at a column boundary at all.
 - A page break is decided against the text itself, so a large `line-height`'s own leading below the last line on a page is not counted. A cloned bottom border can therefore sit within that leading — at most `line-height` minus the text's own height. Ordinary line heights leave this invisible.
 - An inline box that wraps *and* is split at a column boundary has its unbroken width measured within each column rather than across both, so a gradient on such a box restarts in the second column. A block-level box is unaffected, and so is an inline box that only crosses page breaks.
 - `border-image` is parsed but never painted, so §6.2's treatment of it has no visible effect either way. A replaced element (an image, an inline `<svg>`, an `<iframe>`) is never split at all, so it always paints its whole box regardless of the value.
