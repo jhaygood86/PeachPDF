@@ -735,6 +735,26 @@ namespace PeachPDF.Tests.Integration
             Assert.True(after.Location.X > mc.ClientLeft + 50, "the next child starts the next column");
         }
 
+        // The multicol dispatch no longer routes through LayoutMonolithicContent, which used to be what
+        // ran the out-of-flow children of every engine container. The columns engine lays out its own, so
+        // an absolutely-positioned child must still be placed and keep its content.
+        [Fact]
+        public async Task OutOfFlowChild_IsStillLaidOut()
+        {
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:200px; position:relative'>
+                    <div class='item' style='height:40px'>One</div>
+                    <div class='item' style='height:40px'>Two</div>
+                    <div id='abs' style='position:absolute; top:5px; left:5px'>Absolute</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 400);
+
+            var abs = FindById(root, "abs")!;
+            Assert.True(abs.ActualBottom > abs.Location.Y,
+                $"expected the absolutely-positioned child to have been laid out, it is {abs.Location.Y}..{abs.ActualBottom}");
+            Assert.NotEmpty(LayoutHarness.Descendants(abs).SelectMany(b => b.Words));
+        }
+
         // A known boundary, pre-existing and characterized here rather than left silent. CssBox's own
         // content dispatch tests ContainsInlinesOnly *before* EstablishesMultiColumnContext, and
         // ContainsInlinesOnly is "every child is inline" - vacuously true of a box whose children are all
