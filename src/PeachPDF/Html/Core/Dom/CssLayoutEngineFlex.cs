@@ -873,7 +873,7 @@ namespace PeachPDF.Html.Core.Dom
         /// which is a larger behaviour change than the break values themselves ask for.
         /// </remarks>
         private static bool LineMayNotBeCut(FlexLine line) =>
-            line.Items.Any(i => BreakValues.AvoidsPageBreak(i.Box.BreakInside)
+            line.Items.Any(i => BreakValues.AvoidsBreak(i.Box.BreakInside, FragmentationContext.Page)
                                 || MonolithicContent.IsMonolithic(i.Box));
 
         // ─── Direction / wrap parsing ─────────────────────────────────────────────

@@ -68,15 +68,15 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// its own <c>break-before</c> combined with every value propagating outward to it from the chain
         /// of boxes it begins. Null when none of them is forced.
         /// </summary>
-        internal static string? ForcedBreakBeforeAt(CssBox box)
+        internal static string? ForcedBreakBeforeAt(CssBox box, FragmentationContext context)
         {
-            var value = Forced(box.BreakBefore);
+            var value = Forced(box.BreakBefore, context);
 
             for (var child = FirstInFlowChild(box);
                  child is not null && PropagatesBreakBeforeOutward(child);
                  child = FirstInFlowChild(child))
             {
-                value = Combine(value, Forced(child.BreakBefore));
+                value = Combine(value, Forced(child.BreakBefore, context));
             }
 
             return value;
@@ -86,15 +86,15 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// The break-after counterpart of <see cref="ForcedBreakBeforeAt"/>, read through the chain of boxes
         /// <paramref name="box"/> ends.
         /// </summary>
-        internal static string? ForcedBreakAfterAt(CssBox box)
+        internal static string? ForcedBreakAfterAt(CssBox box, FragmentationContext context)
         {
-            var value = Forced(box.BreakAfter);
+            var value = Forced(box.BreakAfter, context);
 
             for (var child = LastInFlowChild(box);
                  child is not null && PropagatesBreakAfterOutward(child);
                  child = LastInFlowChild(child))
             {
-                value = Combine(value, Forced(child.BreakAfter));
+                value = Combine(value, Forced(child.BreakAfter, context));
             }
 
             return value;
@@ -108,7 +108,9 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// A directional value forces a page break as well as naming a side, so it satisfies a plain
         /// <c>page</c> and wins over one outright. Two <i>conflicting</i> directional values cannot both be
         /// honored, and there §3.1 is explicit: the value on the latest element in flow wins — which, for a
-        /// value travelling outward, is the deeper one.
+        /// value travelling outward, is the deeper one. A page break subsumes a <c>column</c> one for the
+        /// same reason a directional value subsumes <c>page</c>: honoring it honors both, since a column
+        /// cannot span pages.
         /// </remarks>
         /// <param name="outer">the value already resolved for the enclosing box</param>
         /// <param name="inner">the value propagating outward from the box it begins, later in flow</param>
@@ -117,10 +119,14 @@ namespace PeachPDF.Html.Core.Fragmentation
             if (BreakValues.SideOf(inner) is not PageSide.Any) return inner;
             if (BreakValues.SideOf(outer) is not PageSide.Any) return outer;
 
+            if (BreakValues.IsForcedPageBreak(inner)) return inner;
+            if (BreakValues.IsForcedPageBreak(outer)) return outer;
+
             return outer ?? inner;
         }
 
-        private static string? Forced(string? value) => BreakValues.IsForcedPageBreak(value) ? value : null;
+        private static string? Forced(string? value, FragmentationContext context) =>
+            BreakValues.IsForcedBreak(value, context) ? value : null;
 
         /// <summary>
         /// Whether a break value on <paramref name="box"/> may travel out to its parent at all — see the
