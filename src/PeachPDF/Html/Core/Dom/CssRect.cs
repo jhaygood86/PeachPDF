@@ -290,12 +290,14 @@ namespace PeachPDF.Html.Core.Dom
             if (MonolithicContent.FitsNoFragmentainer(Height, clonedTop, clonedBottom, container))
                 return false;
 
-            // A column is a fragmentainer too (§2), and it is a *sub-band* of the page band it sits in,
-            // so the page grid cannot answer where it ends. Inside one the question is simply whether
-            // this word clears the column's own bottom: there is exactly one fragmentainer here, and the
-            // engine driving the columns is what opens the next one.
-            if (container.CurrentFragmentainer is { HasOwnBand: true } column)
-                return Bottom + clonedBottom - HtmlContainerInt.PageBoundaryEpsilon > column.BandBottom;
+            // Inside a multi-column column, never. A column is a fragmentainer (§2), but the engine
+            // driving them moves whole children between columns rather than splitting one across two -
+            // a box carries a single Location, and columns sit side by side inside one page band, so a
+            // box in two of them would have both halves at the same document Y and one X. Answering yes
+            // here would split a child anyway, behind the driver's back, and the two halves would be
+            // drawn on top of each other. A child too tall for its column overflows it instead.
+            if (container.CurrentFragmentainer is { HasOwnBand: true })
+                return false;
 
             // The epsilons make a line ending exactly ON a slot boundary a non-break (it fits wholly in
             // the earlier slot).
