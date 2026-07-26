@@ -30,7 +30,8 @@ namespace PeachPDF.Html.Core.Fragmentation
             HtmlContainerInt container,
             CssBox contextRoot,
             int slotIndex,
-            (double Top, double Bottom)? ownBand = null)
+            (double Top, double Bottom)? ownBand = null,
+            bool inheritsSuppression = false)
         {
             ArgumentNullException.ThrowIfNull(container);
             ArgumentNullException.ThrowIfNull(contextRoot);
@@ -43,7 +44,13 @@ namespace PeachPDF.Html.Core.Fragmentation
             // An unpaginated/measurement pass uses the double.MaxValue page-height sentinel; there is no
             // grid to break against, so nothing may fragment. Same guard every existing page-grid caller
             // already applies before touching PageIndexOf.
-            _fragmenting = container.HasRealPageGrid;
+            // A nested context inherits whether breaking is live at all. Establishing one inside a
+            // suppressed scope - a multi-column container inside a flex, grid or table container, or
+            // inside another engine's measurement pass - must not re-enable breaking there: the engine
+            // enclosing it would not read the resumption record, so the content that record names is
+            // simply dropped. Measured at five items lost from a twelve-item container.
+            _fragmenting = container.HasRealPageGrid
+                           && (!inheritsSuppression || container.IsFragmenting);
         }
 
         internal HtmlContainerInt Container { get; }

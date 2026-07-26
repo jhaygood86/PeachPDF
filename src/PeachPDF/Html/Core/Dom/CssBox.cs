@@ -1781,6 +1781,12 @@ namespace PeachPDF.Html.Core.Dom
             token is InlineBreakToken { CompletedLineCount: 0 };
 
         /// <summary>
+        /// Lays this box's out-of-flow children out again, for an engine that narrowed its own inline
+        /// extent while filling fragmentainers and so resolved them against the wrong containing block.
+        /// </summary>
+        internal ValueTask LayoutOutOfFlowChildrenAgain(RGraphics g) => LayoutOutOfFlowChildren(g);
+
+        /// <summary>
         /// Runs the block-children loop for a layout engine that drives fragmentainers of its own, so it
         /// fills each one through the same path ordinary block flow does rather than a parallel copy.
         /// </summary>
@@ -1863,6 +1869,8 @@ namespace PeachPDF.Html.Core.Dom
                     // the same question of every column in turn.
                     if (i > start
                         && childBox.PlacesItselfAsBlockBox
+                        && !childBox.IsOutOfFlow
+                        && childBox.Display != CssConstants.None
                         && HtmlContainer?.CurrentFragmentainer is { HasOwnBand: true } columnBand
                         && childBox.ActualBottom > columnBand.BandBottom)
                     {

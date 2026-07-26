@@ -122,10 +122,19 @@ namespace PeachPDF.Html.Core.Dom
             if (resume is null)
             {
                 var actualSizeBeforeVirtualPass = htmlContainer.ActualSize;
+                var measurementContext = htmlContainer.CurrentFragmentainer;
+                var wasFragmenting = measurementContext?.EnterMonolithic() ?? false;
 
-                foreach (var childBox in children)
+                try
                 {
-                    await childBox.PerformLayout(g);
+                    foreach (var childBox in children)
+                    {
+                        await childBox.PerformLayout(g);
+                    }
+                }
+                finally
+                {
+                    measurementContext?.ExitMonolithic(wasFragmenting);
                 }
 
                 htmlContainer.ActualSize = actualSizeBeforeVirtualPass;
@@ -203,7 +212,11 @@ namespace PeachPDF.Html.Core.Dom
 
                     target = Math.Min(pageBudget, target * TargetGrowthPerAttempt + 1);
                 }
-                else if (balances && !rebalanced && filledColumns < columnCount && contentBottom > boxTop)
+                // Only a fill that used the whole budget - it was not balanced, so this is the fragment
+                // that holds the end of the flow and now knows its real height. A fill made at the
+                // estimate is already balanced, and re-deriving a target from its own result would shrink
+                // it every time and eventually spill the tail.
+                else if (balances && !rebalanced && target >= pageBudget && contentBottom > boxTop)
                 {
                     // The remainder ended here, so this is the fragment that balances - but it was filled
                     // at the full budget and poured everything into the first column. Now that its real
@@ -219,15 +232,25 @@ namespace PeachPDF.Html.Core.Dom
                 ResetChildrenForRefill(children, resume);
             }
 
-            columnsBox.ColumnRuleSegments = ruleSegments;
-
             // One rule per gap between the columns actually used, spanning the content they hold.
             for (var c = 1; c < filledColumns; c++)
             {
                 ruleSegments.Add((columnLeft + c * pitch - gap / 2, boxTop, contentBottom));
             }
 
+            // Accumulated, not assigned: this container is laid out once per page fragment, and the last
+            // fragment's rules are not the only ones drawn.
+            columnsBox.ColumnRuleSegments = resume is null || columnsBox.ColumnRuleSegments is null
+                ? ruleSegments
+                : [.. columnsBox.ColumnRuleSegments, .. ruleSegments];
+
             columnsBox.ActualBottom = Math.Max(boxTop, contentBottom);
+
+            // The column loop narrowed the container to one column at a time, and the shared child loop
+            // walks every box - so an out-of-flow child resolved its position against a *column*. The
+            // containing block css-multicol gives it is the multi-column container, so they are laid out
+            // once more here, with the container back at its own width.
+            await columnsBox.LayoutOutOfFlowChildrenAgain(g);
 
             // Content the last column could not hold belongs to the next page, and this container is not
             // the fragmentation context root - so the token travels up the ordinary chain and the page
@@ -259,7 +282,8 @@ namespace PeachPDF.Html.Core.Dom
                 // Every column shares one band: columns differ in the inline axis, not the block axis.
                 // A column's own inline span is applied by placing it, below.
                 var column = new FragmentainerContext(
-                    htmlContainer, columnsBox, startSlot, (boxTop, boxTop + target));
+                    htmlContainer, columnsBox, startSlot, (boxTop, boxTop + target),
+                    inheritsSuppression: true);
 
                 var previousContext = htmlContainer.EnterNestedFragmentainer(column);
 
@@ -361,11 +385,19 @@ namespace PeachPDF.Html.Core.Dom
         {
             if (token is not BlockBreakToken block) return children.Count;
 
-            var index = children.IndexOf(block.Box.Boxes[block.ResumeChildIndex]);
+            var boundary = block.Box.Boxes[block.ResumeChildIndex];
+            var index = children.IndexOf(boundary);
 
-            if (index < 0) return children.Count;
+            if (index >= 0) return block.IsBreakBefore ? index : index + 1;
 
-            return block.IsBreakBefore ? index : index + 1;
+            // The boxes this engine filtered out - out-of-flow, display:none - are exactly the ones that
+            // cannot be found here. Counting them as "everything" would measure children the fill never
+            // reached, which still carry the measurement pass's tall-single-column geometry: the very
+            // inflation this method exists to avoid. How many real children precede the boundary is the
+            // answer either way.
+            var precedingIndex = block.Box.Boxes.IndexOf(boundary);
+
+            return children.Count(c => block.Box.Boxes.IndexOf(c) < precedingIndex);
         }
 
         /// <summary>

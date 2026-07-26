@@ -755,6 +755,72 @@ namespace PeachPDF.Tests.Integration
             Assert.NotEmpty(LayoutHarness.Descendants(abs).SelectMany(b => b.Words));
         }
 
+        // A multi-column container inside another engine's container is being *measured*, not paginated -
+        // that engine will translate it afterwards. Establishing a fragmentation context here anyway
+        // would let the column driver record a resumption record the enclosing engine never reads, and
+        // the content that record names is simply dropped. Measured at five of twelve items lost.
+        [Theory]
+        [InlineData("display:flex")]
+        [InlineData("display:grid")]
+        [InlineData("display:table")]
+        public async Task InsideAnotherEngine_NoContentIsDropped(string outerStyle)
+        {
+            var items = string.Concat(Enumerable.Range(1, 12)
+                .Select(i => $"<div class='item' id='k{i}' style='height:40px'>Item {i}</div>"));
+            var html = Wrap($"<div style='{outerStyle}'><div id='mc' style='columns:2; width:200px'>{items}</div></div>");
+
+            var (root, _) = await BuildAndLayout(html, pageHeight: 120);
+
+            var placed = FindAllByClass(root, "item");
+            Assert.Equal(12, placed.Count);
+            AssertNoOverlaps(placed);
+            Assert.All(placed, b => Assert.True(b.ActualBottom > b.Location.Y, "every item keeps a height"));
+        }
+
+        // The container is laid out once per page fragment, so a rule list that is *assigned* rather than
+        // accumulated keeps only the last fragment's - and the first page draws no rule at all.
+        [Fact]
+        public async Task ColumnRules_AreKeptForEveryPageTheContainerSpans()
+        {
+            var items = string.Concat(Enumerable.Range(1, 12)
+                .Select(i => $"<div class='item' style='height:40px'>Item {i}</div>"));
+            var html = Wrap($"<div id='mc' style='columns:2; column-rule:1px solid #000; width:200px'>{items}</div>");
+
+            var (root, container) = await BuildAndLayout(html, pageHeight: 120);
+            var mc = FindById(root, "mc")!;
+
+            Assert.NotNull(mc.ColumnRuleSegments);
+
+            // One per page the container occupies, each spanning only that page's own content.
+            var slots = mc.ColumnRuleSegments!
+                .Select(seg => container.PageIndexOf(seg.Top + HtmlContainerInt.PageBoundaryEpsilon))
+                .Distinct()
+                .ToList();
+
+            Assert.True(slots.Count > 1,
+                $"expected a rule on every page the container spans, got segments on slot(s) {string.Join(",", slots)}");
+        }
+
+        // An out-of-flow child's containing block is the multi-column container, not a column - and the
+        // column loop narrows the container to one column at a time while filling it.
+        [Fact]
+        public async Task OutOfFlowChild_ResolvesAgainstTheContainerNotAColumn()
+        {
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:200px; position:relative'>
+                    <div class='item' style='height:40px'>One</div>
+                    <div class='item' style='height:40px'>Two</div>
+                    <div id='abs' style='position:absolute; top:0; left:0; width:100%'>Absolute</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 400);
+
+            var mc = FindById(root, "mc")!;
+            var abs = FindById(root, "abs")!;
+
+            // 200px = 150pt of container, not 75pt of column.
+            Assert.Equal(mc.ClientRight - mc.ClientLeft, abs.ActualRight - abs.Location.X, 1);
+        }
+
         // A known boundary, pre-existing and characterized here rather than left silent. CssBox's own
         // content dispatch tests ContainsInlinesOnly *before* EstablishesMultiColumnContext, and
         // ContainsInlinesOnly is "every child is inline" - vacuously true of a box whose children are all
