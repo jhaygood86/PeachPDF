@@ -389,14 +389,79 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        /// <summary>Lets every child's prologue run again, for a fill that is being attempted afresh.</summary>
+        /// <summary>
+        /// Undoes the fill attempt just made, so the same children can be filled again at a new target.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// On the pass that starts this container every child is being laid out from scratch, so every
+        /// child's prologue — the owner of <c>RectanglesReset</c> — simply has to be let back in.
+        /// </para>
+        /// <para>
+        /// A <b>resumed</b> pass divides them in three, and that division is the whole of it. Children
+        /// below the resume point were filled into columns on earlier pages and still hold the geometry
+        /// those fragments were built from: resetting one blanks a fragment already emitted. Children above
+        /// it are being laid out here for the first time, exactly as on a starting pass, and need the full
+        /// reset — without it the abandoned attempt's per-line rectangles stay on the box, keyed by line
+        /// boxes nothing points at any more. And the child <i>at</i> it is neither: it is continuing, so
+        /// only what this attempt added to it may go
+        /// (<see cref="CssBox.DiscardLineBoxesFrom"/>).
+        /// </para>
+        /// <para>
+        /// Skipping the lot — which is what "return if resumed" did — is what let a retry re-finalize the
+        /// abandoned attempt's own line boxes and throw out of
+        /// <see cref="CssLineBox.AssignRectanglesToBoxes"/>.
+        /// </para>
+        /// </remarks>
         private static void ResetChildrenForRefill(List<CssBox> children, BreakToken? resume)
         {
-            if (resume is not null) return;
-
-            foreach (var child in children)
+            if (resume is null)
             {
-                child.ResetForRefill();
+                foreach (var child in children)
+                {
+                    child.ResetForRefill();
+                }
+
+                return;
+            }
+
+            RewindForRefill(resume);
+        }
+
+        /// <summary>
+        /// Undoes what one fill attempt placed inside the box <paramref name="resume"/> names, given that
+        /// record of how this pass resumes into it.
+        /// </summary>
+        /// <remarks>
+        /// Walks the same chain the resumption itself walks — one link per ancestor down to the box that
+        /// stopped — so at every level the boundary child is told to discard only what it added while its
+        /// later siblings, which this pass laid out from the start, are reset outright. Each link names its
+        /// own box, so nothing here has to assume an index and a box agree.
+        /// </remarks>
+        private static void RewindForRefill(BreakToken resume)
+        {
+            switch (resume)
+            {
+                case InlineBreakToken inline:
+                    inline.Box.DiscardLineBoxesFrom(inline.CompletedLineCount);
+                    break;
+
+                // A break-before names a child this pass lays out from the start, so it is reset like any
+                // other rather than descended into: there is no deeper link to follow.
+                case BlockBreakToken block:
+                    for (var i = block.ResumeChildIndex; i < block.Box.Boxes.Count; i++)
+                    {
+                        if (i == block.ResumeChildIndex && block.ChildToken is { } childToken)
+                        {
+                            RewindForRefill(childToken);
+                        }
+                        else
+                        {
+                            block.Box.Boxes[i].ResetForRefill();
+                        }
+                    }
+
+                    break;
             }
         }
 

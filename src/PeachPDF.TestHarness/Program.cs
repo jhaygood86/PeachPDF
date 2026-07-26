@@ -3239,6 +3239,15 @@ var multicolHtml = "<!DOCTYPE html><html><head>" + MulticolCss + "</head><body>"
             $"clause&nbsp;{i} of one paragraph that keeps flowing until the column runs out,")) +
         " and then stops.</p></div></div>") +
 
+    // column-fill: balance searches for a column height, and where its first estimate leaves a tail
+    // over it grows the target and fills again. On a container that has *resumed* onto a later page
+    // that second attempt has to undo what the first placed - including the geometry of the child it
+    // is continuing, without touching the fragment the earlier page already holds.
+    McSection("7 &mdash; a re-balanced fill on a resumed page",
+        "<div class=\"frame\"><div class=\"label\">columns: 3; entries tall enough that the balance search retries, in a container that resumes onto the next page</div>" +
+        "<div class=\"mc\" style=\"columns:3;column-rule:0.5pt solid #7f8c8d;column-gap:14px\">" +
+        McEntries(60, "term") + "</div></div>") +
+
     "</body></html>";
 
 await SaveShowcaseAsync("multicol", "Layout", "Multi-column Layout",

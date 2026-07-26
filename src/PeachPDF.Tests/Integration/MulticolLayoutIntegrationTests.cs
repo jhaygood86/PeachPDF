@@ -3,6 +3,7 @@ using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Fragments;
 using PeachPDF.PdfSharpCore.Drawing;
 using System.Collections.Generic;
 using System.Linq;
@@ -645,6 +646,112 @@ namespace PeachPDF.Tests.Integration
             var xs = placed.Select(b => System.Math.Round(b.Location.X)).Distinct().ToList();
             Assert.Equal(2, xs.Count);
             Assert.All(placed, b => Assert.True(b.ActualBottom > b.Location.Y, "every item keeps a height"));
+        }
+
+        // ─── A balance retry inside a resumed pass (#374) ──────────────────────────
+
+        // The fill is attempted more than once whenever `column-fill: balance` has to grow or re-derive
+        // its target, and between attempts everything the abandoned one placed has to be undone. Skipping
+        // that wholesale on a resumed pass - which is what "return if resumed" did, for the real reason
+        // that children below the resume point hold earlier pages' geometry - also skipped the children at
+        // and above it, which this pass is laying out for the first time. So the retry re-finalized the
+        // abandoned attempt's own line boxes and CssLineBox.AssignRectanglesToBoxes threw
+        // "An item with the same key has already been added".
+        //
+        // Ordinary auto-height paragraphs, because the shape needs the balance search to want a second
+        // attempt on a *resumed* fragment, which is a function of the content's own heights - fixed-height
+        // children pack too predictably to reach it.
+        [Theory]
+        [InlineData(2)]
+        [InlineData(3)]
+        public async Task BalanceRetryOnAResumedFragment_LaysOutRatherThanThrowing(int columnCount)
+        {
+            var (root, container) = await BuildAndLayout(ResumedBalanceRetryFixture(columnCount), pageHeight: 100);
+
+            var items = FindAllByClass(root, "item");
+
+            Assert.Equal(12, items.Count);
+            Assert.True(container.FragmentainerPasses > 1, "expected the container to have resumed");
+            Assert.All(items, item => Assert.True(item.ActualBottom > item.Location.Y,
+                "every paragraph keeps a height of its own"));
+            AssertNoOverlaps(items);
+        }
+
+        // The structural companion: whatever the undo does, it has to leave the box tree self-consistent.
+        // A per-line rectangle outlives its line box unless the two are discarded together, and one that
+        // does describes a fill that no longer exists - which the emitter reads as readily as the real
+        // thing.
+        [Theory]
+        [InlineData(2)]
+        [InlineData(3)]
+        public async Task BalanceRetryOnAResumedFragment_LeavesNoRectangleKeyedByADiscardedLineBox(int columnCount)
+        {
+            var (root, _) = await BuildAndLayout(ResumedBalanceRetryFixture(columnCount), pageHeight: 100);
+
+            foreach (var box in LayoutHarness.Descendants(root))
+            {
+                foreach (var line in box.Rectangles.Keys)
+                {
+                    Assert.True(line.OwnerBox.LineBoxes.Contains(line),
+                        $"'{box}' still carries a rectangle for the discarded line '{line}'");
+                }
+            }
+        }
+
+        // The workhorse, because a word says both things at once. Claimed twice means the undo left a
+        // word where the abandoned attempt put it and a later attempt that did not reach it again could
+        // not say so - which is what marks every word of a discarded fill as awaiting placement again.
+        // Claimed not at all means the undo went too far: the child at the resume point is *continuing*,
+        // so discarding its earlier fragmentainers' lines along with this attempt's blanks a fragment an
+        // earlier page already emitted. Each of the three guards fails one half or the other.
+        [Theory]
+        [InlineData(2)]
+        [InlineData(3)]
+        public async Task BalanceRetryOnAResumedFragment_KeepsEveryWordExactlyOnce(int columnCount)
+        {
+            var (root, container) = await BuildAndLayout(ResumedBalanceRetryFixture(columnCount), pageHeight: 100);
+
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => FlattenFragments(f.Root))
+                .SelectMany(f => f.Words)
+                .Select(w => w.Word)
+                .ToList();
+
+            Assert.Equal(claimed.Count, claimed.Distinct().Count());
+
+            var authored = FindAllByClass(root, "item")
+                .SelectMany(LayoutHarness.Descendants)
+                .SelectMany(b => b.Words)
+                .Where(w => !w.IsSpaces)
+                .ToList();
+
+            Assert.All(authored, word => Assert.Contains(word, claimed));
+        }
+
+        /// <summary>
+        /// Twelve auto-height paragraphs against a page too short to hold them, so the container spans
+        /// several pages and resumes — the shape from
+        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/374">#374</see>.
+        /// </summary>
+        private static string ResumedBalanceRetryFixture(int columnCount)
+        {
+            var items = string.Concat(Enumerable.Range(1, 12)
+                .Select(i => $"<div class='item' id='i{i}'>Item {i} with a little text of its own</div>"));
+
+            return Wrap($"<div id='mc' style='columns:{columnCount}; column-gap:0; width:200px'>{items}</div>");
+        }
+
+        private static IEnumerable<BoxFragment> FlattenFragments(BoxFragment fragment)
+        {
+            yield return fragment;
+
+            foreach (var child in fragment.Children)
+            {
+                foreach (var descendant in FlattenFragments(child))
+                {
+                    yield return descendant;
+                }
+            }
         }
 
         // The invariant this was drafted as, and characterized as a boundary until a fragment carried
