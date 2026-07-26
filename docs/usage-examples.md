@@ -15,6 +15,8 @@ using PeachPDF.Network;
 - [Rendering HTML from a local string](#rendering-html-from-a-local-string)
 - [Rendering an MHTML file](#rendering-an-mhtml-file)
 - [Fetching HTML over HTTP](#fetching-html-over-http)
+- [Disabling local file access](#disabling-local-file-access)
+- [Rendering in the browser (Blazor WebAssembly)](#rendering-in-the-browser-blazor-webassembly)
 - [Sharing a parsed CSS context across renders](#sharing-a-parsed-css-context-across-renders)
 - [Saving a PDF to a file](#saving-a-pdf-to-a-file)
 - [Fonts](#fonts)
@@ -152,7 +154,57 @@ var document = await generator.GeneratePdf(null, pdfConfig);
 document.Save(stream);
 ```
 
-Relative references resolve against the configured `NetworkLoader`'s `BaseUri` (as above), or a `<base href>` element if the document has one. With no loader configured, they resolve against the current working directory and load from the local file system (see [Rendering a local HTML file](#rendering-a-local-html-file) to make that base an explicit file location instead).
+Relative references resolve against the configured `NetworkLoader`'s `BaseUri` (as above), or a `<base href>` element if the document has one. With no loader configured, they resolve against the current working directory and load from the local file system (see [Rendering a local HTML file](#rendering-a-local-html-file) to make that base an explicit file location instead, or [Disabling local file access](#disabling-local-file-access) to switch that behaviour off).
+
+## Disabling local file access
+
+By default a document can reach the local file system: a `file:` reference is read from disk, and a relative reference resolves against the process's working directory. That's what makes rendering a local HTML file work like opening it in a browser — but it is rarely what you want when the HTML comes from somewhere you don't control.
+
+Set `AllowLocalFileAccess = false` to refuse it:
+
+```csharp
+var config = new PdfGenerateConfig
+{
+    PageSize = PageSize.Letter,
+    AllowLocalFileAccess = false
+};
+
+var document = await new PdfGenerator().GeneratePdf(untrustedHtml, config);
+```
+
+Two things change. Every `file:` resource request — `<img>`, `<link rel="stylesheet">`, CSS `url()`, an SVG `<image href>`, an `@font-face src` — resolves to "not found". And a loader that supplies no `BaseUri` of its own (`DataUriNetworkLoader` and `MimeKitNetworkLoader` are both in that category) no longer inherits the working directory as a base, so a relative reference goes unresolved rather than being turned into a `file:` URI. A deny wins even over an explicitly configured `FileUriNetworkLoader`.
+
+The document you pass in is unaffected: it's an input, not something the document asked for. The same goes for a file a `FileUriNetworkLoader` was explicitly constructed with — that root document is still read; only the resources it references are refused.
+
+## Rendering in the browser (Blazor WebAssembly)
+
+PeachPDF is pure managed code, so it runs unmodified in a browser under WebAssembly — the whole pipeline, from HTML parsing through font subsetting to PDF output, with no server round-trip. [PeachPDF's own demo](https://peachpdf.net/demo/) does exactly this; its source is in `src/PeachPDF.Demo.BlazorWasm/`.
+
+Three things differ from a server or desktop host:
+
+**You must supply the fonts.** A browser exposes no system fonts to WebAssembly, so PeachPDF discovers none. Register your own before rendering, or nothing can be measured, let alone drawn:
+
+```csharp
+var generator = new PdfGenerator();
+
+foreach (var file in new[] { "LiberationSans-Regular.woff", "LiberationSerif-Regular.woff" })
+{
+    using var stream = new MemoryStream(await httpClient.GetByteArrayAsync($"fonts/{file}"));
+    await generator.AddFontFromStream(stream);
+}
+
+// The generic families were resolved before any of these existed, so re-point them.
+generator.AddFontFamilyMapping("sans-serif", "Liberation Sans");
+generator.AddFontFamilyMapping("serif", "Liberation Serif");
+```
+
+The default font on a browser host is Liberation Sans; register a family under that name and it is used directly. Register something else and PeachPDF adopts the first family you register as the default, so text still renders. Note that font-family mapping is consulted only when the requested family isn't registered, and it is single-hop — every mapping has to name a real registered family.
+
+**Use WOFF or TrueType, not WOFF2.** WOFF2 is Brotli-compressed and a browser/WebAssembly host has no Brotli decoder — `System.IO.Compression.Brotli` throws there. WOFF 1.0 uses deflate and works, at roughly 55% of the TrueType size. The same limitation makes `hyphens: auto` unavailable in the browser: PeachPDF's hyphenation patterns are Brotli-compressed, so text lays out unhyphenated rather than failing.
+
+**Pin the culture.** A Blazor WebAssembly app adopts the browser's locale, and CSS is invariant by definition — a visitor whose browser is set to a comma-decimal locale would otherwise have lengths misparsed. Set `<InvariantGlobalization>true</InvariantGlobalization>` in the project file, which also drops the ICU data from the download.
+
+Rendering is synchronous once it starts, and WebAssembly in the browser is single-threaded, so a long document will make the tab unresponsive for the duration. Say so in your UI.
 
 ## Sharing a parsed CSS context across renders
 
@@ -209,7 +261,7 @@ For the full compatibility details of the font-related CSS properties themselves
 
 ### Default Font
 
-By default, PeachPDF uses Segoe UI on Windows. Segoe UI isn't installed by default on other platforms, so PeachPDF picks a different platform-appropriate default there instead (see the generic-family table below — the same "verify installed, else fall back" logic applies). You can remap the default font (or any other family) to another one using
+By default, PeachPDF uses Segoe UI on Windows. Segoe UI isn't installed by default on other platforms, so PeachPDF picks a different platform-appropriate default there instead (see the generic-family table below — the same "verify installed, else fall back" logic applies). On a browser/WebAssembly host, where no system font is discoverable at all, the default is Liberation Sans; if you register some other family instead, the first one you register becomes the default, so text still renders (see [Rendering in the browser](#rendering-in-the-browser-blazor-webassembly)). You can remap the default font (or any other family) to another one using
 
 ```csharp
 PdfGenerator generator = new();

@@ -1,0 +1,235 @@
+:root {
+    color-scheme: light dark;
+    --bg: #fdfcfb;
+    --fg: #1f2328;
+    --muted: #6b7280;
+    --line: #e3e0dc;
+    --panel: #ffffff;
+    --accent: #d97757;
+    --accent-fg: #ffffff;
+    --error: #b42318;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #1a1a19;
+        --fg: #edeceb;
+        --muted: #9a9691;
+        --line: #34322e;
+        --panel: #232321;
+        --error: #f97066;
+    }
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+main {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding: 3rem 1.25rem 1rem;
+}
+
+h1 {
+    font-size: 1.9rem;
+    line-height: 1.25;
+    margin: 0 0 .75rem;
+}
+
+h2 {
+    font-size: 1.1rem;
+    margin: 0;
+}
+
+.lede {
+    color: var(--muted);
+    margin: 0 0 2rem;
+}
+
+.panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 1.5rem;
+}
+
+.panel input[type=file] {
+    width: 100%;
+    padding: 1.25rem;
+    border: 1px dashed var(--line);
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+
+.upload-summary {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: .4rem 1rem;
+    margin: 1.25rem 0 0;
+    align-items: center;
+}
+
+.upload-summary dt {
+    color: var(--muted);
+    font-size: .875rem;
+}
+
+.upload-summary dd { margin: 0; }
+
+.options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin: 1rem 0 1.25rem;
+}
+
+.options label {
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+    font-size: .875rem;
+    color: var(--muted);
+}
+
+select {
+    font: inherit;
+    padding: .35rem .5rem;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--panel);
+    color: var(--fg);
+}
+
+button.primary {
+    font: inherit;
+    font-weight: 600;
+    padding: .55rem 1.1rem;
+    border: none;
+    border-radius: 8px;
+    background: var(--accent);
+    color: var(--accent-fg);
+    cursor: pointer;
+}
+
+button.primary:disabled {
+    opacity: .55;
+    cursor: default;
+}
+
+.status, .error {
+    margin: 1rem 0 0;
+    font-size: .9rem;
+}
+
+.status { color: var(--muted); }
+.error { color: var(--error); }
+.muted { color: var(--muted); }
+
+.result { margin-top: 2rem; }
+
+.result-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: .75rem;
+}
+
+.result object {
+    width: 100%;
+    height: min(80vh, 900px);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+}
+
+.notes {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--line);
+    font-size: .9rem;
+    color: var(--muted);
+}
+
+.notes ul {
+    margin: .75rem 0 0;
+    padding-left: 1.1rem;
+}
+
+.notes li { margin-bottom: .5rem; }
+.notes strong { color: var(--fg); }
+
+code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: .875em;
+    background: color-mix(in oklab, currentColor 8%, transparent);
+    padding: .1em .35em;
+    border-radius: 4px;
+}
+
+footer {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding: 2rem 1.25rem 3rem;
+    color: var(--muted);
+    font-size: .85rem;
+}
+
+a { color: var(--accent); }
+
+/* Blazor's own error banner and boot-progress indicator. */
+#blazor-error-ui {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    padding: .75rem 1.25rem;
+    background: #ffe8e3;
+    color: #7a1c10;
+}
+
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    float: right;
+}
+
+.loading-progress {
+    display: block;
+    margin: 6rem auto 1rem;
+    width: 6rem;
+    height: 6rem;
+}
+
+.loading-progress circle {
+    fill: none;
+    stroke: var(--line);
+    stroke-width: .5rem;
+    transform-origin: 50% 50%;
+    transform: rotate(-90deg);
+}
+
+.loading-progress circle:last-child {
+    stroke: var(--accent);
+    stroke-dasharray: calc(var(--blazor-load-percentage, 0%) * 3.141) 500%;
+    transition: stroke-dasharray .05s ease-in-out;
+}
+
+.loading-progress-text {
+    text-align: center;
+    color: var(--muted);
+    font: 14px system-ui, sans-serif;
+}
+
+.loading-progress-text:after {
+    content: "Loading PeachPDF… " var(--blazor-load-percentage-text, "");
+}

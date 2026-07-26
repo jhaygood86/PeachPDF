@@ -49,7 +49,7 @@ namespace PeachPDF.Text
         private static Dictionary<string, string>? _languageTagMap;
         private static readonly object InitLock = new();
 
-        private sealed record LanguagePatternSet(
+        internal sealed record LanguagePatternSet(
             Dictionary<string, byte[]> Patterns,
             int MaxPatternLength,
             int LeftHyphenMin,
@@ -237,8 +237,25 @@ namespace PeachPDF.Text
         /// <c>[0,0,1,0,0]</c> — plus that pattern set's own hyphenation minimums, parsed from a
         /// <c>hyphenmins:</c> comment line (see <see cref="HyphenMinsRegex"/>), defaulting to
         /// <see cref="DefaultLeftHyphenMin"/>/<see cref="DefaultRightHyphenMin"/> when absent.
+        /// <para>
+        /// Returns <c>null</c> when the language has no patterns — and also when the host cannot decode
+        /// them at all. Not every platform ships a Brotli decoder: a WebAssembly host that has not
+        /// natively relinked its runtime throws <see cref="PlatformNotSupportedException"/> from
+        /// <see cref="BrotliStream"/>. Automatic hyphenation is a typographic refinement, so the honest
+        /// answer there is to lay the text out unhyphenated rather than to fail the whole render over it.
+        /// </para>
         /// </summary>
-        private static LanguagePatternSet? LoadPatternSet(string tag)
+        private static LanguagePatternSet? LoadPatternSet(string tag) =>
+            LoadPatternSet(tag, static compressed => new BrotliStream(compressed, CompressionMode.Decompress));
+
+        /// <param name="tag">the BCP-47 primary language subtag whose patterns to load</param>
+        /// <param name="openDecompressed">
+        /// Opens the decompressing view over the compressed resource. Taken as a parameter purely so a test
+        /// can supply one that fails the way a Brotli-less host does, which is otherwise unreachable on any
+        /// platform that has a decoder - the same explicit-input approach
+        /// <c>CssConstants.DetermineDefaultFont</c> uses for its platform table.
+        /// </param>
+        internal static LanguagePatternSet? LoadPatternSet(string tag, Func<Stream, Stream> openDecompressed)
         {
             var assembly = typeof(HyphenationEngine).Assembly;
             var suffix = $"hyph-{tag}.txt.br";
@@ -252,7 +269,18 @@ namespace PeachPDF.Text
             if (stream is null)
                 return null;
 
-            using var brotli = new BrotliStream(stream, CompressionMode.Decompress);
+            Stream decompressed;
+
+            try
+            {
+                decompressed = openDecompressed(stream);
+            }
+            catch (PlatformNotSupportedException)
+            {
+                return null;
+            }
+
+            using var brotli = decompressed;
             using var reader = new StreamReader(brotli);
 
             var patterns = new Dictionary<string, byte[]>();

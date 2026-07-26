@@ -18,6 +18,11 @@ namespace PeachPDF.Tests.TestSupport
     /// process-wide <c>FontFamilyCache</c> caches resolved font data keyed only by family
     /// name, so a same-named TTF and OTF loaded in the same test run would collide and one
     /// would silently shadow the other.
+    ///
+    /// The files themselves live in the repository-root <c>assets/fonts/</c> directory, shared
+    /// with PeachPDF.TestHarness and PeachPDF.Demo.BlazorWasm; the csproj links each one into
+    /// the output root, which is what these <see cref="AppContext.BaseDirectory"/> lookups find.
+    /// Each font's license notice sits beside it there as a <c>.LICENSE.txt</c>.
     /// </summary>
     internal static class BundledFonts
     {

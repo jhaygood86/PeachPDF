@@ -1,6 +1,8 @@
 # PeachPDF
 Peach PDF is a pure .NET HTML -> PDF rendering library. This library does not depend on Puppeter, wkhtmltopdf, or any other process to render the HTML to PDF. As a result, this should work in virtually any environment where .NET 8+ works. As a side benefit of being pure .NET, performance improvements in future .NET versions immediately benefit this library. 
 
+**[Try it in your browser](https://peachpdf.net/demo/)** — the same library running on WebAssembly, rendering your own HTML, MHTML or ZIP with nothing uploaded anywhere.
+
 ## Features
 
 - Native vector SVG rendering (inline `<svg>`, standalone `<img src="x.svg">`/`data:image/svg+xml`, and as a `background-image`/`list-style-image` source) — never rasterized

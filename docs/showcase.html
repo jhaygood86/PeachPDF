@@ -9,6 +9,10 @@ output always reflects the current release. Each card pairs the exact HTML given
 The previews show the first page of each PDF, rendered on Linux with Liberation fonts
 (the same font substitution any Linux server without Microsoft fonts would use).</p>
 
+<p>Want to render your own? <a href="demo/">Try PeachPDF in your browser</a> — drop in an HTML
+file, an MHTML archive, or a ZIP of a site folder and get a PDF back. It runs entirely on your
+machine, in the page, with no server involved.</p>
+
 {% if site.data.showcases %}
 {% assign categories = site.data.showcases | map: "category" | uniq %}
 {% for cat in categories %}

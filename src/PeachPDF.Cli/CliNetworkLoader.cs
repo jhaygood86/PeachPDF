@@ -5,46 +5,37 @@ using PeachPDF.Network;
 namespace PeachPDF.Cli;
 
 /// <summary>
-/// The resource loader the CLI configures for a rendered document. It derives from
-/// <see cref="FileUriNetworkLoader"/> so that PeachPDF's adapter routes <c>file:</c> resource requests
-/// to it (letting <c>--no-local-files</c> refuse them), while <c>http(s):</c> requests are served by a
-/// caller-configured <see cref="HttpClient"/> (honoring <c>--http-timeout</c>/<c>--http-header</c>/
+/// The resource loader the CLI configures for a rendered document. It serves <c>http(s):</c> requests from
+/// a caller-configured <see cref="HttpClient"/> (honoring <c>--http-timeout</c>/<c>--http-header</c>/
 /// <c>--user-agent</c>/auth/proxy/<c>--insecure</c>, and <c>--no-network</c> when the client is null).
-/// <c>data:</c> URIs are handled internally by the adapter regardless. The document's base URL comes
-/// from <see cref="BaseUri"/> (from <c>--baseurl</c> or the input's own location).
+/// <c>data:</c> and <c>file:</c> URIs are handled internally by the adapter regardless — <c>file:</c>
+/// subject to <see cref="PdfGenerateConfig.AllowLocalFileAccess"/>, which is where <c>--no-local-files</c>
+/// is enforced. The document's base URL comes from <see cref="BaseUri"/> (from <c>--baseurl</c> or the
+/// input's own location).
 /// </summary>
-internal sealed class CliNetworkLoader : FileUriNetworkLoader
+internal sealed class CliNetworkLoader(RUri? baseUri, HttpClient? httpClient) : RNetworkLoader
 {
-    private readonly RUri? _baseUri;
-    private readonly HttpClient? _httpClient;
-    private readonly bool _allowLocalFiles;
+    public override RUri? BaseUri => baseUri;
 
-    public CliNetworkLoader(RUri? baseUri, HttpClient? httpClient, bool allowLocalFiles)
-    {
-        _baseUri = baseUri;
-        _httpClient = httpClient;
-        _allowLocalFiles = allowLocalFiles;
-    }
-
-    public override RUri? BaseUri => _baseUri;
+    /// <summary>
+    /// Not supported: the CLI reads the root document itself (from a file, a URL, or stdin) and passes it
+    /// to <c>GeneratePdf</c>, so this loader is only ever asked for the resources that document references.
+    /// </summary>
+    public override Task<string> GetPrimaryContents() =>
+        throw new NotSupportedException("The CLI supplies the root document directly.");
 
     public override async Task<RNetworkResponse?> GetResourceStream(RUri uri)
     {
-        if (uri.IsAbsoluteUri && uri.Scheme is "file")
-        {
-            return _allowLocalFiles ? await base.GetResourceStream(uri) : null;
-        }
-
         if (uri.IsAbsoluteUri && uri.Scheme is "http" or "https")
         {
-            if (_httpClient is null)
+            if (httpClient is null)
             {
                 return null;
             }
 
             try
             {
-                var response = await _httpClient.GetAsync(uri.Uri);
+                var response = await httpClient.GetAsync(uri.Uri);
                 if (!response.IsSuccessStatusCode)
                 {
                     return null;
@@ -67,7 +58,7 @@ internal sealed class CliNetworkLoader : FileUriNetworkLoader
             }
         }
 
-        // data: is handled by the adapter; anything else is unresolved.
+        // data: and file: are handled by the adapter; anything else is unresolved.
         return null;
     }
 }

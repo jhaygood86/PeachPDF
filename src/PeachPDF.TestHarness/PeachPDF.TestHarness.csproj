@@ -13,6 +13,31 @@
     <ProjectReference Include="..\PeachPDF\PeachPDF.csproj" />
   </ItemGroup>
 
+  <!--
+    Font assets live in the repository-root assets/fonts/ directory, shared with PeachPDF.Tests
+    and PeachPDF.Demo.BlazorWasm so the same file isn't checked in several times. Each is
+    <Link>ed to the output root, so the showcases' AppContext.BaseDirectory lookups are
+    unchanged. Listed one by one rather than globbed, so this project still declares exactly
+    which fonts it needs.
+  -->
+  <ItemGroup>
+    <None Include="..\..\assets\fonts\ColorTestV1.ttf" Link="ColorTestV1.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\NotoColorEmoji-Subset.ttf" Link="NotoColorEmoji-Subset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\NablaSubset.ttf" Link="NablaSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\NotoEmoji-Regular.ttf" Link="NotoEmoji-Regular.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\LiberationMono-Regular.woff" Link="LiberationMono-Regular.woff">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
   <ItemGroup>
     <None Update="4uiwmf4z.html">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -21,21 +46,6 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="charts.css">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="ColorTestV1.ttf">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="NotoColorEmoji-Subset.ttf">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="NablaSubset.ttf">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="LiberationMono-Regular.ttf">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="NotoEmoji-Regular.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="rfc2324.html">
