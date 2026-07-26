@@ -943,6 +943,93 @@ namespace PeachPDF.Tests.Html.Core.Fragments
             Assert.All(lines, line => Assert.True(line.Slice is { HasTopEdge: true, HasBottomEdge: true }));
         }
 
+        // ─── §6.2's block-axis strip ───────────────────────────────────────────────
+
+        /// <summary>
+        /// §6.2's <c>slice</c> renders the box "with no breaks present, then sliced by the breaks", so every
+        /// decoration is measured against the <b>unbroken</b> box. In a nested fragmentainer each fragment
+        /// carries only its own extent — two columns of one page share a band, so nothing else could tell
+        /// them apart — which makes the unbroken box the concatenation of those extents, positioned per
+        /// fragment exactly the way the inline strip is.
+        /// </summary>
+        [Fact]
+        public async Task ABoxSplitAcrossColumns_IsMeasuredAgainstTheConcatenationOfItsFragments()
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(SplitAcrossColumns(), pageHeight: 200, margin: 0);
+
+            var fragments = FragmentsOf(container.FragmentTree!, "long")
+                .OrderBy(f => f.FragmentainerIndex).ThenBy(f => f.Rect.X).ToList();
+
+            Assert.True(fragments.Count >= 2, $"expected a fragment per column, got {fragments.Count}");
+
+            var total = fragments.Sum(f => f.Lines[0].Rect.Height);
+            var preceding = 0d;
+
+            foreach (var fragment in fragments)
+            {
+                var line = Assert.Single(fragment.Lines);
+
+                // The whole box, as seen from this fragment: as tall as every fragment together, and lifted
+                // by the ones before it so this fragment's own slice of it lines up.
+                Assert.Equal(total, line.Slice.UnbrokenStrip.Height, 3);
+                Assert.Equal(line.Rect.Y - preceding, line.Slice.UnbrokenStrip.Y, 3);
+                Assert.Equal(line.Rect.X, line.Slice.UnbrokenStrip.X, 3);
+                Assert.Equal(line.Rect.Width, line.Slice.UnbrokenStrip.Width, 3);
+
+                preceding += line.Rect.Height;
+            }
+
+            // So the strip's own ends are the box's own ends, which is what leaves a border-radius, a
+            // background layer and a shadow at the true top and bottom only.
+            Assert.Equal(fragments[0].Lines[0].Rect.Top, fragments[0].Lines[0].Slice.UnbrokenStrip.Top, 3);
+            Assert.Equal(fragments[^1].Lines[0].Rect.Bottom, fragments[^1].Lines[0].Slice.UnbrokenStrip.Bottom, 3);
+
+            // And every fragment is a genuine slice of it rather than the whole thing, which is what makes
+            // the clip in BoxDecorationGeometry.For necessary at all.
+            Assert.All(fragments, f => Assert.True(f.Lines[0].Slice.UnbrokenStrip.Height > f.Lines[0].Rect.Height));
+        }
+
+        /// <summary>
+        /// The page grid keeps the rule it had: every fragment of a page-split box already reports the
+        /// box's whole bounds — nothing cuts them until the page clip does, at paint — so concatenating
+        /// them would describe a box as many pages tall as it has fragments.
+        /// </summary>
+        [Fact]
+        public async Task ABlockContinuingOntoTheNextPage_IsAlreadyItsOwnWholeBox()
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap($"<p id='long' style='margin:0;font:10pt Arial'>{Words(300)}</p>"),
+                pageHeight: 200, margin: 0);
+
+            var fragments = FragmentsOf(container.FragmentTree!, "long");
+
+            Assert.True(fragments.Count >= 2, $"expected a fragment per page, got {fragments.Count}");
+
+            // Each fragment is its own strip, so BoxDecorationGeometry.For takes its direct path and the
+            // common case's content stream keeps no clip pair it does not need.
+            Assert.All(fragments, f => Assert.Equal(f.Lines[0].Rect, f.Lines[0].Slice.UnbrokenStrip));
+        }
+
+        /// <summary>
+        /// A box that fits inside one column is not broken at all, so it is its own unbroken box — the
+        /// concatenation must not fire merely because the box sits in a nested fragmentainer.
+        /// </summary>
+        [Fact]
+        public async Task AnUnfragmentedBoxInAColumn_IsAlreadyItsOwnWholeBox()
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='columns:2;column-gap:20pt;font:10pt Arial'>" +
+                    "<p id='short' style='margin:0;background:#eee'>short</p>" +
+                    $"<p style='margin:0'>{Words(60)}</p></div>"),
+                pageHeight: 200, margin: 0);
+
+            var fragment = Assert.Single(FragmentsOf(container.FragmentTree!, "short"));
+            var line = Assert.Single(fragment.Lines);
+
+            Assert.Equal(line.Rect, line.Slice.UnbrokenStrip);
+        }
+
         /// <summary>
         /// A paragraph long enough to fill one column and continue into the next, in a container whose
         /// columns are the only thing separating the two fragments.

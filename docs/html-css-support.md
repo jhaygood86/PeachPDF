@@ -528,7 +528,9 @@ A multi-column container whose content is only text, with no block-level child o
 
 - A box split at a column boundary leaves that edge open, per `box-decoration-break: slice` — no border is drawn where the break is, only where the box really starts and ends. See [Decorations at a break](#decorations-at-a-break).
 
-Two limitations at a column boundary specifically: a decoration that is defined over the *whole* box — a `border-radius`, a gradient or image background layer, a `box-shadow` — is still measured against the fragment's own height rather than the unbroken box's, so a rounded box split across a column shows rounded corners at the break as well as at its true ends; and a multi-column container nested inside another one splits its children at the outer level only.
+- A decoration defined over the *whole* box — a `border-radius`, a gradient or image background layer, a `box-shadow` — is measured against the whole box under `slice`, so a rounded, gradient-filled box divided between two columns rounds only at its true ends and its gradient runs on from one column into the next. See [Decorations at a break](#decorations-at-a-break).
+
+One limitation at a column boundary specifically: a multi-column container nested inside another one splits its children at the outer level only.
 
 | Property | MDN Reference | Notes |
 |----------|--------------|-------|
@@ -668,7 +670,7 @@ Limitations:
 
 - Room is reserved for `clone`'s border and padding in normal block and inline flow only. Inside a flex, grid, table or multi-column container, whose own engine positions its children, a cloned decoration at a break is painted but no room is made for it, so it can overlap content.
 - A page break is decided against the text itself, so a large `line-height`'s own leading below the last line on a page is not counted. A cloned bottom border can therefore sit within that leading — at most `line-height` minus the text's own height. Ordinary line heights leave this invisible.
-- At a **column** break, `slice` leaves the break edge open as it should, but a decoration defined over the whole box — a `border-radius`, a gradient or image background layer, a `box-shadow` — is still resolved against the fragment's own height rather than the unbroken box's. A rounded box split across a column therefore rounds at the break as well as at its true ends. A page break is unaffected: there each fragment already carries the whole box's geometry and the page clip does the cutting.
+- An inline box that wraps *and* is split at a column boundary has its unbroken width measured within each column rather than across both, so a gradient on such a box restarts in the second column. A block-level box is unaffected, and so is an inline box that only crosses page breaks.
 - `border-image` is parsed but never painted, so §6.2's treatment of it has no visible effect either way. A replaced element (an image, an inline `<svg>`, an `<iframe>`) is never split at all, so it always paints its whole box regardless of the value.
 
 > **Migration note:** a wrapping inline box whose background is a gradient, or which has `border-radius` or a `box-shadow`, used to be painted independently on each line — a separate full gradient, its own four rounded corners, and a shadow along every wrap. That is `clone`'s behavior, and it was applied whatever the declared value was. Such a box now renders as `slice` unless `box-decoration-break: clone` is set, which is both the spec's initial value and what browsers draw. Add `box-decoration-break: clone` to keep the previous appearance. See [Forward compatibility](#forward-compatibility).
