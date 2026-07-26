@@ -2199,6 +2199,15 @@ var transformHtml = "<!DOCTYPE html><html><head>" + TransformCss + "</head><body
         TransformSwatch("multi-function chain", "translate(10px, 0) rotate(20deg) scale(1.2)")
     ) +
 
+    "<h2>7 — Radial Gradients Under a Transform</h2>" +
+    "<p class=\"intro\">An <b>elliptical</b> radial gradient is the one gradient shape whose PDF shading is written as a unit circle plus a matrix, so it is also the one that has to carry the element's transform through that matrix. The first two swatches are the same gradient with and without a transform; if the transform were dropped, the second would lose its highlight and fill flat with the gradient's outer color.</p>" +
+    Row(
+        TransformSwatch("elliptical radial, no transform", "none", "background: radial-gradient(ellipse, #fff9c4, #f57f17);"),
+        TransformSwatch("elliptical radial + rotate/scale", "rotate(-12deg) scale(1.25)", "background: radial-gradient(ellipse, #fff9c4, #f57f17);"),
+        TransformSwatch("circular radial + rotate/scale", "rotate(-12deg) scale(1.25)", "background: radial-gradient(circle, #fff9c4, #f57f17);"),
+        TransformSwatch("off-center ellipse + skew", "skew(12deg, 4deg)", "background: radial-gradient(ellipse at 30% 35%, #e0f7fa, #006064);")
+    ) +
+
     "</body></html>";
 
 await SaveShowcaseAsync("transform", "Graphics & Effects", "Transforms",
@@ -2652,11 +2661,18 @@ var svgHtml = "<!DOCTYPE html><html><head>" + SvgShowcaseCss + "</head><body>" +
         SvgSwatch("HTML &lt;style&gt; cascades into SVG",
             """<style>svg.svgCascadeDemo circle{fill:#8e44ad}</style><svg class="svgCascadeDemo" viewBox="0 0 100 100" width="80" height="80"><circle cx="50" cy="50" r="35"/></svg>""",
             "a document-level rule matching SVG shapes applies (SVG 2 §6)"),
+        // Both of these <style> rules are scoped through a class on their own <svg>, exactly as the
+        // "HTML <style> cascades into SVG" swatch beside them is. A <style> element inside an inline
+        // <svg> is NOT scoped to that <svg> - in an HTML document it is a document-level stylesheet
+        // like any other (SVG 2 §6), which browsers agree on. Written as the bare type selectors
+        // "circle" and "g rect", they therefore matched every <circle>/<g> <rect> on this page and
+        // repainted the gradient swatches above (and both peach illustrations) a flat #d35400 -
+        // correct cascading, but it silently destroyed what the rest of the page is here to show.
         SvgSwatch("combinator selector",
-            """<svg viewBox="0 0 100 100" width="80" height="80"><style>g rect{fill:#16a085}</style><g><rect x="20" y="20" width="60" height="60"/></g></svg>""",
+            """<svg class="combinatorDemo" viewBox="0 0 100 100" width="80" height="80"><style>.combinatorDemo g rect{fill:#16a085}</style><g><rect x="20" y="20" width="60" height="60"/></g></svg>""",
             "\"g rect\" descendant combinator, via the full selector engine"),
         SvgSwatch("var() custom property",
-            """<svg viewBox="0 0 100 100" width="80" height="80"><style>:root{--c:#d35400}circle{fill:var(--c)}</style><circle cx="50" cy="50" r="35"/></svg>""",
+            """<svg class="varDemo" viewBox="0 0 100 100" width="80" height="80"><style>:root{--c:#d35400}.varDemo circle{fill:var(--c)}</style><circle cx="50" cy="50" r="35"/></svg>""",
             "fill:var(--c) resolves through the CSS cascade")
     ) +
 
