@@ -1266,6 +1266,14 @@ namespace PeachPDF.Html.Core.Dom
 
             if (HtmlContainer.PageIndexOf(LineBoxes[linesBefore - 1].LineTop) != firstSlot) return false;
 
+            // The lines given up move into the box's later fragment, so the two pages have to share one
+            // measure or they arrive wrapped for the page they left.
+            if (!HtmlContainer.MeasureIsSharedBetween(
+                    firstSlot, HtmlContainer.PageIndexOf(LineBoxes[^1].LineTop)))
+            {
+                return false;
+            }
+
             if (!HtmlContainer.RequestWidowsRewind(this, budget)) return false;
 
             _widowsRewindTaken = true;
@@ -2006,7 +2014,7 @@ namespace PeachPDF.Html.Core.Dom
             && box.Location.Y > context.BandTop + HtmlContainerInt.PageBoundaryEpsilon;
 
         /// <summary>
-        /// Whether a break may be moved for <c>orphans</c> at all in this document — false while per-page
+        /// Whether a break may be moved for <c>orphans</c> or <c>widows</c> yet — false while per-page
         /// horizontal reflow is still settling which page each box is on.
         /// </summary>
         /// <remarks>
@@ -2021,6 +2029,13 @@ namespace PeachPDF.Html.Core.Dom
         /// more visible than the orphan it was avoiding.
         /// </para>
         /// <para>
+        /// So the decisions are taken in <b>one final layout</b>, entered once the loop has settled
+        /// (<see cref="HtmlContainerInt.PageWidthsSettled"/>). There is no feedback there: every width in
+        /// that layout comes from the settled assignment, and nothing runs afterwards to be disturbed by what
+        /// the corrections move. A document without per-page horizontal margins has no such loop and nothing
+        /// provisional, so both minimums apply from its first pass, as they always have.
+        /// </para>
+        /// <para>
         /// The same reasoning as the <see cref="HtmlContainerInt.IsFragmenting"/> gates: a decision taken
         /// against coordinates the box does not end up at is not a decision. <c>widows</c>' <b>per-line</b>
         /// correction is gated for exactly the same reason — it re-runs a pass, so it moves content across a
@@ -2028,7 +2043,7 @@ namespace PeachPDF.Html.Core.Dom
         /// complete and does not change any box's width.
         /// </para>
         /// </remarks>
-        private bool OrphansAndWidowsMayMoveABreak => HtmlContainer is { UseVariablePageWidth: false };
+        private bool OrphansAndWidowsMayMoveABreak => HtmlContainer is { PageWidthsSettled: true };
 
         /// <summary>
         /// Lays this box's out-of-flow children out again, for an engine that narrowed its own inline
@@ -2163,6 +2178,9 @@ namespace PeachPDF.Html.Core.Dom
                         // from walking the box down the document.
                         if (KeepsFewerLinesThanOrphans(childToken, childBox) && i > start
                             && OrphansAndWidowsMayMoveABreak
+                            && HtmlContainer!.MeasureIsSharedBetween(
+                                HtmlContainer.PageIndexOf(childBox.Location.Y + HtmlContainerInt.PageBoundaryEpsilon),
+                                childToken.ResumeSlotIndex)
                             && !childBox._orphansBreakTaken
                             && HasRoomAboveInThisFragmentainer(childBox))
                         {
@@ -2923,8 +2941,13 @@ namespace PeachPDF.Html.Core.Dom
                             return;
                         }
 
+                        // The whole-box push moves the box to the next page without re-wrapping it, so it
+                        // is subject to the same measure question the per-line correction is: a box that
+                        // arrives on a page of a different measure is wrapped for the page it left, which
+                        // is worse than the line minimum it was serving.
                         if (linesBefore > 0 && linesAfter > 0 && (linesBefore < orphans || linesAfter < widows)
                             && ActualBottom - Location.Y <= HtmlContainer.PageBandHeightOf(ownPageIndex)
+                            && HtmlContainer.MeasureIsSharedBetween(ownPageIndex, ownPageIndex + 1)
                             && TakeEarlyBreak(EarlyBreak.Discover(this, boundaryY, EarlyBreakReason.OrphansWidows)))
                         {
                             return;

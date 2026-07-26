@@ -643,6 +643,10 @@ namespace PeachPDF.Html.Core
             ActualSize = RSize.Empty;
             if (Root is null) return;
 
+            // A document with per-page left/right margins settles its box->page assignment in the reflow
+            // loop below, and until that loop has run, a box's page is provisional.
+            _pageWidthsSettled = false;
+
             // includeStackingHoistCandidates: false here - IsStackingContextBox reads IsTransformed,
             // which lazily computes and permanently caches ActualTransformMatrix against this box's own
             // border-box size on first access. Before layout, every box's size is still unset/default,
@@ -702,6 +706,24 @@ namespace PeachPDF.Html.Core
                     if (current.SequenceEqual(previous)) break;
                     previous = current;
                 }
+
+                // css-break-3 §5.4's two line minimums are decided here rather than inside the loop above.
+                // A break they move changes which page a box lands on, and every box's width is keyed off
+                // the page it landed on last time - so taken while the loop is still settling, the decision
+                // feeds back into the very thing the loop is trying to settle, and the loop stops
+                // converging (measured on windows-latest, whose font metrics put the fixture at a different
+                // boundary: a paragraph left wrapped to a neighbouring page's measure, which is a far more
+                // visible defect than the orphan it was avoiding).
+                //
+                // One final layout, entered once the assignment has settled, has no such feedback: every
+                // width in it comes from the settled assignment, and nothing re-runs afterwards to be
+                // disturbed by what the corrections move.
+                _pageWidthsSettled = true;
+
+                Root.Size = new RSize(rootWidth, 0);
+                Root.Location = Location;
+                ActualSize = RSize.Empty;
+                await LayoutDocument(g);
             }
 
             // After layout, re-apply content to pseudo-elements now that named strings are set
@@ -1360,6 +1382,55 @@ namespace PeachPDF.Html.Core
         /// </summary>
         internal bool UseVariablePageWidth =>
             PageSize.Width > 0 && PageSize.Width < double.MaxValue - 1 && PageGeometry.HasHorizontalMarginOverrides;
+
+        /// <summary>
+        /// Whether the per-page reflow loop has settled which page each box is on, so a decision taken
+        /// against a box's page is a decision about where it will actually be
+        /// (<see cref="CssBox.OrphansAndWidowsMayMoveABreak"/>). Always true for a document with no
+        /// per-page left/right margins, which has no such loop and therefore nothing provisional.
+        /// </summary>
+        /// <remarks>
+        /// Per <see cref="PerformLayout"/> invocation, not per <see cref="LayoutDocument"/> one: the loop
+        /// runs several layouts, and it is the loop rather than any one layout that settles the question.
+        /// <c>ShrinkToFit</c> re-enters <see cref="PerformLayout"/> and so re-settles it from scratch.
+        /// </remarks>
+        internal bool PageWidthsSettled => !UseVariablePageWidth || _pageWidthsSettled;
+
+        /// <inheritdoc cref="PageWidthsSettled"/>
+        private bool _pageWidthsSettled;
+
+        /// <summary>
+        /// Whether content laid out for pagination slot <paramref name="from"/> would wrap identically in
+        /// slot <paramref name="to"/> — that is, whether the two pages share one measure.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The final layout that takes the §5.4 corrections keys every width off the <i>settled</i>
+        /// assignment, so a box it moves keeps the measure of the page it was measured for. Where the two
+        /// pages share a measure that is exactly right and the correction is free; where they do not, taking
+        /// it leaves the box wrapped to its old page's measure — the defect the reflow loop exists to
+        /// remove, and a far worse one than the line minimum it was serving. So the correction is declined
+        /// there instead, which is §4.3's own last rung: the constraint is given up rather than traded for a
+        /// worse violation.
+        /// </para>
+        /// <para>
+        /// <b>Measured, not reasoned.</b> This guard was written, argued away on the grounds that the
+        /// retroactive whole-box push makes the same trade already, and put back when CI failed on
+        /// <c>windows-latest</c> — a block wrapped to a full-bleed first page's 812pt measure, sitting on a
+        /// 412pt page. The push does make that trade in principle, but it did not fire on the fixtures that
+        /// caught this, and the break-point conversion does.
+        /// </para>
+        /// <para>
+        /// Note mirrored inner/outer margins are <i>not</i> an instance: the two pages' content widths are
+        /// equal and only the left origin differs, and it is the width the wrap depends on.
+        /// </para>
+        /// </remarks>
+        internal bool MeasureIsSharedBetween(int from, int to) =>
+            !UseVariablePageWidth
+            || from == to
+            || Math.Abs(PageContentRightOf(PageTopOf(from) + PageBoundaryEpsilon)
+                        - PageContentRightOf(PageTopOf(to) + PageBoundaryEpsilon)) < 0.01;
+
 
         /// <summary>
         /// The document X-coordinate (layout px, at the <b>base</b> left origin) of the right edge of the
