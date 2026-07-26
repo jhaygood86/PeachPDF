@@ -1,6 +1,7 @@
 using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Fragments;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
@@ -83,14 +84,48 @@ namespace PeachPDF.Tests.Integration
         private const string FourLineParagraph =
             "<p id='p' style='width:200pt;line-height:20pt;margin:0;padding:0'>Line1<br>Line2<br>Line3<br>Line4</p>";
 
+        private const string FiveLineParagraph =
+            "<p id='p' style='width:200pt;line-height:20pt;margin:0;padding:0'>" +
+            "Line1<br>Line2<br>Line3<br>Line4<br>Line5</p>";
+
+        // §5.4 asks for the *minimum* number of lines to be moved across the break, not for the whole box.
+        // Doing that means going back: how many lines fall after a break is settled only once the box
+        // completes, which is a later pass than the one that placed the fragment that has to give a line up.
         [Fact]
-        public async Task Widows2_ParagraphNudgedWhenOnlyOneLineWouldFollowTheBreak()
+        public async Task Widows2_OnlyOneLineWouldFollowTheBreak_MovesOneLineRatherThanTheWholeBox()
         {
             // Natural position (filler=30pt) splits the 4 lines 3-before/1-after the Y=100 boundary,
-            // violating the default widows:2. The whole paragraph must be pushed to start at Y=100.
+            // violating the default widows:2. One line moves across, leaving 2/2 - and the box itself
+            // stays exactly where ordinary flow put it.
             var box = await FindByIdInPagedDocAsync(30, FourLineParagraph);
 
+            Assert.Equal(38, box.Location.Y, 1);
+            AssertLinesSplit(box, boundaryY: 100, before: 2, after: 2);
+        }
+
+        // A larger minimum moves more lines: five lines split 3/2 violate widows:3, and the one line it
+        // takes to fix that still leaves orphans:2 satisfied on the other side.
+        [Fact]
+        public async Task Widows3_MovesAsManyLinesAsItTakes()
+        {
+            var box = await FindByIdInPagedDocAsync(
+                30, FiveLineParagraph.Replace("margin:0", "margin:0;widows:3"));
+
+            Assert.Equal(38, box.Location.Y, 1);
+            AssertLinesSplit(box, boundaryY: 100, before: 2, after: 3);
+        }
+
+        // Where the two constraints meet, one of them has to go: leaving four lines after the break would
+        // leave none before it, so §4.3's ladder gives the per-line correction up rather than trading one
+        // violation for another. The whole-box push is what it degrades to.
+        [Fact]
+        public async Task Widows4_CannotBeSatisfiedWithoutBreakingOrphans_PushesTheWholeBox()
+        {
+            var box = await FindByIdInPagedDocAsync(
+                30, FourLineParagraph.Replace("margin:0", "margin:0;widows:4"));
+
             Assert.Equal(100, box.Location.Y, 1);
+            Assert.All(WordsOf(box), word => Assert.True(word.Top >= 100, $"word at {word.Top} stayed behind"));
         }
 
         [Fact]
@@ -209,7 +244,7 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task Widows2_ParagraphStartingOnSecondPage_StillNudgedCorrectly()
+        public async Task Widows2_ParagraphStartingOnSecondPage_StillCorrected()
         {
             // Regression coverage for the "own top relative to page" modulo loop only having ever been
             // exercised with a box on the first page (Location.Y < pageHeight, loop body never runs) -
@@ -217,7 +252,44 @@ namespace PeachPDF.Tests.Integration
             // loop to actually iterate.
             var box = await FindByIdInPagedDocAsync(130, FourLineParagraph);
 
-            Assert.Equal(200, box.Location.Y, 1);
+            Assert.Equal(138, box.Location.Y, 1);
+            AssertLinesSplit(box, boundaryY: 200, before: 2, after: 2);
+        }
+
+        // The rewind re-runs a pass that has already been emitted, so both directions of getting the undo
+        // wrong show up here: a word left where the abandoned attempt put it is claimed twice, and one
+        // discarded along with a fragment an earlier page already holds is claimed not at all.
+        [Fact]
+        public async Task Widows2_RewoundPass_LeavesEveryWordClaimedExactlyOnce()
+        {
+            var html = "<!DOCTYPE html><html><head></head><body style='margin:8pt'>"
+                       + "<div style='height:30pt'></div>" + FourLineParagraph + "</body></html>";
+
+            var (root, container) = await BuildAndLayoutPaged(html, pageHeight: 100);
+
+            var words = WordsOf(FindById(root, "p")!);
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => FlattenFragments(f.Root))
+                .SelectMany(f => f.Words)
+                .Select(w => w.Word)
+                .ToList();
+
+            Assert.Equal(claimed.Count, claimed.Distinct().Count());
+            Assert.Equal(words.Count, claimed.Count);
+        }
+
+        // One rewind per box per layout. The rewound pass reaches the same epilogue again, so without the
+        // latch a box whose constraint stays unsatisfiable would keep asking and walk backwards.
+        [Fact]
+        public async Task Widows_RewindingABox_TakesABoundedNumberOfPasses()
+        {
+            var html = "<!DOCTYPE html><html><head></head><body style='margin:8pt'>"
+                       + "<div style='height:30pt'></div>" + FourLineParagraph + "</body></html>";
+
+            var (_, container) = await BuildAndLayoutPaged(html, pageHeight: 100);
+
+            Assert.True(container.FragmentainerPasses <= 6,
+                $"expected a bounded pass count, got {container.FragmentainerPasses}");
         }
 
         [Fact]
@@ -269,6 +341,29 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>Every word in a box's subtree — a paragraph's text lives in its child boxes.</summary>
+        /// <summary>
+        /// Asserts how <paramref name="box"/>'s words fall either side of a fragmentainer boundary — the
+        /// quantity <c>orphans</c>/<c>widows</c> are defined over, read from where the words actually
+        /// landed rather than from the line list.
+        /// </summary>
+        private static void AssertLinesSplit(CssBox box, double boundaryY, int before, int after)
+        {
+            var tops = WordsOf(box).Select(w => w.Top).Distinct().OrderBy(t => t).ToList();
+
+            Assert.Equal(before, tops.Count(t => t < boundaryY));
+            Assert.Equal(after, tops.Count(t => t >= boundaryY));
+        }
+
+        private static System.Collections.Generic.IEnumerable<BoxFragment> FlattenFragments(BoxFragment fragment)
+        {
+            yield return fragment;
+
+            foreach (var child in fragment.Children)
+            {
+                foreach (var descendant in FlattenFragments(child)) yield return descendant;
+            }
+        }
+
         private static System.Collections.Generic.List<CssRect> WordsOf(CssBox box) =>
             [.. LayoutHarness.Descendants(box).SelectMany(b => b.Words)];
 

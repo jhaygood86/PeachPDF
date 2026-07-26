@@ -1215,6 +1215,64 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// One <c>widows</c> rewind per box per layout — not per pass. The rewound pass reaches this
+        /// epilogue again, and asking a second time either finds the constraint satisfied or finds it
+        /// unsatisfiable at a different line count; either way, re-deciding is how a box walks backwards
+        /// through the document.
+        /// </summary>
+        private bool _widowsRewindTaken;
+
+        /// <summary>
+        /// Tries to satisfy <see href="https://www.w3.org/TR/css-break-3/#widows-orphans">§5.4</see>'s
+        /// <c>widows</c> by keeping fewer lines in the fragment <i>before</i> the break, so the fragment
+        /// after it reaches its minimum — the per-line correction the spec asks for, rather than moving the
+        /// whole box.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This is the one break decision that has to reach <i>backwards</i>. The count of lines after a
+        /// break is settled only once the box completes, which is a later pass than the one that placed its
+        /// first fragment — so the fragment that has to give lines up has already been laid out and emitted.
+        /// The driver re-runs that pass (<c>HtmlContainerInt.RequestWidowsRewind</c>); what this method owns
+        /// is deciding whether a budget exists that satisfies both constraints at once.
+        /// </para>
+        /// <para>
+        /// <b>Two fragments only.</b> The budget is a line count for the fragment before the break, so it is
+        /// only meaningful when the lines before the break all sit in <i>one</i> fragment — otherwise a
+        /// budget below the count an earlier fragment already completed would be asking a fragmentainer that
+        /// is not being re-run to give lines up. A box spanning three fragmentainers therefore keeps the
+        /// whole-box push, which is what it had before.
+        /// </para>
+        /// <para>
+        /// <b>The budget must satisfy <c>orphans</c> too.</b> Giving up lines to feed <c>widows</c> can only
+        /// go as far as leaving <c>orphans</c> lines behind; below that the two constraints cannot both hold
+        /// and §4.3's ladder gives one of them up rather than trading one violation for another.
+        /// </para>
+        /// </remarks>
+        private bool TryKeepFewerLinesForWidows(int linesBefore, int widows, int orphans)
+        {
+            if (_widowsRewindTaken || !OrphansAndWidowsMayMoveABreak
+                || HtmlContainer is not { IsFragmenting: true })
+            {
+                return false;
+            }
+
+            // What the fragment before the break may keep so the one after it reaches `widows`.
+            var budget = LineBoxes.Count - widows;
+
+            if (budget < 1 || budget < orphans || budget >= linesBefore) return false;
+
+            var firstSlot = HtmlContainer.PageIndexOf(LineBoxes[0].LineTop);
+
+            if (HtmlContainer.PageIndexOf(LineBoxes[linesBefore - 1].LineTop) != firstSlot) return false;
+
+            if (!HtmlContainer.RequestWidowsRewind(this, budget)) return false;
+
+            _widowsRewindTaken = true;
+            return true;
+        }
+
+        /// <summary>
         /// The document Y this box asked to be placed at in a later fragmentainer, when the placement
         /// code decided the break falls <i>before</i> it. Distinct from
         /// <see cref="PendingBreakToken"/> because the box cannot name itself in a token — only its
@@ -1956,11 +2014,13 @@ namespace PeachPDF.Html.Core.Dom
         /// </para>
         /// <para>
         /// The same reasoning as the <see cref="HtmlContainerInt.IsFragmenting"/> gates: a decision taken
-        /// against coordinates the box does not end up at is not a decision. <c>widows</c>' retroactive push
-        /// is unaffected — it runs after the box is complete and does not change any box's width.
+        /// against coordinates the box does not end up at is not a decision. <c>widows</c>' <b>per-line</b>
+        /// correction is gated for exactly the same reason — it re-runs a pass, so it moves content across a
+        /// boundary the loop has yet to settle. The whole-box push is unaffected: it runs after the box is
+        /// complete and does not change any box's width.
         /// </para>
         /// </remarks>
-        private bool OrphansMayMoveABreak => HtmlContainer is { UseVariablePageWidth: false };
+        private bool OrphansAndWidowsMayMoveABreak => HtmlContainer is { UseVariablePageWidth: false };
 
         /// <summary>
         /// Lays this box's out-of-flow children out again, for an engine that narrowed its own inline
@@ -2071,7 +2131,7 @@ namespace PeachPDF.Html.Core.Dom
                         // acted on pointlessly - and it is what keeps a band too small for `orphans` lines
                         // from walking the box down the document.
                         if (KeepsFewerLinesThanOrphans(childToken, childBox) && i > start
-                            && OrphansMayMoveABreak
+                            && OrphansAndWidowsMayMoveABreak
                             && !childBox._orphansBreakTaken
                             && HasRoomAboveInThisFragmentainer(childBox))
                         {
@@ -2725,15 +2785,14 @@ namespace PeachPDF.Html.Core.Dom
             }
 
 
-            // orphans/widows: a paragraph-like box (real line boxes, not multicol's atomic-child model -
-            // which never splits a child, so this defect can't occur there in the first place) whose
-            // lines would otherwise straddle a page boundary with too few lines before/after it gets
-            // nudged, as a whole, to the next page - the same OffsetTop mechanism BreakInside:avoid uses
-            // just above. This is a coarser-than-spec approximation (a real UA pulls only the minimum
-            // lines needed across the break; this moves the entire box) - accepted deliberately, since
-            // real per-line fragmentation would need this engine's "whole child" layout model rewritten.
-            // A paragraph taller than one page is left alone: pushing it whole can't help; it would just
-            // recreate the same violation on the next page.
+            // widows (§5.4): a paragraph-like box (real line boxes, not multicol's atomic-child model -
+            // which never splits a child, so this defect can't occur there in the first place) whose last
+            // fragment keeps too few lines. `orphans` is settled at the break point and is decided there
+            // (LayoutBlockChildren); `widows` is not, because how many lines fall *after* a break depends
+            // on content that has not been flowed yet - so it is answered here, on the pass that completes
+            // the box, in one of two ways: by moving the minimum number of lines the spec asks for, or,
+            // where that cannot be arranged, by pushing the whole box to the next fragmentainer. A
+            // paragraph taller than one page is not pushed: it would just recreate the violation there.
             if (DomUtils.ContainsInlinesOnly(this) && LineBoxes.Count > 1
                 && !_earlyBreakTaken
                 && int.TryParse(Orphans, out var orphans) && int.TryParse(Widows, out var widows)
@@ -2741,13 +2800,10 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var owPageHeight = HtmlContainer!.PageSize.Height;
 
-                if (owPageHeight > 0
-                    && ActualBottom - Location.Y <= HtmlContainer.PageBandHeightOf(HtmlContainer.PageIndexOf(Location.Y)))
+                if (owPageHeight > 0)
                 {
                     // Same shifted-grid convention as the BreakInside:Avoid block above.
                     var ownPageIndex = HtmlContainer.PageIndexOf(Location.Y);
-                    var ownPageTop = HtmlContainer.PageTopOf(ownPageIndex);
-                    var ownTopRelativeToPage = Location.Y - ownPageTop;
 
                     // Absolute Y of the first shifted-page boundary at or after this box's own top.
                     var boundaryY = HtmlContainer.PageTopOf(ownPageIndex + 1);
@@ -2757,7 +2813,17 @@ namespace PeachPDF.Html.Core.Dom
                         var linesBefore = LineBoxes.Count(l => l.LineBottom <= boundaryY);
                         var linesAfter = LineBoxes.Count - linesBefore;
 
+                        // The per-line answer first: keep fewer lines in the fragment before the break so
+                        // the one after it reaches its minimum. It needs no room in the destination, so it
+                        // is not subject to the whole-box push's own fits-on-one-page test.
+                        if (linesBefore > 0 && linesAfter > 0 && linesAfter < widows
+                            && TryKeepFewerLinesForWidows(linesBefore, widows, orphans))
+                        {
+                            return;
+                        }
+
                         if (linesBefore > 0 && linesAfter > 0 && (linesBefore < orphans || linesAfter < widows)
+                            && ActualBottom - Location.Y <= HtmlContainer.PageBandHeightOf(ownPageIndex)
                             && TakeEarlyBreak(EarlyBreak.Discover(this, boundaryY, EarlyBreakReason.OrphansWidows)))
                         {
                             return;

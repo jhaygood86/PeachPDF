@@ -39,7 +39,20 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Gets a list of boxes related with the linebox. 
+        /// The position in <c>CssLayoutEngine.FlowBox</c>'s walk of this line's first word — the same
+        /// quantity an <see cref="Fragmentation.InlineBreakToken"/> resumes at.
+        /// </summary>
+        /// <remarks>
+        /// Recorded so a flow can be re-entered <i>at a line that has already been laid out</i>, which is
+        /// what §5.4's <c>widows</c> needs: how many lines fall after a break is only known once the box
+        /// completes, so satisfying it means going back and keeping fewer lines in the fragment before it.
+        /// A resumed pass leaves earlier lines untouched, so each line keeps the ordinal of the pass that
+        /// produced it.
+        /// </remarks>
+        public int StartOrdinal { get; internal set; }
+
+        /// <summary>
+        /// Gets a list of boxes related with the linebox.
         /// To know the words of the box inside this linebox, use the <see cref="WordsOf"/> method.
         /// </summary>
         public List<CssBox> RelatedBoxes { get; }
@@ -72,6 +85,23 @@ namespace PeachPDF.Html.Core.Dom
                     height = Math.Max(height, rect.Value.Height);
                 }
                 return height;
+            }
+        }
+
+        /// <summary>
+        /// Get the top of this box line (the min top of all the words), which is what says which
+        /// fragmentainer the line is in. Zero for a line that has not been given rectangles yet.
+        /// </summary>
+        public double LineTop
+        {
+            get
+            {
+                double? top = null;
+                foreach (var rect in Rectangles)
+                {
+                    top = top is null ? rect.Value.Top : Math.Min(top.Value, rect.Value.Top);
+                }
+                return top ?? 0;
             }
         }
 

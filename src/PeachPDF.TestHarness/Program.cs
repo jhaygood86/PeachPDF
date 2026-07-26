@@ -1668,6 +1668,47 @@ await SaveShowcaseAsync("paged_media_monolithic_content", "Paged Media", "Monoli
     + "grid row that ask not to be broken move as a unit for the same reason.",
     monolithicHtml, new PdfGenerateConfig { PageSize = PageSize.A5 });
 
+// ── orphans / widows showcase ──────────────────────────────────────────────
+static string OrphansWidowsSection(string title, string intro, string paragraphStyle, int filler) =>
+    $"<h1 style=\"break-before:page\">{title}</h1><p class=\"intro\">{intro}</p>"
+    + string.Concat(Enumerable.Range(1, filler).Select(i =>
+        $"<p class=\"filler\">Filler line {i} &mdash; body copy that positions the marked paragraph so its "
+        + "own lines meet the page boundary.</p>"))
+    + $"<p class=\"marked\" style=\"{paragraphStyle}\">"
+    + string.Concat(Enumerable.Range(1, 9).Select(i =>
+        $"Sentence {i} of the marked paragraph, long enough to occupy a line of its own at this measure. "))
+    + "</p>";
+
+var orphansWidowsHtml = """
+    <!DOCTYPE html>
+    <html><head><style>
+    @page { size: a5; margin: 14mm }
+    body { font: 9pt Helvetica, Arial, sans-serif; margin: 0; color: #1f2937 }
+    h1 { font-size: 12pt; margin: 0 0 0.4em }
+    p { margin: 0 0 0.6em; line-height: 1.6 }
+    p.intro { color: #6b7280; font-size: 8pt; margin-bottom: 1em }
+    p.filler { color: #9ca3af }
+    p.marked { background: #eff6ff; border-left: 2pt solid #2563eb; padding: 2pt 6pt; color: #1e3a8a }
+    </style></head><body>
+    """
+    + OrphansWidowsSection(
+        "Without a minimum",
+        "The marked paragraph below declares <code>orphans: 1; widows: 1</code>, so any split of it is "
+        + "acceptable and the page boundary falls exactly where ordinary flow puts it.",
+        "orphans:1; widows:1", filler: 13)
+    + OrphansWidowsSection(
+        "widows: four lines must follow",
+        "The same paragraph in the same place, now declaring <code>orphans: 2; widows: 4</code>, so at "
+        + "least four of its own lines have to fall after the break it is split at.",
+        "orphans:2; widows:4", filler: 13)
+    + "</body></html>";
+
+await SaveShowcaseAsync("paged_media_orphans_widows", "Paged Media", "Orphans and Widows",
+    "CSS Fragmentation §5.4's line minimums either side of a page break. widows moves the minimum number "
+    + "of lines across the break rather than relocating the whole paragraph; orphans is decided at the "
+    + "break point, so too few lines before it makes the break fall before the paragraph instead.",
+    orphansWidowsHtml, new PdfGenerateConfig { PageSize = PageSize.A5 });
+
 // ── Margin box explicit sizing showcase ────────────────────────────────────
 var marginBoxSizingHtml = """
     <!DOCTYPE html>

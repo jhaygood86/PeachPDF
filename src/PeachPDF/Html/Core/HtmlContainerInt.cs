@@ -838,6 +838,17 @@ namespace PeachPDF.Html.Core
                     await Root.PerformLayout(g);
                     FragmentainerPasses++;
 
+                    // §5.4's widows is the one decision that reaches backwards: the pass that has just
+                    // ended kept lines a later fragment needs, and it has to be run again with fewer.
+                    // Nothing it produced is kept, so this is done before the pass is frozen.
+                    if (_widowsRewind is { } rewind && TryRewindForWidows(rewind, ref token, emitter))
+                    {
+                        _widowsRewind = null;
+                        continue;
+                    }
+
+                    _widowsRewind = null;
+
                     var next = context.OutgoingToken;
 
                     if (next is null)
@@ -878,6 +889,101 @@ namespace PeachPDF.Html.Core
             finally
             {
                 CurrentFragmentainer = null;
+            }
+        }
+
+        /// <summary>
+        /// A box's request to re-run the pass that produced its previous fragment, keeping at most
+        /// <c>Budget</c> line boxes there so its last fragment reaches its <c>widows</c> minimum.
+        /// </summary>
+        private (CssBox Box, int Budget)? _widowsRewind;
+
+        /// <summary>
+        /// Records <paramref name="box"/>'s request to re-run the pass it is completing, with its previous
+        /// fragment cut down to <paramref name="budget"/> line boxes
+        /// (<see href="https://www.w3.org/TR/css-break-3/#widows-orphans">§5.4</see>). Returns whether the
+        /// request was taken.
+        /// </summary>
+        /// <remarks>
+        /// One request per pass. Two boxes cannot both be rewound at once — the second's own fragment would
+        /// be rebuilt by the first's rewind anyway, and it asks again on the pass that follows.
+        /// </remarks>
+        internal bool RequestWidowsRewind(CssBox box, int budget)
+        {
+            if (_widowsRewind is not null) return false;
+
+            _widowsRewind = (box, budget);
+            return true;
+        }
+
+        /// <summary>
+        /// Re-enters the pass that has just ended with <paramref name="rewind"/>'s box cut down to its line
+        /// budget, so the fragment after the break gets the lines <c>widows</c> asks for.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The pass is re-run rather than the whole document: in block flow the box whose inline flow
+        /// stopped is the <b>last</b> content in the fragmentainer it stopped in, so keeping fewer lines
+        /// there shortens that fragmentainer's tail and moves nothing else in it. Everything that follows
+        /// the box does move, and that is exactly what re-running this pass onwards lays out again.
+        /// </para>
+        /// <para>
+        /// Three things have to be undone, which is #374's lesson in a different shape. The box's own line
+        /// boxes past the budget go (<see cref="CssBox.DiscardLineBoxesFrom"/>, which also un-places their
+        /// words, since the retry need not reach every one of them again). The fragment the earlier pass
+        /// froze goes, because it is about to describe fewer lines than it did. And the resumption record
+        /// the pass was entered with is rebuilt to name the budget, since that record is the only thing that
+        /// says where the flow picks up.
+        /// </para>
+        /// <para>
+        /// Declined where the record does not name the box — the box is only rewindable when it is the one
+        /// the previous pass stopped at, which is what "its previous fragment is the pass being re-run"
+        /// means. The caller then falls back to the whole-box push.
+        /// </para>
+        /// </remarks>
+        private bool TryRewindForWidows(
+            (CssBox Box, int Budget) rewind, ref BreakToken? token, FragmentEmitter emitter)
+        {
+            if (token is null || !TryRebuildForBudget(token, rewind.Box, rewind.Budget, out var rebuilt))
+                return false;
+
+            emitter.InvalidateFrom(PageIndexOf(rewind.Box.LineBoxes[0].LineTop));
+            rewind.Box.DiscardLineBoxesFrom(rewind.Budget);
+
+            token = rebuilt;
+            return true;
+        }
+
+        /// <summary>
+        /// The same resumption chain with the inline link for <paramref name="box"/> resuming at line
+        /// <paramref name="budget"/> instead of wherever it did, or false when the chain does not end in
+        /// that box's inline flow.
+        /// </summary>
+        private static bool TryRebuildForBudget(
+            BreakToken token, CssBox box, int budget, out BreakToken rebuilt)
+        {
+            rebuilt = token;
+
+            switch (token)
+            {
+                case InlineBreakToken inline when ReferenceEquals(inline.Box, box):
+                    rebuilt = inline with
+                    {
+                        // The walk position of the first line the budget gives up, which is where the flow
+                        // is to pick up instead.
+                        ResumeWordIndex = box.LineBoxes[budget].StartOrdinal,
+                        CompletedLineCount = budget,
+                        LinesKeptHere = budget - (inline.CompletedLineCount - inline.LinesKeptHere)
+                    };
+                    return true;
+
+                case BlockBreakToken { ChildToken: { } child } block
+                    when TryRebuildForBudget(child, box, budget, out var rebuiltChild):
+                    rebuilt = block with { ChildToken = rebuiltChild };
+                    return true;
+
+                default:
+                    return false;
             }
         }
 
