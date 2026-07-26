@@ -62,6 +62,16 @@ dotnet test --collect:"XPlat Code Coverage" --settings PeachPDF.Tests/coverlet.r
 
 Before considering any non-trivial code change complete, run the command above and check diff coverage on the lines you changed. If new/changed code falls short of the 90% diff-coverage threshold CI enforces, add tests to close the gap before finishing — don't leave it for CI to catch.
 
+### Build warnings
+
+**Before opening a pull request, the whole solution must build with zero warnings.** Not just the projects you touched — a warning anywhere is a warning the next change has to read past, and the ones that accumulate here (`CS1573` missing `<param>` tags, `CS8602` possible null dereference) are exactly the ones that make a real defect invisible in the noise.
+
+```
+dotnet build PeachPDF.slnx -t:Rebuild
+```
+
+Rebuild rather than a plain `build`: an incremental build skips up-to-date projects and reports their warnings not at all, so a clean-looking `dotnet build` can hide every warning in the solution. Fix what you find, including warnings you did not introduce — the doc comment or null annotation is a two-line fix, and leaving it is what got it there.
+
 Avoid writing tests against `PeachPDF.Fonts.FontFactory` (and OpenType neighbors) without care — it caches resolved fonts in `static readonly Dictionary` fields shared process-wide, and xUnit's parallel test-class execution makes new tests here a real order-dependent-flakiness risk against the rest of the suite.
 
 ## Post-change review pass

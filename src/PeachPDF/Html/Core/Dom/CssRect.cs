@@ -327,7 +327,9 @@ namespace PeachPDF.Html.Core.Dom
 
         public bool BreakPage()
         {
-            var container = OwnerBox.HtmlContainer;
+            // Non-null for the same reason WouldStraddleFragmentainer's own read of it is: a word is only
+            // ever asked this during layout, which a box without a container never reaches.
+            var container = OwnerBox.HtmlContainer!;
 
             if (!WouldStraddleFragmentainer())
                 return false;
