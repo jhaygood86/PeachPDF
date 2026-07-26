@@ -440,6 +440,65 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(2 * fragments, CountBlueEdges(container, vertical: false));
         }
 
+        /// <summary>
+        /// The rest of the decoration follows the same rule as the border: <c>slice</c> renders the box
+        /// unbroken and cuts it, so a gradient layer runs continuously through every fragment rather than
+        /// restarting in each — <c>clone</c>'s behaviour under the <c>slice</c> value. On the page grid this
+        /// already held, because a page-split box's fragments each report the whole box; in a column each
+        /// reports only its own extent, so the unbroken box has to be put back together from them.
+        /// </summary>
+        [Fact]
+        public async Task Slice_BlockSplitAtAColumnBoundary_ResolvesItsGradientAgainstTheWholeUnbrokenBox()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                SplitAcrossColumns("background:linear-gradient(to bottom,#f00,#00f)"), pageHeight: 200, margin: 0);
+
+            var paragraph = LayoutHarness.FindById(root, "long")!;
+            var fragments = OrderedFragmentsOf(container, paragraph);
+
+            Assert.True(fragments.Count > 2, $"expected the paragraph to split across columns, got {fragments.Count}");
+
+            var total = fragments.Sum(f => f.Lines[0].Rect.Height);
+            var preceding = 0d;
+
+            foreach (var (fragment, fill, clips) in GradientLayerPerFragment(container, fragments))
+            {
+                // One layer per fragment, each as tall as the whole box and lifted by the fragments before
+                // it, so the same point of the gradient falls at the same point of the box everywhere.
+                Assert.Equal(total, fill.Height, 1);
+                Assert.Equal(fragment.Lines[0].Rect.Y - preceding, fill.Y, 1);
+
+                // And it is cut to this fragment, which is what makes it a slice rather than a repaint.
+                Assert.Contains(clips,
+                    c => Approximately(c.Top, fragment.Lines[0].Rect.Top)
+                         && Approximately(c.Bottom, fragment.Lines[0].Rect.Bottom));
+
+                preceding += fragment.Lines[0].Rect.Height;
+            }
+        }
+
+        /// <summary>
+        /// <c>clone</c> at the same boundary is the contrast: each fragment is wrapped independently, so
+        /// the layer is measured against the fragment and starts again in each one.
+        /// </summary>
+        [Fact]
+        public async Task Clone_BlockSplitAtAColumnBoundary_RestartsItsGradientInEveryFragment()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                SplitAcrossColumns("background:linear-gradient(to bottom,#f00,#00f);box-decoration-break:clone"),
+                pageHeight: 200, margin: 0);
+
+            var paragraph = LayoutHarness.FindById(root, "long")!;
+            var fragments = OrderedFragmentsOf(container, paragraph);
+
+            Assert.True(fragments.Count > 2, $"expected the paragraph to split across columns, got {fragments.Count}");
+
+            foreach (var (fragment, fill, _) in GradientLayerPerFragment(container, fragments))
+            {
+                Assert.Equal(fragment.Lines[0].Rect.Height, fill.Height, 1);
+            }
+        }
+
         // ── the equivalence short circuit ─────────────────────────────────────────────────────────────
 
         [Fact]
@@ -502,6 +561,47 @@ namespace PeachPDF.Tests.Integration
             $"<p id='long' style='margin:0;{style}'>" +
             string.Join(" ", Enumerable.Range(0, 300).Select(i => $"word{i}")) +
             "</p></div>");
+
+        /// <summary>
+        /// Every fragment <paramref name="box"/> produced, in fill order: page first, then column within it.
+        /// </summary>
+        private static List<BoxFragment> OrderedFragmentsOf(PeachPDF.Html.Core.HtmlContainerInt container, CssBox box) =>
+        [
+            .. container.FragmentTree!.Fragmentainers
+                .SelectMany(f => Flatten(f.Root))
+                .Where(f => ReferenceEquals(f.Box, box) && f.Lines.Count > 0)
+                .OrderBy(f => f.FragmentainerIndex).ThenBy(f => f.Rect.X)
+        ];
+
+        /// <summary>
+        /// Pairs each of <paramref name="fragments"/> with the background layer painted for it, and with
+        /// the clips in force on its page.
+        /// </summary>
+        /// <remarks>
+        /// Painted page by page, as production does, because two column fragments of one box share a page —
+        /// which is also why the layer is matched to its fragment by inline position rather than by asking
+        /// the paint harness for "the box's fragment on this page".
+        /// </remarks>
+        private static IEnumerable<(BoxFragment Fragment, RRect Fill, List<RRect> Clips)> GradientLayerPerFragment(
+            PeachPDF.Html.Core.HtmlContainerInt container, List<BoxFragment> fragments)
+        {
+            foreach (var page in fragments.Select(f => f.FragmentainerIndex).Distinct())
+            {
+                var g = new TestRecordingGraphics();
+                FragmentPaintHarness.PaintPage(container, g, page);
+
+                var clips = g.Log.OfType<TestRecordingGraphics.PushClipCall>().Select(c => c.Rect).ToList();
+                var fills = GradientFills(g).OrderBy(f => f.X).ToList();
+                var onThisPage = fragments.Where(f => f.FragmentainerIndex == page).ToList();
+
+                Assert.Equal(onThisPage.Count, fills.Count);
+
+                for (var i = 0; i < onThisPage.Count; i++)
+                {
+                    yield return (onThisPage[i], fills[i], clips);
+                }
+            }
+        }
 
         /// <summary>How many fragments <paramref name="box"/> produced across the whole document.</summary>
         private static int FragmentCountOf(PeachPDF.Html.Core.HtmlContainerInt container, CssBox box) =>

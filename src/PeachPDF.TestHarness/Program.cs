@@ -3308,6 +3308,22 @@ static string AvoidColumnPanel(string label, string breakInside) =>
     "it once the entry above has taken its share of the height." +
     "</div></div></div>";
 
+// The same paragraph in the same box twice, differing only in box-decoration-break. A vertical
+// gradient and a large border-radius are the two decorations defined over the whole box, so where
+// each one starts and where it rounds is the whole of the difference between the two halves.
+static string DecorationBreakPanel(string label, string decorationBreak) =>
+    "<div class=\"frame\"><div class=\"label\">" + label + "</div>" +
+    // An entry above the panel, as in section 8: it takes part of the first column's balanced share, so
+    // the panel below it cannot finish there and splits at the boundary.
+    "<div class=\"mc\" style=\"columns:2;column-gap:20px\">" +
+    McEntries(1, "lead") +
+    "<p style=\"box-decoration-break:" + decorationBreak + ";" +
+    "background:linear-gradient(to bottom,#2980b9,#ecf0f1);border:1pt solid #1b4f72;" +
+    "border-radius:10pt;padding:4pt;margin:0;text-align:justify\">" +
+    string.Join(" ", Enumerable.Range(1, 16).Select(i =>
+        $"clause&nbsp;{i} of a paragraph long enough to leave the column it starts in,")) +
+    " and to finish in the next one.</p></div></div>";
+
 const string MulticolCss = """
     <style>
     @page { size: a4; margin: 15mm }
@@ -3383,6 +3399,15 @@ var multicolHtml = "<!DOCTYPE html><html><head>" + MulticolCss + "</head><body>"
         "</div></div>" +
         AvoidColumnPanel("break-inside: auto &mdash; the panel splits at the column boundary, its border and background cut in two", "") +
         AvoidColumnPanel("break-inside: avoid-column &mdash; the same panel, moved whole to the next column", "break-inside:avoid-column;")) +
+
+    // box-decoration-break at a column boundary, for the decorations that are defined over the *whole*
+    // box rather than edge by edge. `slice` renders the box with no breaks present and cuts it
+    // afterwards, so the gradient runs once from the top of the first fragment to the bottom of the last
+    // and the corners round only at the box's true ends; `clone` wraps each fragment, so both restart in
+    // every column. The two panels hold the same text in the same box and differ only in the value.
+    McSection("9 &mdash; whole-box decorations at a column break",
+        DecorationBreakPanel("box-decoration-break: slice (initial) &mdash; one gradient and one pair of rounded ends across both fragments", "slice") +
+        DecorationBreakPanel("box-decoration-break: clone &mdash; the same panel, each fragment decorated in full", "clone")) +
 
     "</body></html>";
 
