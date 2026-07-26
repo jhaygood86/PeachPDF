@@ -426,8 +426,19 @@ FodyWeavers.xsd
 # regenerates it on every run); not source
 /src/PeachPDF.TestHarness/showcases.json
 
+# Upstream TTFs downloaded by assets/fonts/convert_liberation_woff2.py; only the converted
+# .woff2 files it produces are source
+/assets/fonts/.liberation-src/
+
+# The demo app's host page is source, despite the global *.html ignore above
+!/src/PeachPDF.Demo.BlazorWasm/wwwroot/index.html
+
 # Jekyll layouts and the landing page are source, despite the global *.html ignore above
 !/docs/_layouts/*.html
 !/docs/index.html
 !/docs/showcase.html
 !/docs/why-peachpdf.html
+
+# Staged into the demo's wwwroot by its StageSharedFontAssets target; the source of truth is
+# assets/fonts/
+/src/PeachPDF.Demo.BlazorWasm/wwwroot/fonts/

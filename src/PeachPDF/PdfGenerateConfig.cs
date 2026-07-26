@@ -122,6 +122,32 @@ namespace PeachPDF
         public RNetworkLoader? NetworkLoader { get; set; } = null;
 
         /// <summary>
+        /// Whether the document may reach the local file system. Defaults to <c>true</c>, preserving the
+        /// historical behavior in which <c>file:</c> references are read from disk and relative references
+        /// resolve against the current working directory.
+        /// <para>
+        /// Set to <c>false</c> when rendering untrusted input, or in a host with no meaningful file system
+        /// (a browser/WebAssembly app). Two things then change: every <c>file:</c> resource request resolves
+        /// to "not found", and a <see cref="NetworkLoader"/> with no <see cref="RNetworkLoader.BaseUri"/> of
+        /// its own (<see cref="DataUriNetworkLoader"/> and <see cref="MimeKitNetworkLoader"/> are both in
+        /// this category) no longer inherits the working directory as a base — so a relative reference goes
+        /// unresolved rather than being turned into a <c>file:</c> URI and read from disk.
+        /// </para>
+        /// <para>
+        /// This covers every resource the document asks for — <c>&lt;img&gt;</c>,
+        /// <c>&lt;link rel="stylesheet"&gt;</c>, CSS <c>url()</c>, SVG <c>&lt;image href&gt;</c>, and
+        /// <c>@font-face src: url()</c> — because they all resolve through one place. A deny wins even over
+        /// an explicitly configured <see cref="FileUriNetworkLoader"/>.
+        /// </para>
+        /// <para>
+        /// It does not restrict the root document, which is an input rather than a fetch: an HTML string
+        /// passed to <c>GeneratePdf</c>, or a file a <see cref="FileUriNetworkLoader"/> was explicitly
+        /// constructed with, is still read.
+        /// </para>
+        /// </summary>
+        public bool AllowLocalFileAccess { get; set; } = true;
+
+        /// <summary>
         /// A fallback language (e.g. <c>"en-US"</c>) used for language-dependent rendering — currently
         /// <c>hyphens: auto</c> automatic hyphenation — only when the document itself declares none via
         /// <c>&lt;html lang="..."&gt;</c>. A document's own <c>lang</c> attribute always takes priority

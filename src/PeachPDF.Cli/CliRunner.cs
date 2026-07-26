@@ -91,6 +91,9 @@ internal static class CliRunner
             EnableTaggedPdf = options.TaggedPdf,
             Media = options.Media ?? "print",
             IgnoreAuthorStyleSheets = options.NoAuthorStyle,
+            // Set on the config rather than on the loader, so it holds for every input kind - including
+            // MHTML, which is rendered through a bare MimeKitNetworkLoader that never saw this option.
+            AllowLocalFileAccess = !options.NoLocalFiles,
         };
 
         if (options.PageSize is { } pageSize)
@@ -176,7 +179,7 @@ internal static class CliRunner
             _ => throw new InvalidOperationException($"unsupported input kind {input.Kind}"),
         };
 
-        var loader = new CliNetworkLoader(baseUri, options.NoNetwork ? null : httpClient, !options.NoLocalFiles);
+        var loader = new CliNetworkLoader(baseUri, options.NoNetwork ? null : httpClient);
         return (html, loader);
     }
 

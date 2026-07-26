@@ -201,6 +201,7 @@ namespace PeachPDF
             document.PdfDocument.Options.CompressContentStreams = config.CompressContentStreams;
 
             _pdfSharpAdapter.NetworkLoader = config.NetworkLoader ?? new DataUriNetworkLoader();
+            _pdfSharpAdapter.AllowLocalFileAccess = config.AllowLocalFileAccess;
             _pdfSharpAdapter.PixelsPerPoint = config.PixelsPerInch / 72d;
 
             html ??= await _pdfSharpAdapter.NetworkLoader.GetPrimaryContents();

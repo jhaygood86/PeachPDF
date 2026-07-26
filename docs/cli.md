@@ -81,7 +81,7 @@ the default media type is **print**.
 | `-l`, `--input-list=FILE` | Read a newline-separated list of inputs from `FILE`. |
 | `--baseurl=URL` | Base URL for resolving relative resource references. |
 | `--no-network` | Disable network (HTTP) resource access. |
-| `--no-local-files` | Disable local-file resource access. |
+| `--no-local-files` | Disable local-file resource access, for every input kind — HTML, MHTML and URL alike. A `file:` reference in the document (image, stylesheet, `@font-face`, SVG `<image>`) resolves to nothing, and a relative reference no longer falls back to the working directory. The input document you name on the command line is still read. |
 
 ### CSS
 

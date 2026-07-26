@@ -60,7 +60,7 @@ public abstract class RNetworkLoader
 |---|---|
 | `GetPrimaryContents()` | Returns the root HTML string. Called once at the start of the pipeline when `null` is passed to `PdfGenerator.GeneratePdf`. |
 | `GetResourceStream(RUri)` | Returns a `RNetworkResponse` (stream + HTTP-style headers) for any external resource URI. Called for stylesheets and images. |
-| `BaseUri` | The document's base URL. Used to resolve relative URIs in `href`, `src`, and `url()` values. If `null`, relative references resolve against the current working directory as a `file:` URI (the default working-directory base is supplied by `PdfSharpAdapter`). |
+| `BaseUri` | The document's base URL. Used to resolve relative URIs in `href`, `src`, and `url()` values. If `null`, relative references resolve against the current working directory as a `file:` URI (the default working-directory base is supplied by `PdfSharpAdapter`) — unless [local file access is disabled](usage-examples.md#disabling-local-file-access), in which case there is no base to resolve against and the reference goes unresolved. |
 
 `RNetworkResponse` is a simple record: `(Stream? ResourceStream, Dictionary<string, string[]>? ResponseHeaders)`. The headers are inspected by `StylesheetLoadHandler` to validate the `Content-Type` is `text/css` before accepting the body as a stylesheet.
 
@@ -72,7 +72,7 @@ public abstract class RNetworkLoader
 
 **Stylesheets and images** — `StylesheetLoadHandler.LoadStylesheet` and `ImageLoadHandler.SetImageFromPath` both resolve their `href`/`src` to an absolute URI against the document base (a `<base href>` element, else `BaseUri`, else the working-directory `file:` default) via the shared `CommonUtils.ResolveAgainstDocumentBase`, then call `adapter.GetResourceStream(uri)`. There is a single resolution path — local files, `data:` URIs, and remote resources all flow through `GetResourceStream` uniformly, with no separate file-system branch. Stylesheet responses are only accepted when the `Content-Type` is `text/css`; a resolved SVG image is detected from its `Content-Type: image/svg+xml` (or `.svg` extension).
 
-**`data:` and `file:` URIs** — regardless of which `RNetworkLoader` is configured, `PdfSharpAdapter.GetResourceStream` handles `data:` URIs internally via `DataUriNetworkLoader` and `file:` URIs internally via `FileUriNetworkLoader`. This ensures inline base64 resources and local files always work without the configured loader needing to implement either scheme.
+**`data:` and `file:` URIs** — regardless of which `RNetworkLoader` is configured, `PdfSharpAdapter.GetResourceStream` handles `data:` URIs internally via `DataUriNetworkLoader` and `file:` URIs internally via `FileUriNetworkLoader`. This ensures inline base64 resources and local files always work without the configured loader needing to implement either scheme. Setting [`AllowLocalFileAccess`](usage-examples.md#disabling-local-file-access) to `false` removes the `file:` half of that: every `file:` request then resolves to "not found", and the working-directory base above is withdrawn, so a document cannot reach the file system by either route.
 
 ### Built-in implementations
 

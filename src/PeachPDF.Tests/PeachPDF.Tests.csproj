@@ -10,44 +10,47 @@
 
   <ItemGroup>
     <None Remove="CSS\bootstrap.css" />
-    <None Remove="Inter-Medium.woff2" />
-    <None Remove="NotoEmoji-Regular.ttf" />
-    <None Remove="SourceCodePro-Regular.otf" />
-    <None Remove="SourceSans3-Regular.ttf" />
   </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="CSS\bootstrap.css" />
   </ItemGroup>
 
+  <!--
+    Font assets live in the repository-root assets/fonts/ directory, shared with
+    PeachPDF.TestHarness and PeachPDF.Demo.BlazorWasm so the same file isn't checked in several
+    times. Each is <Link>ed to the output root, so BundledFonts' AppContext.BaseDirectory lookups
+    are unchanged. Listed one by one rather than globbed, so this project still declares exactly
+    which fonts it needs and an unrelated asset can't silently bloat the test output.
+  -->
   <ItemGroup>
-    <None Include="Inter-Medium.woff2">
+    <None Include="..\..\assets\fonts\Inter-Medium.woff2" Link="Inter-Medium.woff2">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="NotoEmoji-Regular.ttf">
+    <None Include="..\..\assets\fonts\NotoEmoji-Regular.ttf" Link="NotoEmoji-Regular.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="SourceCodePro-Regular.otf">
+    <None Include="..\..\assets\fonts\SourceCodePro-Regular.otf" Link="SourceCodePro-Regular.otf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="SourceSans3-Regular.ttf">
+    <None Include="..\..\assets\fonts\SourceSans3-Regular.ttf" Link="SourceSans3-Regular.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="TestSupport\Fonts\ColorTestV0.ttf">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>ColorTestV0.ttf</Link>
-    </None>
-    <None Include="TestSupport\Fonts\ColorTestV1.ttf">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>ColorTestV1.ttf</Link>
-    </None>
-    <None Include="TestSupport\Fonts\NablaSubset.ttf">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>NablaSubset.ttf</Link>
-    </None>
-    <None Include="NotoColorEmoji-Subset.ttf">
+    <None Include="..\..\assets\fonts\ColorTestV0.ttf" Link="ColorTestV0.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\..\assets\fonts\ColorTestV1.ttf" Link="ColorTestV1.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\NablaSubset.ttf" Link="NablaSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\NotoColorEmoji-Subset.ttf" Link="NotoColorEmoji-Subset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
     <None Include="TestSupport\acid2.html">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

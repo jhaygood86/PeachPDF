@@ -1,0 +1,263 @@
+@page "/"
+@using PeachPDF
+@using PeachPDF.Demo.BlazorWasm.Services
+@inject PdfRenderService Renderer
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<PageTitle>PeachPDF — HTML to PDF in your browser</PageTitle>
+
+<h1>HTML → PDF, entirely in your browser</h1>
+
+<p class="lede">
+    Drop in an HTML file, an MHTML archive, or a ZIP of a site folder. PeachPDF renders it to a PDF here,
+    on this page — nothing is uploaded anywhere, and the document you render cannot reach the network or
+    your file system.
+</p>
+
+<section class="panel">
+    <InputFile OnChange="OnFileSelectedAsync" accept=".html,.htm,.xhtml,.mhtml,.mht,.zip" />
+
+    @if (_upload is not null)
+    {
+        <dl class="upload-summary">
+            <dt>File</dt>
+            <dd>@_upload.FileName <span class="muted">(@FormatSize(_upload.Bytes.Length))</span></dd>
+            <dt>Treat as</dt>
+            <dd>
+                <select @bind="_kind" disabled="@_busy">
+                    <option value="@UploadKind.Html">HTML document</option>
+                    <option value="@UploadKind.Mhtml">MHTML archive</option>
+                    <option value="@UploadKind.Zip">ZIP archive</option>
+                </select>
+            </dd>
+        </dl>
+
+        <div class="options">
+            <label>
+                Page size
+                <select @bind="_pageSize" disabled="@_busy">
+                    <option value="@PageSize.Letter">Letter</option>
+                    <option value="@PageSize.A4">A4</option>
+                    <option value="@PageSize.Legal">Legal</option>
+                    <option value="@PageSize.A3">A3</option>
+                    <option value="@PageSize.A5">A5</option>
+                </select>
+            </label>
+            <label>
+                Orientation
+                <select @bind="_orientation" disabled="@_busy">
+                    <option value="@PageOrientation.Portrait">Portrait</option>
+                    <option value="@PageOrientation.Landscape">Landscape</option>
+                </select>
+            </label>
+        </div>
+
+        <button class="primary" @onclick="GenerateAsync" disabled="@_busy">
+            @(_busy ? "Working…" : "Generate PDF")
+        </button>
+    }
+
+    @if (_status is not null)
+    {
+        <p class="status">@_status</p>
+    }
+
+    @if (_error is not null)
+    {
+        <p class="error" role="alert">@_error</p>
+    }
+</section>
+
+@if (_previewUrl is not null)
+{
+    <section class="result">
+        <div class="result-header">
+            <h2>@_resultName</h2>
+            <button class="primary" @onclick="DownloadAsync">Download</button>
+        </div>
+        <object data="@_previewUrl" type="application/pdf" title="Rendered PDF">
+            <p>Your browser will not display the PDF inline. Use the download button above.</p>
+        </object>
+    </section>
+}
+
+<section class="notes">
+    <h2>What to expect</h2>
+    <ul>
+        <li>
+            <strong>The tab freezes while rendering.</strong> WebAssembly in the browser is single-threaded,
+            so a long document will make this page unresponsive for a few seconds. It is working, not stuck.
+        </li>
+        <li>
+            <strong>Fonts are Liberation Sans, Serif and Mono</strong> — metrically compatible with Arial,
+            Times New Roman and Courier New, so documents laid out for those keep their measure. A browser
+            exposes no system fonts to WebAssembly, so these are the fonts that exist here.
+        </li>
+        <li>
+            <strong>A ZIP is opened at</strong> <code>index.html</code>, <code>index.htm</code>,
+            <code>default.html</code> or <code>default.htm</code> — at the archive root, or inside a single
+            wrapper folder.
+        </li>
+        <li>
+            <strong>Nothing external loads.</strong> An HTML file's images must be <code>data:</code> URIs;
+            an MHTML or ZIP carries its own. References to the web or to local files resolve to nothing.
+        </li>
+        <li>WebP images are not supported by the renderer's image decoder.</li>
+    </ul>
+</section>
+
+@code {
+    // The browser's own stream cap is 512 KB, which any real archive exceeds immediately.
+    private const long MaxFileSize = 64L * 1024 * 1024;
+
+    private UploadedDocument? _upload;
+    private UploadKind _kind = UploadKind.Html;
+    private PageSize _pageSize = PageSize.Letter;
+    private PageOrientation _orientation = PageOrientation.Portrait;
+
+    private bool _busy;
+    private string? _status;
+    private string? _error;
+
+    private IJSObjectReference? _module;
+    private string? _previewUrl;
+    private string? _resultName;
+
+    private async Task OnFileSelectedAsync(InputFileChangeEventArgs e)
+    {
+        _error = null;
+        _status = null;
+        await ClearPreviewAsync();
+
+        try
+        {
+            var file = e.File;
+
+            // The browser hands back a forward-only, async-only stream, while both the ZIP reader and the
+            // MHTML parser want to seek - so buffer the whole upload first.
+            await using var source = file.OpenReadStream(MaxFileSize);
+            using var buffer = new MemoryStream();
+            await source.CopyToAsync(buffer);
+
+            var bytes = buffer.ToArray();
+            _kind = UploadSniffer.Detect(file.Name, bytes);
+            _upload = new UploadedDocument(_kind, file.Name, bytes);
+        }
+        catch (IOException ex)
+        {
+            _upload = null;
+            _error = $"Could not read that file: {ex.Message}";
+        }
+    }
+
+    private async Task GenerateAsync()
+    {
+        if (_upload is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        _status = "Starting…";
+        await ClearPreviewAsync();
+
+        // Let the browser paint the busy state before the render takes the thread. Task.Yield() alone
+        // queues a microtask, which can run before the browser gets a chance to repaint.
+        StateHasChanged();
+        await Task.Delay(1);
+
+        try
+        {
+            var document = _upload with { Kind = _kind };
+
+            var pdf = await Renderer.RenderAsync(document, _pageSize, _orientation, async message =>
+            {
+                _status = message;
+                StateHasChanged();
+
+                // Task.Yield rather than Task.Delay here: this runs once per font face, and a browser
+                // throttles timers hard in a backgrounded tab - a delay per face would turn font
+                // registration into a visible stall for anyone who switched away mid-render.
+                await Task.Yield();
+            });
+
+            _resultName = Path.GetFileNameWithoutExtension(_upload.FileName) + ".pdf";
+            _previewUrl = await CreateObjectUrlAsync(pdf);
+            _status = $"Done — {FormatSize(pdf.Length)}.";
+        }
+        catch (Exception ex)
+        {
+            _status = null;
+            _error = $"{ex.GetType().Name}: {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task<string> CreateObjectUrlAsync(byte[] pdf)
+    {
+        var module = await GetModuleAsync();
+
+        // Streamed rather than base64-encoded, which would inflate the payload by about a third.
+        using var stream = new MemoryStream(pdf, writable: false);
+        using var reference = new DotNetStreamReference(stream, leaveOpen: true);
+
+        return await module.InvokeAsync<string>("createPdfObjectUrl", reference);
+    }
+
+    private async Task DownloadAsync()
+    {
+        if (_previewUrl is null)
+        {
+            return;
+        }
+
+        var module = await GetModuleAsync();
+        await module.InvokeVoidAsync("triggerDownload", _previewUrl, _resultName);
+    }
+
+    private async Task<IJSObjectReference> GetModuleAsync() =>
+        _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/pdfDownload.js");
+
+    private async Task ClearPreviewAsync()
+    {
+        if (_previewUrl is null)
+        {
+            return;
+        }
+
+        var url = _previewUrl;
+        _previewUrl = null;
+
+        // Blob URLs are held by the page until explicitly released; a render-happy visitor would otherwise
+        // accumulate every PDF they had produced.
+        var module = await GetModuleAsync();
+        await module.InvokeVoidAsync("revokeObjectUrl", url);
+    }
+
+    private static string FormatSize(long bytes) =>
+        bytes >= 1024 * 1024
+            ? $"{bytes / 1024d / 1024d:0.#} MB"
+            : $"{Math.Max(1, bytes / 1024)} KB";
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await ClearPreviewAsync();
+
+            if (_module is not null)
+            {
+                await _module.DisposeAsync();
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // The page is going away; there is nothing left to release.
+        }
+    }
+}

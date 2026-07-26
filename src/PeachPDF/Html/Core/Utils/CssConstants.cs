@@ -290,19 +290,51 @@ namespace PeachPDF.Html.Core.Utils
         ];
 
         /// <summary>
+        /// Common metrically-compatible Arial substitutes for a browser/WebAssembly host, in
+        /// preference order. Such a host has no discoverable system fonts at all — the
+        /// application must register its own — so in practice this list names what an
+        /// application is most likely to have bundled, and Liberation Sans (metrically
+        /// compatible with Arial, and OFL-licensed) is the conventional choice.
+        /// </summary>
+        /// <remarks>
+        /// Must be declared (and therefore initialized) before <see cref="DefaultFont"/> —
+        /// see the remarks on <see cref="LinuxArialAlternatives"/>.
+        /// </remarks>
+        private static readonly string[] BrowserArialAlternatives =
+        [
+            "Liberation Sans",
+            "Arimo",
+            "DejaVu Sans",
+            "Noto Sans",
+            "Helvetica",
+            "Arial",
+        ];
+
+        /// <summary>
         /// Default font used when no font-family is specified. "Segoe UI" only exists on
-        /// Windows, so macOS, Linux, and Android need a different, actually-installed
-        /// default.
+        /// Windows, so macOS, Linux, Android, and browser/WebAssembly hosts need a different,
+        /// actually-installed default.
         /// </summary>
         public static readonly string DefaultFont = DetermineDefaultFont(
-            OperatingSystem.IsWindows(), OperatingSystem.IsMacOS(), OperatingSystem.IsLinux(), OperatingSystem.IsAndroid());
+            OperatingSystem.IsWindows(), OperatingSystem.IsMacOS(), OperatingSystem.IsLinux(),
+            OperatingSystem.IsAndroid(), OperatingSystem.IsBrowser());
 
-        internal static string DetermineDefaultFont(bool isWindows, bool isMacOS, bool isLinux, bool isAndroid)
+        internal static string DetermineDefaultFont(bool isWindows, bool isMacOS, bool isLinux, bool isAndroid, bool isBrowser)
         {
             // Checked before isLinux: Android is Linux-kernel-based and isLinux may also be
             // true there depending on how it was computed, so Android must take priority.
             if (isAndroid)
                 return PickAndroidDefaultFont(GetInstalledFontFamilyNames());
+
+            // Likewise checked early: a browser/WebAssembly host matches none of the desktop
+            // platforms and would otherwise fall through to the "Segoe UI" default below - a
+            // font that cannot possibly be present, since FontResolver discovers none there.
+            // Nothing is registered yet when this runs (the application registers its fonts
+            // afterwards, via PdfGenerator.AddFontFromStream), so this names the font it is
+            // most likely to have bundled; PdfSharpAdapter.AddFont then points the default at
+            // whatever family is actually registered first if that guess turns out wrong.
+            if (isBrowser)
+                return PickBrowserDefaultFont(GetInstalledFontFamilyNames());
 
             if (isWindows)
                 return "Segoe UI";
@@ -351,6 +383,15 @@ namespace PeachPDF.Html.Core.Utils
         /// </summary>
         internal static string PickAndroidDefaultFont(IEnumerable<string> installedFontFamilyNames) =>
             PickBestAvailableFont(installedFontFamilyNames, AndroidArialAlternatives);
+
+        /// <summary>
+        /// Picks the best available default font from a list of installed font family
+        /// names for a browser/WebAssembly host. That list is normally empty there (nothing
+        /// is discoverable, and the application registers its fonts after this runs), so in
+        /// practice this returns the first preference — Liberation Sans.
+        /// </summary>
+        internal static string PickBrowserDefaultFont(IEnumerable<string> installedFontFamilyNames) =>
+            PickBestAvailableFont(installedFontFamilyNames, BrowserArialAlternatives);
 
         /// <summary>
         /// Shared picking logic for <see cref="PickLinuxDefaultFont"/> and
