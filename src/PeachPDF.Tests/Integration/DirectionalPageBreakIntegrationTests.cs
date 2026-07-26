@@ -339,10 +339,53 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal([0, 1], container.FragmentTree!.Fragmentainers.Select(f => f.SlotIndex));
         }
 
-        // A known boundary, characterized rather than left silent: the break is derived from the
-        // previous sibling, so a box that has none takes no break at all. Pre-existing for `page`.
+        // A container's first in-flow child has no predecessor for the break to be resolved against, so
+        // the target comes from where the box itself would land. The wrapper is pushed off its page's
+        // top by a preceding block, so the first child starts mid-band and the break has somewhere to go
+        // - which is what distinguishes this from the flush case below.
+        private static string FirstChildDocument(string declaration) =>
+            LayoutHarness.Wrap(
+                "<div id='first' style='height:50pt'>first</div>"
+                + $"<div id='wrap'><div id='only' style='height:50pt;{declaration}'>only</div></div>");
+
+        [Theory]
+        [InlineData("break-before: page", 1)]
+        [InlineData("page-break-before: always", 1)]
+        [InlineData("break-before: left", 1)]
+        [InlineData("break-before: verso", 1)]
+        [InlineData("break-before: right", 2)]
+        [InlineData("break-before: recto", 2)]
+        public async Task ForcedBreakBefore_OnAFirstChild_IsTaken(string declaration, int expectedSlot)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                FirstChildDocument(declaration), pageHeight: PageHeight);
+
+            var only = LayoutHarness.FindById(root, "only");
+            Assert.NotNull(only);
+            Assert.Equal(expectedSlot, SlotOf(container, only!));
+        }
+
+        // §4.4's "no empty fragmentainer for a single forced break at a boundary", in the shape a first
+        // child takes it: a box that would already begin flush at a slot top has satisfied the break, so
+        // it must stay put rather than be pushed a page further. This is what keeps a break-before on
+        // the very first thing in a document from manufacturing a blank first page.
         [Fact]
-        public async Task DirectionalBreakBefore_OnAFirstChild_IsANoOp_KnownBoundary()
+        public async Task ForcedBreakBefore_OnAFirstChildAlreadyAtASlotTop_TakesNoBreak()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap("<div id='wrap'><div id='only' style='break-before: page'>only</div></div>"),
+                pageHeight: PageHeight);
+
+            var only = LayoutHarness.FindById(root, "only");
+            Assert.NotNull(only);
+            Assert.Equal(0, SlotOf(container, only!));
+            Assert.Equal([0], container.FragmentTree!.Fragmentainers.Select(f => f.SlotIndex));
+        }
+
+        // The directional half of the same rule: slot 0 is a right page, so a first child already at its
+        // top satisfies `right` outright and no page is manufactured for it either.
+        [Fact]
+        public async Task DirectionalBreakBefore_OnAFirstChildAlreadyOnTheRequiredSide_ManufacturesNoPage()
         {
             var (root, container) = await LayoutHarness.LayoutAsync(
                 LayoutHarness.Wrap("<div id='wrap'><div id='only' style='break-before: right'>only</div></div>"),
@@ -351,7 +394,39 @@ namespace PeachPDF.Tests.Integration
             var only = LayoutHarness.FindById(root, "only");
             Assert.NotNull(only);
             Assert.Equal(0, SlotOf(container, only!));
+            Assert.Equal([0], container.FragmentTree!.Fragmentainers.Select(f => f.SlotIndex));
         }
+
+        // The slot a first child's directional break steps over is reserved and materialized, exactly as
+        // it is for the sibling case - the reservation is keyed by the box that takes the break, and a
+        // first child is no different there.
+        [Fact]
+        public async Task DirectionalBreakBefore_OnAFirstChild_MaterializesTheSteppedOverSlot()
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(
+                FirstChildDocument("break-before: recto"), pageHeight: PageHeight);
+
+            Assert.Equal([0, 1, 2], container.FragmentTree!.Fragmentainers.Select(f => f.SlotIndex));
+            Assert.Empty(WordsIn(container.FragmentTree.Fragmentainers[1].Root));
+        }
+
+        // §5.2 preserves a margin adjoining a *forced* break, and a first child's own margin is no
+        // exception - it is this box's margin collapsed with its adjoining first-child chain, which is
+        // what MarginTopCollapse(null) computes.
+        [Fact]
+        public async Task MarginAfterAFirstChildsForcedBreak_IsPreserved()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                FirstChildDocument("break-before: page; margin-top: 30pt"), pageHeight: PageHeight);
+
+            var only = LayoutHarness.FindById(root, "only");
+            Assert.NotNull(only);
+            Assert.Equal(container.PageTopOf(1) + 30, only!.Location.Y, 3);
+        }
+
+        // Another characterized boundary: inside content an engine paginates itself, this box's
+        // coordinates during layout are provisional, so the parity step (and its reservation) is not
+        // taken and the break degrades to a plain page break.
 
         // Another characterized boundary: inside content an engine paginates itself, this box's
         // coordinates during layout are provisional, so the parity step (and its reservation) is not

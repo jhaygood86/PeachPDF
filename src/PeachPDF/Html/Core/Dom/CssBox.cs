@@ -1401,7 +1401,16 @@ namespace PeachPDF.Html.Core.Dom
 
             if (_isForcedBreak)
             {
-                if (previousSiblingForBreak is not null)
+                // The break falls between this box and whatever precedes it in the flow. For a
+                // container's *first* in-flow child that is not a sibling of its own: §3.1's break point
+                // before it is the same break point as the one before its container, so the predecessor
+                // to resolve the target against is found by climbing the chain of containers this box
+                // begins. A climb that reaches the root means nothing precedes this box in the flow at
+                // all — there is nothing to break from, and taking a break anyway would manufacture a
+                // blank page in front of the first content in the document.
+                var breakAnchor = previousSiblingForBreak ?? PredecessorOfEnclosingFirstChildChain();
+
+                if (breakAnchor is not null)
                 {
                     // HtmlContainer.PageSize.Height is already margin-free (PdfGenerator.SetContent
                     // subtracts both page margins up front) - a page's real content band is the
@@ -1424,8 +1433,8 @@ namespace PeachPDF.Html.Core.Dom
                     // moves a box visually without affecting the layout of anything around it
                     // (CSS 2.1 §9.4.3), so it must not decide which slot the break lands in either.
                     var container = HtmlContainer!;
-                    var prevBottom = previousSiblingForBreak.StaticBottom;
-                    var prevTop = previousSiblingForBreak.Location.Y - previousSiblingForBreak.RelativeOffsetY;
+                    var prevBottom = breakAnchor.StaticBottom;
+                    var prevTop = breakAnchor.Location.Y - breakAnchor.RelativeOffsetY;
                     var slot = container.PageIndexOf(prevBottom - HtmlContainerInt.PageBoundaryEpsilon) + 1;
                     if (prevTop >= container.PageTopOf(slot) - HtmlContainerInt.PageBoundaryEpsilon)
                     {
@@ -1441,9 +1450,53 @@ namespace PeachPDF.Html.Core.Dom
                     // reach it take the break at all - a display:none or out-of-flow box runs this
                     // prologue but is never placed, so reserving a blank page here would manufacture
                     // one for a break that is never taken.
-                    _forcedBreakSide = BreakValues.RequiredSide(BreakBefore, previousSiblingForBreak.BreakAfter);
+                    // The side comes from this box's own break-before and its *immediate* predecessor's
+                    // break-after, never the climbed anchor's: a break-after states something about the
+                    // break point after that box, and for a first child the anchor's break point is
+                    // several levels out. RequiredSide already accepts a null second value.
+                    _forcedBreakSide = BreakValues.RequiredSide(BreakBefore, previousSiblingForBreak?.BreakAfter);
                 }
             }
+        }
+
+        /// <summary>
+        /// The nearest preceding in-flow box a forced break before this box falls after, when this box
+        /// is the first in-flow child of its container and so has no predecessor of its own. Null when
+        /// nothing at all precedes this box in the flow.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <see href="https://www.w3.org/TR/css-break-3/#break-between">§3.1</see>'s break point before a
+        /// container's first in-flow child is the <i>same</i> break point as the one before the container
+        /// — the requirement propagates outward through every box this one begins — so the predecessor to
+        /// resolve the target against is found by climbing that chain rather than invented.
+        /// </para>
+        /// <para>
+        /// Reaching the root without finding one means this box begins the flow, where a forced break has
+        /// nothing to break from. Returning null there is what stops a <c>break-before</c> on the first
+        /// element of a document — or on a heading whose <c>page</c> name merely starts the first named
+        /// page — from manufacturing a blank page in front of it, which
+        /// <see href="https://www.w3.org/TR/css-break-3/#break-between">§4.4</see> asks user agents not
+        /// to do.
+        /// </para>
+        /// <para>
+        /// Only the target is resolved this way. The break is still taken by <i>this</i> box, so the
+        /// containers it begins keep their own position and span the boundary; moving them too is
+        /// §3.1 propagation proper, which is a separate question.
+        /// </para>
+        /// </remarks>
+        private CssBox? PredecessorOfEnclosingFirstChildChain()
+        {
+            var origin = this;
+
+            while (DomUtils.GetPreviousSibling(origin, false) is null)
+            {
+                if (origin.ParentBox is not { } parent) return null;
+
+                origin = parent;
+            }
+
+            return DomUtils.GetPreviousSibling(origin, false);
         }
 
         /// <summary>
