@@ -42,6 +42,7 @@ internal sealed class ZipFileNetworkLoader : RNetworkLoader
     private readonly Dictionary<string, byte[]> _entries;
     private readonly Dictionary<string, byte[]> _entriesIgnoringCase;
     private readonly string _primaryDocumentPath;
+    private readonly string _baseUri;
 
     private ZipFileNetworkLoader(
         Dictionary<string, byte[]> entries,
@@ -51,6 +52,7 @@ internal sealed class ZipFileNetworkLoader : RNetworkLoader
         _entries = entries;
         _entriesIgnoringCase = entriesIgnoringCase;
         _primaryDocumentPath = primaryDocumentPath;
+        _baseUri = $"{SyntheticScheme}://{SyntheticHost}/{EscapePath(primaryDocumentPath)}";
     }
 
     /// <summary>
@@ -59,8 +61,20 @@ internal sealed class ZipFileNetworkLoader : RNetworkLoader
     /// <c>index.html</c> nested inside a folder still resolves its siblings correctly, and a
     /// <c>&lt;base href&gt;</c> in the document composes with it as it would anywhere else.
     /// </summary>
-    public override RUri? BaseUri =>
-        new($"{SyntheticScheme}://{SyntheticHost}/{_primaryDocumentPath}");
+    public override RUri? BaseUri => new(_baseUri);
+
+    /// <summary>
+    /// Percent-encodes each segment of an entry path so it can be interpolated into a URI.
+    /// </summary>
+    /// <remarks>
+    /// A zip entry name is an arbitrary string, not a URI component: one containing a space, a <c>#</c> or
+    /// a <c>?</c> would otherwise be read as a fragment or query and silently truncate the base path, so
+    /// every relative reference in the document would then resolve against the wrong place. Separators are
+    /// escaped per segment rather than over the whole string, so they survive as separators.
+    /// <see cref="GetResourceStream"/> decodes symmetrically, which is what makes the round trip exact.
+    /// </remarks>
+    private static string EscapePath(string path) =>
+        string.Join('/', path.Split('/').Select(Uri.EscapeDataString));
 
     /// <summary>
     /// Reads every entry of <paramref name="zipBytes"/> into memory and locates the document to render.
