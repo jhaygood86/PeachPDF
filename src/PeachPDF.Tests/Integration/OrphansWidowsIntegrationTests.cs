@@ -2,6 +2,8 @@ using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.Tests.TestSupport;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Tests.Integration
@@ -74,6 +76,10 @@ namespace PeachPDF.Tests.Integration
         // is pinned to 8pt (the value the UA default `body { margin: 8px }` resolved to when these
         // positions were calibrated, before px became 0.75pt), so the empirical numbers stay exact.
 
+        private const string EightLineParagraph =
+            "<p id='p' style='width:200pt;line-height:20pt;margin:0;padding:0'>" +
+            "L1<br>L2<br>L3<br>L4<br>L5<br>L6<br>L7<br>L8</p>";
+
         private const string FourLineParagraph =
             "<p id='p' style='width:200pt;line-height:20pt;margin:0;padding:0'>Line1<br>Line2<br>Line3<br>Line4</p>";
 
@@ -121,6 +127,43 @@ namespace PeachPDF.Tests.Integration
             var box = await FindByIdInPagedDocAsync(30, eightLineParagraph);
 
             Assert.Equal(38, box.Location.Y, 1);
+        }
+
+        // orphans decided at the break point rather than afterwards (css-break-3 §5.4). This is the case
+        // the whole-box push deliberately skips - moving a paragraph taller than the band cannot help,
+        // because it would recreate the violation on the next page - but the *break before it* can fall
+        // earlier perfectly well, and with a single line above the boundary orphans:2 says it must.
+        [Fact]
+        public async Task Orphans2_ParagraphTallerThanTheBand_BreaksBeforeItselfRatherThanStrandingOneLine()
+        {
+            var box = await FindByIdInPagedDocAsync(70, EightLineParagraph);
+
+            // Nothing of it is left on the first page: it begins at the second page's content top.
+            Assert.Equal(100, box.Location.Y, 1);
+            Assert.All(WordsOf(box), word => Assert.True(word.Top >= 100, $"word at {word.Top} stayed behind"));
+        }
+
+        // The author's own relaxation of the same constraint: orphans:1 permits a single-line fragment, so
+        // the paragraph stays exactly where ordinary flow put it and its first line stays on page one.
+        [Fact]
+        public async Task Orphans1_ParagraphTallerThanTheBand_KeepsItsSingleLineFragment()
+        {
+            var box = await FindByIdInPagedDocAsync(
+                70, EightLineParagraph.Replace("margin:0", "margin:0;orphans:1"));
+
+            Assert.Equal(78, box.Location.Y, 1);
+            Assert.Contains(WordsOf(box), word => word.Top < 100);
+        }
+
+        // Where the fragment being left already satisfies orphans, nothing moves - the same paragraph one
+        // line higher keeps its three lines on the first page and continues on the second.
+        [Fact]
+        public async Task Orphans2_SatisfiedByTheNaturalBreak_LeavesTheParagraphWhereItIs()
+        {
+            var box = await FindByIdInPagedDocAsync(30, EightLineParagraph);
+
+            Assert.Equal(38, box.Location.Y, 1);
+            Assert.True(WordsOf(box).Count(word => word.Top < 100) >= 2, "expected at least orphans:2 lines to stay");
         }
 
         [Fact]
@@ -174,6 +217,10 @@ namespace PeachPDF.Tests.Integration
             Assert.NotNull(container.Root);
             return FindById(container.Root!, "p")!;
         }
+
+        /// <summary>Every word in a box's subtree — a paragraph's text lives in its child boxes.</summary>
+        private static System.Collections.Generic.List<CssRect> WordsOf(CssBox box) =>
+            [.. LayoutHarness.Descendants(box).SelectMany(b => b.Words)];
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
 

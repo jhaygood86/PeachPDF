@@ -153,6 +153,52 @@ namespace PeachPDF.Tests.Integration
                 $"Heading (bottom={heading.ActualBottom}) must sit above the paragraph (top={para.Location.Y})");
         }
 
+        // §4.3 relaxation, one tier at a time (see BreakRelaxation): where the whole chain cannot travel,
+        // the run is trimmed from its *front* rather than dropped entirely. The members nearest the
+        // breaking box are what the chain is about - the subheading immediately above the content matters
+        // more than the chapter heading above that - so the h3 travels and the h2 is what gets left behind.
+        [Fact]
+        public async Task ChainedAvoidHeadings_TooTallToTravelWhole_AreTrimmedFromTheFront()
+        {
+            // A ~728pt band (A4 less 20mm margins). The chapter heading is 600pt tall, so the whole group -
+            // heading, subheading and the 180pt avoid box - cannot fit the destination band, while the
+            // subheading plus the box needs only ~200pt of it.
+            var html = @"<!DOCTYPE html>
+<html><head><style>
+@page { size: A4; margin: 20mm; }
+body { margin: 8pt; }
+h2, h3 { margin: 6pt 0; }
+</style></head>
+<body>
+<div class='filler' style='height: 100pt'>filler</div>
+<h2 class='outer' style='height: 600pt'>Chapter heading</h2>
+<h3 class='inner'>Section heading</h3>
+<div class='keep' style='break-inside: avoid; page-break-inside: avoid'>
+<div style='height: 180pt'>Keep together</div>
+</div>
+</body></html>";
+
+            var (rootBox, container) = await BuildCssBoxTree(html);
+            var pageHeight = container.PageSize.Height;
+
+            var outer = FindBoxByClass(rootBox, "outer")!;
+            var inner = FindBoxByClass(rootBox, "inner")!;
+            var keep = FindBoxByClass(rootBox, "keep")!;
+
+            var keepPage = Math.Floor(keep.Location.Y / pageHeight);
+
+            Assert.True(keepPage >= 1, $"Test setup expects the avoid box to move, but it is at y={keep.Location.Y}");
+
+            // The tail of the run travelled...
+            Assert.Equal(keepPage, Math.Floor(inner.Location.Y / pageHeight));
+            Assert.True(inner.ActualBottom <= keep.Location.Y + 1.0);
+
+            // ...and the head of it did not, which is the relaxation: dropping the run whole would have
+            // stranded the h3 as well.
+            Assert.True(Math.Floor(outer.Location.Y / pageHeight) < keepPage,
+                $"expected the chapter heading to stay behind, it is at y={outer.Location.Y}");
+        }
+
         // Two consecutive avoid headings (h2 then h3) chain transitively - both move together
         // with the content that triggered the break.
         [Fact]

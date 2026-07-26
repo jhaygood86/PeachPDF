@@ -84,6 +84,12 @@ namespace PeachPDF.Html.Core.Fragmentation
         internal IReadOnlyList<CssBox> KeepWithNextRun { get; private init; } = [];
 
         /// <summary>
+        /// Which of §4.3's tiers this decision settled at — how much of what was asked for it could keep.
+        /// See <see cref="BreakRelaxation"/> for the ladder.
+        /// </summary>
+        internal BreakRelaxation Relaxation { get; private init; } = BreakRelaxation.None;
+
+        /// <summary>
         /// Works out where the break falls, given that <paramref name="box"/> itself needs to start at
         /// <paramref name="targetTop"/>.
         /// </summary>
@@ -125,42 +131,57 @@ namespace PeachPDF.Html.Core.Fragmentation
         {
             var container = box.HtmlContainer!;
             var slot = container.PageIndexOf(targetTop + HtmlContainerInt.PageBoundaryEpsilon);
-            var alone = new EarlyBreak(box, box, targetTop, slot, reason);
+            var alone = new EarlyBreak(box, box, targetTop, slot, reason)
+            {
+                Relaxation = BreakRelaxation.RunDropped
+            };
 
             var subject = BreakPropagation.AnchorForBreakBefore(box);
             var run = DomUtils.GetPrecedingKeepWithNextRun(subject);
 
-            if (run.Count == 0) return alone;
-
-            var runTop = run[0].Location.Y;
-            var extraAbove = subject.Location.Y - runTop;
-
-            if (extraAbove <= 0) return alone;
+            if (run.Count == 0) return alone with { Relaxation = BreakRelaxation.None };
 
             // The run has to start on the page being left. Otherwise "pull it along" names content in
             // a fragmentainer this decision has no business touching — expressed, as it has been since
             // this guard was written, as the run's top lying below that page's own content top.
             var ownPageTop = container.PageTopOf(container.PageIndexOf(subject.Location.Y));
 
-            if (extraAbove >= subject.Location.Y - ownPageTop) return alone;
-
             // "Fits on one page" is asked of the destination band, which per-page @page margins can
             // size differently from the one being left. The extent measured is from the subject's own top
             // down to the bottom of the box that broke: where the two differ the subject is still mid-layout,
             // so its own ActualBottom is not settled yet.
             var destinationBand = container.PageBandHeightOf(container.PageIndexOf(targetTop));
+            var subjectExtent = box.ActualBottom - subject.Location.Y;
 
-            if (extraAbove + box.ActualBottom - subject.Location.Y > destinationBand) return alone;
-
-            // The run's own top lands where this box would have gone alone; the box follows at its
-            // original distance below the run, so the spacing inside the group is preserved.
-            return alone with
+            // §4.3 relaxation, one tier at a time (see BreakRelaxation): a run that does not fit as a whole
+            // is trimmed from its *front* rather than dropped, because the members nearest the breaking box
+            // are the ones the chain is about — a subheading immediately above a table matters more than the
+            // heading above that. The first head that satisfies both guards is the most of the run that can
+            // travel; failing all of them, the box moves alone.
+            for (var head = 0; head < run.Count; head++)
             {
-                BeforeBox = run[0],
-                Subject = subject,
-                KeepWithNextRun = run,
-                Reason = EarlyBreakReason.KeepWithNext
-            };
+                var extraAbove = subject.Location.Y - run[head].Location.Y;
+
+                // A member at or below the subject cannot be "above" it, and neither can anything after it
+                // in the run — so there is nothing left to trim towards.
+                if (extraAbove <= 0) break;
+
+                if (extraAbove >= subject.Location.Y - ownPageTop) continue;
+                if (extraAbove + subjectExtent > destinationBand) continue;
+
+                // The retained run's own top lands where this box would have gone alone; the box follows at
+                // its original distance below it, so the spacing inside the group is preserved.
+                return alone with
+                {
+                    BeforeBox = run[head],
+                    Subject = subject,
+                    KeepWithNextRun = run.GetRange(head, run.Count - head),
+                    Reason = EarlyBreakReason.KeepWithNext,
+                    Relaxation = head == 0 ? BreakRelaxation.None : BreakRelaxation.RunTrimmed
+                };
+            }
+
+            return alone;
         }
 
         /// <summary>

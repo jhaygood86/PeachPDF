@@ -331,7 +331,12 @@ namespace PeachPDF.Html.Core.Dom
                 }
 
                 FinalizeLineBoxes(blockBox, completedLines);
-                return stopped with { CompletedLineCount = blockBox.LineBoxes.Count };
+
+                return stopped with
+                {
+                    CompletedLineCount = blockBox.LineBoxes.Count,
+                    LinesKeptHere = blockBox.LineBoxes.Count - completedLines
+                };
             }
 
             // if width is not restricted we need to lower it to the actual width

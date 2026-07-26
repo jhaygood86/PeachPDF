@@ -77,10 +77,17 @@ namespace PeachPDF.Html.Core.Fragmentation
     /// this index has been emitted into an earlier fragmentainer and must not be re-aligned, re-bubbled
     /// or re-measured by the resumed pass.
     /// </param>
+    /// <param name="LinesKeptHere">
+    /// how many line boxes <i>this</i> fragmentainer kept — <see cref="CompletedLineCount"/> minus what the
+    /// pass began with. This is the quantity <c>orphans</c> is defined over
+    /// (<see href="https://www.w3.org/TR/css-break-3/#widows-orphans">§5.4</see>: line boxes left in a
+    /// fragment before the break), which the cumulative count cannot answer for any fragment but the first.
+    /// </param>
     internal sealed record InlineBreakToken(
         CssBox Box,
         int ResumeSlotIndex,
         IReadOnlyList<int> ResumePath,
         int ResumeWordIndex,
-        int CompletedLineCount) : BreakToken(Box, ResumeSlotIndex);
+        int CompletedLineCount,
+        int LinesKeptHere = 0) : BreakToken(Box, ResumeSlotIndex);
 }

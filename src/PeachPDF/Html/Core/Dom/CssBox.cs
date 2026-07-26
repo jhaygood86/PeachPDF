@@ -1809,18 +1809,40 @@ namespace PeachPDF.Html.Core.Dom
         /// (<see href="https://www.w3.org/TR/css-break-3/#break-between">css-break-3 §4.4</see>).
         /// </returns>
         /// <summary>
-        /// Whether <paramref name="token"/> says the box it names produced nothing at all in the
-        /// fragmentainer being left — an inline flow that kept no line.
+        /// Whether <paramref name="token"/> says the fragment being left holds fewer line boxes than
+        /// <paramref name="box"/>'s <c>orphans</c> minimum — in which case the break belongs <i>before</i>
+        /// the box rather than inside it, so those lines travel with the rest
+        /// (<see href="https://www.w3.org/TR/css-break-3/#widows-orphans">§5.4</see>,
+        /// <see href="https://www.w3.org/TR/css-break-3/#break-between">§4.4</see>).
         /// </summary>
         /// <remarks>
-        /// It is a column that makes this visible rather than a column that makes it true. On the page
-        /// grid an empty box left at the foot of a page is easy to miss; a column is sized to its content,
-        /// so the same box is a hole at the foot of one column with its text at the head of the next —
-        /// the shape multi-column layout exists to avoid. The rule is §4.4's either way, so it is not
-        /// gated on being in a column, and the full suite is unchanged by it.
+        /// <para>
+        /// <b>This is <c>orphans</c> decided at the break point, which is the only place it can be decided
+        /// forward.</b> How many lines fall <i>before</i> a break is known the moment the break is taken;
+        /// how many fall after it is not, since the rest of the content has yet to be flowed. So the
+        /// epilogue's retroactive whole-box push stays for <c>widows</c>, and the orphans half becomes a
+        /// break decision like any other — which also brings the case that push deliberately skips into
+        /// scope: a block taller than a band cannot be helped by moving it whole, but the break before it
+        /// can perfectly well fall earlier.
+        /// </para>
+        /// <para>
+        /// Keeping <i>no</i> line is the degenerate case (any <c>orphans</c> value is at least 1), and it
+        /// is §4.4's own rule rather than §5.4's: a box with no fragment here should not be left as an
+        /// empty stub. It is a column that makes that visible rather than a column that makes it true — on
+        /// the page grid an empty box at the foot of a page is easy to miss, while a column is sized to its
+        /// content, so the same box is a hole at the foot of one column with its text at the head of the
+        /// next.
+        /// </para>
         /// </remarks>
-        private static bool KeptNothingInThisFragmentainer(BreakToken token) =>
-            token is InlineBreakToken { CompletedLineCount: 0 };
+        private static bool KeepsFewerLinesThanOrphans(BreakToken token, CssBox box) =>
+            token is InlineBreakToken inline && inline.LinesKeptHere < OrphansOf(box);
+
+        /// <summary>
+        /// <paramref name="box"/>'s <c>orphans</c> minimum, never below 1 — a block that keeps no line at
+        /// all has no fragment here whatever the property says.
+        /// </summary>
+        private static int OrphansOf(CssBox box) =>
+            int.TryParse(box.Orphans, out var orphans) && orphans > 1 ? orphans : 1;
 
         /// <summary>
         /// Lays this box's out-of-flow children out again, for an engine that narrowed its own inline
@@ -1911,14 +1933,36 @@ namespace PeachPDF.Html.Core.Dom
                             return true;
                         }
 
-                        // A child that kept nothing here has no fragment in this fragmentainer, so the
-                        // break falls *before* it rather than inside it (§4.4). Left as a break inside,
-                        // it leaves an empty box behind - which on the page grid is invisible, and in a
-                        // column is a hole the next column's content cannot fill.
-                        if (KeptNothingInThisFragmentainer(childToken) && i > start)
+                        // A child that kept too few lines here to satisfy its own orphans minimum - none
+                        // at all being the degenerate case - has the break fall *before* it rather than
+                        // inside it (§5.4, §4.4), so those lines travel with the rest of its content
+                        // instead of being stranded at the foot of the fragmentainer being left.
+                        if (KeepsFewerLinesThanOrphans(childToken, childBox) && i > start)
                         {
+                            // The target has to travel with the break. A break-before whose top is left to
+                            // be re-derived places the child at its natural position again - which for a box
+                            // that kept a line or two is still inside the fragmentainer being left, so the
+                            // resumed pass reaches the same conclusion and the driver's no-progress backstop
+                            // is what ends it. Flush at the destination's content top, per §5.2: the margin
+                            // adjoining an unforced break is truncated.
+                            var orphanTarget = HtmlContainer!.PageTopOf(childToken.ResumeSlotIndex);
+
+                            // And a run chained to it by `avoid` travels too, exactly as it does when the
+                            // epilogue's own orphans/widows mover relocates the box: the reason the break
+                            // moved is different, but "do not strand the heading above it" is the same
+                            // requirement (§3.1), and this is the only level the run's members are siblings
+                            // at.
+                            if (HtmlContainer.CurrentFragmentainer is not { HasOwnBand: true }
+                                && EarlyBreak.Discover(childBox, orphanTarget, EarlyBreakReason.OrphansWidows)
+                                    is { KeepWithNextRun.Count: > 0 } orphanPull
+                                && TryRestartAt(orphanPull, start, i, ref restartedHeads, out var orphanFrom))
+                            {
+                                i = orphanFrom - 1;
+                                continue;
+                            }
+
                             PendingBreakToken = new BlockBreakToken(
-                                this, childToken.ResumeSlotIndex, i, null, IsBreakBefore: true, null);
+                                this, childToken.ResumeSlotIndex, i, null, IsBreakBefore: true, orphanTarget);
                             return true;
                         }
 
