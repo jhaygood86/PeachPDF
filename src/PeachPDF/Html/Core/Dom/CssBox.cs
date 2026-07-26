@@ -1991,6 +1991,15 @@ namespace PeachPDF.Html.Core.Dom
             // conclusion cannot cycle.
             HashSet<int>? restartedHeads = null;
 
+            // The pass's own resumption record is consumed the first time the child it names is laid out.
+            // A restart at that same index re-*places* that child, and applying the record again would tell
+            // it to continue a flow it is about to lay out afresh: it would keep the line boxes an earlier
+            // fragmentainer produced and re-finalize them from the resumed index, which is the duplicate-key
+            // failure CssLineBox.AssignRectanglesToBoxes reports. Reachable whenever the restart head is the
+            // resumed child itself - which §3.1 propagation makes ordinary, since the container that travels
+            // is the very box the pass resumed into.
+            var resumeConsumed = false;
+
             _canRestartChildLoop = true;
 
             try
@@ -2001,8 +2010,9 @@ namespace PeachPDF.Html.Core.Dom
 
                     // Only the child the previous pass stopped at resumes; everything after it is laid out
                     // from the start, having never been reached.
-                    if (i == start && resumeAt is not null)
+                    if (i == start && resumeAt is not null && !resumeConsumed)
                     {
+                        resumeConsumed = true;
                         childBox.ResumeAt(resumeAt.ChildToken, resumeAt.ResumeTopOverride);
                     }
 

@@ -287,6 +287,64 @@ namespace PeachPDF.Tests.Integration
             return Math.Round(card.ActualBottom - card.Location.Y, 6);
         }
 
+        // ── §3.1 propagation (the container travels too) ──────────────────────────────────────────────
+
+        /// <summary>
+        /// §3.1's break point before a container's first in-flow child <i>is</i> the break point before the
+        /// container, so a §4.3 mover relocating that child has to move the container with it. Left behind,
+        /// the container spans the boundary and paints an empty copy of its own background, border and
+        /// padding on the page its content just left.
+        /// </summary>
+        [Theory]
+        [InlineData("break-inside:avoid")]
+        [InlineData("overflow:hidden")]
+        public async Task RelocatedFirstChild_TakesItsContainerWithIt(string cardCss)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                WrappedCardDocument(fillerHeight: 130, cardCss), pageHeight: PageHeight, margin: Margin);
+
+            var wrapper = LayoutHarness.FindById(root, "wrapper")!;
+            var card = LayoutHarness.FindById(root, "card")!;
+
+            var nextBandTop = container.PageTopOf(1);
+
+            Assert.Equal(nextBandTop, wrapper.Location.Y, 1);
+            Assert.True(card.Location.Y >= wrapper.Location.Y - 0.001,
+                $"the card must sit inside its wrapper, but is at {card.Location.Y:F1} against {wrapper.Location.Y:F1}");
+
+            // And the wrapper is no longer on the page it left, which is the whole visible defect.
+            Assert.Equal(1, container.PageIndexOf(wrapper.Location.Y));
+        }
+
+        /// <summary>
+        /// The redirect is a relaxation ladder rung, not an unconditional rewrite: a container that does not
+        /// fit the destination is left where it is and the box moves alone. Moving it anyway would put it
+        /// somewhere it also does not fit, so it would break again from its new top and be asked again —
+        /// the runaway <c>CanBeLaidOutAgain</c>'s own fit test exists to prevent.
+        /// </summary>
+        [Fact]
+        public async Task RelocatedFirstChild_LeavesAContainerThatDoesNotFitTheDestination()
+        {
+            // The card straddles the boundary and fits a band on its own, so the mover fires; the wrapper's
+            // own extent (its top down to the card's bottom) is 180pt against a 160pt band, so it cannot go.
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                WrappedCardDocument(fillerHeight: 50, "break-inside:avoid", wrapperCss: "padding-top:100pt"),
+                pageHeight: PageHeight, margin: Margin);
+
+            var wrapper = LayoutHarness.FindById(root, "wrapper")!;
+            var card = LayoutHarness.FindById(root, "card")!;
+
+            Assert.Equal(0, container.PageIndexOf(wrapper.Location.Y));
+            Assert.Equal(1, container.PageIndexOf(card.Location.Y));
+        }
+
+        private static string WrappedCardDocument(double fillerHeight, string cardCss, string wrapperCss = "") =>
+            LayoutHarness.Wrap(
+                $"<div style='height:{fillerHeight}pt'>filler</div>"
+                + $"<div id='wrapper' style='{wrapperCss};background:#eee;border:1pt solid #000'>"
+                + $"<div id='card' style='{cardCss};orphans:1;widows:1;line-height:{LineHeight}pt;font-size:10pt;width:60pt'>"
+                + "Aaa Bbb Ccc Ddd Eee Fff Ggg Hhh</div></div>");
+
         private static string GapDocument(double fillerHeight, string cardCss) =>
             LayoutHarness.Wrap(
                 $"<div style='height:{fillerHeight}pt'>filler</div>"

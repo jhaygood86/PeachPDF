@@ -1614,6 +1614,31 @@ var monolithicHtml = """
     + string.Concat(Enumerable.Range(45, 3).Select(i =>
         $"<p>Trailing paragraph {i}.</p>"))
     + """
+    <h1 style="margin-top:1.4em">The container travels with it</h1>
+    <p class="intro">A break point before a container's first child <i>is</i> the break point before the
+    container (&sect;3.1), so when the child moves the container moves with it. Left behind, the panel below
+    would span the boundary and print an empty copy of its own border and background on the page its
+    contents had just left.</p>
+    """
+    + string.Concat(Enumerable.Range(65, 8).Select(i =>
+        $"<p>Filler paragraph {i}. This run puts the panel's own first child across the page boundary."
+        + "</p>"))
+    + """
+    <div style="border:1px solid #a3a3a3; border-radius:6px; padding:8px 10px; background:#fafafa">
+      <div class="card clipped">
+        <span class="tag">first child &mdash; monolithic</span>
+        <h2>The panel moves too</h2>
+        <p>This card may not be split, so it starts on the next page. The panel around it is not what
+        asked for the break, but the break point is the panel's own, so the panel opens on that page as
+        well rather than being cut open on this one.</p>
+      </div>
+      <p style="font-size:8pt; margin:0.6em 0 0; color:#6b7280">A second child, so the panel is visibly
+      more than the card it wraps.</p>
+    </div>
+    """
+    + string.Concat(Enumerable.Range(75, 3).Select(i =>
+        $"<p>Trailing paragraph {i}.</p>"))
+    + """
     <h1>Inside a flex or grid container</h1>
     <p>A flex line and a grid row are break points too. The row below asks not to be broken, so it moves
     to the next page as a unit &mdash; every item in it, not only the one that asked, because the

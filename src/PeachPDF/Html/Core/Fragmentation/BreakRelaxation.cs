@@ -27,6 +27,14 @@ namespace PeachPDF.Html.Core.Fragmentation
     /// moves alone, exactly as if no <c>avoid</c> had been written between them.
     /// </description></item>
     /// <item><description>
+    /// <b>The container is left behind</b> (<see cref="ContainerLeftBehind"/>). §3.1's break point before a
+    /// container's first in-flow child <i>is</i> the break point before the container, so the container is
+    /// what should travel; where it does not fit the destination the break is taken on the box alone, and
+    /// the container spans the boundary with an empty stub of its own chrome on the fragmentainer being
+    /// left. Below the run tiers because it costs correctness of what is painted rather than of what is
+    /// kept together.
+    /// </description></item>
+    /// <item><description>
     /// <b>The constraint itself is given up.</b> The box is not moved at all and the boundary cuts it —
     /// which is where a monolithic box that fits in no fragmentainer ends up
     /// (<c>CssBox.PerformLayoutEpilogue</c>; see
@@ -59,6 +67,12 @@ namespace PeachPDF.Html.Core.Fragmentation
         RunTrimmed,
 
         /// <summary>No part of the keep-with-next run could travel, so the box moves alone.</summary>
-        RunDropped
+        RunDropped,
+
+        /// <summary>
+        /// The container whose break point this really is could not travel, so the box moves out of it and
+        /// the container spans the boundary.
+        /// </summary>
+        ContainerLeftBehind
     }
 }

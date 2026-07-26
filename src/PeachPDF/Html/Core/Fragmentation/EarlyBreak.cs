@@ -118,10 +118,16 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// behaves differently.
         /// </para>
         /// <para>
-        /// The anchor is consulted <i>only</i> when it yields a run. Redirecting the decision onto the
-        /// container regardless would bypass the destination-fit guard below — <c>TryRestartAt</c> has no fit
-        /// test of its own, and a box laid out again where it still does not fit breaks again from its new
-        /// top, which is the runaway <see cref="CssBox.CanBeLaidOutAgain"/> exists to prevent.
+        /// With <b>no</b> run to collect, the anchor still travels — that is the whole of §3.1 propagation
+        /// for the §4.3 movers, and without it <c>&lt;div class="card"&gt;&lt;table&gt;…&lt;/table&gt;&lt;/div&gt;</c>
+        /// relocates the table and leaves the card spanning the boundary, painting an empty copy of its own
+        /// background, border and padding on the fragmentainer the table just left. It travels only where it
+        /// <i>fits</i> the destination, and that guard is not bookkeeping: <c>TryRestartAt</c> has no fit test
+        /// of its own, so a box laid out again where it still does not fit breaks again from its new top,
+        /// opens another pass, and is re-asked — the runaway <see cref="CssBox.CanBeLaidOutAgain"/> exists to
+        /// prevent, measured at 100,000 pages. The anchor is mid-layout when this is asked, so what is
+        /// measured is the same extent the run case measures: from the anchor's own top down to the bottom of
+        /// the box that broke, since the anchor's own <c>ActualBottom</c> is not settled yet.
         /// </para>
         /// </remarks>
         /// <param name="box">the box that discovered it does not fit</param>
@@ -139,8 +145,6 @@ namespace PeachPDF.Html.Core.Fragmentation
             var subject = BreakPropagation.AnchorForBreakBefore(box);
             var run = DomUtils.GetPrecedingKeepWithNextRun(subject);
 
-            if (run.Count == 0) return alone with { Relaxation = BreakRelaxation.None };
-
             // The run has to start on the page being left. Otherwise "pull it along" names content in
             // a fragmentainer this decision has no business touching — expressed, as it has been since
             // this guard was written, as the run's top lying below that page's own content top.
@@ -152,6 +156,14 @@ namespace PeachPDF.Html.Core.Fragmentation
             // so its own ActualBottom is not settled yet.
             var destinationBand = container.PageBandHeightOf(container.PageIndexOf(targetTop));
             var subjectExtent = box.ActualBottom - subject.Location.Y;
+
+            // The anchor travels whether or not a run is chained to it — §3.1's break point before this box
+            // is the container's, so leaving the container behind is a relaxation, not the normal case.
+            var withTheContainer = ReferenceEquals(subject, box) || !CanTravelTo(subject, subjectExtent, destinationBand)
+                ? alone with { Relaxation = ReferenceEquals(subject, box) ? BreakRelaxation.None : BreakRelaxation.ContainerLeftBehind }
+                : alone with { BeforeBox = subject, Subject = subject, Relaxation = BreakRelaxation.None };
+
+            if (run.Count == 0) return withTheContainer;
 
             // §4.3 relaxation, one tier at a time (see BreakRelaxation): a run that does not fit as a whole
             // is trimmed from its *front* rather than dropped, because the members nearest the breaking box
@@ -181,8 +193,20 @@ namespace PeachPDF.Html.Core.Fragmentation
                 };
             }
 
-            return alone;
+            return withTheContainer;
         }
+
+        /// <summary>
+        /// Whether the propagation anchor can take the break itself rather than being left spanning the
+        /// boundary while its content moves off it.
+        /// </summary>
+        /// <remarks>
+        /// It has to fit the destination — see <see cref="Discover"/>'s own remarks for why that is the
+        /// guard the whole redirect hangs on — and it has to be a box that <i>places itself</i>, since the
+        /// target reaches it through <c>PlaceBlockBox</c> and any other box would ignore it and never move.
+        /// </remarks>
+        private static bool CanTravelTo(CssBox subject, double subjectExtent, double destinationBand) =>
+            subject.PlacesItselfAsBlockBox && subjectExtent <= destinationBand;
 
         /// <summary>
         /// Whether <paramref name="token"/>, produced by <paramref name="container"/>, records a break before
