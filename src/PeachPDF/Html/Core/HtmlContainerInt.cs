@@ -818,6 +818,12 @@ namespace PeachPDF.Html.Core
             PageGeometry.Reset();
             ClearBlankSlotReservations();
 
+            // Both per layout, not per document: ShrinkToFit and the per-page reflow loop each re-run this
+            // method, and a record kept across them would describe passes that no longer exist while the
+            // latch silently disabled the correction on every layout after the first.
+            _passEntries.Clear();
+            _passesRewoundFor.Clear();
+
             // Each invocation re-decides the whole document, so the fragments an earlier one emitted
             // describe a layout that no longer exists.
             var emitter = new FragmentEmitter(this);
@@ -834,6 +840,11 @@ namespace PeachPDF.Html.Core
                     var context = new FragmentainerContext(this, Root!, slot);
                     CurrentFragmentainer = context;
 
+                    // What this pass was entered with, so a decision discovered on a later one can send the
+                    // driver back to it. Recorded before the pass runs, since that is the state re-entering
+                    // it needs and nothing the pass produces can be part of it.
+                    _passEntries.Add((slot, token));
+
                     Root!.ResumeAt(token, resumeTopOverride: null);
                     await Root.PerformLayout(g);
                     FragmentainerPasses++;
@@ -848,6 +859,17 @@ namespace PeachPDF.Html.Core
                     }
 
                     _widowsRewind = null;
+
+                    // §4.3's keep-with-next run pull reaches back further than one pass: the run head was
+                    // placed in a fragmentainer the driver has already left, so the pass that placed it is
+                    // re-entered rather than this one.
+                    if (_runPullRewind is { } pull && TryRewindForRunPull(pull, ref token, ref slot))
+                    {
+                        _runPullRewind = null;
+                        continue;
+                    }
+
+                    _runPullRewind = null;
 
                     var next = context.OutgoingToken;
 
@@ -897,6 +919,112 @@ namespace PeachPDF.Html.Core
         /// <c>Budget</c> line boxes there so its last fragment reaches its <c>widows</c> minimum.
         /// </summary>
         private (CssBox Box, int Budget)? _widowsRewind;
+
+        /// <summary>
+        /// What each fragmentainer pass was entered with, indexed by pass. The one thing re-entering an
+        /// earlier pass needs and cannot re-derive: which slot it was filling and which resumption record
+        /// it picked up from.
+        /// </summary>
+        private readonly List<(int Slot, BreakToken? Token)> _passEntries = [];
+
+        /// <summary>
+        /// A request to re-enter the pass that placed <c>Head</c>, with the box re-placed at <c>Top</c>.
+        /// </summary>
+        private (CssBox Head, double Top)? _runPullRewind;
+
+        /// <summary>
+        /// The boxes already rewound to in this layout — one rewind per head, so a run that keeps reaching
+        /// the same conclusion cannot cycle.
+        /// </summary>
+        private readonly HashSet<CssBox> _passesRewoundFor = new(ReferenceEqualityComparer.Instance);
+
+        /// <summary>
+        /// Records a request to re-enter the pass that placed <paramref name="head"/>, so a keep-with-next
+        /// run whose head belongs to an already-filled fragmentainer can be <i>laid out again</i> at
+        /// <paramref name="top"/> rather than translated there
+        /// (<see href="https://www.w3.org/TR/css-break-3/#possible-breaks">§4.3</see>). Returns whether it
+        /// was taken; the caller falls back to the translation when it was not.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Declined once per head per layout — not per pass. The rewound pass reaches the same epilogue
+        /// again, and where the correction has done its job the second answer is "nothing to do"; where it
+        /// has not, repeating it walks the group down the document one pass at a time against the driver's
+        /// own cap. This is the same shape, and the same reason, as the <c>orphans</c> break conversion's
+        /// latch.
+        /// </para>
+        /// <para>
+        /// Also declined where no recorded pass was filling the head's own slot, which is the honest way to
+        /// ask "is there a pass to go back to": the head's position is the only thing that says which
+        /// fragmentainer it was placed in.
+        /// </para>
+        /// </remarks>
+        internal bool RequestPassRewind(CssBox head, double top)
+        {
+            // One pending request at a time, one per head per layout, a real page grid to name a pass
+            // against, and not inside a column - a column's fill is driven by the columns engine rather
+            // than by this driver, so sending it back would rewind a pass that is not the one filling that
+            // fragmentainer. And a pass that was filling the head's own fragmentainer has to exist for
+            // there to be one to name.
+            if (_runPullRewind is not null
+                || !HasRealPageGrid
+                || CurrentFragmentainer is { HasOwnBand: true }
+                || _passesRewoundFor.Contains(head)
+                || PassEntryFilling(PageIndexOf(head.Location.Y + PageBoundaryEpsilon)) < 0)
+            {
+                return false;
+            }
+
+            _runPullRewind = (head, top);
+            return true;
+        }
+
+        /// <summary>
+        /// Re-enters the pass that placed <paramref name="pull"/>'s head, with the head re-placed at the
+        /// break's target so the run and everything after it is laid out again rather than moved.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Only the head is told where to go. Every other member of the run, and every box after it,
+        /// re-derives its position from the sibling above it as the re-entered pass reaches it — which is
+        /// exactly what <c>TryRestartAt</c> does inside a single pass, and the reason neither has to compute
+        /// a group offset.
+        /// </para>
+        /// <para>
+        /// The fragments from the head's own fragmentainer on are un-frozen first: that pass is about to
+        /// describe different geometry, and everything after it is about to be laid out again.
+        /// </para>
+        /// </remarks>
+        private bool TryRewindForRunPull((CssBox Head, double Top) pull, ref BreakToken? token, ref int slot)
+        {
+            var entry = PassEntryFilling(PageIndexOf(pull.Head.Location.Y + PageBoundaryEpsilon));
+
+            if (entry < 0) return false;
+
+            var (rewoundSlot, rewoundToken) = _passEntries[entry];
+
+            _passesRewoundFor.Add(pull.Head);
+            _emitter?.InvalidateFrom(rewoundSlot);
+
+            // The passes from this one on are about to run again, so the record of them describes a layout
+            // that no longer exists.
+            _passEntries.RemoveRange(entry, _passEntries.Count - entry);
+
+            slot = rewoundSlot;
+            token = rewoundToken;
+
+            pull.Head.ResumeAt(null, pull.Top);
+            return true;
+        }
+
+        /// <summary>
+        /// The index of the pass that was filling <paramref name="slot"/>, or -1 when none was.
+        /// </summary>
+        /// <remarks>
+        /// The <i>first</i> such pass, since a slot re-entered more than once is one whose earliest pass is
+        /// the one that placed the content now being reconsidered.
+        /// </remarks>
+        private int PassEntryFilling(int slot) => _passEntries.FindIndex(entry => entry.Slot == slot);
 
         /// <summary>
         /// Records <paramref name="box"/>'s request to re-run the pass it is completing, with its previous

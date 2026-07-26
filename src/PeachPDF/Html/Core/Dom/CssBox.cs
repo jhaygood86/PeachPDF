@@ -2320,15 +2320,28 @@ namespace PeachPDF.Html.Core.Dom
         private bool TryRestartAt(EarlyBreak restart, int start, int raisedAt, ref HashSet<int>? restartedHeads, out int resumeFrom)
         {
             resumeFrom = Boxes.IndexOf(restart.BeforeBox);
-            if (resumeFrom < start || resumeFrom > raisedAt) return false;
+            if (resumeFrom < 0 || resumeFrom > raisedAt) return false;
 
             // Asked of every index about to be replayed, not just of the box that raised this. The run
             // is found by walking siblings, which skips display:none, floated and out-of-flow ones, so
             // the range re-run is wider than the run itself — and a table in it that repeats a header
-            // would not survive being laid out a second time.
+            // would not survive being laid out a second time. Asked before the range test below so that
+            // such a table declines the driver's replay too, not only this loop's.
             for (var j = resumeFrom; j <= raisedAt; j++)
             {
                 if (ContainsARepeatingTable(Boxes[j])) return false;
+            }
+
+            // Below the index this pass began at, the head belongs to a fragmentainer the driver has
+            // already filled — nothing this loop can re-run, but something the driver can, by re-entering
+            // the pass that filled it. Asked here rather than at the call site so that "this head cannot
+            // be re-run from here" keeps one home, with every guard above it applying to both answers.
+            // A granted request makes everything this pass produces moot, so the loop simply carries on:
+            // resuming one past the box that raised the decision is what "carry on" is spelt as here.
+            if (resumeFrom < start)
+            {
+                resumeFrom = raisedAt + 1;
+                return HtmlContainer!.RequestPassRewind(restart.BeforeBox, restart.Top);
             }
 
             restartedHeads ??= [];

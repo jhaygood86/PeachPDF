@@ -1709,6 +1709,48 @@ await SaveShowcaseAsync("paged_media_orphans_widows", "Paged Media", "Orphans an
     + "break point, so too few lines before it makes the break fall before the paragraph instead.",
     orphansWidowsHtml, new PdfGenerateConfig { PageSize = PageSize.A5 });
 
+// ── keep-with-next showcase ────────────────────────────────────────────────
+// A heading chained to the paragraph below it by break-after: avoid (the UA print default for h1-h6),
+// positioned so the paragraph's own text breaks across the page boundary. The paragraph therefore
+// completes on a *later* fragmentainer pass than the one that placed the heading, so the correction
+// has to reach back into a fragmentainer the driver has already filled: the pass that placed the
+// heading is re-entered and the group is laid out again at the top of the next page. Carried out by
+// moving the group instead - which is all that was possible before - the paragraph arrives with the
+// page gap still inside it, as blank space between two of its own lines.
+static string KeepWithNextSection(double fillerHeight) =>
+    "<h1 style=\"break-before:page\">Keep-with-next across a page boundary</h1>"
+    + "<p class=\"intro\">The heading below declares nothing of its own: <code>h1&ndash;h6 { break-after: "
+    + "avoid }</code> is the user-agent print default. Its section body asks not to be broken and starts "
+    + $"a line above the page boundary, with {fillerHeight:0}pt of filler above it.</p>"
+    + $"<div class=\"filler\" style=\"height:{fillerHeight:0}pt\">Filler</div>"
+    + "<h2>A heading that must not be stranded</h2>"
+    + "<p class=\"marked\">"
+    + string.Concat(Enumerable.Range(1, 5).Select(i =>
+        $"Sentence {i} of the section body, long enough to occupy a line of its own. "))
+    + "</p>";
+
+var keepWithNextHtml = """
+    <!DOCTYPE html>
+    <html><head><style>
+    @page { size: a5; margin: 14mm }
+    body { font: 9pt Helvetica, Arial, sans-serif; margin: 0; color: #1f2937 }
+    h1 { font-size: 12pt; margin: 0 0 0.4em }
+    h2 { font-size: 10pt; margin: 0 0 0.4em; color: #1e3a8a }
+    p { margin: 0 0 0.6em; line-height: 1.6 }
+    p.intro { color: #6b7280; font-size: 8pt; margin-bottom: 1em }
+    div.filler { color: #9ca3af; background: #f3f4f6; font-size: 8pt }
+    p.marked { background: #eff6ff; border-left: 2pt solid #2563eb; padding: 2pt 6pt; color: #1e3a8a;
+               width: 200pt; break-inside: avoid; orphans: 1; widows: 1 }
+    </style></head><body>
+    """
+    + KeepWithNextSection(410)
+    + "</body></html>";
+
+await SaveShowcaseAsync("paged_media_keep_with_next", "Paged Media", "Keep With Next",
+    "CSS Fragmentation §3.1's break-after: avoid, honored even where the heading was placed in a "
+    + "fragmentainer the layout driver had already finished with.",
+    keepWithNextHtml, new PdfGenerateConfig { PageSize = PageSize.A5 });
+
 // ── Margin box explicit sizing showcase ────────────────────────────────────
 var marginBoxSizingHtml = """
     <!DOCTYPE html>
