@@ -1362,6 +1362,7 @@ namespace PeachPDF.Html.Core.Dom
 
                             coordinates.Line = new CssLineBox(blockBox);
                             coordinates.LineStartOrdinal = wordOrdinal;
+                            coordinates.Line.StartOrdinal = wordOrdinal;
 
                             if (word.IsImage || word.Equals(b.FirstWord))
                             {
@@ -1384,6 +1385,7 @@ namespace PeachPDF.Html.Core.Dom
                             // First word of the flow's opening line, which was created by the caller
                             // rather than by a wrap.
                             coordinates.LineStartOrdinal = wordOrdinal;
+                            coordinates.Line.StartOrdinal = wordOrdinal;
 
                             // ...and on a resumed flow that word is where the fragment this pass opens
                             // begins, so it is where every cloning box the break fell inside re-opens
