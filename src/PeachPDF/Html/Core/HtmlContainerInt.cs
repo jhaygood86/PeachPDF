@@ -841,7 +841,7 @@ namespace PeachPDF.Html.Core
                     // §5.4's widows is the one decision that reaches backwards: the pass that has just
                     // ended kept lines a later fragment needs, and it has to be run again with fewer.
                     // Nothing it produced is kept, so this is done before the pass is frozen.
-                    if (_widowsRewind is { } rewind && TryRewindForWidows(rewind, ref token, emitter))
+                    if (_widowsRewind is { } rewind && TryRewindForWidows(rewind, ref token))
                     {
                         _widowsRewind = null;
                         continue;
@@ -942,12 +942,12 @@ namespace PeachPDF.Html.Core
         /// </para>
         /// </remarks>
         private bool TryRewindForWidows(
-            (CssBox Box, int Budget) rewind, ref BreakToken? token, FragmentEmitter emitter)
+            (CssBox Box, int Budget) rewind, ref BreakToken? token)
         {
             if (token is null || !TryRebuildForBudget(token, rewind.Box, rewind.Budget, out var rebuilt))
                 return false;
 
-            emitter.InvalidateFrom(PageIndexOf(rewind.Box.LineBoxes[0].LineTop));
+            InvalidateEmittedFragmentsFor(rewind.Box, rewind.Box.LineBoxes[0].LineTop);
             rewind.Box.DiscardLineBoxesFrom(rewind.Budget);
 
             token = rebuilt;

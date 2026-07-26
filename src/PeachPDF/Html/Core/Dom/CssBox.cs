@@ -1459,6 +1459,7 @@ namespace PeachPDF.Html.Core.Dom
                 _incomingToken = null;
                 _resumeTopOverride = null;
                 _orphansBreakTaken = false;
+                _widowsRewindTaken = false;
             }
 
             var resume = _incomingToken;
