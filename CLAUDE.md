@@ -62,6 +62,16 @@ dotnet test --collect:"XPlat Code Coverage" --settings PeachPDF.Tests/coverlet.r
 
 Before considering any non-trivial code change complete, run the command above and check diff coverage on the lines you changed. If new/changed code falls short of the 90% diff-coverage threshold CI enforces, add tests to close the gap before finishing — don't leave it for CI to catch.
 
+### Build warnings
+
+**Before opening a pull request, the whole solution must build with zero warnings.** Not just the projects you touched — a warning anywhere is a warning the next change has to read past, and the ones that accumulate here (`CS1573` missing `<param>` tags, `CS8602` possible null dereference) are exactly the ones that make a real defect invisible in the noise.
+
+```
+dotnet build PeachPDF.slnx -t:Rebuild
+```
+
+Rebuild rather than a plain `build`: an incremental build skips up-to-date projects and reports their warnings not at all, so a clean-looking `dotnet build` can hide every warning in the solution. Fix what you find, including warnings you did not introduce — the doc comment or null annotation is a two-line fix, and leaving it is what got it there.
+
 Avoid writing tests against `PeachPDF.Fonts.FontFactory` (and OpenType neighbors) without care — it caches resolved fonts in `static readonly Dictionary` fields shared process-wide, and xUnit's parallel test-class execution makes new tests here a real order-dependent-flakiness risk against the rest of the suite.
 
 ## Post-change review pass
@@ -144,6 +154,16 @@ Report findings the same way `/code-review` does; fix what's actually wrong, and
 - The header-aware whole-table pre-check (`CssLayoutEngineTable.LayoutCells`, added by the keep-with-next fix below) decides from `EstimateRowHeight`, the same one-line-of-text heuristic the headerless pre-check already uses — blind to tall block content inside the first row's cells, same as the pre-existing gap the headerless pre-check's own post-check (real-layout-based, run after the table is fully laid out) closes. That post-check is itself gated on `!_shouldRepeatHeaders`, so a repeating-header table whose *first row estimate* under-shoots (declares "fits" when real content doesn't) has no equivalent real-height fallback. Not attempted: extending the post-check to the headered case would need it to also correctly reposition the header's already-created `CssProxyBox` (which captures a paint-time position snapshot at proxy-creation time — see `CssProxyBox.PerformLayoutImp`), not just `_tableBox.Location`, unlike the headerless case. Filed as [issue #152](https://github.com/jhaygood86/PeachPDF/issues/152).
 
 ## Recent fixes
+
+- **A `clone` fragment at a column break claims the room layout reserved for it** ([issue #335](https://github.com/jhaygood86/PeachPDF/issues/335)'s multicol half, [CSS Fragmentation 3 §6.2](https://www.w3.org/TR/css-break-3/#break-decoration)). §6.2 requires room to be reserved for a cloned decoration when working out how much of a fragmentainer is left.
+
+  **The load-bearing discovery is that layout already reserves it, and the fragment does not claim it.** `CssRect.WouldStraddleFragmentainer` has asked its question against the *column's* own band since #366, cloned insets included, so a `clone` box's content genuinely stops short of the column edge by its own border and padding — measured, not assumed. What was wrong is one level on: a continuing box's fragment extent is measured *from the content it holds* (`BoundsEndAtItsContent`, #366), so the fragment ended at the last line and `clone` drew the closing border **over that line**, in the middle of the room reserved for it. A *page* fragment never had this, because its bounds are cut to the band rather than derived from content.
+
+  So the fix is to add the box's **own** share back (`DomUtils.OwnClonedBlockEnd`, factored out of `ClonedBlockEnd`, which is now its sum over the chain). Own share, not the chain sum, is what composes: each level of a nested cloning stack closes inside its ancestors', and an ancestor's own fragment is measured from this one, so the chain sum would count every ancestor once per level.
+
+  **The layout half needed nothing, and that is worth not re-deriving** — the arithmetic in `WouldStraddleFragmentainer` and `CreateLineBoxes`' resume top is band-relative, and a column's band is the page's band with a different bottom, so both were already right once a column became a real `FragmentainerContext`.
+
+  Tests: `BoxDecorationBreakLayoutIntegrationTests` (+2 — the content stopping short *and* the fragment claiming exactly that much, with `slice` as the control that ends at its content). Full net8.0 suite green (6367); **100% diff coverage**. **64 of 65 showcases are pixel-identical**; `multicol`'s new section 9 differs, and it differs by the clone panel's closing border no longer being drawn across its own last line. **Boundary, not fixed here:** a box in a multicol whose content is *blocks* rather than text is not split at a column boundary at all — it neither moves nor breaks, and overflows its page ([#387](https://github.com/jhaygood86/PeachPDF/issues/387)) — so there is no break inside it to reserve at. The flex/grid/table half of #335 is unchanged, still waiting on item content being fragmented at all.
 
 - **A whole-box `slice` decoration is measured against the concatenation of a box's column fragments** ([issue #376](https://github.com/jhaygood86/PeachPDF/issues/376), [CSS Fragmentation 3 §6.2](https://www.w3.org/TR/css-break-3/#break-decoration)). #368 gave `SliceGeometry` its block-axis *edges*; what it did not change is the rectangle the rest of the decoration is resolved against. `border-radius`, a gradient/image background layer and a `box-shadow` still measured from the fragment's own block extent at a column break — `clone`'s rendering under the `slice` value.
 

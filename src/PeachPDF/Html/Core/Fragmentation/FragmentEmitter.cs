@@ -1185,6 +1185,14 @@ namespace PeachPDF.Html.Core.Fragmentation
                     bottom = Math.Max(bottom, RectOf(child).Bottom + child.OriginY);
                 }
 
+                // Under `clone` this fragment closes with its own bottom border and padding (§6.2), and
+                // layout has already stopped its content short of the fragmentainer edge by that much
+                // (CssRect.WouldStraddleFragmentainer). Measured from the content alone the fragment would
+                // end at the last line, and the closing border would be drawn over it rather than in the
+                // room reserved for it. Only this box's own share: each level of a nested cloning stack
+                // closes inside its ancestors', whose own fragments are measured from this one.
+                if (container.HasCloneDecorations) bottom += DomUtils.OwnClonedBlockEnd(draft.Box);
+
                 if (bottom > bounds.Bottom)
                     bounds = RRect.FromLTRB(bounds.Left, bounds.Top, bounds.Right, bottom);
             }
