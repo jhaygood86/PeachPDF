@@ -1,4 +1,6 @@
 using PeachPDF.Html.Core;
+using PeachPDF.Html.Core.Fragments;
+using System.Collections.Generic;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Tests.TestSupport;
@@ -147,6 +149,7 @@ namespace PeachPDF.Tests.Integration
         // the box that pulled it re-flows at its new position like any other relocated box.
         [Theory]
         [InlineData(105)]
+        [InlineData(115)]
         [InlineData(125)]
         public async Task PulledRun_IsLaidOutAgain_SoTheBoxHasNoInteriorGap(double fillerHeight)
         {
@@ -156,31 +159,101 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
-        /// The boundary of the run pull: once the pass that placed the run has been left behind, the run
-        /// belongs to a fragmentainer that is already filled and cannot be re-run, so the correction
-        /// degrades to moving the group instead — carrying the page gap into the box, as every one of
-        /// these corrections used to.
+        /// The run head belongs to a fragmentainer the driver has already filled — a structural condition,
+        /// not a geometric one: its index lies below the index this pass resumed at. At 115pt of filler the
+        /// box's own first line fits on the page and the rest does not, so its content breaks and it
+        /// completes on a later pass, by which time the heading above it is settled.
         /// </summary>
         /// <remarks>
-        /// A structural condition, not a geometric one: the run head's index lies below the index this
-        /// pass resumed at. At 115pt of filler the box's own first line fits on the page and the rest
-        /// does not, so its content breaks and it completes on a later pass — by which time the heading
-        /// above it is settled. Characterized rather than fixed: re-running it needs the driver to
-        /// withdraw a fragmentainer it has already filled.
+        /// This was characterized as a boundary — the group was moved, carrying the fragmentainer gap into
+        /// the box, exactly as every one of these corrections used to. The driver can now re-enter the pass
+        /// that placed the head, so it is the invariant it was drafted as. The theory above covers the
+        /// no-interior-gap half at this filler height; what this adds is that the page the head left keeps
+        /// no fragment of it, which is the un-emission half.
         /// </remarks>
         [Fact]
-        public async Task PulledRun_FromAResumedPass_MovesTheGroupInsteadOfReLayingItOut()
+        public async Task PulledRun_FromAnEarlierPass_LeavesNoFragmentOnThePageItLeft()
         {
             var (heading, card, container) = await PulledRunAsync(115);
+
+            var headingPage = container.PageIndexOf(heading.Location.Y + HtmlContainerInt.PageBoundaryEpsilon);
+
+            Assert.Equal(
+                headingPage,
+                container.PageIndexOf(card.Location.Y + HtmlContainerInt.PageBoundaryEpsilon));
+
+            var elsewhere = container.FragmentTree!.Fragmentainers
+                .Where(f => f.SlotIndex != headingPage)
+                .SelectMany(f => Flatten(f.Root))
+                .ToList();
+
+            Assert.DoesNotContain(elsewhere, f => ReferenceEquals(f.Box, heading));
+        }
+
+        /// <summary>
+        /// The workhorse invariant for a correction that reaches back across a pass: every word the
+        /// document authored is claimed by exactly one fragment. It fails one way if the re-entered pass
+        /// leaves a ghost from the layout it replaced, and the other way if un-emitting the head's
+        /// fragmentainer discards content that legitimately belonged to it.
+        /// </summary>
+        [Theory]
+        [InlineData(105)]
+        [InlineData(115)]
+        [InlineData(125)]
+        public async Task PulledRun_ClaimsEveryWordExactlyOnce(double fillerHeight)
+        {
+            var (_, _, container) = await PulledRunAsync(fillerHeight);
+
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => Flatten(f.Root))
+                .SelectMany(f => f.Words)
+                .Select(w => w.Word)
+                .ToList();
+
+            Assert.NotEmpty(claimed);
+            Assert.Equal(claimed.Count, claimed.Distinct().Count());
+        }
+
+        /// <summary>
+        /// One restart per run head per child loop, so a run whose members keep reaching the same
+        /// conclusion cannot cycle. Where that guard declines, the head is not offered to the driver
+        /// either — the loop has already tried it — and the correction falls back to moving the group,
+        /// which is what it always did.
+        /// </summary>
+        [Fact]
+        public async Task PulledRun_AlreadyRestartedOnThisPass_IsMovedRatherThanRestartedAgain()
+        {
+            // The spacer alone spans three bands, so everything below it is placed well past the
+            // fragmentainer the pass is filling and the head is reconsidered more than once.
+            var html = LayoutHarness.Wrap(
+                "<div style='height:400pt'>filler</div>"
+                + "<h2 id='heading' style='margin:0;font-size:10pt;line-height:20pt'>Heading</h2>"
+                + $"<div id='card' style='break-inside:avoid;orphans:1;widows:1;line-height:{LineHeight}pt;font-size:10pt;width:60pt'>"
+                + "Aaa Bbb Ccc Ddd Eee Fff Ggg Hhh</div>");
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight, margin: Margin);
+
+            var heading = LayoutHarness.FindById(root, "heading")!;
+            var card = LayoutHarness.FindById(root, "card")!;
 
             Assert.Equal(
                 container.PageIndexOf(heading.Location.Y + HtmlContainerInt.PageBoundaryEpsilon),
                 container.PageIndexOf(card.Location.Y + HtmlContainerInt.PageBoundaryEpsilon));
+            Assert.True(heading.ActualBottom <= card.Location.Y + 1.0,
+                "the heading must still sit above the box it is chained to");
+        }
 
-            var tops = card.LineBoxes.SelectMany(l => l.Words).Select(w => w.Top).Distinct().Order().ToList();
-            var steps = tops.Zip(tops.Skip(1), (previous, next) => next - previous).ToList();
+        private static IEnumerable<BoxFragment> Flatten(BoxFragment fragment)
+        {
+            yield return fragment;
 
-            Assert.Contains(steps, step => step > LineHeight + 0.5);
+            foreach (var child in fragment.Children)
+            {
+                foreach (var descendant in Flatten(child))
+                {
+                    yield return descendant;
+                }
+            }
         }
 
         /// <summary>
