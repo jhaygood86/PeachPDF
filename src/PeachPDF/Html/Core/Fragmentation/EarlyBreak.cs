@@ -65,10 +65,17 @@ namespace PeachPDF.Html.Core.Fragmentation
     /// </para>
     /// </remarks>
     /// <param name="BeforeBox">the box the break falls before, which begins the next fragmentainer</param>
+    /// <param name="Subject">
+    /// the box that travels — the one that discovered the decision, or, where the break point before it is
+    /// really its container's
+    /// (<see href="https://www.w3.org/TR/css-break-3/#break-between">§3.1</see> propagation), the outermost
+    /// container it begins. Carrying it out on the container is what stops that container from being left
+    /// spanning the boundary while its content moves off it.
+    /// </param>
     /// <param name="Top">the document Y <paramref name="BeforeBox"/> is to begin at</param>
     /// <param name="Slot">the pagination slot <paramref name="Top"/> falls in</param>
     /// <param name="Reason">what made the break necessary</param>
-    internal sealed record EarlyBreak(CssBox BeforeBox, double Top, int Slot, EarlyBreakReason Reason)
+    internal sealed record EarlyBreak(CssBox BeforeBox, CssBox Subject, double Top, int Slot, EarlyBreakReason Reason)
     {
         /// <summary>
         /// The run of preceding siblings that travels with the break, empty when the break falls before
@@ -94,6 +101,23 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// satisfied is relaxed and the box moves alone, exactly as if it had never been written.
         /// </para>
         /// </remarks>
+        /// <remarks>
+        /// <para>
+        /// The run is collected at <paramref name="box"/>'s <b>propagation anchor</b> rather than at the box
+        /// itself (<see cref="BreakPropagation.AnchorForBreakBefore"/>). Where the box is a container's first
+        /// in-flow child it has no preceding sibling of its own, but §3.1's break point before it is the one
+        /// before that container — so the heading to keep with it is the container's sibling, and it is the
+        /// container that travels. Without this the heading is stranded on the page the content just left,
+        /// and the structurally equivalent document with the paragraph as the heading's own next sibling
+        /// behaves differently.
+        /// </para>
+        /// <para>
+        /// The anchor is consulted <i>only</i> when it yields a run. Redirecting the decision onto the
+        /// container regardless would bypass the destination-fit guard below — <c>TryRestartAt</c> has no fit
+        /// test of its own, and a box laid out again where it still does not fit breaks again from its new
+        /// top, which is the runaway <see cref="CssBox.CanBeLaidOutAgain"/> exists to prevent.
+        /// </para>
+        /// </remarks>
         /// <param name="box">the box that discovered it does not fit</param>
         /// <param name="targetTop">the document Y <paramref name="box"/> would move to on its own</param>
         /// <param name="reason">what made the break necessary</param>
@@ -101,33 +125,60 @@ namespace PeachPDF.Html.Core.Fragmentation
         {
             var container = box.HtmlContainer!;
             var slot = container.PageIndexOf(targetTop + HtmlContainerInt.PageBoundaryEpsilon);
-            var alone = new EarlyBreak(box, targetTop, slot, reason);
+            var alone = new EarlyBreak(box, box, targetTop, slot, reason);
 
-            var run = DomUtils.GetPrecedingKeepWithNextRun(box);
+            var subject = BreakPropagation.AnchorForBreakBefore(box);
+            var run = DomUtils.GetPrecedingKeepWithNextRun(subject);
 
             if (run.Count == 0) return alone;
 
             var runTop = run[0].Location.Y;
-            var extraAbove = box.Location.Y - runTop;
+            var extraAbove = subject.Location.Y - runTop;
 
             if (extraAbove <= 0) return alone;
 
             // The run has to start on the page being left. Otherwise "pull it along" names content in
             // a fragmentainer this decision has no business touching — expressed, as it has been since
             // this guard was written, as the run's top lying below that page's own content top.
-            var ownPageTop = container.PageTopOf(container.PageIndexOf(box.Location.Y));
+            var ownPageTop = container.PageTopOf(container.PageIndexOf(subject.Location.Y));
 
-            if (extraAbove >= box.Location.Y - ownPageTop) return alone;
+            if (extraAbove >= subject.Location.Y - ownPageTop) return alone;
 
             // "Fits on one page" is asked of the destination band, which per-page @page margins can
-            // size differently from the one being left.
+            // size differently from the one being left. The extent measured is from the subject's own top
+            // down to the bottom of the box that broke: where the two differ the subject is still mid-layout,
+            // so its own ActualBottom is not settled yet.
             var destinationBand = container.PageBandHeightOf(container.PageIndexOf(targetTop));
 
-            if (extraAbove + box.ActualBottom - box.Location.Y > destinationBand) return alone;
+            if (extraAbove + box.ActualBottom - subject.Location.Y > destinationBand) return alone;
 
             // The run's own top lands where this box would have gone alone; the box follows at its
             // original distance below the run, so the spacing inside the group is preserved.
-            return alone with { BeforeBox = run[0], KeepWithNextRun = run, Reason = EarlyBreakReason.KeepWithNext };
+            return alone with
+            {
+                BeforeBox = run[0],
+                Subject = subject,
+                KeepWithNextRun = run,
+                Reason = EarlyBreakReason.KeepWithNext
+            };
+        }
+
+        /// <summary>
+        /// Whether <paramref name="token"/>, produced by <paramref name="container"/>, records a break before
+        /// that container's own first in-flow child — a break point §3.1 says is the container's, so the
+        /// container travels with it rather than being left spanning the boundary.
+        /// </summary>
+        internal static bool NamesAPropagatingBreakBefore(BreakToken token, CssBox container)
+        {
+            if (token is not BlockBreakToken { IsBreakBefore: true, ChildToken: null } block
+                || !ReferenceEquals(block.Box, container))
+            {
+                return false;
+            }
+
+            return BreakPropagation.FirstInFlowChild(container) is { } first
+                   && BreakPropagation.PropagatesBreakBeforeOutward(first)
+                   && container.Boxes.IndexOf(first) == block.ResumeChildIndex;
         }
     }
 }

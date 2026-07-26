@@ -53,7 +53,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// PeachPDF's page progression is left-to-right, so <c>recto</c> is the right-hand page and
         /// <c>verso</c> the left-hand one.
         /// </remarks>
-        private static PageSide SideOf(string? value) => value switch
+        internal static PageSide SideOf(string? value) => value switch
         {
             CssConstants.Left or CssConstants.Verso => PageSide.Left,
             CssConstants.Right or CssConstants.Recto => PageSide.Right,
@@ -67,9 +67,11 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <remarks>
         /// A directional value beats a plain <c>page</c> on the other side of the pair, since §3.1 asks
         /// that all specified breaking requirements be honored and a directional break satisfies both.
-        /// Two <i>conflicting</i> directional values are unsatisfiable; the later box's own
-        /// <c>break-before</c> wins, pending the full combination and propagation rules.
+        /// Two <i>conflicting</i> directional values are unsatisfiable, and §3.1 says which one to keep:
+        /// the value on the latest element in flow, which at this break point is this box's own
+        /// <c>break-before</c> rather than the preceding sibling's <c>break-after</c>.
         /// </remarks>
+        /// <seealso cref="BreakPropagation.ForcedBreakBeforeAt"/>
         internal static PageSide RequiredSide(string? breakBefore, string? previousBreakAfter) =>
             SideOf(breakBefore) is var own && own is not PageSide.Any ? own : SideOf(previousBreakAfter);
 

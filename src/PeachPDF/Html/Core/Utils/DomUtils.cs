@@ -133,21 +133,27 @@ namespace PeachPDF.Html.Core.Utils
             while (true)
             {
                 // Siblings only, deliberately. The break point before a container's first in-flow child
-                // is the container's own (§3.1), so the run "ought" to continue out through it - but the
-                // members of a run are *moved*, and moving a container's predecessor while the container
-                // itself stays put is not a state layout can settle into: it was measured driving the
-                // pass driver into its own no-progress backstop. Pulling the run across a container needs
-                // the container to travel with it, which is §3.1 propagation proper and is not
-                // implemented. See PageBreakIntegrationTests' characterization of the stranded heading.
+                // is the container's own (§3.1), so the run "ought" to continue out through it - and it
+                // does, but not by widening this walk: the members of a run are *moved*, and moving a
+                // container's predecessor while the container itself stays put is not a state layout can
+                // settle into (measured driving the pass driver into its own no-progress backstop). The
+                // container has to travel too, so callers ask this about the *propagation anchor*
+                // (BreakPropagation.AnchorForBreakBefore) - a box at the level the run's members live at -
+                // rather than about the box that broke. See EarlyBreak.Discover.
                 var prev = GetPreviousSibling(current, false);
 
                 if (prev is null)
                     break;
 
-                // css-break §5.2: a forced break value on either side of the pair takes precedence
-                // over a break-avoidance value on the other - such a pair is never kept together.
-                if (BreakValues.IsForcedPageBreak(prev.BreakAfter) || BreakValues.IsForcedPageBreak(current.BreakBefore))
+                // css-break §3.1: a forced break value on either side of the pair takes precedence
+                // over a break-avoidance value on the other - such a pair is never kept together. Both
+                // sides are read through the chains they end and begin, for the same reason the break
+                // point itself is (BreakPropagation).
+                if (BreakPropagation.ForcedBreakAfterAt(prev) is not null
+                    || BreakPropagation.ForcedBreakBeforeAt(current) is not null)
+                {
                     break;
+                }
 
                 if (!BreakValues.AvoidsPageBreak(prev.BreakAfter) && !BreakValues.AvoidsPageBreak(current.BreakBefore))
                     break;
