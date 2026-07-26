@@ -18,9 +18,7 @@ internal static class ZipMimeTypes
 {
     public static string GetMimeType(string entryName)
     {
-        var extension = Path.GetExtension(entryName).TrimStart('.').ToLowerInvariant();
-
-        return extension switch
+        return ExtensionOf(entryName) switch
         {
             "html" or "htm" or "xhtml" => "text/html",
             "css" => "text/css",
@@ -46,5 +44,24 @@ internal static class ZipMimeTypes
 
             _ => "application/octet-stream",
         };
+    }
+
+    /// <summary>
+    /// The lowercased extension of a zip entry name, without the dot.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not <c>Path.GetExtension</c>. A zip entry name is always <c>/</c>-separated by
+    /// specification and is not a path on this machine — nothing in this app opens a file, least of all in
+    /// a browser, where there is no file system to open one on. <c>Path.GetExtension</c> would apply the
+    /// host's own separator rules to it (on Windows it treats <c>\</c> as one), which is simply the wrong
+    /// question to ask of an archive entry.
+    /// </remarks>
+    private static string ExtensionOf(string entryName)
+    {
+        var lastSeparator = entryName.LastIndexOf('/');
+        var fileName = lastSeparator < 0 ? entryName : entryName[(lastSeparator + 1)..];
+        var dot = fileName.LastIndexOf('.');
+
+        return dot < 0 ? string.Empty : fileName[(dot + 1)..].ToLowerInvariant();
     }
 }
