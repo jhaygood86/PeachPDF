@@ -30,8 +30,8 @@ namespace PeachPDF.Html.Core.Fragments
     /// <summary>
     /// What one decoration rectangle needs in order to honour <c>box-decoration-break</c>
     /// (<see href="https://www.w3.org/TR/css-break-3/#break-decoration">css-break-3 §6.2</see>): the
-    /// unbroken box this rectangle is a slice of, this fragment's own box, and which of its inline-axis
-    /// edges are real box edges rather than fragmentation breaks.
+    /// unbroken box this rectangle is a slice of, this fragment's own box, and which of its four edges
+    /// are real box edges rather than fragmentation breaks.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -47,9 +47,11 @@ namespace PeachPDF.Html.Core.Fragments
     /// <c>InlineFlowBox::paintFillLayer</c>.
     /// </para>
     /// <para>
-    /// The two edge flags are <b>physical</b> and derived from the two rectangles, so they cannot disagree
-    /// with the strip and they stay correct when a right-to-left line reverses the inline progression.
-    /// Every consumer is physical too — the left border edge, the left padding inset on an underline.
+    /// All four edge flags are <b>physical</b>, and every consumer is physical too — the left border edge,
+    /// the left padding inset on an underline. The inline pair is derived from the two rectangles, so it
+    /// cannot disagree with the strip and it stays correct when a right-to-left line reverses the inline
+    /// progression. The block pair cannot be derived that way and is read from the break record instead;
+    /// see <see cref="SliceGeometry.HasTopEdge"/>.
     /// </para>
     /// </remarks>
     /// <param name="UnbrokenStrip">
@@ -63,7 +65,21 @@ namespace PeachPDF.Html.Core.Fragments
     /// </param>
     /// <param name="HasLeftEdge">whether this rectangle's left edge is the box's own, not a break</param>
     /// <param name="HasRightEdge">whether this rectangle's right edge is the box's own, not a break</param>
-    internal sealed record SliceGeometry(RRect UnbrokenStrip, RRect FragmentRect, bool HasLeftEdge, bool HasRightEdge);
+    /// <param name="HasTopEdge">
+    /// whether this rectangle's top edge is the box's own, not a break. <b>Not</b> derived from geometry,
+    /// unlike the inline pair: two fragments of one box in two columns of a page occupy the <i>same</i>
+    /// block-axis range, so comparing rectangles cannot tell the box's own top from a column boundary. The
+    /// honest source is the break record — which boxes layout said carry on past a fragmentainer — and that
+    /// is what this reports.
+    /// </param>
+    /// <param name="HasBottomEdge">whether this rectangle's bottom edge is the box's own, not a break</param>
+    internal sealed record SliceGeometry(
+        RRect UnbrokenStrip,
+        RRect FragmentRect,
+        bool HasLeftEdge,
+        bool HasRightEdge,
+        bool HasTopEdge = true,
+        bool HasBottomEdge = true);
 
     /// <summary>
     /// One line's worth of a box's own decoration area — the fragmentainer-local equivalent of a

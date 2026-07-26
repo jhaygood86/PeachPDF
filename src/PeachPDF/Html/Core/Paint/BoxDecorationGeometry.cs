@@ -40,6 +40,14 @@ namespace PeachPDF.Html.Core.Paint
     /// and the leading inset of an underline.
     /// </param>
     /// <param name="HasRightEdge">whether the box's trailing border and padding belong to this rectangle</param>
+    /// <param name="HasTopEdge">
+    /// whether the box's own top border belongs to this rectangle. False on a fragment that resumes an
+    /// earlier fragmentainer. At a <i>page</i> break this only restates what the page clip already does — the
+    /// box's real top edge is on another page — but at a <b>column</b> boundary there is no clip, because two
+    /// columns share one page band, so this is the only thing that keeps <c>slice</c> from closing the box at
+    /// the break.
+    /// </param>
+    /// <param name="HasBottomEdge">whether the box's own bottom border belongs to this rectangle</param>
     /// <param name="NeedsClip">
     /// whether <paramref name="ClipRect"/> has to be pushed before painting. False whenever
     /// <paramref name="DecorationRect"/> is this rectangle already, which keeps the common case's content
@@ -50,15 +58,18 @@ namespace PeachPDF.Html.Core.Paint
         RRect ClipRect,
         bool HasLeftEdge,
         bool HasRightEdge,
+        bool HasTopEdge,
+        bool HasBottomEdge,
         bool NeedsClip)
     {
         /// <summary>
-        /// A rectangle no break touches: it is its own decoration area and owns both of its inline-axis
-        /// edges. The page canvas and every replaced element (monolithic, per
+        /// A rectangle no break touches: it is its own decoration area and owns all four of its edges. The
+        /// page canvas and every replaced element (monolithic, per
         /// <see href="https://www.w3.org/TR/css-break-3/#monolithic">§4.1</see>) paint through this.
         /// </summary>
         internal static BoxDecorationGeometry Unbroken(RRect rect) =>
-            new(rect, rect, HasLeftEdge: true, HasRightEdge: true, NeedsClip: false);
+            new(rect, rect, HasLeftEdge: true, HasRightEdge: true,
+                HasTopEdge: true, HasBottomEdge: true, NeedsClip: false);
 
         /// <summary>
         /// Resolves §6.2 for one of <paramref name="box"/>'s decoration rectangles.
@@ -74,7 +85,8 @@ namespace PeachPDF.Html.Core.Paint
                 // border at the break rather than one the page clip cuts away. Nothing to clip: the
                 // decoration area is already this fragment's.
                 return new BoxDecorationGeometry(slice.FragmentRect, slice.FragmentRect,
-                    HasLeftEdge: true, HasRightEdge: true, NeedsClip: false);
+                    HasLeftEdge: true, HasRightEdge: true,
+                    HasTopEdge: true, HasBottomEdge: true, NeedsClip: false);
             }
 
             // Slicing an unbroken box, or one whose decorations do not depend on where they sit, is
@@ -82,11 +94,13 @@ namespace PeachPDF.Html.Core.Paint
             if (slice.UnbrokenStrip == line.Rect || !NeedsUnbrokenGeometry(box))
             {
                 return new BoxDecorationGeometry(line.Rect, line.Rect,
-                    slice.HasLeftEdge, slice.HasRightEdge, NeedsClip: false);
+                    slice.HasLeftEdge, slice.HasRightEdge,
+                    slice.HasTopEdge, slice.HasBottomEdge, NeedsClip: false);
             }
 
             return new BoxDecorationGeometry(slice.UnbrokenStrip, line.Rect,
-                slice.HasLeftEdge, slice.HasRightEdge, NeedsClip: true);
+                slice.HasLeftEdge, slice.HasRightEdge,
+                slice.HasTopEdge, slice.HasBottomEdge, NeedsClip: true);
         }
 
         /// <summary>

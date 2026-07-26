@@ -45,25 +45,34 @@ namespace PeachPDF.Html.Core.Handlers
         /// top/bottom edges must not take their 45° mitre cut on that side, or a notch appears.
         /// </param>
         /// <param name="hasRightEdge">whether the box's trailing edge belongs to this rectangle</param>
-        public static void DrawBoxBorders(RGraphics g, CssBox box, RRect rect, bool hasLeftEdge, bool hasRightEdge)
+        /// <param name="hasTopEdge">
+        /// whether the box's own top edge belongs to this rectangle. False on a fragment that resumes an
+        /// earlier fragmentainer — the block-axis twin of <paramref name="hasLeftEdge"/>, and what keeps a box
+        /// split at a <i>column</i> boundary from closing itself off there (no clip cuts it: two columns share
+        /// one page band).
+        /// </param>
+        /// <param name="hasBottomEdge">whether the box's own bottom edge belongs to this rectangle</param>
+        public static void DrawBoxBorders(
+            RGraphics g, CssBox box, RRect rect,
+            bool hasLeftEdge, bool hasRightEdge, bool hasTopEdge = true, bool hasBottomEdge = true)
         {
             if (rect is not { Width: > 0, Height: > 0 }) return;
 
-            if (!(string.IsNullOrEmpty(box.BorderTopStyle) || box.BorderTopStyle == CssConstants.None || box.BorderTopStyle == CssConstants.Hidden) && box.ActualBorderTopWidth > 0)
+            if (hasTopEdge && !(string.IsNullOrEmpty(box.BorderTopStyle) || box.BorderTopStyle == CssConstants.None || box.BorderTopStyle == CssConstants.Hidden) && box.ActualBorderTopWidth > 0)
             {
-                DrawBorder(Border.Top, box, g, rect, hasLeftEdge, hasRightEdge);
+                DrawBorder(Border.Top, box, g, rect, hasLeftEdge, hasRightEdge, true, hasBottomEdge);
             }
             if (hasLeftEdge && !(string.IsNullOrEmpty(box.BorderLeftStyle) || box.BorderLeftStyle == CssConstants.None || box.BorderLeftStyle == CssConstants.Hidden) && box.ActualBorderLeftWidth > 0)
             {
-                DrawBorder(Border.Left, box, g, rect, true, hasRightEdge);
+                DrawBorder(Border.Left, box, g, rect, true, hasRightEdge, hasTopEdge, hasBottomEdge);
             }
-            if (!(string.IsNullOrEmpty(box.BorderBottomStyle) || box.BorderBottomStyle == CssConstants.None || box.BorderBottomStyle == CssConstants.Hidden) && box.ActualBorderBottomWidth > 0)
+            if (hasBottomEdge && !(string.IsNullOrEmpty(box.BorderBottomStyle) || box.BorderBottomStyle == CssConstants.None || box.BorderBottomStyle == CssConstants.Hidden) && box.ActualBorderBottomWidth > 0)
             {
-                DrawBorder(Border.Bottom, box, g, rect, hasLeftEdge, hasRightEdge);
+                DrawBorder(Border.Bottom, box, g, rect, hasLeftEdge, hasRightEdge, hasTopEdge, true);
             }
             if (hasRightEdge && !(string.IsNullOrEmpty(box.BorderRightStyle) || box.BorderRightStyle == CssConstants.None || box.BorderRightStyle == CssConstants.Hidden) && box.ActualBorderRightWidth > 0)
             {
-                DrawBorder(Border.Right, box, g, rect, hasLeftEdge, true);
+                DrawBorder(Border.Right, box, g, rect, hasLeftEdge, true, hasTopEdge, hasBottomEdge);
             }
         }
 
@@ -78,7 +87,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// <returns>Beveled border path, null if there is no rounded corners</returns>
         public static void DrawBorder(Border border, RGraphics g, CssBox box, RBrush brush, RRect rectangle)
         {
-            SetInOutsetRectanglePoints(border, box, rectangle, true, true);
+            SetInOutsetRectanglePoints(border, box, rectangle, true, true, true, true);
             g.DrawPolygon(brush, _borderPts);
         }
 
@@ -94,7 +103,11 @@ namespace PeachPDF.Html.Core.Handlers
         /// <param name="rect">the rectangle the border is enclosing</param>
         /// <param name="isLineStart">Specifies if the border is for a starting line (no bevel on left)</param>
         /// <param name="isLineEnd">Specifies if the border is for an ending line (no bevel on right)</param>
-        private static void DrawBorder(Border border, CssBox box, RGraphics g, RRect rect, bool isLineStart, bool isLineEnd)
+        /// <param name="isBlockStart">Specifies if the box's own top edge is here (no bevel at the top)</param>
+        /// <param name="isBlockEnd">Specifies if the box's own bottom edge is here (no bevel at the bottom)</param>
+        private static void DrawBorder(
+            Border border, CssBox box, RGraphics g, RRect rect,
+            bool isLineStart, bool isLineEnd, bool isBlockStart, bool isBlockEnd)
         {
             var style = GetStyle(border, box);
             var color = GetColor(border, box, style);
@@ -131,7 +144,7 @@ namespace PeachPDF.Html.Core.Handlers
                     // Acid2's own ".nose div div:before"/":after" (the nose's diamond, "border-style:
                     // none solid solid"/"solid solid none" with red/yellow/black/yellow colors) is
                     // exactly this technique.
-                    SetInOutsetRectanglePoints(border, box, rect, isLineStart, isLineEnd);
+                    SetInOutsetRectanglePoints(border, box, rect, isLineStart, isLineEnd, isBlockStart, isBlockEnd);
                     g.DrawPolygon(g.GetSolidBrush(color), _borderPts);
                 }
                 else if (style is CssConstants.Double or CssConstants.Groove or CssConstants.Ridge)
@@ -172,9 +185,22 @@ namespace PeachPDF.Html.Core.Handlers
         /// <param name="r">the rectangle the border is enclosing</param>
         /// <param name="isLineStart">Specifies if the border is for a starting line (no bevel on left)</param>
         /// <param name="isLineEnd">Specifies if the border is for an ending line (no bevel on right)</param>
+        /// <param name="isBlockStart">Specifies if the box's own top edge is here (no bevel at the top)</param>
+        /// <param name="isBlockEnd">Specifies if the box's own bottom edge is here (no bevel at the bottom)</param>
         /// <returns>Beveled border path, null if there is no rounded corners</returns>
-        private static void SetInOutsetRectanglePoints(Border border, CssBox b, RRect r, bool isLineStart, bool isLineEnd)
+        /// <remarks>
+        /// The four flags are one rule read on two axes: a side border mitres into the adjacent edge only
+        /// where that edge is really there. At a fragmentation break there is no adjacent edge to meet, so
+        /// the side runs square to the break — the same reason <paramref name="isLineStart"/> already
+        /// suppresses the top/bottom edges' 45° cut.
+        /// </remarks>
+        private static void SetInOutsetRectanglePoints(
+            Border border, CssBox b, RRect r,
+            bool isLineStart, bool isLineEnd, bool isBlockStart, bool isBlockEnd)
         {
+            var top = isBlockStart ? b.ActualBorderTopWidth : 0;
+            var bottom = isBlockEnd ? b.ActualBorderBottomWidth : 0;
+
             switch (border)
             {
                 case Border.Top:
@@ -188,10 +214,10 @@ namespace PeachPDF.Html.Core.Handlers
                         _borderPts[3].X += b.ActualBorderLeftWidth;
                     break;
                 case Border.Right:
-                    _borderPts[0] = new RPoint(r.Right - b.ActualBorderRightWidth, r.Top + b.ActualBorderTopWidth);
+                    _borderPts[0] = new RPoint(r.Right - b.ActualBorderRightWidth, r.Top + top);
                     _borderPts[1] = new RPoint(r.Right, r.Top);
                     _borderPts[2] = new RPoint(r.Right, r.Bottom);
-                    _borderPts[3] = new RPoint(r.Right - b.ActualBorderRightWidth, r.Bottom - b.ActualBorderBottomWidth);
+                    _borderPts[3] = new RPoint(r.Right - b.ActualBorderRightWidth, r.Bottom - bottom);
                     break;
                 case Border.Bottom:
                     _borderPts[0] = new RPoint(r.Left, r.Bottom - b.ActualBorderBottomWidth);
@@ -205,8 +231,8 @@ namespace PeachPDF.Html.Core.Handlers
                     break;
                 case Border.Left:
                     _borderPts[0] = new RPoint(r.Left, r.Top);
-                    _borderPts[1] = new RPoint(r.Left + b.ActualBorderLeftWidth, r.Top + b.ActualBorderTopWidth);
-                    _borderPts[2] = new RPoint(r.Left + b.ActualBorderLeftWidth, r.Bottom - b.ActualBorderBottomWidth);
+                    _borderPts[1] = new RPoint(r.Left + b.ActualBorderLeftWidth, r.Top + top);
+                    _borderPts[2] = new RPoint(r.Left + b.ActualBorderLeftWidth, r.Bottom - bottom);
                     _borderPts[3] = new RPoint(r.Left, r.Bottom);
                     break;
             }

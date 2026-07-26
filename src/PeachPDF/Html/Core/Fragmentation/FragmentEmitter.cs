@@ -157,8 +157,18 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// zero-height box they still report. The page grid needs no equivalent: there a continuing box's
         /// bounds are cut to the band, which is exactly what cannot separate two fragmentainers sharing one.
         /// </remarks>
+        /// <remarks>
+        /// <see cref="ContinuedFrom"/> is the previous fragmentainer's <see cref="Continuing"/> — the boxes
+        /// this one <i>resumes</i>. Kept here rather than re-derived because §6.2's block-axis edges are a
+        /// break fact and this is where that fact lives for a nested context: a box that carries on past a
+        /// column and one that ends there have the same block extent, so nothing downstream can tell them
+        /// apart.
+        /// </remarks>
         private readonly record struct NestedFragmentainer(
-            FragmentRegion Region, BoxGeometrySnapshot Geometry, IReadOnlySet<CssBox> Continuing);
+            FragmentRegion Region,
+            BoxGeometrySnapshot Geometry,
+            IReadOnlySet<CssBox> Continuing,
+            IReadOnlySet<CssBox> ContinuedFrom);
 
         /// <summary>
         /// A fragment before its first/last flags are known — which cannot be until every slot has been
@@ -191,6 +201,16 @@ namespace PeachPDF.Html.Core.Fragmentation
             internal bool BoundsEndAtItsContent { get; set; }
 
             /// <summary>
+            /// Whether the box carries on past this fragmentainer, and whether it resumes one it began in
+            /// earlier — §6.2's block-axis edges (<see cref="SliceGeometry.HasTopEdge"/>). Read from the
+            /// break record rather than from geometry, which cannot answer it inside a nested context.
+            /// </summary>
+            internal bool ContinuesIntoTheNext { get; set; }
+
+            /// <inheritdoc cref="ContinuesIntoTheNext"/>
+            internal bool ContinuedFromThePrevious { get; set; }
+
+            /// <summary>
             /// Whether the box's own decoration area is its border box rather than a set of per-line
             /// rectangles — a block-level box, which is one rectangle. Resolved at materialization from the
             /// box's final bounds, because a box that continues into a later fragmentainer has not had its
@@ -211,6 +231,15 @@ namespace PeachPDF.Html.Core.Fragmentation
 
         private readonly SortedDictionary<int, (Slot Slot, Draft Root, bool HasPrintableContent)> _emitted = [];
         private readonly Dictionary<FragmentKey, (int First, int Last)> _spans = [];
+
+        /// <summary>
+        /// Where each box's fragments begin and end in fill order, ignoring which nested fragmentainer they
+        /// landed in — the question <see cref="_spans"/> cannot answer, since two columns of one slot are two
+        /// keys. A break edge only exists where there is a fragment on the other side of it, and that is what
+        /// this says.
+        /// </summary>
+        private readonly Dictionary<(CssBox Box, CssProxyBox? Owner),
+            ((int Slot, int Instance) First, (int Slot, int Instance) Last)> _fragmentRange = [];
         private readonly HashSet<(FragmentKey Key, int Slot)> _continuedFrom = [];
         private readonly HashSet<(FragmentKey Key, int Slot)> _continuesInto = [];
         private readonly Dictionary<FragmentKey, Dictionary<CssLineBox, RRect>> _rectangles = [];
@@ -218,6 +247,9 @@ namespace PeachPDF.Html.Core.Fragmentation
         private readonly SortedSet<int> _stale = [];
         private readonly Dictionary<(CssBox Root, int Slot), List<NestedFragmentainer>> _nested = [];
         private int _lastEmittedSlot = -1;
+
+        /// <summary>The empty box set the first nested fragmentainer of a slot resumes nothing from.</summary>
+        private static readonly IReadOnlySet<CssBox> NoBoxes = new HashSet<CssBox>(ReferenceEqualityComparer.Instance);
 
         /// <summary>
         /// Hands over one nested fragmentainer <paramref name="contextRoot"/> has just finished filling
@@ -246,7 +278,10 @@ namespace PeachPDF.Html.Core.Fragmentation
             }
 
             fragmentainers.Add(new NestedFragmentainer(
-                new FragmentRegion(band.Top, band.Bottom, inline.Left, inline.Right), geometry, continuing));
+                new FragmentRegion(band.Top, band.Bottom, inline.Left, inline.Right),
+                geometry,
+                continuing,
+                fragmentainers.Count > 0 ? fragmentainers[^1].Continuing : NoBoxes));
         }
 
         /// <summary>
@@ -371,6 +406,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             // describing a fragment that no longer exists.
             _spans.Clear();
             _rectangles.Clear();
+            _fragmentRange.Clear();
             foreach (var (_, root, _) in _emitted.Values)
             {
                 RecordSpansAndRectangles(root);
@@ -432,6 +468,14 @@ namespace PeachPDF.Html.Core.Fragmentation
                 ? (Math.Min(span.First, draft.Slot.Index), Math.Max(span.Last, draft.Slot.Index))
                 : (draft.Slot.Index, draft.Slot.Index);
 
+            var boxKey = (draft.Key.Box, draft.Key.Owner);
+            var position = (draft.Slot.Index, draft.Key.Instance);
+
+            _fragmentRange[boxKey] = _fragmentRange.TryGetValue(boxKey, out var range)
+                ? (IsBefore(position, range.First) ? position : range.First,
+                   IsBefore(range.Last, position) ? position : range.Last)
+                : (position, position);
+
             foreach (var (line, rect) in draft.Lines)
             {
                 if (!_rectangles.TryGetValue(draft.Key, out var rectangles))
@@ -447,6 +491,10 @@ namespace PeachPDF.Html.Core.Fragmentation
                 RecordSpansAndRectangles(child);
             }
         }
+
+        /// <summary>Fill order: pagination slot first, then which nested fragmentainer of it.</summary>
+        private static bool IsBefore((int Slot, int Instance) a, (int Slot, int Instance) b) =>
+            a.Slot != b.Slot ? a.Slot < b.Slot : a.Instance < b.Instance;
 
         private void EmitSlot(int index)
         {
@@ -545,12 +593,14 @@ namespace PeachPDF.Html.Core.Fragmentation
 
                     // One rectangle: nothing slices it in the inline axis, so the strip is the rectangle
                     // itself. Its block axis is still fragmented, which is what the band-cut FragmentRect
-                    // carries.
+                    // and the two block-axis edge flags carry.
                     lines.Add(new LineFragment(local, null,
                         new SliceGeometry(
                             local,
                             Localize(BandCut(bounds, draft.Box, draft.Region), draft.OriginY),
-                            HasLeftEdge: true, HasRightEdge: true)));
+                            HasLeftEdge: true, HasRightEdge: true,
+                            HasTopEdge: !ResumesAnEarlierFragment(draft),
+                            HasBottomEdge: !ContinuesIntoALaterFragment(draft))));
                 }
 
                 return lines;
@@ -567,6 +617,36 @@ namespace PeachPDF.Html.Core.Fragmentation
             }
 
             return lines;
+        }
+
+        /// <summary>
+        /// Whether this fragment's top edge is a fragmentation break rather than the box's own —
+        /// §6.2's question, answered by the break record <b>and</b> by whether anything is actually on the
+        /// other side of it.
+        /// </summary>
+        /// <remarks>
+        /// Both halves are load-bearing. The record alone cannot answer it, because a §4.3 mover can
+        /// relocate a box <i>after</i> the pass that recorded it as continuing — a <c>break-inside: avoid</c>
+        /// card whose first lines had already been placed is laid out again whole at the top of the next
+        /// page, and the earlier fragment it is still recorded as resuming has been un-emitted
+        /// (<see cref="InvalidateFrom"/>). Reading the record on its own opened such a box at its own top.
+        /// And geometry alone cannot answer it either, which is the whole reason the record is consulted:
+        /// two column fragments of one box occupy the same block-axis range.
+        /// </remarks>
+        private bool ResumesAnEarlierFragment(Draft draft) =>
+            draft.ContinuedFromThePrevious && HasFragmentBeside(draft, before: true);
+
+        /// <inheritdoc cref="ResumesAnEarlierFragment"/>
+        private bool ContinuesIntoALaterFragment(Draft draft) =>
+            draft.ContinuesIntoTheNext && HasFragmentBeside(draft, before: false);
+
+        private bool HasFragmentBeside(Draft draft, bool before)
+        {
+            if (!_fragmentRange.TryGetValue((draft.Key.Box, draft.Key.Owner), out var range)) return false;
+
+            var position = (draft.Slot.Index, draft.Key.Instance);
+
+            return before ? IsBefore(range.First, position) : IsBefore(position, range.Last);
         }
 
         /// <summary>
@@ -683,6 +763,17 @@ namespace PeachPDF.Html.Core.Fragmentation
             draft.IsMonolithic = MonolithicContent.IsMonolithic(box);
             draft.UsesOwnBounds = usesOwnBounds;
             draft.BoundsEndAtItsContent = nested is { } fragmentainer && fragmentainer.Continuing.Contains(box);
+
+            // Which of the box's block-axis edges are its own, from the two records that state it: the pass's
+            // own resumption chain for the page grid, and the nested fragmentainer's carry sets for a column.
+            // Both are consulted for a nested fragment, because a box can resume a *page* into a column - the
+            // first column of a slot has no previous column to have carried it.
+            var passKey = new FragmentKey(box, null, 0);
+
+            draft.ContinuedFromThePrevious = _continuedFrom.Contains((passKey, slot.Index))
+                || (nested?.ContinuedFrom.Contains(box) ?? false);
+            draft.ContinuesIntoTheNext = _continuesInto.Contains((passKey, slot.Index))
+                || (nested?.Continuing.Contains(box) ?? false);
 
             return draft;
         }
@@ -895,6 +986,12 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <c>inline-block</c> <c>::before</c>, say — so those rectangles are stacked down the block axis
         /// rather than being slices along the inline one, and concatenating their widths would describe a box
         /// that does not exist. Each is its own decoration area instead.
+        /// </para>
+        /// <para>
+        /// Every rectangle here keeps both <b>block-axis</b> edges. A box broken across lines is not sliced in
+        /// that axis at all — its top and bottom borders belong to each line it appears on, which is what a
+        /// wrapping inline looks like in every UA — so the block pair only ever answers for the single
+        /// whole-box rectangle a block-level box produces.
         /// </para>
         /// </remarks>
         private Dictionary<CssLineBox, SliceGeometry> SliceGeometriesOf(

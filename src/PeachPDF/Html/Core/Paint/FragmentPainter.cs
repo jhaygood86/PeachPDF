@@ -405,7 +405,8 @@ namespace PeachPDF.Html.Core.Paint
 
                 if (geometry.NeedsClip) g.PushClip(geometry.ClipRect);
 
-                BordersDrawHandler.DrawBoxBorders(g, box, rectForBorders, geometry.HasLeftEdge, geometry.HasRightEdge);
+                BordersDrawHandler.DrawBoxBorders(g, box, rectForBorders,
+                    geometry.HasLeftEdge, geometry.HasRightEdge, geometry.HasTopEdge, geometry.HasBottomEdge);
 
                 if (geometry.NeedsClip) g.PopClip();
             }

@@ -817,6 +817,132 @@ namespace PeachPDF.Tests.Html.Core.Fragments
                 $"decoration {line.Rect.Bottom} must cover its content {words.Max(w => w.Rect.Bottom)}");
         }
 
+        // ─── §6.2's block-axis edges ───────────────────────────────────────────────
+
+        /// <summary>
+        /// A box split at a column boundary owns the top edge of its leading fragment and the bottom edge
+        /// of its trailing one, and neither of the two edges the break made. Those are the only decoration
+        /// edges §6.2's <c>slice</c> leaves open there — a page break has a clip to cut the border away, and
+        /// two columns of one page share a band, so nothing cuts anything.
+        /// </summary>
+        [Fact]
+        public async Task ABoxSplitAcrossColumns_OwnsOnlyTheBlockEdgesTheBreakDidNotMake()
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(SplitAcrossColumns(), pageHeight: 200, margin: 0);
+
+            // Fill order, which for a multi-page multicol is column within page: the paragraph is longer than
+            // one page's columns, so the fragment that ends it is not simply the rightmost one.
+            var fragments = FragmentsOf(container.FragmentTree!, "long")
+                .OrderBy(f => f.FragmentainerIndex).ThenBy(f => f.Rect.X).ToList();
+
+            Assert.True(fragments.Count >= 2, $"expected a fragment per column, got {fragments.Count}");
+
+            // The two column fragments of the first page share a band, so nothing but the break record
+            // distinguishes the boundary between them from the box's own edges.
+            Assert.Equal(fragments[0].FragmentainerIndex, fragments[1].FragmentainerIndex);
+            Assert.True(fragments[1].Rect.X > fragments[0].Rect.Right);
+
+            var leading = Assert.Single(fragments[0].Lines).Slice;
+            var trailing = Assert.Single(fragments[^1].Lines).Slice;
+
+            Assert.True(leading.HasTopEdge, "the leading fragment starts at the box's own top");
+            Assert.False(leading.HasBottomEdge, "the leading fragment ends at a column break");
+
+            Assert.False(trailing.HasTopEdge, "the trailing fragment starts at a break");
+            Assert.True(trailing.HasBottomEdge, "the trailing fragment ends at the box's own bottom");
+
+            // Everything between owns neither: both of its block edges are breaks.
+            foreach (var middle in fragments.Skip(1).Take(fragments.Count - 2))
+            {
+                var slice = Assert.Single(middle.Lines).Slice;
+                Assert.True(slice is { HasTopEdge: false, HasBottomEdge: false });
+            }
+
+            // The inline axis is untouched: a block-level box is one rectangle wide, whichever column it is in.
+            Assert.All(fragments, f => Assert.True(f.Lines[0].Slice is { HasLeftEdge: true, HasRightEdge: true }));
+        }
+
+        /// <summary>
+        /// The same question on the page grid, where the break record is the driver's own resumption chain.
+        /// Nothing visible changes there — the page clip has always removed the border at the break — but the
+        /// two mechanisms have to agree, or a box that breaks both ways would contradict itself.
+        /// </summary>
+        [Fact]
+        public async Task ABlockContinuingOntoTheNextPage_OwnsOnlyTheBlockEdgesTheBreakDidNotMake()
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap($"<p id='long' style='margin:0;font:10pt Arial'>{Words(300)}</p>"),
+                pageHeight: 200, margin: 0);
+
+            var fragments = FragmentsOf(container.FragmentTree!, "long")
+                .OrderBy(f => f.FragmentainerIndex).ToList();
+
+            Assert.True(fragments.Count >= 2, $"expected a fragment per page, got {fragments.Count}");
+
+            Assert.True(Assert.Single(fragments[0].Lines).Slice.HasTopEdge);
+            Assert.False(Assert.Single(fragments[0].Lines).Slice.HasBottomEdge);
+
+            Assert.False(Assert.Single(fragments[^1].Lines).Slice.HasTopEdge);
+            Assert.True(Assert.Single(fragments[^1].Lines).Slice.HasBottomEdge);
+        }
+
+        /// <summary>
+        /// A §4.3 mover can relocate a box <i>after</i> the pass that recorded it as continuing: a
+        /// monolithic box whose first lines had already been placed is laid out again whole on the next page,
+        /// and the fragment it was resuming is un-emitted. The break record is not retracted with it, so the
+        /// record alone would open the box at its own top — which is why a break edge also has to have a
+        /// fragment on the other side of it to be one.
+        /// </summary>
+        [Fact]
+        public async Task ABoxARetroactiveMoverRelocated_OwnsAllFourOfItsEdges()
+        {
+            // 14 fillers is the alignment that puts the page boundary inside the card's own text, so the
+            // pass records the card as continuing before the mover relocates it whole.
+            const int filler = 14;
+
+            var (_, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='font:10pt Arial'>" +
+                    string.Concat(Enumerable.Range(0, filler).Select(i => $"<p style='margin:0'>Filler {i}</p>")) +
+                    $"<div id='card' style='overflow:hidden;border:1pt solid #000'>{Words(40)}</div>" +
+                    "</div>"),
+                pageHeight: 200, margin: 0);
+
+            // Monolithic content (§2) is never split, so however the boundary fell it is one fragment.
+            var fragment = Assert.Single(FragmentsOf(container.FragmentTree!, "card"));
+            var slice = Assert.Single(fragment.Lines).Slice;
+
+            Assert.True(slice is { HasTopEdge: true, HasBottomEdge: true });
+        }
+
+        [Fact]
+        public async Task AnUnfragmentedBlock_OwnsAllFourOfItsEdges()
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap("<p id='p' style='margin:0'>hello</p>"));
+
+            var slice = Assert.Single(Assert.Single(FragmentsOf(container.FragmentTree!, "p")).Lines).Slice;
+
+            Assert.True(slice is { HasLeftEdge: true, HasRightEdge: true, HasTopEdge: true, HasBottomEdge: true });
+        }
+
+        /// <summary>
+        /// An inline box broken across lines is not sliced in the block axis at all: its top and bottom
+        /// borders belong to every line it appears on, which is what a wrapping inline looks like in every
+        /// UA. So every one of its rectangles keeps both block-axis edges, including across a page break.
+        /// </summary>
+        [Fact]
+        public async Task AWrappingInline_KeepsBothBlockEdgesOnEveryLine()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                SpanningInline(leadingSpacing: false), pageHeight: 160, margin: 0);
+
+            var lines = LinesOf(container.FragmentTree!, LayoutHarness.FindById(root, "s")!);
+
+            Assert.True(lines.Count > 3, $"expected the inline to wrap and to cross a page, got {lines.Count} lines");
+            Assert.All(lines, line => Assert.True(line.Slice is { HasTopEdge: true, HasBottomEdge: true }));
+        }
+
         /// <summary>
         /// A paragraph long enough to fill one column and continue into the next, in a container whose
         /// columns are the only thing separating the two fragments.

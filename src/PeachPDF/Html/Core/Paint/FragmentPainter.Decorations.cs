@@ -226,7 +226,8 @@ namespace PeachPDF.Html.Core.Paint
         private static bool PushBreakEdgeClip(
             RGraphics g, CssBox box, in BoxDecorationGeometry geometry, IReadOnlyList<BoxShadowGrammar.ShadowLayer> layers)
         {
-            if (geometry is { HasLeftEdge: true, HasRightEdge: true }) return false;
+            if (geometry is { HasLeftEdge: true, HasRightEdge: true, HasTopEdge: true, HasBottomEdge: true })
+                return false;
 
             var bleed = 0d;
 
@@ -244,9 +245,9 @@ namespace PeachPDF.Html.Core.Paint
 
             g.PushClip(RRect.FromLTRB(
                 geometry.HasLeftEdge ? shape.Left - bleed : geometry.ClipRect.Left,
-                shape.Top - bleed,
+                geometry.HasTopEdge ? shape.Top - bleed : geometry.ClipRect.Top,
                 geometry.HasRightEdge ? shape.Right + bleed : geometry.ClipRect.Right,
-                shape.Bottom + bleed));
+                geometry.HasBottomEdge ? shape.Bottom + bleed : geometry.ClipRect.Bottom));
 
             return true;
         }
