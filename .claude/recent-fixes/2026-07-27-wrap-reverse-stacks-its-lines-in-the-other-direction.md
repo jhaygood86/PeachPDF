@@ -83,13 +83,15 @@ height of its tallest line (#462 — measured identical before and after this ch
 
 ## Evidence
 
-Tests: `FlexboxIntegrationTests` +5 cases (unequal-size stacking with an explicit no-overlap
-assertion, `align-content: flex-end` and `space-between` against the reversed edges, an overflowing
-container, and a `flex-direction: column` container whose lines pack against the right edge),
-`FlexGridFragmentationIntegrationTests` +1. All five fail on the unfixed build. Verified load-bearing
-by neutralizing each half in turn: restoring the permutation → **5 fail**; keeping the reflection but
-dropping the container's definite cross size for the content extent → **2** (the overflow case and the
-column one, where the free space has to be there for the lines to be packed against the far edge).
+Tests: `FlexboxIntegrationTests` +10 cases counting theory rows, `FlexGridFragmentationIntegrationTests`
++1. The five that state the stacking (unequal sizes with an explicit no-overlap assertion,
+`align-content: flex-end` and `space-between` against the reversed edges, an overflowing container, and
+a `flex-direction: column` container whose lines pack against the right edge) all fail on the unfixed
+build. Verified load-bearing by neutralizing each half in turn: restoring the permutation → **5 fail**;
+keeping the reflection but dropping the container's definite cross size for the content extent → **2**
+(the overflow case and the column one, where the free space has to be there for the lines to be packed
+against the far edge). The two review fixes are pinned by one case each, each failing alone when its own
+fix is neutralized.
 
 Full net8.0 suite green (**6749** passed), CLI green (**96**), **100% diff coverage**, zero-warning
 `dotnet build PeachPDF.slnx -t:Rebuild`.
