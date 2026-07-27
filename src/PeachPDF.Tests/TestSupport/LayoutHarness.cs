@@ -1,4 +1,5 @@
 using PeachPDF.Adapters;
+using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -26,12 +27,19 @@ namespace PeachPDF.Tests.TestSupport
         /// test that has to put something in the tree the parser cannot produce — a box whose layout
         /// behaviour is the subject, rather than a box some markup happens to produce.
         /// </param>
+        /// <param name="after">
+        /// Optional: run once layout has finished, with the same <see cref="RGraphics"/> layout itself
+        /// used, for a test whose subject is a layout call the document cannot make on its own — running
+        /// one engine again over a box it already laid out, say. It runs before the graphics context is
+        /// disposed, which is why it belongs here rather than after the call returns.
+        /// </param>
         internal static async Task<(CssBox Root, HtmlContainerInt Container)> LayoutAsync(
             string html,
             double pageWidth = 595,
             double pageHeight = 842,
             double margin = 20,
-            Action<CssBox>? prepare = null)
+            Action<CssBox>? prepare = null,
+            Func<CssBox, HtmlContainerInt, RGraphics, Task>? after = null)
         {
             var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(adapter)
@@ -67,6 +75,12 @@ namespace PeachPDF.Tests.TestSupport
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
+
+            if (after is not null)
+            {
+                await after(container.Root!, container, graphics);
+            }
+
             return (container.Root!, container);
         }
 

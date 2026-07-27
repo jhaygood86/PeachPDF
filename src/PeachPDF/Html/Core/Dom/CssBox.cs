@@ -366,6 +366,21 @@ namespace PeachPDF.Html.Core.Dom
         internal IReadOnlyList<UnfinishedTableCell> UnfinishedTableCells { get; set; } = [];
 
         /// <summary>
+        /// What <c>CssLayoutEngineTable</c> settled once for this table, kept here because the engine is
+        /// constructed afresh every time it runs. Null on every box that is not a table, and on a table
+        /// until its first layout.
+        /// </summary>
+        /// <remarks>
+        /// Replaced wholesale by every layout of this table that does not continue an earlier fragmentainer
+        /// pass, which is what keeps a re-layout — the per-page-width reflow loop, <c>ShrinkToFit</c>, a
+        /// §4.3 relocation — starting from the markup. A resumed pass over a table that has settled nothing
+        /// replaces it too, since there is nothing to inherit and nothing an earlier pass could be
+        /// destroyed by. See <see cref="Fragmentation.TableSetup"/> for what a resumed pass inherits from it
+        /// and why each of those things is destructive when done twice.
+        /// </remarks>
+        internal TableSetup? TableSetup { get; set; }
+
+        /// <summary>
         /// The vertical line segments (in absolute document coordinates) to draw between adjacent
         /// columns of a multi-column container — one segment per gap per page-row actually used.
         /// Set by <see cref="CssLayoutEngineColumns"/>, painted by <see cref="FragmentPainter"/>.
@@ -1889,7 +1904,11 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 else if (Display is CssConstants.Table or CssConstants.InlineTable)
                 {
-                    await LayoutMonolithicContent(g, CssLayoutEngineTable.PerformLayout);
+                    // The record travels into the engine so it can tell a resumed pass from a fresh layout
+                    // of the same box - the once-per-table half of its work is destructive when repeated
+                    // on top of rows another pass has already emitted (see TableSetup). It is null at this
+                    // arm for every document today: a table paginates itself inside one pass.
+                    await LayoutMonolithicContent(g, CssLayoutEngineTable.PerformLayout, resume);
                 }
                 else
                 {
@@ -2090,13 +2109,14 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         private async ValueTask LayoutMonolithicContent(
-            RGraphics g, Func<RGraphics, CssBox, ValueTask> engine, bool layoutOutOfFlowChildren = true)
+            RGraphics g, Func<RGraphics, CssBox, BreakToken?, ValueTask> engine, BreakToken? resume,
+            bool layoutOutOfFlowChildren = true)
         {
             var previous = HtmlContainer?.DetachFragmentainer();
 
             try
             {
-                await engine(g, this);
+                await engine(g, this, resume);
 
                 // The multi-column engine lays out every child itself, including out-of-flow ones; the
                 // flex/table/grid engines deliberately place only in-flow items.
