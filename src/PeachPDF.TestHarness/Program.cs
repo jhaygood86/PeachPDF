@@ -5101,6 +5101,67 @@ await SaveShowcaseAsync("css_nesting", "Selectors & Cascade", "CSS Nesting",
     "two-level-deep nested combinator (`& + .tag`), resolved against the parent exactly like `:is(.card)`.",
     nestingHtml, pdfConfig);
 
+// ── Selectors PeachPDF recognizes but never matches: they must not invalidate their list ───
+// Every declaration below arrives through a selector list that also names something PeachPDF has no
+// elements for (`:host`, `::placeholder`, a vendor-prefixed reset pseudo-element). An unrecognized name
+// invalidates the WHOLE list (CSS Selectors 3 §4), so before these were registered this page rendered
+// with no design tokens at all — which is what a real Tailwind v4 document did.
+var unmatchableSelectorHtml =
+    "<html><head><style>" +
+    // The exact shape Tailwind v4 emits: the entire design-token block, guarded by `:root, :host`.
+    ":root, :host {" +
+    "  --font-body: sans-serif; --ink: oklch(0.25 0.03 260); --muted: #64748b;" +
+    "  --brand: oklch(0.55 0.17 250); --accent: oklch(0.62 0.19 25); --surface: #f1f5f9;" +
+    "  --spacing: 4pt; --radius: 10px;" +
+    "}" +
+    "body { font-family: var(--font-body); color: var(--ink); margin: calc(var(--spacing) * 6); }" +
+    "h2 { font-size: 20px; margin: 0 0 4px; } .note { color: var(--muted); font-size: 12px; margin: 0 0 16px; }" +
+    // A preflight-shaped reset: the `::placeholder` half selects nothing, the `p`/`.card` half must apply.
+    ".card, ::placeholder {" +
+    "  font-size: 13px; background: var(--surface); border-left: calc(var(--spacing) * 1.5) solid var(--brand);" +
+    "}" +
+    ".card {" +
+    "  max-width: 420px; margin-bottom: calc(var(--spacing) * 3.5); padding: calc(var(--spacing) * 4);" +
+    "  border-radius: var(--radius);" +
+    "}" +
+    ".card b { display: block; font-size: 15px; color: var(--brand); margin-bottom: calc(var(--spacing) * 1.5); }" +
+    ".card .body { display: block; }" +
+    // Vendor-prefixed pseudo-elements, verbatim from a normalize/reset sheet.
+    ".card.alt b, ::-webkit-file-upload-button, ::-moz-focus-inner { color: var(--accent); }" +
+    ".card.alt { border-left-color: var(--accent); }" +
+    // A functional shadow-DOM selector and a vendor pseudo-class, again sharing their list.
+    ".tag, :host(.theme), :-moz-focusring {" +
+    "  display: inline-block; margin-top: calc(var(--spacing) * 2); padding: 2px 8px;" +
+    "  border-radius: 999px; font-size: 11px; background: var(--brand); color: #fff;" +
+    "}" +
+    ".card.alt .tag { background: var(--accent); }" +
+    "</style></head><body>" +
+    "<h2>Recognized-but-unmatchable selectors</h2>" +
+    "<p class=\"note\">Every colour, font and measure on this page is declared in a rule whose selector list also names " +
+    "something PeachPDF has no elements for. Registering those names keeps the list <b>valid</b>, so the half that " +
+    "does match still applies — and the unmatchable half still selects nothing.</p>" +
+    "<div class=\"card\">" +
+    "<b>:root, :host</b>" +
+    "<span class=\"body\">The design tokens driving this card come from a <code>:root, :host</code> block — the shape a " +
+    "utility framework emits. Its <code>:root</code> half applies; <code>:host</code> matches nothing.</span>" +
+    "<span class=\"tag\">tokens</span><span class=\"tag\">var()</span>" +
+    "</div>" +
+    "<div class=\"card alt\">" +
+    "<b>::placeholder and friends</b>" +
+    "<span class=\"body\">This card's accent comes from a list shared with <code>::-webkit-file-upload-button</code> " +
+    "and <code>::-moz-focus-inner</code>; its panel style from one shared with <code>::placeholder</code>, and its " +
+    "pills from one shared with <code>:host(.theme)</code>.</span>" +
+    "<span class=\"tag\">::placeholder</span><span class=\"tag\">:host()</span>" +
+    "</div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("unmatchable_selectors", "Selectors & Cascade", "Unmatchable Selectors",
+    "Selectors PeachPDF recognizes but can never match — `:host`, `:host()`, `::placeholder`, and vendor " +
+    "extensions like `::-webkit-file-upload-button` — no longer invalidate the selector list they share with a " +
+    "real selector. Every token, colour and measure here arrives through such a list, including a Tailwind-v4-" +
+    "shaped `:root, :host` design-token block.",
+    unmatchableSelectorHtml, pdfConfig);
+
 // ─── CSS Grid layout showcase ──────────────────────────────────────────────
 
 // Exercises the grid engine (issue #232): fixed + fr tracks, item spanning, dense auto-placement

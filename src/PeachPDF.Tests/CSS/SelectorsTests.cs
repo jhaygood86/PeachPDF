@@ -68,7 +68,11 @@ public class SelectorsTests
 
     [Theory]
     [InlineData(false, false, 277)]
-    [InlineData(false, true, 0)]
+    // Bootstrap's vendor-prefixed pseudo-elements (::-moz-placeholder, ::-webkit-input-placeholder,
+    // ::-ms-expand, …) now parse and never match, instead of invalidating the rules they appear in -
+    // so they survive under strict parsing too, not only under AllowInvalidSelectors. See
+    // UnmatchableSelectors and UnmatchableSelectorRegistrationTests.
+    [InlineData(false, true, 6)]
     [InlineData(true, false, 277)]
     [InlineData(true, true, 6)]
     public async Task FindAllStandardPseudoElementSelectors(bool allowInvalidSelectors,
