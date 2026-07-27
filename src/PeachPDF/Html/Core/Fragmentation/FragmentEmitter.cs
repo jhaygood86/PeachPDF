@@ -1025,7 +1025,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </remarks>
         private RRect BandCut(RRect rect, CssBox box, FragmentRegion region) =>
             container.HasCloneDecorations
-                ? region.BlockCut(rect, DomUtils.ClonedBlockStart(box.ParentBox), DomUtils.ClonedBlockEnd(box.ParentBox))
+                ? region.BlockCut(rect, DomUtils.ClonedBlockStart(box.ParentBox, stopAt: null), DomUtils.ClonedBlockEnd(box.ParentBox))
                 : region.BlockCut(rect, 0, 0);
 
         /// <summary>
