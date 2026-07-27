@@ -752,7 +752,7 @@ namespace PeachPDF.Html.Core.Fragmentation
 
                     if (!TryGetWordRect(box, i, snapshot, out var rect)) continue;
 
-                    if (ClaimsWord(rect, slot, region, isFixed))
+                    if (ClaimsWord(rect, slot.Index, region, isFixed))
                         words.Add(new TextFragment(Localize(rect, originY), box.Words[i]));
                 }
             }
@@ -810,22 +810,34 @@ namespace PeachPDF.Html.Core.Fragmentation
         }
 
         /// <summary>
-        /// Whether this fragmentainer claims the word at <paramref name="rect"/>. §4.1 has already made the
-        /// line the unit of block-axis fragmentation, so this is only ever the question of <i>which single</i>
-        /// fragmentainer a line landed in — never of how much of it is where.
+        /// Whether the fragmentainer of pagination slot <paramref name="slotIndex"/> claims the word at
+        /// <paramref name="rect"/>.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// <b>The overlap rule cannot answer it on its own, because layout does not place lines to the
-        /// precision the rule assumes.</b> <c>CssRect.WouldStraddleFragmentainer</c> tolerates a line whose
-        /// bottom overhangs its band by up to <see cref="HtmlContainerInt.PageBoundaryEpsilon"/> — it keeps
-        /// the line where it is rather than moving it on — while
-        /// <see cref="FragmentRegion.Contains"/> counts as little as <see cref="BandOverlapEpsilon"/> of that
-        /// same overhang as membership of the next band. A line ending inside that window was therefore held
-        /// by two pages at once and drawn a second time, above the following page's content top (issue #446).
-        /// <see cref="HtmlContainerInt.SlotStartingAt"/> is the convention layout itself used
-        /// (<c>BandStartingAt(Top)</c>), so asking it here settles the two with one tolerance instead of two
-        /// that merely agree over most of their range.
+        /// <b>Only a line layout could have moved belongs to one fragmentainer alone.</b> Where
+        /// <c>CssRect.WouldStraddleFragmentainer</c> answered "no, it fits" — which it does for an overhang
+        /// of up to <see cref="HtmlContainerInt.PageBoundaryEpsilon"/> — §4.1 has made the line the unit and
+        /// the line is wholly the earlier band's, whatever <see cref="FragmentRegion.Contains"/>'s much finer
+        /// <see cref="BandOverlapEpsilon"/> says about the sliver hanging past the boundary. Asking
+        /// <see cref="HtmlContainerInt.SlotStartingAt"/> — the convention layout used
+        /// (<c>BandStartingAt(Top)</c>) — settles both with one tolerance rather than two that agree over
+        /// most of their range, and stops the page's last line being drawn again above the next page's
+        /// content top (<see href="https://github.com/jhaygood86/PeachPDF/issues/446">#446</see>).
+        /// </para>
+        /// <para>
+        /// <b>A line layout never had the chance to move is a different case, and the reason the tie-break is
+        /// conditional.</b> A flex or grid item's content is laid out under
+        /// <see cref="HtmlContainerInt.SuppressWordPageBreaks"/> and never revisited when
+        /// <c>AssignLocations</c> translates it, and <c>MonolithicContent.FitsNoFragmentainer</c> keeps
+        /// anything taller than the band exactly where it is — so such a line can overhang by many points,
+        /// with no fragmentainer of its own to be whole in. Both bands must keep it: the earlier one shows
+        /// the sliver that fits, the later one the remainder, and that second claim is the only reason the
+        /// content survives the boundary at all. Applied unconditionally, the tie-break deleted it — measured
+        /// at 45 words, one line per break, on a four-page flex document
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/477">#477</see>).
+        /// <see cref="HtmlContainerInt.FallsPast"/> is exactly the "layout could not fix this" test, in the
+        /// same tolerance as the rest.
         /// </para>
         /// <para>
         /// It is a <i>tie-break on top of</i> the region test rather than a replacement for it, and that is
@@ -841,9 +853,11 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// slot, so the one slot its own Y falls in would name a single page instead of all of them.
         /// </para>
         /// </remarks>
-        private bool ClaimsWord(RRect rect, Slot slot, FragmentRegion region, bool isFixed) =>
+        private bool ClaimsWord(RRect rect, int slotIndex, FragmentRegion region, bool isFixed) =>
             region.Contains(rect)
-            && (isFixed || container.SlotStartingAt(rect.Top) == slot.Index);
+            && (isFixed
+                || container.SlotStartingAt(rect.Top) == slotIndex
+                || HtmlContainerInt.FallsPast(rect.Bottom, container.BandStartingAt(rect.Top)));
 
         /// <summary>
         /// The clip an <c>overflow: hidden</c> ancestor imposes on <paramref name="box"/>, in this
