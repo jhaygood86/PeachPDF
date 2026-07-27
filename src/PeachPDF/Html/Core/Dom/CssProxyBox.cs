@@ -46,14 +46,31 @@ namespace PeachPDF.Html.Core.Dom
         internal CssBox SourceBox => _sourceBox;
 
         /// <summary>
+        /// The index <see cref="SourceBox"/> occupied among the table's children before it was detached,
+        /// or -1 when that was not recorded.
+        /// </summary>
+        /// <remarks>
+        /// The engine is constructed afresh for every layout, and detaching nulls the source's
+        /// <see cref="CssBox.ParentBox"/>, so after a run the only thing still referring to the detached
+        /// group is its proxies. Restoring the table's own child list therefore has to go through them,
+        /// and the index is the one piece of that state nothing else records.
+        /// </remarks>
+        internal int SourceIndex { get; }
+
+        /// <summary>
         /// Creates a proxy box that references an original source box.
         /// </summary>
         /// <param name="parent">Parent box for this proxy in the document tree</param>
         /// <param name="sourceBox">The original box to proxy (should not be in document tree)</param>
-        public CssProxyBox(CssBox? parent, CssBox sourceBox)
+        /// <param name="sourceIndex">
+        /// Where <paramref name="sourceBox"/> sat among <paramref name="parent"/>'s children before it was
+        /// detached, so a later run of the engine can put it back where it was.
+        /// </param>
+        public CssProxyBox(CssBox? parent, CssBox sourceBox, int sourceIndex = -1)
         : base(parent, sourceBox.HtmlTag)
         {
             _sourceBox = sourceBox;
+            SourceIndex = sourceIndex;
 
             // Inherit all styles from source
             InheritStyle(sourceBox, everything: true);
