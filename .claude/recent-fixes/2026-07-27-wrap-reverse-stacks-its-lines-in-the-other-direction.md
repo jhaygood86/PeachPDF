@@ -91,10 +91,17 @@ by neutralizing each half in turn: restoring the permutation → **5 fail**; kee
 dropping the container's definite cross size for the content extent → **2** (the overflow case and the
 column one, where the free space has to be there for the lines to be packed against the far edge).
 
-Full net8.0 suite green (**6727** passed), CLI green (**96**), **100% diff coverage**, zero-warning
+Full net8.0 suite green (**6749** passed), CLI green (**96**), **100% diff coverage**, zero-warning
 `dotnet build PeachPDF.slnx -t:Rebuild`.
 
 **67 of 69 showcases identical.** `flexbox` gains a `wrap-reverse, unequal line heights` row in
 section 6 — on the unfixed build its 24pt green card is drawn over the top of the 40pt blue one below
 it, obscuring the label; verified in PDFium and MuPDF. `paged_media_monolithic_content` changes by the
 21pt described above.
+
+The comparison rasterized every page of all 69 at 72 dpi and diffed the pixels, rather than hashing
+normalized bytes. Two reasons, both met here: it needs no list of volatile fields to keep up to date
+(see [the two-timestamps invariant](../invariants/testing-a-pdf-carries-two-timestamps-not-one-when-showcases-are-compared.md)),
+and it says *which page* differs, which is what sends you to the right crop. Regenerate the baseline
+from the same `main` the branch has been merged with: an earlier run against a stale baseline reported
+`transform` and `acid2` as differing, which was the baseline's age and not the change.
