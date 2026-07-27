@@ -123,8 +123,7 @@ namespace PeachPDF.Html.Core.Dom
             if (resume is null)
             {
                 var actualSizeBeforeVirtualPass = htmlContainer.ActualSize;
-                var measurementContext = htmlContainer.CurrentFragmentainer;
-                var wasFragmenting = measurementContext?.EnterMonolithic() ?? false;
+                var measurementContext = htmlContainer.DetachFragmentainer();
 
                 try
                 {
@@ -135,7 +134,7 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 finally
                 {
-                    measurementContext?.ExitMonolithic(wasFragmenting);
+                    htmlContainer.RestoreFragmentainer(measurementContext);
                 }
 
                 htmlContainer.ActualSize = actualSizeBeforeVirtualPass;
