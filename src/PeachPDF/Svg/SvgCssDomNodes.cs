@@ -62,6 +62,10 @@ namespace PeachPDF.Svg
 
         public bool IsRoot => false;
 
+        // Same box tree, so the same :empty test the HTML side runs (Selectors 4 §9.5) - an inline
+        // <svg>'s text lives in anonymous child boxes exactly as HTML text does.
+        public bool IsEmpty => CssBox.IsEmptyElement(box);
+
         public Dictionary<string, string>? CustomProperties
         {
             get => box.CustomProperties;
@@ -103,6 +107,12 @@ namespace PeachPDF.Svg
             element.Elements().Select(ICssDomNode (e) => new SvgXmlDomNode(e, svgRoot)).ToList();
 
         public bool IsRoot => false;
+
+        // Selectors 4 §9.5: any element child, or a text/CDATA child that is not white-space-only, makes
+        // the element non-empty; comments and processing instructions never do. Read off Nodes() rather
+        // than Children, which exposes elements only.
+        public bool IsEmpty => !element.Nodes().Any(n =>
+            n is XElement || (n is XText text && !HtmlUtils.IsNullOrCollapsibleWhitespace(text.Value)));
 
         public Dictionary<string, string>? CustomProperties
         {

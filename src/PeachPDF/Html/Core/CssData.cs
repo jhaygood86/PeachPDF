@@ -919,7 +919,11 @@ namespace PeachPDF.Html.Core
 
         private static bool DoesSelectorMatch(PseudoClassSelector pseudoClassSelector, ICssDomNode? node)
         {
-            if (pseudoClassSelector.Class == PseudoClassNames.Root)
+            var name = pseudoClassSelector.Class;
+
+            // :scope with no scoping root in play is :root (Selectors 4 §6.6) - PeachPDF never matches
+            // against a scoping element, so the two always give the same answer.
+            if (name == PseudoClassNames.Root || name == PseudoClassNames.Scope)
             {
                 // :root is the document's root element - <html> for HTML, or the outermost element of a
                 // (standalone/inline) SVG fragment, which is any element node with no parent element.
@@ -929,8 +933,22 @@ namespace PeachPDF.Html.Core
                     || node.TagName.Equals("html", StringComparison.OrdinalIgnoreCase);
             }
 
-            // :link never matches an SVG node (no interaction/link state); IsClickable is CssBox-only.
-            return pseudoClassSelector.Class == "link" && node is CssBox { IsClickable: true };
+            // :empty (Selectors 4 §9.5) is a pure document-tree question, so every node kind answers it -
+            // HTML boxes and SVG elements alike. A non-element node is never :empty.
+            if (name == PseudoClassNames.Empty)
+            {
+                return node is { TagName: not null } && node.IsEmpty;
+            }
+
+            // :any-link (Selectors 4 §7.1) is the union of :link and :visited. :visited never matches -
+            // a static PDF has no browsing history - so it answers exactly where :link does. Neither
+            // matches an SVG node; IsClickable is CssBox-only.
+            if (name == PseudoClassNames.Link || name == PseudoClassNames.AnyLink)
+            {
+                return node is CssBox { IsClickable: true };
+            }
+
+            return false;
         }
 
         private static bool DoesSelectorMatch(PseudoElementSelector pseudoElementSelector, ICssDomNode? node)
