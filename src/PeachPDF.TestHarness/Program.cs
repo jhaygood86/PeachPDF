@@ -1751,6 +1751,59 @@ await SaveShowcaseAsync("paged_media_keep_with_next", "Paged Media", "Keep With 
     + "fragmentainer the layout driver had already finished with.",
     keepWithNextHtml, new PdfGenerateConfig { PageSize = PageSize.A5 });
 
+// ── table row break values showcase ────────────────────────────────────────
+// A break point between two table rows is a class-A break point like any other (CSS Fragmentation
+// §3.1), so a break value declared on a row - or on the row group the row begins or ends - is taken
+// there. The table engine places its own rows and never routes them through the block-flow break
+// machinery, so until it read those values a `break-before: page` on a <tr> did nothing at all and
+// the table simply flowed on. The repeating <thead> is the point: taking the break through the
+// engine's own row loop is what keeps the header repeating onto the page the break opens.
+static string RowBreakRows(int from, int count, string firstRowStyle = "") =>
+    string.Concat(Enumerable.Range(from, count).Select(i =>
+        $"<tr{(i == from ? firstRowStyle : "")}>"
+        + $"<td>{i:000}</td><td>Component {(char)('A' + (i % 7))}-{i}</td>"
+        + $"<td>{(i % 3 == 0 ? "In stock" : i % 3 == 1 ? "On order" : "Discontinued")}</td>"
+        + $"<td class=\"num\">{i * 137 % 900 + 12}</td></tr>"));
+
+var tableRowBreaksHtml = """
+    <!DOCTYPE html>
+    <html><head><style>
+    @page { size: a5; margin: 14mm }
+    body { font: 9pt Helvetica, Arial, sans-serif; margin: 0; color: #1f2937 }
+    h1 { font-size: 12pt; margin: 0 0 0.4em }
+    p { margin: 0 0 0.8em; color: #6b7280; font-size: 8pt }
+    table { width: 100%; border-collapse: collapse; font-size: 8pt }
+    thead th { background: #1e3a8a; color: #fff; text-align: left; padding: 3pt 5pt; font-size: 7.5pt }
+    td { padding: 2.5pt 5pt; border-bottom: 0.5pt solid #e5e7eb }
+    td.num { text-align: right }
+    tbody.section-2 > tr:first-child { break-before: page }
+    tbody.section-2 > tr:first-child td { background: #eff6ff; color: #1e3a8a; font-weight: bold }
+    </style></head><body>
+    <h1>Break values between table rows</h1>
+    <p>The highlighted row declares <code>break-before: page</code>. Its repeating header follows it
+    onto the page the break opens, and the page before it ends wherever the break fell rather than
+    where the rows ran out of room.</p>
+    <table>
+      <thead><tr><th>#</th><th>Part</th><th>Status</th><th>Qty</th></tr></thead>
+      <tbody>
+    """
+    + RowBreakRows(1, 12)
+    + """
+      </tbody>
+      <tbody class="section-2">
+    """
+    + RowBreakRows(101, 14)
+    + """
+      </tbody>
+    </table>
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("paged_media_table_row_breaks", "Paged Media", "Table Row Break Values",
+    "CSS Fragmentation §3.1's forced break values honored at the break point between two table rows, "
+    + "with the table's repeating header carried onto the page the break opens.",
+    tableRowBreaksHtml, new PdfGenerateConfig { PageSize = PageSize.A5 });
+
 // ── Margin box explicit sizing showcase ────────────────────────────────────
 var marginBoxSizingHtml = """
     <!DOCTYPE html>
