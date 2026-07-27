@@ -66,6 +66,62 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         }
 
         [Fact]
+        public void StepOverTo_MovesTheWholeBandOntoTheSlotThePassSteppedTo()
+        {
+            var container = CreateContainer();
+            var context = CreateContext(container, slot: 0);
+
+            // A forced break is realized by placement: the box is put at the content top of the slot the
+            // break names and the pass carries on from there, with no resumption record in between. From
+            // that point the fragmentainer being filled is slot 2, so every band question has to answer
+            // about slot 2 - which is what "the pass has left slot 0 behind" means concretely.
+            context.StepOverTo(2);
+
+            Assert.Equal(2, context.SlotIndex);
+            Assert.Equal(container.PageTopOf(2), context.BandTop, 9);
+            Assert.Equal(container.PageBottomOf(2), context.BandBottom, 9);
+            Assert.Equal(new PageBand(container.PageTopOf(2), container.PageBottomOf(2)), context.Band);
+            Assert.Equal(container.PageTopOf(2), context.ResumeContentTop, 9);
+        }
+
+        [Fact]
+        public void StepOverTo_IsMonotonic_SoASlotThePassHasAlreadyLeftIsIgnored()
+        {
+            var container = CreateContainer();
+            var context = CreateContext(container, slot: 3);
+
+            // A pass fills fragmentainers in document order and never goes back to an earlier one. A pass
+            // that has to reconsider one is re-entered from the driver with a context of its own, so a
+            // cursor that could move backwards would only ever be describing a stale placement - and one
+            // slot too early is a whole page of content read against the wrong band.
+            context.StepOverTo(2);
+            Assert.Equal(3, context.SlotIndex);
+
+            context.StepOverTo(3);
+            Assert.Equal(3, context.SlotIndex);
+
+            context.StepOverTo(4);
+            Assert.Equal(4, context.SlotIndex);
+        }
+
+        [Fact]
+        public void StepOverTo_IsANoOpForANestedFragmentainer()
+        {
+            var container = CreateContainer();
+            var column = new FragmentainerContext(container, new CssBox(null, null), slotIndex: 1,
+                ownBand: (200, 400));
+
+            // A multi-column column's band is not a slot of the page grid at all - SlotIndex there names
+            // only the page the column sits on. A forced *page* break inside a column is not the column's
+            // to satisfy: it escapes to the page driver (CssBox.PlaceBlockChild's escaping-break arm), so
+            // stepping this cursor would re-band the column onto a page it never reached.
+            column.StepOverTo(5);
+
+            Assert.Equal(1, column.SlotIndex);
+            Assert.Equal(new PageBand(200, 400), column.Band);
+        }
+
+        [Fact]
         public void IsFragmenting_IsFalse_WhenThePageHeightIsTheMeasurementSentinel()
         {
             var container = CreateContainer(bandHeight: double.MaxValue);

@@ -2888,6 +2888,18 @@ namespace PeachPDF.Html.Core.Dom
                             child.RequestBreakBefore(top, escapesNestedFragmentainer: true);
                             return;
                         }
+
+                        // The pass has just stepped over one or more slots without ending, so the
+                        // fragmentainer it is filling from here on is the one this child lands in, not
+                        // the one the pass opened with. The emitter has always known this
+                        // (FragmentEmitter.EmitPass takes a `throughSlot`); the cursor has to know it
+                        // too, or every later question about "the fragmentainer being filled" answers
+                        // about a band the pass has left behind. Measured: a box placed by this break
+                        // whose first fragment cannot meet its own `orphans` minimum was read as having
+                        // room above it in this fragmentainer - it sits at the very top of one - so the
+                        // §5.4 mover pushed it one page further and left the page the break named blank.
+                        child.HtmlContainer.CurrentFragmentainer?.StepOverTo(
+                            child.HtmlContainer.SlotStartingAt(top));
                     }
                     // A previous sibling that a forced break placed and that contributes no height of
                     // its own - the empty "<div class='page-break'>" marker - puts the break

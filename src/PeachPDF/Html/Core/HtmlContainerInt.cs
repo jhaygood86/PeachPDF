@@ -938,7 +938,7 @@ namespace PeachPDF.Html.Core
 
                     if (next is null)
                     {
-                        emitter.EmitPass(slot, LastSlotAnyGeometryTouches(slot), token, null);
+                        emitter.EmitPass(slot, LastSlotAnyGeometryTouches(context.SlotIndex), token, null);
                         break;
                     }
 
@@ -962,7 +962,12 @@ namespace PeachPDF.Html.Core
                     // It is not always empty: a monolithic subtree is laid out in a single pass and can
                     // cover bands past the one it started in, and a box placed far down the document means
                     // the next pass's slot is not this one plus one.
-                    emitter.EmitPass(slot, Math.Max(slot, next.ResumeSlotIndex - 1), token, next);
+                    //
+                    // How far this pass reached is the context's own cursor to answer, not something to
+                    // re-derive from the record it stopped with: a forced break steps a pass over slots
+                    // without ending it (FragmentainerContext.StepOverTo), so the pass can have placed
+                    // content well past the slot it opened with.
+                    emitter.EmitPass(slot, Math.Max(context.SlotIndex, next.ResumeSlotIndex - 1), token, next);
 
                     token = next;
                     slot = next.ResumeSlotIndex;
@@ -1014,7 +1019,8 @@ namespace PeachPDF.Html.Core
         {
             LastResortRelayouts++;
 
-            CurrentFragmentainer = new FragmentainerContext(this, Root!, slot, suppressed: true);
+            var relaxed = new FragmentainerContext(this, Root!, slot, suppressed: true);
+            CurrentFragmentainer = relaxed;
 
             Root!.ResumeAt(token, resumeTopOverride: null);
             await Root.PerformLayout(g);
@@ -1022,8 +1028,9 @@ namespace PeachPDF.Html.Core
 
             // No outgoing record: this pass takes no break, so everything it produced from this
             // fragmentainer on belongs to the bands it reaches, cut at each boundary as monolithic
-            // content already is.
-            emitter.EmitPass(slot, LastSlotAnyGeometryTouches(slot), token, null);
+            // content already is. How far it reached is the context's own cursor to answer - a forced
+            // break steps a pass over slots without ending it (FragmentainerContext.StepOverTo).
+            emitter.EmitPass(slot, LastSlotAnyGeometryTouches(relaxed.SlotIndex), token, null);
         }
 
         /// <summary>
