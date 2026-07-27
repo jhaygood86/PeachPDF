@@ -145,7 +145,8 @@ namespace PeachPDF.Html.Core.Paint
             }
             catch (Exception ex)
             {
-                box.HtmlContainer?.ReportError(HtmlRenderErrorType.Paint, "Exception in box paint", ex);
+                if (box.HtmlContainer is { } container)
+                    throw container.RenderError(HtmlRenderErrorType.Paint, "Exception in box paint", ex);
             }
         }
 

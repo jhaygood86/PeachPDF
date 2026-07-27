@@ -1648,7 +1648,8 @@ namespace PeachPDF.Html.Core.Parse
             }
             catch (Exception ex)
             {
-                box.HtmlContainer?.ReportError(HtmlRenderErrorType.HtmlParsing, "Failed in block inside inline box correction", ex);
+                if (box.HtmlContainer is { } container)
+                    throw container.RenderError(HtmlRenderErrorType.HtmlParsing, "Failed in block inside inline box correction", ex);
             }
         }
 

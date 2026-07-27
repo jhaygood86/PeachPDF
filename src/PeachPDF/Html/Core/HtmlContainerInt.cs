@@ -25,7 +25,6 @@ using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore.Drawing;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -387,6 +386,15 @@ namespace PeachPDF.Html.Core
         /// single pass, which is what keeps the common case as cheap as the old single-flow model.
         /// </summary>
         internal int FragmentainerPasses { get; private set; }
+
+        /// <summary>
+        /// How many times the last <see cref="LayoutDocument"/> reached
+        /// <see cref="LayoutTheRemainderMonolithically"/> — the last rung of
+        /// <see cref="BreakRelaxation"/>'s ladder. Normally zero; a non-zero value says the document
+        /// contains at least one fragmentainer layout could not advance past, so its remainder was
+        /// laid out on one overflowing fragmentainer rather than being dropped.
+        /// </summary>
+        internal int LastResortRelayouts { get; private set; }
 
         /// <summary>
         /// Defensive backstop on the driver loop, mirroring the cap the fragment-tree slot walk uses.
@@ -862,6 +870,7 @@ namespace PeachPDF.Html.Core
         {
             LayoutGeneration++;
             FragmentainerPasses = 0;
+            LastResortRelayouts = 0;
 
             // Registrations append (they aren't idempotent), so without this each re-layout accumulated
             // duplicates and began with a stale ActivePageName from the PREVIOUS invocation's last
@@ -939,17 +948,13 @@ namespace PeachPDF.Html.Core
                         // the same point forever. Lay the remainder out monolithically instead: an
                         // overflowing fragmentainer is a far better outcome than dropped content, and
                         // it is what css-break-3 §4.3's own last-resort relaxation amounts to.
-                        ReportError(HtmlRenderErrorType.Layout, "Layout could not advance past a fragmentainer boundary");
-
-                        // A context that exists but does not fragment: this is a real pass with a real
-                        // slot the emitter reads, unlike a measurement pass, which has no fragmentainer
-                        // at all (see DetachFragmentainer).
-                        CurrentFragmentainer = new FragmentainerContext(this, Root, slot, suppressed: true);
-
-                        Root.ResumeAt(token, resumeTopOverride: null);
-                        await Root.PerformLayout(g);
-                        FragmentainerPasses++;
-                        emitter.EmitPass(slot, LastSlotAnyGeometryTouches(slot), token, null);
+                        //
+                        // Deliberately not reported: the only channel there is builds an exception
+                        // (RenderError), and this recovery used to sit after a call that threw one -
+                        // which is why every statement of it was dead code, and why any input reaching
+                        // here failed the whole render instead of producing a document with one bad
+                        // page. LastResortRelayouts is what says it happened.
+                        await LayoutTheRemainderMonolithically(g, emitter, token!, slot);
                         break;
                     }
 
@@ -967,6 +972,58 @@ namespace PeachPDF.Html.Core
             {
                 CurrentFragmentainer = null;
             }
+        }
+
+        /// <summary>
+        /// The last rung of <see cref="BreakRelaxation"/>'s ladder: lays everything
+        /// <paramref name="token"/> still names out in one go, in fragmentainer
+        /// <paramref name="slot"/>, without allowing another break
+        /// (<see href="https://www.w3.org/TR/css-break-3/#possible-breaks">css-break-3 §4.3</see>).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Reached only when a pass has reproduced the record it was handed, which means re-entering it
+        /// would resume at the same point for ever. Every tier above this one is allowed to refuse
+        /// precisely because this one cannot: the fragmentainer it fills overflows, and a page whose
+        /// content runs off it is a far better answer than a page that never gets written — which is
+        /// what a caller got while this recovery sat behind a call that always threw.
+        /// </para>
+        /// <para>
+        /// The context it runs under <b>exists but does not fragment</b>. That is not the same absence a
+        /// measurement pass has (<see cref="DetachFragmentainer"/>): this is a real pass filling a real
+        /// slot the emitter reads, and the only thing it must not do is break again — which is exactly
+        /// what <c>suppressed</c> says.
+        /// </para>
+        /// <para>
+        /// It re-emits a slot an earlier pass already froze, which
+        /// <see cref="FragmentEmitter.EmitPass"/> supports by design — the later emission is the one that
+        /// describes the layout being kept. What it does not reach is a slot <i>below</i>
+        /// <paramref name="slot"/>: a box this pass places back above the fragmentainer being filled is
+        /// rescued only if it already had a fragment there, in which case repositioning it un-freezes that
+        /// band through <see cref="InvalidateEmittedFragmentsFor"/>.
+        /// </para>
+        /// <para>
+        /// It records no <c>_passEntries</c> entry and clears neither rewind request, unlike every other
+        /// exit from the driver loop. Nothing can reach it: <c>widows</c> and the keep-with-next run pull
+        /// are both gated on breaking being live, and this pass has it suppressed. That is a property of
+        /// <i>their</i> guards rather than of this method, which is why it is written down.
+        /// </para>
+        /// </remarks>
+        private async ValueTask LayoutTheRemainderMonolithically(
+            RGraphics g, FragmentEmitter emitter, BreakToken token, int slot)
+        {
+            LastResortRelayouts++;
+
+            CurrentFragmentainer = new FragmentainerContext(this, Root!, slot, suppressed: true);
+
+            Root!.ResumeAt(token, resumeTopOverride: null);
+            await Root.PerformLayout(g);
+            FragmentainerPasses++;
+
+            // No outgoing record: this pass takes no break, so everything it produced from this
+            // fragmentainer on belongs to the bands it reaches, cut at each boundary as monolithic
+            // content already is.
+            emitter.EmitPass(slot, LastSlotAnyGeometryTouches(slot), token, null);
         }
 
         /// <summary>
@@ -1633,15 +1690,39 @@ namespace PeachPDF.Html.Core
         }
 
         /// <summary>
-        /// Report error in html render process.
+        /// Builds the exception that fails the render — <paramref name="exception"/> (if any) wrapped in
+        /// an <see cref="HtmlRenderException"/> naming the pipeline phase it was raised from. Always used
+        /// as <c>throw container.RenderError(…)</c>.
         /// </summary>
-        /// <param name="type">the type of error to report</param>
+        /// <remarks>
+        /// <para>
+        /// It <b>returns</b> the exception rather than throwing it, so that every call site has to spell
+        /// the <c>throw</c> out. This was called <c>ReportError</c> and threw: a name that reads as
+        /// advisory, on a method after which no statement can run. Two callers were written expecting it
+        /// to return — the driver's own no-progress recovery
+        /// (<see cref="LayoutTheRemainderMonolithically"/>, which had therefore never once run) and
+        /// <c>StylesheetLoadHandler.LoadStylesheet</c>'s failure return — and the compiler flagged
+        /// neither, because it does not treat <c>[DoesNotReturn]</c> as ending a code path. After a
+        /// literal <c>throw</c> it does, so that whole class of dead code is now a build warning.
+        /// </para>
+        /// <para>
+        /// PeachPDF has no non-fatal diagnostic channel: a condition that must not fail the render is
+        /// degraded silently instead, as the recovery above and <c>SvgTreeBuilder</c>'s image prefetch
+        /// both do.
+        /// </para>
+        /// <para>
+        /// Several callers reach this through <c>if (box.HtmlContainer is { } container) throw …</c>. The
+        /// guard is a <i>policy</i> rather than a dependency — nothing here reads the container — and the
+        /// policy is that a box with no container swallows its failure, which is the behaviour those
+        /// call sites have always had through <c>?.</c>.
+        /// </para>
+        /// </remarks>
+        /// <param name="type">the pipeline phase the error was raised from</param>
         /// <param name="message">the error message</param>
         /// <param name="exception">optional: the exception that occured</param>
-        [DoesNotReturn]
-        internal void ReportError(HtmlRenderErrorType type, string message, Exception? exception = null)
+        internal HtmlRenderException RenderError(HtmlRenderErrorType type, string message, Exception? exception = null)
         {
-            throw new HtmlRenderException(message, type, exception);
+            return new HtmlRenderException(message, type, exception);
         }
 
         /// <summary>

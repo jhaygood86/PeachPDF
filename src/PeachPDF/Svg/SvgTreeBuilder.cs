@@ -275,8 +275,8 @@ namespace PeachPDF.Svg
                 // loader) or a malformed Content-Type header must not abort the whole render: this
                 // <image> is skipped and left blank (the same outcome as a missing resource), while
                 // the rest of the SVG - and any other prefetched images - still render. This is a
-                // deliberate swallow; HtmlContainerInt.ReportError is [DoesNotReturn] (it always
-                // throws HtmlRenderException), so it can't be used here without aborting.
+                // deliberate swallow; HtmlContainerInt.RenderError builds the exception that aborts the
+                // render, and PeachPDF has no non-fatal diagnostic channel to use instead.
                 return null;
             }
         }

@@ -1,0 +1,251 @@
+using PeachPDF.Html.Adapters;
+using PeachPDF.Html.Core;
+using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Fragmentation;
+using PeachPDF.Html.Core.Fragments;
+using PeachPDF.Html.Core.Utils;
+using PeachPDF.Tests.TestSupport;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace PeachPDF.Tests.Integration
+{
+    /// <summary>
+    /// The last rung of <c>BreakRelaxation</c>'s ladder
+    /// (<see href="https://www.w3.org/TR/css-break-3/#possible-breaks">CSS Fragmentation Level 3
+    /// §4.3</see>): when a fragmentainer pass reproduces the resumption record it was handed, the
+    /// driver cannot advance, and lays the remainder out monolithically instead.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// That recovery was written but had never once run: it sat after a call to a method named
+    /// <c>ReportError</c> which threw unconditionally, so every statement of it was dead code and any
+    /// document reaching the branch failed outright instead of producing one overflowing page.
+    /// </para>
+    /// <para>
+    /// The stall is provoked by a box in the tree rather than by markup on purpose. Which content
+    /// stalls the driver is a separate, open question — it is alignment-sensitive and has resisted
+    /// reduction — while what the driver does <i>once</i> a pass has made no progress is a property of
+    /// the driver alone, and is what these tests are about. <see cref="StallingBox"/> states the
+    /// condition directly: it hands back the same record every pass, which is exactly what a box the
+    /// driver cannot get past looks like from the loop's side.
+    /// </para>
+    /// </remarks>
+    public class NoProgressBackstopTests
+    {
+        /// <summary>
+        /// A box that <b>defers</b> the rest of its parent's children with the same resumption record on
+        /// every fragmentainer pass, so nothing but the driver's no-progress backstop can end the layout.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Deferring, rather than merely reporting, is what makes the recovery's <i>output</i> observable:
+        /// a pending record stops the parent's child loop, so every sibling after this box is placed by
+        /// no pass but the recovery. A box that only recorded a break on the context would let the first
+        /// pass lay the whole document out and emit it, and the tests below would then hold for a
+        /// recovery that did nothing at all.
+        /// </para>
+        /// <para>
+        /// It defers only while breaking is live, which is both honest — a box cannot ask for a break
+        /// where none may be taken — and what makes the recovery pass identifiable: that pass is
+        /// deliberately suppressed, so the box stops asking and the layout ends. It also never runs
+        /// <c>BeginLayoutPass</c>, which is fine for a stub with no geometry of its own but would not be
+        /// for anything that took part in fragmentation.
+        /// </para>
+        /// </remarks>
+        private sealed class StallingBox : CssBox
+        {
+            private BreakToken? _record;
+
+            internal StallingBox(CssBox parent) : base(parent, null)
+            {
+                InheritStyle(parent, everything: true);
+                Display = CssConstants.Block;
+            }
+
+            /// <summary>Whether breaking was live on each pass this box was laid out in, in order.</summary>
+            internal List<bool> FragmentingPerPass { get; } = [];
+
+            protected override ValueTask PerformLayoutImp(RGraphics g)
+            {
+                var context = HtmlContainer?.CurrentFragmentainer;
+                FragmentingPerPass.Add(context is { IsFragmenting: true });
+
+                if (context is { IsFragmenting: true })
+                {
+                    // Cached, so every pass hands the parent a record equal to the one the last pass did,
+                    // and the chain the parent wraps it in is equal too. A fresh record naming the same
+                    // place would do as well - BreakToken is a record type, so the driver's test is value
+                    // equality - but caching states the intent.
+                    _record ??= new BlockBreakToken(
+                        this, context.SlotIndex, 0, null, IsBreakBefore: true, null);
+                }
+
+                // Cleared explicitly on the suppressed pass, because this override never runs
+                // BeginLayoutPass - which is what clears a box's pending record for the pass about to
+                // run. Left set, it would stop the parent's child loop on the recovery pass too, and
+                // the siblings the recovery exists to place would never be laid out at all.
+                SetPendingBreakToken(context is { IsFragmenting: true } ? _record : null);
+
+                return default;
+            }
+        }
+
+        /// <summary>
+        /// Lays <paramref name="before"/>, then a box the driver cannot get past, then
+        /// <paramref name="after"/> — so everything in <paramref name="after"/> exists only if the
+        /// recovery laid it out and the emitter kept it.
+        /// </summary>
+        private static async Task<(HtmlContainerInt Container, StallingBox Stall)> LayoutWithAStall(
+            string before, string after, string pageCss = "")
+        {
+            StallingBox? stall = null;
+
+            var (_, container) = await LayoutHarness.LayoutAsync(
+                "<!DOCTYPE html><html><head><style>" + pageCss + "</style></head><body style='margin:0'>"
+                    + before + "<div id='stall-anchor'></div>" + after + "</body></html>",
+                pageHeight: 200,
+                margin: 0,
+                prepare: root =>
+                {
+                    var anchor = LayoutHarness.FindById(root, "stall-anchor")!;
+                    var parent = anchor.ParentBox!;
+
+                    stall = new StallingBox(parent);
+
+                    // Constructed at the end of the child list, then moved into the anchor's place, so
+                    // the content in `after` really is after it. (CssBox.ParentBox's setter appends,
+                    // which is why this is a move rather than an insert.)
+                    parent.Boxes.Remove(stall);
+                    parent.Boxes.Insert(parent.Boxes.IndexOf(anchor), stall);
+                });
+
+            Assert.NotNull(stall);
+            return (container, stall);
+        }
+
+        /// <summary>
+        /// The whole point of the fix: a document the driver cannot advance through still renders. Before
+        /// it, this threw <c>HtmlRenderException("Layout could not advance past a fragmentainer
+        /// boundary")</c> out of layout and the caller got no document at all.
+        /// </summary>
+        [Fact]
+        public async Task APassThatMakesNoProgress_StillProducesADocument()
+        {
+            var (container, _) = await LayoutWithAStall(
+                before: "<p style='margin:0'>alpha</p>", after: "<p style='margin:0'>omega</p>");
+
+            Assert.NotNull(container.FragmentTree);
+            Assert.NotEmpty(container.FragmentTree!.Fragmentainers);
+        }
+
+        /// <summary>
+        /// And it says so: a non-zero count is the only signal there is that a document contains a
+        /// fragmentainer layout could not get past, since PeachPDF has no non-fatal diagnostic channel.
+        /// </summary>
+        [Fact]
+        public async Task APassThatMakesNoProgress_IsCountedAsALastResortRelayout()
+        {
+            var (container, _) = await LayoutWithAStall(
+                before: "<p style='margin:0'>alpha</p>", after: "<p style='margin:0'>omega</p>");
+
+            Assert.Equal(1, container.LastResortRelayouts);
+        }
+
+        /// <summary>
+        /// An ordinary document reaches none of this — the backstop is a last resort, not a step every
+        /// paginated layout takes.
+        /// </summary>
+        [Fact]
+        public async Task AnOrdinaryPaginatedDocument_TakesNoLastResortRelayout()
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(string.Concat(Enumerable.Range(0, 40)
+                    .Select(i => $"<p style='margin:0'>paragraph {i}</p>"))),
+                pageHeight: 200, margin: 0);
+
+            Assert.True(container.FragmentainerPasses > 1, "the fixture must paginate");
+            Assert.Equal(0, container.LastResortRelayouts);
+        }
+
+        /// <summary>
+        /// The recovery is <i>monolithic</i>, which is the half of it that makes it terminate: the pass
+        /// exists and fills a real slot the emitter reads, but no break may be taken in it, so the box
+        /// that could not be got past cannot ask again.
+        /// </summary>
+        [Fact]
+        public async Task TheRecoveryPass_RunsWithBreakingSuppressed()
+        {
+            var (_, stall) = await LayoutWithAStall(
+                before: "<p style='margin:0'>alpha</p>", after: "<p style='margin:0'>omega</p>");
+
+            Assert.True(stall.FragmentingPerPass.Count >= 2,
+                $"the fixture must stall, but the box was laid out {stall.FragmentingPerPass.Count} time(s)");
+            Assert.True(stall.FragmentingPerPass[0], "the passes before the backstop are ordinary fragmenting passes");
+            Assert.False(stall.FragmentingPerPass[^1], "the recovery pass must not allow another break");
+        }
+
+        /// <summary>
+        /// "An overflowing fragmentainer is a far better outcome than dropped content" is the recovery's
+        /// stated reason for existing, so the content has to actually be there — and claimed once, not
+        /// duplicated by the pass that was abandoned.
+        /// </summary>
+        [Fact]
+        public async Task TheRecovery_KeepsTheDocumentsContent()
+        {
+            var (container, _) = await LayoutWithAStall(
+                before: "<p style='margin:0'>alpha</p>",
+                after: "<p style='margin:0'>beta</p><p style='margin:0'>gamma</p>");
+
+            var claimed = WordsIn(container);
+
+            // Everything the stall deferred is there, and claimed exactly once - the invariant that
+            // fails one way if the recovery drops content and the other way if it duplicates what the
+            // abandoned pass had already emitted.
+            Assert.Equal(["alpha", "beta", "gamma"], claimed.Order());
+        }
+
+        /// <summary>
+        /// The count is reset per <c>LayoutDocument</c>, not per document — <c>ShrinkToFit</c> and the
+        /// per-page reflow loop each re-run it, and a counter that survived would report one recovery per
+        /// layout rather than the one the fragment tree was actually built from.
+        /// </summary>
+        [Fact]
+        public async Task ADocumentLaidOutSeveralTimes_CountsOnlyTheLastLayoutsRecovery()
+        {
+            // Per-page left/right @page margins put PerformLayout into its reflow loop, so LayoutDocument
+            // runs several times over the same box tree.
+            var (container, stall) = await LayoutWithAStall(
+                before: "<p style='margin:0'>alpha</p>",
+                after: "<p style='margin:0'>omega</p>",
+                pageCss: "@page{margin:10pt}@page :left{margin-left:60pt}@page :right{margin-right:60pt}");
+
+            Assert.True(container.UseVariablePageWidth, "the fixture must drive the reflow loop");
+            Assert.True(stall.FragmentingPerPass.Count > 3,
+                $"the fixture must lay out more than once, but the box was laid out {stall.FragmentingPerPass.Count} time(s)");
+            Assert.Equal(1, container.LastResortRelayouts);
+            Assert.Equal(["alpha", "omega"], WordsIn(container).Order());
+        }
+
+        private static IReadOnlyList<string> WordsIn(HtmlContainerInt container) =>
+            container.FragmentTree!.Fragmentainers
+                .SelectMany(f => Flatten(f.Root))
+                .SelectMany(f => f.Words)
+                .Select(w => w.Word.Text!)
+                .ToList();
+
+        private static IEnumerable<BoxFragment> Flatten(BoxFragment fragment)
+        {
+            yield return fragment;
+
+            foreach (var child in fragment.Children)
+            {
+                foreach (var descendant in Flatten(child))
+                {
+                    yield return descendant;
+                }
+            }
+        }
+    }
+}
