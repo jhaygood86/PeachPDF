@@ -23,6 +23,11 @@ namespace PeachPDF.Tests.Integration
     /// a point. That lands inside the window on every platform, and the fixtures assert that it did before
     /// asserting anything else.
     /// </para>
+    /// <para>
+    /// The counter-case — a line layout <i>could not</i> move, which both pages must keep — lives in
+    /// <see cref="StraddlingLineClaimTests"/>. Neither class is sufficient alone: a rule that always gives a
+    /// line to the page its top starts in passes everything here and loses content there.
+    /// </para>
     /// </remarks>
     public class BandMembershipToleranceTests
     {
@@ -55,11 +60,18 @@ namespace PeachPDF.Tests.Integration
 
         /// <summary>
         /// The same statement in the direction the abstract invariant cannot distinguish: the overhanging
-        /// line belongs to the page layout kept it on, which is the page its own top starts in. Stated from
-        /// the page grid rather than from the fragment tree, so the two are independent.
+        /// line belongs to the page layout kept it on, and to that page only.
         /// </summary>
+        /// <remarks>
+        /// The expected page is found by scanning the grid's raw band coordinates for the one that strictly
+        /// contains the word's top, rather than by calling <c>SlotStartingAt</c>. Asking the production
+        /// helper would restate the predicate under test verbatim, so the assertion would hold for any rule
+        /// of that shape — including the over-broad one that also claimed lines layout never had the chance
+        /// to move (issue #477). The fixture's overhang is a quarter point against a line more than ten
+        /// points tall, so strict containment is unambiguous and needs no tolerance of its own.
+        /// </remarks>
         [Fact]
-        public async Task TheOverhangingLine_IsClaimedByThePageItsTopStartsIn()
+        public async Task TheOverhangingLine_IsClaimedByThePageItsTopStartsIn_AndByNoOther()
         {
             var (_, container) = await LayoutTunedToTheWindowAsync(Paragraph);
 
@@ -68,10 +80,30 @@ namespace PeachPDF.Tests.Integration
 
             foreach (var word in overhanging)
             {
-                var slots = SlotsClaiming(container, word);
+                var expected = BandStrictlyContaining(container, word.Top);
 
-                Assert.Equal([container.SlotStartingAt(word.Top)], slots);
+                // The rule is only doing work if the next band really is a candidate — that is, if the word
+                // overhangs into it at all.
+                Assert.True(word.Bottom > container.PageBottomOf(expected),
+                    $"'{word.Text}' does not reach the next band, so it cannot show a double claim");
+
+                Assert.Equal([expected], SlotsClaiming(container, word));
             }
+        }
+
+        /// <summary>
+        /// The one slot whose band contains <paramref name="y"/>, by raw coordinate comparison against the
+        /// page grid — deliberately not <c>SlotStartingAt</c>, whose behaviour is what the caller asserts.
+        /// </summary>
+        private static int BandStrictlyContaining(HtmlContainerInt container, double y)
+        {
+            for (var slot = 0; slot < container.FragmentTree!.Fragmentainers.Count; slot++)
+            {
+                if (y >= container.PageTopOf(slot) && y < container.PageBottomOf(slot)) return slot;
+            }
+
+            Assert.Fail($"no band strictly contains {y}");
+            return -1;
         }
 
         /// <summary>

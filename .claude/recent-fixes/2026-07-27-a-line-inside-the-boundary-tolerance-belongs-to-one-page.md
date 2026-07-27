@@ -12,10 +12,20 @@ as membership of the *next* band. A line ending anywhere in that 0.5pt window wa
 pages, and drawn a second time at the next page's `local.Y = MarginTop − (wordHeight − overhang)`, i.e. above
 its content top. Found on `windows-latest` only, as `16 words claimed by [0,1], living in 0`.
 
+> **Corrected the same day by [#477](https://github.com/jhaygood86/PeachPDF/issues/477).** The rule below was
+> shipped *unconditional*, and that lost content: it also stripped the later claim from lines layout never had
+> the chance to move (flex/grid item content under `SuppressWordPageBreaks`, and
+> `MonolithicContent.FitsNoFragmentainer`), which overhang by many points and need both fragmentainers — the
+> earlier for the sliver that fits, the later for the readable remainder. `ClaimsWord` now gates the tie-break
+> on `HtmlContainerInt.FallsPast`. Read
+> [the membership invariant](../invariants/fragmentation-one-membership-question-is-asked-with-one-tolerance.md)
+> before touching it; everything below is still the reasoning for the tie-break itself.
+
 ## The fix
 
 `FragmentEmitter.ClaimsWord` — the word arm of `BuildDraft` now asks `HtmlContainerInt.SlotStartingAt(rect.Top)`,
-the same convention layout asked (`BandStartingAt(Top)`), so the two are one statement with one tolerance.
+the same convention layout asked (`BandStartingAt(Top)`), so the two are one statement with one tolerance —
+*where layout was asked at all*, which is the qualification #477 added.
 
 **It is a tie-break intersected with the region test, not a replacement for it, and that distinction is the
 whole content of the change.** Replacing `region.Contains` outright was written first and is wrong twice:
