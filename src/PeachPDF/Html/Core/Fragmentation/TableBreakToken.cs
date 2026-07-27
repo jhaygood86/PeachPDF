@@ -45,6 +45,12 @@ namespace PeachPDF.Html.Core.Fragmentation
     /// rather than per row, which is what
     /// <see href="https://www.w3.org/TR/css-tables-3/#fragmentation">css-tables-3 §6.1</see> asks for.
     /// </param>
+    /// <param name="FinishedCells">
+    /// the cells of <paramref name="ResumeRowIndex"/> that <b>finished</b>, which a continuation must be
+    /// able to tell from a cell no pass has entered: both are absent from
+    /// <paramref name="UnfinishedCells"/>, and only one of them has content already sitting in an earlier
+    /// fragmentainer. A cell that stopped nowhere continues nowhere.
+    /// </param>
     /// <param name="RowSpannedBoxes">
     /// the <c>rowspan &gt; 1</c> bookkeeping, keyed by the <b>absolute</b> body-row index each cell ends
     /// on. Absolute is why a resumed pass cannot start this empty: a cell begun on one page and ending on
@@ -57,5 +63,6 @@ namespace PeachPDF.Html.Core.Fragmentation
         int ResumeRowIndex,
         double MaxRight,
         IReadOnlyList<UnfinishedTableCell> UnfinishedCells,
+        IReadOnlyList<CssBox> FinishedCells,
         IReadOnlyDictionary<int, IReadOnlyList<CssBox>> RowSpannedBoxes) : BreakToken(Box, ResumeSlotIndex);
 }

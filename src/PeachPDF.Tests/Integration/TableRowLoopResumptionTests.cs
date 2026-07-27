@@ -564,6 +564,272 @@ namespace PeachPDF.Tests.Integration
                 throw new InvalidOperationException("layout failed part-way through the row loop");
         }
 
+        // ─── A finished cell is not an unentered one ─────────────────────────────────────────────
+
+        /// <summary>
+        /// The record names the cells of the stopped row that <b>finished</b> as well as the ones that
+        /// did not. Without that a continuation cannot tell a cell whose content is already in an earlier
+        /// fragment from one no pass has entered — both are simply absent from the unfinished list.
+        /// </summary>
+        [Fact]
+        public async Task TheRecordNamesTheCellsThatFinishedAsWellAsTheOnesThatDidNot()
+        {
+            CssBox? root = null;
+            StoppingCell? stopping = null;
+
+            await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap("<table style='width:150pt;font-size:10pt'>"
+                                   + "<tr><td id='c0'>row 0</td><td id='sibling'>beside</td></tr>"
+                                   + "<tr><td id='c1'>row 1</td><td>beside</td></tr></table>"),
+                pageHeight: PageHeight, margin: Margin,
+                prepare: tree => { root = tree; stopping = StopRow(tree, 0); });
+
+            var record = TableOf(root!).TableContinuation!;
+            var sibling = LayoutHarness.FindById(root!, "sibling")!;
+
+            Assert.Equal([sibling], record.FinishedCells);
+            Assert.Same(stopping, Assert.Single(record.UnfinishedCells).Cell);
+        }
+
+        /// <summary>
+        /// What a record names is the stopped row's cells only. The rows before it finished as whole rows
+        /// and are not re-entered at all, so carrying their cells would say nothing and grow with the
+        /// table.
+        /// </summary>
+        [Fact]
+        public async Task TheRecordNamesNoCellFromARowTheLoopHadAlreadyLeft()
+        {
+            CssBox? root = null;
+
+            await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(RowsTable(4)), pageHeight: PageHeight, margin: Margin,
+                prepare: tree => { root = tree; StopRow(tree, 2); });
+
+            var record = TableOf(root!).TableContinuation!;
+            var earlier = LayoutHarness.FindById(root!, "c0")!;
+
+            Assert.Empty(record.FinishedCells);
+            Assert.DoesNotContain(earlier, record.FinishedCells);
+        }
+
+        /// <summary>
+        /// A continuation places nothing at all for a cell an earlier pass finished: its whole content is
+        /// in the fragment that pass emitted, and re-entering it would put that content on this
+        /// fragmentainer instead
+        /// (<see href="https://www.w3.org/TR/css-tables-3/#fragmentation">css-tables-3 §6.1</see>).
+        /// </summary>
+        [Fact]
+        public async Task AContinuation_PlacesNothingForACellAnEarlierPassFinished()
+        {
+            await WithALaidOutTable(
+                "<table style='width:150pt;font-size:10pt'>"
+                + "<tr><td id='a'>alpha</td><td id='b'>beta</td></tr>"
+                + "<tr><td id='c'>gamma</td><td>delta</td></tr></table>",
+                async (table, container, g) =>
+                {
+                    var finished = LayoutHarness.FindById(table, "b")!;
+                    var before = finished.Location;
+                    var beforeBottom = finished.ActualBottom;
+
+                    await RunEngine(g, container, table,
+                        Continuation(table, resumeRow: 0, resumeSlot: 1, finished: [finished]));
+
+                    Assert.Equal(before.Y, finished.Location.Y, 3);
+                    Assert.Equal(before.X, finished.Location.X, 3);
+                    Assert.Equal(beforeBottom, finished.ActualBottom, 3);
+
+                    // The cell beside it, which the record says nothing about, did move — so "it stayed
+                    // put" is about the record rather than about the pass placing nothing.
+                    Assert.Equal(container.PageTopOf(1), LayoutHarness.FindById(table, "a")!.Location.Y, 3);
+                });
+        }
+
+        /// <summary>
+        /// The control: the same continuation carrying no finished record for that cell re-enters it, so
+        /// it lands in the fragmentainer this pass is filling. That is exactly the duplication the record
+        /// exists to prevent, and it is what the assertion above would otherwise pass vacuously against.
+        /// </summary>
+        [Fact]
+        public async Task AContinuationNamingNoFinishedCell_RePlacesItInTheFragmentainerItIsFilling()
+        {
+            await WithALaidOutTable(
+                "<table style='width:150pt;font-size:10pt'>"
+                + "<tr><td id='a'>alpha</td><td id='b'>beta</td></tr>"
+                + "<tr><td id='c'>gamma</td><td>delta</td></tr></table>",
+                async (table, container, g) =>
+                {
+                    var cell = LayoutHarness.FindById(table, "b")!;
+
+                    await RunEngine(g, container, table, Continuation(table, resumeRow: 0, resumeSlot: 1));
+
+                    Assert.Equal(container.PageTopOf(1), cell.Location.Y, 3);
+                });
+        }
+
+        /// <summary>
+        /// A cell that a continuation does not enter still holds its column open, so the cells beside it
+        /// keep their own columns rather than sliding left into the space it would have taken.
+        /// </summary>
+        [Fact]
+        public async Task ACellAContinuationDoesNotEnter_StillHoldsItsColumn()
+        {
+            await WithALaidOutTable(
+                "<table style='width:150pt;font-size:10pt'>"
+                + "<tr><td id='a'>alpha</td><td id='b'>beta</td><td id='c'>gamma</td></tr>"
+                + "<tr><td>d</td><td>e</td><td>f</td></tr></table>",
+                async (table, container, g) =>
+                {
+                    var skipped = LayoutHarness.FindById(table, "b")!;
+                    var after = LayoutHarness.FindById(table, "c")!;
+                    var beforeX = after.Location.X;
+
+                    await RunEngine(g, container, table,
+                        Continuation(table, resumeRow: 0, resumeSlot: 1, finished: [skipped]));
+
+                    Assert.Equal(beforeX, after.Location.X, 3);
+                });
+        }
+
+        // ─── A cell that stopped is not aligned against a box that does not describe it ──────────
+
+        /// <summary>
+        /// A cell that stopped never reached the line that sets its own <c>ActualBottom</c>, so the box
+        /// still holds the pre-flow value its placement gave it — its own top. Reading that as the cell's
+        /// height and distributing the difference is what
+        /// <c>CssLayoutEngine.ApplyCellVerticalAlignment</c> does, and it pushes the whole fragment
+        /// <i>up</i> out of the fragmentainer being filled. Measured with the monolithic gate lifted: a
+        /// 244-word <c>&lt;td&gt;</c> put its first line 104pt above the document origin and emitted 121
+        /// of its 244 words.
+        /// </summary>
+        [Fact]
+        public async Task ACellThatStopped_KeepsItsContentWhereTheFlowPutIt()
+        {
+            CssBox? root = null;
+            OverflowingStoppingCell? stopping = null;
+
+            await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(RowsTable(2)), pageHeight: PageHeight, margin: Margin,
+                prepare: tree =>
+                {
+                    root = tree;
+                    var anchor = LayoutHarness.FindById(tree, "c0")!;
+                    var row = anchor.ParentBox!;
+                    stopping = new OverflowingStoppingCell(row);
+                    row.Boxes.Remove(stopping);
+                    row.Boxes[row.Boxes.IndexOf(anchor)] = stopping;
+
+                    // A sibling taller than the stopping cell, so the row's own MaxBottom is below
+                    // where the stopped cell's content reached. Without that the alignment has nothing
+                    // to distribute and skipping it would be indistinguishable from not skipping it.
+                    var tall = new TallCell(row, 320);
+                    row.Boxes.Remove(tall);
+                    row.Boxes.Add(tall);
+                });
+
+            Assert.NotNull(stopping);
+            Assert.Equal(stopping!.PlacedContentTop, stopping.OverflowingContent.Location.Y, 3);
+            Assert.True(stopping.ActualBottom >= stopping.OverflowingContent.ActualBottom,
+                $"the cell's bottom ({stopping.ActualBottom:F1}) is above its own content "
+                + $"({stopping.OverflowingContent.ActualBottom:F1}), so nothing above it can measure the fragment");
+        }
+
+        /// <summary>
+        /// The control: the identical cell that <i>finished</i> is aligned, so "the content stayed where
+        /// the flow put it" above is a fact about the cell having stopped.
+        /// </summary>
+        [Fact]
+        public async Task ACellThatFinished_IsStillVerticallyAligned()
+        {
+            CssBox? root = null;
+            OverflowingStoppingCell? finishing = null;
+
+            await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(RowsTable(2)), pageHeight: PageHeight, margin: Margin,
+                prepare: tree =>
+                {
+                    root = tree;
+                    var anchor = LayoutHarness.FindById(tree, "c0")!;
+                    var row = anchor.ParentBox!;
+                    finishing = new OverflowingStoppingCell(row, stops: false);
+                    row.Boxes.Remove(finishing);
+                    row.Boxes[row.Boxes.IndexOf(anchor)] = finishing;
+
+                    var tall = new TallCell(row, 320);
+                    row.Boxes.Remove(tall);
+                    row.Boxes.Add(tall);
+                });
+
+            Assert.NotNull(finishing);
+            Assert.NotEqual(finishing!.PlacedContentTop, finishing.OverflowingContent.Location.Y, 3);
+        }
+
+        /// <summary>A cell that finishes, deeper than the one beside it, so the row's bottom is below it.</summary>
+        private sealed class TallCell : CssBox
+        {
+            private readonly double _depth;
+
+            internal TallCell(CssBox row, double depth) : base(row, null)
+            {
+                InheritStyle(row, everything: true);
+                Display = CssConstants.TableCell;
+                _depth = depth;
+            }
+
+            protected override ValueTask PerformLayoutImp(RGraphics g)
+            {
+                ActualBottom = Location.Y + _depth;
+                Height = $"{_depth}px";
+                return default;
+            }
+        }
+
+        /// <summary>
+        /// A cell whose content flows well past the box its placement gave it, which is the shape a cell
+        /// that ran out of fragmentainer really has: <c>CssLayoutEngine.CreateLineBoxes</c> returns on the
+        /// break before setting <c>ActualBottom</c>, leaving the pre-flow value behind.
+        /// </summary>
+        private sealed class OverflowingStoppingCell : CssBox
+        {
+            private readonly bool _stops;
+
+            internal OverflowingStoppingCell(CssBox row, bool stops = true) : base(row, null)
+            {
+                InheritStyle(row, everything: true);
+                Display = CssConstants.TableCell;
+                VerticalAlign = CssConstants.Middle;
+                _stops = stops;
+
+                OverflowingContent = new CssBox(this, null);
+                OverflowingContent.InheritStyle(this, everything: true);
+                OverflowingContent.Display = CssConstants.Block;
+            }
+
+            /// <summary>The content that flowed past the cell's own box.</summary>
+            internal CssBox OverflowingContent { get; }
+
+            /// <summary>Where this cell's layout left that content.</summary>
+            internal double PlacedContentTop { get; private set; }
+
+            protected override ValueTask PerformLayoutImp(RGraphics g)
+            {
+                // What a real stopped flow leaves: content 200pt deep, and a box still holding the top it
+                // was placed at.
+                OverflowingContent.Location = new RPoint(Location.X, Location.Y);
+                OverflowingContent.ActualBottom = Location.Y + 200;
+                OverflowingContent.Height = "200px";
+                PlacedContentTop = OverflowingContent.Location.Y;
+                ActualBottom = Location.Y;
+
+                if (_stops)
+                {
+                    SetPendingBreakToken(new InlineBreakToken(this, ResumeSlotIndex: 1, ResumePath: [],
+                        ResumeWordIndex: 0, CompletedLineCount: 0));
+                }
+
+                return default;
+            }
+        }
+
         // ─── The cursor's own contract ───────────────────────────────────────────────────────────
 
         /// <summary>
@@ -586,7 +852,7 @@ namespace PeachPDF.Tests.Integration
 
             var a = LayoutHarness.FindById(root, "a")!;
             var carried = new TableBreakToken(a, ResumeSlotIndex: 3, ResumeRowIndex: 7, MaxRight: 42,
-                UnfinishedCells: [],
+                UnfinishedCells: [], FinishedCells: [],
                 RowSpannedBoxes: new Dictionary<int, IReadOnlyList<CssBox>> { [9] = [a] });
 
             var cursor = TableRowCursor.Continuing(carried, top: 100);
@@ -616,7 +882,7 @@ namespace PeachPDF.Tests.Integration
 
             var body = TableRowCursor.Continuing(
                 new TableBreakToken(a, ResumeSlotIndex: 1, ResumeRowIndex: 0, MaxRight: 10,
-                    UnfinishedCells: [new UnfinishedTableCell(0, a, token)],
+                    UnfinishedCells: [new UnfinishedTableCell(0, a, token)], FinishedCells: [],
                     RowSpannedBoxes: new Dictionary<int, IReadOnlyList<CssBox>>()),
                 top: 0);
 
@@ -674,8 +940,9 @@ namespace PeachPDF.Tests.Integration
 
         private static TableBreakToken Continuation(
             CssBox table, int resumeRow, double maxRight = 0,
-            IReadOnlyList<UnfinishedTableCell>? unfinished = null, int resumeSlot = 1) =>
-            new(table, resumeSlot, resumeRow, maxRight, unfinished ?? [],
+            IReadOnlyList<UnfinishedTableCell>? unfinished = null, int resumeSlot = 1,
+            IReadOnlyList<CssBox>? finished = null) =>
+            new(table, resumeSlot, resumeRow, maxRight, unfinished ?? [], finished ?? [],
                 new Dictionary<int, IReadOnlyList<CssBox>>());
     }
 }
