@@ -934,9 +934,11 @@ namespace PeachPDF.Html.Core.Dom
                 // See the identical fix/comment on the pre-check's availableHeight above.
                 var availableHeight = (container?.PageBandHeightOf(currentPageNumber) ?? pageHeight) - _footerHeight;
 
-                // Check for page break
-                if (WillCrossPageBoundary(container, currentY + estimatedRowHeight, availableHeight, currentPageNumber)
-            && i > 0 && container != null)
+                // Check for page break: either the row does not fit, or a break value says the break
+                // falls here regardless (css-break-3 §3.1's class-A break point between two rows).
+                if (i > 0 && container != null
+                    && (ForcedBreakFallsBeforeRow(i)
+                        || WillCrossPageBoundary(container, currentY + estimatedRowHeight, availableHeight, currentPageNumber)))
                 {
                     // Start with the last body-row bottom; may be extended by the footer below.
                     var pageBreakBottomY = maxBottom;
@@ -1082,6 +1084,45 @@ namespace PeachPDF.Html.Core.Dom
                 box.ActualRight = rows.Max(r => r.ActualRight);
                 box.ActualBottom = rows.Max(r => r.ActualBottom);
             }
+        }
+
+        /// <summary>
+        /// Whether <see href="https://www.w3.org/TR/css-break-3/#break-between">§3.1</see>'s forced break
+        /// falls at the class-A break point immediately before body row <paramref name="index"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Both sides of the break point are read, and through the chains they begin and end
+        /// (<see cref="BreakPropagation"/>), so a <c>break-before</c> on a <c>&lt;tbody&gt;</c> is seen at
+        /// its first row and a <c>break-after</c> on one at its last. The rows themselves are flattened
+        /// into <c>_bodyRows</c> by <see cref="AssignBoxKinds"/>, so the row is the only box the engine
+        /// places and therefore the only one that can act on the value.
+        /// </para>
+        /// <para>
+        /// Asked in the page context because that is the only vehicle this engine has: it moves a row to
+        /// the next page's content top, exactly as it already does when the row does not fit. A
+        /// <c>column</c> value names a fragmentation context the table does not establish, and is left to
+        /// the multi-column container the table may sit in.
+        /// </para>
+        /// <para>
+        /// <c>break-inside: avoid</c> on a row needs nothing here: the engine never splits a row, so a row
+        /// that would cross a boundary is already moved whole by the geometric test beside this one. The
+        /// value is satisfied by construction rather than by being read.
+        /// </para>
+        /// </remarks>
+        private bool ForcedBreakFallsBeforeRow(int index)
+        {
+            if (index <= 0) return false;
+
+            // Read at each side's *anchor*: the value may sit on the row group the row begins or ends
+            // rather than on the row itself, and the group is not a box this engine places, so the row is
+            // where it has to be acted on. ForcedBreak*At then reads back down the chain, so both the
+            // group's own value and the row's are seen.
+            var before = BreakPropagation.AnchorForBreakBefore(_bodyRows[index]);
+            var after = BreakPropagation.AnchorForBreakAfter(_bodyRows[index - 1]);
+
+            return BreakPropagation.ForcedBreakBeforeAt(before, FragmentationContext.Page) is not null
+                   || BreakPropagation.ForcedBreakAfterAt(after, FragmentationContext.Page) is not null;
         }
 
         /// <summary>

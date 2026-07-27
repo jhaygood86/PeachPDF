@@ -607,6 +607,8 @@ These properties control how content breaks across PDF pages. Both the legacy `p
 
 > **Migration note:** a forced break on a container's first in-flow child, and a `break-after` on its last, used to move only the element: the container kept its position and spanned the boundary, drawing its background, border and padding on both pages with nothing inside the copy on the page being left. The value now propagates to the container, which moves with the break — so that duplicate chrome disappears and the container's own margin opens the new page. A heading chained to such content by `break-after: avoid` now travels with it as well, instead of being stranded on the page the content left. See [Forward compatibility](#forward-compatibility).
 
+> **Migration note:** a forced break value declared between two **table rows** — on a `<tr>`, or on the row group one begins or ends — previously had no effect at all: the table broke only where its rows ran out of room. It is now honored, so a document carrying such a declaration gains page breaks, and possibly pages, it did not have before. See [Breaks between table rows](#breaks-between-table-rows) and [Forward compatibility](#forward-compatibility).
+
 > **Migration note:** the same is now true of a break that is *decided* rather than declared — `break-inside: avoid`, [monolithic content](#monolithic-content), or an `orphans` push relocating a container's first child. The container used to stay put and span the boundary, printing an empty copy of its own border, background and padding on the page its contents had just left; it now moves with them. Content following such a container shifts down a page correspondingly. See [Forward compatibility](#forward-compatibility).
 
 <a id="directional-page-breaks"></a>
@@ -638,6 +640,13 @@ The same applies to the breaks that are decided *after* content has been placed 
 An item with no break value of its own is left where it is, and the page boundary cuts it — the same answer ordinary block content gets when it has no line to break at. A line or row taller than a whole page is also left alone, since moving it could not help.
 
 Two limits are worth knowing. A flex or grid container **inside a table** is positioned against the table's own row grid, so its lines are left to the table engine rather than moved against the page grid. And an `inline-flex` or `inline-grid` box is an atomic inline — where it sits is the line it is on to decide. Item *content* is also not fragmented: an item is moved whole or cut, never continued on the next page.
+
+<a id="breaks-in-tables"></a>
+**Breaks between table rows.** The break point between two rows of a table is an ordinary break point ([CSS Fragmentation Level 3 §3.1](https://www.w3.org/TR/css-break-3/#break-between)), and a forced value declared there is honored: `break-before: page` (or one of the directional values) on a `<tr>` starts that row on the next page even where it would have fitted, and a `break-after` on the row above it does the same. A value on a `<tbody>`, `<thead>` or `<tfoot>` is a value at the break point before its first row or after its last, so it is honored at that row. A table repeating a header carries the header onto the page such a break opens, exactly as it does at a break the row heights themselves forced.
+
+`break-inside: avoid` on a row needs nothing to be honored: a row is never split across a page, so a row that would straddle a boundary is already carried onto the next page whole. The column-context values (`column`, `avoid-column`) name a fragmentation context a table does not establish; inside a [multi-column container](#multi-column-layout) they are the container's to act on.
+
+Two limits. Keep-with-next (`break-after: avoid`) between two rows is not honored — the chain is read among block-flow siblings, and a table's rows are placed by the table itself. And a break value on a box *inside* a cell is likewise the table's row grid to answer, not the page grid's.
 
 <a id="monolithic-content"></a>
 **Monolithic content moves whole rather than being split** ([CSS Fragmentation Level 3 §2](https://www.w3.org/TR/css-break-3/#monolithic)). Some content may not be broken at all, and where it would straddle a page boundary it is carried onto the next page in one piece. Two kinds qualify:

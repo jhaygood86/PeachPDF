@@ -64,6 +64,22 @@ namespace PeachPDF.Html.Core.Fragmentation
         }
 
         /// <summary>
+        /// The break-after counterpart of <see cref="AnchorForBreakBefore"/>: the outermost box whose break
+        /// point after it is the same one as after <paramref name="box"/>.
+        /// </summary>
+        internal static CssBox AnchorForBreakAfter(CssBox box)
+        {
+            var anchor = box;
+
+            while (PropagatesBreakAfterOutward(anchor))
+            {
+                anchor = anchor.ParentBox!;
+            }
+
+            return anchor;
+        }
+
+        /// <summary>
         /// The forced break value that applies at the break point <i>before</i> <paramref name="box"/> —
         /// its own <c>break-before</c> combined with every value propagating outward to it from the chain
         /// of boxes it begins. Null when none of them is forced.
