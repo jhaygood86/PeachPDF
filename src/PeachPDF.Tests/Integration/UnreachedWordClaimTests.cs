@@ -14,9 +14,19 @@ namespace PeachPDF.Tests.Integration
     /// well as the page the word really lands on (issue #433).
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The margin matters and is taken from production. <see cref="LayoutHarness"/>'s own default of 20pt
     /// puts slot 0's band below a word's zero rectangle (height ≈ 13pt) entirely, so the defect is
     /// invisible there; <c>PdfGenerateConfig</c>'s default is 10pt, where it is not.
+    /// </para>
+    /// <para>
+    /// The line geometry is pinned rather than left to the platform's default font, and the two other
+    /// mechanisms that can move a word are turned off (<c>orphans: 1; widows: 1</c>), so that what these
+    /// fixtures measure is which fragment claims a word the flow never reached. A 20pt line against an
+    /// 830pt band leaves every page's last line 10pt clear of the boundary, which keeps them out of the
+    /// 0.5pt window where layout and the emitter disagree about membership (#446) — reached on
+    /// <c>windows-latest</c> only, and a different defect.
+    /// </para>
     /// </remarks>
     public class UnreachedWordClaimTests
     {
@@ -33,14 +43,14 @@ namespace PeachPDF.Tests.Integration
         /// inline drops its words (#318).
         /// </remarks>
         [Theory]
-        [InlineData("<p>{F}</p>")]
-        [InlineData("<p>{F} <b>bold words carried across the break</b> {F}</p>")]
-        [InlineData("<p><span style='color:red'>{F}</span></p>")]
-        [InlineData("<div>{F}<span style='float:left;width:40pt'>fl oa ted</span>{F}</div>")]
-        [InlineData("<div style='column-count:2'><p>{F}</p></div>")]
+        [InlineData("<p style='orphans:1;widows:1;font-size:10pt;line-height:20pt'>{F}</p>")]
+        [InlineData("<p style='orphans:1;widows:1;font-size:10pt;line-height:20pt'>{F} <b>bold words carried across the break</b> {F}</p>")]
+        [InlineData("<p style='orphans:1;widows:1;font-size:10pt;line-height:20pt'><span style='color:red'>{F}</span></p>")]
+        [InlineData("<div style='orphans:1;widows:1;font-size:10pt;line-height:20pt'>{F}<span style='float:left;width:40pt'>fl oa ted</span>{F}</div>")]
+        [InlineData("<div style='column-count:2'><p style='orphans:1;widows:1;font-size:10pt;line-height:20pt'>{F}</p></div>")]
         public async Task AParagraphSplitAtAPageBoundary_ClaimsEveryWordExactlyOnce(string template)
         {
-            var (root, container) = await LayoutHarness.LayoutAsync(Document(template, 2500), margin: 10);
+            var (root, container) = await LayoutHarness.LayoutAsync(Document(template, 2500), pageHeight: 850, margin: 10);
 
             Assert.True(container.FragmentTree!.Fragmentainers.Count > 1,
                 "the fixture must span more than one page");
@@ -62,7 +72,9 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task TheFirstPage_ClaimsOnlyTheWordsItShows()
         {
-            var (root, container) = await LayoutHarness.LayoutAsync(Document("<p>{F}</p>", 3000), margin: 10);
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                Document("<p style='orphans:1;widows:1;font-size:10pt;line-height:20pt'>{F}</p>", 3000),
+                pageHeight: 850, margin: 10);
 
             var fragmentainers = container.FragmentTree!.Fragmentainers;
             Assert.True(fragmentainers.Count > 1, "the fixture must span more than one page");
@@ -89,9 +101,9 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task AListWhoseItemsDoNotBreak_StillClaimsEveryMarker()
         {
-            var items = string.Join("", Enumerable.Range(0, 200).Select(i => $"<li>item {i} of the list</li>"));
+            var items = string.Join("", Enumerable.Range(0, 200).Select(i => $"<li style='font-size:10pt;line-height:20pt'>item {i} of the list</li>"));
             var (root, container) = await LayoutHarness.LayoutAsync(
-                LayoutHarness.Wrap($"<ul>{items}</ul>"), margin: 10);
+                LayoutHarness.Wrap($"<ul>{items}</ul>"), pageHeight: 850, margin: 10);
 
             Assert.True(container.FragmentTree!.Fragmentainers.Count > 1,
                 "the fixture must span more than one page");

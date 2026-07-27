@@ -50,6 +50,19 @@ laid out by `CssBox.PerformLayoutEpilogue`, which the pass that breaks never rea
 positioned only on the completing pass — after the slot it belongs to was frozen. Filed as
 [#444](https://github.com/jhaygood86/PeachPDF/issues/444).
 
+**`windows-latest` found a second defect, and it is not this one.** The claimed-exactly-once
+invariant, asked of the whole document, failed there on a plain paragraph with **16 words claimed by
+slots [0,1], living in 0** — one whole line, drawn again in the next page's top margin. That is a
+tolerance mismatch, not an unplaced word: layout keeps a line overhanging the band bottom by up to
+`PageBoundaryEpsilon` (0.5pt) while the emitter counts an overlap of `BandOverlapEpsilon` (1e-6) as
+membership of the next band, and whether a page's last line lands in that window is a function of
+the platform's font metrics. Filed as [#446](https://github.com/jhaygood86/PeachPDF/issues/446); the
+fixtures here now pin their line geometry (a 20pt line against an 830pt band, so every page's last
+line is 10pt clear) and turn `orphans`/`widows` off, so what they measure is which fragment claims a
+word the flow never reached. **Making the diagnostic name the slots, the word and where it lives is
+what turned one red check into a filed issue in a single CI cycle** — the assertion message is part
+of the test.
+
 **One residual the review chased and the numbers closed.** `AwaitPlacement` marks a subtree
 strictly larger than `FlowBox` visits — an outside `::marker` is skipped by the flow — so the
 question is whether anything is now newly *un*painted. Measured over seven shapes at 2,500 words
