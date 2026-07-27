@@ -1,0 +1,3 @@
+# `::marker` marker-box layout is not implemented
+
+`::marker` marker-box width/height/margin/padding/alignment (the CSS Lists Level 3 "marker box" layout model) is not implemented — the spec itself (§3.1.1) declares this layout "not fully defined" and restricts applicable properties to `content`/`color`/font properties/`direction` (all of which PeachPDF fully supports on `::marker`, including real per-item numbering via the `list-item` counter and `<ol start>`/`<ol reversed>`/`<li value>`) — no browser implements marker-box sizing either, for the same reason. See [Pseudo-elements](docs/html-css-support.md#pseudo-elements).

@@ -1,0 +1,13 @@
+# A `clone` fragment at a column break claims the room layout reserved for it
+
+_Landed 2026-07-26._
+
+**A `clone` fragment at a column break claims the room layout reserved for it** ([issue #335](https://github.com/jhaygood86/PeachPDF/issues/335)'s multicol half, [CSS Fragmentation 3 §6.2](https://www.w3.org/TR/css-break-3/#break-decoration)). §6.2 requires room to be reserved for a cloned decoration when working out how much of a fragmentainer is left.
+
+**The load-bearing discovery is that layout already reserves it, and the fragment does not claim it.** `CssRect.WouldStraddleFragmentainer` has asked its question against the *column's* own band since #366, cloned insets included, so a `clone` box's content genuinely stops short of the column edge by its own border and padding — measured, not assumed. What was wrong is one level on: a continuing box's fragment extent is measured *from the content it holds* (`BoundsEndAtItsContent`, #366), so the fragment ended at the last line and `clone` drew the closing border **over that line**, in the middle of the room reserved for it. A *page* fragment never had this, because its bounds are cut to the band rather than derived from content.
+
+So the fix is to add the box's **own** share back (`DomUtils.OwnClonedBlockEnd`, factored out of `ClonedBlockEnd`, which is now its sum over the chain). Own share, not the chain sum, is what composes: each level of a nested cloning stack closes inside its ancestors', and an ancestor's own fragment is measured from this one, so the chain sum would count every ancestor once per level.
+
+**The layout half needed nothing, and that is worth not re-deriving** — the arithmetic in `WouldStraddleFragmentainer` and `CreateLineBoxes`' resume top is band-relative, and a column's band is the page's band with a different bottom, so both were already right once a column became a real `FragmentainerContext`.
+
+Tests: `BoxDecorationBreakLayoutIntegrationTests` (+2 — the content stopping short *and* the fragment claiming exactly that much, with `slice` as the control that ends at its content). Full net8.0 suite green (6367); **100% diff coverage**. **64 of 65 showcases are pixel-identical**; `multicol`'s new section 9 differs, and it differs by the clone panel's closing border no longer being drawn across its own last line. **Boundary, not fixed here:** a box in a multicol whose content is *blocks* rather than text is not split at a column boundary at all — it neither moves nor breaks, and overflows its page ([#387](https://github.com/jhaygood86/PeachPDF/issues/387)) — so there is no break inside it to reserve at. The flex/grid/table half of #335 is unchanged, still waiting on item content being fragmented at all.
