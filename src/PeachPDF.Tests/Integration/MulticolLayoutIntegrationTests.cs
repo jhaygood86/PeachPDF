@@ -1576,6 +1576,84 @@ namespace PeachPDF.Tests.Integration
             return (root, FindById(root, "mc")!, FindById(root, "long")!, container);
         }
 
+        // A column is at least as tall as its unbreakable content (css-multicol-1 §3.3). The band a
+        // column is *given* comes from balancing, and a child this engine cannot fragment - a table,
+        // another engine's container - is placed whole and overflows it. Recording the target rather
+        // than the band the column actually filled left everything below the target claimed by no
+        // fragmentainer at all: laid out, and painted nowhere (issue #406). No break value is needed;
+        // the plain nesting is enough.
+        [Fact]
+        public async Task AnUnbreakableChildTallerThanTheBalancedTarget_EmitsAllOfItsContent()
+        {
+            var blocks = string.Concat(Enumerable.Range(1, 4)
+                .Select(i => $"<p class='item'>block {i} alpha beta gamma delta</p>"));
+
+            var (root, container) = await BuildAndLayout(
+                Wrap("<div id='mc' style='columns:2; column-gap:20px; width:300px'>"
+                     + $"<table style='width:100%'><tr><td>{blocks}</td></tr></table></div>"),
+                pageHeight: 400);
+
+            var authored = FindAllByClass(root, "item")
+                .SelectMany(LayoutHarness.Descendants)
+                .SelectMany(b => b.Words)
+                .Where(w => !w.IsSpaces)
+                .ToList();
+
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => FlattenFragments(f.Root))
+                .SelectMany(f => f.Words)
+                .Select(w => w.Word)
+                .ToList();
+
+            Assert.NotEmpty(authored);
+            Assert.All(authored, word => Assert.Contains(word, claimed));
+
+            // And the widening cannot have let a neighbouring column claim the same word: columns are
+            // told apart by the inline axis, which the band says nothing about.
+            Assert.Equal(claimed.Count, claimed.Distinct().Count());
+        }
+
+        // The same equality for a grid container, which reached it by a different route. Its items'
+        // content used to be laid out at a width that ignored the column entirely - an `auto` track was
+        // seeded at its max-content contribution and only ever grown - so it overflowed the column's
+        // *inline* span, the one axis that must stay exact because it is what tells two columns of one
+        // band apart. Fixing the track sizing (CSS Grid §12.6) is what makes the overflow not exist.
+        [Fact]
+        public async Task AGridChildOfAMulticol_KeepsItsContentInsideTheColumn()
+        {
+            var blocks = string.Concat(Enumerable.Range(1, 4)
+                .Select(i => $"<p class='item'>block {i} alpha beta gamma delta</p>"));
+
+            var (root, container) = await BuildAndLayout(
+                Wrap("<div id='mc' style='columns:2; column-gap:20px; width:300px'>"
+                     + $"<div id='g' style='display:grid'>{blocks}</div></div>"),
+                pageHeight: 400);
+
+            var grid = FindById(root, "g")!;
+
+            var authored = FindAllByClass(root, "item")
+                .SelectMany(LayoutHarness.Descendants)
+                .SelectMany(b => b.Words)
+                .Where(w => !w.IsSpaces)
+                .ToList();
+
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => FlattenFragments(f.Root))
+                .SelectMany(f => f.Words)
+                .Select(w => w.Word)
+                .ToList();
+
+            Assert.NotEmpty(authored);
+
+            // Nothing reaches past the column the grid is in, so nothing is refused for being outside it.
+            Assert.All(authored, word =>
+                Assert.True(word.Right <= grid.ActualRight + 0.5,
+                    $"'{word.Text}' ends at {word.Right:F1}, past the grid's own right edge {grid.ActualRight:F1}"));
+
+            Assert.All(authored, word => Assert.Contains(word, claimed));
+            Assert.Equal(claimed.Count, claimed.Distinct().Count());
+        }
+
         /// <summary>
         /// Asserts no two boxes' bounding rectangles overlap — the structural invariant a
         /// two-axis (page, column) fragmentation engine must never violate, since an overlap

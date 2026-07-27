@@ -52,13 +52,12 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Equal(10, laidOut);
 
-            // Characterization, not the invariant it should be: the cell's *first* block is emitted and
-            // its second is not, so the table renders partially. Before a suppressed pass stopped naming
-            // the enclosing column, the count here was 0 — the whole table was laid out and none of it
-            // painted. The remaining half is a table nested in a multi-column container not being
-            // fragmented by that container at all (issue #406); closing it turns this into an equality.
-            Assert.Equal(5, emitted.Count);
-            Assert.Equal(new[] { "one", "two", "three", "four", "five" },
+            // Everything laid out is emitted. This was drafted as a characterization at 0 (before a
+            // suppressed pass stopped naming the enclosing column, the whole table was invisible) and
+            // then at 5 (the cell's first block only, the rest below a column band derived from
+            // balancing that a table cannot be fragmented to fit).
+            Assert.Equal(laidOut, emitted.Count);
+            Assert.Equal(new[] { "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten" },
                 emitted.Select(w => w.Word.Text).ToArray());
         }
 
@@ -74,8 +73,9 @@ namespace PeachPDF.Tests.Integration
                 .Select(w => w.Word)
                 .ToList();
 
-            // The half of the invariant that does hold, and the one a break raised against the wrong
-            // fragmentainer breaks first: whatever is emitted is emitted once.
+            // The other half of the same invariant, and the one a break raised against the wrong
+            // fragmentainer breaks first: whatever is emitted is emitted once. Widening a column's
+            // recorded band to the one it filled could only fail this way.
             Assert.Equal(emitted.Count, emitted.Distinct().Count());
         }
 
