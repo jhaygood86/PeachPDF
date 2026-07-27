@@ -123,10 +123,13 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(rowGeometry[1], rowGeometry[2]);
         }
 
-        [Fact]
-        public async Task ATableWithARepeatingHeader_StillMeasuresOneHeaderTallerOnASecondRun()
+        [Theory]
+        [InlineData(3)]    // fits one page: one repeated header
+        [InlineData(12)]
+        [InlineData(40)]   // spans pages: a repeated header per page
+        public async Task ATableWithARepeatingHeader_LaidOutAgain_ReproducesItsOwnHeight(int rows)
         {
-            var body = string.Format(CultureInfo.InvariantCulture, RepeatingHeaderTable, TableRows(40));
+            var body = string.Format(CultureInfo.InvariantCulture, RepeatingHeaderTable, TableRows(rows));
 
             var heights = await LayoutHarness.LayoutRepeatedlyAsync(
                 LayoutHarness.Wrap(body), passes: 3,
@@ -137,12 +140,29 @@ namespace PeachPDF.Tests.Integration
                 },
                 pageHeight: 400);
 
-            // Characterization of what is left of #353, not the invariant it should be. The body rows are
-            // reproduced exactly (above) and the extra height is precisely one header row plus the
-            // vertical spacing — the table's own reported height gains a header's worth on the second run
-            // and stabilises there. Closing that turns these three into an equality.
-            Assert.True(heights[1] > heights[0], $"expected drift, got {heights[0]} then {heights[1]}");
+            // The half that took the longest to find: the extra height was exactly one header's worth,
+            // and independent of how many pages the table spans, because the restore added the group
+            // twice - CssBox.ParentBox's setter appends to the new parent, so inserting at an index and
+            // *then* re-parenting puts it in the child list at both places.
+            Assert.Equal(heights[0], heights[1], 3);
             Assert.Equal(heights[1], heights[2], 3);
+        }
+
+        [Fact]
+        public async Task ATableWithARepeatingHeader_LaidOutAgain_KeepsItsHeaderGroupExactlyOnce()
+        {
+            var body = string.Format(CultureInfo.InvariantCulture, RepeatingHeaderTable, TableRows(12));
+
+            var counts = await LayoutHarness.LayoutRepeatedlyAsync(
+                LayoutHarness.Wrap(body), passes: 3,
+                (root, _) => LayoutHarness.Descendants(root)
+                    .Count(b => b.Display == "table-header-group" && b is not CssProxyBox),
+                pageHeight: 400);
+
+            // Both directions of getting the restore wrong show up here: none means a second run found
+            // no header group to repeat, two means it was added twice. The engine detaches the group
+            // before it finishes, so the count a completed layout leaves behind is zero.
+            Assert.All(counts, count => Assert.Equal(0, count));
         }
     }
 }

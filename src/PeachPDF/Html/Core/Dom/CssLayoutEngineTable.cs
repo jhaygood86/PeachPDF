@@ -701,12 +701,17 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (source.ParentBox is not null) continue;
 
-                var index = proxy.SourceIndex < 0
-                    ? _tableBox.Boxes.Count
-                    : Math.Min(proxy.SourceIndex, _tableBox.Boxes.Count);
-
-                _tableBox.Boxes.Insert(index, source);
+                // The ParentBox setter is what re-parents, and it *appends* to the new parent's
+                // children - so the index is applied afterwards by moving the box. Inserting first and
+                // then setting the parent adds the group twice, which is exactly one header's worth of
+                // extra height on the second run and was the whole of this issue's "extra height".
                 source.ParentBox = _tableBox;
+
+                if (proxy.SourceIndex >= 0 && proxy.SourceIndex < _tableBox.Boxes.Count - 1)
+                {
+                    _tableBox.Boxes.Remove(source);
+                    _tableBox.Boxes.Insert(proxy.SourceIndex, source);
+                }
             }
         }
 
