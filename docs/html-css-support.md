@@ -646,6 +646,8 @@ Two limits are worth knowing. A flex or grid container **inside a table** is pos
 
 `break-inside: avoid` on a row needs nothing to be honored: a row is never split across a page, so a row that would straddle a boundary is already carried onto the next page whole. The column-context values (`column`, `avoid-column`) name a fragmentation context a table does not establish; inside a [multi-column container](#multi-column-layout) they are the container's to act on.
 
+**A table that did not break moves whole.** A table breaks between two of its rows when the next row does not fit, and where no row break was taken at all — most often a single-row table, or one whose cells hold tall block content the row-height estimate could not see — the table did not fragment, and it is carried onto the next page in one piece rather than painting sliced across the boundary. This applies to every table, including one repeating a `<thead>` or a `<tfoot>`: the header follows it onto the page it lands on. A table taller than one page is left where it is, since moving it would only recreate the straddle. A heading chained to the table by `break-after: avoid` — the user-agent print default for `h1`–`h6` — travels with it, as at every other relocation.
+
 Two limits. Keep-with-next (`break-after: avoid`) between two rows is not honored — the chain is read among block-flow siblings, and a table's rows are placed by the table itself. And a break value on a box *inside* a cell is likewise the table's row grid to answer, not the page grid's.
 
 <a id="monolithic-content"></a>
