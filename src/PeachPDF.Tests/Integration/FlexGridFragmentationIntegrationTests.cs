@@ -85,6 +85,112 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(1, SlotOf(container, a!));
         }
 
+        // §3.1: a forced break falls at a class-A break point if *either* side asks for it. The line
+        // after one whose items carry a forced break-after starts on the next page, exactly as it would
+        // had the same intent been spelt on its own items as break-before.
+        [Theory]
+        [InlineData("break-after: page")]
+        [InlineData("page-break-after: always")]
+        public async Task FlexItem_WithAForcedBreakAfter_StartsTheNextLineOnTheNextPage(string declaration)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:40pt'>filler</div>"
+                    + "<div id='c' style='display:flex; flex-wrap:wrap; width:300pt'>"
+                    + $"<div id='a' style='width:100%;height:20pt;{declaration}'>A</div>"
+                    + "<div id='b' style='width:100%;height:20pt'>B</div>"
+                    + "</div>"),
+                pageHeight: PageHeight);
+
+            var a = LayoutHarness.FindById(root, "a");
+            var b = LayoutHarness.FindById(root, "b");
+            Assert.NotNull(a);
+            Assert.NotNull(b);
+
+            // The line that declared it stays where it was - the break is after it, not before it.
+            Assert.Equal(0, SlotOf(container, a!));
+            Assert.Equal(1, SlotOf(container, b!));
+        }
+
+        [Theory]
+        [InlineData("break-after: page")]
+        [InlineData("page-break-after: always")]
+        public async Task GridItem_WithAForcedBreakAfter_StartsTheNextRowOnTheNextPage(string declaration)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:40pt'>filler</div>"
+                    + "<div id='c' style='display:grid; grid-template-columns:1fr'>"
+                    + $"<div id='a' style='height:20pt;{declaration}'>A</div>"
+                    + "<div id='b' style='height:20pt'>B</div>"
+                    + "</div>"),
+                pageHeight: PageHeight);
+
+            var a = LayoutHarness.FindById(root, "a");
+            var b = LayoutHarness.FindById(root, "b");
+            Assert.NotNull(a);
+            Assert.NotNull(b);
+
+            Assert.Equal(0, SlotOf(container, a!));
+            Assert.Equal(1, SlotOf(container, b!));
+        }
+
+        // A break-after on the *last* line names the break point after the container, which is not this
+        // pass's to take - there is no line after it to move, and §3.1's propagation stops before a box
+        // whose children an engine places for itself.
+        [Theory]
+        [InlineData("display:flex; flex-wrap:wrap")]
+        [InlineData("display:grid; grid-template-columns:1fr")]
+        public async Task AForcedBreakAfterOnTheLastLine_MovesNothing(string containerStyle)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:40pt'>filler</div>"
+                    + $"<div id='c' style='{containerStyle}; width:300pt'>"
+                    + "<div id='a' style='width:100%;height:20pt'>A</div>"
+                    + "<div id='b' style='width:100%;height:20pt;break-after:page'>B</div>"
+                    + "</div>"),
+                pageHeight: PageHeight);
+
+            var a = LayoutHarness.FindById(root, "a");
+            var b = LayoutHarness.FindById(root, "b");
+            Assert.NotNull(a);
+            Assert.NotNull(b);
+
+            Assert.Equal(0, SlotOf(container, a!));
+            Assert.Equal(0, SlotOf(container, b!));
+        }
+
+        // An item spanning several rows is the earlier sibling of the row after the *last* one it covers,
+        // so its break-after falls there. Attributing it to the row it starts in would take the break at a
+        // boundary running through the middle of the item itself.
+        [Fact]
+        public async Task AGridItemSpanningRows_TakesItsBreakAfterAtTheEndOfTheSpan()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:40pt'>filler</div>"
+                    + "<div id='c' style='display:grid; grid-template-columns:1fr 1fr'>"
+                    + "<div id='a' style='grid-row:1/3;height:40pt;break-after:page'>A</div>"
+                    + "<div id='b' style='grid-column:2;height:20pt'>B</div>"
+                    + "<div id='d' style='grid-column:2;height:20pt'>D</div>"
+                    + "<div id='e' style='height:20pt'>E</div>"
+                    + "</div>"),
+                pageHeight: PageHeight);
+
+            var a = LayoutHarness.FindById(root, "a");
+            var d = LayoutHarness.FindById(root, "d");
+            var e = LayoutHarness.FindById(root, "e");
+            Assert.NotNull(a);
+            Assert.NotNull(d);
+            Assert.NotNull(e);
+
+            // Row 2 is still beside the spanning item, on its page; only the row after the span moves.
+            Assert.Equal(0, SlotOf(container, a!));
+            Assert.Equal(0, SlotOf(container, d!));
+            Assert.Equal(1, SlotOf(container, e!));
+        }
+
         // The line moves together, not the item that asked. The cross-axis phases aligned these against
         // each other, and moving one alone would break that alignment.
         [Fact]

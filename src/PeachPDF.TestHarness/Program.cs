@@ -1676,6 +1676,32 @@ var monolithicHtml = """
         + $"<h2>Item {i}</h2><p>Sized so three lines of two wrap inside the container.</p></div>"))
     + """
     </div>
+
+    <h1>Either side of the break point may force it</h1>
+    <p>&sect;3.1 states a forced break of the break <i>point</i>, not of a box: it is taken if the earlier
+    item's <code>break-after</code> or the later item's <code>break-before</code> asks for one. The first
+    line below declares <code>break-after: page</code>, so the line after it opens the next page even
+    though nothing in that line asks for anything.</p>
+    """
+    + string.Concat(Enumerable.Range(96, 3).Select(i =>
+        $"<p>Filler paragraph {i}. There is room left on this page, so nothing but the declared break "
+        + "moves the second line off it.</p>"))
+    + """
+    <div style="display:flex; flex-wrap:wrap; gap:8pt; border:1px dashed #a3a3a3; padding:6pt">
+      <div class="card" style="width:38%; margin:0; break-after:page">
+        <span class="tag">break-after: page</span><h2>Item 1</h2>
+        <p>This line stays where the flow put it &mdash; the break is after it, not before it.</p></div>
+      <div class="card" style="width:38%; margin:0; break-after:page">
+        <span class="tag">break-after: page</span><h2>Item 2</h2>
+        <p>Its neighbour on the same line, declaring the same thing.</p></div>
+      <div class="card" style="width:38%; margin:0">
+        <span class="tag">no break value</span><h2>Item 3</h2>
+        <p>Nothing here asks for a break, yet the line opens the next page: the break point above it was
+        forced from the other side.</p></div>
+      <div class="card" style="width:38%; margin:0">
+        <span class="tag">no break value</span><h2>Item 4</h2>
+        <p>It travels with its line, as a line always does.</p></div>
+    </div>
     </body></html>
     """;
 
@@ -1683,7 +1709,8 @@ await SaveShowcaseAsync("paged_media_monolithic_content", "Paged Media", "Monoli
     "A box with overflow: hidden is a scroll container, which CSS Fragmentation §2 forbids breaking: it "
     + "moves to the next page whole instead of being cut in half by the page boundary. A flex line and a "
     + "grid row that ask not to be broken move as a unit for the same reason, and the lines below a "
-    + "moved one follow it rather than staying put.",
+    + "moved one follow it rather than staying put. A forced break is taken from either side of a break "
+    + "point, so break-after on one line opens the next page for the line after it.",
     monolithicHtml, new PdfGenerateConfig { PageSize = PageSize.A5 });
 
 // ── orphans / widows showcase ──────────────────────────────────────────────
@@ -1747,6 +1774,28 @@ static string KeepWithNextSection(double fillerHeight) =>
         $"Sentence {i} of the section body, long enough to occupy a line of its own. "))
     + "</p>";
 
+// The pass the driver goes back to is not always one that began at a page top. Here running text
+// carries across the first page boundary, so the pass that places the first section's heading was
+// itself entered part-way through that paragraph - and going back to it means continuing the
+// paragraph a second time. Everything the discarded passes appended to it has to be undone first;
+// left in place, the pass hands line boxes it already holds to CssLineBox.AssignRectanglesToBoxes a
+// second time and the whole render fails with "An item with the same key has already been added".
+static string ResumedPassSection(int leadSentences, int bodySentences) =>
+    "<h1 style=\"break-before:page\">Going back to a pass that stopped mid-paragraph</h1>"
+    + "<p class=\"intro\">The running text below breaks across the page boundary, so the pass that placed "
+    + "the first heading under it started inside that paragraph rather than at a page top. Each heading "
+    + "still arrives with its own section body.</p>"
+    + "<p>"
+    + string.Concat(Enumerable.Range(1, leadSentences).Select(i =>
+        $"Sentence {i} of the running text that carries on across the page boundary, long enough to "
+        + "occupy a line of its own at this measure. "))
+    + "</p>"
+    + string.Concat(Enumerable.Range(1, 2).Select(n =>
+        $"<h2>Section {n}</h2><p class=\"marked\">"
+        + string.Concat(Enumerable.Range(1, bodySentences).Select(i =>
+            $"Sentence {i} of section {n}'s body, long enough to occupy a line of its own. "))
+        + "</p>"));
+
 var keepWithNextHtml = """
     <!DOCTYPE html>
     <html><head><style>
@@ -1762,6 +1811,7 @@ var keepWithNextHtml = """
     </style></head><body>
     """
     + KeepWithNextSection(410)
+    + ResumedPassSection(leadSentences: 40, bodySentences: 10)
     + "</body></html>";
 
 await SaveShowcaseAsync("paged_media_keep_with_next", "Paged Media", "Keep With Next",

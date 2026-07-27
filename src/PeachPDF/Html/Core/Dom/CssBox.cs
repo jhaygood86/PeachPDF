@@ -1142,7 +1142,7 @@ namespace PeachPDF.Html.Core.Dom
 
             _prologueDone = false;
 
-            AwaitPlacementAgain();
+            AwaitPlacement();
         }
 
         /// <summary>
@@ -1150,12 +1150,20 @@ namespace PeachPDF.Html.Core.Dom
         /// the layout about to run actually places can be claimed by it.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// A discarded attempt leaves its words where it put them, and the attempt that replaces it need not
         /// reach all of them again — a shorter column stops sooner. Cleared per word by being positioned
         /// (<see cref="CssRect.Top"/>'s setter), so what survives is exactly what this layout did not place:
         /// the same rule §4.1's own discarded line already follows, applied to a discarded fill.
+        /// </para>
+        /// <para>
+        /// The other caller is the flow itself: a word a stopped flow never reached carries no position of
+        /// its own either, and the one it carries instead — document Y 0 — lies inside the first slot's own
+        /// band. So the block's inline flow says the same thing about itself before it starts, on the pass
+        /// that opens it (<c>CssLayoutEngine.CreateLineBoxes</c>).
+        /// </para>
         /// </remarks>
-        private void AwaitPlacementAgain()
+        internal void AwaitPlacement()
         {
             foreach (var word in Words)
             {
@@ -1164,7 +1172,7 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var childBox in Boxes)
             {
-                childBox.AwaitPlacementAgain();
+                childBox.AwaitPlacement();
             }
         }
 
