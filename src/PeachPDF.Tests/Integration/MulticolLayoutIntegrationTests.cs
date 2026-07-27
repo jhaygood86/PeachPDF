@@ -1176,6 +1176,14 @@ namespace PeachPDF.Tests.Integration
             Assert.True(
                 BreakValues.SlotIsOn(landing, side == "right" ? PageSide.Right : PageSide.Left),
                 $"expected a {side}-hand page, the box landed in slot {landing}");
+
+            // The slot is only half of it, and the half a reader never sees. Every slot the break stepped
+            // over has to be *materialized* as a blank page, or the side the value names and the page the
+            // reader counts to disagree — which the escape used to do, by settling the reservation on the
+            // pass that declined to place the box and losing it before the pass that did.
+            var materialized = container.FragmentTree!.Fragmentainers.Select(f => f.SlotIndex).ToList();
+
+            Assert.Equal(Enumerable.Range(0, landing + 1), materialized);
         }
 
         /// <summary>
@@ -1441,11 +1449,11 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
-        /// The termination argument, which the index test states rather than measures. A run whose head is
-        /// the very child this column's fill began at cannot be moved: breaking before it would start the
-        /// next column at the same place and put the identical question to it again. Every column of a
-        /// container shares one block-axis band, so nothing geometric could tell those two columns apart —
-        /// which is why this is the index's job and not a coordinate's.
+        /// A run whose head is the very child this column's fill began at is left where it is: breaking
+        /// before it would start the next column at the same place and put the identical question to it
+        /// again. The index test states that outright; here the fit test reaches it first, since a head at
+        /// the band top plus a box that overflows the band can never fit the band together. Both are
+        /// wanted — the index test is what keeps the decision sound if a fit test ever becomes an estimate.
         /// </summary>
         [Fact]
         public async Task ARunHeadingTheColumnsOwnFill_IsNotMovedAgain()
@@ -1465,29 +1473,30 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
-        /// The other arm that raises a column break — a box that asks not to be broken by one — pulls its
-        /// run too, and the workhorse invariant holds across the move.
+        /// The other arm that raises a column break — a box that asks not to be broken by one — moves the
+        /// content alone, and §4.3 is why: that box has a <i>pending record</i>, which is the statement
+        /// that its epilogue has not run, so its height is not known and the fit question cannot be asked
+        /// about it. Answering anyway reads as "the run always fits", and moves the heading into a column
+        /// of its own while the box it is chained to breaks again in the next one — worse than leaving it,
+        /// and a wasted column besides.
         /// </summary>
         [Fact]
-        public async Task KeepWithNext_AtAnAvoidColumnBreak_MovesTheHeadAndClaimsEveryWordOnce()
+        public async Task AtAnAvoidColumnBreak_TheContentMovesAlone_SinceItsHeightIsNotYetKnown()
         {
             var html = Wrap(@"
-                <div id='mc' style='columns:2; column-gap:0; width:300px; column-fill:auto'>
-                    <div id='top' style='height:40pt'>Top</div>
-                    <div id='head' style='height:20pt; break-after:avoid; margin:0; font-size:10pt; line-height:20pt'>Heading</div>
+                <div id='mc' style='columns:3; column-gap:0; width:450px; column-fill:auto'>
+                    <div id='top' style='height:30pt'>Top</div>
+                    <div id='head' style='height:10pt; break-after:avoid; margin:0; font-size:10pt; line-height:10pt'>Heading</div>
                     <p id='long' style='break-inside:avoid-column; margin:0; font-size:10pt; line-height:20pt'>
-                    L1<br>L2<br>L3</p>
+                    L1<br>L2<br>L3<br>L4</p>
                 </div>");
-            var (root, container) = await BuildAndLayout(html, pageHeight: 100);
+            var (root, container) = await BuildAndLayout(html, pageHeight: 60);
 
             var mc = FindById(root, "mc")!;
-            var words = LayoutHarness.Descendants(FindById(root, "long")!).SelectMany(b => b.Words).ToList();
+            var head = FindById(root, "head")!;
+            var top = FindById(root, "top")!;
 
-            Assert.NotEmpty(words);
-            Assert.All(words, w => Assert.True(w.Left >= mc.ClientLeft + 50,
-                $"every word of the avoiding box must be in the second column, one is at x={w.Left}"));
-            Assert.True(FindById(root, "head")!.Location.X > mc.ClientLeft + 50,
-                "the heading must travel with it");
+            Assert.Equal(top.Location.X, head.Location.X, 1);
 
             var claimed = container.FragmentTree!.Fragmentainers
                 .SelectMany(f => FlattenFragments(f.Root))
@@ -1497,7 +1506,41 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotEmpty(claimed);
             Assert.Equal(claimed.Count, claimed.Distinct().Count());
+            Assert.True(mc.ClientLeft >= 0);
         }
+
+        /// <summary>
+        /// §5.2's forced-break governance survives the escape. The break is settled on the pass that
+        /// declines to place the box and applied on the one that does, and in between the columns engine
+        /// re-opens the box's prologue, which retracts it — so a collapse-through marker read as an
+        /// ordinary self-collapsing box and the sibling after it anchored to the box <i>before</i> the
+        /// marker, landing ahead of the break it was supposed to follow.
+        /// </summary>
+        [Fact]
+        public async Task AnEscapingForcedBreak_StillGovernsTheMarginAfterIt()
+        {
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:300pt; column-fill:auto'>
+                    <div id='a' style='height:20pt; margin:0'>A</div>
+                    <div id='mark' style='break-before:page; margin:0'></div>
+                    <div id='c' style='height:20pt; margin-top:30pt'>C</div>
+                </div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 200);
+
+            var mark = FindById(root, "mark")!;
+            var c = FindById(root, "c")!;
+
+            Assert.True(mark.PlacedByForcedBreak, "the marker is placed by the break it carries");
+            Assert.True(c.Location.Y > mark.Location.Y,
+                $"the sibling after the break must follow it, it is at y={c.Location.Y} against the marker's {mark.Location.Y}");
+            Assert.Equal(container.PageIndexOf(mark.Location.Y), container.PageIndexOf(c.Location.Y));
+        }
+
+        /// <summary>
+        /// The invariant that catches both directions of getting an escape wrong: a ghost left in the
+        /// column the content escaped from, or content dropped along with the columns the container
+        /// stopped opening.
+        /// </summary>
 
         private static async Task<(CssBox Root, CssBox Mc)> StrandedHeadingAsync(string onHead, string onBody)
         {

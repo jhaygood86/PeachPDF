@@ -1299,6 +1299,32 @@ namespace PeachPDF.Html.Core.Dom
         internal bool RequestedBreakEscapesNestedFragmentainer { get; private set; }
 
         /// <summary>
+        /// What an escaping forced break settled on the pass that raised it, waiting for the pass that
+        /// actually places this box.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The forced-break arm of <c>PlaceBlockChild</c> runs on the pass that <i>declines</i> to place
+        /// the box; the pass that places it takes the resumed-target branch instead, which is not the
+        /// branch that asserts either of these. And between the two, a nested engine re-opens this box's
+        /// prologue (<c>CssLayoutEngineColumns.ResetChildrenForRefill</c>), which retracts both so a
+        /// re-decided break can re-assert them — right for a break being decided again, wrong for one
+        /// already decided and travelling in a record.
+        /// </para>
+        /// <para>
+        /// Deliberately <b>not</b> cleared by the prologue, for that reason; cleared per layout in
+        /// <see cref="BeginLayoutPass"/> like the other one-shot latches, and consumed on arrival.
+        /// </para>
+        /// </remarks>
+        private bool _escapedForcedBreakPending;
+
+        /// <summary>
+        /// The slot a directional escaping break reserved to land on the side it names, or null when the
+        /// break named no side or already landed on one.
+        /// </summary>
+        private int? _escapedForcedBreakBlankSlot;
+
+        /// <summary>
         /// How this box resumes on the current pass, or null when it is being laid out from the start.
         /// </summary>
         private BreakToken? _incomingToken;
@@ -1475,6 +1501,8 @@ namespace PeachPDF.Html.Core.Dom
                 _resumeTopOverride = null;
                 _orphansBreakTaken = false;
                 _widowsRewindTaken = false;
+                _escapedForcedBreakPending = false;
+                _escapedForcedBreakBlankSlot = null;
             }
 
             var resume = _incomingToken;
@@ -1500,10 +1528,13 @@ namespace PeachPDF.Html.Core.Dom
             if (HtmlContainer?.CurrentFragmentainer is not { } context || !ReferenceEquals(this, context.ContextRoot))
                 return;
 
-            // The root itself has no parent to wrap a break-before request, so it stands in as one.
+            // The root itself has no parent to wrap a break-before request, so it stands in as one -
+            // carrying every part of the request, the escape mark included, since nothing above it will
+            // get another chance to.
             context.RecordBreak(PendingBreakToken
                                 ?? new BlockBreakToken(this, RequestedBreakBeforeSlot, 0, null,
-                                    IsBreakBefore: true, RequestedBreakBeforeTop));
+                                    IsBreakBefore: true, RequestedBreakBeforeTop,
+                                    RequestedBreakEscapesNestedFragmentainer));
         }
 
         /// <summary>
@@ -2410,19 +2441,18 @@ namespace PeachPDF.Html.Core.Dom
         /// computed.
         /// </para>
         /// <para>
-        /// <b>The index test does two jobs at once, and that is what makes it the column analogue of the
-        /// page question.</b> A member at or below <paramref name="start"/> is in a column already filled,
-        /// or is the very child this column's fill began at — so breaking before it moves nothing and puts
-        /// the same question to the next column forever. It is also the only test that <i>can</i>
-        /// distinguish them: every column of a container shares one block-axis band, so an earlier
-        /// column's member has a document Y indistinguishable from this one's, and the geometric "does the
-        /// run start in the fragmentainer being left" guard the page sites use says nothing here.
+        /// <b>Which column a run member is in is an index question here, not a geometric one.</b> Every
+        /// column of a container shares one block-axis band, so a member of an earlier column has a
+        /// document Y indistinguishable from this one's — the "does the run start in the fragmentainer
+        /// being left" guard the page sites answer with coordinates says nothing at all here, and the
+        /// index this column's fill began at is the only thing that does.
         /// </para>
         /// <para>
         /// §4.3's ladder otherwise applies as it does on the page grid: a run that cannot fit a whole
         /// column with the content it is chained to is trimmed from its <i>front</i> — the members nearest
         /// the breaking box are what the chain is about — and where no member can travel, the content
-        /// moves alone.
+        /// moves alone. So does a box whose height is not yet known, which is every box raising the
+        /// <c>avoid-column</c> arm: see the guard below.
         /// </para>
         /// </remarks>
         private int ColumnBreakFallsBefore(int childIndex, int start, CssBox childBox, FragmentainerContext column)
@@ -2430,6 +2460,14 @@ namespace PeachPDF.Html.Core.Dom
             var run = DomUtils.GetPrecedingKeepWithNextRun(childBox, FragmentationContext.Column);
 
             if (run.Count == 0) return childIndex;
+
+            // A box that has not finished cannot be measured, so the fit test below cannot be asked about
+            // it: a pending record *is* the statement that its epilogue has not run, and its ActualBottom
+            // is still its own top. Answering anyway reads as "the run always fits", which is how a run
+            // gets moved into a column of its own while the box it is chained to breaks again in the next
+            // one - the very outcome the test exists to prevent. §4.3's ladder gives a constraint up
+            // rather than acting on it speculatively, so the content moves alone.
+            if (childBox.PendingBreakToken is not null) return childIndex;
 
             // Only a box that positions itself owns its ActualBottom; anything else holds its previous
             // sibling's, so measuring it would ask the fit question about the wrong box.
@@ -2441,6 +2479,14 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var headIndex = Boxes.IndexOf(run[head]);
 
+                // Soundness rather than the deciding test. A head below the index this column's fill began
+                // at names a child of a column already filled, and breaking before it would state a record
+                // whose resume index is behind this column's own start - the next column would lay that
+                // content out a second time. One *at* it is the child this column began with, so breaking
+                // before it moves nothing and puts the identical question to the next column forever.
+                // In practice the fit test below reaches those conclusions first, because it is exact for
+                // a whole box: a head it accepts really does fit the destination, so the destination does
+                // not overflow and is not asked again. This does not depend on that remaining true.
                 if (headIndex <= start) continue;
 
                 var extraAbove = childBox.Location.Y - run[head].Location.Y;
@@ -2710,6 +2756,27 @@ namespace PeachPDF.Html.Core.Dom
                         // "does not fit" conclusion and break again, forever.
                         child._resumeTopOverride = null;
                         top = resumedTop;
+
+                        // An escaping forced break is placed *here*, one pass after the arm below settled
+                        // it, and that arm is not re-entered - so what it settled has to be re-asserted
+                        // rather than re-derived. Two things, both retracted in between by a prologue the
+                        // engine re-opened (ResetChildrenForRefill): that this box is placed by a forced
+                        // break, which its *next* sibling reads through §5.2 and the margin walk-back, and
+                        // the blank slot a directional break reserved to land on the side it names. Losing
+                        // the first put the following sibling ahead of the break; losing the second landed
+                        // the content on a page of the wrong side, which is precisely what the value asked
+                        // about.
+                        if (child._escapedForcedBreakPending)
+                        {
+                            child._escapedForcedBreakPending = false;
+                            child._forcedBreakTop = null;
+                            child.PlacedByForcedBreak = true;
+
+                            if (child._escapedForcedBreakBlankSlot is { } blankSlot)
+                            {
+                                child.HtmlContainer!.SetBlankSlotReservation(child, blankSlot);
+                            }
+                        }
                     }
                     else if (child._forcedBreakTop is { } forcedTop)
                     {
@@ -2754,6 +2821,8 @@ namespace PeachPDF.Html.Core.Dom
                         // page exactly as it does outside one. It used to be excluded here, because
                         // reserving a page while the box merely moved to the next column honoured half of
                         // a decision.
+                        int? reservedBlankSlot = null;
+
                         for (var guard = 0;
                              child._forcedBreakSide is not PageSide.Any
                              && child.HtmlContainer!.IsFragmenting
@@ -2766,6 +2835,7 @@ namespace PeachPDF.Html.Core.Dom
                                 break;
 
                             child.HtmlContainer.SetBlankSlotReservation(child, landing);
+                            reservedBlankSlot = landing;
                             top = child.HtmlContainer.PageTopOf(landing + 1) + forcedBreakMargin;
                         }
 
@@ -2776,9 +2846,15 @@ namespace PeachPDF.Html.Core.Dom
                         // the break is stated as a record instead, marked as escaping: the columns engine
                         // stops opening columns for it and hands it up to the page driver, which already
                         // knows how to open the page this target names.
+                        //
+                        // What this arm settled travels with the request, because the pass that places the
+                        // box takes the resumed-target branch above and never re-enters this one - and the
+                        // prologue the engine re-opens in between retracts both of them.
                         if (child.HtmlContainer!.IsFragmenting
                             && child.HtmlContainer.CurrentFragmentainer is { HasOwnBand: true })
                         {
+                            child._escapedForcedBreakPending = true;
+                            child._escapedForcedBreakBlankSlot = reservedBlankSlot;
                             child.RequestBreakBefore(top, escapesNestedFragmentainer: true);
                             return;
                         }

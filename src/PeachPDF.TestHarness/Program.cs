@@ -3325,19 +3325,25 @@ static string AvoidColumnPanel(string label, string breakInside) =>
     "</div></div></div>";
 
 // The same heading and panel in the same box twice, differing only in the heading's break-after, so
-// whether the heading travels with the content it introduces is the whole of the difference. The panel
-// asks not to be broken by a column, which is what makes it start the next column whole.
+// whether the heading travels with the content it introduces is the whole of the difference.
+//
+// `column-fill: auto` rather than the default, and deliberately: a balanced column's height is derived
+// from the content, and the arithmetic then rules the pull out everywhere. "The heading fits column one"
+// is `filler + heading <= target` and "the run fits the destination" is `heading + panel <= target`,
+// which together need `target >= filler + 2*heading + panel` - more than the whole content, where
+// balancing sets the target to a fraction of it. A page-bounded column has a height of its own, which is
+// also what the real case looks like: a chapter heading arriving near the foot of a full column.
 static string KeepWithNextPanel(string label, string breakAfter) =>
     "<div class=\"frame\"><div class=\"label\">" + label + "</div>" +
-    "<div class=\"mc\" style=\"columns:2;column-gap:20px;column-rule:0.5pt solid #000\">" +
-    McEntries(1, "lead") +
+    "<div class=\"mc\" style=\"columns:2;column-gap:20px;column-fill:auto;column-rule:0.5pt solid #000\">" +
+    McEntries(26, "lead") +
     // Stated on both halves, because the UA print sheet already gives every heading
     // `page-break-after: avoid` - which is exactly what makes this the ordinary case, and what makes
     // "auto" rather than the absence of a declaration the control.
     "<h3 style=\"font-size:9pt;margin:0 0 0.3em;break-after:" + breakAfter + "\">Section heading</h3>" +
-    "<div style=\"break-inside:avoid-column;background:#fdf3e3;border:0.5pt solid #d68910;padding:3pt;margin:0\">" +
-    "<b>Panel</b> &mdash; the content this heading introduces, kept whole rather than split, so it cannot " +
-    "stay in the column the heading is in and has to start the next one." +
+    "<div style=\"height:200pt;background:#fdf3e3;border:0.5pt solid #d68910;padding:3pt;margin:0\">" +
+    "<b>Panel</b> &mdash; the content this heading introduces. It is taller than the room left below the " +
+    "heading, so it starts the next column; whether the heading comes with it is the question." +
     "</div></div></div>";
 
 // The same paragraph in the same box twice, differing only in box-decoration-break. A vertical
