@@ -47,7 +47,8 @@ namespace PeachPDF.Html.Core.Dom
             }
             catch (Exception ex)
             {
-                columnsBox.HtmlContainer?.ReportError(HtmlRenderErrorType.Layout, "Failed multi-column layout", ex);
+                if (columnsBox.HtmlContainer is { } container)
+                    throw container.RenderError(HtmlRenderErrorType.Layout, "Failed multi-column layout", ex);
             }
         }
 

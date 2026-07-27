@@ -78,7 +78,8 @@ namespace PeachPDF.Html.Core.Dom
             }
             catch (Exception ex)
             {
-                gridBox.HtmlContainer?.ReportError(HtmlRenderErrorType.Layout, "Failed grid layout", ex);
+                if (gridBox.HtmlContainer is { } container)
+                    throw container.RenderError(HtmlRenderErrorType.Layout, "Failed grid layout", ex);
             }
         }
 

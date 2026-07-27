@@ -173,7 +173,7 @@ namespace PeachPDF.Tests.TestSupport
     /// it's meant to constrain) - per this class's own convention of extending the single ordered log
     /// for new call types rather than building a separate parallel mechanism.
     /// </summary>
-    internal sealed class TestRecordingGraphics : RGraphics
+    internal class TestRecordingGraphics : RGraphics
     {
         public sealed record DrawStringCall(string Text, RFont Font, RColor Color, RPoint Point, RSize Size, bool Rtl, double LetterSpacing = 0);
         public sealed record DrawRectCall(RColor Color, double X, double Y, double Width, double Height);

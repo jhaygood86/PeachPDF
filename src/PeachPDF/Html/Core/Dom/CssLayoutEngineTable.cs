@@ -144,7 +144,8 @@ namespace PeachPDF.Html.Core.Dom
             }
             catch (Exception ex)
             {
-                tableBox.HtmlContainer?.ReportError(HtmlRenderErrorType.Layout, "Failed table layout", ex);
+                if (tableBox.HtmlContainer is { } container)
+                    throw container.RenderError(HtmlRenderErrorType.Layout, "Failed table layout", ex);
             }
         }
 

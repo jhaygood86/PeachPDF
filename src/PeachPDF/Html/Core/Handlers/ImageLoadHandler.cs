@@ -129,8 +129,11 @@ namespace PeachPDF.Html.Core.Handlers
             }
             catch (Exception ex)
             {
+                // Runs before the throw, and so does run - the render is about to abort, but this
+                // handler's own completion state is left consistent for anything already awaiting it.
                 ImageLoadComplete();
-                _htmlContainer.ReportError(HtmlRenderErrorType.Image, "Exception in handling image source", ex);
+
+                throw _htmlContainer.RenderError(HtmlRenderErrorType.Image, "Exception in handling image source", ex);
             }
         }
 
@@ -233,8 +236,11 @@ namespace PeachPDF.Html.Core.Handlers
             }
             catch (XmlException ex)
             {
+                // Same: runs before the throw, so a malformed document does not leave a half-built one
+                // behind on a handler the render abort might not tear down.
                 SvgDocument = null;
-                _htmlContainer.ReportError(HtmlRenderErrorType.Image, "Failed to parse SVG image", ex);
+
+                throw _htmlContainer.RenderError(HtmlRenderErrorType.Image, "Failed to parse SVG image", ex);
             }
         }
 

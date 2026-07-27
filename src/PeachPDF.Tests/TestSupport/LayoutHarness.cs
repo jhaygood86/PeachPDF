@@ -2,6 +2,7 @@ using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -20,11 +21,17 @@ namespace PeachPDF.Tests.TestSupport
         /// <paramref name="pageHeight"/> points. <c>PixelsPerPoint</c> is pinned to 1.0 to match
         /// production's default <c>PixelsPerInch = 72</c>, so asserted coordinates read as points.
         /// </summary>
+        /// <param name="prepare">
+        /// Optional: run against the parsed box tree's root after <c>SetHtml</c> and before layout, for a
+        /// test that has to put something in the tree the parser cannot produce — a box whose layout
+        /// behaviour is the subject, rather than a box some markup happens to produce.
+        /// </param>
         internal static async Task<(CssBox Root, HtmlContainerInt Container)> LayoutAsync(
             string html,
             double pageWidth = 595,
             double pageHeight = 842,
-            double margin = 20)
+            double margin = 20,
+            Action<CssBox>? prepare = null)
         {
             var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(adapter)
@@ -39,6 +46,12 @@ namespace PeachPDF.Tests.TestSupport
             container.PageSize = Utilities.Utils.Convert(sheet, 1.0);
 
             await container.SetHtml(html, null);
+
+            if (prepare is not null)
+            {
+                Assert.NotNull(container.Root);
+                prepare(container.Root!);
+            }
 
             // Mirror PdfGenerator.SetContent: PageSize is the *content band* (the sheet less its
             // margins) and the document origin sits at the top-left of that band. Getting this wrong

@@ -40,7 +40,14 @@ namespace PeachPDF.Html.Core.Handlers
         /// Null for top-level loads (a document's own &lt;link&gt;/&lt;style&gt;), which keep resolving
         /// against the document base as before.
         /// </param>
-        /// <returns>the stylesheet string, and the absolute URI it was resolved/fetched from (both null on failure)</returns>
+        /// <returns>
+        /// The stylesheet string, and the absolute URI it was resolved/fetched from. A reference that is
+        /// simply not a stylesheet — unresolvable, missing, or served with a <c>Content-Type</c> other
+        /// than <c>text/css</c> — returns empty content so the rest of the document still renders.
+        /// Anything else (a network loader that throws, an unreadable stream) fails the whole render
+        /// through <see cref="HtmlContainerInt.RenderError"/>; this method never returns null
+        /// content, even though both callers are written as if it could.
+        /// </returns>
         public static async Task<(string? Content, RUri? ResolvedUri)> LoadStylesheet(HtmlContainerInt htmlContainer, string src, RUri? importingBaseUri = null)
         {
             try
@@ -83,8 +90,13 @@ namespace PeachPDF.Html.Core.Handlers
             }
             catch (Exception ex)
             {
-                htmlContainer.ReportError(HtmlRenderErrorType.CssParsing, "Exception in handling stylesheet source", ex);
-                return (null, null);
+                // A `return (null, null)` used to sit after this call, back when the throw was hidden
+                // inside a method named ReportError - so the "both null on failure" half of this
+                // method's own contract has never once been reachable, and both callers' null checks
+                // have never once fired. Whether an *unexpected* failure here should degrade the way
+                // the handled ones above deliberately do is a policy question rather than a defect in
+                // this catch, so the behaviour is unchanged and only the dead statement is gone.
+                throw htmlContainer.RenderError(HtmlRenderErrorType.CssParsing, "Exception in handling stylesheet source", ex);
             }
         }
     }
