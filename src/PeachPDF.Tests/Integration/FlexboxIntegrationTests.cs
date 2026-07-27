@@ -812,8 +812,145 @@ namespace PeachPDF.Tests.Integration
             double left = container.ClientLeft;
 
             Assert.Equal(200, container.ActualBoxSizingWidth, 0.5);
-            Assert.Equal(left, a.Location.X, 0.5);
+            // Both items sit in the one line, whose cross size is B's 50pt. A cannot stretch to it (it has
+            // a definite width), so it is flush with the line's cross-start edge — which wrap-reverse puts
+            // on the right, 30pt along.
+            Assert.Equal(left + 30, a.Location.X, 0.5);
             Assert.Equal(left, b.Location.X, 0.5);
+        }
+
+        // ─── wrap-reverse: the swap inside a line ────────────────────────────────
+
+        [Theory]
+        // A 200pt-wide, 100pt-tall container. Line 1 in flow holds a 10pt and a 40pt item (cross size
+        // 40pt), line 2 a single 40pt item; align-content packs them at cross-start, which wrap-reverse
+        // puts at the bottom, so line 1 occupies [60, 100] and line 2 [20, 60]. Inside line 1 the short
+        // item is flush with the line's *cross-start* edge — its bottom under wrap-reverse.
+        [InlineData("flex-start", 90)]
+        [InlineData("start", 90)]
+        [InlineData("flex-end", 60)]
+        [InlineData("end", 60)]
+        [InlineData("center", 75)]
+        public async Task WrapReverse_AlignItems_PlacesTheShortItemAgainstTheSwappedEdge(
+            string alignItems, double expectedShortItemTop)
+        {
+            var html = Wrap($@"
+                <div id='container' style='display:flex; flex-wrap:wrap-reverse; align-items:{alignItems};
+                                           align-content:flex-start; width:200pt; height:100pt;'>
+                    <div id='a' style='width:100pt; height:10pt; flex-shrink:0;'></div>
+                    <div id='b' style='width:100pt; height:40pt; flex-shrink:0;'></div>
+                    <div id='c' style='width:150pt; height:40pt; flex-shrink:0;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            var c = FindById(root, "c")!;
+            double top = container.ClientTop;
+
+            Assert.Equal(100, container.ActualBoxSizingHeight, 0.5);
+            Assert.Equal(top + expectedShortItemTop, a.Location.Y, 0.5);
+            Assert.Equal(top + expectedShortItemTop + 10, a.ActualBottom, 0.5);
+            // The item that is the whole line's cross size, and the line below it, are unmoved by the
+            // within-line swap — only the short item has anywhere else to go.
+            Assert.Equal(top + 60, b.Location.Y, 0.5);
+            Assert.Equal(top + 20, c.Location.Y, 0.5);
+        }
+
+        [Fact]
+        public async Task WrapReverse_StretchFallback_DefiniteCrossSize_TakesTheSwappedEdgeToo()
+        {
+            // align-items is left at its initial `normal` ≡ stretch. An item with a definite cross size
+            // cannot stretch and falls back to flex-start, which is how most wrap-reverse containers
+            // reach the swapped edge — no `align-items` is written anywhere in this document.
+            var html = Wrap(@"
+                <div id='container' style='display:flex; flex-wrap:wrap-reverse; align-content:flex-start;
+                                           width:200pt; height:100pt;'>
+                    <div id='a' style='width:100pt; height:10pt; flex-shrink:0;'></div>
+                    <div id='b' style='width:100pt; height:40pt; flex-shrink:0;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            double top = container.ClientTop;
+
+            Assert.Equal(100, container.ActualBoxSizingHeight, 0.5);
+            Assert.Equal(top + 90, a.Location.Y, 0.5);
+            Assert.Equal(top + 100, a.ActualBottom, 0.5);
+            Assert.Equal(top + 60, b.Location.Y, 0.5);
+            Assert.Equal(top + 100, b.ActualBottom, 0.5);
+        }
+
+        [Fact]
+        public async Task WrapReverse_StretchableItem_StillFillsItsLine()
+        {
+            // An item that really can stretch fills the line and is on both edges at once, so the swap
+            // must leave it alone. The arithmetic that places it has to read the size it ended up with
+            // rather than the one it was measured at, or the stretched item lands short of the line.
+            var html = Wrap(@"
+                <div id='container' style='display:flex; flex-wrap:wrap-reverse; align-content:flex-start;
+                                           width:200pt; height:100pt;'>
+                    <div id='a' style='width:100pt; flex-shrink:0;'></div>
+                    <div id='b' style='width:100pt; height:40pt; flex-shrink:0;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            double top = container.ClientTop;
+
+            Assert.Equal(top + 60, a.Location.Y, 0.5);
+            Assert.Equal(top + 100, a.ActualBottom, 0.5);
+            Assert.Equal(40, a.ActualBoxSizingHeight, 0.5);
+        }
+
+        [Fact]
+        public async Task WrapReverse_AlignSelf_OnOneItemOnly_UsesTheSwappedEdge()
+        {
+            // align-self states the same thing per item, and reaches the same two arms.
+            var html = Wrap(@"
+                <div id='container' style='display:flex; flex-wrap:wrap-reverse; align-items:flex-end;
+                                           align-content:flex-start; width:200pt; height:100pt;'>
+                    <div id='a' style='width:100pt; height:10pt; align-self:flex-start; flex-shrink:0;'></div>
+                    <div id='b' style='width:100pt; height:40pt; flex-shrink:0;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            double top = container.ClientTop;
+
+            Assert.Equal(top + 90, a.Location.Y, 0.5);
+            Assert.Equal(top + 100, a.ActualBottom, 0.5);
+        }
+
+        [Fact]
+        public async Task WrapReverse_Baseline_FlushesTheGroupToTheLinesCrossStartEdge()
+        {
+            // Two items holding the same text, one with 10pt of padding above it, so their baselines are
+            // 10pt apart within their own boxes. §8.3 aligns the baselines with each other and puts the
+            // group flush with the line's cross-start edge — the bottom, under wrap-reverse. A third,
+            // textless item fixes the line's cross size at 60pt so there is somewhere else to be.
+            var html = Wrap(@"
+                <div id='container' style='display:flex; flex-wrap:wrap-reverse; align-items:baseline;
+                                           align-content:flex-start; width:300pt; height:100pt; font:10pt Arial;'>
+                    <div id='a' style='width:60pt; flex-shrink:0;'>Ay</div>
+                    <div id='b' style='width:60pt; padding-top:10pt; flex-shrink:0;'>By</div>
+                    <div id='filler' style='width:60pt; height:60pt; flex-shrink:0;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            double top = container.ClientTop;
+
+            // One line of cross size 60 in a 100pt container, packed at the reversed cross-start: [40, 100].
+            Assert.Equal(100, container.ActualBoxSizingHeight, 0.5);
+            // B's own baseline is 10pt lower inside its box, so its box sits 10pt higher for the two to meet.
+            Assert.Equal(a.Location.Y - 10, b.Location.Y, 0.5);
+            // ...and the group is flush with the line's bottom rather than its top.
+            Assert.Equal(top + 100, a.ActualBottom, 0.5);
+            Assert.True(a.Location.Y > top + 50,
+                $"the baseline group is still flush with the line's top: A.Y={a.Location.Y:F1}, line top={top + 40:F1}");
         }
 
         // ─── Showcase scenario regression ────────────────────────────────────────
@@ -912,6 +1049,61 @@ namespace PeachPDF.Tests.Integration
 
             Assert.InRange(g.Location.Y - r.Location.Y, -1.0, 1.0);
             Assert.InRange(b.Location.Y - r.Location.Y, -1.0, 1.0);
+        }
+
+        [Theory]
+        // Identical either way round: this is not about the wrap direction.
+        [InlineData("wrap", 0, 10)]
+        [InlineData("wrap-reverse", 40, 0)]
+        public async Task InlineFlex_Wrapping_BlockLevelItems_StayInsideTheContainer(
+            string flexWrap, double expectedA, double expectedB)
+        {
+            // An inline-flex box is an atomic inline: it takes part in its parent's inline formatting
+            // context as one item, and its own children belong to the flex formatting context inside it.
+            // Reading them as the parent's block-in-inline problem hoisted the first one out of the box
+            // altogether — it was drawn above the container's own top edge, the container kept only the
+            // second item and reported that item's height as its own.
+            var html = Wrap($@"
+                <div id='container' style='display:inline-flex; flex-wrap:{flexWrap}; width:200pt;'>
+                    <div id='a' style='width:150pt; height:10pt; flex-shrink:0;'></div>
+                    <div id='b' style='width:150pt; height:40pt; flex-shrink:0;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            double top = container.ClientTop;
+
+            Assert.Same(container, a.ParentBox);
+            Assert.Same(container, b.ParentBox);
+            Assert.Equal(50, container.ActualBoxSizingHeight, 0.5);
+            Assert.Equal(top + expectedA, a.Location.Y, 0.5);
+            Assert.Equal(top + expectedB, b.Location.Y, 0.5);
+            Assert.True(a.Location.Y >= top - 0.5,
+                $"A is drawn above the container's top edge: A.Y={a.Location.Y:F1}, container top={top:F1}");
+        }
+
+        [Fact]
+        public async Task InlineFlex_BlockLevelItems_KeepTheirSiblingText()
+        {
+            // The correction this replaces also split the surrounding inline content, so the check is not
+            // only that the items stayed put: the text either side of the box must still be on its line.
+            var html = Wrap(@"
+                <div style='width:400pt;'>before
+                    <span id='container' style='display:inline-flex; flex-wrap:wrap; width:200pt;'>
+                        <div id='a' style='width:150pt; height:10pt; flex-shrink:0;'></div>
+                        <div id='b' style='width:150pt; height:40pt; flex-shrink:0;'></div>
+                    </span> after</div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            Assert.Same(container, a.ParentBox);
+            Assert.Same(container, b.ParentBox);
+            Assert.Equal(50, container.ActualBoxSizingHeight, 0.5);
+            Assert.Equal(container.ClientTop, a.Location.Y, 0.5);
+            Assert.Equal(container.ClientTop + 10, b.Location.Y, 0.5);
         }
 
         [Fact]
