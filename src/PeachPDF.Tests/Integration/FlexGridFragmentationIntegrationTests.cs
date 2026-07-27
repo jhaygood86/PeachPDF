@@ -388,5 +388,355 @@ namespace PeachPDF.Tests.Integration
             Assert.True(container.ActualBottom >= lowest - 0.5,
                 $"container ends at {container.ActualBottom:F1} but its content reaches {lowest:F1}");
         }
+
+        // ─── §4.4: a break at a point that already is a boundary is already satisfied ─────
+
+        // A line whose top is already flush on a fragmentainer top has had the break the value asks for.
+        // Moving it a further page produces the empty fragmentainer §4.4 forbids, and attributes the
+        // content to the wrong slot for @page :left/:right and for a directional break's parity.
+        [Theory]
+        [InlineData("display:flex")]
+        [InlineData("display:grid; grid-template-columns:1fr")]
+        public async Task AForcedBreakOnALineAlreadyFlushOnAFragmentainerTop_MovesNothing(string containerStyle)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    // Exactly the band: the container's first line begins on slot 1's top edge.
+                    "<div style='height:160pt'>filler</div>"
+                    + $"<div id='c' style='{containerStyle}'>"
+                    + "<div id='a' style='height:20pt;break-before:page'>A</div>"
+                    + "</div>"),
+                pageHeight: PageHeight);
+
+            var a = LayoutHarness.FindById(root, "a");
+            Assert.NotNull(a);
+
+            Assert.Equal(1, SlotOf(container, a!));
+            Assert.Equal(container.PageTopOf(1), a!.Location.Y, 1);
+        }
+
+        // The neighbours of the flush case, which must keep behaving as they did: a line whose top falls
+        // one point short of the boundary still moves to it, and one already past it moves to the slot
+        // after.
+        [Theory]
+        [InlineData(159, 1)]
+        [InlineData(161, 2)]
+        public async Task AForcedBreakNearAFragmentainerTop_StillTakesTheBreak(double filler, int expectedSlot)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    $"<div style='height:{filler}pt'>filler</div>"
+                    + "<div id='c' style='display:flex'>"
+                    + "<div id='a' style='height:20pt;break-before:page'>A</div>"
+                    + "</div>"),
+                pageHeight: PageHeight);
+
+            var a = LayoutHarness.FindById(root, "a");
+            Assert.NotNull(a);
+            Assert.Equal(expectedSlot, SlotOf(container, a!));
+        }
+
+        // §4.4 satisfies a break that has already happened, but a directional value asks for more than a
+        // boundary: it asks that the content *begin* on a page of the named side. A line flush on slot 1's
+        // top has taken its break, and slot 1 is page 2 - a left page - so `verso` is satisfied there and
+        // `recto` is not.
+        [Theory]
+        [InlineData("break-before:verso", 1)]
+        [InlineData("break-before:recto", 2)]
+        public async Task ADirectionalBreakOnALineFlushOnAFragmentainerTop_StillAsksForItsSide(
+            string declaration, int expectedSlot)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:160pt'>filler</div>"
+                    + "<div id='c' style='display:flex'>"
+                    + $"<div id='a' style='height:20pt;{declaration}'>A</div>"
+                    + "</div>"),
+                pageHeight: PageHeight);
+
+            var a = LayoutHarness.FindById(root, "a");
+            Assert.NotNull(a);
+            Assert.Equal(expectedSlot, SlotOf(container, a!));
+        }
+
+        // ─── §3.1: a directional break selects the side, not merely the next page ────────
+
+        // Slot k is page k + 1 and page 1 is a right page, so slot 1 is a left page: a line asking to
+        // begin recto has to step over it, and the slot stepped over is a deliberately blank page rather
+        // than one the fragment tree may drop for holding no content.
+        [Theory]
+        [InlineData("display:flex", "break-before:right")]
+        [InlineData("display:flex", "break-before:recto")]
+        [InlineData("display:grid; grid-template-columns:1fr", "break-before:right")]
+        [InlineData("display:grid; grid-template-columns:1fr", "break-before:recto")]
+        public async Task ADirectionalBreakBeforeALine_LandsItOnAPageOfThatSide(
+            string containerStyle, string declaration)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:40pt'>filler</div>"
+                    + $"<div id='c' style='{containerStyle}'>"
+                    + $"<div id='a' style='height:20pt;{declaration}'>A</div>"
+                    + "</div>"),
+                pageHeight: PageHeight);
+
+            var a = LayoutHarness.FindById(root, "a");
+            Assert.NotNull(a);
+
+            Assert.Equal(2, SlotOf(container, a!));
+            Assert.True(container.IsReservedBlankSlot(1),
+                "the slot stepped over must be reserved, or nothing blank is printed and recto reads as page");
+            Assert.NotNull(container.FragmentTree);
+            Assert.Equal(3, container.FragmentTree!.Fragmentainers.Count);
+        }
+
+        // The same rule read from the earlier side of the break point (§3.1 takes it from either side),
+        // and the side that needs no step, which must not gain a blank page.
+        [Theory]
+        [InlineData("break-after:right", 2, true)]
+        [InlineData("break-after:left", 1, false)]
+        [InlineData("break-after:verso", 1, false)]
+        public async Task ADirectionalBreakAfterALine_LandsTheNextLineOnThatSide(
+            string declaration, int expectedSlot, bool expectABlankSlot)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:40pt'>filler</div>"
+                    + "<div id='c' style='display:flex; flex-wrap:wrap; width:300pt'>"
+                    + $"<div id='a' style='width:100%;height:20pt;{declaration}'>A</div>"
+                    + "<div id='b' style='width:100%;height:20pt'>B</div>"
+                    + "</div>"),
+                pageHeight: PageHeight);
+
+            var b = LayoutHarness.FindById(root, "b");
+            Assert.NotNull(b);
+
+            Assert.Equal(0, SlotOf(container, LayoutHarness.FindById(root, "a")!));
+            Assert.Equal(expectedSlot, SlotOf(container, b!));
+            Assert.Equal(expectABlankSlot, container.IsReservedBlankSlot(1));
+        }
+
+        // ─── §3.1: avoidance between two lines ───────────────────────────────────────────
+
+        // break-after: avoid on the earlier line's items forbids the unforced break at the point below
+        // them, so the earlier line travels to join the later one rather than being stranded at the foot
+        // of the page its successor just left. This is the user-agent print sheet's h1-h6 rule.
+        [Theory]
+        [InlineData("display:flex; flex-wrap:wrap", "break-after:avoid")]
+        [InlineData("display:flex; flex-wrap:wrap", "break-after:avoid-page")]
+        [InlineData("display:flex; flex-wrap:wrap", "page-break-after:avoid")]
+        [InlineData("display:grid; grid-template-columns:1fr", "break-after:avoid")]
+        [InlineData("display:grid; grid-template-columns:1fr", "page-break-after:avoid")]
+        public async Task AnAvoidedBreakBetweenTwoLines_TakesTheEarlierLineWithTheLater(
+            string containerStyle, string declaration)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                // The first line ends at 160 and the second begins there, so the fragmentainer boundary
+                // at 180 falls between them only once the second line has crossed it: filler 100pt puts
+                // line one at 120-160 and line two at 160-200, straddling. Instead: size them so the
+                // boundary falls exactly at the break point.
+                LayoutHarness.Wrap(
+                    "<div style='height:120pt'>filler</div>"
+                    + $"<div id='c' style='{containerStyle}; width:300pt'>"
+                    + $"<div id='a' style='width:100%;height:40pt;{declaration}'>A</div>"
+                    + "<div id='b' style='width:100%;height:40pt;break-inside:avoid'>B</div>"
+                    + "</div>"),
+                pageHeight: PageHeight);
+
+            var a = LayoutHarness.FindById(root, "a");
+            var b = LayoutHarness.FindById(root, "b");
+            Assert.NotNull(a);
+            Assert.NotNull(b);
+
+            // B moved to slot 1 because it may not be cut; A must follow it there rather than stay behind.
+            Assert.Equal(1, SlotOf(container, b!));
+            Assert.Equal(1, SlotOf(container, a!));
+            Assert.True(a!.ActualBottom <= b!.Location.Y + 0.5,
+                $"A must stay above B (A ends {a.ActualBottom:F1}, B starts {b.Location.Y:F1})");
+        }
+
+        // Read from the later side of the same break point: break-before: avoid on the line below says
+        // exactly what break-after: avoid on the line above says, and neither side can veto the other.
+        [Theory]
+        [InlineData("display:flex; flex-wrap:wrap")]
+        [InlineData("display:grid; grid-template-columns:1fr")]
+        public async Task AnAvoidDeclaredOnTheLaterLine_TakesTheEarlierLineToo(string containerStyle)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:120pt'>filler</div>"
+                    + $"<div id='c' style='{containerStyle}; width:300pt'>"
+                    + "<div id='a' style='width:100%;height:40pt'>A</div>"
+                    + "<div id='b' style='width:100%;height:40pt;break-before:avoid;break-inside:avoid'>B</div>"
+                    + "</div>"),
+                pageHeight: PageHeight);
+
+            var a = LayoutHarness.FindById(root, "a");
+            var b = LayoutHarness.FindById(root, "b");
+            Assert.NotNull(a);
+            Assert.NotNull(b);
+
+            Assert.Equal(1, SlotOf(container, b!));
+            Assert.Equal(1, SlotOf(container, a!));
+        }
+
+        // Nothing relocates the later line: the fragmentainer boundary simply falls at the break point
+        // between the two, which is the plain form of the defect. The avoid moves the earlier line so the
+        // break falls before it instead.
+        [Theory]
+        [InlineData("display:flex; flex-wrap:wrap")]
+        [InlineData("display:grid; grid-template-columns:1fr")]
+        public async Task AnAvoidWhereTheBoundaryFallsExactlyAtTheBreakPoint_MovesTheEarlierLine(
+            string containerStyle)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                // Line one runs 140-180 and line two 180-220: the boundary at 180 is the break point.
+                LayoutHarness.Wrap(
+                    "<div style='height:120pt'>filler</div>"
+                    + $"<div id='c' style='{containerStyle}; width:300pt'>"
+                    + "<div id='a' style='width:100%;height:40pt;break-after:avoid'>A</div>"
+                    + "<div id='b' style='width:100%;height:40pt'>B</div>"
+                    + "</div>"),
+                pageHeight: PageHeight);
+
+            var a = LayoutHarness.FindById(root, "a");
+            var b = LayoutHarness.FindById(root, "b");
+            Assert.NotNull(a);
+            Assert.NotNull(b);
+
+            Assert.Equal(1, SlotOf(container, a!));
+            Assert.Equal(1, SlotOf(container, b!));
+            Assert.Equal(container.PageTopOf(1), a!.Location.Y, 1);
+        }
+
+        // §4.3: an avoid that cannot be satisfied is relaxed rather than abandoned wholesale. A chain of
+        // three lines is trimmed from its front - the members nearest the break point are what the chain
+        // is about - and where even one member does not fit, the break is taken as written.
+        [Fact]
+        public async Task AKeepWithNextChainTooTallForTheDestination_IsTrimmedFromItsFront()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:40pt'>filler</div>"
+                    + "<div id='c' style='display:flex; flex-wrap:wrap; width:300pt'>"
+                    + "<div id='i1' style='width:100%;height:60pt;break-after:avoid'>1</div>"
+                    + "<div id='i2' style='width:100%;height:60pt;break-after:avoid'>2</div>"
+                    + "<div id='i3' style='width:100%;height:60pt;break-inside:avoid'>3</div>"
+                    + "</div>"),
+                pageHeight: PageHeight);
+
+            var i1 = LayoutHarness.FindById(root, "i1")!;
+            var i2 = LayoutHarness.FindById(root, "i2")!;
+            var i3 = LayoutHarness.FindById(root, "i3")!;
+
+            // 60 + 60 + 60 = 180 does not fit a 160pt band, so the head is trimmed: line 1 stays and
+            // lines 2 and 3 travel together.
+            Assert.Equal(0, SlotOf(container, i1));
+            Assert.Equal(1, SlotOf(container, i2));
+            Assert.Equal(1, SlotOf(container, i3));
+        }
+
+        // The run has to start on the page being left. A chain reaching the fragmentainer's own content
+        // top names every line on it, and moving all of them leaves the page blank and asks the same
+        // question again forever - so the avoid is relaxed and the break is taken as written.
+        [Fact]
+        public async Task AKeepWithNextChainReachingTheTopOfItsOwnPage_IsRelaxed()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div id='c' style='display:flex; flex-wrap:wrap; width:300pt'>"
+                    + "<div id='i1' style='width:100%;height:100pt;break-after:avoid'>1</div>"
+                    + "<div id='i2' style='width:100%;height:100pt;break-inside:avoid'>2</div>"
+                    + "</div>"),
+                pageHeight: PageHeight);
+
+            var i1 = LayoutHarness.FindById(root, "i1")!;
+            var i2 = LayoutHarness.FindById(root, "i2")!;
+
+            // Line 1 begins at the page's own content top; taking it along would empty the page.
+            Assert.Equal(0, SlotOf(container, i1));
+            Assert.Equal(1, SlotOf(container, i2));
+        }
+
+        // §3.1: a forced break value on either side of a pair takes precedence over an avoidance value on
+        // the other, so a chain never reaches back through one.
+        [Fact]
+        public async Task AForcedBreakInsideAChain_StopsTheRunThere()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:40pt'>filler</div>"
+                    + "<div id='c' style='display:flex; flex-wrap:wrap; width:300pt'>"
+                    + "<div id='i1' style='width:100%;height:20pt;break-after:avoid'>1</div>"
+                    + "<div id='i2' style='width:100%;height:20pt;break-before:page;break-after:avoid'>2</div>"
+                    + "<div id='i3' style='width:100%;height:20pt;break-inside:avoid'>3</div>"
+                    + "</div>"),
+                pageHeight: PageHeight);
+
+            var i1 = LayoutHarness.FindById(root, "i1")!;
+            var i2 = LayoutHarness.FindById(root, "i2")!;
+
+            // The forced break between lines 1 and 2 is the chain's end: line 1 stays on slot 0.
+            Assert.Equal(0, SlotOf(container, i1));
+            Assert.Equal(1, SlotOf(container, i2));
+        }
+
+        // A forced break at the very break point an avoid names wins outright (§3.1), so the earlier line
+        // is not pulled along by its own break-after: avoid.
+        [Fact]
+        public async Task AForcedBreakAtTheSameBreakPointAsAnAvoid_Wins()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:40pt'>filler</div>"
+                    + "<div id='c' style='display:flex; flex-wrap:wrap; width:300pt'>"
+                    + "<div id='a' style='width:100%;height:20pt;break-after:avoid'>A</div>"
+                    + "<div id='b' style='width:100%;height:20pt;break-before:page'>B</div>"
+                    + "</div>"),
+                pageHeight: PageHeight);
+
+            Assert.Equal(0, SlotOf(container, LayoutHarness.FindById(root, "a")!));
+            Assert.Equal(1, SlotOf(container, LayoutHarness.FindById(root, "b")!));
+        }
+
+        // A container whose lines the avoidance moved has to report a height that still holds them.
+        [Theory]
+        [InlineData("display:flex; flex-wrap:wrap")]
+        [InlineData("display:grid; grid-template-columns:1fr")]
+        public async Task AContainerWhoseAvoidMovedALine_ReportsAHeightThatHoldsIt(string containerStyle)
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:120pt'>filler</div>"
+                    + $"<div id='c' style='{containerStyle}; width:300pt'>"
+                    + "<div id='a' style='width:100%;height:40pt;break-after:avoid'>A</div>"
+                    + "<div id='b' style='width:100%;height:40pt'>B</div>"
+                    + "</div>"),
+                pageHeight: PageHeight);
+
+            var c = LayoutHarness.FindById(root, "c")!;
+            var b = LayoutHarness.FindById(root, "b")!;
+
+            Assert.True(c.ActualBottom >= b.ActualBottom - 0.5,
+                $"container ends at {c.ActualBottom:F1} but its content reaches {b.ActualBottom:F1}");
+        }
+
+        // An avoid between two lines that a boundary never falls between changes nothing.
+        [Theory]
+        [InlineData("display:flex; flex-wrap:wrap")]
+        [InlineData("display:grid; grid-template-columns:1fr")]
+        public async Task AnAvoidWithNoBoundaryBetweenTheLines_MovesNothing(string containerStyle)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    $"<div id='c' style='{containerStyle}; width:300pt'>"
+                    + "<div id='a' style='width:100%;height:20pt;break-after:avoid'>A</div>"
+                    + "<div id='b' style='width:100%;height:20pt'>B</div>"
+                    + "</div>"),
+                pageHeight: PageHeight);
+
+            Assert.Equal(0, SlotOf(container, LayoutHarness.FindById(root, "a")!));
+            Assert.Equal(0, SlotOf(container, LayoutHarness.FindById(root, "b")!));
+        }
     }
 }

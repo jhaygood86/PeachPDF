@@ -801,73 +801,31 @@ namespace PeachPDF.Html.Core.Dom
                 return;
             }
 
-            double shift = 0;
-
-            // The line above the break point being asked about. Both sides of a class-A break point can
-            // force it (§3.1), and this walk has the earlier one in hand.
-            FlexLine? above = null;
+            // The break point above each line is governed by the line before it, which in a flex container
+            // is simply the previous non-empty one: an item belongs to exactly one line, so unlike a grid
+            // row there is nothing spanning across a boundary to attribute elsewhere.
+            var groups = new List<LineGroup>(lines.Count);
+            IReadOnlyList<CssBox>? above = null;
 
             foreach (var line in lines)
             {
-                if (LineBounds(line) is not { } bounds) continue;
+                if (line.Items.Count == 0) continue;
 
-                shift += LineRelocation.DeltaFor(
-                    container, bounds.Top + shift, bounds.Bottom + shift,
-                    LineRelocation.ForcedBreakBetween(
-                        above?.Items.Select(i => i.Box), line.Items.Select(i => i.Box)),
-                    LineMayNotBeCut(line));
+                var boxes = line.Items.Select(item => item.Box).ToList();
 
-                above = line;
-
-                // Every line from the first relocated one onward moves by the *accumulated* displacement,
-                // not by its own: a line below one that moved to the next fragmentainer follows it there,
-                // and a line needing no relocation of its own still has to keep its place under the one
-                // that did. Moving only the line that asked leaves the ones after it on top of it.
-                if (shift <= 0) continue;
-
-                foreach (var item in line.Items)
-                {
-                    item.Box.OffsetTop(shift);
-                }
+                groups.Add(new LineGroup(boxes, above));
+                above = boxes;
             }
+
+            if (groups.Count == 0) return;
+
+            var shift = LineRelocation.Relocate(container, groups);
 
             if (shift > 0)
             {
                 _flexBox.ActualBottom += shift;
             }
         }
-
-        /// <summary>The document-space extent of a line's items, or null when it holds none.</summary>
-        private static (double Top, double Bottom)? LineBounds(FlexLine line)
-        {
-            if (line.Items.Count == 0) return null;
-
-            var top = double.MaxValue;
-            var bottom = double.MinValue;
-
-            foreach (var item in line.Items)
-            {
-                top = Math.Min(top, item.Box.Location.Y);
-                bottom = Math.Max(bottom, item.Box.ActualBottom);
-            }
-
-            return (top, bottom);
-        }
-
-        /// <summary>
-        /// Whether anything in this line may not be cut by a fragmentainer boundary: an item asking not
-        /// to be broken, or one <see href="https://www.w3.org/TR/css-break-3/#monolithic">§2</see> says
-        /// no user agent may break.
-        /// </summary>
-        /// <remarks>
-        /// An item that neither asks nor forbids is left where it is, and the boundary cuts it — the same
-        /// answer ordinary block content gets when it has no line to break at. Moving every straddling
-        /// line regardless would paginate a flex container quite differently from how it renders now,
-        /// which is a larger behaviour change than the break values themselves ask for.
-        /// </remarks>
-        private static bool LineMayNotBeCut(FlexLine line) =>
-            line.Items.Any(i => BreakValues.AvoidsBreak(i.Box.BreakInside, FragmentationContext.Page)
-                                || MonolithicContent.IsMonolithic(i.Box));
 
         // ─── Direction / wrap parsing ─────────────────────────────────────────────
 

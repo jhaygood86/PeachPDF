@@ -1702,6 +1702,33 @@ var monolithicHtml = """
         <span class="tag">no break value</span><h2>Item 4</h2>
         <p>It travels with its line, as a line always does.</p></div>
     </div>
+
+    <h1>An avoided break takes the line above it too</h1>
+    <p>&sect;3.1's other half. A break-avoidance value on either side of a break point forbids an
+    unforced break there, and honouring it means moving the <i>earlier</i> line: the line below travels
+    to the next page because it may not be cut, and the line chained to it by
+    <code>break-after: avoid</code> follows rather than being stranded at the foot of the page its
+    successor just left. This is the user-agent print sheet's <code>h1&ndash;h6 { break-after: avoid }</code>
+    for a heading that happens to be a flex item.</p>
+    """
+    + string.Concat(Enumerable.Range(100, 11).Select(i =>
+        $"<p>Filler paragraph {i}. This run puts the pair of lines below at the foot of their page."
+        + "</p>"))
+    + """
+    <div style="display:flex; flex-wrap:wrap; gap:8pt; border:1px dashed #a3a3a3; padding:6pt">
+      <div class="card" style="width:38%; margin:0; break-after:avoid">
+        <span class="tag">break-after: avoid</span><h2>Heading line</h2>
+        <p>Nothing here asks to move. It travels because the break point below it may not be broken.</p></div>
+      <div class="card" style="width:38%; margin:0">
+        <span class="tag">same line</span><h2>Its neighbour</h2>
+        <p>A line moves as a unit, so this comes along.</p></div>
+      <div class="card" style="width:38%; margin:0; break-inside:avoid">
+        <span class="tag">break-inside: avoid</span><h2>Section body</h2>
+        <p>This line meets the page boundary and may not be cut, so it opens the next page.</p></div>
+      <div class="card" style="width:38%; margin:0; break-inside:avoid">
+        <span class="tag">same line</span><h2>Its neighbour</h2>
+        <p>The two lines arrive together, with the spacing between them preserved.</p></div>
+    </div>
     </body></html>
     """;
 
@@ -1710,7 +1737,9 @@ await SaveShowcaseAsync("paged_media_monolithic_content", "Paged Media", "Monoli
     + "moves to the next page whole instead of being cut in half by the page boundary. A flex line and a "
     + "grid row that ask not to be broken move as a unit for the same reason, and the lines below a "
     + "moved one follow it rather than staying put. A forced break is taken from either side of a break "
-    + "point, so break-after on one line opens the next page for the line after it.",
+    + "point, so break-after on one line opens the next page for the line after it — and break-after: "
+    + "avoid there moves the earlier line too, so a heading is not stranded on the page its section "
+    + "body just left.",
     monolithicHtml, new PdfGenerateConfig { PageSize = PageSize.A5 });
 
 // ── orphans / widows showcase ──────────────────────────────────────────────

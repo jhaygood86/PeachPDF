@@ -1,33 +1,62 @@
 using PeachPDF.Html.Core.Dom;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace PeachPDF.Html.Core.Fragmentation
 {
     /// <summary>
-    /// Whether a forced break falls between two flex lines or grid rows, and how far one has to move to
-    /// stop being cut by a fragmentainer boundary, per
+    /// One group of boxes that moves together across a fragmentainer boundary — a flex <b>line</b> or a
+    /// grid <b>row</b> — together with the boxes governing the break point immediately above it.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Above"/> is not simply the previous group's boxes. Which boxes are above a break point
+    /// is a question about where they <i>end</i>: a grid item spanning rows 1–2 is not above the break
+    /// point before row 2 at all, because that boundary runs through the middle of it. The engine answers
+    /// that for itself and hands the result in.
+    /// </remarks>
+    /// <param name="Boxes">the boxes that move together, non-empty</param>
+    /// <param name="Above">
+    /// the boxes whose <c>break-after</c> governs the break point immediately before this group, or null
+    /// where there is none — the first group of a container has nothing before it
+    /// </param>
+    internal readonly record struct LineGroup(IReadOnlyList<CssBox> Boxes, IReadOnlyList<CssBox>? Above);
+
+    /// <summary>
+    /// Moves flex lines and grid rows across fragmentainer boundaries, honouring the break values declared
+    /// at the break points between them, per
     /// <see href="https://www.w3.org/TR/css-break-3/#break-between">CSS Fragmentation Level 3 §3.1</see>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// A flex container's break points are between its <b>lines</b> and a grid container's between its
-    /// <b>rows</b>, not between the items sharing one — so the two engines ask exactly the same question
-    /// of exactly the same inputs, and asking it in one place is what stops them drifting apart.
+    /// <b>rows</b>, not between the items sharing one — so the two engines ask exactly the same questions
+    /// of exactly the same inputs, and asking them in one place is what stops them drifting apart. Each
+    /// engine's own work is reducing its layout to a list of <see cref="LineGroup"/>s in block-axis order;
+    /// everything after that is here.
     /// </para>
     /// <para>
-    /// The caller accumulates what this returns and moves each line by the <i>running total</i>, not by
-    /// its own answer. That is the whole of why the displacement is returned rather than applied here: a
-    /// line below one that moved to the next fragmentainer follows it there, and a line needing no
-    /// relocation of its own still has to keep its place under the one that did. Applying each line's own
-    /// delta instead leaves the lines after the first relocation sitting on top of it.
+    /// Displacement <b>accumulates</b>: a line below one that moved to the next fragmentainer follows it
+    /// there, and a line needing no relocation of its own still has to keep its place under the one that
+    /// did. Moving each line by its own answer instead leaves the lines after the first relocation sitting
+    /// on top of it.
     /// </para>
     /// </remarks>
     internal static class LineRelocation
     {
         /// <summary>
-        /// Whether a forced page break falls at the break point between two adjacent lines — the line
-        /// whose items are <paramref name="above"/> and the line whose items are <paramref name="below"/>.
+        /// Relocates <paramref name="lines"/>, given in block-axis order, and returns the total
+        /// displacement in force below the last of them — what the container's own height has to grow by.
+        /// </summary>
+        /// <param name="container">the layout container, for the page grid</param>
+        /// <param name="lines">the container's lines or rows, each holding at least one box</param>
+        internal static double Relocate(HtmlContainerInt container, IReadOnlyList<LineGroup> lines) =>
+            new Walk(container, lines).Run();
+
+        /// <summary>
+        /// The side required at the break point between two adjacent lines — the line whose items are
+        /// <paramref name="above"/> and the line whose items are <paramref name="below"/> — or null where
+        /// no forced break falls there.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -38,58 +67,293 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// the same intent spelt as <c>break-before</c> on the following line took effect.
         /// </para>
         /// <para>
+        /// The <i>value</i> rather than a boolean, because a directional break has a side to honour and
+        /// combination is not "whichever was read first". Within one side the most demanding value wins —
+        /// a directional value subsumes a plain <c>page</c> — and across the two sides
+        /// <see cref="BreakValues.RequiredSide"/> applies §3.1's rule for a pair: two conflicting
+        /// directional values resolve to the one on the latest element in flow, which at this break point
+        /// is the later line's <c>break-before</c>.
+        /// </para>
+        /// <para>
         /// Both sides are read one box deep rather than through the chains they begin and end
         /// (<see cref="BreakPropagation"/>): a break travelling out of an item would name a position the
         /// engine is about to overwrite, which is why propagation stops before a box whose children an
         /// engine places for itself.
         /// </para>
-        /// <para>
-        /// This answers <i>whether</i>, not <i>which</i>. <see cref="BreakPropagation"/> resolves the
-        /// winning value where the two sides differ, which is what a directional break's side would need;
-        /// a line moved from here goes to the next fragmentainer whichever side it falls on.
-        /// </para>
         /// </remarks>
-        /// <param name="above">
-        /// the items of the line immediately above the break point, or null where there is none — the
-        /// first line of a container has nothing before it for a <c>break-after</c> to be declared on
-        /// </param>
-        /// <param name="below">the items of the line immediately below it</param>
-        internal static bool ForcedBreakBetween(IEnumerable<CssBox>? above, IEnumerable<CssBox> below) =>
-            below.Any(box => BreakValues.IsForcedPageBreak(box.BreakBefore))
-            || (above is not null && above.Any(box => BreakValues.IsForcedPageBreak(box.BreakAfter)));
+        internal static PageSide? ForcedBreakBetween(IEnumerable<CssBox>? above, IEnumerable<CssBox> below)
+        {
+            var later = MostDemandingForcedValue(below.Select(box => box.BreakBefore));
+            var earlier = above is null ? null : MostDemandingForcedValue(above.Select(box => box.BreakAfter));
+
+            return later is null && earlier is null ? null : BreakValues.RequiredSide(later, earlier);
+        }
+
+        /// <summary>
+        /// The forced value one side of a break point speaks with, or null where it declares none. A
+        /// directional value wins over a plain <c>page</c>, since §3.1 asks that all specified breaking
+        /// requirements be honored and a directional break satisfies both.
+        /// </summary>
+        private static string? MostDemandingForcedValue(IEnumerable<string?> values)
+        {
+            string? forced = null;
+
+            foreach (var value in values)
+            {
+                if (!BreakValues.IsForcedPageBreak(value)) continue;
+                if (BreakValues.SideOf(value) is not PageSide.Any) return value;
+
+                forced ??= value;
+            }
+
+            return forced;
+        }
+
+        /// <summary>
+        /// Whether a break-avoidance value on either side of the break point between two adjacent lines
+        /// forbids an unforced break there (§3.1).
+        /// </summary>
+        private static bool AvoidsBreakBetween(IReadOnlyList<CssBox>? above, IReadOnlyList<CssBox> below) =>
+            below.Any(box => BreakValues.AvoidsBreak(box.BreakBefore, FragmentationContext.Page))
+            || (above is not null
+                && above.Any(box => BreakValues.AvoidsBreak(box.BreakAfter, FragmentationContext.Page)));
+
+        /// <summary>
+        /// Whether anything in a line may not be cut by a fragmentainer boundary: an item asking not to be
+        /// broken, or one <see href="https://www.w3.org/TR/css-break-3/#monolithic">§2</see> says no user
+        /// agent may break.
+        /// </summary>
+        /// <remarks>
+        /// An item that neither asks nor forbids is left where it is, and the boundary cuts it — the same
+        /// answer ordinary block content gets when it has no line to break at. Moving every straddling
+        /// line regardless would paginate a flex container quite differently from how it renders now,
+        /// which is a larger behaviour change than the break values themselves ask for.
+        /// </remarks>
+        private static bool MayNotBeCut(IReadOnlyList<CssBox> boxes) =>
+            boxes.Any(box => BreakValues.AvoidsBreak(box.BreakInside, FragmentationContext.Page)
+                             || MonolithicContent.IsMonolithic(box));
 
         /// <summary>
         /// How far the line spanning <paramref name="top"/>..<paramref name="bottom"/> must move down,
         /// or 0 to leave it where it is.
         /// </summary>
         /// <param name="container">the layout container, for the page grid</param>
+        /// <param name="owner">
+        /// the box a directional break's deliberately-blank page is recorded against — one of the line's
+        /// own, so two lines each stepping over a page keep both reservations
+        /// </param>
         /// <param name="top">the line's top, already displaced by everything above it that moved</param>
         /// <param name="bottom">the line's bottom, displaced the same way</param>
-        /// <param name="takesAForcedBreak">
-        /// a forced break falls at the break point before it — see <see cref="ForcedBreakBetween"/>
+        /// <param name="forcedBreak">
+        /// the side a forced break at the break point before it demands, or null where none falls there —
+        /// see <see cref="ForcedBreakBetween"/>
         /// </param>
-        /// <param name="mayNotBeCut">
-        /// something in it asks not to be broken, or §2 says no user agent may break it. A line that
-        /// neither asks nor forbids is left where it is and the boundary cuts it — the same answer
-        /// ordinary block content gets when it has no line to break at.
-        /// </param>
+        /// <param name="mayNotBeCut">something in it asks not to be broken, or §2 says no user agent may</param>
         internal static double DeltaFor(
-            HtmlContainerInt container, double top, double bottom, bool takesAForcedBreak, bool mayNotBeCut)
+            HtmlContainerInt container, CssBox owner, double top, double bottom,
+            PageSide? forcedBreak, bool mayNotBeCut)
         {
             var slot = container.SlotStartingAt(top);
+
+            // §4.4: a forced break must not produce an empty fragmentainer, and a break at a point that
+            // already *is* a fragmentainer boundary has already happened. SlotStartingAt resolves a top
+            // edge flush on a boundary to the *later* slot, so without this the line is moved a whole
+            // further page — measured at exactly one band of filler, where 1pt less and 1pt more both
+            // land correctly and only the flush case skips a slot.
+            //
+            // The *side* is part of what is being asked, so a directional value is satisfied by a flush
+            // boundary only where the slot it begins is the side it named: §3.1 asks that the content
+            // begin on a page of that side, which an already-taken break on the wrong side has not done.
+            if (forcedBreak is { } already
+                && top - container.PageTopOf(slot) <= HtmlContainerInt.PageBoundaryEpsilon
+                && BreakValues.SlotIsOn(slot, already))
+            {
+                forcedBreak = null;
+            }
 
             var straddles = mayNotBeCut
                             && bottom - HtmlContainerInt.PageBoundaryEpsilon > container.PageBottomOf(slot);
 
-            if (!takesAForcedBreak && !straddles) return 0;
+            if (forcedBreak is null && !straddles) return 0;
 
             // A line taller than a whole band has nowhere better to be, and moving it would ask the same
             // question again on the next fragmentainer, forever.
-            if (!takesAForcedBreak && bottom - top > container.PageBandHeightOf(slot + 1)) return 0;
+            if (forcedBreak is null && bottom - top > container.PageBandHeightOf(slot + 1)) return 0;
 
-            var delta = container.PageTopOf(slot + 1) - top;
+            var target = slot + 1;
+
+            if (forcedBreak is { } side)
+            {
+                // §3.1's "one or two page breaks": the content after the break has to *begin* on a page of
+                // the requested side. Page parity alternates from slot to slot, so at most one page is ever
+                // stepped over — and the slot stepped over is reserved, because a slot holding no printable
+                // content is otherwise dropped (CSS Paged Media 3 §3.2), which would leave `recto`
+                // indistinguishable from `page`. Retracted where no step is needed, so a pass that
+                // re-decides the same line cannot leave behind a blank page the final layout does not want.
+                var stepsOver = !BreakValues.SlotIsOn(target, side);
+
+                container.SetBlankSlotReservation(owner, stepsOver ? target : null);
+
+                if (stepsOver) target++;
+            }
+
+            var delta = container.PageTopOf(target) - top;
 
             return delta > 0 ? delta : 0;
+        }
+
+        /// <summary>
+        /// One pass down a container's lines, carrying the running displacement and where each line has
+        /// been left. Held as state rather than threaded through parameters because §3.1 avoidance reaches
+        /// <i>back</i> over lines already placed, so the walk is not a fold over one line at a time.
+        /// </summary>
+        private sealed class Walk(HtmlContainerInt container, IReadOnlyList<LineGroup> lines)
+        {
+            private readonly double[] _tops = new double[lines.Count];
+            private readonly double[] _bottoms = new double[lines.Count];
+            private readonly double[] _applied = new double[lines.Count];
+
+            /// <summary>Runs the walk and returns the displacement in force below the last line.</summary>
+            internal double Run()
+            {
+                double shift = 0;
+
+                for (var index = 0; index < lines.Count; index++)
+                {
+                    var boxes = lines[index].Boxes;
+
+                    var top = double.MaxValue;
+                    var bottom = double.MinValue;
+
+                    foreach (var box in boxes)
+                    {
+                        top = Math.Min(top, box.Location.Y);
+                        bottom = Math.Max(bottom, box.ActualBottom);
+                    }
+
+                    _tops[index] = top;
+                    _bottoms[index] = bottom;
+
+                    var forced = ForcedBreakBetween(lines[index].Above, boxes);
+                    var shiftBefore = shift;
+
+                    // Where this line would land with nothing but the displacement above it — the frame the
+                    // group's internal spacing is measured in, since the delta below is this line's alone.
+                    var naturalTop = top + shiftBefore;
+
+                    shift += DeltaFor(
+                        container, boxes[0], naturalTop, bottom + shiftBefore, forced, MayNotBeCut(boxes));
+
+                    Displace(index, shift);
+
+                    // §3.1: a forced break at this break point takes precedence over any avoidance value
+                    // on either side of it, so such a pair is never kept together.
+                    if (index == 0 || forced is not null) continue;
+
+                    var (head, runDelta) = AvoidanceRun(index, naturalTop, bottom - top);
+
+                    if (head < 0) continue;
+
+                    // The run head takes the break instead of this line, so everything from the head down —
+                    // this line included — is displaced by the same amount, which preserves the spacing
+                    // inside the group. This line's own delta is superseded rather than added to: it moved
+                    // to open the destination fragmentainer, and the head now opens it in its place.
+                    for (var member = head; member < index; member++)
+                    {
+                        Displace(member, _applied[member] + runDelta);
+                    }
+
+                    shift = shiftBefore + runDelta;
+                    Displace(index, shift);
+                }
+
+                return shift;
+            }
+
+            /// <summary>
+            /// Offsets the line at <paramref name="index"/> so that its total displacement from where the
+            /// engine placed it is <paramref name="total"/>, and records where that leaves it.
+            /// </summary>
+            private void Displace(int index, double total)
+            {
+                var step = total - _applied[index];
+
+                _applied[index] = total;
+
+                if (step == 0) return;
+
+                foreach (var box in lines[index].Boxes)
+                {
+                    box.OffsetTop(step);
+                }
+
+                _tops[index] += step;
+                _bottoms[index] += step;
+            }
+
+            /// <summary>
+            /// The run of earlier lines that has to travel with the line at <paramref name="index"/>
+            /// because an <c>avoid</c> forbids the break the fragmentainer boundary is taking above it,
+            /// and how far that run moves. A head of <c>-1</c> means nothing moves — either no break falls
+            /// there, none is forbidden, or §4.3 relaxed the constraint away.
+            /// </summary>
+            /// <remarks>
+            /// <para>
+            /// This is keep-with-next over a chain of <i>lines</i>. A forced break only ever moves the
+            /// later line; avoidance has to move the <b>earlier</b> one, which is why it reaches back over
+            /// lines already placed rather than being another argument to <see cref="DeltaFor"/>.
+            /// </para>
+            /// <para>
+            /// Asked <i>after</i> the line has landed, because whether a boundary really falls at the break
+            /// point is a question about where it landed: a line the boundary cuts through has not taken a
+            /// break at the point above it at all, and there is nothing there to avoid.
+            /// </para>
+            /// </remarks>
+            /// <param name="index">the line the break point being asked about sits above</param>
+            /// <param name="naturalTop">
+            /// where the line sat before its own delta — the frame the lines above it share, and so the one
+            /// the group's internal spacing is measured in
+            /// </param>
+            /// <param name="extent">the line's own height</param>
+            private (int Head, double Delta) AvoidanceRun(int index, double naturalTop, double extent)
+            {
+                var destination = container.SlotStartingAt(_tops[index]);
+
+                // Does a boundary actually fall at this break point? Bands are contiguous, so the line
+                // above ending in an earlier slot than this one begins in *is* the statement that it does.
+                if (container.SlotEndingAt(_bottoms[index - 1]) == destination) return (-1, 0);
+
+                if (!AvoidsBreakBetween(lines[index].Above, lines[index].Boxes)) return (-1, 0);
+
+                // The chain reaches back while every break point along it forbids a break and none forces
+                // one: §3.1's forced values take precedence, so a run never reaches through one.
+                var chainStart = index - 1;
+
+                while (chainStart > 0
+                       && ForcedBreakBetween(lines[chainStart].Above, lines[chainStart].Boxes) is null
+                       && AvoidsBreakBetween(lines[chainStart].Above, lines[chainStart].Boxes))
+                {
+                    chainStart--;
+                }
+
+                var candidates = new double[index - chainStart];
+
+                for (var member = chainStart; member < index; member++)
+                {
+                    candidates[member - chainStart] = _tops[member];
+                }
+
+                var head = EarlyBreak.TravellingRunHead(
+                    candidates,
+                    naturalTop,
+                    container.PageTopOf(container.SlotEndingAt(_bottoms[index - 1])),
+                    extent,
+                    container.PageBandHeightOf(destination));
+
+                return head < candidates.Length
+                    ? (chainStart + head, container.PageTopOf(destination) - _tops[chainStart + head])
+                    : (-1, 0);
+            }
         }
     }
 }
