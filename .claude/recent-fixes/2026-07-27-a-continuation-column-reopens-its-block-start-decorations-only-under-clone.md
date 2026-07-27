@@ -46,7 +46,7 @@ neither contradicts the other: #430 is not closed.)
 
 Tests: `MulticolLayoutIntegrationTests` (+1, `slice` flush at the column top against `clone` at
 +16pt; and `ABreakTwoLevelsBelowTheContainer_…` **renamed and re-pointed**, since it pinned the
-deviation as intended). Full net8.0 suite green (6739); **100% diff coverage**; zero warnings on
+deviation as intended). Full net8.0 suite green (6750 after merging `main`); **100% diff coverage**; zero warnings on
 `dotnet build PeachPDF.slnx -t:Rebuild`. **68 of 69 showcases byte-identical**; `multicol` differs by
 2 bytes, and pages 1–6 rasterize identically — the whole difference is section 12's `slice` panel now
 starting its continuation column flush while the `clone` panel keeps its re-opened inset, which is the
