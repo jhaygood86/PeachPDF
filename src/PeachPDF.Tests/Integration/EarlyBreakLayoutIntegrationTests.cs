@@ -440,13 +440,18 @@ namespace PeachPDF.Tests.Integration
             var (root, container) = await LayoutHarness.LayoutAsync(
                 ResumedParagraphDocument(leadWords, cardWords), pageWidth: 300, pageHeight: pageHeight, margin: 10);
 
-            Assert.NotNull(container.FragmentTree);
+            // A pass really was re-entered: the driver ran more of them than there are fragmentainers to
+            // show for it. Without this the theory is load-bearing only because the un-rolled-back path
+            // happens to throw, and a future guard that silently declined the rewind would leave it green.
+            Assert.True(container.PassRewinds > 0,
+                "fixture must send the driver back to a pass it had already finished");
 
             // The paragraph the re-entered pass continued holds each of its own words on exactly one of its
             // own line boxes. A line the rollback failed to discard shows up here as a word on two of them.
             var lead = LayoutHarness.FindById(root, "lead")!;
             var hosted = lead.LineBoxes.SelectMany(l => l.Words).ToList();
 
+            Assert.NotEmpty(hosted);
             Assert.Equal(hosted.Count, hosted.Distinct().Count());
             Assert.Equal(WordsIn(lead).Count, hosted.Count);
         }
@@ -502,6 +507,8 @@ namespace PeachPDF.Tests.Integration
                 .SelectMany(n => WordsIn(LayoutHarness.FindById(root, $"card{n}")!))
                 .ToHashSet(ReferenceEqualityComparer.Instance);
 
+            Assert.NotEmpty(blockWords);
+
             var claimed = container.FragmentTree!.Fragmentainers
                 .SelectMany(f => Flatten(f.Root))
                 .SelectMany(f => f.Words)
@@ -510,7 +517,7 @@ namespace PeachPDF.Tests.Integration
                 .ToList();
 
             Assert.Equal(blockWords.Count, claimed.Count);
-            Assert.Equal(claimed.Count, claimed.Distinct().Count());
+            Assert.Equal(claimed.Count, claimed.Distinct(ReferenceEqualityComparer.Instance).Count());
         }
 
         private static List<CssRect> WordsIn(CssBox box) =>

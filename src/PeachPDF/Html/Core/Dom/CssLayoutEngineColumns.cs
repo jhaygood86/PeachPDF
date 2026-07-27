@@ -435,25 +435,12 @@ namespace PeachPDF.Html.Core.Dom
         /// Undoes the fill attempt just made, so the same children can be filled again at a new target.
         /// </summary>
         /// <remarks>
-        /// On the pass that starts this container every child is being laid out from scratch, so every
-        /// child's prologue — the owner of <c>RectanglesReset</c> — simply has to be let back in. A
-        /// <b>resumed</b> pass is the shared rollback (<see cref="PassRewind.RollBackTo"/>), which the
-        /// driver's own pass re-entry needs in exactly the same terms.
+        /// Goes through the shared rollback (<see cref="PassRewind.RollBackTo"/>), which the driver's own
+        /// pass re-entry needs in exactly the same terms — including its no-record branch, which is what
+        /// the pass that starts this container takes.
         /// </remarks>
-        private static void ResetChildrenForRefill(List<CssBox> children, BreakToken? resume)
-        {
-            if (resume is null)
-            {
-                foreach (var child in children)
-                {
-                    child.ResetForRefill();
-                }
-
-                return;
-            }
-
-            PassRewind.RollBackTo(resume);
-        }
+        private static void ResetChildrenForRefill(List<CssBox> children, BreakToken? resume) =>
+            PassRewind.RollBackTo(resume, children);
 
         /// <summary>
         /// Narrows the container's own inline extent to one column, so children lay out at that column's

@@ -1,4 +1,5 @@
 using PeachPDF.Html.Core.Dom;
+using System.Collections.Generic;
 
 namespace PeachPDF.Html.Core.Fragmentation
 {
@@ -14,6 +15,11 @@ namespace PeachPDF.Html.Core.Fragmentation
     /// re-enters the pass that placed a keep-with-next run's head. Both hand back a box tree that must
     /// look the way it did when that pass began, and "the way it looked" is stated entirely by the
     /// resumption record itself — one link per ancestor, down to the box that stopped.
+    /// </para>
+    /// <para>
+    /// A pass entered with <b>no</b> record laid everything out from the start, so everything goes back:
+    /// each of the children it was going to lay out is reset outright, which is what lets its prologue —
+    /// the owner of <c>RectanglesReset</c> — run again.
     /// </para>
     /// <para>
     /// A resumed pass divides a container's children in three, and that division is the whole of it.
@@ -37,14 +43,32 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// Rolls the box tree back to the state it was in when the pass entered with
         /// <paramref name="resume"/> began.
         /// </summary>
+        /// <param name="resume">the record that pass was entered with, or null where it began the flow.</param>
+        /// <param name="fromTheStart">
+        /// the children that pass was going to lay out from the start, used only where
+        /// <paramref name="resume"/> is null: the fragmentation-context root's for the driver, the
+        /// container's own in-flow children for an engine driving fragmentainers of its own.
+        /// </param>
         /// <remarks>
         /// Walks the same chain the resumption itself walks, so at every level the boundary child is told
         /// to discard only what it added while its later siblings, which the pass laid out from the start,
-        /// are reset outright. Each link names its own box, so nothing here has to assume an index and a
-        /// box agree.
+        /// are reset outright. Which child is the boundary is settled by <i>identity</i> rather than by the
+        /// index: the record names its own box, and between the pass that recorded it and the pass being
+        /// re-run a child list can be restructured (a repeating <c>&lt;thead&gt;</c> is detached and
+        /// replaced by proxies), so an index alone could name a different box than the one continuing.
         /// </remarks>
-        internal static void RollBackTo(BreakToken resume)
+        internal static void RollBackTo(BreakToken? resume, IReadOnlyList<CssBox> fromTheStart)
         {
+            if (resume is null)
+            {
+                foreach (var child in fromTheStart)
+                {
+                    child.ResetForRefill();
+                }
+
+                return;
+            }
+
             switch (resume)
             {
                 case InlineBreakToken inline:
@@ -56,13 +80,15 @@ namespace PeachPDF.Html.Core.Fragmentation
                 case BlockBreakToken block:
                     for (var i = block.ResumeChildIndex; i < block.Box.Boxes.Count; i++)
                     {
-                        if (i == block.ResumeChildIndex && block.ChildToken is { } childToken)
+                        var child = block.Box.Boxes[i];
+
+                        if (block.ChildToken is { } childToken && ReferenceEquals(child, childToken.Box))
                         {
-                            RollBackTo(childToken);
+                            RollBackTo(childToken, fromTheStart);
                         }
                         else
                         {
-                            block.Box.Boxes[i].ResetForRefill();
+                            child.ResetForRefill();
                         }
                     }
 

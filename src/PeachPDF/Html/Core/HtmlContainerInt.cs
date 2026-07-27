@@ -397,6 +397,16 @@ namespace PeachPDF.Html.Core
         internal int LastResortRelayouts { get; private set; }
 
         /// <summary>
+        /// How many times the last <see cref="LayoutDocument"/> went back to a pass it had already
+        /// finished, to lay a keep-with-next run out again at its destination
+        /// (<see href="https://www.w3.org/TR/css-break-3/#possible-breaks">§4.3</see>). Zero for a document
+        /// whose corrections all fit inside the pass that discovered them — which is what makes "a pass was
+        /// really re-entered" assertable rather than assumed, the same job
+        /// <see cref="FragmentainerPasses"/> does for resumption.
+        /// </summary>
+        internal int PassRewinds { get; private set; }
+
+        /// <summary>
         /// Defensive backstop on the driver loop, mirroring the cap the fragment-tree slot walk uses.
         /// </summary>
         private const int MaxFragmentainers = 100_000;
@@ -871,6 +881,7 @@ namespace PeachPDF.Html.Core
             LayoutGeneration++;
             FragmentainerPasses = 0;
             LastResortRelayouts = 0;
+            PassRewinds = 0;
 
             // Registrations append (they aren't idempotent), so without this each re-layout accumulated
             // duplicates and began with a stale ActivePageName from the PREVIOUS invocation's last
@@ -1125,9 +1136,10 @@ namespace PeachPDF.Html.Core
             var (rewoundSlot, rewoundToken) = _passEntries[entry];
 
             _passesRewoundFor.Add(pull.Head);
+            PassRewinds++;
             _emitter?.InvalidateFrom(rewoundSlot);
 
-            if (rewoundToken is not null) PassRewind.RollBackTo(rewoundToken);
+            PassRewind.RollBackTo(rewoundToken, Root!.Boxes);
 
             // The passes from this one on are about to run again, so the record of them describes a layout
             // that no longer exists.
@@ -1185,6 +1197,13 @@ namespace PeachPDF.Html.Core
         /// froze goes, because it is about to describe fewer lines than it did. And the resumption record
         /// the pass was entered with is rebuilt to name the budget, since that record is the only thing that
         /// says where the flow picks up.
+        /// </para>
+        /// <para>
+        /// Deliberately <b>narrower</b> than <see cref="PassRewind.RollBackTo"/>, which the other two pass
+        /// re-entries use: what the pass placed after the box is left exactly where it is, rather than
+        /// being reset and laid out again. Widening it to the shared rollback was tried and <i>lost
+        /// content</i> — 16 words of <c>paged_media_horizontal_reflow</c> — so what it would take is a
+        /// question of its own (issue #440).
         /// </para>
         /// <para>
         /// Declined where the record does not name the box — the box is only rewindable when it is the one
