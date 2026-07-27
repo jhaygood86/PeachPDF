@@ -119,8 +119,9 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Positions an <c>outside</c> marker (the CSS default) relative to its owner, after the
-        /// owner's own <c>Location</c> is final - see the call site in <c>CssBox.PerformLayoutImp</c>.
+        /// Positions an <c>outside</c> marker (the CSS default) relative to its owner, once the frame above
+        /// the owner has assigned its <c>Location</c> - see the call site, <c>CssBox.LayoutOutsideMarker</c>,
+        /// and its remarks for why that is the pass the item <i>starts</i> in rather than the one it ends in.
         /// Per CSS2.1 12.5.1 / CSS Lists Level 3, an outside marker must not affect the layout of the
         /// rest of the list item, so it's never part of the owner's own inline flow (excluded in
         /// <c>CssLayoutEngine.FlowBox</c>) - its geometry is entirely self-computed here instead, the

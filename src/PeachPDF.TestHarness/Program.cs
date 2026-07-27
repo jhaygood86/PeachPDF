@@ -933,6 +933,16 @@ var markerHtml = "<!DOCTYPE html><html><head>" + ListCss + "</head><body>" +
         "</td>"
     ) +
 
+    "<h2>5 — a marker whose item breaks across a page</h2>" +
+    "<p class=\"intro\">An outside marker sits beside its item's first line, so it belongs to the page the item <em>starts</em> on even when the item's own text carries on onto the next one. The spacer below pushes the last item across the page boundary; its number must still appear, on the page its first line is on.</p>" +
+    "<div style=\"height: 120pt\"></div>" +
+    "<ol style=\"margin: 0; padding-left: 3em\">" +
+    string.Join("", Enumerable.Range(1, 3).Select(i =>
+        $"<li>Item {i} of a list long enough to be broken by the page boundary. " +
+        string.Join(" ", Enumerable.Range(0, 90).Select(w => $"word{w}")) +
+        "</li>")) +
+    "</ol>" +
+
     "</body></html>";
 
 await SaveShowcaseAsync("marker_styling", "Lists & Generated Content", "::marker Styling",
