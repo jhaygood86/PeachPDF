@@ -39,18 +39,40 @@ namespace PeachPDF.Html.Core.Dom
         /// Performs layout of the DOM structure creating lines by set bounds restrictions.
         /// </summary>
         /// <param name="g">Device context to use</param>
+        /// <remarks>
+        /// <para>
+        /// The rule's <i>size</i> is its own — a full-width line whose height falls back to a 1px top and
+        /// bottom border — but its <i>position</i> is not, so it goes through
+        /// <see cref="CssBox.PlaceAsBlockChild"/> like every other block-level box rather than through a
+        /// copy of that formula. The copy is what let three placement rules drift: it read the
+        /// predecessor's <c>ActualBottom</c> rather than its static one (so a relatively-positioned
+        /// sibling dragged the rule along, against
+        /// <see href="https://www.w3.org/TR/CSS21/visuren.html#relative-positioning">CSS 2.1 §9.4.3</see>),
+        /// it asked for the previous sibling with floats <i>included</i> (so a floated sibling became its
+        /// margin-collapse partner, against
+        /// <see href="https://www.w3.org/TR/CSS21/box.html#collapsing-margins">§8.3.1</see>), and it added
+        /// that sibling's bottom border on top of a value that already contains it.
+        /// </para>
+        /// <para>
+        /// Width is resolved before the placement rather than after it, so a floated rule reaches
+        /// <c>CssLayoutEngine.FloatBox</c> at its real width. Height still comes after, because the
+        /// placement writes <see cref="CssBoxProperties.ActualBottom"/> and so clears
+        /// <see cref="CssBoxProperties.ActualHeight"/> — which is exactly what makes the fallback below
+        /// fire on a re-layout instead of reading the previous pass's height.
+        /// </para>
+        /// </remarks>
         protected override ValueTask PerformLayoutImp(RGraphics g)
         {
             if (Display == CssConstants.None)
                 return ValueTask.CompletedTask;
 
-            RectanglesReset();
+            // The rule has no content to resume into, so the only pass state it carries is a break-before
+            // request the frame may have made on an earlier pass. Clearing it here is what lets the
+            // resumed pass place the rule instead of asking for the same break again and making no
+            // progress — which is the driver's own backstop, and how the omission announced itself.
+            BeginLayoutPass();
 
-            var prevSibling = DomUtils.GetPreviousSibling(this);
-            double left = ContainingBlock.Location.X + ContainingBlock.ActualPaddingLeft + ActualMarginLeft + ContainingBlock.ActualBorderLeftWidth;
-            double top = (prevSibling == null && ParentBox != null ? ParentBox.ClientTop : ParentBox == null ? Location.Y : 0) + MarginTopCollapse(prevSibling) + (prevSibling != null ? prevSibling.ActualBottom + prevSibling.ActualBorderBottomWidth : 0);
-            Location = new RPoint(left, top);
-            ActualBottom = top;
+            RectanglesReset();
 
             //width at 100% (or auto)
             double minwidth = GetMinimumWidth();
@@ -67,6 +89,15 @@ namespace PeachPDF.Html.Core.Dom
 
             if (width < minwidth || width >= 9999)
                 width = minwidth;
+
+            Size = new RSize(width, Size.Height);
+
+            PlaceAsBlockChild();
+
+            // The frame may conclude the break falls before the rule, in which case it has no position
+            // in the fragmentainer being filled and nothing more to resolve here.
+            if (RequestedBreakBeforeTop is not null)
+                return ValueTask.CompletedTask;
 
             double height = ActualHeight;
             if (height < 1)
