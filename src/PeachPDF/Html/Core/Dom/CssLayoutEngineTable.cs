@@ -95,6 +95,13 @@ namespace PeachPDF.Html.Core.Dom
         private readonly TableSetup _setup;
 
         /// <summary>
+        /// Where the pass this run continues left its row loop, or null when the row loop starts from the
+        /// first body row — which is every run today, and also a continuation whose record does not name a
+        /// row (see <see cref="TableBreakToken"/>).
+        /// </summary>
+        private readonly TableBreakToken? _carried;
+
+        /// <summary>
         /// Init.
         /// </summary>
         /// <param name="tableBox"></param>
@@ -106,10 +113,17 @@ namespace PeachPDF.Html.Core.Dom
         {
             _tableBox = tableBox;
 
+            // Cleared before anything can throw, for the reason the setup is: a run that dies part-way
+            // must leave no answer rather than the previous run's. A record naming a row of a layout that
+            // no longer exists is worse than none - it carries CssBox references into a tree that has
+            // moved on. Safe on a continuation too, since the record this run continues is _carried.
+            tableBox.TableContinuation = null;
+
             if (resume is not null && tableBox.TableSetup is { } carried)
             {
                 _setup = carried;
                 _continuesAPreviousPass = true;
+                _carried = resume as TableBreakToken;
             }
             else
             {
@@ -118,7 +132,7 @@ namespace PeachPDF.Html.Core.Dom
                 // leave a run that threw part-way with a non-null but *empty* setup on a table whose
                 // <thead> is already detached, and a later continuation would inherit nothing while
                 // skipping the restore, which is the only way back to that group through its proxies.
-                // Same shape, and the same reason, as UnfinishedTableCells' clear-then-publish below.
+                // Same shape, and the same reason, as the TableContinuation clear above.
                 _setup = new TableSetup();
                 tableBox.TableSetup = null;
             }
@@ -839,19 +853,27 @@ namespace PeachPDF.Html.Core.Dom
             // a page boundary. Reading it there names the page the table just left, and the pre-check
             // below then nudges the table one point onto the next one - which is what a table relocated
             // by CssBox's own §4.3 mover, and so placed exactly at a page top, does every time.
-            var cursor = new TableRowCursor(
-                startY, startX,
-                pageHeight < double.MaxValue - 1 ? container!.SlotStartingAt(_tableBox.ClientTop) : 0);
+            //
+            // A continuation resumes the cursor the pass before it left; every other run starts one. The
+            // two differ in what only the earlier pass knows - which row to re-enter and which of its
+            // cells to continue, the rowspan map keyed by absolute row index, and the widest edge the
+            // table has reached.
+            //
+            // Where its rows go is the other half, and it is not startY. A box that spans fragmentainers
+            // keeps the one Location it was placed at (CssBox.ResumeInTheNextFragmentainer moves only a
+            // box inside a fragmentainer with a band of its own - a column - and does nothing on the page
+            // grid), so startY still names the top of the page the table *began* on. The rows this pass
+            // places belong to the fragmentainer the break fell in, which is what the record names.
+            var cursor = ContinuedRowLoop is { } carried
+                ? TableRowCursor.Continuing(carried, ResumedRowTop(container, carried, startY, pageHeight))
+                : new TableRowCursor(
+                    startY, startX,
+                    pageHeight < double.MaxValue - 1 ? container!.SlotStartingAt(_tableBox.ClientTop) : 0);
 
             // Reset page-break tracking so re-layout doesn't accumulate stale entries. A resumed pass is
             // not a re-layout: where the table's slice ended on the pages earlier passes filled is what
             // clips its borders there, so those entries have to accumulate rather than be thrown away.
             if (!_continuesAPreviousPass) _tableBox.PageBreakBottoms = null;
-
-            // Cleared here as well as published at the end, so a run that throws part-way through leaves
-            // no answer rather than the previous run's - both CssLayoutEngineTable.PerformLayout and
-            // CssBox.PerformLayout swallow the exception when there is no HtmlContainer to report it to.
-            _tableBox.UnfinishedTableCells = [];
 
             // Steps 1-3, once per table: take the repeating groups out of the tree and lay each out once
             // to learn its height. A continuation inherits both from what settled them (AssignBoxKinds
@@ -866,6 +888,39 @@ namespace PeachPDF.Html.Core.Dom
             // Step 4: Layout body rows with page break detection.
             await LayoutBodyRows(g, cursor, startX, startY, container, pageHeight);
         }
+
+        /// <summary>
+        /// Where a continuation's first row goes: the content top of the fragmentainer
+        /// <paramref name="carried"/> names, never above the table's own content top.
+        /// </summary>
+        /// <param name="container">the container whose page grid resolves the slot, or null when there is none</param>
+        /// <param name="carried">the record this run continues</param>
+        /// <param name="startY">
+        /// the table's own content top, which is where a run with no page grid to resolve the slot
+        /// against puts everything — a document with no pagination has one fragmentainer, so a record
+        /// naming any other names nothing.
+        /// </param>
+        /// <param name="pageHeight">the page band's height, or <see cref="double.MaxValue"/> when unpaged</param>
+        private static double ResumedRowTop(
+            HtmlContainerInt? container, TableBreakToken carried, double startY, double pageHeight) =>
+            container is null || pageHeight >= double.MaxValue - 1
+                ? startY
+                : Math.Max(startY, container.PageTopOf(carried.ResumeSlotIndex));
+
+        /// <summary>
+        /// The record whose row loop this run continues, or null when there is none — including a record
+        /// naming a row this table does not have, which belongs to a layout that no longer exists and so
+        /// has nothing to continue. Reading it as "start from the markup" is both the safe answer and the
+        /// total one, and it is the same reading a record for a table with no settled setup gets.
+        /// </summary>
+        /// <remarks>
+        /// Valid only once <see cref="AssignBoxKinds"/> has filled <c>_bodyRows</c>, which is every use.
+        /// </remarks>
+        private TableBreakToken? ContinuedRowLoop =>
+            _carried is { ResumeRowIndex: var row } && row >= 0 && row < _bodyRows.Count ? _carried : null;
+
+        /// <summary>The body row this run's loop starts at.</summary>
+        private int ResumeRowIndex => ContinuedRowLoop?.ResumeRowIndex ?? 0;
 
         /// <summary>
         /// Steps 1 to 3: detaches the repeating <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c> and lays each out
@@ -1063,7 +1118,15 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
-            for (var i = 0; i < _bodyRows.Count; i++)
+            // The body rows this table has reached, this pass or an earlier one - which is every body
+            // row unless the loop below stops. Steps 5 and 6 close the table over them rather than over
+            // its markup, because a row no pass has placed has no geometry to close over.
+            var placedRows = _bodyRows.Count;
+
+            // A continuation re-enters the row that did not finish, not the one after it: only some of
+            // that row's cells stopped, and the cells of a row are §2.1 parallel flows, so the row is
+            // where the record points. Every other run starts at the first body row.
+            for (var i = ResumeRowIndex; i < _bodyRows.Count; i++)
             {
                 var row = _bodyRows[i];
                 cursor.RowIndex = i;
@@ -1077,7 +1140,14 @@ namespace PeachPDF.Html.Core.Dom
 
                 // Check for page break: either the row does not fit, or a break value says the break
                 // falls here regardless (css-break-3 §3.1's class-A break point between two rows).
-                if (i > 0 && container != null
+                // Not at the row a continuation re-enters: that break point was decided by the pass that
+                // stopped there, and re-deciding it takes a forced break a second time - pushing the row
+                // a further page down, adding a second header and footer proxy, and writing this pass's
+                // MaxBottom (the band top it has just started at) over the slice bottom the earlier pass
+                // recorded for that page, which is what clips the table's borders there. §4.4's "no
+                // empty fragmentainer" says the same thing from the other side: the resumed row begins
+                // this fragmentainer, so there is nothing before it here to break from.
+                if (i > ResumeRowIndex && container != null
                     && (ForcedBreakFallsBeforeRow(i)
                         || WillCrossPageBoundary(container, cursor.CurrentY + estimatedRowHeight, availableHeight, slot)))
                 {
@@ -1128,10 +1198,29 @@ namespace PeachPDF.Html.Core.Dom
                 row.Location = new RPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
                 row.ActualRight = row.Boxes.Max(x => x.ActualRight);
                 row.ActualBottom = cursor.MaxBottom;
+
+                // A cell of this row ran out of fragmentainer before it ran out of content, so the rows
+                // after it belong to the fragmentainer this table resumes in - laying them out here would
+                // place them above content that has not been placed yet. The row itself stays: its
+                // finished cells are complete and its unfinished ones continue, which is what
+                // css-tables-3 §6.1 asks of a fragmented row.
+                //
+                // Reachable from markup exactly once in the suite today, and there the row is the last
+                // one, so nothing is skipped. What makes the table resumable from outside is publishing
+                // the record below as this box's PendingBreakToken, which this step deliberately does not
+                // do - see CssBox.TableContinuation.
+                if (cursor.Stopped)
+                {
+                    placedRows = i + 1;
+                    break;
+                }
             }
 
-            // Step 5: Create final footer proxy
-            if (_shouldRepeatFooters && _footerHeight > 0)
+            // Step 5: Create final footer proxy. Not on a pass that stopped: the closing footer sits
+            // under the table's last row, and a pass that has not reached the last row would put it in
+            // the middle of the table on the page it is leaving. The footer for that page is the
+            // per-row break block's above, and the pass that finishes the table writes this one.
+            if (!cursor.Stopped && _shouldRepeatFooters && _footerHeight > 0)
             {
                 var finalFooterProxy = CreateFooterProxy(cursor.CurrentY);
                 if (finalFooterProxy != null)
@@ -1156,22 +1245,23 @@ namespace PeachPDF.Html.Core.Dom
             // along with its entire row/cell subtree, even though every row/cell inside it has a
             // perfectly valid, already-computed position. Give every row-group box a real bounding
             // rect spanning its own row children so it participates in that check correctly.
-            SetRowGroupBoxDimensions();
+            SetRowGroupBoxDimensions(placedRows);
 
             // Step 7: Set final table dimensions
             var tableRight = Math.Max(cursor.MaxRight, _tableBox.Location.X + _tableBox.ActualWidth);
             _tableBox.ActualRight = tableRight + GetHorizontalSpacing() + _tableBox.ActualBorderRightWidth;
             _tableBox.ActualBottom = Math.Max(cursor.MaxBottom, startY) + GetVerticalSpacing() + _tableBox.ActualBorderBottomWidth;
 
-            // Publish what the row loop noticed, as a copy: TableRowCursor holds a live list, and a stage-4
-            // caller that keeps a cursor alive past this point would otherwise mutate what it already
-            // handed out. Free today, since the list is always empty.
+            // Publish where the row loop stopped, as a copy of the cursor's own state rather than the
+            // cursor: a caller that kept one alive past this point would otherwise mutate what it has
+            // already handed out. Null when the loop reached the end of the body rows.
             //
-            // Deliberately NOT _tableBox.SetPendingBreakToken: that record is read by the parent's child
-            // loop and by PerformLayoutImp, so setting it would make everything above the table try to
-            // resume a table this step is not yet able to resume. This one is read by nothing.
-            _tableBox.UnfinishedTableCells =
-                cursor.UnfinishedCells.Count == 0 ? [] : [.. cursor.UnfinishedCells];
+            // Deliberately NOT _tableBox.SetPendingBreakToken, though this is a BreakToken and that is the
+            // one line the next step adds. That record means "resume me" to PerformLayoutImp, to
+            // PublishBreakToTheContextRoot and to the parent's child loop at once, and unlike everything
+            // above it, a real document reaches it - so it is a visible change to the table engine rather
+            // than a step that is neutral by construction. This one is read by nothing outside the engine.
+            _tableBox.TableContinuation = cursor.Continuation(_tableBox);
 
             // What the pre-checks above decide from EstimateRowHeight - a one-line-of-text heuristic
             // that can grossly undershoot a row whose cells hold tall block content - only real layout
@@ -1191,14 +1281,22 @@ namespace PeachPDF.Html.Core.Dom
         /// are unaffected: they're already explicitly positioned above (as _headerBox/_footerBox),
         /// since any present header/footer group is unconditionally treated as repeatable.
         /// </summary>
-        private void SetRowGroupBoxDimensions()
+        /// <param name="placedRows">
+        /// how many of <see cref="_bodyRows"/> have been placed, this pass or an earlier one. Rows past
+        /// that belong to a fragmentainer no pass has filled yet and still sit at the origin, so spanning
+        /// them would give the group a box starting above the table.
+        /// </param>
+        private void SetRowGroupBoxDimensions(int placedRows)
         {
+            var placed = _bodyRows.Take(placedRows).ToHashSet();
+
             foreach (var box in _tableBox.Boxes)
             {
                 if (box.Display != CssConstants.TableRowGroup)
                     continue;
 
-                var rows = box.Boxes.Where(b => b.Display == CssConstants.TableRow).ToList();
+                var rows = box.Boxes.Where(b => b.Display == CssConstants.TableRow && placed.Contains(b))
+                    .ToList();
                 if (rows.Count == 0)
                     continue;
 
@@ -1277,6 +1375,11 @@ namespace PeachPDF.Html.Core.Dom
 
                 cell.Location = new RPoint(currentX, currentY);
                 cell.ActualRight = cell.Location.X + width;
+
+                // A cell an earlier pass stopped part-way through continues from its own record rather
+                // than from the start - the cells of one row are §2.1 parallel flows, so each has its own
+                // stopping point and the ones that finished are simply not in the carried list.
+                if (cursor.CarriedTokenFor(cell) is { } carried) cell.ResumeAt(carried, null);
 
                 await cell.PerformLayout(g);
 
