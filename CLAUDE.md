@@ -138,7 +138,7 @@ Report findings the same way `/code-review` does; fix what's actually wrong, and
 ## Out of scope / accepted gaps (don't relitigate without new information)
 
 Each gap lives in its own file under [.claude/accepted-gaps/](.claude/accepted-gaps/), named for the
-gap; [.claude/accepted-gaps/README.md](.claude/accepted-gaps/README.md) indexes them by title.
+gap — the directory listing is the index, and grep over the folder finds a gap by any term in it.
 **Read the file covering an area before treating behaviour there as a defect** — each one records a
 limitation already argued through once, often with an approach that was tried, measured and rejected,
 so "fixing" it without new information re-runs work that has already been done and lost.
@@ -149,13 +149,17 @@ from the user-facing page in `docs/**`. Add a file when a change deliberately le
 if the gap is a genuine spec deviation, file the tracking issue described under "Post-change review
 pass" above and reference it from the file.
 
+**Recording a gap adds exactly one new file and edits nothing else** — no index to append to, no
+list in this file to extend, so two branches recording gaps cannot conflict over it. That is the
+whole point of the folder; keep it true. Refer to a sibling gap by linking its file, never by
+position ("the entry above"), which stops meaning anything once a neighbour is added or deleted.
+
 ## Recent fixes
 
 Each fix lives in its own file under [.claude/recent-fixes/](.claude/recent-fixes/), named
-`YYYY-MM-DD-<slug>.md` for the date it landed on `main`;
-[.claude/recent-fixes/README.md](.claude/recent-fixes/README.md) indexes them newest-first by title,
-so you can find the one that covers an area from the index alone rather than by reading the folder.
-**Read the entries touching an area before making a non-trivial change there** — they carry the
+`YYYY-MM-DD-<slug>.md` for the date it landed on `main` — the directory listing is the index, so
+`ls` gives you a chronological table of contents and grep over the folder finds an entry by any term
+in it. **Read the entries touching an area before making a non-trivial change there** — they carry the
 reasoning, the alternatives already measured and rejected, and the traps that cost real debugging
 time, which is exactly the context that keeps a change from re-deriving or re-breaking something.
 
@@ -163,6 +167,11 @@ When you land a non-trivial change, add one file rather than appending here. Say
 load-bearing idea was, what was found by running it rather than by reading it, what was deliberately
 not done and why, and what evidence the conclusion rests on (suite/showcase/diff-coverage results).
 A defect a future change could plausibly reintroduce is worth more words than the diff itself.
+
+**Recording a fix adds exactly one new file and edits nothing else** — no index to append to, no
+list in this file to extend, so two branches recording fixes cannot conflict over it. That is the
+whole point of the folder; keep it true. Refer to a sibling entry by linking its file, never by
+position ("the entry above"), which stops meaning anything once the neighbour ages out.
 
 **A fix is not recent once it is more than 30 days old — delete the file.** By then anything a
 reader still needs should already live somewhere durable: user-facing behaviour in `docs/**` /
