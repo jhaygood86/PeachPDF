@@ -37,7 +37,13 @@ namespace PeachPDF.Html.Core.Dom
 
         private CssBox? _headerBox;
 
+        /// <summary>Where <see cref="_headerBox"/> sat among the table's children before it was detached.</summary>
+        private int _headerIndex = -1;
+
         private CssBox? _footerBox;
+
+        /// <summary>Where <see cref="_footerBox"/> sat among the table's children before it was detached.</summary>
+        private int _footerIndex = -1;
 
         /// <summary>
         /// collection of all rows boxes
@@ -152,6 +158,11 @@ namespace PeachPDF.Html.Core.Dom
         private async ValueTask Layout(RGraphics g)
         {
             await MeasureWords(_tableBox, g);
+
+            // This engine may be run again over the same table - a resumed fragmentainer pass, the
+            // per-page-width reflow loop, ShrinkToFit - and it does not start from the markup unless the
+            // last run's output is undone first.
+            RestoreStructureFromAnyPreviousRun();
 
             // get the table boxes into the proper fields
             AssignBoxKinds();
@@ -634,14 +645,68 @@ namespace PeachPDF.Html.Core.Dom
         {
             if (_headerBox != null)
             {
+                _headerIndex = _tableBox.Boxes.IndexOf(_headerBox);
                 _tableBox.Boxes.Remove(_headerBox);
                 _headerBox.ParentBox = null;
             }
 
             if (_footerBox != null)
             {
+                _footerIndex = _tableBox.Boxes.IndexOf(_footerBox);
                 _tableBox.Boxes.Remove(_footerBox);
                 _footerBox.ParentBox = null;
+            }
+        }
+
+        /// <summary>
+        /// Undoes what a previous run of this engine did to the table's own child list, so this run sees
+        /// the markup's structure rather than the last run's output.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <see cref="RemoveHeaderFooterFromTree"/> detaches a repeating <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c>
+        /// and puts one <see cref="CssProxyBox"/> per page in its place, and nothing removed the proxies.
+        /// A second run therefore found the markup's own group gone — and, because a proxy inherits the
+        /// source's style, its <c>Display</c> <i>is</i> <c>table-header-group</c>, so
+        /// <see cref="AssignBoxKinds"/> took the first stale proxy as the header and classified the rest as
+        /// body rows. A proxy has no cells, so the row-positioning step then threw on an empty sequence.
+        /// </para>
+        /// <para>
+        /// The proxies are the only surviving reference to the detached group — the engine is constructed
+        /// afresh per layout and detaching nulls the group's <see cref="CssBox.ParentBox"/> — which is why
+        /// the restore goes through them and why each carries the index it was taken from.
+        /// </para>
+        /// </remarks>
+        private void RestoreStructureFromAnyPreviousRun()
+        {
+            List<CssProxyBox>? proxies = null;
+
+            foreach (var box in _tableBox.Boxes)
+            {
+                if (box is CssProxyBox proxy) (proxies ??= []).Add(proxy);
+            }
+
+            if (proxies is null) return;
+
+            foreach (var proxy in proxies)
+            {
+                _tableBox.Boxes.Remove(proxy);
+            }
+
+            // Lowest index first, so each group lands where it was rather than being displaced by one
+            // restored before it. Several proxies share one source (one per page), hence the parent check.
+            foreach (var proxy in proxies.OrderBy(p => p.SourceIndex))
+            {
+                var source = proxy.SourceBox;
+
+                if (source.ParentBox is not null) continue;
+
+                var index = proxy.SourceIndex < 0
+                    ? _tableBox.Boxes.Count
+                    : Math.Min(proxy.SourceIndex, _tableBox.Boxes.Count);
+
+                _tableBox.Boxes.Insert(index, source);
+                source.ParentBox = _tableBox;
             }
         }
 
@@ -653,7 +718,7 @@ namespace PeachPDF.Html.Core.Dom
             if (_headerBox == null)
                 return null;
 
-            var proxy = new CssProxyBox(_tableBox, _headerBox);
+            var proxy = new CssProxyBox(_tableBox, _headerBox, _headerIndex);
             var startX = Math.Max(_tableBox.ClientLeft + GetHorizontalSpacing(), 0);
             proxy.Location = new RPoint(startX, yPosition);
             return proxy;
@@ -667,7 +732,7 @@ namespace PeachPDF.Html.Core.Dom
             if (_footerBox == null)
                 return null;
 
-            var proxy = new CssProxyBox(_tableBox, _footerBox);
+            var proxy = new CssProxyBox(_tableBox, _footerBox, _footerIndex);
             var startX = Math.Max(_tableBox.ClientLeft + GetHorizontalSpacing(), 0);
             proxy.Location = new RPoint(startX, yPosition);
             return proxy;
