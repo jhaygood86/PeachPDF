@@ -2523,11 +2523,17 @@ namespace PeachPDF.Html.Core.Dom
         /// <b>The fragmentainer's own content edge is the whole of the base answer.</b> Nothing is added to
         /// it for the multi-column container itself, which is not fragmented by its own columns — its border
         /// and padding wrap every column at once, and
-        /// <see cref="Fragmentation.FragmentainerContext.ResumeContentTop"/> is already inside them. The
-        /// maximum against <see cref="CssBoxProperties.ClientTop"/> this replaced was doing nothing: that
-        /// coordinate is the container's position on the page it <i>began</i>, so it is never the greater of
-        /// the two. Removing it changes no result across the suite, and keeping it would have left a branch
-        /// no document can distinguish.
+        /// <see cref="Fragmentation.FragmentainerContext.ResumeContentTop"/> is already inside them.
+        /// </para>
+        /// <para>
+        /// <b>The maximum against <see cref="CssBoxProperties.ClientTop"/> this replaced is gone for two
+        /// different reasons, depending on which box is asking</b>, and neither is "it was equivalent". For
+        /// the container itself that coordinate is its position on the page it <i>began</i>, at or above the
+        /// edge of the fragmentainer now being filled, so the maximum never chose it. For any box below the
+        /// container it is the one thing that must <i>not</i> be chosen: it folds in exactly the block-start
+        /// border and padding §6.2 declines to re-insert under <c>slice</c>, which is the defect. So this is
+        /// a correction on the deep path and a simplification on the shallow one; removing it changes no
+        /// result across the suite.
         /// </para>
         /// <para>
         /// <b>Every box below it that the fill reaches here is a continuation</b> — the record that brought
@@ -2537,10 +2543,12 @@ namespace PeachPDF.Html.Core.Dom
         /// much blank space and no border drawn in it, because paint has always got this right
         /// (<c>FragmentEmitter.ResumesAnEarlierFragment</c> clears the fragment's top edge). Under
         /// <c>clone</c> they are, for the box and for every cloning ancestor the break falls inside at once,
-        /// which is exactly <see cref="DomUtils.ClonedBlockStart(CssBox?, CssBox?)"/>. This is the same rule the inline axis
-        /// applies to a resumed flow's first line in <c>CssLayoutEngine.CreateLineBoxes</c>; the block axis
-        /// consulted the property nowhere at all, so <c>slice</c> and <c>clone</c> were indistinguishable
-        /// here.
+        /// which is exactly <see cref="DomUtils.ClonedBlockStart(CssBox?, CssBox?)"/>. This is the same
+        /// arithmetic <c>CssLayoutEngine.CreateLineBoxes</c> writes for a resumed flow's first line; the
+        /// block axis consulted the property nowhere at all, so <c>slice</c> and <c>clone</c> were
+        /// indistinguishable here. Note the inline path is the <i>shape</i> to copy and not a working
+        /// precedent at a column boundary — a cloning box's own decorations are measurably not re-opened
+        /// there either; see the accepted-gap note on clone decorations at a multicol boundary.
         /// </para>
         /// <para>
         /// <b>What separates a re-opened box from one that is not is the fragmentation context, and it is

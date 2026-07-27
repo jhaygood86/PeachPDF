@@ -18,6 +18,7 @@ using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Svg;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 
 namespace PeachPDF.Html.Core.Utils
@@ -727,12 +728,25 @@ namespace PeachPDF.Html.Core.Utils
         internal static double ClonedBlockStart(CssBox? box, CssBox? stopAt)
         {
             var total = 0d;
+            var reachedStop = stopAt is null;
 
-            for (var current = box; current is not null && !ReferenceEquals(current, stopAt); current = current.ParentBox)
+            for (var current = box; current is not null; current = current.ParentBox)
             {
+                if (ReferenceEquals(current, stopAt))
+                {
+                    reachedStop = true;
+                    break;
+                }
+
                 if (current.BoxDecorationBreak == CssConstants.Clone)
                     total += current.ActualBorderTopWidth + current.ActualPaddingTop;
             }
+
+            // A stopAt that is not an ancestor of `box` silently degrades to the unbounded walk, which is
+            // the behaviour this parameter exists to prevent — so say so where it can be seen. Every caller
+            // passes the fragmentation context root of a box inside it, so this holds by construction.
+            Debug.Assert(reachedStop,
+                "ClonedBlockStart's stopAt was not on the ancestor chain, so the walk ran to the root.");
 
             return total;
         }

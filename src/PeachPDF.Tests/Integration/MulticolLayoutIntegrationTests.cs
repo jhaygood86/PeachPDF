@@ -1877,11 +1877,11 @@ namespace PeachPDF.Tests.Integration
 
             // Same break point either way: the wrapper's own decorations are at its *top*, so nothing about
             // them changes how much of the band the first column holds. Both split at r17.
-            var slicedSecondColumn = sliced.Rows.Count(r => r.Location.X <= sliced.Rows[0].Location.X + 0.5);
-            var clonedSecondColumn = cloned.Rows.Count(r => r.Location.X <= cloned.Rows[0].Location.X + 0.5);
+            var slicedRowsInFirstColumn = sliced.Rows.Count(r => r.Location.X <= sliced.Rows[0].Location.X + 0.5);
+            var clonedRowsInFirstColumn = cloned.Rows.Count(r => r.Location.X <= cloned.Rows[0].Location.X + 0.5);
 
-            Assert.Equal(17, slicedSecondColumn);
-            Assert.Equal(17, clonedSecondColumn);
+            Assert.Equal(17, slicedRowsInFirstColumn);
+            Assert.Equal(17, clonedRowsInFirstColumn);
 
             // The wrapper's continuation fragment itself opens at the column's content top in both: it is
             // the container's own child, and the container is not fragmented by its own columns.
@@ -1938,10 +1938,11 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(mc.ClientTop + 8, inner.Location.Y, 1);
             Assert.Equal(mc.ClientTop + 12, firstInSecondColumn.Location.Y, 1);
 
-            // Which is to say each level's fragment holds its own content, rather than two levels closing
-            // on the same coordinate.
-            Assert.Equal(wrap.ClientTop, inner.Location.Y, 1);
-            Assert.Equal(inner.ClientTop, firstInSecondColumn.Location.Y, 1);
+            // And the re-opened inset is the same one the boxes really open with where they are not broken
+            // at all: in the first column the rows sit below the 20pt lead sibling and then below both
+            // levels' actual padding. That is what `clone` means - each fragment wrapped as the whole box
+            // is - and it is independent of the three assertions above rather than restating them.
+            Assert.Equal(mc.ClientTop + 20 + 12, rowBoxes[0].Location.Y, 1);
         }
 
         /// <summary>

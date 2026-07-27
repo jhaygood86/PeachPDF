@@ -17,10 +17,19 @@ gap — the painter was right the whole time (`FragmentEmitter.ResumesAnEarlierF
 of a fragment that resumes an earlier one), so the symptom was a strip of blank space with nothing in it.
 
 **The load-bearing point is that this was a block/inline inconsistency inside one feature, not an
-unimplemented area.** `CssLayoutEngine.CreateLineBoxes` had the arithmetic right already —
+unimplemented area.** `CssLayoutEngine.CreateLineBoxes` already had the arithmetic written —
 `context.ResumeContentTop + (HasCloneDecorations ? DomUtils.ClonedBlockStart(...) : 0)` — so the fix is
 the block path saying the same thing, out of one helper (`CssBox.ContentTopOfTheContainingBlockIn`) that
 both block sites call.
+
+**Do not read that as "the inline path was already correct" — it is not, at a column boundary**, and the
+post-change review is what forced the distinction. Measured on the fixed build with
+`box-decoration-break: clone` and `padding-top: 9pt; border-top: 5pt` on a paragraph split between two
+columns: the continuation begins flush at the column's content top, identically to `slice`, so the
+paragraph's own decorations are never re-opened there even though `ClonedBlockStart` returns the right
+14pt for it. The inline path supplied the *shape* of the answer, not a working precedent. That gap, and
+the paint-side one beside it, are tracked — see the accepted-gap file
+[clone-decorations-at-a-multicol-boundary-outside-the-block-path.md](../accepted-gaps/clone-decorations-at-a-multicol-boundary-outside-the-block-path.md).
 
 **Both sites, because they answer the same question about the same containing block.**
 `ColumnTopForTheChildThisFillBeginsAt` places the child laid out *afresh* at the head of the column;

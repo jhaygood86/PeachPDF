@@ -5,6 +5,7 @@ using PeachPDF.Html.Core.Utils;
 using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Fragments;
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -44,7 +45,7 @@ namespace PeachPDF.Html.Core.Dom
         /// not holding", shared rather than allocated per column: a container whose content fits gives it
         /// for every column, and every container gives it for its last one.
         /// </summary>
-        private static readonly IReadOnlySet<CssBox> NoBoxes = new HashSet<CssBox>();
+        private static readonly IReadOnlySet<CssBox> NoBoxes = FrozenSet<CssBox>.Empty;
 
 
         public static async ValueTask PerformLayout(RGraphics g, CssBox columnsBox, BreakToken? resume = null)
@@ -415,11 +416,11 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private static IReadOnlySet<CssBox> ContinuingPast(BreakToken? token)
         {
-            if (token is not BlockBreakToken { ChildToken: not null }) return NoBoxes;
+            if (token is not BlockBreakToken { ChildToken: not null } block) return NoBoxes;
 
             var continuing = new HashSet<CssBox>();
 
-            for (var link = token is BlockBreakToken block ? block.ChildToken : null; link is not null;)
+            for (var link = block.ChildToken; link is not null;)
             {
                 continuing.Add(link.Box);
                 link = link is BlockBreakToken { ChildToken: { } child } ? child : null;
@@ -503,11 +504,11 @@ namespace PeachPDF.Html.Core.Dom
             // The last column of every container reaches here with no record at all, and so does every
             // column of one whose content fits - so the empty answer is the common one, and it needs no
             // set of its own.
-            if (token is not BlockBreakToken) return NoBoxes;
+            if (token is not BlockBreakToken outermost) return NoBoxes;
 
             var beyond = new HashSet<CssBox>();
 
-            for (var link = token as BlockBreakToken; link is not null; link = link.ChildToken as BlockBreakToken)
+            for (var link = outermost; link is not null; link = link.ChildToken as BlockBreakToken)
             {
                 var from = link.IsBreakBefore ? link.ResumeChildIndex : link.ResumeChildIndex + 1;
 

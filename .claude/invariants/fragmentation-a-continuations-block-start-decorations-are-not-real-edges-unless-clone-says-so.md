@@ -39,6 +39,10 @@ containing block is then an ancestor *higher in the same continuing chain*. "It 
 does not follow from it. Asking instead whether the containing block is the context root answers the
 question §6.2 actually turns on, and it collapses into the walk's `stopAt` rather than needing a branch.
 
-The inline path (`CssLayoutEngine.CreateLineBoxes`) has had this right since §6.2 landed. When a block
-path needs the same answer, make it call the same shape rather than deriving a second one — the two
-getting different answers inside one feature is what this cost.
+The inline path (`CssLayoutEngine.CreateLineBoxes`) is where the arithmetic was first written, and it is
+the shape to copy. **It is not itself correct at a *column* boundary**, though — measured with
+`box-decoration-break: clone` and `padding-top: 9pt; border-top: 5pt` on a paragraph split between two
+columns, the continuation begins flush, identically to `slice`, so the paragraph's own decorations are
+never re-opened there. Copy the shape, not the assumption that the inline axis already agrees. When a
+block path needs the same answer, make it call the same shape rather than deriving a second one — the
+two getting different answers inside one feature is what this cost.
