@@ -443,7 +443,10 @@ namespace PeachPDF.Html.Core
         /// How many float-intersection lookups (<see cref="Utils.DomUtils.GetFirstIntersectingFloatBox"/>)
         /// layout made during the current <see cref="PerformLayout"/> call, counted before the
         /// <see cref="HasFloatedBoxes"/> short-circuit is consulted. Reset at the start of each
-        /// <see cref="PerformLayout"/>, so it describes one layout rather than the container's lifetime.
+        /// <see cref="PerformLayout"/>, so it describes one layout rather than the container's lifetime -
+        /// and note that one <see cref="PerformLayout"/> can invoke <c>LayoutDocument</c> several times
+        /// (the per-page reflow loop re-runs it until the box-to-page assignment settles), so this is the
+        /// total across all of them rather than a per-pass figure.
         /// Exists so a regression test can assert the *complexity* of the float scan - the work it does per
         /// box - deterministically, instead of timing a render and hoping a contended CI runner cooperates.
         /// </summary>

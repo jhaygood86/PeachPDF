@@ -578,6 +578,13 @@ namespace PeachPDF.Html.Core.Utils
             return found;
         }
 
+        /// <summary>
+        /// The walk itself: climb to the root, scanning each level's preceding siblings' subtrees.
+        /// </summary>
+        /// <param name="reference">The box the lookup starts from.</param>
+        /// <param name="coordinates">The area a float has to intersect to be returned.</param>
+        /// <param name="floatProp">Which side's floats to look for.</param>
+        /// <param name="boxesVisited">Accumulator, not an input: every box the walk examines is added to it.</param>
         private static CssBox? FindIntersectingFloatBox(CssBox reference, CssFloatCoordinates coordinates, string floatProp, ref int boxesVisited)
         {
             while (true)

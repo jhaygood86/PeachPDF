@@ -2,9 +2,10 @@
 
 `FloatLayoutRegressionTests.ManyNestedBlocksWithoutFloats_RendersWithinASaneTimeBound` asserted
 `sw.ElapsedMilliseconds < 15000` around a 40-section float-free render. It failed CI on `windows-latest`
-at 16,383 ms (issue #482) while the same job's net10.0 leg passed 6,815/6,815 on identical source — the
-two TFM passes run concurrently on one two-core runner, both under coverage instrumentation. The bound
-had already been raised once for that, and the test's own comment said so.
+at 16,383 ms (issue #482) while the same job's net10.0 leg passed all 6,815 of its tests on identical
+source — one job runs both target frameworks' suites under coverage instrumentation, with xUnit running
+collections in parallel. The bound had already been raised once for that, and the test's own comment
+said so.
 
 ## What replaced it
 
@@ -24,8 +25,7 @@ Four tests replace the one:
 - `ManyNestedBlocksWithoutFloats_FloatScanVisitsNoBoxes` — 40 sections: calls > 0 (with a floor tied to
   the box count), visits **exactly 0**;
 - `FloatFreeDocument_FloatScanWorkPerBoxDoesNotGrowWithDocumentSize` — 10/20/40 sections: `visits ≤
-  boxCount` at every size, `calls ≤ 4 × boxCount`, and calls-per-box at 40 sections no more than 2× the
-  rate at 10 (flat is 1.0, quadratic is 4.0);
+  boxCount` at every size, plus a loose `calls ≤ 20 × boxCount` and a calls-per-box ratio;
 - `FloatScanCounters_CountTheWalkTheyGuard_WhenAFloatIsPresent` — a floated document must move **both**
   counters, so the two guards above cannot decay into assertions about nothing;
 - `ManyNestedBlocksWithoutFloats_StillRendersEveryPage` — the end-to-end `PdfGenerator` render the old
@@ -58,6 +58,21 @@ are the permitted last-resort form: three `[Fact(Timeout = 10000)]` CSS-parser t
 `StylesheetRelativeUrlResolutionTests.CircularImport_DoesNotHang_AndStillRendersRemainingStyles`, whose
 15 s `Task.WhenAny` race is against an in-memory loader. None of them stands in for a complexity claim,
 so none was converted and no follow-up issue was filed for them.
+
+## Which assertion is load-bearing, and which is not
+
+The post-change review found this and it is worth stating plainly: **only the visit bound detects the
+regression this test is named for.** Deleting the short-circuit changes how far each lookup walks, not
+how often layout asks for one, so the call count is unmoved by it — measured independently as
+`calls = 5 × line count + 3` with and without the short-circuit. `visits ≤ boxCount` is therefore the
+O(n) vs O(n²) statement; the two assertions on `calls` guard a *different* hypothetical (a future caller
+asking once per descendant rather than once per box needing line layout) and are kept for that reason,
+with a loose constant. Anyone tightening or removing an assertion here should know which one is which.
+
+The same review noted the `calls` bound's only real exposure: `FloatScanCalls` aggregates across every
+`LayoutDocument` invocation one `PerformLayout` makes, and the per-page reflow loop can make five. That
+is why the bound is 20× the box count rather than the measured ~2.1, and why the counter's own
+documentation says so.
 
 ## Deliberately not done
 
