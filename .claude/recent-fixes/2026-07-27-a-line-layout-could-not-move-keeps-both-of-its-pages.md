@@ -66,4 +66,8 @@ simulating them.
 ## Evidence
 
 All 5 new tests fail against the unconditional rule and pass with the gate. Suite, CLI, zero warnings,
-showcases and diff coverage as recorded in PR #478.
+showcases and diff coverage as recorded in PR #480.
+
+The residual §4.1 deviation this restores — one line box drawn in two fragmentainers — is recorded as
+[an accepted gap](../accepted-gaps/a-straddling-line-is-drawn-in-both-fragmentainers.md) against #484. Do not
+close it by narrowing `ClaimsWord`; that is the change this fix had to undo.

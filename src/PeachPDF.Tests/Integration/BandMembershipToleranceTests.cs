@@ -97,7 +97,7 @@ namespace PeachPDF.Tests.Integration
         /// </summary>
         private static int BandStrictlyContaining(HtmlContainerInt container, double y)
         {
-            for (var slot = 0; slot < container.FragmentTree!.Fragmentainers.Count; slot++)
+            foreach (var slot in container.FragmentTree!.Fragmentainers.Select(f => f.SlotIndex))
             {
                 if (y >= container.PageTopOf(slot) && y < container.PageBottomOf(slot)) return slot;
             }
@@ -135,7 +135,10 @@ namespace PeachPDF.Tests.Integration
             // silently degrading into a second copy of the ordinary case.
             var overhang = LastBottomOnTheFirstPage(container) - container.PageBottomOf(0);
 
-            Assert.InRange(overhang, 1e-6, HtmlContainerInt.PageBoundaryEpsilon);
+            // Exclusive at the top: at exactly PageBoundaryEpsilon, FallsPast fires and the line becomes
+            // StraddlingLineClaimTests' subject rather than this class's.
+            Assert.True(overhang > 1e-6 && overhang < HtmlContainerInt.PageBoundaryEpsilon,
+                $"the fixture must land strictly inside the tolerance window, not at an overhang of {overhang}");
 
             return (root, container);
         }
