@@ -102,23 +102,43 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         }
 
         [Fact]
-        public void EnterMonolithic_SuppressesFragmenting_AndRestoresOnExit()
+        public void DetachFragmentainer_LeavesNoFragmentainerToAskAtAll_AndComposes()
         {
-            var context = CreateContext(CreateContainer());
+            var container = CreateContainer();
+            container.EnterNestedFragmentainer(CreateContext(container));
 
-            Assert.True(context.IsFragmenting);
+            Assert.True(container.IsFragmenting);
+            Assert.NotNull(container.CurrentFragmentainer);
 
-            var outer = context.EnterMonolithic();
+            var outer = container.DetachFragmentainer();
+
+            // Not "a fragmentainer that will not break" — no fragmentainer. Everything that asks *which*
+            // fragmentainer this is, and not merely whether it may break, gets the same answer.
+            Assert.Null(container.CurrentFragmentainer);
+            Assert.False(container.IsFragmenting);
+
+            // Nested measurement scopes compose: the inner restore puts back "still detached".
+            var inner = container.DetachFragmentainer();
+            Assert.Null(container.CurrentFragmentainer);
+            container.RestoreFragmentainer(inner);
+            Assert.Null(container.CurrentFragmentainer);
+
+            container.RestoreFragmentainer(outer);
+            Assert.True(container.IsFragmenting);
+        }
+
+        [Fact]
+        public void ASuppressedContext_ExistsButDoesNotFragment()
+        {
+            var container = CreateContainer();
+            var root = new CssBox(null, null);
+
+            // The driver's last-resort relaxation: a real pass, with a real slot the emitter reads, that
+            // must not break again.
+            var context = new FragmentainerContext(container, root, slotIndex: 2, suppressed: true);
+
             Assert.False(context.IsFragmenting);
-
-            // Nested monolithic content composes: the inner scope restores to "still monolithic".
-            var inner = context.EnterMonolithic();
-            Assert.False(context.IsFragmenting);
-            context.ExitMonolithic(inner);
-            Assert.False(context.IsFragmenting);
-
-            context.ExitMonolithic(outer);
-            Assert.True(context.IsFragmenting);
+            Assert.Equal(2, context.SlotIndex);
         }
 
         [Fact]

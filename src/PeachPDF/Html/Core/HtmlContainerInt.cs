@@ -320,7 +320,7 @@ namespace PeachPDF.Html.Core
         /// A multi-column column is a fragmentainer in its own right
         /// (<see href="https://www.w3.org/TR/css-break-3/#fragmentainer">§2</see>), established by the
         /// columns engine inside the page the container sits on. A save/restore pair rather than a
-        /// disposable scope for the same reason <c>FragmentainerContext.EnterMonolithic</c> is one: every
+        /// disposable scope for the same reason <see cref="DetachFragmentainer"/> is one: every
         /// call site is an <c>async</c> method, where a <c>ref struct</c> cannot live across an
         /// <c>await</c>.
         /// </remarks>
@@ -340,6 +340,38 @@ namespace PeachPDF.Html.Core
         /// <see cref="LayoutDocument"/> pass, where there is no fragmentainer to break against.
         /// </summary>
         internal bool IsFragmenting => CurrentFragmentainer?.IsFragmenting ?? false;
+
+        /// <summary>
+        /// Detaches the fragmentainer for the duration of a measurement pass or a monolithic subtree, so
+        /// nothing laid out inside can ask a fragmentation question at all. Hand the returned value back
+        /// to <see cref="RestoreFragmentainer"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>An absence rather than a suppressed flag.</b> A box laid out at a provisional position — a
+        /// flex or grid item being measured at the container's content origin, anything inside a
+        /// monolithic subtree — has coordinates it is about to be moved away from, so every question
+        /// about a fragmentainer is meaningless there, not merely unanswerable. Leaving a context in place
+        /// with breaking switched off answered the "may I break?" question correctly while still letting
+        /// <i>which</i> fragmentainer, and its band, be read: <c>CurrentFragmentainer is { HasOwnBand:
+        /// true }</c> is asked in several places that never consult
+        /// <see cref="IsFragmenting"/> at all, so a table cell inside a column could raise a column break
+        /// from inside a pass that was supposed to be suppressed.
+        /// </para>
+        /// <para>
+        /// A save/restore pair rather than a disposable scope because every call site is an
+        /// <c>async</c> method, where a <c>ref struct</c> cannot live across an <c>await</c>.
+        /// </para>
+        /// </remarks>
+        internal FragmentainerContext? DetachFragmentainer()
+        {
+            var previous = CurrentFragmentainer;
+            CurrentFragmentainer = null;
+            return previous;
+        }
+
+        /// <inheritdoc cref="DetachFragmentainer"/>
+        internal void RestoreFragmentainer(FragmentainerContext? previous) => CurrentFragmentainer = previous;
 
         /// <summary>
         /// Increments once per <see cref="LayoutDocument"/> invocation. A box records the generation it
@@ -909,9 +941,10 @@ namespace PeachPDF.Html.Core
                         // it is what css-break-3 §4.3's own last-resort relaxation amounts to.
                         ReportError(HtmlRenderErrorType.Layout, "Layout could not advance past a fragmentainer boundary");
 
-                        var final = new FragmentainerContext(this, Root, slot);
-                        final.EnterMonolithic();
-                        CurrentFragmentainer = final;
+                        // A context that exists but does not fragment: this is a real pass with a real
+                        // slot the emitter reads, unlike a measurement pass, which has no fragmentainer
+                        // at all (see DetachFragmentainer).
+                        CurrentFragmentainer = new FragmentainerContext(this, Root, slot, suppressed: true);
 
                         Root.ResumeAt(token, resumeTopOverride: null);
                         await Root.PerformLayout(g);

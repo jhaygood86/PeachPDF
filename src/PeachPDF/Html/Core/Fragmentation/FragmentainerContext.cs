@@ -22,7 +22,7 @@ namespace PeachPDF.Html.Core.Fragmentation
     /// </remarks>
     internal sealed class FragmentainerContext
     {
-        private bool _fragmenting;
+        private readonly bool _fragmenting;
 
         private readonly (double Top, double Bottom)? _ownBand;
 
@@ -31,7 +31,8 @@ namespace PeachPDF.Html.Core.Fragmentation
             CssBox contextRoot,
             int slotIndex,
             (double Top, double Bottom)? ownBand = null,
-            bool inheritsSuppression = false)
+            bool inheritsSuppression = false,
+            bool suppressed = false)
         {
             ArgumentNullException.ThrowIfNull(container);
             ArgumentNullException.ThrowIfNull(contextRoot);
@@ -49,7 +50,11 @@ namespace PeachPDF.Html.Core.Fragmentation
             // inside another engine's measurement pass - must not re-enable breaking there: the engine
             // enclosing it would not read the resumption record, so the content that record names is
             // simply dropped. Measured at five items lost from a twelve-item container.
-            _fragmenting = container.HasRealPageGrid
+            // `suppressed` is the driver's own last-resort relaxation: a real pass, with a real slot the
+            // emitter reads, that must not break again. A *measurement* pass is not this - it has no
+            // fragmentainer at all (HtmlContainerInt.DetachFragmentainer).
+            _fragmenting = !suppressed
+                           && container.HasRealPageGrid
                            && (!inheritsSuppression || container.IsFragmenting);
         }
 
@@ -128,26 +133,6 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </para>
         /// </remarks>
         internal bool IsFragmenting => _fragmenting;
-
-        /// <summary>
-        /// Suppresses breaking for the duration of a monolithic subtree — content the spec does not
-        /// allow to be split (<see href="https://www.w3.org/TR/css-break-3/#monolithic">§2</see>), which
-        /// here also covers the layout engines that paginate their own content. Returns the previous
-        /// state to hand back to <see cref="ExitMonolithic"/>, so nested monolithic subtrees compose.
-        /// </summary>
-        /// <remarks>
-        /// A save/restore pair rather than a disposable scope because every call site is an
-        /// <c>async</c> method, where a <c>ref struct</c> cannot live across an <c>await</c>. This
-        /// mirrors the <c>previousSuppress</c> idiom the flex and grid engines already use.
-        /// </remarks>
-        internal bool EnterMonolithic()
-        {
-            var previous = _fragmenting;
-            _fragmenting = false;
-            return previous;
-        }
-
-        internal void ExitMonolithic(bool previous) => _fragmenting = previous;
 
         internal void RecordBreak(BreakToken token)
         {

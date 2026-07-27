@@ -986,8 +986,7 @@ namespace PeachPDF.Html.Core.Dom
             // from, so this scope suppresses breaking as well as the legacy word relocation above. The two
             // used to be one flag, which meant breaking could never be enabled for a placed item without
             // also re-enabling the relocation - see FragmentainerContext.IsFragmenting.
-            var fragmentainer = container?.CurrentFragmentainer;
-            var previousFragmenting = fragmentainer?.EnterMonolithic() ?? false;
+            var fragmentainer = container?.DetachFragmentainer();
 
             try
             {
@@ -995,7 +994,7 @@ namespace PeachPDF.Html.Core.Dom
             }
             finally
             {
-                fragmentainer?.ExitMonolithic(previousFragmenting);
+                container?.RestoreFragmentainer(fragmentainer);
 
                 if (container is not null)
                     container.SuppressWordPageBreaks = previousSuppress;

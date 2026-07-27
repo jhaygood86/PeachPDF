@@ -1966,8 +1966,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             await engine(g, this);
 
-            var context = HtmlContainer?.CurrentFragmentainer;
-            var previous = context?.EnterMonolithic() ?? false;
+            var previous = HtmlContainer?.DetachFragmentainer();
 
             try
             {
@@ -1975,15 +1974,14 @@ namespace PeachPDF.Html.Core.Dom
             }
             finally
             {
-                context?.ExitMonolithic(previous);
+                HtmlContainer?.RestoreFragmentainer(previous);
             }
         }
 
         private async ValueTask LayoutMonolithicContent(
             RGraphics g, Func<RGraphics, CssBox, ValueTask> engine, bool layoutOutOfFlowChildren = true)
         {
-            var context = HtmlContainer?.CurrentFragmentainer;
-            var previous = context?.EnterMonolithic() ?? false;
+            var previous = HtmlContainer?.DetachFragmentainer();
 
             try
             {
@@ -1995,7 +1993,7 @@ namespace PeachPDF.Html.Core.Dom
             }
             finally
             {
-                context?.ExitMonolithic(previous);
+                HtmlContainer?.RestoreFragmentainer(previous);
             }
         }
 
