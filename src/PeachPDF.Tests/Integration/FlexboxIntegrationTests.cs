@@ -1107,6 +1107,33 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task InlineFlex_ItemWrappingABlock_KeepsBothLevelsInsideTheContainer()
+        {
+            // The correction now stops at the inline-flex box, so a block-in-inline *inside* one is no
+            // longer restructured either. That must not lose it: the item is blockified by the flex engine
+            // and lays its own block child out itself, the same as under a block-level `display: flex`
+            // container, whose subtree the correction has never descended into.
+            var html = Wrap(@"
+                <span id='container' style='display:inline-flex; flex-wrap:wrap; width:200pt;'>
+                    <span id='item' style='width:150pt;'><div id='inner' style='width:120pt; height:30pt;'></div></span>
+                </span>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var item = FindById(root, "item")!;
+            var inner = FindById(root, "inner")!;
+
+            Assert.Same(container, item.ParentBox);
+            Assert.Equal(container.ClientTop, item.Location.Y, 0.5);
+            Assert.Equal(container.ClientLeft, item.Location.X, 0.5);
+            // The inner block is laid out inside the item, at the item's own origin and its own width.
+            Assert.Equal(item.Location.Y, inner.Location.Y, 0.5);
+            Assert.Equal(item.Location.X, inner.Location.X, 0.5);
+            Assert.Equal(120, inner.ActualBoxSizingWidth, 0.5);
+            Assert.Equal(30, inner.ActualBoxSizingHeight, 0.5);
+            Assert.Equal(30, container.ActualBoxSizingHeight, 0.5);
+        }
+
+        [Fact]
         public async Task InlineFlex_Gap_AppliedBetweenItems()
         {
             // gap:6pt must separate items; without flex layout the gap is not applied.
