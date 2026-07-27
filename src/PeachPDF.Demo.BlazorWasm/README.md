@@ -33,6 +33,9 @@ web or to a local file resolves to nothing.
 - **The tab freezes while rendering.** WebAssembly in the browser is single-threaded and PeachPDF's
   pipeline is synchronous once it starts. Making this genuinely responsive needs
   `WasmEnableThreads`, which requires COOP/COEP response headers that GitHub Pages cannot serve.
+- **This is not a performance benchmark.** Blazor WebAssembly interprets IL rather than JIT-compiling it,
+  so the same document renders far faster on any non-browser host. Enabling `RunAOTCompilation` would
+  narrow the gap at a large cost in download size and build time, and it is not what this demo is for.
 - **Fonts are WOFF 1.0, not WOFF2.** WOFF2 is Brotli-compressed and a browser/WebAssembly host has no
   Brotli decoder — `System.IO.Compression.Brotli` throws there, and installing the `wasm-tools` workload
   to natively relink the runtime does not change it (measured; the limitation is managed-side). WOFF 1.0
