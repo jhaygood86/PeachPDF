@@ -1106,6 +1106,15 @@ namespace PeachPDF.Html.Core
         /// The fragments from the head's own fragmentainer on are un-frozen first: that pass is about to
         /// describe different geometry, and everything after it is about to be laid out again.
         /// </para>
+        /// <para>
+        /// So is the layout those passes produced (<see cref="PassRewind.RollBackTo"/>). Un-freezing a
+        /// fragment says only that it will be built again; it does not undo what the box tree holds, and
+        /// the box the re-entered pass resumes into holds line boxes those passes appended. Its prologue
+        /// is once per layout and a resumed flow deliberately does not clear its line list, so without the
+        /// rollback <c>CssLayoutEngine.FinalizeLineBoxes</c> hands them to
+        /// <see cref="CssLineBox.AssignRectanglesToBoxes"/> a second time and the per-line rectangle they
+        /// already carry throws.
+        /// </para>
         /// </remarks>
         private bool TryRewindForRunPull((CssBox Head, double Top) pull, ref BreakToken? token, ref int slot)
         {
@@ -1117,6 +1126,8 @@ namespace PeachPDF.Html.Core
 
             _passesRewoundFor.Add(pull.Head);
             _emitter?.InvalidateFrom(rewoundSlot);
+
+            if (rewoundToken is not null) PassRewind.RollBackTo(rewoundToken);
 
             // The passes from this one on are about to run again, so the record of them describes a layout
             // that no longer exists.

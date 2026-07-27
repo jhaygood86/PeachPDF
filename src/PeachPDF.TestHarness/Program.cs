@@ -1747,6 +1747,28 @@ static string KeepWithNextSection(double fillerHeight) =>
         $"Sentence {i} of the section body, long enough to occupy a line of its own. "))
     + "</p>";
 
+// The pass the driver goes back to is not always one that began at a page top. Here running text
+// carries across the first page boundary, so the pass that places the first section's heading was
+// itself entered part-way through that paragraph - and going back to it means continuing the
+// paragraph a second time. Everything the discarded passes appended to it has to be undone first;
+// left in place, the pass hands line boxes it already holds to CssLineBox.AssignRectanglesToBoxes a
+// second time and the whole render fails with "An item with the same key has already been added".
+static string ResumedPassSection(int leadSentences, int bodySentences) =>
+    "<h1 style=\"break-before:page\">Going back to a pass that stopped mid-paragraph</h1>"
+    + "<p class=\"intro\">The running text below breaks across the page boundary, so the pass that placed "
+    + "the first heading under it started inside that paragraph rather than at a page top. Each heading "
+    + "still arrives with its own section body.</p>"
+    + "<p>"
+    + string.Concat(Enumerable.Range(1, leadSentences).Select(i =>
+        $"Sentence {i} of the running text that carries on across the page boundary, long enough to "
+        + "occupy a line of its own at this measure. "))
+    + "</p>"
+    + string.Concat(Enumerable.Range(1, 2).Select(n =>
+        $"<h2>Section {n}</h2><p class=\"marked\">"
+        + string.Concat(Enumerable.Range(1, bodySentences).Select(i =>
+            $"Sentence {i} of section {n}'s body, long enough to occupy a line of its own. "))
+        + "</p>"));
+
 var keepWithNextHtml = """
     <!DOCTYPE html>
     <html><head><style>
@@ -1762,6 +1784,7 @@ var keepWithNextHtml = """
     </style></head><body>
     """
     + KeepWithNextSection(410)
+    + ResumedPassSection(leadSentences: 40, bodySentences: 10)
     + "</body></html>";
 
 await SaveShowcaseAsync("paged_media_keep_with_next", "Paged Media", "Keep With Next",
