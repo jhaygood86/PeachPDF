@@ -345,6 +345,27 @@ namespace PeachPDF.Html.Core.Dom
         internal Dictionary<int, double>? PageBreakBottoms { get; set; }
 
         /// <summary>
+        /// The cells of this table that ran out of fragmentainer before they ran out of content, as the
+        /// row loop saw them (<c>CssLayoutEngineTable.LayoutCells</c>). Empty on every other box, and
+        /// empty on a table too for as long as the engine runs with the fragmentainer detached.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A table paginates itself inside one fragmentainer pass and hands the driver nothing, so the
+        /// row loop is the only thing that ever sees a cell stop. This is where it says so — the raw
+        /// material for the resumption record a table will eventually publish, held one step short of
+        /// being one.
+        /// </para>
+        /// <para>
+        /// It is deliberately <b>not</b> <see cref="PendingBreakToken"/>. That record means "resume me",
+        /// and the parent's child loop, <see cref="PerformLayoutImp"/> and the fragmentation context all
+        /// act on it the moment it is set. Nothing reads this one, which is what lets the row loop notice
+        /// a cell stopped before anything is able to do something about it.
+        /// </para>
+        /// </remarks>
+        internal IReadOnlyList<UnfinishedTableCell> UnfinishedTableCells { get; set; } = [];
+
+        /// <summary>
         /// The vertical line segments (in absolute document coordinates) to draw between adjacent
         /// columns of a multi-column container — one segment per gap per page-row actually used.
         /// Set by <see cref="CssLayoutEngineColumns"/>, painted by <see cref="FragmentPainter"/>.

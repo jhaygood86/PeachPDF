@@ -4,6 +4,22 @@ using System.Collections.Generic;
 namespace PeachPDF.Html.Core.Fragmentation
 {
     /// <summary>
+    /// A table cell that ran out of fragmentainer before it ran out of content, and where it stopped.
+    /// </summary>
+    /// <param name="RowIndex">
+    /// the body row the cell belongs to, as <see cref="TableRowCursor.RowIndex"/> numbered it — the row a
+    /// resumed pass would have to re-enter, and <c>-1</c> for a
+    /// <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c> measurement row, whose cursor is its own.
+    /// </param>
+    /// <param name="Cell">the cell box that did not finish</param>
+    /// <param name="Token">
+    /// the cell's own resumption record, read off <see cref="CssBox.PendingBreakToken"/> the moment its
+    /// layout returned. It names a box inside the cell, never the cell's place in the table — the row and
+    /// the cell are what <see cref="RowIndex"/> and <see cref="Cell"/> add.
+    /// </param>
+    internal sealed record UnfinishedTableCell(int RowIndex, CssBox Cell, BreakToken Token);
+
+    /// <summary>
     /// Where a table's row loop has got to: the state <c>CssLayoutEngineTable.LayoutCells</c> carries from
     /// one body row to the next.
     /// </summary>
@@ -81,6 +97,40 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </remarks>
         internal Dictionary<int, List<CssBox>> RowSpannedBoxes { get; } = [];
 
+        private readonly List<UnfinishedTableCell> _unfinishedCells = [];
+
+        /// <summary>
+        /// The cells this cursor has placed that did not finish, in the order the row loop placed them.
+        /// </summary>
+        /// <remarks>
+        /// Empty for every fixture measured so far, and that is a fact about the gate rather than about
+        /// tables: <c>CssBox.LayoutMonolithicContent</c> detaches the fragmentainer around the whole
+        /// engine, so nothing inside a cell has a fragmentainer to run out of. The list is what the gate
+        /// is waiting on — a row loop that can be told a cell stopped is the prerequisite for lifting it,
+        /// not a consequence.
+        /// </remarks>
+        internal IReadOnlyList<UnfinishedTableCell> UnfinishedCells => _unfinishedCells;
+
+        /// <summary>
+        /// Notes that <paramref name="cell"/> did not finish, if it says so. Called by the row loop the
+        /// moment the cell's layout returns, which is the only moment the answer is readable:
+        /// <c>CssBox.BeginLayoutPass</c> clears the record at the start of every layout of the box.
+        /// </summary>
+        /// <remarks>
+        /// This asks only <see cref="CssBox.PendingBreakToken"/> — a cell that was entered and stopped
+        /// part-way. A break falling <i>before</i> a cell is a different question with a different answer:
+        /// it moves the whole row, which is the row loop's own per-row break check
+        /// (<see href="https://www.w3.org/TR/css-break-3/#break-between">§4.4</see>), not a cell's
+        /// continuation.
+        /// </remarks>
+        internal void RecordIfUnfinished(CssBox cell)
+        {
+            if (cell.PendingBreakToken is { } token)
+            {
+                _unfinishedCells.Add(new UnfinishedTableCell(RowIndex, cell, token));
+            }
+        }
+
         /// <summary>Moves the cursor onto the next slot, at <paramref name="top"/>.</summary>
         internal void OpenNextSlot(double top)
         {
@@ -102,7 +152,9 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <summary>
         /// A cursor for measuring one row group's own rows, which are laid out once to learn their height
         /// and then repeated by proxy. It shares only <see cref="MaxRight"/> with the body's cursor: its
-        /// rows are not body rows, so neither its row numbering nor its rowspan bookkeeping is theirs.
+        /// rows are not body rows, so neither its row numbering nor its rowspan bookkeeping nor its
+        /// <see cref="UnfinishedCells"/> is theirs — a header row is measured, not placed, so where it
+        /// stopped says nothing about where the body has to resume.
         /// </summary>
         internal TableRowCursor ForRowGroupMeasurement(double top) =>
             new(top, MaxRight, SlotIndex) { MaxBottom = top };

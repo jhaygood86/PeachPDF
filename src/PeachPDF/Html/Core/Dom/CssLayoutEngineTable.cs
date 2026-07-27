@@ -1042,6 +1042,15 @@ namespace PeachPDF.Html.Core.Dom
             _tableBox.ActualRight = tableRight + GetHorizontalSpacing() + _tableBox.ActualBorderRightWidth;
             _tableBox.ActualBottom = Math.Max(cursor.MaxBottom, startY) + GetVerticalSpacing() + _tableBox.ActualBorderBottomWidth;
 
+            // Publish what the row loop noticed. Assigned unconditionally, so a second layout of the same
+            // table replaces the previous run's answer rather than adding to it - the same reason
+            // PageBreakBottoms is reset at the top of this method.
+            //
+            // Deliberately NOT _tableBox.SetPendingBreakToken: that record is read by the parent's child
+            // loop and by PerformLayoutImp, so setting it would make everything above the table try to
+            // resume a table this step is not yet able to resume. This one is read by nothing.
+            _tableBox.UnfinishedTableCells = cursor.UnfinishedCells;
+
             // What the pre-checks above decide from EstimateRowHeight - a one-line-of-text heuristic
             // that can grossly undershoot a row whose cells hold tall block content - only real layout
             // can settle. When the estimate misses, the laid-out table straddles a page boundary with no
@@ -1148,6 +1157,13 @@ namespace PeachPDF.Html.Core.Dom
                 cell.ActualRight = cell.Location.X + width;
 
                 await cell.PerformLayout(g);
+
+                // Did this cell finish? Asked here because here is the only place the answer exists: the
+                // cell's own record is cleared at the start of its next layout, and the row loop reads
+                // nothing else off the cell but ActualBottom. Recorded, not acted on - the loop still
+                // places every remaining row, which is what keeps this step behaviour-neutral while the
+                // engine runs with the fragmentainer detached and no cell can answer yes.
+                cursor.RecordIfUnfinished(cell);
 
                 // Track max bottom
                 if (cell is CssSpacingBox sb)
