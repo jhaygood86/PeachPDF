@@ -20,7 +20,9 @@ by page under PDFium; 6,671 tests; 96 CLI tests; 100% diff coverage; zero-warnin
 **A cell's record is readable for one instant.** `CssBox.BeginLayoutPass` clears
 `PendingBreakToken` at the top of every `PerformLayoutImp`, so the answer exists between the cell's
 layout returning and the next layout of that box — which is the statement inside the row loop's
-`foreach`, and nowhere else. Anything that tried to collect this afterwards would collect nulls.
+`foreach`, and nowhere else. Measured on the general case rather than argued: a 600-word `<div>` on a
+300pt page takes 16 fragmentainer passes, and afterwards not one box in the tree carries a record.
+Recorded as [an invariant](../invariants/fragmentation-a-boxs-resumption-record-is-readable-only-when-its-layout-returns.md).
 
 **It is deliberately not published as the table's own `PendingBreakToken`.** That record means
 "resume me": `PerformLayoutImp` returns early on it, `PublishBreakToTheContextRoot` hands it to the

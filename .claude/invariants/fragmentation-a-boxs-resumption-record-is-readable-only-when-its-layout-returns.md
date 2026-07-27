@@ -8,8 +8,8 @@ the answer has to ask at the call site — inside the loop that laid the child o
 `await child.PerformLayout(g)` returning and anything else touching the child.
 
 Measured, so the shape of the wrong answer is recognizable: a `<div>` of 600 words on a 300pt page
-takes **16 fragmentainer passes**, records a break on fifteen of them, and afterwards **zero boxes in
-the whole tree carry a record** — the box that stopped fifteen times reports `null`. A consumer that
+takes **16 fragmentainer passes** — and the driver opens a further one only on a recorded break, so
+fifteen records were produced — yet afterwards **zero boxes in the whole tree carry one**. A consumer that
 gathers records after layout, or in an epilogue, or from a second walk of the tree, is not reading a
 weaker version of the answer; it is reading the absence of one, silently and without an exception.
 
