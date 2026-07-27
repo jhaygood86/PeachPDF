@@ -933,7 +933,40 @@ var markerHtml = "<!DOCTYPE html><html><head>" + ListCss + "</head><body>" +
         "</td>"
     ) +
 
-    "<h2>5 — a marker whose item breaks across a page</h2>" +
+    "<h2>5 — items whose content is block-level</h2>" +
+    "<p class=\"intro\">A marker sits beside its item's principal block box whether the item's content is inline or block-level, so <code>&lt;li&gt;&lt;p&gt;…&lt;/p&gt;&lt;/li&gt;</code> is numbered exactly like its inline neighbour, and an item mixing the two is numbered once.</p>" +
+    Row(
+        "<td>" +
+        "<ol style=\"margin: 0; padding-left: 2em\">" +
+        "<li><p style=\"margin: 0\">A paragraph, so this item's content is block-level.</p></li>" +
+        "<li>Ordinary inline content.</li>" +
+        "<li><p style=\"margin: 0\">Another block-level item.</p></li>" +
+        "</ol>" +
+        "<div class=\"desc\">block-level item content</div>" +
+        "<div class=\"css\">&lt;li&gt;&lt;p&gt;…&lt;/p&gt;&lt;/li&gt;</div>" +
+        "</td>",
+        "<td>" +
+        "<ul style=\"margin: 0; padding-left: 2em\">" +
+        "<li>Leading inline text<p style=\"margin: 0\">followed by a block.</p></li>" +
+        "<li><div>A div, also block-level.</div></li>" +
+        "</ul>" +
+        "<div class=\"desc\">mixed inline and block content</div>" +
+        "<div class=\"css\">&lt;li&gt;text&lt;p&gt;…&lt;/p&gt;&lt;/li&gt;</div>" +
+        "</td>"
+    ) +
+
+    "<h2>6 — a marker whose item breaks across a column</h2>" +
+    "<p class=\"intro\">A column is a fragmentainer like a page, so the same rule holds: an outside marker goes with the column its item <em>begins</em> in, not the one it happens to finish in. The middle item below runs past the end of the first column; its bullet stays beside its own first line, and it gets no second one where it resumes.</p>" +
+    "<div style=\"column-count: 2; column-gap: 2em\">" +
+    "<ul style=\"margin: 0; padding-left: 2em\">" +
+    string.Join("", Enumerable.Range(1, 3).Select(i =>
+        $"<li>Column item {i}, long enough that the list runs past the end of the first column. " +
+        string.Join(" ", Enumerable.Range(0, 40).Select(w => $"word{w}")) +
+        "</li>")) +
+    "</ul>" +
+    "</div>" +
+
+    "<h2>7 — a marker whose item breaks across a page</h2>" +
     "<p class=\"intro\">An outside marker sits beside its item's first line, so it belongs to the page the item <em>starts</em> on even when the item's own text carries on onto the next one. The spacer below pushes the last item across the page boundary; its number must still appear, on the page its first line is on.</p>" +
     "<div style=\"height: 120pt\"></div>" +
     "<ol style=\"margin: 0; padding-left: 3em\">" +

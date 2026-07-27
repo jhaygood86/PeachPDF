@@ -1774,10 +1774,10 @@ namespace PeachPDF.Html.Core.Parse
             {
                 for (int i = 0; i < box.Boxes.Count; i++)
                 {
-                    if (box.Boxes[i].IsInline)
+                    if (JoinsTheInlineRun(box.Boxes[i]))
                     {
                         var newbox = CssBox.CreateBlock(box, null, box.Boxes[i++]);
-                        while (i < box.Boxes.Count && box.Boxes[i].IsInline)
+                        while (i < box.Boxes.Count && JoinsTheInlineRun(box.Boxes[i]))
                         {
                             box.Boxes[i].ParentBox = newbox;
                         }
@@ -1793,6 +1793,23 @@ namespace PeachPDF.Html.Core.Parse
                 }
             }
         }
+
+        /// <summary>
+        /// Whether <paramref name="box"/> is one of the inline boxes an anonymous block is created to hold.
+        /// </summary>
+        /// <remarks>
+        /// Every inline box is, bar one: an <c>outside</c> <c>::marker</c> (the CSS default) is not part of
+        /// its list item's inline flow at all — <c>CssLayoutEngine.FlowBox</c> skips it, and it is positioned
+        /// beside the item's principal block box rather than in a line box of it (CSS 2.1 §12.5.1 / CSS Lists
+        /// Level 3 §3.1) — so it has no business inside the anonymous block that flow needs. Re-parenting it
+        /// there made it a <i>grand</i>child of the item, which the one call that positions a marker
+        /// (<c>CssBox.LayoutOutsideMarker</c>) and the one that paints it
+        /// (<c>FragmentPainter.FindMarkerFragment</c>) both scan for among <i>direct</i> children: an item
+        /// whose content was block-level (<c>&lt;li&gt;&lt;p&gt;…&lt;/p&gt;&lt;/li&gt;</c>) got no marker at
+        /// all, on any page (<see href="https://github.com/jhaygood86/PeachPDF/issues/467">#467</see>).
+        /// An <c>inside</c> marker <i>is</i> an ordinary flowed inline, and is wrapped like any other.
+        /// </remarks>
+        private static bool JoinsTheInlineRun(CssBox box) => box.IsInline && !CssBox.IsOutsideMarker(box);
 
 
         private static void CorrectAbsolutelyPositionedInlineElements(CssBox box)
@@ -2101,6 +2118,13 @@ namespace PeachPDF.Html.Core.Parse
         /// </summary>
         /// <param name="box">the box to check</param>
         /// <returns>true - has variant child boxes, false - otherwise</returns>
+        /// <remarks>
+        /// Asked of the same boxes <see cref="CorrectInlineBoxesParent"/> would wrap, so an
+        /// <c>outside</c> <c>::marker</c> does not count as the inline half — see
+        /// <see cref="JoinsTheInlineRun"/>. A list item whose every other child is block-level has no
+        /// inline run to wrap, and saying otherwise would make this method describe work that method
+        /// then declines to do.
+        /// </remarks>
         private static bool ContainsVariantBoxes(CssBox box)
         {
             bool hasBlock = false;
@@ -2109,7 +2133,7 @@ namespace PeachPDF.Html.Core.Parse
             {
                 var isBlock = !box.Boxes[i].IsInline;
                 hasBlock = hasBlock || isBlock;
-                hasInline = hasInline || !isBlock;
+                hasInline = hasInline || JoinsTheInlineRun(box.Boxes[i]);
             }
 
             return hasBlock && hasInline;
