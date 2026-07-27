@@ -487,7 +487,7 @@ namespace PeachPDF.Tests.Integration
         /// Asked of the two blocks rather than of the whole document: a word the pass that froze the first
         /// slot never reached still carries document Y 0, which lies inside that slot's own band, so the
         /// first page's fragment claims it — a pre-existing defect this fixture would otherwise trip over
-        /// (issue #429), present identically with and without the pull.
+        /// (issue #433), present identically with and without the pull.
         /// </remarks>
         [Theory]
         [InlineData(50, 30, 120)]
