@@ -345,25 +345,26 @@ namespace PeachPDF.Html.Core.Dom
         internal Dictionary<int, double>? PageBreakBottoms { get; set; }
 
         /// <summary>
-        /// The cells of this table that ran out of fragmentainer before they ran out of content, as the
-        /// row loop saw them (<c>CssLayoutEngineTable.LayoutCells</c>). Empty on every other box, and
-        /// empty on a table too for as long as the engine runs with the fragmentainer detached.
+        /// Where this table's row loop stopped, or null when it reached the end of its body rows — which
+        /// it does for every document today. Null on every box that is not a table.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// A table paginates itself inside one fragmentainer pass and hands the driver nothing, so the
-        /// row loop is the only thing that ever sees a cell stop. This is where it says so — the raw
-        /// material for the resumption record a table will eventually publish, held one step short of
-        /// being one.
+        /// A table paginates itself inside one fragmentainer pass and hands the driver nothing, so its own
+        /// row loop is the only thing that ever sees a cell stop. This is where it says so, and it is
+        /// already a <see cref="BreakToken"/> — the second thing a table pass hands the next, alongside
+        /// <see cref="TableSetup"/>.
         /// </para>
         /// <para>
-        /// It is deliberately <b>not</b> <see cref="PendingBreakToken"/>. That record means "resume me",
-        /// and the parent's child loop, <see cref="PerformLayoutImp"/> and the fragmentation context all
-        /// act on it the moment it is set. Nothing reads this one, which is what lets the row loop notice
-        /// a cell stopped before anything is able to do something about it.
+        /// It is deliberately <b>not</b> <see cref="PendingBreakToken"/>, and that is the whole of what
+        /// separates this from a table the rest of the engine can resume. That record means "resume me" to
+        /// three consumers at once: <see cref="PerformLayoutImp"/> returns early on it,
+        /// <see cref="PublishBreakToTheContextRoot"/> hands it to the fragmentation context, and the
+        /// parent's child loop stops and wraps it. Nothing outside <c>CssLayoutEngineTable</c> reads this
+        /// one, which is what lets the row loop stop and record where before anything acts on it.
         /// </para>
         /// </remarks>
-        internal IReadOnlyList<UnfinishedTableCell> UnfinishedTableCells { get; set; } = [];
+        internal TableBreakToken? TableContinuation { get; set; }
 
         /// <summary>
         /// What <c>CssLayoutEngineTable</c> settled once for this table, kept here because the engine is

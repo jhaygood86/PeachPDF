@@ -153,6 +153,94 @@ namespace PeachPDF.Html.Core.Fragmentation
             }
         }
 
+        /// <summary>
+        /// Whether any cell this cursor has placed did not finish — which, because the row loop stops at
+        /// the first such row, means the row it has just placed.
+        /// </summary>
+        internal bool Stopped => _unfinishedCells.Count > 0;
+
+        /// <summary>
+        /// The cells an earlier pass left part-way through, which this cursor's first row hands back to
+        /// them. Empty on a cursor that is not continuing anything.
+        /// </summary>
+        /// <remarks>
+        /// Matched by reference rather than consumed, which is enough because a <see cref="CssBox"/> is a
+        /// child of exactly one row: no later row of the same pass holds a cell named here. A
+        /// <c>rowspan</c> cell is reached again through a <c>CssSpacingBox</c> placeholder, which is a
+        /// different box.
+        /// </remarks>
+        private readonly List<UnfinishedTableCell> _carriedRecords = [];
+
+        /// <summary>
+        /// The record <paramref name="cell"/> resumes from on this pass, or null when it is being entered
+        /// from the start.
+        /// </summary>
+        internal BreakToken? CarriedTokenFor(CssBox cell)
+        {
+            foreach (var carried in _carriedRecords)
+            {
+                if (ReferenceEquals(carried.Cell, cell)) return carried.Token;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// A cursor continuing the row loop <paramref name="carried"/> stopped, at <paramref name="top"/>
+        /// in the fragmentainer the table resumes in.
+        /// </summary>
+        /// <remarks>
+        /// Everything here is something the resumed pass cannot derive: which row to re-enter and which
+        /// of its cells to continue, the rowspan map keyed by absolute row index (see
+        /// <see cref="TableBreakToken.RowSpannedBoxes"/>), the table's widest edge so far, and the slot
+        /// the break actually fell in. <see cref="CurrentY"/> and <see cref="MaxBottom"/> are the two that
+        /// come from the new fragmentainer instead — the resumed table has already been moved there by
+        /// <c>CssBox.ResumeInTheNextFragmentainer</c>, so where the earlier pass's rows ended says nothing
+        /// about where this one's begin.
+        /// </remarks>
+        internal static TableRowCursor Continuing(TableBreakToken carried, double top)
+        {
+            var cursor = new TableRowCursor(top, carried.MaxRight, carried.ResumeSlotIndex)
+            {
+                MaxBottom = top,
+                RowIndex = carried.ResumeRowIndex
+            };
+
+            cursor._carriedRecords.AddRange(carried.UnfinishedCells);
+
+            foreach (var (endRow, boxes) in carried.RowSpannedBoxes)
+            {
+                cursor.RowSpannedBoxes[endRow] = [.. boxes];
+            }
+
+            return cursor;
+        }
+
+        /// <summary>
+        /// What this cursor has to hand the next pass, or null when the row loop reached the end of the
+        /// body rows.
+        /// </summary>
+        /// <param name="tableBox">the table the record resumes</param>
+        internal TableBreakToken? Continuation(CssBox tableBox)
+        {
+            if (_unfinishedCells.Count == 0) return null;
+
+            var resumeSlot = 0;
+            foreach (var unfinished in _unfinishedCells)
+            {
+                if (unfinished.Token.ResumeSlotIndex > resumeSlot) resumeSlot = unfinished.Token.ResumeSlotIndex;
+            }
+
+            var spanned = new Dictionary<int, IReadOnlyList<CssBox>>(RowSpannedBoxes.Count);
+            foreach (var (endRow, boxes) in RowSpannedBoxes)
+            {
+                spanned[endRow] = [.. boxes];
+            }
+
+            return new TableBreakToken(tableBox, resumeSlot, _unfinishedCells[0].RowIndex, MaxRight,
+                [.. _unfinishedCells], spanned);
+        }
+
         /// <summary>Moves the cursor onto the next slot, at <paramref name="top"/>.</summary>
         internal void OpenNextSlot(double top)
         {
