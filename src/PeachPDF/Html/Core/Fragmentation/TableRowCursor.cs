@@ -103,11 +103,21 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// The cells this cursor has placed that did not finish, in the order the row loop placed them.
         /// </summary>
         /// <remarks>
+        /// <para>
+        /// Per cell rather than per row, which is what
+        /// <see href="https://www.w3.org/TR/css-tables-3/#fragmentation">css-tables-3 §6.1</see> asks
+        /// for: a fragmented row fits as much content as it can in each of its cells <i>independently</i>,
+        /// and the next fragment starts each cell where that cell stopped. The cells of one row are
+        /// <see href="https://www.w3.org/TR/css-break-3/#parallel-flows">§2.1 parallel fragmentation
+        /// flows</see>, so each has a stopping point of its own to record.
+        /// </para>
+        /// <para>
         /// Empty for every fixture measured so far, and that is a fact about the gate rather than about
         /// tables: <c>CssBox.LayoutMonolithicContent</c> detaches the fragmentainer around the whole
         /// engine, so nothing inside a cell has a fragmentainer to run out of. The list is what the gate
         /// is waiting on — a row loop that can be told a cell stopped is the prerequisite for lifting it,
         /// not a consequence.
+        /// </para>
         /// </remarks>
         internal IReadOnlyList<UnfinishedTableCell> UnfinishedCells => _unfinishedCells;
 
@@ -117,11 +127,23 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <c>CssBox.BeginLayoutPass</c> clears the record at the start of every layout of the box.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// This asks only <see cref="CssBox.PendingBreakToken"/> — a cell that was entered and stopped
-        /// part-way. A break falling <i>before</i> a cell is a different question with a different answer:
-        /// it moves the whole row, which is the row loop's own per-row break check
-        /// (<see href="https://www.w3.org/TR/css-break-3/#break-between">§4.4</see>), not a cell's
-        /// continuation.
+        /// part-way — and <b>not</b> <c>CssBox.RequestedBreakBeforeTop</c>, the other channel
+        /// <c>CssBox.PerformLayoutImp</c> treats as "did not finish". That is safe today for a reason
+        /// worth naming exactly, because it is not the obvious one: <c>CssBox.PlaceBlockChild</c> wraps
+        /// its whole body — both <c>RequestBreakBefore</c> call sites included — in
+        /// <c>if (child.Display != CssConstants.TableCell)</c>, so a cell cannot carry that request at
+        /// all. It is not that the row loop's per-row break check covers it; that check is a different
+        /// decision, taken from <c>EstimateRowHeight</c> before the row is laid out. A change that gives
+        /// a cell its own break-before has to add the second channel here.
+        /// </para>
+        /// <para>
+        /// There is in any case no break point <i>before</i> a cell to record:
+        /// <see href="https://www.w3.org/TR/css-break-3/#possible-breaks">§4.1</see>'s class-A list names
+        /// block-level boxes, floats, table row-group and table row boxes, and multi-column column-row
+        /// boxes — cells are absent from it, being parallel flows rather than siblings in one flow.
+        /// </para>
         /// </remarks>
         internal void RecordIfUnfinished(CssBox cell)
         {
@@ -153,8 +175,9 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// A cursor for measuring one row group's own rows, which are laid out once to learn their height
         /// and then repeated by proxy. It shares only <see cref="MaxRight"/> with the body's cursor: its
         /// rows are not body rows, so neither its row numbering nor its rowspan bookkeeping nor its
-        /// <see cref="UnfinishedCells"/> is theirs — a header row is measured, not placed, so where it
-        /// stopped says nothing about where the body has to resume.
+        /// <see cref="UnfinishedCells"/> is theirs — the group is laid out once and then <i>repeated</i> by
+        /// proxy on every later page, so where one of its rows stopped says nothing about where the body
+        /// has to resume.
         /// </summary>
         internal TableRowCursor ForRowGroupMeasurement(double top) =>
             new(top, MaxRight, SlotIndex) { MaxBottom = top };

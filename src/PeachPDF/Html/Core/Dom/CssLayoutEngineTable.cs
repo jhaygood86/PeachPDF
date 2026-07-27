@@ -769,6 +769,11 @@ namespace PeachPDF.Html.Core.Dom
             // Reset page-break tracking so re-layout doesn't accumulate stale entries
             _tableBox.PageBreakBottoms = null;
 
+            // Cleared here as well as published at the end, so a run that throws part-way through leaves
+            // no answer rather than the previous run's - both CssLayoutEngineTable.PerformLayout and
+            // CssBox.PerformLayout swallow the exception when there is no HtmlContainer to report it to.
+            _tableBox.UnfinishedTableCells = [];
+
             // Step 1: Remove header/footer from document tree
             RemoveHeaderFooterFromTree();
 
@@ -1042,14 +1047,15 @@ namespace PeachPDF.Html.Core.Dom
             _tableBox.ActualRight = tableRight + GetHorizontalSpacing() + _tableBox.ActualBorderRightWidth;
             _tableBox.ActualBottom = Math.Max(cursor.MaxBottom, startY) + GetVerticalSpacing() + _tableBox.ActualBorderBottomWidth;
 
-            // Publish what the row loop noticed. Assigned unconditionally, so a second layout of the same
-            // table replaces the previous run's answer rather than adding to it - the same reason
-            // PageBreakBottoms is reset at the top of this method.
+            // Publish what the row loop noticed, as a copy: TableRowCursor holds a live list, and a stage-4
+            // caller that keeps a cursor alive past this point would otherwise mutate what it already
+            // handed out. Free today, since the list is always empty.
             //
             // Deliberately NOT _tableBox.SetPendingBreakToken: that record is read by the parent's child
             // loop and by PerformLayoutImp, so setting it would make everything above the table try to
             // resume a table this step is not yet able to resume. This one is read by nothing.
-            _tableBox.UnfinishedTableCells = cursor.UnfinishedCells;
+            _tableBox.UnfinishedTableCells =
+                cursor.UnfinishedCells.Count == 0 ? [] : [.. cursor.UnfinishedCells];
 
             // What the pre-checks above decide from EstimateRowHeight - a one-line-of-text heuristic
             // that can grossly undershoot a row whose cells hold tall block content - only real layout
@@ -1158,11 +1164,11 @@ namespace PeachPDF.Html.Core.Dom
 
                 await cell.PerformLayout(g);
 
-                // Did this cell finish? Asked here because here is the only place the answer exists: the
-                // cell's own record is cleared at the start of its next layout, and the row loop reads
-                // nothing else off the cell but ActualBottom. Recorded, not acted on - the loop still
-                // places every remaining row, which is what keeps this step behaviour-neutral while the
-                // engine runs with the fragmentainer detached and no cell can answer yes.
+                // Did this cell finish? Asked here because here is the only place the answer exists: a
+                // box's record is cleared at the start of its next layout, and the engine's whole-table
+                // pre-checks can restart this loop over the same cells. Recorded, not acted on - the loop
+                // still places every remaining row, which is what keeps this step behaviour-neutral while
+                // the engine runs with the fragmentainer detached and no cell can answer yes.
                 cursor.RecordIfUnfinished(cell);
 
                 // Track max bottom

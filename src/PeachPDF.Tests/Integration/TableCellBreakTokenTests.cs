@@ -151,8 +151,11 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
-        /// Several cells of one row can stop, and each is recorded in the order the row loop placed them —
-        /// a row fragments when any of its cells does, and resuming it means resuming all of them.
+        /// Several cells of one row can stop, and each is recorded in the order the row loop placed them.
+        /// That is what <see href="https://www.w3.org/TR/css-tables-3/#fragmentation">css-tables-3
+        /// §6.1</see> asks for: a fragmented row fits as much as it can in each cell independently, and
+        /// the next fragment starts each cell where <i>that</i> cell stopped — so the record is per cell,
+        /// and only the cells that actually stopped are in it.
         /// </summary>
         [Fact]
         public async Task EveryCellOfARowThatStops_IsRecorded()
@@ -188,16 +191,18 @@ namespace PeachPDF.Tests.Integration
                 LayoutHarness.Wrap("<table><tr><td>first</td><td id='anchor'>anchor</td></tr>"
                                    + "<tr><td>a</td><td>b</td></tr></table>"),
                 pageHeight: PageHeight, margin: Margin,
-                prepare: root =>
+                prepare: tree =>
                 {
-                    var anchor = LayoutHarness.FindById(root, "anchor")!;
+                    var anchor = LayoutHarness.FindById(tree, "anchor")!;
                     var row = anchor.ParentBox!;
 
                     stopping = new StoppingCell(row);
 
                     // Constructed at the end of the row, then moved into the anchor's place - and the
-                    // anchor removed, since a row's cells are its columns. CssBox.ParentBox's setter
-                    // appends, which is why this is a move rather than an insert.
+                    // anchor displaced, since a row's cells are its columns. CssBox.ParentBox's setter
+                    // appends, which is why this is a move rather than an insert. The displaced anchor
+                    // keeps ParentBox == row while absent from row.Boxes; nothing walks up to it, so it
+                    // is simply unreachable for the rest of this layout.
                     row.Boxes.Remove(stopping);
                     row.Boxes[row.Boxes.IndexOf(anchor)] = stopping;
                 });
@@ -206,7 +211,7 @@ namespace PeachPDF.Tests.Integration
 
             var recorded = Assert.Single(TableOf(root).UnfinishedTableCells);
             Assert.Same(stopping, recorded.Cell);
-            Assert.Same(stopping!.Record, recorded.Token);
+            Assert.Same(stopping.Record, recorded.Token);
 
             // The row the loop was placing when it asked, not the cell's position within it.
             Assert.Equal(0, recorded.RowIndex);
