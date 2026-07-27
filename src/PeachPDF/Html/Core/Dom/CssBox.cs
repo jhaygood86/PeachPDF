@@ -3629,6 +3629,40 @@ namespace PeachPDF.Html.Core.Dom
 
         bool ICssDomNode.IsRoot => IsRoot;
 
+        bool ICssDomNode.IsEmpty => IsEmptyElement(this);
+
+        /// <summary>
+        /// Selectors 4 §9.5's <c>:empty</c> test over the box tree: an element child, or a text child
+        /// carrying anything other than collapsible white space, makes the element non-empty. Comments
+        /// never reach the box tree at all (<c>HtmlParser</c> drops the token), so they need no handling.
+        /// Shared with the SVG subsystem's <c>ICssDomNode</c> view of the same boxes.
+        /// </summary>
+        /// <remarks>
+        /// Two box kinds are not source children and so cannot decide the answer. A generated
+        /// <c>::before</c>/<c>::after</c>/<c>::marker</c> box is skipped, because <c>:empty</c> is defined
+        /// over the source tree and one may already have been synthesized as a match side effect of an
+        /// earlier rule in the very same cascade pass - letting it count would make <c>div:empty</c> depend
+        /// on whether a <c>div::before</c> rule happened to be matched first. An anonymous box (no source
+        /// element of its own) is transparent instead: the test descends into it, since the restructuring
+        /// passes wrap real element and text children in one. A <c>::first-letter</c> box is deliberately
+        /// NOT skipped - unlike the other pseudo-elements it holds real source text, split out of a text
+        /// box that keeps only the remainder.
+        /// </remarks>
+        internal static bool IsEmptyElement(CssBox box)
+        {
+            foreach (var child in box.Boxes)
+            {
+                if (child.IsBeforePseudoElement || child.IsAfterPseudoElement || child.IsMarkerPseudoElement)
+                    continue;
+
+                if (child.HtmlTag is not null) return false;
+                if (!HtmlUtils.IsNullOrCollapsibleWhitespace(child.Text)) return false;
+                if (!IsEmptyElement(child)) return false;
+            }
+
+            return true;
+        }
+
         Dictionary<string, string>? ICssDomNode.CustomProperties
         {
             get => CustomProperties;

@@ -773,9 +773,9 @@ Pseudo-class and pseudo-element names are matched ASCII case-insensitively, so `
 
 This is deliberately **not** blanket acceptance of anything unknown: a genuine typo (`:bogus-pseudo`) still invalidates its selector list, exactly as it does in a browser.
 
-Three of the recognized names are unmatched only because they are unimplemented, not because a PDF lacks the state for them: `:empty`, `:any-link` and `:scope` depend solely on the document tree and are evaluable in principle. They currently select nothing.
-
 > **Migration note.** Earlier versions dropped these rules entirely. A rule that names one of the selectors above *alongside* a selector PeachPDF does match now applies to the matching half, where before it applied to nothing — so a document that (knowingly or not) depended on such a rule being discarded will render differently. See [Forward compatibility](#forward-compatibility).
+
+> **Migration note.** `:empty`, `:any-link` and `:scope` used to be in this recognized-but-unmatchable set. They depend solely on the document tree, which a static renderer can read, so they are now [evaluated](#pseudo-classes) — a rule using one of them applies where before it applied to nothing. See [Forward compatibility](#forward-compatibility).
 
 ### Basic Selectors
 
@@ -880,7 +880,10 @@ Because PeachPDF renders a static PDF with no interactive or dynamic state, stat
 | Pseudo-class | Notes |
 |--------------|-------|
 | `:link` | Matches `<a>` elements that have an `href` attribute |
+| `:any-link` | The union of `:link` and `:visited`. Since a static PDF has no browsing history, `:visited` never matches, so `:any-link` selects exactly the same elements `:link` does |
 | `:root` | Matches the document's root element (the `<html>` element) |
+| `:scope` | With no scoping root in play, this is the document's root element — the same element `:root` matches ([Selectors 4 §6.6](https://www.w3.org/TR/selectors-4/#the-scope-pseudo)), so `:scope p` and `:root p` behave identically |
+| `:empty` | Matches an element with no children other than white-space-only text. Comments do not count as children, and neither does generated content — an element with a `::before`/`::after`/`::marker` box is still `:empty`. A non-breaking space (`&nbsp;`) *is* content, so it is not. Also evaluated for SVG, in both an inline `<svg>` and a standalone one |
 | `:first-child`, `:last-child` | Equivalent to `:nth-child(1)` / `:nth-last-child(1)` |
 | `:only-child` | Matches an element with no other element siblings |
 | `:first-of-type`, `:last-of-type` | Equivalent to `:nth-of-type(1)` / `:nth-last-of-type(1)` |
@@ -898,7 +901,7 @@ Because PeachPDF renders a static PDF with no interactive or dynamic state, stat
 
 Known gap: `:nth-column()`/`:nth-last-column()`'s same-row-only limitation described above.
 
-State-based pseudo-classes other than `:link` (`:hover`, `:focus`, `:active`, `:visited`, `:checked`, `:disabled`, `:empty`, etc.) are parsed but not applied — PeachPDF renders a static PDF with no browsing history or interaction state, so `:visited`/`:active` never match by design. Crucially they are *recognized*, so they do not invalidate a selector list they share with a selector that does match; see [Recognized but unmatchable selectors](#recognized-but-unmatchable-selectors) for the full set and for the vendor-extension rule.
+State-based pseudo-classes other than `:link`/`:any-link` (`:hover`, `:focus`, `:active`, `:visited`, `:checked`, `:disabled`, etc.) are parsed but not applied — PeachPDF renders a static PDF with no browsing history or interaction state, so `:visited`/`:active` never match by design. Crucially they are *recognized*, so they do not invalidate a selector list they share with a selector that does match; see [Recognized but unmatchable selectors](#recognized-but-unmatchable-selectors) for the full set and for the vendor-extension rule.
 
 ### Cascade & Specificity
 

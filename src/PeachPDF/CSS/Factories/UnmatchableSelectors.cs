@@ -5,10 +5,9 @@ using System.Collections.Generic;
 namespace PeachPDF.CSS
 {
     /// <summary>
-    /// The selectors PeachPDF <em>recognizes</em> but does not match. Almost all of them cannot be
-    /// matched at all: there is no shadow tree, no form control state, no interaction, no media playback
-    /// and no browsing history in a static PDF, so a selector naming one of those has nothing to select.
-    /// The three flagged below are merely unimplemented (issue #417).
+    /// The selectors PeachPDF <em>recognizes</em> but does not match: there is no shadow tree, no form
+    /// control state, no interaction, no media playback and no browsing history in a static PDF, so a
+    /// selector naming one of those has nothing to select.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -40,13 +39,6 @@ namespace PeachPDF.CSS
         public static readonly FrozenSet<string> PseudoClasses =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
-                // Evaluable in principle - they depend only on the document tree, not on any state a PDF
-                // lacks - but not implemented by CssData.DoesSelectorMatch. A pre-existing gap this list
-                // records rather than introduces; see issue #417.
-                PseudoClassNames.Empty,
-                PseudoClassNames.Scope,
-                PseudoClassNames.AnyLink,
-
                 // Selectors 3/4 — no interaction, focus, or browsing history in a static PDF.
                 PseudoClassNames.Visited,
                 PseudoClassNames.Active,
