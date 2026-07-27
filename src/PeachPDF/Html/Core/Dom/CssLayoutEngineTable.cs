@@ -835,9 +835,16 @@ namespace PeachPDF.Html.Core.Dom
                 _footerHeight = _footerBox.ActualBottom - _footerBox.Location.Y;
             }
 
-            // Step 4: Layout body rows with page break detection
+            // Step 4: Layout body rows with page break detection.
+            //
+            // Which fragmentainer the table begins in is a question about the table's own top edge, not
+            // about startY: startY is a row cursor, and GetVerticalSpacing() is -1 for a collapsed-border
+            // table, so it sits one point *above* the box for exactly the tables whose top lands flush on
+            // a page boundary. Reading it there names the page the table just left, and the pre-check
+            // below then nudges the table one point onto the next one - which is what a table relocated
+            // by CssBox's own §4.3 mover, and so placed exactly at a page top, does every time.
             var currentPageNumber = pageHeight < double.MaxValue - 1
-                ? container!.PageIndexOf(startY)
+                ? container!.SlotStartingAt(_tableBox.ClientTop)
                 : 0;
 
             // Pre-check: move the entire table to the next page when the first body row
@@ -935,9 +942,11 @@ namespace PeachPDF.Html.Core.Dom
                 // See the identical fix/comment on the pre-check's availableHeight above.
                 var availableHeight = (container?.PageBandHeightOf(currentPageNumber) ?? pageHeight) - _footerHeight;
 
-                // Check for page break
-                if (WillCrossPageBoundary(container, currentY + estimatedRowHeight, availableHeight, currentPageNumber)
-            && i > 0 && container != null)
+                // Check for page break: either the row does not fit, or a break value says the break
+                // falls here regardless (css-break-3 §3.1's class-A break point between two rows).
+                if (i > 0 && container != null
+                    && (ForcedBreakFallsBeforeRow(i)
+                        || WillCrossPageBoundary(container, currentY + estimatedRowHeight, availableHeight, currentPageNumber)))
                 {
                     // Start with the last body-row bottom; may be extended by the footer below.
                     var pageBreakBottomY = maxBottom;
@@ -1024,41 +1033,15 @@ namespace PeachPDF.Html.Core.Dom
             _tableBox.ActualRight = maxRight + GetHorizontalSpacing() + _tableBox.ActualBorderRightWidth;
             _tableBox.ActualBottom = Math.Max(maxBottom, startY) + GetVerticalSpacing() + _tableBox.ActualBorderBottomWidth;
 
-            // Post-check: the pre-check above decides from EstimateRowHeight, a one-line-of-text
-            // heuristic that can grossly undershoot a row whose cells hold tall block content
-            // (e.g. a styled card div) - only real layout reveals the true height. When the
-            // estimate misses, the laid-out table ends up straddling a page boundary with no
-            // per-row break recorded (a single-row table is never row-split - the per-row check
-            // requires i > 0) and would paint sliced across two pages. Now that actual bounds
-            // are known, apply the same whole-table move (with the same css-break §3.1
-            // keep-with-next pull of e.g. a preceding h2) the pre-check would have made had the
-            // estimate been accurate. A table taller than one page is left in place - moving it
-            // whole can't satisfy anything, it would just recreate the straddle on the next page.
-            // Restricted to in-flow tables, mirroring the word-flow keep-with-next guard in
-            // CssBox.PerformLayoutImp: a fixed-position box renders at the same page-box
-            // position on every page (CSS2.1 §13.3.1) and an absolutely-positioned one is
-            // placed by its offsets, not by flow pagination (§9.6) - relocating either by a
-            // page height would move it off its intended position on every page.
-            if (pageHeight < double.MaxValue - 1
-                && _tableBox.HtmlContainer != null
-                && !_shouldRepeatHeaders
-                && !_shouldRepeatFooters
-                && _bodyRows.Count > 0
-                && _tableBox.Position is CssConstants.Static or CssConstants.Relative
-                && !_tableBox.IsFloated
-                && _tableBox.PageBreakBottoms is not { Count: > 0 })
-            {
-                var tableTop = _tableBox.Location.Y;
-                var tablePage = container!.PageIndexOf(tableTop);
-                var nextPageStart = container.PageTopOf(tablePage + 1);
-
-                if (_tableBox.ActualBottom > nextPageStart
-                    && _tableBox.ActualBottom - tableTop <= container.PageBandHeightOf(tablePage))
-                {
-                    _tableBox.OffsetTopWithKeepWithNextRun(nextPageStart - tableTop,
-                        tableTop - container.PageTopOf(tablePage));
-                }
-            }
+            // What the pre-checks above decide from EstimateRowHeight - a one-line-of-text heuristic
+            // that can grossly undershoot a row whose cells hold tall block content - only real layout
+            // can settle. When the estimate misses, the laid-out table straddles a page boundary with no
+            // per-row break recorded and would paint sliced across two pages. Correcting that is a
+            // question about a box that has finished laying out and knows its own height, which is what
+            // CssBox.PerformLayoutEpilogue's §4.3 mover already asks of every other such box: this table
+            // recorded no break inside itself, so it did not fragment, and a box that did not fragment
+            // is moved whole or left alone. The engine states the fact (PageBreakBottoms) and the
+            // epilogue takes the decision - see CssBox.PaginatedItsOwnContentWithoutBreaking.
         }
 
         /// <summary>
@@ -1083,6 +1066,45 @@ namespace PeachPDF.Html.Core.Dom
                 box.ActualRight = rows.Max(r => r.ActualRight);
                 box.ActualBottom = rows.Max(r => r.ActualBottom);
             }
+        }
+
+        /// <summary>
+        /// Whether <see href="https://www.w3.org/TR/css-break-3/#break-between">§3.1</see>'s forced break
+        /// falls at the class-A break point immediately before body row <paramref name="index"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Both sides of the break point are read, and through the chains they begin and end
+        /// (<see cref="BreakPropagation"/>), so a <c>break-before</c> on a <c>&lt;tbody&gt;</c> is seen at
+        /// its first row and a <c>break-after</c> on one at its last. The rows themselves are flattened
+        /// into <c>_bodyRows</c> by <see cref="AssignBoxKinds"/>, so the row is the only box the engine
+        /// places and therefore the only one that can act on the value.
+        /// </para>
+        /// <para>
+        /// Asked in the page context because that is the only vehicle this engine has: it moves a row to
+        /// the next page's content top, exactly as it already does when the row does not fit. A
+        /// <c>column</c> value names a fragmentation context the table does not establish, and is left to
+        /// the multi-column container the table may sit in.
+        /// </para>
+        /// <para>
+        /// <c>break-inside: avoid</c> on a row needs nothing here: the engine never splits a row, so a row
+        /// that would cross a boundary is already moved whole by the geometric test beside this one. The
+        /// value is satisfied by construction rather than by being read.
+        /// </para>
+        /// </remarks>
+        private bool ForcedBreakFallsBeforeRow(int index)
+        {
+            if (index <= 0) return false;
+
+            // Read at each side's *anchor*: the value may sit on the row group the row begins or ends
+            // rather than on the row itself, and the group is not a box this engine places, so the row is
+            // where it has to be acted on. ForcedBreak*At then reads back down the chain, so both the
+            // group's own value and the row's are seen.
+            var before = BreakPropagation.AnchorForBreakBefore(_bodyRows[index]);
+            var after = BreakPropagation.AnchorForBreakAfter(_bodyRows[index - 1]);
+
+            return BreakPropagation.ForcedBreakBeforeAt(before, FragmentationContext.Page) is not null
+                   || BreakPropagation.ForcedBreakAfterAt(after, FragmentationContext.Page) is not null;
         }
 
         /// <summary>
@@ -1604,22 +1626,20 @@ namespace PeachPDF.Html.Core.Dom
         private double PullKeepWithNextRun(HtmlContainerInt container, double currentY, double pageBreakOffset,
             int currentPageNumber, double availableHeight, double trailingHeight)
         {
-            var keepWithNextRun = DomUtils.GetPrecedingKeepWithNextRun(_tableBox, FragmentationContext.Page);
-            if (keepWithNextRun.Count == 0)
-                return pageBreakOffset;
+            // The ladder itself belongs to EarlyBreak, which owns it for every other mover; the pre-check
+            // supplies what only it knows - an *estimate* of the room the table still needs, since its rows
+            // are not placed yet - and carries the move out itself, because there is no laid-out box here
+            // for a stated decision to re-place.
+            var (run, extraAbove, _) = EarlyBreak.TravellingRun(
+                _tableBox, currentY, container.PageTopOf(currentPageNumber), trailingHeight, availableHeight);
 
-            var runTop = keepWithNextRun[0].Location.Y;
-            var extraAbove = currentY - runTop;
-            var runStartsOnSamePage = container.PageIndexOf(runTop) == currentPageNumber;
+            if (run.Count == 0) return pageBreakOffset;
 
-            if (extraAbove <= 0 || !runStartsOnSamePage || extraAbove + trailingHeight > availableHeight)
-                return pageBreakOffset;
-
-            // One common offset lands the run's top at the next page's content top and keeps the
+            // One common offset lands the retained run's top at the next page's content top and keeps the
             // run→table spacing intact.
             var groupOffset = pageBreakOffset + extraAbove;
 
-            foreach (var member in keepWithNextRun)
+            foreach (var member in run)
             {
                 member.OffsetTop(groupOffset);
             }

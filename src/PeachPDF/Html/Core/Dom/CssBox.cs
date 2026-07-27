@@ -1910,6 +1910,37 @@ namespace PeachPDF.Html.Core.Dom
             && MonolithicContent.IsMonolithic(this);
 
         /// <summary>
+        /// Whether this box paginates its own content but recorded no break inside itself on this pass,
+        /// so it did not fragment and the §4.3 mover beside this one applies to it as it does to content
+        /// that <see cref="MonolithicContent.IsMonolithic">may not be broken at all</see>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Only a table asserts this, and it asserts it as a fact rather than as a property.</b> A
+        /// table's own break points are between its rows, and whether one was taken is settled by the
+        /// engine and recorded in <see cref="PageBreakBottoms"/> — so unlike §2's set, which is decided
+        /// from style, this is a question that can only be answered once the box has finished laying out.
+        /// That is exactly the epilogue's own position, and it is why the correction belongs here rather
+        /// than at the end of <c>CssLayoutEngineTable.LayoutCells</c>, where it used to sit: the engine
+        /// runs with the fragmentainer detached, so a decision taken there can only ever be a
+        /// translation, and the whole point of stating a decision is to be able to lay the box out again
+        /// at its destination.
+        /// </para>
+        /// <para>
+        /// The engine's row-height estimate is what makes this necessary. Its own pre-checks decide from
+        /// <c>EstimateRowHeight</c>, a one-line-of-text heuristic that can grossly undershoot a row whose
+        /// cells hold tall block content, and when it misses the table straddles a boundary it was
+        /// predicted to clear. A table that <i>did</i> break internally is not a candidate: it fragmented,
+        /// so the boundary it crosses is one it chose.
+        /// </para>
+        /// </remarks>
+        private bool PaginatedItsOwnContentWithoutBreaking() =>
+            !IsOutOfFlow
+            && Display is CssConstants.Table or CssConstants.InlineTable
+            && HtmlContainer is { IsFragmenting: true }
+            && PageBreakBottoms is not { Count: > 0 };
+
+        /// <summary>
         /// Whether this box, with the decorations §6.2 makes each fragment re-open and close with, fits
         /// inside pagination slot <paramref name="slotIndex"/>'s content band.
         /// </summary>
@@ -3170,9 +3201,11 @@ namespace PeachPDF.Html.Core.Dom
             // so a hint naming a different fragmentation context must not suppress a page break.
             //
             // Monolithic content (css-break-3 §2 - a replaced element, a scroll container) reaches the same
-            // mover, because "may not be broken" and "asks not to be broken" want the same relocation.
+            // mover, because "may not be broken" and "asks not to be broken" want the same relocation. So
+            // does a table that did not break between any two of its own rows: it did not fragment, which
+            // is what the other two say about themselves in advance rather than after the fact.
             var avoidsBreak = BreakValues.AvoidsBreak(BreakInside, FragmentationContext.Page);
-            var monolithic = IsMonolithicBoxThisMoverMayMove();
+            var monolithic = IsMonolithicBoxThisMoverMayMove() || PaginatedItsOwnContentWithoutBreaking();
 
             // One correction per box per pass (_earlyBreakTaken). Where the box was laid out again
             // rather than moved, this epilogue is the relocated box's own, and it asks the same
@@ -4501,49 +4534,6 @@ namespace PeachPDF.Html.Core.Dom
             PlacesItselfAsBlockBox
             && HtmlContainer is { IsFragmenting: true }
             && FitsInFragmentainer(decision.Slot);
-
-        /// <summary>
-        /// Moves this box to the next page (like a plain <see cref="OffsetTop"/> by <paramref name="offset"/>),
-        /// additionally pulling along the run of preceding siblings chained to it by
-        /// break-after/break-before: avoid (css-break §3.1 keep-with-next, e.g. the UA default
-        /// <c>h1-h6 { page-break-after: avoid }</c>) so a heading is not stranded at the bottom of the
-        /// page its content just left. The run only comes along when it starts on the same page as this
-        /// box and the combined run + box still fits on a single page; an unsatisfiable avoid is relaxed
-        /// per spec and this box moves alone, exactly as before.
-        /// </summary>
-        /// <param name="offset">the offset that moves this box's top to the next page's content top</param>
-        /// <param name="topRelativeToCurrentPage">this box's top, reduced to page-relative coordinates by the caller</param>
-        internal void OffsetTopWithKeepWithNextRun(double offset, double topRelativeToCurrentPage)
-        {
-            // "Fits on a single page" is judged against the destination page's band (the page this
-            // box's top lands on after the offset), not the page it is leaving.
-            var targetPageBand = HtmlContainer!.PageBandHeightOf(HtmlContainer.PageIndexOf(Location.Y + offset));
-            var keepWithNextRun = DomUtils.GetPrecedingKeepWithNextRun(this, FragmentationContext.Page);
-
-            if (keepWithNextRun.Count > 0)
-            {
-                var runTop = keepWithNextRun[0].Location.Y;
-                var extraAbove = Location.Y - runTop;
-
-                if (extraAbove > 0 && extraAbove < topRelativeToCurrentPage
-                    && extraAbove + ActualBottom - Location.Y <= targetPageBand)
-                {
-                    // Shift the run and this box by one common offset, chosen so the run's top lands at
-                    // the next page's content top - relative spacing inside the group is preserved.
-                    var groupOffset = offset + extraAbove;
-
-                    foreach (var member in keepWithNextRun)
-                    {
-                        member.OffsetTop(groupOffset);
-                    }
-
-                    OffsetTop(groupOffset);
-                    return;
-                }
-            }
-
-            OffsetTop(offset);
-        }
 
         /// <summary>
         /// Deeply offsets the top of the box and its contents

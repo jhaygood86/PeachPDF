@@ -60,7 +60,12 @@ namespace PeachPDF.CSS
                 {PseudoClassNames.Matches, ctx => new MatchesFunctionState(ctx, PseudoClassNames.Matches)},
                 {PseudoClassNames.Is, ctx => new MatchesFunctionState(ctx, PseudoClassNames.Is)},
                 {PseudoClassNames.Where, ctx => new MatchesFunctionState(ctx, PseudoClassNames.Where)},
-                {PseudoClassNames.HostContext, ctx => new HostContextFunctionState(ctx)}
+                {PseudoClassNames.HostContext, ctx => new HostContextFunctionState(ctx)},
+                // `:-webkit-any()`/`:-moz-any()` are the legacy vendor spellings of `:is()` and behave
+                // identically, so they get the real matcher rather than the never-matching vendor path
+                // UnmatchableSelectors would otherwise route them down.
+                {PseudoClassNames.WebkitAny, ctx => new MatchesFunctionState(ctx, PseudoClassNames.WebkitAny)},
+                {PseudoClassNames.MozAny, ctx => new MatchesFunctionState(ctx, PseudoClassNames.MozAny)}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
         public bool IsValid => _valid && _ready;
@@ -318,15 +323,25 @@ namespace PeachPDF.CSS
         {
             _state = State.Data;
             _ready = true;
-            if (token.Type == TokenType.Ident)
+
+            var sel = token.Type switch
             {
-                var sel = _pseudoElementSelector.Create(token.Data);
-                if (sel != null)
-                {
-                    _valid = _valid && !IsNested;
-                    Insert(sel);
-                    return;
-                }
+                TokenType.Ident => _pseudoElementSelector.Create(token.Data),
+                // A functional pseudo-element PeachPDF recognizes but can never match (`::part()`,
+                // `::slotted()`, `::highlight()`, `::view-transition-*()`, any vendor extension). The
+                // argument belongs to the selector's identity, so the whole "part(foo)" text becomes the
+                // selector's name - which no branch of CssData's pseudo-element matcher answers, hence
+                // it selects nothing. See UnmatchableSelectors.
+                TokenType.Function when UnmatchableSelectors.IsFunctionalPseudoElement(token.Data) =>
+                    PseudoElementSelector.Create(token.ToValue()),
+                _ => null
+            };
+
+            if (sel != null)
+            {
+                _valid = _valid && !IsNested;
+                Insert(sel);
+                return;
             }
 
             _valid = false;
@@ -485,7 +500,16 @@ namespace PeachPDF.CSS
 
         private ISelector GetPseudoFunction(FunctionToken arguments)
         {
-            if (!PseudoClassFunctions.TryGetValue(arguments.Data, out var creator)) return null;
+            if (!PseudoClassFunctions.TryGetValue(arguments.Data, out var creator))
+            {
+                // A functional pseudo-class PeachPDF recognizes but can never match (`:host()`,
+                // `:state()`, any vendor extension). Its argument is kept verbatim in the selector's
+                // text - `arguments.ToValue()` is already "host(.a)" - and never interpreted, so there
+                // is no argument grammar to get wrong. See UnmatchableSelectors.
+                return UnmatchableSelectors.IsFunctionalPseudoClass(arguments.Data)
+                    ? PseudoClassSelector.Create(arguments.ToValue())
+                    : null;
+            }
 
             using var function = creator(this);
             _ready = false;

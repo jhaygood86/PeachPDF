@@ -143,7 +143,6 @@ namespace PeachPDF.Html.Core.Fragmentation
             };
 
             var subject = BreakPropagation.AnchorForBreakBefore(box);
-            var run = DomUtils.GetPrecedingKeepWithNextRun(subject, FragmentationContext.Page);
 
             // The run has to start on the page being left. Otherwise "pull it along" names content in
             // a fragmentainer this decision has no business touching — expressed, as it has been since
@@ -163,37 +162,69 @@ namespace PeachPDF.Html.Core.Fragmentation
                 ? alone with { Relaxation = ReferenceEquals(subject, box) ? BreakRelaxation.None : BreakRelaxation.ContainerLeftBehind }
                 : alone with { BeforeBox = subject, Subject = subject, Relaxation = BreakRelaxation.None };
 
+            var (run, _, trimmed) = TravellingRun(
+                subject, subject.Location.Y, ownPageTop, subjectExtent, destinationBand);
+
             if (run.Count == 0) return withTheContainer;
 
-            // §4.3 relaxation, one tier at a time (see BreakRelaxation): a run that does not fit as a whole
-            // is trimmed from its *front* rather than dropped, because the members nearest the breaking box
-            // are the ones the chain is about — a subheading immediately above a table matters more than the
-            // heading above that. The first head that satisfies both guards is the most of the run that can
-            // travel; failing all of them, the box moves alone.
+            // The retained run's own top lands where this box would have gone alone; the box follows at
+            // its original distance below it, so the spacing inside the group is preserved.
+            return alone with
+            {
+                BeforeBox = run[0],
+                Subject = subject,
+                KeepWithNextRun = run,
+                Reason = EarlyBreakReason.KeepWithNext,
+                Relaxation = trimmed ? BreakRelaxation.RunTrimmed : BreakRelaxation.None
+            };
+        }
+
+        /// <summary>
+        /// The most of <paramref name="subject"/>'s preceding keep-with-next run that can travel with it
+        /// when it moves to the next fragmentainer, and how far above <paramref name="subjectTop"/> the
+        /// retained run's head sits. Empty when none of it can, which is §4.3's "give the constraint up".
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// §4.3 relaxation, one tier at a time (see <see cref="BreakRelaxation"/>): a run that does not
+        /// fit as a whole is trimmed from its <i>front</i> rather than dropped, because the members
+        /// nearest the breaking box are the ones the chain is about — a subheading immediately above a
+        /// table matters more than the heading above that.
+        /// </para>
+        /// <para>
+        /// Separate from <see cref="Discover"/> because the two whole-table pre-checks in
+        /// <c>CssLayoutEngineTable.LayoutCells</c> ask the same question at a point where no decision can
+        /// be stated: they run before the rows are placed, so the subject has no settled extent of its own
+        /// and nothing to be laid out again. They pass an <i>estimate</i> as
+        /// <paramref name="subjectExtent"/> and carry the move out themselves. Sharing the ladder is what
+        /// stops those guards being a second, drifting copy of these.
+        /// </para>
+        /// </remarks>
+        /// <param name="subject">the box that moves, and whose preceding siblings the chain is read from</param>
+        /// <param name="subjectTop">the coordinate <paramref name="subject"/> would move away from</param>
+        /// <param name="ownPageTop">the content top of the fragmentainer being left</param>
+        /// <param name="subjectExtent">how much room the subject itself still needs in the destination</param>
+        /// <param name="destinationBand">the destination fragmentainer's content height</param>
+        internal static (List<CssBox> Run, double ExtraAbove, bool Trimmed) TravellingRun(
+            CssBox subject, double subjectTop, double ownPageTop, double subjectExtent, double destinationBand)
+        {
+            var run = DomUtils.GetPrecedingKeepWithNextRun(subject, FragmentationContext.Page);
+
             for (var head = 0; head < run.Count; head++)
             {
-                var extraAbove = subject.Location.Y - run[head].Location.Y;
+                var extraAbove = subjectTop - run[head].Location.Y;
 
                 // A member at or below the subject cannot be "above" it, and neither can anything after it
                 // in the run — so there is nothing left to trim towards.
                 if (extraAbove <= 0) break;
 
-                if (extraAbove >= subject.Location.Y - ownPageTop) continue;
+                if (extraAbove >= subjectTop - ownPageTop) continue;
                 if (extraAbove + subjectExtent > destinationBand) continue;
 
-                // The retained run's own top lands where this box would have gone alone; the box follows at
-                // its original distance below it, so the spacing inside the group is preserved.
-                return alone with
-                {
-                    BeforeBox = run[head],
-                    Subject = subject,
-                    KeepWithNextRun = run.GetRange(head, run.Count - head),
-                    Reason = EarlyBreakReason.KeepWithNext,
-                    Relaxation = head == 0 ? BreakRelaxation.None : BreakRelaxation.RunTrimmed
-                };
+                return (run.GetRange(head, run.Count - head), extraAbove, head > 0);
             }
 
-            return withTheContainer;
+            return ([], 0, false);
         }
 
         /// <summary>

@@ -607,6 +607,8 @@ These properties control how content breaks across PDF pages. Both the legacy `p
 
 > **Migration note:** a forced break on a container's first in-flow child, and a `break-after` on its last, used to move only the element: the container kept its position and spanned the boundary, drawing its background, border and padding on both pages with nothing inside the copy on the page being left. The value now propagates to the container, which moves with the break — so that duplicate chrome disappears and the container's own margin opens the new page. A heading chained to such content by `break-after: avoid` now travels with it as well, instead of being stranded on the page the content left. See [Forward compatibility](#forward-compatibility).
 
+> **Migration note:** a forced break value declared between two **table rows** — on a `<tr>`, or on the row group one begins or ends — previously had no effect at all: the table broke only where its rows ran out of room. It is now honored, so a document carrying such a declaration gains page breaks, and possibly pages, it did not have before. See [Breaks between table rows](#breaks-between-table-rows) and [Forward compatibility](#forward-compatibility).
+
 > **Migration note:** the same is now true of a break that is *decided* rather than declared — `break-inside: avoid`, [monolithic content](#monolithic-content), or an `orphans` push relocating a container's first child. The container used to stay put and span the boundary, printing an empty copy of its own border, background and padding on the page its contents had just left; it now moves with them. Content following such a container shifts down a page correspondingly. See [Forward compatibility](#forward-compatibility).
 
 <a id="directional-page-breaks"></a>
@@ -638,6 +640,15 @@ The same applies to the breaks that are decided *after* content has been placed 
 An item with no break value of its own is left where it is, and the page boundary cuts it — the same answer ordinary block content gets when it has no line to break at. A line or row taller than a whole page is also left alone, since moving it could not help.
 
 Two limits are worth knowing. A flex or grid container **inside a table** is positioned against the table's own row grid, so its lines are left to the table engine rather than moved against the page grid. And an `inline-flex` or `inline-grid` box is an atomic inline — where it sits is the line it is on to decide. Item *content* is also not fragmented: an item is moved whole or cut, never continued on the next page.
+
+<a id="breaks-in-tables"></a>
+**Breaks between table rows.** The break point between two rows of a table is an ordinary break point ([CSS Fragmentation Level 3 §3.1](https://www.w3.org/TR/css-break-3/#break-between)), and a forced value declared there is honored: `break-before: page` (or one of the directional values) on a `<tr>` starts that row on the next page even where it would have fitted, and a `break-after` on the row above it does the same. A value on a `<tbody>`, `<thead>` or `<tfoot>` is a value at the break point before its first row or after its last, so it is honored at that row. A table repeating a header carries the header onto the page such a break opens, exactly as it does at a break the row heights themselves forced.
+
+`break-inside: avoid` on a row needs nothing to be honored: a row is never split across a page, so a row that would straddle a boundary is already carried onto the next page whole. The column-context values (`column`, `avoid-column`) name a fragmentation context a table does not establish; inside a [multi-column container](#multi-column-layout) they are the container's to act on.
+
+**A table that did not break moves whole.** A table breaks between two of its rows when the next row does not fit, and where no row break was taken at all — most often a single-row table, or one whose cells hold tall block content the row-height estimate could not see — the table did not fragment, and it is carried onto the next page in one piece rather than painting sliced across the boundary. This applies to every table, including one repeating a `<thead>` or a `<tfoot>`: the header follows it onto the page it lands on. A table taller than one page is left where it is, since moving it would only recreate the straddle. A heading chained to the table by `break-after: avoid` — the user-agent print default for `h1`–`h6` — travels with it, as at every other relocation.
+
+Two limits. Keep-with-next (`break-after: avoid`) between two rows is not honored — the chain is read among block-flow siblings, and a table's rows are placed by the table itself. And a break value on a box *inside* a cell is likewise the table's row grid to answer, not the page grid's.
 
 <a id="monolithic-content"></a>
 **Monolithic content moves whole rather than being split** ([CSS Fragmentation Level 3 §2](https://www.w3.org/TR/css-break-3/#monolithic)). Some content may not be broken at all, and where it would straddle a page boundary it is carried onto the next page in one piece. Two kinds qualify:
@@ -744,6 +755,25 @@ PeachPDF evaluates a subset of CSS selectors. Selectors that are parsed but not 
 
 CSS comments (`/* ... */`) are supported anywhere in a stylesheet, including between selectors and declarations, and are stripped before parsing.
 
+### Recognized but unmatchable selectors
+
+A selector list is only as valid as its least-understood member: per [CSS Selectors 3 §4](https://www.w3.org/TR/selectors-3/#Conformance), an unknown pseudo-class or pseudo-element invalidates the **whole** list it appears in, discarding the declarations for the selectors alongside it too. PeachPDF therefore **recognizes** the selectors it can never match, rather than treating them as unknown — they parse, they select nothing, and the rest of their list still applies:
+
+```css
+/* The :root half applies; :host selects nothing. Both declarations survive. */
+:root, :host { --brand: #2563eb; --spacing: .25rem; }
+```
+
+This covers the state-based pseudo-classes a static PDF has no state for (`:hover`, `:focus`, `:visited`, `:checked`, `:disabled`, `:enabled`, `:valid`, `:user-invalid`, `:autofill`, `:target`, `:open`, `:popover-open`, `:modal`, `:fullscreen`, `:picture-in-picture`, the media-playback set `:playing`/`:paused`/`:seeking`/`:buffering`/`:stalled`/`:muted`/`:volume-locked`, …), the Shadow DOM selectors PeachPDF builds no shadow trees for (`:host`, `:host()`, `:host-context()`, `:defined`, `:state()`, `::part()`, `::slotted()`), the pseudo-elements it generates no box for (`::placeholder`, `::backdrop`, `::file-selector-button`, `::details-content`, `::selection`, `::target-text`, `::spelling-error`, `::grammar-error`, `::cue`, `::highlight()`, `::view-transition*`), and **any vendor extension** — a leading hyphen ([CSS Syntax 3 §2](https://www.w3.org/TR/css-syntax-3/)) marks a UA-internal box or state, so `::-webkit-file-upload-button`, `::-moz-focus-inner`, `::-webkit-input-placeholder`, `:-moz-focusring` and their kin are all accepted wholesale. `:-webkit-any()`/`:-moz-any()` are the legacy vendor spellings of `:is()` and behave exactly like it.
+
+Pseudo-class and pseudo-element names are matched ASCII case-insensitively, so `:HOVER` and `::Before` are recognized too.
+
+This is deliberately **not** blanket acceptance of anything unknown: a genuine typo (`:bogus-pseudo`) still invalidates its selector list, exactly as it does in a browser.
+
+Three of the recognized names are unmatched only because they are unimplemented, not because a PDF lacks the state for them: `:empty`, `:any-link` and `:scope` depend solely on the document tree and are evaluable in principle. They currently select nothing.
+
+> **Migration note.** Earlier versions dropped these rules entirely. A rule that names one of the selectors above *alongside* a selector PeachPDF does match now applies to the matching half, where before it applied to nothing — so a document that (knowingly or not) depended on such a rule being discarded will render differently. See [Forward compatibility](#forward-compatibility).
+
 ### Basic Selectors
 
 | Selector | Syntax | Notes |
@@ -794,7 +824,7 @@ A nested selector is resolved against its parent (`&` takes the parent's specifi
 
 ### Pseudo-elements
 
-`::before`, `::after`, `::marker`, `::first-letter`, and `::first-line` are supported. All other pseudo-elements are parsed but have no effect.
+`::before`, `::after`, `::marker`, `::first-letter`, and `::first-line` are supported. All other pseudo-elements are parsed but have no effect — see [Recognized but unmatchable selectors](#recognized-but-unmatchable-selectors) for which names are recognized and why that matters for the rest of their selector list.
 
 | Pseudo-element | Notes |
 |----------------|-------|
@@ -860,11 +890,12 @@ Because PeachPDF renders a static PDF with no interactive or dynamic state, stat
 | `:is(S)`, `:matches(S)` | Matches an element that matches any selector in the (comma-separated, forgiving) list `S`. `:matches()` is the legacy alias for `:is()` |
 | `:where(S)` | Like `:is(S)`, but always contributes **zero specificity** (CSS Selectors 4 §16) — so a rule written with `:where(…)` is overridden by any normal selector, which is how reset/normalize layers stay low-priority |
 | `:has(S)` | Matches an element with a descendant matching `S`; `S` may be a comma-separated selector list. Only the default descendant relationship is supported — CSS4 leading-combinator forms (`:has(> S)`, `:has(+ S)`, `:has(~ S)`) are not supported and are silently discarded by the parser |
+| `:-webkit-any(S)`, `:-moz-any(S)` | The legacy vendor spellings of `:is(S)`, with identical behaviour |
 | All others | Parsed but not matched — rules are silently ignored |
 
 Known gap: `:nth-column()`/`:nth-last-column()`'s same-row-only limitation described above.
 
-State-based pseudo-classes other than `:link` (`:hover`, `:focus`, `:active`, `:visited`, `:checked`, `:disabled`, `:empty`, etc.) are parsed but not applied — PeachPDF renders a static PDF with no browsing history or interaction state, so `:visited`/`:active` never match by design.
+State-based pseudo-classes other than `:link` (`:hover`, `:focus`, `:active`, `:visited`, `:checked`, `:disabled`, `:empty`, etc.) are parsed but not applied — PeachPDF renders a static PDF with no browsing history or interaction state, so `:visited`/`:active` never match by design. Crucially they are *recognized*, so they do not invalidate a selector list they share with a selector that does match; see [Recognized but unmatchable selectors](#recognized-but-unmatchable-selectors) for the full set and for the vendor-extension rule.
 
 ### Cascade & Specificity
 

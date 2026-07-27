@@ -16,38 +16,16 @@ namespace PeachPDF.CSS
 
         private static Dictionary<string, ISelector> BuildSelectors()
         {
+            // :root and :link are the only two ident-form pseudo-classes CssData.DoesSelectorMatch can
+            // actually answer; everything else here parses and selects nothing, and lives in the one
+            // list that says so (UnmatchableSelectors.PseudoClasses).
             var selectors = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                 {
                     PseudoClassNames.Root,
-                    PseudoClassNames.Scope,
-                    PseudoClassNames.Empty,
-                    PseudoClassNames.AnyLink,
                     PseudoClassNames.Link,
-                    PseudoClassNames.Visited,
-                    PseudoClassNames.Active,
-                    PseudoClassNames.Hover,
-                    PseudoClassNames.Focus,
-                    PseudoClassNames.FocusVisible,
-                    PseudoClassNames.FocusWithin,
-                    PseudoClassNames.Target,
-                    PseudoClassNames.Enabled,
-                    PseudoClassNames.Disabled,
-                    PseudoClassNames.Default,
-                    PseudoClassNames.Checked,
-                    PseudoClassNames.Indeterminate,
-                    PseudoClassNames.PlaceholderShown,
-                    PseudoClassNames.Unchecked,
-                    PseudoClassNames.Valid,
-                    PseudoClassNames.Invalid,
-                    PseudoClassNames.Required,
-                    PseudoClassNames.ReadOnly,
-                    PseudoClassNames.ReadWrite,
-                    PseudoClassNames.InRange,
-                    PseudoClassNames.OutOfRange,
-                    PseudoClassNames.Optional,
-                    PseudoClassNames.Shadow,
                 }
-                .ToDictionary(x => x, PseudoClassSelector.Create);
+                .Union(UnmatchableSelectors.PseudoClasses, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(x => x, PseudoClassSelector.Create, StringComparer.OrdinalIgnoreCase);
 
             selectors.Add(PseudoElementNames.Before,
                 PseudoElementSelectorFactory.Instance.Create(PseudoElementNames.Before));
@@ -73,7 +51,10 @@ namespace PeachPDF.CSS
             return selectors;
         }
 
-        private static readonly FrozenDictionary<string, ISelector> Selectors = BuildSelectors().ToFrozenDictionary();
+        // Pseudo-class names are ASCII case-insensitive (CSS Syntax 3 §3.3 / Selectors 4 §3.1) and the
+        // lexer does not normalize an ident's case, so the lookup has to.
+        private static readonly FrozenDictionary<string, ISelector> Selectors =
+            BuildSelectors().ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
         #endregion
 
@@ -81,7 +62,13 @@ namespace PeachPDF.CSS
 
         public ISelector Create(string name)
         {
-            return Selectors.TryGetValue(name, out var selector) ? selector : null;
+            if (Selectors.TryGetValue(name, out var selector)) return selector;
+
+            // A vendor extension (`:-moz-focusring`, `:-moz-placeholder`, …) parses and never matches,
+            // rather than invalidating the selector list it appears in. See UnmatchableSelectors.
+            return UnmatchableSelectors.IsVendorExtension(name)
+                ? PseudoClassSelector.Create(name)
+                : null;
         }
     }
 }

@@ -1751,6 +1751,59 @@ await SaveShowcaseAsync("paged_media_keep_with_next", "Paged Media", "Keep With 
     + "fragmentainer the layout driver had already finished with.",
     keepWithNextHtml, new PdfGenerateConfig { PageSize = PageSize.A5 });
 
+// ── table row break values showcase ────────────────────────────────────────
+// A break point between two table rows is a class-A break point like any other (CSS Fragmentation
+// §3.1), so a break value declared on a row - or on the row group the row begins or ends - is taken
+// there. The table engine places its own rows and never routes them through the block-flow break
+// machinery, so until it read those values a `break-before: page` on a <tr> did nothing at all and
+// the table simply flowed on. The repeating <thead> is the point: taking the break through the
+// engine's own row loop is what keeps the header repeating onto the page the break opens.
+static string RowBreakRows(int from, int count, string firstRowStyle = "") =>
+    string.Concat(Enumerable.Range(from, count).Select(i =>
+        $"<tr{(i == from ? firstRowStyle : "")}>"
+        + $"<td>{i:000}</td><td>Component {(char)('A' + (i % 7))}-{i}</td>"
+        + $"<td>{(i % 3 == 0 ? "In stock" : i % 3 == 1 ? "On order" : "Discontinued")}</td>"
+        + $"<td class=\"num\">{i * 137 % 900 + 12}</td></tr>"));
+
+var tableRowBreaksHtml = """
+    <!DOCTYPE html>
+    <html><head><style>
+    @page { size: a5; margin: 14mm }
+    body { font: 9pt Helvetica, Arial, sans-serif; margin: 0; color: #1f2937 }
+    h1 { font-size: 12pt; margin: 0 0 0.4em }
+    p { margin: 0 0 0.8em; color: #6b7280; font-size: 8pt }
+    table { width: 100%; border-collapse: collapse; font-size: 8pt }
+    thead th { background: #1e3a8a; color: #fff; text-align: left; padding: 3pt 5pt; font-size: 7.5pt }
+    td { padding: 2.5pt 5pt; border-bottom: 0.5pt solid #e5e7eb }
+    td.num { text-align: right }
+    tbody.section-2 > tr:first-child { break-before: page }
+    tbody.section-2 > tr:first-child td { background: #eff6ff; color: #1e3a8a; font-weight: bold }
+    </style></head><body>
+    <h1>Break values between table rows</h1>
+    <p>The highlighted row declares <code>break-before: page</code>. Its repeating header follows it
+    onto the page the break opens, and the page before it ends wherever the break fell rather than
+    where the rows ran out of room.</p>
+    <table>
+      <thead><tr><th>#</th><th>Part</th><th>Status</th><th>Qty</th></tr></thead>
+      <tbody>
+    """
+    + RowBreakRows(1, 12)
+    + """
+      </tbody>
+      <tbody class="section-2">
+    """
+    + RowBreakRows(101, 14)
+    + """
+      </tbody>
+    </table>
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("paged_media_table_row_breaks", "Paged Media", "Table Row Break Values",
+    "CSS Fragmentation §3.1's forced break values honored at the break point between two table rows, "
+    + "with the table's repeating header carried onto the page the break opens.",
+    tableRowBreaksHtml, new PdfGenerateConfig { PageSize = PageSize.A5 });
+
 // ── Margin box explicit sizing showcase ────────────────────────────────────
 var marginBoxSizingHtml = """
     <!DOCTYPE html>
@@ -5047,6 +5100,67 @@ await SaveShowcaseAsync("css_nesting", "Selectors & Cascade", "CSS Nesting",
     "(`&.accent`), an implicit-descendant nested selector (`.body`), a child combinator (`> .tag`), and a " +
     "two-level-deep nested combinator (`& + .tag`), resolved against the parent exactly like `:is(.card)`.",
     nestingHtml, pdfConfig);
+
+// ── Selectors PeachPDF recognizes but never matches: they must not invalidate their list ───
+// Every declaration below arrives through a selector list that also names something PeachPDF has no
+// elements for (`:host`, `::placeholder`, a vendor-prefixed reset pseudo-element). An unrecognized name
+// invalidates the WHOLE list (CSS Selectors 3 §4), so before these were registered this page rendered
+// with no design tokens at all — which is what a real Tailwind v4 document did.
+var unmatchableSelectorHtml =
+    "<html><head><style>" +
+    // The exact shape Tailwind v4 emits: the entire design-token block, guarded by `:root, :host`.
+    ":root, :host {" +
+    "  --font-body: sans-serif; --ink: oklch(0.25 0.03 260); --muted: #64748b;" +
+    "  --brand: oklch(0.55 0.17 250); --accent: oklch(0.62 0.19 25); --surface: #f1f5f9;" +
+    "  --spacing: 4pt; --radius: 10px;" +
+    "}" +
+    "body { font-family: var(--font-body); color: var(--ink); margin: calc(var(--spacing) * 6); }" +
+    "h2 { font-size: 20px; margin: 0 0 4px; } .note { color: var(--muted); font-size: 12px; margin: 0 0 16px; }" +
+    // A preflight-shaped reset: the `::placeholder` half selects nothing, the `p`/`.card` half must apply.
+    ".card, ::placeholder {" +
+    "  font-size: 13px; background: var(--surface); border-left: calc(var(--spacing) * 1.5) solid var(--brand);" +
+    "}" +
+    ".card {" +
+    "  max-width: 420px; margin-bottom: calc(var(--spacing) * 3.5); padding: calc(var(--spacing) * 4);" +
+    "  border-radius: var(--radius);" +
+    "}" +
+    ".card b { display: block; font-size: 15px; color: var(--brand); margin-bottom: calc(var(--spacing) * 1.5); }" +
+    ".card .body { display: block; }" +
+    // Vendor-prefixed pseudo-elements, verbatim from a normalize/reset sheet.
+    ".card.alt b, ::-webkit-file-upload-button, ::-moz-focus-inner { color: var(--accent); }" +
+    ".card.alt { border-left-color: var(--accent); }" +
+    // A functional shadow-DOM selector and a vendor pseudo-class, again sharing their list.
+    ".tag, :host(.theme), :-moz-focusring {" +
+    "  display: inline-block; margin-top: calc(var(--spacing) * 2); padding: 2px 8px;" +
+    "  border-radius: 999px; font-size: 11px; background: var(--brand); color: #fff;" +
+    "}" +
+    ".card.alt .tag { background: var(--accent); }" +
+    "</style></head><body>" +
+    "<h2>Recognized-but-unmatchable selectors</h2>" +
+    "<p class=\"note\">Every colour, font and measure on this page is declared in a rule whose selector list also names " +
+    "something PeachPDF has no elements for. Registering those names keeps the list <b>valid</b>, so the half that " +
+    "does match still applies — and the unmatchable half still selects nothing.</p>" +
+    "<div class=\"card\">" +
+    "<b>:root, :host</b>" +
+    "<span class=\"body\">The design tokens driving this card come from a <code>:root, :host</code> block — the shape a " +
+    "utility framework emits. Its <code>:root</code> half applies; <code>:host</code> matches nothing.</span>" +
+    "<span class=\"tag\">tokens</span><span class=\"tag\">var()</span>" +
+    "</div>" +
+    "<div class=\"card alt\">" +
+    "<b>::placeholder and friends</b>" +
+    "<span class=\"body\">This card's accent comes from a list shared with <code>::-webkit-file-upload-button</code> " +
+    "and <code>::-moz-focus-inner</code>; its panel style from one shared with <code>::placeholder</code>, and its " +
+    "pills from one shared with <code>:host(.theme)</code>.</span>" +
+    "<span class=\"tag\">::placeholder</span><span class=\"tag\">:host()</span>" +
+    "</div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("unmatchable_selectors", "Selectors & Cascade", "Unmatchable Selectors",
+    "Selectors PeachPDF recognizes but can never match — `:host`, `:host()`, `::placeholder`, and vendor " +
+    "extensions like `::-webkit-file-upload-button` — no longer invalidate the selector list they share with a " +
+    "real selector. Every token, colour and measure here arrives through such a list, including a Tailwind-v4-" +
+    "shaped `:root, :host` design-token block.",
+    unmatchableSelectorHtml, pdfConfig);
 
 // ─── CSS Grid layout showcase ──────────────────────────────────────────────
 
