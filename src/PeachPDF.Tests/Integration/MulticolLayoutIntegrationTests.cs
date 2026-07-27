@@ -1785,12 +1785,22 @@ namespace PeachPDF.Tests.Integration
 
         /// <summary>
         /// Two levels below the container, so the record's chain has an intermediate link that is itself
-        /// <i>continuing</i>. The target for the box that begins the next column is its own containing
-        /// block's content top, which is inside that block's padding — not the column's band top, and not
-        /// knowable when the record was written, since the block had not been re-placed there yet.
+        /// <i>continuing</i>. The target for the box that begins the next column is resolved against its own
+        /// containing block — which is why it is re-derived at placement time rather than carried on the
+        /// record, since that block had not been re-placed in this column when the record was written.
+        /// <para>
+        /// The inline axis is the unambiguous half: the continuation begins at the inner block's own left
+        /// edge, inside its containing block's <c>padding-left</c>. In the block axis it begins at the
+        /// column's own content top under the default <c>box-decoration-break: slice</c>, because
+        /// <see href="https://www.w3.org/TR/css-break-3/#break-decoration">§6.2</see> does not re-insert the
+        /// inner block's <c>padding-top</c> at a fragmentation break. This test previously asserted
+        /// <c>mc.ClientTop + 4</c> here, pinning a deviation rather than a regression: the block path
+        /// consulted <c>box-decoration-break</c> nowhere, so it opened every continuation column with the
+        /// continuation's own block-start padding and border while paint — correctly — drew no border in it.
+        /// </para>
         /// </summary>
         [Fact]
-        public async Task ABreakTwoLevelsBelowTheContainer_StartsInsideItsOwnContainingBlock()
+        public async Task ABreakTwoLevelsBelowTheContainer_StartsFlushAtTheColumnTop()
         {
             var rows = string.Concat(Enumerable.Range(0, 24)
                 .Select(i => $"<div id='r{i}' class='row' style='height:20pt; margin:0'>r{i}</div>"));
@@ -1807,12 +1817,20 @@ namespace PeachPDF.Tests.Integration
             var inner = FindById(root, "inner")!;
             var rowBoxes = FindAllByClass(root, "row");
 
-            // The continuation begins at its own containing block's content top - the inner block's
-            // padding is inside the column, not swallowed by it - and at that block's own left edge.
-            Assert.Equal(inner.ClientTop, rowBoxes[18].Location.Y, 1);
+            // The inline axis: the continuation begins at its own containing block's left edge, inside the
+            // wrapper's padding, rather than at the column's.
             Assert.Equal(inner.ClientLeft, rowBoxes[18].Location.X, 1);
-            Assert.Equal(mc.ClientTop + 4, rowBoxes[18].Location.Y, 1);
             Assert.True(rowBoxes[18].Location.X > mc.ClientLeft + 100);
+
+            // The block axis: the column's own content top. `inner` is a continuation here, so under
+            // `slice` its padding-top is not re-inserted - and its fragment in this column therefore opens
+            // exactly where its content does.
+            Assert.Equal(mc.ClientTop, rowBoxes[18].Location.Y, 1);
+            Assert.Equal(inner.Location.Y, rowBoxes[18].Location.Y, 1);
+
+            // The padding is genuinely there in the fragment the block *started* in, so this is a statement
+            // about the break rather than about the padding being dropped.
+            Assert.Equal(mc.ClientTop + 20 + 4, rowBoxes[0].Location.Y, 1);
 
             for (var i = 19; i <= 23; i++)
             {
@@ -1821,6 +1839,220 @@ namespace PeachPDF.Tests.Integration
             }
 
             Assert.Single(container.FragmentTree!.Fragmentainers);
+        }
+
+        /// <summary>
+        /// <see href="https://www.w3.org/TR/css-break-3/#break-decoration">§6.2</see> at a column boundary,
+        /// asked of the <i>block</i> axis: a continuation's own block-start border and padding are
+        /// re-inserted under <c>clone</c> and not under <c>slice</c>.
+        /// </summary>
+        /// <remarks>
+        /// The block path used to read the containing block's content edge unconditionally, so the two
+        /// values were indistinguishable — every continuation column opened with 16pt of blank space and no
+        /// border drawn in it, since <c>FragmentEmitter.ResumesAnEarlierFragment</c> clears the fragment's
+        /// top edge. The inline axis has always got this right
+        /// (<c>CssLayoutEngine.CreateLineBoxes</c>), which is what made it a block/inline inconsistency
+        /// inside one feature rather than an unimplemented area.
+        /// </remarks>
+        [Fact]
+        public async Task AContinuationsBlockStartDecorations_AreReInsertedAtAColumnBreakOnlyUnderClone()
+        {
+            async Task<(CssBox Mc, CssBox Wrap, IReadOnlyList<CssBox> Rows)> ColumnsWith(string decorationBreak)
+            {
+                var rows = string.Concat(Enumerable.Range(0, 24)
+                    .Select(i => $"<div id='r{i}' class='row' style='height:20pt; margin:0'>r{i}</div>"));
+
+                var (root, _) = await BuildAndLayout(Wrap($@"
+                    <div id='mc' style='columns:2; column-gap:0; width:300pt; column-fill:auto'>
+                        <div id='lead' style='height:20pt; margin:0'>lead</div>
+                        <div id='wrap' style='margin:0; padding-top:10pt; border-top:6pt solid red;
+                             box-decoration-break:{decorationBreak}'>{rows}</div>
+                    </div>"), pageHeight: 400);
+
+                return (FindById(root, "mc")!, FindById(root, "wrap")!, FindAllByClass(root, "row"));
+            }
+
+            var sliced = await ColumnsWith("slice");
+            var cloned = await ColumnsWith("clone");
+
+            // Same break point either way: the wrapper's own decorations are at its *top*, so nothing about
+            // them changes how much of the band the first column holds. Both split at r17.
+            var slicedSecondColumn = sliced.Rows.Count(r => r.Location.X <= sliced.Rows[0].Location.X + 0.5);
+            var clonedSecondColumn = cloned.Rows.Count(r => r.Location.X <= cloned.Rows[0].Location.X + 0.5);
+
+            Assert.Equal(17, slicedSecondColumn);
+            Assert.Equal(17, clonedSecondColumn);
+
+            // The wrapper's continuation fragment itself opens at the column's content top in both: it is
+            // the container's own child, and the container is not fragmented by its own columns.
+            Assert.Equal(sliced.Mc.ClientTop, sliced.Wrap.Location.Y, 1);
+            Assert.Equal(cloned.Mc.ClientTop, cloned.Wrap.Location.Y, 1);
+
+            // `slice` does not re-open the wrapper's border and padding, so its content resumes flush with
+            // the column's content top; `clone` does, so it resumes 6pt + 10pt below it.
+            Assert.Equal(sliced.Mc.ClientTop, sliced.Rows[17].Location.Y, 1);
+            Assert.Equal(cloned.Mc.ClientTop + 16, cloned.Rows[17].Location.Y, 1);
+
+            // Stated as the difference the spec requires, so a change that stopped reading the property at
+            // all fails here whatever the two absolute values became.
+            Assert.Equal(16, cloned.Rows[17].Location.Y - sliced.Rows[17].Location.Y, 1);
+
+            // Everything after it follows, in both.
+            for (var i = 18; i <= 23; i++)
+            {
+                Assert.Equal(sliced.Rows[17].Location.Y + 20 * (i - 17), sliced.Rows[i].Location.Y, 1);
+                Assert.Equal(cloned.Rows[17].Location.Y + 20 * (i - 17), cloned.Rows[i].Location.Y, 1);
+                Assert.Equal(sliced.Rows[17].Location.X, sliced.Rows[i].Location.X, 1);
+            }
+        }
+
+        /// <summary>
+        /// §6.2 clones the decorations of <i>every</i> box the break falls inside at once, so a nested pair
+        /// of cloning blocks re-opens with the sum of both — and each level's own fragment opens inside its
+        /// ancestors' re-inserted spacing rather than on top of it.
+        /// </summary>
+        [Fact]
+        public async Task NestedCloningBlocks_ReOpenAColumnWithTheSumOfTheirBlockStartDecorations()
+        {
+            var rows = string.Concat(Enumerable.Range(0, 24)
+                .Select(i => $"<div id='r{i}' class='row' style='height:20pt; margin:0'>r{i}</div>"));
+
+            var (root, _) = await BuildAndLayout(Wrap($@"
+                <div id='mc' style='columns:2; column-gap:0; width:300pt; column-fill:auto'>
+                    <div id='lead' style='height:20pt; margin:0'>lead</div>
+                    <div id='wrap' style='margin:0; padding-top:8pt; box-decoration-break:clone'>
+                        <div id='inner' style='margin:0; padding-top:4pt; box-decoration-break:clone'>{rows}</div>
+                    </div>
+                </div>"), pageHeight: 400);
+
+            var mc = FindById(root, "mc")!;
+            var wrap = FindById(root, "wrap")!;
+            var inner = FindById(root, "inner")!;
+            var rowBoxes = FindAllByClass(root, "row");
+
+            var firstInSecondColumn = rowBoxes.First(r => r.Location.X > rowBoxes[0].Location.X + 100);
+
+            // The container's own child opens at the column top; the block inside it opens below the
+            // wrapper's re-inserted 8pt; the rows open below the inner block's further 4pt.
+            Assert.Equal(mc.ClientTop, wrap.Location.Y, 1);
+            Assert.Equal(mc.ClientTop + 8, inner.Location.Y, 1);
+            Assert.Equal(mc.ClientTop + 12, firstInSecondColumn.Location.Y, 1);
+
+            // Which is to say each level's fragment holds its own content, rather than two levels closing
+            // on the same coordinate.
+            Assert.Equal(wrap.ClientTop, inner.Location.Y, 1);
+            Assert.Equal(inner.ClientTop, firstInSecondColumn.Location.Y, 1);
+        }
+
+        /// <summary>
+        /// The multi-column container is <b>not</b> fragmented by its own columns: its border and padding
+        /// wrap all of them at once, so §6.2 has nothing to say about it and a <c>clone</c> value on the
+        /// container re-opens nothing at a column boundary.
+        /// </summary>
+        /// <remarks>
+        /// The distinction the block path draws is between the container establishing the columns and every
+        /// box below it, and this is the case that tells them apart: treating the container as a
+        /// continuation too would add its own block-start border and padding to a coordinate
+        /// (<c>ResumeContentTop</c>) that is already its content edge, indenting the second column by them
+        /// twice over.
+        /// </remarks>
+        [Fact]
+        public async Task AColumnBoundary_DoesNotReOpenTheContainersOwnClonedDecorations()
+        {
+            var rows = string.Concat(Enumerable.Range(0, 24)
+                .Select(i => $"<div id='r{i}' class='row' style='height:20pt; margin:0'>r{i}</div>"));
+
+            var (root, _) = await BuildAndLayout(Wrap($@"
+                <div id='mc' style='columns:2; column-gap:0; width:300pt; column-fill:auto;
+                     padding-top:9pt; border-top:5pt solid red; box-decoration-break:clone'>
+                    <div id='lead' style='height:20pt; margin:0'>lead</div>
+                    <div id='wrap' style='margin:0'>{rows}</div>
+                </div>"), pageHeight: 400);
+
+            var mc = FindById(root, "mc")!;
+            var wrap = FindById(root, "wrap")!;
+            var rowBoxes = FindAllByClass(root, "row");
+
+            var firstInSecondColumn = rowBoxes.First(r => r.Location.X > rowBoxes[0].Location.X + 100);
+
+            // The container's own content edge, once - not once from ClientTop and again from its cloned
+            // border and padding.
+            Assert.Equal(mc.ClientTop, wrap.Location.Y, 1);
+            Assert.Equal(mc.ClientTop, firstInSecondColumn.Location.Y, 1);
+
+            // And the first column still begins there too, so both columns share one content top.
+            Assert.Equal(mc.ClientTop, FindById(root, "lead")!.Location.Y, 1);
+        }
+
+        /// <summary>
+        /// A continuation's own fragment rectangle begins where its content begins — asserted on the
+        /// emitted <see cref="BoxFragment"/> rather than on the box, because that rectangle is what paint
+        /// consumes and it is the only place this failure is visible.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This is the test that separates a whole fix from half of one.</b> Two sites begin a column's
+        /// content: the child laid out afresh there, and the box that <i>continues</i> into it
+        /// (<c>CssBox.ResumeInTheNextFragmentainer</c>). Correcting only the first leaves a chain two or more
+        /// levels deep placing the continuing block at its containing block's re-inserted content edge while
+        /// placing that block's own children at the column's — so under <c>slice</c> the block's fragment
+        /// rectangle sits 16pt <b>below</b> the rows it contains, and its background and border paint outside
+        /// their own content. That reads as correct on every box-level assertion about the rows, which is why
+        /// it needs a fragment-level one.
+        /// </para>
+        /// <para>
+        /// Measured on the half-fixed build: the second column's fragment for <c>inner</c> was
+        /// <c>(x, 22.00)</c> against a column content top of <c>6.00</c> and rows at <c>6.00</c>. Before
+        /// either fix it was <c>(x, 22.00)</c> with rows at <c>22.00</c> — wrong, but at least self-consistent.
+        /// </para>
+        /// </remarks>
+        [Theory]
+        [InlineData("slice", 0)]
+        [InlineData("clone", 16)]
+        public async Task AContinuingBlocksFragment_BeginsWhereItsContentBegins(string decorationBreak, double inset)
+        {
+            var rows = string.Concat(Enumerable.Range(0, 24)
+                .Select(i => $"<div id='r{i}' class='row' style='height:20pt; margin:0'>r{i}</div>"));
+
+            // The decorations are on `wrap`, and the rows sit one level further down in `inner`. That is what
+            // routes `inner` through the continuing-box site while the rows go through the laid-out-afresh
+            // one, so the two must agree for the fragment to contain its own content.
+            var (root, container) = await BuildAndLayout(Wrap($@"
+                <div id='mc' style='columns:2; column-gap:0; width:300pt; column-fill:auto'>
+                    <div id='lead' style='height:20pt; margin:0'>lead</div>
+                    <div id='wrap' style='margin:0; padding-top:10pt; border-top:6pt solid red;
+                         box-decoration-break:{decorationBreak}'>
+                        <div id='inner' style='margin:0; background:#eef; border:1pt solid blue'>{rows}</div>
+                    </div>
+                </div>"), pageHeight: 400);
+
+            var mc = FindById(root, "mc")!;
+            var inner = FindById(root, "inner")!;
+            var rowBoxes = FindAllByClass(root, "row");
+            var firstInSecondColumn = rowBoxes.First(r => r.Location.X > rowBoxes[0].Location.X + 100);
+
+            // The box-level facts: the continuing block and the content it holds agree with each other, and
+            // both sit at the column's content top plus whatever §6.2 re-opens.
+            Assert.Equal(mc.ClientTop + inset, inner.Location.Y, 1);
+            Assert.Equal(mc.ClientTop + inset, firstInSecondColumn.Location.Y, 1);
+
+            // And the fact that actually reaches paint: `inner`'s fragment in the second column starts at
+            // the same coordinate, so its border and background enclose the rows rather than beginning below
+            // them.
+            var innerFragments = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => FlattenFragments(f.Root))
+                .Where(f => ReferenceEquals(f.Box, inner))
+                .OrderBy(f => f.WholeBoxRect.X)
+                .ToList();
+
+            Assert.Equal(2, innerFragments.Count);
+
+            var secondColumnFragment = innerFragments[1];
+
+            Assert.Equal(mc.ClientTop + inset, secondColumnFragment.WholeBoxRect.Y, 1);
+            Assert.True(secondColumnFragment.WholeBoxRect.Y <= firstInSecondColumn.Location.Y + 0.1,
+                $"the fragment begins at y={secondColumnFragment.WholeBoxRect.Y} but its first row is at " +
+                $"y={firstInSecondColumn.Location.Y}, so its decorations paint below their own content");
         }
 
         /// <summary>

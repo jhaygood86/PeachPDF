@@ -2496,10 +2496,10 @@ namespace PeachPDF.Html.Core.Dom
         /// (<see cref="ResumeInTheNextFragmentainer"/>) — writing a target for it would place it twice.
         /// </para>
         /// <para>
-        /// The destination is the lower of the column's own content edge and this box's, for the same reason
-        /// <see cref="ResumeInTheNextFragmentainer"/> takes that maximum: the containing block has just been
-        /// re-placed in this column and its content edge sits inside its own border and padding, while a
-        /// container that began on an earlier page names a coordinate this column does not reach.
+        /// The destination is <see cref="ContentTopOfTheContainingBlockIn"/>'s, which is also what
+        /// <see cref="ResumeInTheNextFragmentainer"/> moves a <i>continuing</i> box to — the same question
+        /// asked of the same containing block, so the two arms of one column's first placement cannot
+        /// disagree.
         /// </para>
         /// </remarks>
         private double? ColumnTopForTheChildThisFillBeginsAt(BlockBreakToken resumeAt, CssBox childBox)
@@ -2508,8 +2508,71 @@ namespace PeachPDF.Html.Core.Dom
 
             if (HtmlContainer?.CurrentFragmentainer is not { HasOwnBand: true } column) return null;
 
-            return Math.Max(column.ResumeContentTop, childBox.ContainingBlock.ClientTop);
+            return ContentTopOfTheContainingBlockIn(column, childBox.ContainingBlock);
         }
+
+        /// <summary>
+        /// Where <paramref name="containingBlock"/>'s content begins in <paramref name="column"/> — §2's
+        /// fragmentainer content edge, plus only what
+        /// <see href="https://www.w3.org/TR/css-break-3/#break-decoration">§6.2</see> says is re-inserted
+        /// there.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The fragmentainer's own content edge is the whole of the base answer.</b> Nothing is added to
+        /// it for the multi-column container itself, which is not fragmented by its own columns — its border
+        /// and padding wrap every column at once, and
+        /// <see cref="Fragmentation.FragmentainerContext.ResumeContentTop"/> is already inside them. The
+        /// maximum against <see cref="CssBoxProperties.ClientTop"/> this replaced was doing nothing: that
+        /// coordinate is the container's position on the page it <i>began</i>, so it is never the greater of
+        /// the two. Removing it changes no result across the suite, and keeping it would have left a branch
+        /// no document can distinguish.
+        /// </para>
+        /// <para>
+        /// <b>Every box below it that the fill reaches here is a continuation</b> — the record that brought
+        /// this pass in descends through it — so the column boundary falls inside it and §6.2 decides
+        /// whether its block-start border and padding are re-inserted at that edge. Under <c>slice</c> they
+        /// are not, and reading its content edge unconditionally opened every continuation column with that
+        /// much blank space and no border drawn in it, because paint has always got this right
+        /// (<c>FragmentEmitter.ResumesAnEarlierFragment</c> clears the fragment's top edge). Under
+        /// <c>clone</c> they are, for the box and for every cloning ancestor the break falls inside at once,
+        /// which is exactly <see cref="DomUtils.ClonedBlockStart(CssBox?, CssBox?)"/>. This is the same rule the inline axis
+        /// applies to a resumed flow's first line in <c>CssLayoutEngine.CreateLineBoxes</c>; the block axis
+        /// consulted the property nowhere at all, so <c>slice</c> and <c>clone</c> were indistinguishable
+        /// here.
+        /// </para>
+        /// <para>
+        /// <b>What separates a re-opened box from one that is not is the fragmentation context, and it is
+        /// stated once — as the walk's bound</b>
+        /// (<see cref="DomUtils.ClonedBlockStart(CssBox?, CssBox?)"/>'s <c>stopAt</c>). Stopping at
+        /// <see cref="Fragmentation.FragmentainerContext.ContextRoot"/> says exactly "sum the boxes this
+        /// boundary falls inside", which is what §6.2 turns on, and it is what makes the container
+        /// contribute nothing without a branch of its own. Left unbounded the walk runs past the container
+        /// to the document root, so a container that itself sets <c>clone</c> added its own block-start
+        /// border and padding to content inside it — spacing the fragmentainer's content edge already
+        /// accounts for. Measured at 14pt of spurious indent with <c>padding-top: 9pt; border-top: 5pt</c>
+        /// on the container.
+        /// </para>
+        /// <para>
+        /// The near-miss is to ask instead whether the containing block is the box whose child loop is
+        /// running. Because a child's <see cref="ParentBox"/> always <i>is</i> that box, such a test is false
+        /// only when the loop's box is not a block container by <see cref="ContainingBlock"/>'s walk — and
+        /// the containing block is then an ancestor sitting <i>higher in the same continuing chain</i>, so
+        /// "it did not resume here" does not follow from it and that arm would re-insert the ancestor's
+        /// decorations.
+        /// </para>
+        /// <para>
+        /// Both sites that begin a column's content ask this — the child laid out afresh
+        /// (<see cref="ColumnTopForTheChildThisFillBeginsAt"/>) and the box that continues into it
+        /// (<see cref="ResumeInTheNextFragmentainer"/>). Fixing only the first left a continuation two or
+        /// more levels deep with its own fragment rectangle 16pt <i>below</i> the content it holds, which is
+        /// a worse failure than the blank strip: its background and border paint outside their own content.
+        /// </para>
+        /// </remarks>
+        private static double ContentTopOfTheContainingBlockIn(FragmentainerContext column, CssBox containingBlock) =>
+            column.ResumeContentTop + (containingBlock.HtmlContainer is { HasCloneDecorations: true }
+                ? DomUtils.ClonedBlockStart(containingBlock, stopAt: column.ContextRoot)
+                : 0);
 
         /// <summary>
         /// Whether <see href="https://www.w3.org/TR/css-break-3/#break-between">§3.1</see>'s <c>column</c>
@@ -2778,15 +2841,12 @@ namespace PeachPDF.Html.Core.Dom
         /// otherwise its continuation is laid out over the fragment it just left.
         /// </para>
         /// <para>
-        /// The block axis moves too, to whichever of the fragmentainer's own content edge and the containing
-        /// block's is lower. Neither alone is right: the containing block of a top-level child is the
-        /// multi-column container itself, and a container spanning pages keeps the top it was placed at on
-        /// the page it <i>began</i> — so its content edge names a coordinate a column several bands further
-        /// down does not reach, and reading it moved a continuation back to the container's first column.
-        /// The fragmentainer's edge answers that case; the containing block's answers the deeper one, where
-        /// it has already been re-placed inside this fragmentainer and its content edge sits inside its own
-        /// border and padding. This box begins the fragmentainer, so it has no predecessor to resolve
-        /// against, and §5.2 truncates the margin adjoining the unforced break that put it here.
+        /// The block axis moves too, to where its containing block's content begins in this fragmentainer
+        /// (<see cref="ContentTopOfTheContainingBlockIn"/>) — the same coordinate
+        /// <see cref="ColumnTopForTheChildThisFillBeginsAt"/> hands the box that begins the column having
+        /// been laid out afresh, since both are the first thing inside that containing block here. This box
+        /// begins the fragmentainer, so it has no predecessor to resolve against, and §5.2 truncates the
+        /// margin adjoining the unforced break that put it here.
         /// </para>
         /// <para>
         /// Only this box moves, not its subtree. Its already-placed descendants belong to the fragmentainer
@@ -2806,7 +2866,7 @@ namespace PeachPDF.Html.Core.Dom
             // Moving Location is the whole translation: ActualRight and ActualBottom are derived from it
             // (Location plus the box-sizing extent), so the inline size this box was measured at on the pass
             // that placed it survives untouched - which is precisely §2's one-inline-size rule.
-            var top = Math.Max(fragmentainer.ResumeContentTop, ContainingBlock.ClientTop);
+            var top = ContentTopOfTheContainingBlockIn(fragmentainer, ContainingBlock);
 
             Location = new RPoint(ContainingBlock.ClientLeft + ActualMarginLeft, top);
             ActualBottom = Location.Y;

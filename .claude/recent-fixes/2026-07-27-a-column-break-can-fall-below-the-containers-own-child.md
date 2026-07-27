@@ -22,10 +22,14 @@ coordinate, so `CssLayoutEngineColumns.ResumeInTheNextColumn` supplies it. It ca
 a *top-level* child, though, and a deeper link's box begins its own containing block's content
 rather than the column, at a coordinate not knowable when the record is written because that block
 has not been re-placed in the next column yet. So the target is now re-derived at placement time:
-`CssBox.ColumnTopForTheChildThisFillBeginsAt` gives the child a resume top of
-`max(column.ResumeContentTop, ContainingBlock.ClientTop)`, the same maximum
-`ResumeInTheNextFragmentainer` takes and for the same reason. Without it `PlaceBlockChild` fell back
-to the previous sibling's bottom — a sibling still sitting in the column just vacated.
+`CssBox.ColumnTopForTheChildThisFillBeginsAt` gives the child a resume top at the column's own
+content edge. Without it `PlaceBlockChild` fell back to the previous sibling's bottom — a sibling
+still sitting in the column just vacated. (As landed this read
+`max(column.ResumeContentTop, ContainingBlock.ClientTop)` — the same expression the sibling site
+`ResumeInTheNextFragmentainer` used, and deliberately so. Both re-inserted a *continuing* block's top
+border and padding for `slice` as well as `clone`; corrected the same day, at both sites together —
+see
+[2026-07-27-a-continuation-column-reopens-its-block-start-decorations-only-under-clone.md](2026-07-27-a-continuation-column-reopens-its-block-start-decorations-only-under-clone.md).)
 
 **(b) The whole chain is restated, not only the outermost link.** Every link was decided against the
 page grid, so a deeper one carries a slot several pages on and a target somewhere down the document.

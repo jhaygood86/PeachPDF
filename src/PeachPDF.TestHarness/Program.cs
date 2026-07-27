@@ -3586,6 +3586,32 @@ static string DecorationBreakPanel(string label, string decorationBreak) =>
         $"clause&nbsp;{i} of a paragraph long enough to leave the column it starts in,")) +
     " and to finish in the next one.</p></div></div>";
 
+// The same wrapper in the same box twice, differing only in box-decoration-break. Where the previous
+// panel asks what a *whole-box* decoration is measured against, this one asks the plainer question of
+// §6.2: whether the wrapper's own block-start border and padding are re-inserted at the column
+// boundary. Under `slice` they are not, so the continuation begins flush with the column's content top;
+// under `clone` they are, so it begins below a re-opened border and padding. The content is blocks
+// rather than text, which is exactly the axis the block path had never asked the property about - it
+// read the containing block's content edge either way, so both halves used to render as the `clone` one
+// does, but with no border drawn in the room it left.
+//
+// The entries sit one level further down, inside a plain <div>, deliberately. That inner block is the
+// box that *continues* into the second column, so it is placed by CssBox.ResumeInTheNextFragmentainer
+// while its entries are placed by ColumnTopForTheChildThisFillBeginsAt - two different sites that have
+// to agree. Correcting only the second leaves the inner block's own fragment starting below the entries
+// it contains, which paints its border and background outside their own content; with the wrapper's
+// decorations on the outer <section> and the entries one level in, that shows up here rather than only
+// in the unit tests.
+static string ContinuationDecorationPanel(string label, string decorationBreak) =>
+    "<div class=\"frame\"><div class=\"label\">" + label + "</div>" +
+    "<div class=\"mc\" style=\"columns:2;column-gap:20px;column-rule:0.5pt solid #000\">" +
+    McEntries(1, "lead") +
+    "<section style=\"box-decoration-break:" + decorationBreak + ";background:#eef9f0;" +
+    "border:1pt solid #27ae60;padding:8pt 3pt 3pt;margin:0\">" +
+    "<div style=\"margin:0;background:#f4ecf7;border:0.5pt solid #7d3c98\">" +
+    McEntries(10, "nested") +
+    "</div></section></div></div>";
+
 const string MulticolCss = """
     <style>
     @page { size: a4; margin: 15mm }
@@ -3691,19 +3717,23 @@ var multicolHtml = "<!DOCTYPE html><html><head>" + MulticolCss + "</head><body>"
         McEntries(4, "moved") +
         "</div></div>") +
 
-    // A break that falls one level below the container's own child loop. The entries here are wrapped in
-    // a <section> of their own, so the boundary is between two of *its* children rather than between two
-    // of the container's - and the record has to travel up through the wrapper before the columns engine
-    // can read it. Left alone, the wrapper neither moved nor broke: it kept flowing past the column band
-    // and past the page. The wrapper carries a background and a border so both of its fragments are
-    // visible, one per column.
+    // A break that falls below the container's own child loop. The entries are wrapped in a <section> of
+    // their own, so the boundary is between two of *its* descendants rather than between two of the
+    // container's - and the record has to travel up through the wrapper before the columns engine can read
+    // it. Left alone, the wrapper neither moved nor broke: it kept flowing past the column band and past
+    // the page.
+    //
+    // The two panels differ only in box-decoration-break, and the difference is at the *head* of the
+    // continuation column (§6.2): `slice` is one box cut at the boundary, so the wrapper's own top border
+    // and padding belong to the fragment it started in and the second column begins flush at the column
+    // top; `clone` wraps each fragment, so the second column re-opens with both above it.
     McSection("12 &mdash; a break below the container's own child",
-        "<div class=\"frame\"><div class=\"label\">columns: 2; the entries sit inside a &lt;section&gt; of their own, so the break falls between two of its children rather than between two of the container's</div>" +
-        "<div class=\"mc\" style=\"columns:2;column-gap:20px;column-rule:0.5pt solid #000\">" +
-        McEntries(1, "lead") +
-        "<section style=\"background:#eef9f0;border:0.5pt solid #27ae60;padding:3pt;margin:0\">" +
-        McEntries(10, "nested") +
-        "</section></div></div>") +
+        ContinuationDecorationPanel(
+            "box-decoration-break: slice (initial) &mdash; the continuation begins flush at the column top, with no border or padding re-inserted at the break",
+            "slice") +
+        ContinuationDecorationPanel(
+            "box-decoration-break: clone &mdash; the same wrapper, each fragment re-opening with its own top border and padding",
+            "clone")) +
 
     "</body></html>";
 

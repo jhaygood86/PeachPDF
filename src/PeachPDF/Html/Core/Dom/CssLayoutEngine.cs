@@ -303,7 +303,7 @@ namespace PeachPDF.Html.Core.Dom
             // applies to the first formatted line only (CSS Text §5), so it is not re-applied here.
             var startY = resume is not null && context is not null
                 ? context.ResumeContentTop + (blockBox.HtmlContainer is { HasCloneDecorations: true }
-                    ? DomUtils.ClonedBlockStart(blockBox)
+                    ? DomUtils.ClonedBlockStart(blockBox, stopAt: null)
                     : 0)
                 : blockBox.ClientTop;
 

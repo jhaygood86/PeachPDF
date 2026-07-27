@@ -137,7 +137,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </summary>
         internal static (double Start, double End) ClonedBlockInsets(CssBox box, HtmlContainerInt container) =>
             container.HasCloneDecorations
-                ? (DomUtils.ClonedBlockStart(box), DomUtils.ClonedBlockEnd(box))
+                ? (DomUtils.ClonedBlockStart(box, stopAt: null), DomUtils.ClonedBlockEnd(box))
                 : (0, 0);
 
         /// <summary>

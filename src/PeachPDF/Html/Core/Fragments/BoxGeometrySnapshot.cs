@@ -2,6 +2,7 @@ using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace PeachPDF.Html.Core.Fragments
 {
@@ -58,7 +59,7 @@ namespace PeachPDF.Html.Core.Fragments
             ArgumentNullException.ThrowIfNull(root);
 
             var snapshot = new BoxGeometrySnapshot();
-            snapshot.CaptureBox(root);
+            snapshot.CaptureBox(root, excluded: null);
             return snapshot;
         }
 
@@ -78,6 +79,15 @@ namespace PeachPDF.Html.Core.Fragments
         /// everything from the break onward belongs to the next one — so the root is captured and the walk
         /// stops at each excluded box.
         /// </para>
+        /// <para>
+        /// <b>A root is never itself excluded</b>, which is why only descendants are tested. The two sets
+        /// are built from one break record by the same caller
+        /// (<c>CssLayoutEngineColumns.FillColumns</c>): the roots stop <i>below</i> the box the break falls
+        /// before (<c>ChildrenIn</c>'s upper bound is <c>PlacedBelow</c>), and <paramref name="excluded"/>
+        /// starts <i>at</i> it (<c>BeyondThisColumn</c>'s lower bound), so the two ranges abut and cannot
+        /// overlap. That is a fact about the caller rather than about this method, so it is asserted here
+        /// in <c>DEBUG</c> rather than assumed silently.
+        /// </para>
         /// </remarks>
         internal static BoxGeometrySnapshot Capture(IEnumerable<CssBox> roots, IReadOnlySet<CssBox>? excluded = null)
         {
@@ -87,13 +97,16 @@ namespace PeachPDF.Html.Core.Fragments
 
             foreach (var root in roots)
             {
+                Debug.Assert(excluded is null || !excluded.Contains(root),
+                    "A captured root is also excluded: the caller's two ranges have come to overlap.");
+
                 snapshot.CaptureBox(root, excluded);
             }
 
             return snapshot;
         }
 
-        private void CaptureBox(CssBox box, IReadOnlySet<CssBox>? excluded = null)
+        private void CaptureBox(CssBox box, IReadOnlySet<CssBox>? excluded)
         {
             var geometry = new BoxGeometry
             {
