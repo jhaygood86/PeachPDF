@@ -2522,16 +2522,6 @@ namespace PeachPDF.Html.Core.Dom
             resumeFrom = Boxes.IndexOf(restart.BeforeBox);
             if (resumeFrom < 0 || resumeFrom > raisedAt) return false;
 
-            // Asked of every index about to be replayed, not just of the box that raised this. The run
-            // is found by walking siblings, which skips display:none, floated and out-of-flow ones, so
-            // the range re-run is wider than the run itself — and a table in it that repeats a header
-            // would not survive being laid out a second time. Asked before the range test below so that
-            // such a table declines the driver's replay too, not only this loop's.
-            for (var j = resumeFrom; j <= raisedAt; j++)
-            {
-                if (ContainsARepeatingTable(Boxes[j])) return false;
-            }
-
             // Below the index this pass began at, the head belongs to a fragmentainer the driver has
             // already filled — nothing this loop can re-run, but something the driver can, by re-entering
             // the pass that filled it. Asked here rather than at the call site so that "this head cannot
@@ -4505,42 +4495,11 @@ namespace PeachPDF.Html.Core.Dom
         /// question. Verified to walk a box down 100,000 pages before the driver's own cap stopped it.
         /// Relaxation therefore keeps the translation, which is exactly what it did before.
         /// </para>
-        /// <para>
-        /// The last exclusion is narrower and is a defect rather than a boundary: laying a table out a
-        /// second time does not reproduce the first result. Its repeating <c>&lt;thead&gt;</c> is
-        /// detached from the tree and replaced by one proxy per page, and a second run neither finds
-        /// the header nor removes the proxies — so the header stops repeating and stale copies are left
-        /// behind, or, once the structure is restored, the header's height is counted twice. Until that
-        /// is fixed a subtree containing one keeps the translation.
-        /// </para>
         /// </remarks>
         private bool CanBeLaidOutAgain(EarlyBreak decision) =>
             PlacesItselfAsBlockBox
             && HtmlContainer is { IsFragmenting: true }
-            && FitsInFragmentainer(decision.Slot)
-            && !ContainsARepeatingTable(this);
-
-        /// <summary>
-        /// Whether <paramref name="box"/>'s subtree contains a table that repeats a header or footer
-        /// group — the structure a second layout of the same table does not reproduce.
-        /// </summary>
-        /// <remarks>
-        /// Both spellings have to be looked for, because the first layout consumes the first one: before
-        /// it, the repeating group is an ordinary child of the table; after it, the group has been
-        /// detached and only the per-page <see cref="CssProxyBox"/> proxies remain.
-        /// </remarks>
-        private static bool ContainsARepeatingTable(CssBox box)
-        {
-            if (box.Display is CssConstants.Table or CssConstants.InlineTable
-                && box.Boxes.Exists(child =>
-                    child is CssProxyBox
-                    || child.Display is CssConstants.TableHeaderGroup or CssConstants.TableFooterGroup))
-            {
-                return true;
-            }
-
-            return box.Boxes.Exists(ContainsARepeatingTable);
-        }
+            && FitsInFragmentainer(decision.Slot);
 
         /// <summary>
         /// Moves this box to the next page (like a plain <see cref="OffsetTop"/> by <paramref name="offset"/>),
