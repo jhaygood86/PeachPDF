@@ -190,13 +190,21 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// in the fragmentainer the table resumes in.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// Everything here is something the resumed pass cannot derive: which row to re-enter and which
         /// of its cells to continue, the rowspan map keyed by absolute row index (see
         /// <see cref="TableBreakToken.RowSpannedBoxes"/>), the table's widest edge so far, and the slot
-        /// the break actually fell in. <see cref="CurrentY"/> and <see cref="MaxBottom"/> are the two that
-        /// come from the new fragmentainer instead — the resumed table has already been moved there by
-        /// <c>CssBox.ResumeInTheNextFragmentainer</c>, so where the earlier pass's rows ended says nothing
-        /// about where this one's begin.
+        /// the break actually fell in. <see cref="CurrentY"/> and <see cref="MaxBottom"/> are the two the
+        /// caller resolves instead, from the band that slot names — a table that spans fragmentainers
+        /// keeps the one <c>Location</c> it was placed at, so its own content top still names the page it
+        /// <i>began</i> on rather than the one these rows go in.
+        /// </para>
+        /// <para>
+        /// <see cref="SlotIndex"/> is seeded from where the break fell rather than re-derived from
+        /// <paramref name="top"/>, which is what keeps this from being the correction this type's own
+        /// remarks warn against: the counter is seeded once per pass here exactly as a fresh run seeds it
+        /// from the table's top, and its deliberate staleness <i>within</i> a pass is untouched.
+        /// </para>
         /// </remarks>
         internal static TableRowCursor Continuing(TableBreakToken carried, double top)
         {

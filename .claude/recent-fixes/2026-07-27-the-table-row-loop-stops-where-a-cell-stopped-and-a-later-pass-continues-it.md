@@ -88,25 +88,76 @@ pages earlier is found — so it is asserted on the cursor and on the published 
 
 ## Every part neutralized in turn
 
-A step reachable from exactly one fixture is one where an unpinned part would be invisible. Of the
-15 tests in `TableRowLoopResumptionTests` plus the four in `TableCellBreakTokenTests`:
+A step reachable from exactly one fixture is one where an unpinned part would be invisible. Every
+part was neutralized in turn and the table test classes (263 tests) re-run:
 
 | neutralization | tests failing |
 |---|---|
-| the row loop never stops | 1 |
-| the record is never published | 3 |
-| the row loop always starts at row 0 | 1 |
+| the row loop never stops | 2 |
+| the record is never published | 5 |
+| the row loop always starts at row 0 | 3 |
 | no per-cell record handed back to the cell | 1 |
-| the cursor is restarted rather than continued | 2 |
+| the cursor is restarted rather than continued | 4 |
 | `MaxRight` not carried | 2 |
 | the rowspan map not carried | 1 |
 | the row-group measurement cursor inherits the carried records | 1 |
+| the closing footer proxy written on a pass that stopped | 1 |
+| the row group spanned over rows no pass placed | 1 |
+| the break point before the resumed row re-decided | 2 |
+| the record not cleared in the constructor | 1 |
+| a record naming a row the table does not have honoured anyway | 2 |
+| the resumed rows start at the table's own top | 3 |
 
-Two of those tests have explicit controls, because "nothing moved" is satisfied vacuously by a run
+Three of those tests carry explicit controls, because "nothing moved" is satisfied vacuously by a run
 that would not have moved anything: `AContinuationThatNamesTheFirstRow_RePlacesEveryRow` is what
-makes "rows 0 and 1 stayed put" mean something, and
+makes "rows 0 and 1 stayed put" mean something,
 `AContinuationCarryingNoRecordForACell_EntersItFromTheStart` is what makes "the cell gained exactly
-five words" mean something.
+five words" mean something, and the forced-break test runs a *fresh* pass over the same table first,
+to show the break really is taken when it is this pass's to take.
+
+**A run that is killed mid-sweep leaves the mutation in the file, and the next sweep then restores
+it.** Two neutralization runs were interrupted here and the leaked mutations looked exactly like
+order-dependent test flakiness — four tests failing under a broad filter and passing under a narrow
+one, twice. The script now snapshots the pristine source once, up front, and restores from that in a
+`finally`. Worth knowing before reading any sweep's output as evidence.
+
+## What the review caught, and the two worth carrying forward
+
+Six findings were real and are in the diff. The two with teeth are both "a continuation is not a
+fresh run, and two more places had not been told":
+
+**The break point *before* the row a continuation re-enters was being decided twice.** The per-row
+check was guarded `i > 0`, which on a continuation resuming at row *k* re-asks
+`ForcedBreakFallsBeforeRow(k)` — deterministic from style, so a forced break the stopping pass
+already took is taken **again**: the row is pushed a further page down, a second header and footer
+proxy are laid out, and `PageBreakBottoms[slot]` is written with this pass's `MaxBottom`, which is the
+band top it has just started at — over the slice bottom an earlier pass recorded for that page, which
+is the thing #457 went to trouble to preserve. It is now `i > ResumeRowIndex`, which is also what
+[§4.4](https://www.w3.org/TR/css-break-3/#break-between)'s "no empty fragmentainer" says from the
+other side: the resumed row *begins* this fragmentainer, so nothing precedes it here to break from.
+
+**A continuation's rows were starting at the table's own content top, which is the page it began
+on.** The first draft's comment justified this with `CssBox.ResumeInTheNextFragmentainer` — which
+returns immediately unless `CurrentFragmentainer is { HasOwnBand: true }`, and
+`FragmentainerContext._ownBand` is **null for the page context**. So on the page grid nothing moves a
+resumed table, and a box that spans fragmentainers keeps the one `Location` it was placed at by
+design. The rows go where the record says instead: `PageTopOf(carried.ResumeSlotIndex)`, floored at
+the table's own top. Two consequences fall out — the cursor's `SlotIndex` and its `CurrentY` now name
+the same fragmentainer, so `WillCrossPageBoundary` can fire again for the rest of the table, and a
+repeating `<thead>`'s proxy lands on the resumed page rather than on top of the first pass's.
+
+The other four: the record is cleared in the constructor rather than in `LayoutCells` (a run that
+dies between them would otherwise leave the previous layout's `CssBox` references standing — the same
+finding the last review made about `TableSetup`, in the same file); a record naming a row this table
+does not have is read as continuing nothing rather than indexing past the end; `cref="TableSetup"`
+inside `CssBox` binds to the *property* rather than the type, which is the exact defect the last
+review found and this one reintroduced two lines away; and a stray blank line.
+
+Two findings were checked and left. The `SlotIndex` seed is *not* the correction the stale-cursor
+invariant warns against — it is seeded once per pass, as a fresh run seeds it from the table's top,
+and the deliberate staleness within a pass is untouched. And `BeginLayoutPass` would drop a carried
+per-cell record if a continuation ever ran in a new layout generation; that exposure is the generic
+path's too and is not new here.
 
 ## Deliberately not done
 
@@ -117,7 +168,15 @@ five words" mean something.
   says why correcting it alone regresses four tests.
 - **A continuation re-enters every cell of the row that stopped**, including the ones that finished,
   which duplicates their content. css-tables-3 §6.1's per-cell rule needs the fragment model to know
-  a cell fragment is empty on the continuation; recorded on #464 rather than half-built here.
+  a cell fragment is empty on the continuation; recorded as
+  [an accepted gap](../accepted-gaps/table-a-fragmented-row-re-enters-its-finished-cells.md) with
+  #464, rather than half-built here.
+- **Steps 5 and 6 close the table only over the rows a pass placed.** A repeating `<tfoot>`'s closing
+  proxy sits under the *last* row, so a pass that stopped earlier would put it in the middle of the
+  table on the page it is leaving (measured: at y=36.5 under a row ending at 35.0, with two rows still
+  unplaced), and a `<tbody>`'s own box spanned rows still sitting at the origin, giving the group a box
+  starting above the table. Step 7 is deliberately not gated: a fragment's bottom *is* the slice
+  bottom.
 - **A record that does not name a row** — anything but a `TableBreakToken` — starts the loop at the
   first body row. That is the total reading, and it is what keeps `TableOncePerTableTests`'
   `BlockBreakToken` continuations meaningful.

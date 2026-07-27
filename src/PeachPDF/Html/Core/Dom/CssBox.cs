@@ -353,7 +353,7 @@ namespace PeachPDF.Html.Core.Dom
         /// A table paginates itself inside one fragmentainer pass and hands the driver nothing, so its own
         /// row loop is the only thing that ever sees a cell stop. This is where it says so, and it is
         /// already a <see cref="BreakToken"/> — the second thing a table pass hands the next, alongside
-        /// <see cref="TableSetup"/>.
+        /// <see cref="Fragmentation.TableSetup"/>.
         /// </para>
         /// <para>
         /// It is deliberately <b>not</b> <see cref="PendingBreakToken"/>, and that is the whole of what

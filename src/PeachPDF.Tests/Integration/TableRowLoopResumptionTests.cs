@@ -258,28 +258,91 @@ namespace PeachPDF.Tests.Integration
             Assert.Null(table.TableContinuation);
         }
 
+        // ─── A pass that stopped has not closed the table ────────────────────────────────────────
+
+        /// <summary>
+        /// A repeating <c>&lt;tfoot&gt;</c>'s closing proxy sits under the table's <i>last</i> row, so a
+        /// pass that never reached the last row would put it in the middle of the table on the page it is
+        /// leaving. The pass that finishes the table writes it.
+        /// </summary>
+        [Fact]
+        public async Task APassThatStopped_DoesNotCloseTheTableWithItsFooter()
+        {
+            var markup = "<table style='width:150pt;font-size:10pt'><tfoot><tr><td>F</td></tr></tfoot><tbody>"
+                         + string.Concat(Enumerable.Range(0, 4)
+                             .Select(i => $"<tr><td id='c{i}'>row {i}</td></tr>"))
+                         + "</tbody></table>";
+
+            CssBox? stopped = null;
+            CssBox? finished = null;
+
+            await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(markup),
+                pageHeight: PageHeight, margin: Margin,
+                prepare: tree => { stopped = tree; StopRow(tree, 1); });
+
+            var (control, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(markup),
+                pageHeight: PageHeight, margin: Margin);
+            finished = control;
+
+            // The control is what makes this mean anything: a table that finishes does close itself
+            // with the footer, from the same markup on the same page.
+            Assert.Single(TableOf(finished).Boxes.OfType<CssProxyBox>());
+            Assert.Empty(TableOf(stopped!).Boxes.OfType<CssProxyBox>());
+        }
+
+        /// <summary>
+        /// A <c>&lt;tbody&gt;</c>'s own box spans the rows a pass has placed, not its markup: a row no
+        /// pass has reached still sits at the origin, and spanning it gives the group a box starting
+        /// above the table — which is exactly the degenerate bounds this step exists to avoid, arrived at
+        /// from the other side.
+        /// </summary>
+        [Fact]
+        public async Task APassThatStopped_SpansItsRowGroupOverTheRowsItPlaced()
+        {
+            CssBox? root = null;
+
+            await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap("<table style='width:150pt;font-size:10pt'><tbody>"
+                                   + string.Concat(Enumerable.Range(0, 4)
+                                       .Select(i => $"<tr><td id='c{i}'>row {i}</td></tr>"))
+                                   + "</tbody></table>"),
+                pageHeight: PageHeight, margin: Margin,
+                prepare: tree => { root = tree; StopRow(tree, 1); });
+
+            var table = TableOf(root!);
+            var group = table.Boxes.First(b => b.Display == CssConstants.TableRowGroup);
+            var rows = BodyRowsOf(table);
+
+            Assert.Equal(rows[0].Location.Y, group.Location.Y, 3);
+            Assert.Equal(rows[1].ActualBottom, group.ActualBottom, 3);
+        }
+
         // ─── A continuation resumes the cursor rather than restarting it ─────────────────────────
 
         /// <summary>
         /// A run handed the record re-enters the row that did not finish — not row 0, and not the row
-        /// after it. The rows before it were emitted by the earlier pass and are left exactly where
-        /// they are.
+        /// after it. The rows before it were emitted by the earlier pass and are left exactly where they
+        /// are, and the rows it places go in the fragmentainer the record names, which is <b>not</b> the
+        /// table's own content top: a table that spans fragmentainers keeps the one <c>Location</c> it
+        /// was placed at, so that still names the page it began on.
         /// </summary>
-        [Fact]
-        public async Task AContinuation_ReEntersTheRowThatDidNotFinish()
+        [Theory]
+        [InlineData(1)]
+        [InlineData(2)]
+        public async Task AContinuation_PlacesItsRowsInTheFragmentainerTheRecordNames(int slot)
         {
             await WithALaidOutTable(RowsTable(4), async (table, container, g) =>
             {
                 var before = BodyRowsOf(table).Select(r => r.Location.Y).ToList();
 
-                await RunEngine(g, container, table, Continuation(table, resumeRow: 2));
+                await RunEngine(g, container, table,
+                    Continuation(table, resumeRow: 2, resumeSlot: slot));
 
                 var after = BodyRowsOf(table).Select(r => r.Location.Y).ToList();
 
                 Assert.Equal(before[0], after[0], 3);
                 Assert.Equal(before[1], after[1], 3);
-                Assert.True(after[2] < before[2] - 1,
-                    $"row 2 was not re-placed at the resumed top ({after[2]:F1} vs {before[2]:F1})");
+                Assert.Equal(container.PageTopOf(slot), after[2], 3);
                 Assert.True(after[3] > after[2], "row 3 does not follow the row the pass resumed at");
             });
         }
@@ -375,6 +438,130 @@ namespace PeachPDF.Tests.Integration
 
                     Assert.Equal(before, cell.LineBoxes.Sum(l => l.Words.Count));
                 });
+        }
+
+        /// <summary>
+        /// The break point <i>before</i> the row a continuation re-enters was decided by the pass that
+        /// stopped there. Re-deciding it takes the forced break a second time, which pushes the row a
+        /// further page down — and
+        /// <see href="https://www.w3.org/TR/css-break-3/#break-between">§4.4</see>'s "no empty
+        /// fragmentainer" says the same from the other side: the resumed row begins this fragmentainer,
+        /// so nothing precedes it here to break from.
+        /// </summary>
+        [Fact]
+        public async Task AContinuation_DoesNotRetakeTheForcedBreakBeforeTheRowItResumesAt()
+        {
+            var markup = "<table style='width:150pt;font-size:10pt'>"
+                         + "<tr><td id='c0'>row 0</td></tr><tr><td id='c1'>row 1</td></tr>"
+                         + "<tr><td id='c2' style='break-before:page'>row 2</td></tr>"
+                         + "<tr><td id='c3'>row 3</td></tr></table>";
+
+            await WithALaidOutTable(markup, async (table, container, g) =>
+            {
+                // The control: a fresh run really does take this break, so the continuation staying on
+                // its own page says something.
+                await RunEngine(g, container, table, resume: null);
+                var fresh = BodyRowsOf(table)[2].Location.Y;
+                Assert.True(fresh >= container.PageTopOf(1), $"the fresh run took no break ({fresh:F1})");
+
+                await RunEngine(g, container, table, Continuation(table, resumeRow: 2, resumeSlot: 1));
+
+                Assert.Equal(container.PageTopOf(1), BodyRowsOf(table)[2].Location.Y, 3);
+            });
+        }
+
+        /// <summary>
+        /// Taking that break again would also record this pass's <c>MaxBottom</c> — the band top it has
+        /// just started at — over the slice bottom the earlier pass recorded for that page, which is what
+        /// clips the table's borders there.
+        /// </summary>
+        [Fact]
+        public async Task AContinuation_DoesNotOverwriteAPageBreakBottomAnEarlierPassRecorded()
+        {
+            var markup = "<table style='width:150pt;font-size:10pt'>"
+                         + "<tr><td id='c0'>row 0</td></tr>"
+                         + "<tr><td id='c1' style='break-before:page'>row 1</td></tr>"
+                         + "<tr><td id='c2'>row 2</td></tr></table>";
+
+            await WithALaidOutTable(markup, async (table, container, g) =>
+            {
+                table.PageBreakBottoms = new Dictionary<int, double> { [1] = 4242d };
+
+                await RunEngine(g, container, table, Continuation(table, resumeRow: 1, resumeSlot: 1));
+
+                Assert.Equal(4242d, table.PageBreakBottoms![1], 3);
+            });
+        }
+
+        /// <summary>
+        /// A record naming a row this table does not have belongs to a layout that no longer exists, so
+        /// there is nothing to continue and the run starts from the first body row — rather than laying
+        /// out no rows at all, or indexing past the end.
+        /// </summary>
+        [Theory]
+        [InlineData(-1)]
+        [InlineData(9)]
+        public async Task ARecordNamingARowTheTableDoesNotHave_StartsAtTheFirstBodyRow(int resumeRow)
+        {
+            await WithALaidOutTable(RowsTable(4), async (table, container, g) =>
+            {
+                table.Location = table.Location with { Y = table.Location.Y + 25 };
+                var before = BodyRowsOf(table).Select(r => r.Location.Y).ToList();
+
+                await RunEngine(g, container, table, Continuation(table, resumeRow));
+
+                var after = BodyRowsOf(table).Select(r => r.Location.Y).ToList();
+                Assert.All(Enumerable.Range(0, 4),
+                    i => Assert.True(Math.Abs(after[i] - before[i]) > 1,
+                        $"row {i} was not placed ({after[i]:F1} vs {before[i]:F1})"));
+            });
+        }
+
+        /// <summary>
+        /// A run publishes its record only once it has finished, and clears whatever the last one left
+        /// before anything can throw. A record left standing by a run that died names a row and holds
+        /// <see cref="CssBox"/> references belonging to a layout that no longer exists, and a later run
+        /// handed it would resume into that.
+        /// </summary>
+        [Fact]
+        public async Task ARunThatDies_LeavesNoRecordFromThePreviousOne()
+        {
+            CssBox? root = null;
+
+            await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(RowsTable(3)), pageHeight: PageHeight, margin: Margin,
+                prepare: tree => { root = tree; StopRow(tree, 0); },
+                after: async (tree, container, g) =>
+                {
+                    var table = TableOf(tree);
+                    Assert.NotNull(table.TableContinuation);
+
+                    // The stopping cell is replaced by one that throws, in place rather than beside it —
+                    // a row's cells are its columns, and ParentBox's setter appends. It has to be that
+                    // cell: the row loop stops at row 0, so nothing further along is reached.
+                    var row = BodyRowsOf(table)[0];
+                    var thrower = new ThrowingCell(row);
+                    row.Boxes.Remove(thrower);
+                    row.Boxes[0] = thrower;
+
+                    await Assert.ThrowsAnyAsync<Exception>(
+                        async () => await RunEngine(g, container, table, resume: null));
+
+                    Assert.Null(table.TableContinuation);
+                });
+        }
+
+        /// <summary>A cell whose layout fails, so a run can be stopped part-way through.</summary>
+        private sealed class ThrowingCell : CssBox
+        {
+            internal ThrowingCell(CssBox row) : base(row, null)
+            {
+                InheritStyle(row, everything: true);
+                Display = CssConstants.TableCell;
+            }
+
+            protected override ValueTask PerformLayoutImp(RGraphics g) =>
+                throw new InvalidOperationException("layout failed part-way through the row loop");
         }
 
         // ─── The cursor's own contract ───────────────────────────────────────────────────────────
@@ -487,8 +674,8 @@ namespace PeachPDF.Tests.Integration
 
         private static TableBreakToken Continuation(
             CssBox table, int resumeRow, double maxRight = 0,
-            IReadOnlyList<UnfinishedTableCell>? unfinished = null) =>
-            new(table, ResumeSlotIndex: 1, resumeRow, maxRight, unfinished ?? [],
+            IReadOnlyList<UnfinishedTableCell>? unfinished = null, int resumeSlot = 1) =>
+            new(table, resumeSlot, resumeRow, maxRight, unfinished ?? [],
                 new Dictionary<int, IReadOnlyList<CssBox>>());
     }
 }
