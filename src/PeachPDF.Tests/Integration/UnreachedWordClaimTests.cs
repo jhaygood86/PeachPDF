@@ -49,7 +49,8 @@ namespace PeachPDF.Tests.Integration
             var claimed = ClaimedWords(container);
 
             Assert.NotEmpty(authored);
-            Assert.Equal(claimed.Distinct(ReferenceEqualityComparer.Instance).Count(), claimed.Count);
+            Assert.True(claimed.Count == claimed.Distinct(ReferenceEqualityComparer.Instance).Count(),
+                DescribeDoubleClaims(container));
             Assert.Equal(claimed.Count, authored.Count);
         }
 
@@ -105,6 +106,35 @@ namespace PeachPDF.Tests.Integration
             var claimed = ClaimedWords(container).ToHashSet(ReferenceEqualityComparer.Instance);
 
             Assert.All(markerWords, w => Assert.Contains(w, claimed));
+        }
+
+        /// <summary>
+        /// Names the words more than one fragment claims, with the slots that claim them and the slot the
+        /// word's own position falls in — the three facts needed to tell #433's shape from any other.
+        /// </summary>
+        private static string DescribeDoubleClaims(HtmlContainerInt container)
+        {
+            var claims = new Dictionary<CssRect, List<int>>(ReferenceEqualityComparer.Instance);
+
+            foreach (var fragmentainer in container.FragmentTree!.Fragmentainers)
+            {
+                foreach (var word in Flatten(fragmentainer.Root).SelectMany(f => f.Words))
+                {
+                    if (!claims.TryGetValue(word.Word, out var slots))
+                    {
+                        claims[word.Word] = slots = [];
+                    }
+
+                    slots.Add(fragmentainer.SlotIndex);
+                }
+            }
+
+            var doubled = claims.Where(c => c.Value.Count > 1).ToList();
+
+            return $"{doubled.Count} words claimed more than once: " + string.Join("; ", doubled
+                .Take(8)
+                .Select(c => $"'{c.Key.Text}' by [{string.Join(",", c.Value)}], lives in "
+                             + container.SlotStartingAt(c.Key.Top)));
         }
 
         private static string Document(string template, int wordCount) =>
