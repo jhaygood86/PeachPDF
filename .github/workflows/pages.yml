@@ -137,6 +137,10 @@ jobs:
           grep -q '<base href="/" />' demo-publish/wwwroot/index.html
           sed -i 's|<base href="/" />|<base href="/demo/" />|' demo-publish/wwwroot/index.html
 
+          # jekyll-build-pages runs in a container as root, so it leaves _site owned by root while
+          # this step runs as the runner user - writing into it fails outright without this.
+          sudo chown -R "$(id -u):$(id -g)" _site
+
           mkdir -p _site/demo
           cp -r demo-publish/wwwroot/. _site/demo/
 
