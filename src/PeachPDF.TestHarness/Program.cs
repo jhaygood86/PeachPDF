@@ -2092,7 +2092,11 @@ var flexHtml = "<!DOCTYPE html><html><head>" + FlexCss + "</head><body>" +
         FContainer("wrap", "flex-wrap:wrap;width:200px;gap:4px;",
             FItems3("width:90px;height:24px;")) +
         FContainer("wrap-reverse", "flex-wrap:wrap-reverse;width:200px;gap:4px;",
-            FItems3("width:90px;height:24px;"))
+            FItems3("width:90px;height:24px;")) +
+        FContainer("wrap-reverse, unequal line heights", "flex-wrap:wrap-reverse;width:200px;gap:4px;",
+            FItem("A 12px", "#e74c3c", "width:90px;height:12px;") +
+            FItem("B 40px", "#3498db", "width:90px;height:40px;") +
+            FItem("C 24px", "#27ae60", "width:90px;height:24px;"))
     ) +
 
     FSection("7 — align-self (overrides align-items)",

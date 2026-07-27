@@ -455,7 +455,7 @@ CSS Flexbox Level 1 (`display: flex` / `inline-flex`) is supported, including mu
 | Property | MDN Reference | Notes |
 |----------|--------------|-------|
 | `flex-direction` | [flex-direction](https://developer.mozilla.org/en-US/docs/Web/CSS/flex-direction) | `row`, `row-reverse`, `column`, `column-reverse` |
-| `flex-wrap` | [flex-wrap](https://developer.mozilla.org/en-US/docs/Web/CSS/flex-wrap) | `nowrap`, `wrap`, `wrap-reverse` |
+| `flex-wrap` | [flex-wrap](https://developer.mozilla.org/en-US/docs/Web/CSS/flex-wrap) | `nowrap`, `wrap`, `wrap-reverse`. `wrap-reverse` swaps the cross-start and cross-end edges, so the lines are stacked in the opposite direction — each still occupying its own cross size, in sequence, with whatever `align-content` puts between them. Lines of different cross size therefore stack without overlapping, and `align-content` reads in the reversed direction too: `flex-end` on a row container packs the lines against its *top* edge, and lines that do not fit overflow that edge |
 | `flex-flow` | [flex-flow](https://developer.mozilla.org/en-US/docs/Web/CSS/flex-flow) | Shorthand for `flex-direction` + `flex-wrap`, in either order (`wrap row` as well as `row wrap`) |
 | `justify-content` | [justify-content](https://developer.mozilla.org/en-US/docs/Web/CSS/justify-content) | `flex-start`, `flex-end`, `center`, `space-between`, `space-around`, `space-evenly` |
 | `align-items` | [align-items](https://developer.mozilla.org/en-US/docs/Web/CSS/align-items) | `flex-start`, `flex-end`, `center`, `stretch`, `baseline`. Applies in **both** directions: a non-`stretch` alignment shrink-wraps each item to its fit-content cross size and positions it (a row item vertically, a column item horizontally), while `stretch` (the default) fills the line's cross size. `baseline` aligns items by their first text baseline and is only meaningful for row-direction flex — column-direction flex falls back to `flex-start` |
@@ -468,6 +468,8 @@ CSS Flexbox Level 1 (`display: flex` / `inline-flex`) is supported, including mu
 | `flex` | [flex](https://developer.mozilla.org/en-US/docs/Web/CSS/flex) | Shorthand for `flex-grow`, `flex-shrink`, `flex-basis`, including the `none` and `auto` keywords |
 | `gap` / `row-gap` / `column-gap` | [gap](https://developer.mozilla.org/en-US/docs/Web/CSS/gap) | Full support on flex containers |
 | `margin` auto values | [margin](https://developer.mozilla.org/en-US/docs/Web/CSS/margin) | `auto` on a main-axis margin absorbs free space on that line (e.g. `margin-left: auto` to push a flex item to the end) |
+
+> **Migration note:** `flex-wrap: wrap-reverse` used to reverse the lines' cross-axis *offsets* rather than the stack itself, which is the same thing only where every line has the same cross size. Lines of different sizes used to overlap — a short line drawn inside a taller one — and the container reported a height measured from the wrong end of the stack; with free cross space to distribute, the lines also stayed at the edge `align-content` had packed them against instead of the opposite one. The lines are now stacked in the reversed direction, so such a container gets taller, its lines separate, and `align-content: flex-end`/`space-between`/`space-around`/`space-evenly` place them against the mirror-image edge. See [Forward compatibility](#forward-compatibility).
 
 ### Grid
 

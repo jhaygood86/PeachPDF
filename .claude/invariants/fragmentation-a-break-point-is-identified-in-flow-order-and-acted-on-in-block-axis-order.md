@@ -13,8 +13,8 @@ follow one that moves, and how a running displacement accumulates are all questi
 boxes ended up.
 
 Block flow is the case where the two coincide, which is why the distinction stayed invisible until a
-flex container was walked. `flex-wrap: wrap-reverse` reverses the lines' cross offsets *after* they are
-assigned (`CssLayoutEngineFlex.DistributeCrossSpace`), so the first line in the source is the last one
+flex container was walked. `flex-wrap: wrap-reverse` stacks the lines in the opposite cross-axis
+direction (`CssLayoutEngineFlex.DistributeCrossSpace`), so the first line in the source is the last one
 down the page — measured on a 200pt page with two full-width 40pt lines and no break values at all, the
 first item lands at `y = 180` and the second at `y = 140`. Walking the source order there accumulates a
 displacement onto lines physically *above* the one that moved and leaves the ones below untouched, so
