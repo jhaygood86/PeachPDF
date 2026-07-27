@@ -801,30 +801,103 @@ namespace PeachPDF.Html.Core.Dom
                 return;
             }
 
-            // The break point above each line is governed by the line before it, which in a flex container
-            // is simply the previous non-empty one: an item belongs to exactly one line, so unlike a grid
-            // row there is nothing spanning across a boundary to attribute elsewhere.
-            var groups = new List<LineGroup>(lines.Count);
-            IReadOnlyList<CssBox>? above = null;
+            var flowLines = new List<IReadOnlyList<CssBox>>(lines.Count);
 
             foreach (var line in lines)
             {
                 if (line.Items.Count == 0) continue;
 
-                var boxes = line.Items.Select(item => item.Box).ToList();
-
-                groups.Add(new LineGroup(boxes, above));
-                above = boxes;
+                flowLines.Add(line.Items.Select(item => item.Box).ToList());
             }
 
-            if (groups.Count == 0) return;
+            if (flowLines.Count == 0) return;
 
-            var shift = LineRelocation.Relocate(container, groups);
+            var shift = LineRelocation.Relocate(container, BuildLineGroups(flowLines));
 
             if (shift > 0)
             {
                 _flexBox.ActualBottom += shift;
             }
+        }
+
+        /// <summary>
+        /// The container's lines as <see cref="LineGroup"/>s in <b>block-axis</b> order, each carrying the
+        /// two sides of the break point immediately above it in <b>flow</b> order.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Neither order is the order <paramref name="flowLines"/> is in. Flex lines are laid out in flow
+        /// order, but where they sit is decided by the cross axis, and two ordinary declarations put that
+        /// somewhere other than "one below the next".
+        /// </para>
+        /// <para>
+        /// <b><c>flex-wrap: wrap-reverse</c></b> reverses the cross offsets after they are assigned
+        /// (<see cref="DistributeCrossSpace"/>), so the first line in flow is the <i>last</i> one down the
+        /// page. The walk needs it the other way round — a displacement accumulates onto the lines
+        /// <i>below</i> the one that moved, and a fragmentainer boundary leaves a particular line above
+        /// it. The break point's two sides stay in flow order regardless, because that is how
+        /// <see href="https://www.w3.org/TR/css-break-3/#break-between">§3.1</see> identifies one: the
+        /// earlier sibling's <c>break-after</c> and the later one's <c>break-before</c> name the same
+        /// point, which here is the boundary <i>above the earlier line</i>, so it is the earlier line
+        /// that begins the new fragmentainer.
+        /// </para>
+        /// <para>
+        /// <b>A column direction</b> stacks the lines along the <i>inline</i> axis instead: they sit side
+        /// by side sharing one block-axis range, so no fragmentainer boundary falls between two of them
+        /// and a break value there names nothing this pass can act on. All of them are one group, which
+        /// keeps the geometric half — a line holding something that may not be cut still moves, and the
+        /// lines beside it move with it rather than sliding out of alignment. Their block-axis break
+        /// points are the ones <i>between items within</i> a line, which this pass does not have.
+        /// </para>
+        /// </remarks>
+        /// <param name="flowLines">the container's non-empty lines, in flow order</param>
+        private List<LineGroup> BuildLineGroups(List<IReadOnlyList<CssBox>> flowLines)
+        {
+            if (!_isRow)
+            {
+                // The break point before the container's first in-flow child is the one before the
+                // container itself (§3.1), and that boundary *is* above this group - so the first line
+                // still speaks for it, while the points between the lines say nothing here. A column
+                // container that did not wrap has one line and comes out of this identical to the walk
+                // below, which is why the arm needs no line count to guard it.
+                return [new LineGroup(flowLines.SelectMany(line => line).ToList(), null, flowLines[0])];
+            }
+
+            var groups = new List<LineGroup>(flowLines.Count);
+
+            for (var index = 0; index < flowLines.Count; index++)
+            {
+                var flowIndex = _isWrapReverse ? flowLines.Count - 1 - index : index;
+                var boxes = flowLines[flowIndex];
+
+                IReadOnlyList<CssBox>? earlier;
+                IReadOnlyList<CssBox>? later;
+
+                if (index == 0)
+                {
+                    // Nothing sits above the first line down the page but the container's own top edge.
+                    // Where that line is also the first in flow, the break point before the container's
+                    // first child is there and its own break-before speaks for it; under wrap-reverse
+                    // with more than one line the first in flow is the *last* down the page, so no break
+                    // point is above this one at all.
+                    earlier = null;
+                    later = flowIndex == 0 ? boxes : null;
+                }
+                else if (_isWrapReverse)
+                {
+                    earlier = boxes;
+                    later = flowLines[flowIndex + 1];
+                }
+                else
+                {
+                    earlier = flowLines[flowIndex - 1];
+                    later = boxes;
+                }
+
+                groups.Add(new LineGroup(boxes, earlier, later));
+            }
+
+            return groups;
         }
 
         // ─── Direction / wrap parsing ─────────────────────────────────────────────

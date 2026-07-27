@@ -7,20 +7,37 @@ namespace PeachPDF.Html.Core.Fragmentation
 {
     /// <summary>
     /// One group of boxes that moves together across a fragmentainer boundary — a flex <b>line</b> or a
-    /// grid <b>row</b> — together with the boxes governing the break point immediately above it.
+    /// grid <b>row</b> — together with the two sides of the break point immediately above it.
     /// </summary>
     /// <remarks>
-    /// <see cref="Above"/> is not simply the previous group's boxes. Which boxes are above a break point
-    /// is a question about where they <i>end</i>: a grid item spanning rows 1–2 is not above the break
-    /// point before row 2 at all, because that boundary runs through the middle of it. The engine answers
-    /// that for itself and hands the result in.
+    /// <para>
+    /// The break point's two sides are given in <b>flow</b> order while the groups themselves are given
+    /// in <b>block-axis</b> order, and the two disagree under <c>flex-wrap: wrap-reverse</c>. §3.1
+    /// identifies a break point by flow order — the earlier sibling's <c>break-after</c> and the later
+    /// one's <c>break-before</c> name the same point — but which line a fragmentainer boundary leaves
+    /// above it, and which lines have to follow one that moves, are questions about geometry. So the
+    /// group that moves is the one <i>below</i> the boundary whichever of the pair it happens to be.
+    /// </para>
+    /// <para>
+    /// <see cref="Earlier"/> is not simply the previous group's boxes. Which boxes are above a break
+    /// point is a question about where they <i>end</i>: a grid item spanning rows 1–2 is not above the
+    /// break point before row 2 at all, because that boundary runs through the middle of it. The engine
+    /// answers that for itself and hands the result in.
+    /// </para>
     /// </remarks>
     /// <param name="Boxes">the boxes that move together, non-empty</param>
-    /// <param name="Above">
-    /// the boxes whose <c>break-after</c> governs the break point immediately before this group, or null
-    /// where there is none — the first group of a container has nothing before it
+    /// <param name="Earlier">
+    /// the boxes on the earlier-in-flow side of the break point immediately above this group, whose
+    /// <c>break-after</c> governs it, or null where that side does not exist
     /// </param>
-    internal readonly record struct LineGroup(IReadOnlyList<CssBox> Boxes, IReadOnlyList<CssBox>? Above);
+    /// <param name="Later">
+    /// the boxes on the later-in-flow side of that break point, whose <c>break-before</c> governs it, or
+    /// null where that side does not exist. Both null says no break point sits above this group at all.
+    /// </param>
+    internal readonly record struct LineGroup(
+        IReadOnlyList<CssBox> Boxes,
+        IReadOnlyList<CssBox>? Earlier,
+        IReadOnlyList<CssBox>? Later);
 
     /// <summary>
     /// Moves flex lines and grid rows across fragmentainer boundaries, honouring the break values declared
@@ -67,8 +84,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         }
 
         /// <summary>
-        /// The side required at the break point between two adjacent lines — the line whose items are
-        /// <paramref name="above"/> and the line whose items are <paramref name="below"/> — or null where
+        /// The side required at the break point immediately above <paramref name="line"/>, or null where
         /// no forced break falls there.
         /// </summary>
         /// <remarks>
@@ -84,8 +100,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// combination is not "whichever was read first". Within one side the most demanding value wins —
         /// a directional value subsumes a plain <c>page</c> — and across the two sides
         /// <see cref="BreakValues.RequiredSide"/> applies §3.1's rule for a pair: two conflicting
-        /// directional values resolve to the one on the latest element in flow, which at this break point
-        /// is the later line's <c>break-before</c>.
+        /// directional values resolve to the one on the latest element in flow.
         /// </para>
         /// <para>
         /// Both sides are read one box deep rather than through the chains they begin and end
@@ -94,12 +109,23 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// engine places for itself.
         /// </para>
         /// </remarks>
-        internal static PageSide? ForcedBreakBetween(IReadOnlyList<CssBox>? above, IReadOnlyList<CssBox> below)
-        {
-            var later = MostDemandingForcedValue(below.Select(box => box.BreakBefore));
-            var earlier = above is null ? null : MostDemandingForcedValue(above.Select(box => box.BreakAfter));
+        private static PageSide? ForcedBreakAbove(LineGroup line) =>
+            ForcedBreakBetween(line.Earlier, line.Later);
 
-            return later is null && earlier is null ? null : BreakValues.RequiredSide(later, earlier);
+        /// <summary>
+        /// The side required at the break point whose earlier-in-flow side is <paramref name="earlier"/>
+        /// and whose later-in-flow side is <paramref name="later"/>, or null where no forced break falls
+        /// there. Either side may be absent.
+        /// </summary>
+        private static PageSide? ForcedBreakBetween(
+            IReadOnlyList<CssBox>? earlier, IReadOnlyList<CssBox>? later)
+        {
+            var laterValue = later is null ? null : MostDemandingForcedValue(later.Select(box => box.BreakBefore));
+            var earlierValue = earlier is null ? null : MostDemandingForcedValue(earlier.Select(box => box.BreakAfter));
+
+            return laterValue is null && earlierValue is null
+                ? null
+                : BreakValues.RequiredSide(laterValue, earlierValue);
         }
 
         /// <summary>
@@ -131,13 +157,14 @@ namespace PeachPDF.Html.Core.Fragmentation
         }
 
         /// <summary>
-        /// Whether a break-avoidance value on either side of the break point between two adjacent lines
-        /// forbids an unforced break there (§3.1).
+        /// Whether a break-avoidance value on either side of the break point immediately above
+        /// <paramref name="line"/> forbids an unforced break there (§3.1).
         /// </summary>
-        private static bool AvoidsBreakBetween(IReadOnlyList<CssBox>? above, IReadOnlyList<CssBox> below) =>
-            below.Any(box => BreakValues.AvoidsBreak(box.BreakBefore, FragmentationContext.Page))
-            || (above is not null
-                && above.Any(box => BreakValues.AvoidsBreak(box.BreakAfter, FragmentationContext.Page)));
+        private static bool AvoidsBreakAbove(LineGroup line) =>
+            (line.Later is not null
+             && line.Later.Any(box => BreakValues.AvoidsBreak(box.BreakBefore, FragmentationContext.Page)))
+            || (line.Earlier is not null
+                && line.Earlier.Any(box => BreakValues.AvoidsBreak(box.BreakAfter, FragmentationContext.Page)));
 
         /// <summary>
         /// Whether anything in a line may not be cut by a fragmentainer boundary: an item asking not to be
@@ -167,7 +194,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <param name="bottom">the line's bottom, displaced the same way</param>
         /// <param name="forcedBreak">
         /// the side a forced break at the break point before it demands, or null where none falls there —
-        /// see <see cref="ForcedBreakBetween"/>
+        /// see <see cref="ForcedBreakAbove"/>
         /// </param>
         /// <param name="mayNotBeCut">something in it asks not to be broken, or §2 says no user agent may</param>
         internal static double DeltaFor(
@@ -263,7 +290,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                     _tops[index] = top;
                     _bottoms[index] = bottom;
 
-                    var forced = ForcedBreakBetween(lines[index].Above, boxes);
+                    var forced = ForcedBreakAbove(lines[index]);
                     var shiftBefore = shift;
 
                     // Where this line would land with nothing but the displacement above it — the frame the
@@ -352,15 +379,15 @@ namespace PeachPDF.Html.Core.Fragmentation
                 // above ending in an earlier slot than this one begins in *is* the statement that it does.
                 if (container.SlotEndingAt(_bottoms[index - 1]) == destination) return (-1, 0);
 
-                if (!AvoidsBreakBetween(lines[index].Above, lines[index].Boxes)) return (-1, 0);
+                if (!AvoidsBreakAbove(lines[index])) return (-1, 0);
 
                 // The chain reaches back while every break point along it forbids a break and none forces
                 // one: §3.1's forced values take precedence, so a run never reaches through one.
                 var chainStart = index - 1;
 
                 while (chainStart > 0
-                       && ForcedBreakBetween(lines[chainStart].Above, lines[chainStart].Boxes) is null
-                       && AvoidsBreakBetween(lines[chainStart].Above, lines[chainStart].Boxes))
+                       && ForcedBreakAbove(lines[chainStart]) is null
+                       && AvoidsBreakAbove(lines[chainStart]))
                 {
                     chainStart--;
                 }

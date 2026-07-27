@@ -775,5 +775,152 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(0, SlotOf(container, LayoutHarness.FindById(root, "a")!));
             Assert.Equal(0, SlotOf(container, LayoutHarness.FindById(root, "b")!));
         }
+
+        // ─── Block-axis order is not list order ───────────────────────────────────
+
+        // Two full-width lines in a wrap-reverse container: the *second* in flow is the one on top,
+        // because the cross offsets are reversed after they are assigned. Filler puts the container's
+        // top line across the boundary in the first fixture and its bottom line across it in the second.
+        private static string WrapReverse(double filler, string aStyle, string bStyle) =>
+            LayoutHarness.Wrap(
+                $"<div style='height:{filler}pt'>filler</div>"
+                + "<div id='c' style='display:flex; flex-wrap:wrap-reverse; width:300pt'>"
+                + $"<div id='a' style='width:100%;height:40pt;{aStyle}'>A</div>"
+                + $"<div id='b' style='width:100%;height:40pt;{bStyle}'>B</div>"
+                + "</div>");
+
+        // The line below a relocated one follows it — and under wrap-reverse the line below is the one
+        // *earlier* in the list. Walking the list instead leaves it where it was, overlapping.
+        [Fact]
+        public async Task UnderWrapReverse_TheLineBelowARelocatedOne_FollowsIt()
+        {
+            // Container at 170; the top line (B, second in flow) spans 170–210 and crosses slot 0's
+            // bottom at 180, so it moves to 180. A, below it at 210–250, has to move with it.
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                WrapReverse(150, string.Empty, "break-inside:avoid"), pageHeight: PageHeight);
+
+            var a = LayoutHarness.FindById(root, "a")!;
+            var b = LayoutHarness.FindById(root, "b")!;
+
+            // The fixture is only meaningful while the second line in flow really is the upper one.
+            Assert.True(b.Location.Y < a.Location.Y,
+                $"wrap-reverse should put B above A; B is at {b.Location.Y:F1} and A at {a.Location.Y:F1}");
+
+            Assert.Equal(container.PageTopOf(1), b.Location.Y, 1);
+            Assert.True(a.Location.Y >= b.ActualBottom - 0.5,
+                $"A overlaps the line that moved: it starts at {a.Location.Y:F1} while B ends at "
+                + $"{b.ActualBottom:F1}");
+        }
+
+        // The mirror image: the line that moves is the *last* in the list, so nothing above it may be
+        // displaced. Accumulating onto the earlier entries pushes the line physically above it down.
+        [Fact]
+        public async Task UnderWrapReverse_ALineAboveARelocatedOne_StaysWhereItIs()
+        {
+            // Container at 120; B (upper) spans 120–160 entirely inside slot 0, and A (lower) spans
+            // 160–200 across the boundary, so only A moves.
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                WrapReverse(100, "break-inside:avoid", string.Empty), pageHeight: PageHeight);
+
+            var a = LayoutHarness.FindById(root, "a")!;
+            var b = LayoutHarness.FindById(root, "b")!;
+
+            Assert.Equal(container.PageTopOf(1), a.Location.Y, 1);
+            Assert.Equal(120, b.Location.Y, 1);
+            Assert.Equal(0, SlotOf(container, b));
+        }
+
+        // §3.1 identifies a break point by *flow* order, and that identification still holds under
+        // wrap-reverse: `break-after` on the first line's items and `break-before` on the second's name
+        // the same break point. Only the geometry is reversed — that boundary sits *above* the first
+        // line in flow, so it is that line which starts the new fragmentainer.
+        [Theory]
+        [InlineData("break-after:page", "")]
+        [InlineData("page-break-after:always", "")]
+        [InlineData("", "break-before:page")]
+        public async Task UnderWrapReverse_AForcedBreakBetweenTheLines_MovesTheLowerOne(
+            string aStyle, string bStyle)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                WrapReverse(40, aStyle, bStyle), pageHeight: PageHeight);
+
+            var a = LayoutHarness.FindById(root, "a")!;
+            var b = LayoutHarness.FindById(root, "b")!;
+
+            Assert.Equal(0, SlotOf(container, b));
+            Assert.Equal(1, SlotOf(container, a));
+            Assert.Equal(container.PageTopOf(1), a.Location.Y, 1);
+        }
+
+        // A wrapping column flex container stacks its lines along the *inline* axis: they sit side by
+        // side sharing one block-axis range. Two items 40pt tall in a 60pt-tall column container take a
+        // line each, beside one another.
+        private static string WrappingColumn(double filler, string aStyle, string bStyle) =>
+            LayoutHarness.Wrap(
+                $"<div style='height:{filler}pt'>filler</div>"
+                + "<div id='c' style='display:flex; flex-direction:column; flex-wrap:wrap;"
+                + " height:60pt; width:300pt'>"
+                + $"<div id='a' style='width:100pt;height:40pt;{aStyle}'>A</div>"
+                + $"<div id='b' style='width:100pt;height:40pt;{bStyle}'>B</div>"
+                + "</div>");
+
+        // No fragmentainer boundary falls between two lines that share a block-axis range, so a break
+        // value at that point names nothing this pass can act on.
+        [Theory]
+        [InlineData("break-after:page", "")]
+        [InlineData("", "break-before:page")]
+        public async Task InAWrappingColumnContainer_ABreakValueBetweenTheLines_MovesNothing(
+            string aStyle, string bStyle)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                WrappingColumn(120, aStyle, bStyle), pageHeight: PageHeight);
+
+            var a = LayoutHarness.FindById(root, "a")!;
+            var b = LayoutHarness.FindById(root, "b")!;
+
+            // The fixture asserts nothing unless the two items really are on separate lines beside
+            // each other rather than stacked.
+            Assert.True(b.Location.X > a.Location.X,
+                $"expected B on a second line beside A; both are at x {a.Location.X:F1}");
+
+            Assert.Equal(a.Location.Y, b.Location.Y, 1);
+            Assert.Equal(0, SlotOf(container, a));
+            Assert.Equal(0, SlotOf(container, b));
+        }
+
+        // The geometric half survives: a line holding something that may not be cut still moves, and
+        // the line beside it moves with it rather than being left behind out of alignment.
+        [Fact]
+        public async Task InAWrappingColumnContainer_ALineThatMayNotBeCut_MovesEveryLineWithIt()
+        {
+            // Container at 170; both lines span 170–210 and cross slot 0's bottom at 180.
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                WrappingColumn(150, string.Empty, "break-inside:avoid"), pageHeight: PageHeight);
+
+            var a = LayoutHarness.FindById(root, "a")!;
+            var b = LayoutHarness.FindById(root, "b")!;
+
+            Assert.True(b.Location.X > a.Location.X,
+                $"expected B on a second line beside A; both are at x {a.Location.X:F1}");
+
+            Assert.Equal(container.PageTopOf(1), b.Location.Y, 1);
+            Assert.Equal(b.Location.Y, a.Location.Y, 1);
+        }
+
+        // A column container that did not wrap has one line, which is all of its content — that line is
+        // stacked in the block axis like any other and is relocated exactly as a row container's is.
+        [Fact]
+        public async Task InASingleLineColumnContainer_ALineThatMayNotBeCut_StillMoves()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                Document("display:flex; flex-direction:column", "break-inside: avoid"),
+                pageHeight: PageHeight);
+
+            var a = LayoutHarness.FindById(root, "a")!;
+
+            Assert.Equal(1, SlotOf(container, a));
+            Assert.True(a.ActualBottom <= container.PageBottomOf(1) + 0.5,
+                $"expected the item whole in slot 1, it runs to {a.ActualBottom}");
+        }
     }
 }
