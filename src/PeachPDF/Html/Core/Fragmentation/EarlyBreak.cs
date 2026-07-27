@@ -143,7 +143,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             };
 
             var subject = BreakPropagation.AnchorForBreakBefore(box);
-            var run = DomUtils.GetPrecedingKeepWithNextRun(subject);
+            var run = DomUtils.GetPrecedingKeepWithNextRun(subject, FragmentationContext.Page);
 
             // The run has to start on the page being left. Otherwise "pull it along" names content in
             // a fragmentainer this decision has no business touching — expressed, as it has been since

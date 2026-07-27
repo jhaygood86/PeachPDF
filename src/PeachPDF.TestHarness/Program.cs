@@ -3324,6 +3324,28 @@ static string AvoidColumnPanel(string label, string breakInside) =>
     "it once the entry above has taken its share of the height." +
     "</div></div></div>";
 
+// The same heading and panel in the same box twice, differing only in the heading's break-after, so
+// whether the heading travels with the content it introduces is the whole of the difference.
+//
+// `column-fill: auto` rather than the default, and deliberately: a balanced column's height is derived
+// from the content, and the arithmetic then rules the pull out everywhere. "The heading fits column one"
+// is `filler + heading <= target` and "the run fits the destination" is `heading + panel <= target`,
+// which together need `target >= filler + 2*heading + panel` - more than the whole content, where
+// balancing sets the target to a fraction of it. A page-bounded column has a height of its own, which is
+// also what the real case looks like: a chapter heading arriving near the foot of a full column.
+static string KeepWithNextPanel(string label, string breakAfter) =>
+    "<div class=\"frame\"><div class=\"label\">" + label + "</div>" +
+    "<div class=\"mc\" style=\"columns:2;column-gap:20px;column-fill:auto;column-rule:0.5pt solid #000\">" +
+    McEntries(26, "lead") +
+    // Stated on both halves, because the UA print sheet already gives every heading
+    // `page-break-after: avoid` - which is exactly what makes this the ordinary case, and what makes
+    // "auto" rather than the absence of a declaration the control.
+    "<h3 style=\"font-size:9pt;margin:0 0 0.3em;break-after:" + breakAfter + "\">Section heading</h3>" +
+    "<div style=\"height:200pt;background:#fdf3e3;border:0.5pt solid #d68910;padding:3pt;margin:0\">" +
+    "<b>Panel</b> &mdash; the content this heading introduces. It is taller than the room left below the " +
+    "heading, so it starts the next column; whether the heading comes with it is the question." +
+    "</div></div></div>";
+
 // The same paragraph in the same box twice, differing only in box-decoration-break. A vertical
 // gradient and a large border-radius are the two decorations defined over the whole box, so where
 // each one starts and where it rounds is the whole of the difference between the two halves.
@@ -3424,6 +3446,26 @@ var multicolHtml = "<!DOCTYPE html><html><head>" + MulticolCss + "</head><body>"
     McSection("9 &mdash; whole-box decorations at a column break",
         DecorationBreakPanel("box-decoration-break: slice (initial) &mdash; one gradient and one pair of rounded ends across both fragments", "slice") +
         DecorationBreakPanel("box-decoration-break: clone &mdash; the same panel, each fragment decorated in full", "clone")) +
+
+    // §3.1's keep-with-next chain at a column boundary. A run's members are moved on the page grid, and
+    // a column has no lower coordinate to move them to - every column of a container begins at the same
+    // one - so the break is stated before the head of the run instead and the next column's fill lays
+    // the whole run out there. The two panels differ only in the heading's break-after value.
+    McSection("10 &mdash; keep-with-next at a column boundary",
+        KeepWithNextPanel("break-after: auto &mdash; the heading is left at the foot of the column its content has left", "auto") +
+        KeepWithNextPanel("break-after: avoid &mdash; the same heading, travelling with its content into the next column", "avoid")) +
+
+    // §3.1's forced *page* break, inside a container that fragments its own content. It names the page
+    // grid, and no column of this container is on another page - so it escapes the container rather than
+    // being answered with a column of its own, and the entries after it open the next page.
+    McSection("11 &mdash; a forced page break inside a multi-column container",
+        "<div class=\"frame\"><div class=\"label\">columns: 2; break-before: page on the second heading &mdash; the entries after it start a new page, not a new column</div>" +
+        "<div class=\"mc\" style=\"columns:2;column-gap:20px;column-rule:0.5pt solid #000\">" +
+        "<h3 style=\"font-size:9pt;margin:0 0 0.3em\">Before the break</h3>" +
+        McEntries(4, "kept") +
+        "<h3 style=\"font-size:9pt;margin:0 0 0.3em;break-before:page\">After the break, on a page of its own</h3>" +
+        McEntries(4, "moved") +
+        "</div></div>") +
 
     "</body></html>";
 

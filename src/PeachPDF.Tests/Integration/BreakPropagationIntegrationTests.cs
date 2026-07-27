@@ -208,7 +208,7 @@ namespace PeachPDF.Tests.Integration
             var wrap = LayoutHarness.FindById(root, "wrap");
             Assert.NotNull(wrap);
 
-            Assert.Empty(DomUtils.GetPrecedingKeepWithNextRun(wrap!));
+            Assert.Empty(DomUtils.GetPrecedingKeepWithNextRun(wrap!, FragmentationContext.Page));
         }
 
         // The §4.3 movers reach the same rule through EarlyBreak.Discover: the run is collected at the
