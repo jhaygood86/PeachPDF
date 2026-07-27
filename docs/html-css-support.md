@@ -506,7 +506,7 @@ CSS Multi-column Layout (`column-count`/`column-width`/`columns`) is supported, 
 - `orphans` and [margin truncation](#page-breaks) apply at a column boundary the same way they apply at a page boundary (`widows`, which is enforced after the fact by re-running the pass that filled a fragmentainer, is a page-context rule only).
 - A container whose content outlasts its columns continues on the next page, resuming where its last column stopped rather than starting over, and balances the fragment that holds the end of the flow.
 - A child continues **into** the next column rather than moving to it whole: a paragraph's first lines stay in one column and the rest flow into the next, each fragment carrying its own background, border and padding.
-- The break need not fall between two of the container's own children. A block nested any distance below one is split at the column boundary too, and the content after the break starts the next column at that column's top — inside its own containing block's border and padding, and inside the wrapper's own fragment there.
+- The break need not fall between two of the container's own children. A block nested any distance below one is split at the column boundary too, and the content after the break starts the next column flush at that column's top, inside the continuing block's own fragment there. The continuing block's top border and padding are re-opened above it only under `box-decoration-break: clone`; under `slice` the box is cut at the break and nothing is inserted there. See [Decorations at a break](#decorations-at-a-break).
 
 `column-fill: balance` (the default) aims for equal-height columns, and `column-fill: auto` fills each column before starting the next.
 

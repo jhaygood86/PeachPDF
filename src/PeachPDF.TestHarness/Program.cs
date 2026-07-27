@@ -3557,6 +3557,20 @@ static string KeepWithNextPanel(string label, string breakAfter) =>
     "</div></div></div>";
 
 // The same paragraph in the same box twice, differing only in box-decoration-break. A vertical
+// The same wrapped entries in the same box twice, differing only in box-decoration-break. A generous
+// top padding and a solid top border make the head of the continuation column the visible difference:
+// under `slice` the wrapper's own block-start decorations belong to the fragment it started in, so
+// the second column opens flush at the column top with no border above it; under `clone` each fragment
+// re-opens with both, and its content starts below them.
+static string NestedBreakPanel(string label, string decorationBreak) =>
+    "<div class=\"frame\"><div class=\"label\">" + label + "</div>" +
+    "<div class=\"mc\" style=\"columns:2;column-gap:20px;column-rule:0.5pt solid #000\">" +
+    McEntries(1, "lead") +
+    "<section style=\"box-decoration-break:" + decorationBreak + ";" +
+    "background:#eef9f0;border:1pt solid #27ae60;padding:8pt 3pt 3pt;margin:0\">" +
+    McEntries(10, "nested") +
+    "</section></div></div>";
+
 // gradient and a large border-radius are the two decorations defined over the whole box, so where
 // each one starts and where it rounds is the whole of the difference between the two halves.
 static string DecorationBreakPanel(string label, string decorationBreak) =>
@@ -3683,13 +3697,14 @@ var multicolHtml = "<!DOCTYPE html><html><head>" + MulticolCss + "</head><body>"
     // can read it. Left alone, the wrapper neither moved nor broke: it kept flowing past the column band
     // and past the page. The wrapper carries a background and a border so both of its fragments are
     // visible, one per column.
+    //
+    // The two panels differ only in box-decoration-break, and the difference is at the *head* of the
+    // continuation column: `slice` is one box cut at the boundary, so the wrapper's own top padding
+    // belongs to the fragment it started in and the second column begins flush at the column top;
+    // `clone` wraps each fragment, so the second column re-opens with the padding and the border above it.
     McSection("12 &mdash; a break below the container's own child",
-        "<div class=\"frame\"><div class=\"label\">columns: 2; the entries sit inside a &lt;section&gt; of their own, so the break falls between two of its children rather than between two of the container's</div>" +
-        "<div class=\"mc\" style=\"columns:2;column-gap:20px;column-rule:0.5pt solid #000\">" +
-        McEntries(1, "lead") +
-        "<section style=\"background:#eef9f0;border:0.5pt solid #27ae60;padding:3pt;margin:0\">" +
-        McEntries(10, "nested") +
-        "</section></div></div>") +
+        NestedBreakPanel("box-decoration-break: slice (initial) &mdash; the continuation begins flush at the column top, with no padding re-inserted at the break", "slice") +
+        NestedBreakPanel("box-decoration-break: clone &mdash; the same wrapper, each fragment re-opening with its own top border and padding", "clone")) +
 
     "</body></html>";
 

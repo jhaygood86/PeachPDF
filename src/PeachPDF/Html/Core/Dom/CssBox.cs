@@ -2424,10 +2424,25 @@ namespace PeachPDF.Html.Core.Dom
         /// (<see cref="ResumeInTheNextFragmentainer"/>) — writing a target for it would place it twice.
         /// </para>
         /// <para>
-        /// The destination is the lower of the column's own content edge and this box's, for the same reason
-        /// <see cref="ResumeInTheNextFragmentainer"/> takes that maximum: the containing block has just been
-        /// re-placed in this column and its content edge sits inside its own border and padding, while a
-        /// container that began on an earlier page names a coordinate this column does not reach.
+        /// <b>The destination is the column's own content edge, and only a <c>clone</c> box adds anything to
+        /// it</b> (<see href="https://www.w3.org/TR/css-break-3/#break-decoration">§6.2</see>). A record
+        /// naming this box is what makes this a resumed loop, so <i>this</i> box is continuing — its
+        /// block-start border and padding are not real edges here, and <c>slice</c> renders it as one box cut
+        /// at the break with nothing inserted there. Reading
+        /// <see cref="CssBoxProperties.ClientTop"/> unconditionally re-inserted them for both values alike:
+        /// measured with <c>padding-top: 10pt; border-top: 6pt</c>, the first child of every continuation
+        /// column began 16pt below the column top, with no border drawn in the gap — the painter is right,
+        /// because <c>FragmentEmitter</c> clears the top edge of a fragment that resumes an earlier one. This
+        /// is the same arithmetic the inline path already does in
+        /// <c>CssLayoutEngine.CreateLineBoxes</c>, which is what makes it a block/inline inconsistency inside
+        /// one feature rather than an unimplemented area. Summed over the child's <i>ancestors</i>: the child
+        /// begins here whole, so its own decorations are not being re-opened.
+        /// </para>
+        /// <para>
+        /// A containing block that is not this box did <i>not</i> resume here — nothing gave it a record —
+        /// so it began in this column and its content edge is a real edge the child goes inside. That is the
+        /// case the maximum answers, and it is the only one left now that the continuing box is handled
+        /// above.
         /// </para>
         /// </remarks>
         private double? ColumnTopForTheChildThisFillBeginsAt(BlockBreakToken resumeAt, CssBox childBox)
@@ -2436,7 +2451,14 @@ namespace PeachPDF.Html.Core.Dom
 
             if (HtmlContainer?.CurrentFragmentainer is not { HasOwnBand: true } column) return null;
 
-            return Math.Max(column.ResumeContentTop, childBox.ContainingBlock.ClientTop);
+            var top = column.ResumeContentTop
+                      + (HtmlContainer is { HasCloneDecorations: true }
+                          ? DomUtils.ClonedBlockStart(childBox.ParentBox)
+                          : 0);
+
+            return ReferenceEquals(childBox.ContainingBlock, this)
+                ? top
+                : Math.Max(top, childBox.ContainingBlock.ClientTop);
         }
 
         /// <summary>

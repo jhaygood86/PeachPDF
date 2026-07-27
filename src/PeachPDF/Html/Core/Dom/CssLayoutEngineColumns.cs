@@ -297,6 +297,8 @@ namespace PeachPDF.Html.Core.Dom
         private const int MaxFillAttempts = 4;
         private const double TargetGrowthPerAttempt = 1.2;
 
+        private static readonly IReadOnlySet<CssBox> NoBoxes = new HashSet<CssBox>();
+
         /// <summary>
         /// Fills this container's columns once at <paramref name="target"/>, returning what would not fit,
         /// how far down the content reached, and how many columns it took.
@@ -490,9 +492,13 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private static IReadOnlySet<CssBox> BeyondThisColumn(BreakToken? token)
         {
+            // A column whose fill finished holds everything it reached, which is the common case and the
+            // one that ends the loop - no record, nothing beyond, and no set to allocate for it.
+            if (token is not BlockBreakToken) return NoBoxes;
+
             var beyond = new HashSet<CssBox>();
 
-            for (var link = token as BlockBreakToken; link is not null; link = link.ChildToken as BlockBreakToken)
+            for (var link = (BlockBreakToken?)token; link is not null; link = link.ChildToken as BlockBreakToken)
             {
                 var from = link.IsBreakBefore ? link.ResumeChildIndex : link.ResumeChildIndex + 1;
 

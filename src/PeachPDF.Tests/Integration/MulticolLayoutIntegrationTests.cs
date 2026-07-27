@@ -1785,12 +1785,13 @@ namespace PeachPDF.Tests.Integration
 
         /// <summary>
         /// Two levels below the container, so the record's chain has an intermediate link that is itself
-        /// <i>continuing</i>. The target for the box that begins the next column is its own containing
-        /// block's content top, which is inside that block's padding — not the column's band top, and not
-        /// knowable when the record was written, since the block had not been re-placed there yet.
+        /// <i>continuing</i>. The target for the box that begins the next column is that column's own
+        /// content top, and — since the block it continues is <c>slice</c> — nothing is inserted above it
+        /// there: §6.2 renders a sliced box as though it were never broken and cuts it at the break, so the
+        /// padding belongs to the fragment the block <i>started</i> in and to no other.
         /// </summary>
         [Fact]
-        public async Task ABreakTwoLevelsBelowTheContainer_StartsInsideItsOwnContainingBlock()
+        public async Task ABreakTwoLevelsBelowTheContainer_StartsFlushAtTheColumnTop()
         {
             var rows = string.Concat(Enumerable.Range(0, 24)
                 .Select(i => $"<div id='r{i}' class='row' style='height:20pt; margin:0'>r{i}</div>"));
@@ -1807,12 +1808,16 @@ namespace PeachPDF.Tests.Integration
             var inner = FindById(root, "inner")!;
             var rowBoxes = FindAllByClass(root, "row");
 
-            // The continuation begins at its own containing block's content top - the inner block's
-            // padding is inside the column, not swallowed by it - and at that block's own left edge.
-            Assert.Equal(inner.ClientTop, rowBoxes[18].Location.Y, 1);
+            // Flush at the column's own content top, with the sliced block's 4pt padding *not* re-inserted
+            // there - and at that block's own left edge, which is a real edge in every fragment because §2
+            // shares one inline size across a box's fragments.
+            Assert.Equal(mc.ClientTop, rowBoxes[18].Location.Y, 1);
             Assert.Equal(inner.ClientLeft, rowBoxes[18].Location.X, 1);
-            Assert.Equal(mc.ClientTop + 4, rowBoxes[18].Location.Y, 1);
             Assert.True(rowBoxes[18].Location.X > mc.ClientLeft + 100);
+
+            // The padding is genuinely there in the fragment the block started in, so this is a statement
+            // about the break rather than about the padding being dropped.
+            Assert.Equal(mc.ClientTop + 20 + 4, rowBoxes[0].Location.Y, 1);
 
             for (var i = 19; i <= 23; i++)
             {
@@ -1821,6 +1826,47 @@ namespace PeachPDF.Tests.Integration
             }
 
             Assert.Single(container.FragmentTree!.Fragmentainers);
+        }
+
+        /// <summary>
+        /// <see href="https://www.w3.org/TR/css-break-3/#break-decoration">§6.2</see> at the <i>head</i> of a
+        /// continuation column, which is the other end of the same rule. Only <c>clone</c> re-opens the
+        /// continuing block's block-start border and padding there; <c>slice</c> is one box cut at the break
+        /// and inserts nothing. Both values used to insert them alike — 16pt of blank space at the head of
+        /// every continuation column, with no border drawn in it, because the painter correctly clears the
+        /// top edge of a fragment that resumes an earlier one.
+        /// </summary>
+        [Fact]
+        public async Task AContinuingBlocksBlockStartDecorations_AreReopenedOnlyByClone()
+        {
+            async Task<(double ColumnTop, double FirstRowTop)> ContinuationHeadOf(string decorationBreak)
+            {
+                var rows = string.Concat(Enumerable.Range(0, 24)
+                    .Select(i => $"<div id='r{i}' class='row' style='height:20pt; margin:0'>r{i}</div>"));
+
+                var (root, _) = await BuildAndLayout(Wrap($@"
+                    <div id='mc' style='columns:2; column-gap:0; width:300pt; column-fill:auto'>
+                        <div id='lead' style='height:20pt; margin:0'>lead</div>
+                        <div id='wrap' style='margin:0; padding-top:10pt; border-top:6pt solid red;
+                             box-decoration-break:{decorationBreak}'>{rows}</div>
+                    </div>"), pageHeight: 400);
+
+                var mc = FindById(root, "mc")!;
+                var secondColumnLeft = FindAllByClass(root, "row")
+                    .First(r => r.Location.X > mc.ClientLeft + 100);
+
+                return (mc.ClientTop, secondColumnLeft.Location.Y);
+            }
+
+            var (sliceTop, sliceFirst) = await ContinuationHeadOf("slice");
+            var (cloneTop, cloneFirst) = await ContinuationHeadOf("clone");
+
+            // `slice`: flush at the column's content top, nothing inserted at the break.
+            Assert.Equal(sliceTop, sliceFirst, 1);
+
+            // `clone`: the fragment opens with its own 6pt border and 10pt padding, and content starts below
+            // them.
+            Assert.Equal(cloneTop + 16, cloneFirst, 1);
         }
 
         /// <summary>

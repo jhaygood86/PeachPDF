@@ -58,7 +58,7 @@ namespace PeachPDF.Html.Core.Fragments
             ArgumentNullException.ThrowIfNull(root);
 
             var snapshot = new BoxGeometrySnapshot();
-            snapshot.CaptureBox(root);
+            snapshot.CaptureBox(root, excluded: null);
             return snapshot;
         }
 
@@ -78,6 +78,12 @@ namespace PeachPDF.Html.Core.Fragments
         /// everything from the break onward belongs to the next one — so the root is captured and the walk
         /// stops at each excluded box.
         /// </para>
+        /// <para>
+        /// A root is never itself tested against <paramref name="excluded"/>, and does not need to be: the
+        /// two are read off the same break record, whose boundary index is where one range ends and the
+        /// other begins, so no root can also be excluded. Stated here because it is not a local property of
+        /// this method.
+        /// </para>
         /// </remarks>
         internal static BoxGeometrySnapshot Capture(IEnumerable<CssBox> roots, IReadOnlySet<CssBox>? excluded = null)
         {
@@ -93,7 +99,7 @@ namespace PeachPDF.Html.Core.Fragments
             return snapshot;
         }
 
-        private void CaptureBox(CssBox box, IReadOnlySet<CssBox>? excluded = null)
+        private void CaptureBox(CssBox box, IReadOnlySet<CssBox>? excluded)
         {
             var geometry = new BoxGeometry
             {
