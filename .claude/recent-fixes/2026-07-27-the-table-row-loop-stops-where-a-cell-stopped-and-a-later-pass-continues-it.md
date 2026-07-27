@@ -18,7 +18,7 @@ each unfinished cell's own token; a continuation hands those tokens back to thei
 continues where *it* stopped.
 
 **Behaviour-neutral, and measured rather than argued**: 69/69 showcases byte-identical against `main`
-at `0c596fc`, 6,753 tests, 96 CLI tests, 100% diff coverage, zero-warning solution rebuild.
+at `1408bb7`, 6,779 tests, 96 CLI tests, 100% diff coverage, zero-warning solution rebuild.
 
 ## The headline: this step is *not* unreachable, and the previous measurement was wrong
 
@@ -33,7 +33,7 @@ corpus, says otherwise:
 | | reached |
 |---|---|
 | 69 showcases | never |
-| 6,753-test suite, from markup | **once** |
+| the whole test suite, from markup | **once** |
 
 The one is `MulticolLayoutIntegrationTests.InsideAnotherEngine_NoContentIsDropped(outerStyle:
 "display:table")` — a `columns: 2` container inside a `display: table`. `CssLayoutEngineColumns`

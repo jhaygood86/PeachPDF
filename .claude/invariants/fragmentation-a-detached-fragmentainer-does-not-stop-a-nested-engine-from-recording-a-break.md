@@ -32,7 +32,7 @@ suite and the whole showcase corpus, not by enumerating shapes.
 
 ## The measured symptom
 
-A probe recording every entry into the row loop's new stop, run over the 6,730-test suite and all 69
+A probe recording every entry into the row loop's new stop, run over the whole test suite and all 69
 showcases: the showcases never reach it, the suite reaches it **once**, from that fixture. It is
 harmless there only because the row that stops is the table's last, so stopping the loop skips no
 row — a fact about the fixture, not about the guard.
