@@ -1506,15 +1506,17 @@ namespace PeachPDF.Html.Core.Dom
                 await LayoutContents(g, resume);
 
                 // Positioned here rather than from the epilogue, so that a box which does not finish in
-                // this fragmentainer still has its marker - see the method's own remarks for which pass
-                // that has to be, and why it is not the same pass on the page grid as inside a column.
-                if (MarkerBelongsToTheFragmentainerBeingFilled())
+                // this fragmentainer still has its marker - see the method's own remarks for why that is
+                // the pass which places the item, and only that one.
+                if (MarkerBelongsToTheFragmentainerBeingFilled(resume))
                 {
                     await LayoutOutsideMarker(g);
                 }
 
                 if (PendingBreakToken is not null || RequestedBreakBeforeTop is not null)
                 {
+                    TakeBackTheMarkerOfAnItemThisPassKeptNothingOf();
+
                     // This box did not finish in this fragmentainer. Its epilogue judges a *complete*
                     // box, so it waits for the pass that completes it; the record unwinds from here.
                     PublishBreakToTheContextRoot();
@@ -1543,43 +1545,129 @@ namespace PeachPDF.Html.Core.Dom
         /// Whether the pass now running is the one whose fragmentainer this list item's <c>outside</c>
         /// <c>::marker</c> belongs to — the pass that must position it.
         /// </summary>
+        /// <param name="resume">
+        /// this pass's resumption record, or null when it is the pass that <i>places</i> the item.
+        /// </param>
         /// <remarks>
         /// <para>
-        /// <b>The marker belongs to the fragmentainer holding the geometry its item keeps</b>, because it is
-        /// positioned against the item's own border box (CSS 2.1 §12.5.1: beside the item's first line box)
-        /// rather than against the item's content — so which fragmentainer that is, is the same question as
-        /// which one the item's own <see cref="CssBoxProperties.Location"/> describes.
+        /// <b>The marker belongs to the fragmentainer its item begins in</b> (CSS 2.1 §12.5.1 / CSS Lists
+        /// Level 3 §3.1: beside the item's <i>first</i> line box), and that is settled the moment the item is
+        /// placed — it is positioned against the item's own border box rather than against its content, so
+        /// neither the item's height nor how much of it fits here is an input. So the pass that places the
+        /// item is the pass that positions the marker, and a pass that <i>resumes</i> it must not: whatever it
+        /// does to the item's own <see cref="CssBoxProperties.Location"/>, the marker's place in the document
+        /// was decided a fragmentainer ago.
         /// </para>
         /// <para>
-        /// <b>The page grid and a nested fragmentainer answer it differently, and one rule cannot serve
-        /// both.</b> On the page grid a box that does not finish keeps the position the pass that placed it
-        /// gave it, so the marker belongs to that first pass — positioning it from
-        /// <see cref="PerformLayoutEpilogue"/>, which runs only on the pass that <i>completes</i> the item,
-        /// gave it its coordinates after the slot those coordinates fall in had been frozen, and the marker
-        /// was claimed by no fragment at all and painted on no page
-        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/444">#444</see>). Inside a column a box
-        /// that does not finish is laid out <i>again</i> at the next column's inline position
-        /// (<see cref="ResumeInTheNextFragmentainer"/>, gated on the very same
-        /// <c>HasOwnBand</c>), so only its last fragment's geometry survives and positioning the marker on an
-        /// earlier pass puts it in a column its item has left — and leaves that column's
-        /// <see cref="Fragments.BoxGeometrySnapshot"/> holding a second copy of it.
+        /// <b>Both halves cost a measured defect.</b> Positioned from <see cref="PerformLayoutEpilogue"/>,
+        /// which runs only on the pass that <i>completes</i> the item, a straddling item's marker got its
+        /// coordinates after the slot they fall in had been frozen, and was claimed by no fragment at all and
+        /// painted on no page (<see href="https://github.com/jhaygood86/PeachPDF/issues/444">#444</see>).
+        /// Positioned again on a resumed pass, it moved with the item: inside a column that means
+        /// <see cref="ResumeInTheNextFragmentainer"/>'s new inline position, so the bullet appeared beside the
+        /// continuation in the later column instead of beside the item's own first line, and the earlier
+        /// column's <see cref="Fragments.BoxGeometrySnapshot"/> and the live box then held two origins for one
+        /// word (<see href="https://github.com/jhaygood86/PeachPDF/issues/468">#468</see>). Leaving it where
+        /// the placing pass put it needs nothing else: a column's snapshot already records word origins of
+        /// its own, and <c>FragmentEmitter</c>'s region test rejects a marker sitting in a neighbouring
+        /// column's inline span.
         /// </para>
         /// <para>
         /// A pass that requested a break <i>before</i> this box declined to place it at all, so there is no
-        /// position for the marker to sit against and neither answer applies.
+        /// position for the marker to sit against; the pass that does place it lays it out afresh, with no
+        /// resumption record, and answers true here.
         /// </para>
         /// </remarks>
-        private bool MarkerBelongsToTheFragmentainerBeingFilled() =>
+        private bool MarkerBelongsToTheFragmentainerBeingFilled(BreakToken? resume) =>
             RequestedBreakBeforeTop is null
-            && (PendingBreakToken is null
-                || HtmlContainer?.CurrentFragmentainer is not { HasOwnBand: true });
+            && (resume is null || OutsideMarkerAwaitsPlacement());
+
+        /// <summary>
+        /// Whether this list item's <c>outside</c> <c>::marker</c> is still waiting to be positioned by this
+        /// layout — the state <see cref="AwaitPlacement"/> puts every word into and being positioned takes it
+        /// out of (<c>CssRect.Top</c>'s setter).
+        /// </summary>
+        /// <remarks>
+        /// It is the marker's own record of "no pass has placed me yet", so it is what lets a resumed pass
+        /// answer <see cref="MarkerBelongsToTheFragmentainerBeingFilled"/> true without any second bookkeeping
+        /// channel: the pass that placed the item took its own positioning back
+        /// (<see cref="TakeBackTheMarkerOfAnItemThisPassKeptNothingOf"/>), or an abandoned multi-column fill
+        /// attempt did (<see cref="ResetForRefill"/>), and the marker is still owed a fragmentainer.
+        /// </remarks>
+        private bool OutsideMarkerAwaitsPlacement()
+        {
+            foreach (var childBox in Boxes)
+            {
+                if (IsOutsideMarker(childBox))
+                    return childBox.Words.Count > 0 && childBox.Words[0].AwaitsTheNextFragmentainer;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Un-positions this list item's <c>outside</c> <c>::marker</c> when the pass that placed the item
+        /// went on to keep none of its content, so that the pass which does keep some positions it instead.
+        /// </summary>
+        /// <remarks>
+        /// A pass places a box before it discovers how much of it fits, and the answer can be "none": the
+        /// break then falls <i>before</i> the item (css-break-3 §3.1 propagation, §5.4's orphans floor, or a
+        /// column's own overflow arm), and the fill drops the item from that fragmentainer's geometry
+        /// altogether. The marker positioned against that placement would be the only thing left of the item
+        /// there — beside nothing, in a fragmentainer whose captured geometry no longer holds its item, so
+        /// claimed by nothing and painted on no page, which is
+        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/444">#444</see>'s symptom reached from the
+        /// other direction. Measured on a 660-document multi-column sweep: 9 markers, every one of them
+        /// <c>column-fill: balance</c>.
+        /// <para>
+        /// "Kept nothing" is asked of the item's own words rather than of the break record, because the
+        /// decision that drops it is the <i>parent's</i> and is not made until this box's layout has
+        /// returned. A word placed by an earlier pass counts as kept: the item does have a fragment
+        /// somewhere, and taking the marker back again would be how it goes missing.
+        /// </para>
+        /// </remarks>
+        private void TakeBackTheMarkerOfAnItemThisPassKeptNothingOf()
+        {
+            if (Display != CssConstants.ListItem) return;
+
+            foreach (var childBox in Boxes)
+            {
+                if (!IsOutsideMarker(childBox)) continue;
+
+                if (!HasAPlacedWord(this, childBox)) childBox.AwaitPlacement();
+
+                return;
+            }
+        }
+
+        /// <summary>
+        /// Whether any word of <paramref name="box"/>'s subtree has been positioned by some pass of this
+        /// layout, skipping the subtree rooted at <paramref name="excluded"/>.
+        /// </summary>
+        private static bool HasAPlacedWord(CssBox box, CssBox excluded)
+        {
+            foreach (var word in box.Words)
+            {
+                if (!word.AwaitsTheNextFragmentainer) return true;
+            }
+
+            foreach (var childBox in box.Boxes)
+            {
+                if (ReferenceEquals(childBox, excluded)) continue;
+
+                if (HasAPlacedWord(childBox, excluded)) return true;
+            }
+
+            return false;
+        }
 
         /// <summary>
         /// Lays out this list item's <c>outside</c> <c>::marker</c> (the CSS default), which is deliberately
-        /// excluded from the item's own inline flow (<c>CssLayoutEngine.FlowBox</c>) and never reached by the
-        /// generic block-children loop either, so this is the one call that positions it. An <c>inside</c>
-        /// marker is an ordinary flowed child that has already positioned itself, and no-ops here
-        /// (<see cref="CssBoxMarker.PerformLayoutImp"/>'s own <c>ListStylePosition</c> check).
+        /// excluded from the item's own inline flow (<c>CssLayoutEngine.FlowBox</c>) and from the generic
+        /// block-children loop (<see cref="LayoutBlockChildren"/>) alike, so this is the one call that
+        /// positions it. An <c>inside</c> marker is an ordinary flowed child that has already positioned
+        /// itself, and no-ops here (<see cref="CssBoxMarker.PerformLayoutImp"/>'s own
+        /// <c>ListStylePosition</c> check).
         /// </summary>
         /// <remarks>
         /// Called after <see cref="LayoutContents"/> rather than immediately after placement, and that
@@ -1602,6 +1690,21 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
         }
+
+        /// <summary>
+        /// Whether <paramref name="box"/> is an <c>outside</c> <c>::marker</c> — the CSS default, and the one
+        /// box that belongs to neither of a list item's flows.
+        /// </summary>
+        /// <remarks>
+        /// It is positioned beside the item's principal block box rather than inside it (CSS 2.1 §12.5.1 /
+        /// CSS Lists Level 3 §3.1), by <see cref="LayoutOutsideMarker"/> alone. Three places have to agree on
+        /// which box that is — the inline flow (<c>CssLayoutEngine.FlowBox</c>), the block-children loop
+        /// (<see cref="LayoutBlockChildren"/>), and the parser pass that gathers inline runs into anonymous
+        /// blocks (<c>DomParser.JoinsTheInlineRun</c>) — so they ask here rather than each restating it. An
+        /// <c>inside</c> marker is an ordinary flowed inline and answers false.
+        /// </remarks>
+        internal static bool IsOutsideMarker(CssBox box) =>
+            box is { IsMarkerPseudoElement: true, ListStylePosition: not CssConstants.Inside };
 
         /// <summary>
         /// Picks up this box's resumption state for the pass that is starting, discarding anything left
@@ -2262,6 +2365,16 @@ namespace PeachPDF.Html.Core.Dom
             var resumeAt = resume as BlockBreakToken;
             var start = resumeAt?.ResumeChildIndex ?? 0;
 
+            // An outside ::marker is not one of this box's block children: it is positioned beside the item's
+            // principal block box rather than in its flow (CSS 2.1 §12.5.1), by the one call
+            // CssBox.LayoutOutsideMarker makes. It reaches this loop only for a list item whose content is
+            // block-level, where nothing wraps it into an anonymous block (DomParser.JoinsTheInlineRun); the
+            // inline flow, which is where it sits for every other item, skips it for the same reason
+            // (CssLayoutEngine.FlowBox). Stepping `start` over it as well as the loop keeps the resumption
+            // record with the first child this loop actually lays out - the marker is Boxes[0], so a record
+            // naming index 0 would otherwise be consumed by a child that is passed over and lost.
+            while (start < Boxes.Count && IsOutsideMarker(Boxes[start])) start++;
+
             // One restart per run head per loop, so a run whose members keep reaching the same
             // conclusion cannot cycle.
             HashSet<int>? restartedHeads = null;
@@ -2282,6 +2395,8 @@ namespace PeachPDF.Html.Core.Dom
                 for (var i = start; i < Boxes.Count; i++)
                 {
                     var childBox = Boxes[i];
+
+                    if (IsOutsideMarker(childBox)) continue;
 
                     // Only the child the previous pass stopped at resumes; everything after it is laid out
                     // from the start, having never been reached.

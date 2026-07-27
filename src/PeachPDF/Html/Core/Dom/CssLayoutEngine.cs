@@ -1221,7 +1221,7 @@ namespace PeachPDF.Html.Core.Dom
                 // and sized entirely on its own (see CssBoxMarker.PerformLayoutImp), not as part of
                 // this inline flow. An "inside" marker has no such exclusion - it's simply the first
                 // ordinary inline child, flowed exactly like any other word/box below.
-                if (b is { IsMarkerPseudoElement: true, ListStylePosition: not CssConstants.Inside }) continue;
+                if (CssBox.IsOutsideMarker(b)) continue;
 
                 // The same question as `opensHere` above, asked of this child: has the walk reached the
                 // resume point yet, or is it still fast-forwarding through content an earlier
