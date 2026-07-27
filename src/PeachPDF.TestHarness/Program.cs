@@ -1659,13 +1659,31 @@ var monolithicHtml = """
       <div class="card"><span class="tag">grid item</span><h2>Four</h2>
         <p>An item spanning several rows travels with the first of them.</p></div>
     </div>
+
+    <h1>The lines below a moved one follow it</h1>
+    <p>A wrapping flex container whose middle line meets the page boundary. That line moves to the next
+    page, and every line below it moves with it &mdash; a line does not stay where it was while the one
+    above it leaves, and the container's own height grows by what its content travelled.</p>
+    """
+    + string.Concat(Enumerable.Range(85, 11).Select(i =>
+        $"<p>Filler paragraph {i}. This run puts the second of the three lines below across the boundary.</p>"))
+    + """
+    <div style="display:flex; flex-wrap:wrap; gap:8pt; border:1px dashed #a3a3a3; padding:6pt">
+    """
+    + string.Concat(Enumerable.Range(1, 6).Select(i =>
+        $"<div class=\"card\" style=\"width:38%; margin:0; break-inside:avoid\">"
+        + $"<span class=\"tag\">line {(i + 1) / 2}</span>"
+        + $"<h2>Item {i}</h2><p>Sized so three lines of two wrap inside the container.</p></div>"))
+    + """
+    </div>
     </body></html>
     """;
 
 await SaveShowcaseAsync("paged_media_monolithic_content", "Paged Media", "Monolithic Content",
     "A box with overflow: hidden is a scroll container, which CSS Fragmentation §2 forbids breaking: it "
     + "moves to the next page whole instead of being cut in half by the page boundary. A flex line and a "
-    + "grid row that ask not to be broken move as a unit for the same reason.",
+    + "grid row that ask not to be broken move as a unit for the same reason, and the lines below a "
+    + "moved one follow it rather than staying put.",
     monolithicHtml, new PdfGenerateConfig { PageSize = PageSize.A5 });
 
 // ── orphans / widows showcase ──────────────────────────────────────────────

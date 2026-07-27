@@ -184,10 +184,6 @@ namespace PeachPDF.Html.Core.Dom
             // Phase 9: assign final locations
             AssignLocations(lines);
 
-            // Phase 9b: the break points between lines are real ones now that the items sit where they
-            // will finally sit - see RelocateLinesAcrossFragmentainers.
-            RelocateLinesAcrossFragmentainers(lines);
-
             // Phase 10: update container size if auto.
             // Use Max across all lines because wrap-reverse can make the last line have the smallest offset.
             double maxCrossEnd = lines.Count > 0
@@ -203,6 +199,14 @@ namespace PeachPDF.Html.Core.Dom
                     _flexBox.ActualRight = _flexBox.ClientLeft + maxCrossEnd
                         + _flexBox.ActualPaddingRight + _flexBox.ActualBorderRightWidth;
             }
+
+            // Phase 9b: the break points between lines are real ones now that the items sit where they
+            // will finally sit - see RelocateLinesAcrossFragmentainers. Run *after* the container has
+            // been sized from its lines, because that sizing reads the line offsets rather than the
+            // boxes and so would overwrite the displacement this adds: an auto-height container whose
+            // lines were pushed onto the next fragmentainer reported a height a whole displacement short
+            // of the content it holds.
+            RelocateLinesAcrossFragmentainers(lines);
 
             // Phase 10b: inline-flex shrinks to content in the main axis (like inline-block).
             // For row direction with auto width, update ActualRight to the actual content extent.
@@ -802,32 +806,19 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (LineBounds(line) is not { } bounds) continue;
 
-                var (top, bottom) = (bounds.Top + shift, bounds.Bottom + shift);
+                shift += LineRelocation.DeltaFor(
+                    container, bounds.Top + shift, bounds.Bottom + shift,
+                    LineTakesAForcedBreak(line), LineMayNotBeCut(line));
 
-                var slot = container.SlotStartingAt(top);
-                var slotBottom = container.PageBottomOf(slot);
-
-                var forced = LineTakesAForcedBreak(line);
-                var straddles = bottom - HtmlContainerInt.PageBoundaryEpsilon > slotBottom
-                                && LineMayNotBeCut(line);
-
-                if (!forced && !straddles) continue;
-
-                var target = container.PageTopOf(slot + 1);
-
-                // A line taller than a whole band has nowhere better to be, and moving it would ask the
-                // same question again on the next fragmentainer, forever.
-                if (!forced && bottom - top > container.PageBandHeightOf(slot + 1)) continue;
-
-                var delta = target - top;
-
-                if (delta <= 0) continue;
-
-                shift += delta;
+                // Every line from the first relocated one onward moves by the *accumulated* displacement,
+                // not by its own: a line below one that moved to the next fragmentainer follows it there,
+                // and a line needing no relocation of its own still has to keep its place under the one
+                // that did. Moving only the line that asked leaves the ones after it on top of it.
+                if (shift <= 0) continue;
 
                 foreach (var item in line.Items)
                 {
-                    item.Box.OffsetTop(delta);
+                    item.Box.OffsetTop(shift);
                 }
             }
 
