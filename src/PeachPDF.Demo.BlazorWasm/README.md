@@ -38,7 +38,14 @@ web or to a local file resolves to nothing.
   to natively relink the runtime does not change it (measured; the limitation is managed-side). WOFF 1.0
   uses deflate and works, at about 2.3 MB for the twelve faces against WOFF2's 1.6 MB.
 - **`hyphens: auto` does nothing here**, for the same reason: the hyphenation patterns are
-  Brotli-compressed. Text lays out unhyphenated rather than the render failing.
+  Brotli-compressed. Text lays out unhyphenated rather than the render failing. The page says so.
+- **The footer names the build it is running.** A `GenerateDemoBuildInfo` target bakes in the library's
+  `PackageVersion`, this commit, and whether the two agree — a release is tagged `v{PackageVersion}`, so a
+  commit that is not that tag's commit is a prerelease of it, and the footer links the commit instead of
+  the release. Both git calls tolerate failure, so the demo still builds from a source archive with no
+  repository; with no commit to compare, the version alone is the honest answer. Note this makes
+  `pages.yml` check out full history — a shallow clone has no tags, and every deploy would otherwise
+  describe itself as a prerelease.
 - **`Arial Narrow` renders at normal width.** Liberation Sans Narrow is not part of Liberation 2.x — it
   ships separately under a different licence — so no metrically compatible narrow face is bundled.
 - **WebP images do not render.** PeachPDF's image decoder does not support the format.

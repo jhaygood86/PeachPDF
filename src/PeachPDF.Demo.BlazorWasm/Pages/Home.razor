@@ -103,6 +103,11 @@
             <strong>Nothing external loads.</strong> An HTML file's images must be <code>data:</code> URIs;
             an MHTML or ZIP carries its own. References to the web or to local files resolve to nothing.
         </li>
+        <li>
+            <strong><code>hyphens: auto</code> does nothing here.</strong> PeachPDF's hyphenation patterns
+            are Brotli-compressed, and a browser has no Brotli decoder — so text lays out unhyphenated
+            rather than the render failing. Everywhere else PeachPDF runs, it hyphenates normally.
+        </li>
         <li>WebP images are not supported by the renderer's image decoder.</li>
     </ul>
 </section>
