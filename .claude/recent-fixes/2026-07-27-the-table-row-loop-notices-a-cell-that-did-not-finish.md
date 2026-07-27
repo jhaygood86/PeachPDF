@@ -78,6 +78,29 @@ Four neutralizations, each measured rather than asserted:
 | delete the publication onto `_tableBox` | 1 |
 | record every cell, finished or not | 14 |
 
+## What the review changed, and the one thing worth carrying forward
+
+Three of the review's findings were real and are in the diff: the record is now **cleared at the top of
+`LayoutCells`** as well as published at the end (both `PerformLayout` wrappers swallow the exception
+when there is no `HtmlContainer`, so a throw part-way through would otherwise leave the *previous*
+run's answer standing), it is published as a **copy** rather than the cursor's live list, and the
+§4.4 citation had an anchor pointing at §3.1.
+
+The one worth carrying forward is why only one of the two "did not finish" channels is asked.
+`CssBox.PerformLayoutImp` treats `PendingBreakToken is not null || RequestedBreakBeforeTop is not null`
+as unfinished, and the first draft's comment credited the row loop's per-row break check with covering
+the second. **It does not.** A cell cannot carry a break-before request because `PlaceBlockChild` wraps
+its whole body — both `RequestBreakBefore` call sites included — in
+`if (child.Display != CssConstants.TableCell)`. The per-row check is a different decision entirely,
+taken from `EstimateRowHeight` before the row is laid out. A change that ever gives a cell its own
+break-before has to add the second channel here, and would get no warning from the tests.
+
+Also worth knowing when the gate lifts: `RecordIfUnfinished` fires for `CssSpacingBox` rowspan
+placeholders too, so a token carried by one would be recorded against the placeholder rather than
+against the spanning cell's `ExtendedBox`; and the cell loop `break`s at
+`currentColumn >= _columnWidths.Length`, so the record is "cells the loop placed", not "cells of the
+row". Neither is reachable today.
+
 ## Deliberately not done
 
 - **The monolithic gate stays down.** It is the last thing to move, not the first — lifting it loses
