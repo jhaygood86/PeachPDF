@@ -5,6 +5,7 @@ using PeachPDF.Html.Core.Utils;
 using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Fragments;
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -39,6 +40,14 @@ namespace PeachPDF.Html.Core.Dom
     /// </remarks>
     internal static class CssLayoutEngineColumns
     {
+        /// <summary>
+        /// The empty answer to both "which boxes continue past this column" and "which boxes is this column
+        /// not holding", shared rather than allocated per column: a container whose content fits gives it
+        /// for every column, and every container gives it for its last one.
+        /// </summary>
+        private static readonly IReadOnlySet<CssBox> NoBoxes = FrozenSet<CssBox>.Empty;
+
+
         public static async ValueTask PerformLayout(RGraphics g, CssBox columnsBox, BreakToken? resume = null)
         {
             try
@@ -407,9 +416,11 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private static IReadOnlySet<CssBox> ContinuingPast(BreakToken? token)
         {
+            if (token is not BlockBreakToken { ChildToken: not null } block) return NoBoxes;
+
             var continuing = new HashSet<CssBox>();
 
-            for (var link = token is BlockBreakToken block ? block.ChildToken : null; link is not null;)
+            for (var link = block.ChildToken; link is not null;)
             {
                 continuing.Add(link.Box);
                 link = link is BlockBreakToken { ChildToken: { } child } ? child : null;
@@ -490,9 +501,14 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private static IReadOnlySet<CssBox> BeyondThisColumn(BreakToken? token)
         {
+            // The last column of every container reaches here with no record at all, and so does every
+            // column of one whose content fits - so the empty answer is the common one, and it needs no
+            // set of its own.
+            if (token is not BlockBreakToken outermost) return NoBoxes;
+
             var beyond = new HashSet<CssBox>();
 
-            for (var link = token as BlockBreakToken; link is not null; link = link.ChildToken as BlockBreakToken)
+            for (var link = outermost; link is not null; link = link.ChildToken as BlockBreakToken)
             {
                 var from = link.IsBreakBefore ? link.ResumeChildIndex : link.ResumeChildIndex + 1;
 
@@ -653,6 +669,17 @@ namespace PeachPDF.Html.Core.Dom
         /// column is not known until it has been re-placed there — so the target is dropped rather than
         /// carried, and re-derived at placement time
         /// (<c>CssBox.ColumnTopForTheChildThisFillBeginsAt</c>).
+        /// <para>
+        /// <b>The non-block arm is reached only by the recursion, never by the outermost call.</b> A record
+        /// this container hands over is built by its own child loop, which always wraps what it stopped at
+        /// in a <see cref="BlockBreakToken"/> — but the innermost link of that chain is an
+        /// <see cref="InlineBreakToken"/> whenever the box that stopped is a block whose content is text,
+        /// which is the ordinary "a paragraph continues into the next column" case. Verified by throwing
+        /// here: with the throw restricted to <paramref name="outermost"/> the whole suite passes, and
+        /// without that restriction 29 tests fail. So this arm carries real documents and must restate the
+        /// slot rather than reject the record; a line index needs no target, since the block holding those
+        /// lines is placed by the link above it.
+        /// </para>
         /// </remarks>
         private static BreakToken RestatedInTheNextColumn(
             BreakToken token, double bandTop, int startSlot, bool outermost)

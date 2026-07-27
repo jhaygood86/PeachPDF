@@ -18,6 +18,7 @@ using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Svg;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 
 namespace PeachPDF.Html.Core.Utils
@@ -703,7 +704,8 @@ namespace PeachPDF.Html.Core.Utils
         /// (<see href="https://www.w3.org/TR/css-break-3/#break-decoration">css-break-3 §6.2</see>): each
         /// fragment is wrapped independently, so the one starting in the new fragmentainer opens with its own
         /// border and padding, and content has to start below them. Summed over <paramref name="box"/> and
-        /// every ancestor, since a break inside a nested box breaks all of them at once.
+        /// every ancestor up to <paramref name="stopAt"/>, since a break inside a nested box breaks all of
+        /// them at once.
         /// <para>
         /// Margin is excluded, unlike on the inline axis (<see cref="ClonedInlineStart"/>): a margin adjoining an
         /// unforced break is truncated to zero by
@@ -711,21 +713,46 @@ namespace PeachPDF.Html.Core.Utils
         /// no margin left for §6.2 to clone.
         /// </para>
         /// </summary>
-        internal static double ClonedBlockStart(CssBox? box)
+        /// <param name="box">The box whose content resumes in the new fragmentainer.</param>
+        /// <param name="stopAt">
+        /// The box establishing the fragmentation context the break falls in, excluded from the sum along
+        /// with everything above it, or null for the page grid — where every ancestor up to the root is
+        /// broken by the page boundary and so every one of them re-opens.
+        /// <para>
+        /// A <i>column</i> boundary is the case that needs it: the multi-column container is not fragmented
+        /// by its own columns — its border and padding wrap all of them at once — so its cloned block-start
+        /// spacing is not re-inserted there, and adding it indented every continuation column by spacing
+        /// the column's content top already accounted for.
+        /// </para>
+        /// </param>
+        internal static double ClonedBlockStart(CssBox? box, CssBox? stopAt)
         {
             var total = 0d;
+            var reachedStop = stopAt is null;
 
             for (var current = box; current is not null; current = current.ParentBox)
             {
+                if (ReferenceEquals(current, stopAt))
+                {
+                    reachedStop = true;
+                    break;
+                }
+
                 if (current.BoxDecorationBreak == CssConstants.Clone)
                     total += current.ActualBorderTopWidth + current.ActualPaddingTop;
             }
+
+            // A stopAt that is not an ancestor of `box` silently degrades to the unbounded walk, which is
+            // the behaviour this parameter exists to prevent — so say so where it can be seen. Every caller
+            // passes the fragmentation context root of a box inside it, so this holds by construction.
+            Debug.Assert(reachedStop,
+                "ClonedBlockStart's stopAt was not on the ancestor chain, so the walk ran to the root.");
 
             return total;
         }
 
         /// <summary>
-        /// The block-end counterpart of <see cref="ClonedBlockStart"/> — the border and padding the fragment
+        /// The block-end counterpart of <see cref="ClonedBlockStart(CssBox?, CssBox?)"/> — the border and padding the fragment
         /// being left behind closes with, and which content therefore has to stop short of.
         /// </summary>
         internal static double ClonedBlockEnd(CssBox? box)
