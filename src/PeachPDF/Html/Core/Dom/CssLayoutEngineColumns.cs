@@ -337,7 +337,12 @@ namespace PeachPDF.Html.Core.Dom
                     // laid out again in the next column, so its geometry is not this column's.
                     var placedBelow = PlacedBelow(columnsBox.PendingBreakToken, children);
 
-                    columnBottom = MaxBottomOf(children, placedBelow);
+                    // And the same is true one level further down, which the index above cannot say:
+                    // a break raised inside a nested block leaves that block in this column while
+                    // everything from the break onward belongs to the next one.
+                    var beyond = BeyondThisColumn(columnsBox.PendingBreakToken);
+
+                    columnBottom = MaxBottomOf(children, placedBelow, beyond);
 
                     // This column's geometry, handed over while the boxes still hold it. A child
                     // continuing into the next column is laid out again there, at that column's own
@@ -357,7 +362,7 @@ namespace PeachPDF.Html.Core.Dom
                         startSlot,
                         (boxTop, Math.Max(boxTop + target, columnBottom)),
                         (columnInlineLeft, columnInlineLeft + columnWidth),
-                        BoxGeometrySnapshot.Capture(ChildrenIn(children, columnStart, placedBelow)),
+                        BoxGeometrySnapshot.Capture(ChildrenIn(children, columnStart, placedBelow), beyond),
                         ContinuingPast(columnsBox.PendingBreakToken));
                 }
                 finally
@@ -458,13 +463,55 @@ namespace PeachPDF.Html.Core.Dom
             columnsBox.ActualRight = columnsBox.Location.X + width + columnsBox.ActualBoxSizeIncludedWidth;
         }
 
-        private static double MaxBottomOf(List<CssBox> children, int limit)
+        /// <summary>
+        /// The boxes this column does <b>not</b> hold, read off the record it stopped at — at every level
+        /// of the chain rather than only the container's own.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <see cref="PlacedBelow"/> answers this for the container's own children, which is the whole
+        /// answer while a child is atomic per column. It is not the whole answer once a break can be raised
+        /// <i>inside</i> a child: the child stays, and what belongs to the next column is the part of it
+        /// from the break onward — the siblings at and after the boundary at each nested level.
+        /// </para>
+        /// <para>
+        /// A break <i>before</i> a box means the box itself is beyond this column; a break <i>inside</i>
+        /// one means it is here, up to where it stopped, and the chain descends into it. Everything after
+        /// the boundary is beyond either way, and the fill never reached it — so it still carries the
+        /// <i>measurement</i> pass's geometry, one tall virtual column down the document. Measuring it
+        /// sized this column to the whole flow; capturing it described content in a column it is not in,
+        /// and left the same word claimed by two fragments at once.
+        /// </para>
+        /// <para>
+        /// The walk stops at an inline record. A box whose own flow stopped mid-line is in this column, and
+        /// which of its words are not is already said per word
+        /// (<see cref="CssRect.AwaitsTheNextFragmentainer"/>).
+        /// </para>
+        /// </remarks>
+        private static IReadOnlySet<CssBox> BeyondThisColumn(BreakToken? token)
+        {
+            var beyond = new HashSet<CssBox>();
+
+            for (var link = token as BlockBreakToken; link is not null; link = link.ChildToken as BlockBreakToken)
+            {
+                var from = link.IsBreakBefore ? link.ResumeChildIndex : link.ResumeChildIndex + 1;
+
+                for (var i = from; i < link.Box.Boxes.Count; i++)
+                {
+                    beyond.Add(link.Box.Boxes[i]);
+                }
+            }
+
+            return beyond;
+        }
+
+        private static double MaxBottomOf(List<CssBox> children, int limit, IReadOnlySet<CssBox> beyond)
         {
             var bottom = double.MinValue;
 
             for (var i = 0; i < children.Count && i < limit; i++)
             {
-                bottom = Math.Max(bottom, DeepestBottomOf(children[i]));
+                bottom = Math.Max(bottom, DeepestBottomOf(children[i], beyond));
             }
 
             return bottom is double.MinValue ? 0 : bottom;
@@ -494,7 +541,7 @@ namespace PeachPDF.Html.Core.Dom
         /// finished with, so asking one how far down it reaches names the wrong box.
         /// </para>
         /// </remarks>
-        private static double DeepestBottomOf(CssBox box)
+        private static double DeepestBottomOf(CssBox box, IReadOnlySet<CssBox> beyond)
         {
             var bottom = box.PlacesItselfAsBlockBox ? box.ActualBottom : double.MinValue;
 
@@ -505,7 +552,9 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var childBox in box.Boxes)
             {
-                bottom = Math.Max(bottom, DeepestBottomOf(childBox));
+                if (beyond.Contains(childBox)) continue;
+
+                bottom = Math.Max(bottom, DeepestBottomOf(childBox, beyond));
             }
 
             return bottom;
@@ -579,15 +628,45 @@ namespace PeachPDF.Html.Core.Dom
         /// The slot is restated as this container's own. A break decided inside a column was worked out
         /// against the page grid, whose next slot is the next <i>page</i> — the next column is on this one.
         /// </para>
+        /// <para>
+        /// <b>Every link of the chain is restated, not only the outermost.</b> A break raised below a
+        /// top-level child produces a chain, and each link of it was decided against the page grid just as
+        /// the outermost one was — so a deeper link left alone carries a slot several pages on and a target
+        /// somewhere down the document, which the next column then places its content at. Measured as a
+        /// resumed page whose second column began 400pt past the page it is on.
+        /// </para>
         /// </remarks>
         private static BreakToken? ResumeInTheNextColumn(CssBox columnsBox, double bandTop, int startSlot)
         {
-            if (columnsBox.TakePendingBreakToken() is not BlockBreakToken token) return null;
+            if (columnsBox.TakePendingBreakToken() is not { } token) return null;
 
-            if (token.IsBreakBefore)
-                return token with { ResumeSlotIndex = startSlot, ResumeTopOverride = bandTop };
+            return RestatedInTheNextColumn(token, bandTop, startSlot, outermost: true);
+        }
 
-            return token with { ResumeSlotIndex = startSlot };
+        /// <summary>
+        /// One link of a resumption record, restated in the next column's terms.
+        /// </summary>
+        /// <remarks>
+        /// Only the <b>outermost</b> link's target is this container's to state: its box is a top-level
+        /// child, so it begins the next column and the band top is where it goes. A deeper link's box
+        /// begins its own containing block's content instead, and where <i>that</i> lands in the next
+        /// column is not known until it has been re-placed there — so the target is dropped rather than
+        /// carried, and re-derived at placement time
+        /// (<c>CssBox.ColumnTopForTheChildThisFillBeginsAt</c>).
+        /// </remarks>
+        private static BreakToken RestatedInTheNextColumn(
+            BreakToken token, double bandTop, int startSlot, bool outermost)
+        {
+            if (token is not BlockBreakToken block) return token with { ResumeSlotIndex = startSlot };
+
+            return block with
+            {
+                ResumeSlotIndex = startSlot,
+                ResumeTopOverride = block.IsBreakBefore && outermost ? bandTop : null,
+                ChildToken = block.ChildToken is null
+                    ? null
+                    : RestatedInTheNextColumn(block.ChildToken, bandTop, startSlot, outermost: false)
+            };
         }
 
         /// <summary>
