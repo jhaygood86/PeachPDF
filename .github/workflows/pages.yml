@@ -19,7 +19,12 @@ jobs:
     if: "!github.event.release.prerelease"
     runs-on: ubuntu-latest
     steps:
+      # Full history, so the demo's build-info step can tell whether this commit is the one tagged
+      # v<PackageVersion> - a shallow checkout has no tags to compare against, and every deploy would
+      # then describe itself as a prerelease.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
