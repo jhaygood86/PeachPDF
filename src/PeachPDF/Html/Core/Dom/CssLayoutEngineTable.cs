@@ -75,12 +75,46 @@ namespace PeachPDF.Html.Core.Dom
         private bool _shouldRepeatFooters => _footerBox != null && _footerBox.Display == CssConstants.TableFooterGroup;
 
         /// <summary>
+        /// Whether this run continues a table layout an earlier fragmentainer pass began, rather than
+        /// laying the table out from the start.
+        /// </summary>
+        /// <remarks>
+        /// Every other reason this engine runs again over the same box — the per-page-width reflow loop,
+        /// <c>ShrinkToFit</c>, a §4.3 relocation laying the subtree out again at its destination — is a
+        /// fresh layout and has to start from the markup, which is why the question is asked of the
+        /// resumption record rather than of anything the box carries from a previous run.
+        /// </remarks>
+        private readonly bool _continuesAPreviousPass;
+
+        /// <summary>
+        /// What this table settled once: inherited whole on a continuation, and built by this run
+        /// otherwise. See <see cref="TableSetup"/> for what re-deciding each part would destroy.
+        /// </summary>
+        private readonly TableSetup _setup;
+
+        /// <summary>
         /// Init.
         /// </summary>
         /// <param name="tableBox"></param>
-        private CssLayoutEngineTable(CssBox tableBox)
+        /// <param name="resume">
+        /// how this table resumes on the current fragmentainer pass, or null when it is being laid out
+        /// from the start. Null for every document today.
+        /// </param>
+        private CssLayoutEngineTable(CssBox tableBox, BreakToken? resume)
         {
             _tableBox = tableBox;
+
+            if (resume is not null && tableBox.TableSetup is { } carried)
+            {
+                _setup = carried;
+                _continuesAPreviousPass = true;
+            }
+            else
+            {
+                // A fresh layout discards whatever the last one settled - the markup is the input again.
+                _setup = new TableSetup();
+                tableBox.TableSetup = _setup;
+            }
         }
 
         /// <summary>
@@ -132,14 +166,19 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         /// <param name="g"></param>
         /// <param name="tableBox"> </param>
-        public static async ValueTask PerformLayout(RGraphics g, CssBox tableBox)
+        /// <param name="resume">
+        /// how <paramref name="tableBox"/> resumes on the current fragmentainer pass, or null when it is
+        /// being laid out from the start. A continuation inherits what the table already settled rather
+        /// than settling it again — see <see cref="TableSetup"/>.
+        /// </param>
+        public static async ValueTask PerformLayout(RGraphics g, CssBox tableBox, BreakToken? resume = null)
         {
             ArgumentNullException.ThrowIfNull(g);
             ArgumentNullException.ThrowIfNull(tableBox);
 
             try
             {
-                var table = new CssLayoutEngineTable(tableBox);
+                var table = new CssLayoutEngineTable(tableBox, resume);
                 await table.Layout(g);
             }
             catch (Exception ex)
@@ -160,10 +199,12 @@ namespace PeachPDF.Html.Core.Dom
         {
             await MeasureWords(_tableBox, g);
 
-            // This engine may be run again over the same table - a resumed fragmentainer pass, the
-            // per-page-width reflow loop, ShrinkToFit - and it does not start from the markup unless the
-            // last run's output is undone first.
-            RestoreStructureFromAnyPreviousRun();
+            // This engine may be run again over the same table - the per-page-width reflow loop,
+            // ShrinkToFit, a §4.3 relocation - and it does not start from the markup unless the last run's
+            // output is undone first. A resumed pass is the one run that is not starting from the markup:
+            // it continues the table this output belongs to, and the proxies it would drop here are the
+            // only surviving reference to the detached group every earlier page repeats.
+            if (!_continuesAPreviousPass) RestoreStructureFromAnyPreviousRun();
 
             // get the table boxes into the proper fields
             AssignBoxKinds();
@@ -192,7 +233,11 @@ namespace PeachPDF.Html.Core.Dom
             // intentionally returns 0 for an auto-margin table when boxWidth is null (the table's
             // own shrink-to-fit width isn't known yet during the earlier pass), deferring the real
             // centering offset - now that GetWidthSum() is known - to this point.
-            if (_tableBox.MarginLeft is CssConstants.Auto)
+            //
+            // Once per table, for the same reason the whole-table pre-checks below are: the offset is
+            // derived from the containing block rather than from where the table currently is, so a
+            // continuation adding it again would center an already-centered table a second time.
+            if (!_continuesAPreviousPass && _tableBox.MarginLeft is CssConstants.Auto)
             {
                 _tableBox.Location = _tableBox.Location with
                 {
@@ -212,8 +257,21 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private void AssignBoxKinds()
         {
+            // A continuation's header/footer are not in the table's child list to be found: an earlier
+            // pass detached them, and skipping the restore is what keeps every earlier page's repeated
+            // copy alive. They come from what that pass settled instead.
+            if (_setup.Header is { } header) (_headerBox, _headerIndex, _headerHeight) = header;
+            if (_setup.Footer is { } footer) (_footerBox, _footerIndex, _footerHeight) = footer;
+
             foreach (var box in _tableBox.Boxes)
             {
+                // A proxy standing in for a detached group is this engine's own output rather than
+                // markup, and it inherits the source's Display - so on a continuation, where the restore
+                // that drops proxies is deliberately skipped, the first one would be taken for the header
+                // itself and the rest classified as body rows. A proxy has no cells, so positioning one
+                // as a row throws on an empty sequence (issue #353, from the other direction).
+                if (box is CssProxyBox) continue;
+
                 switch (box.Display)
                 {
                     case CssConstants.TableCaption:
@@ -766,14 +824,37 @@ namespace PeachPDF.Html.Core.Dom
                 startY, startX,
                 pageHeight < double.MaxValue - 1 ? container!.SlotStartingAt(_tableBox.ClientTop) : 0);
 
-            // Reset page-break tracking so re-layout doesn't accumulate stale entries
-            _tableBox.PageBreakBottoms = null;
+            // Reset page-break tracking so re-layout doesn't accumulate stale entries. A resumed pass is
+            // not a re-layout: where the table's slice ended on the pages earlier passes filled is what
+            // clips its borders there, so those entries have to accumulate rather than be thrown away.
+            if (!_continuesAPreviousPass) _tableBox.PageBreakBottoms = null;
 
             // Cleared here as well as published at the end, so a run that throws part-way through leaves
             // no answer rather than the previous run's - both CssLayoutEngineTable.PerformLayout and
             // CssBox.PerformLayout swallow the exception when there is no HtmlContainer to report it to.
             _tableBox.UnfinishedTableCells = [];
 
+            // Steps 1-3, once per table: take the repeating groups out of the tree and lay each out once
+            // to learn its height. A continuation inherits both from what settled them (AssignBoxKinds
+            // reads them back off the setup) - the source subtree is shared by every proxy of it, so
+            // laying it out again re-positions a subtree whose earlier snapshots are already frozen in
+            // the fragment emitter.
+            if (!_continuesAPreviousPass)
+            {
+                await DetachAndMeasureRepeatedRowGroups(g, cursor, startX);
+            }
+
+            // Step 4: Layout body rows with page break detection.
+            await LayoutBodyRows(g, cursor, startX, startY, container, pageHeight);
+        }
+
+        /// <summary>
+        /// Steps 1 to 3: detaches the repeating <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c> and lays each out
+        /// once to measure it, recording both in <see cref="_setup"/> so a resumed pass inherits them
+        /// rather than doing either again.
+        /// </summary>
+        private async ValueTask DetachAndMeasureRepeatedRowGroups(RGraphics g, TableRowCursor cursor, double startX)
+        {
             // Step 1: Remove header/footer from document tree
             RemoveHeaderFooterFromTree();
 
@@ -859,7 +940,21 @@ namespace PeachPDF.Html.Core.Dom
                 _footerHeight = _footerBox.ActualBottom - _footerBox.Location.Y;
             }
 
-            // Step 4: Layout body rows with page break detection.
+            _setup.Header = _headerBox is null ? null : new DetachedRowGroup(_headerBox, _headerIndex, _headerHeight);
+            _setup.Footer = _footerBox is null ? null : new DetachedRowGroup(_footerBox, _footerIndex, _footerHeight);
+        }
+
+        /// <summary>
+        /// Step 4 onwards: places the body rows, breaking between them as the page runs out, and settles
+        /// the table's own dimensions.
+        /// </summary>
+        private async ValueTask LayoutBodyRows(
+            RGraphics g, TableRowCursor cursor, double startX, double startY,
+            HtmlContainerInt? container, double pageHeight)
+        {
+            // The two whole-table pre-checks below move the table's own Location, so both are once per
+            // table: a continuation's earlier rows are already emitted at coordinates the table's own
+            // position is what makes sense of, and moving it now moves only the rows still to come.
             //
             // Pre-check: move the entire table to the next page when the first body row
             // would cross a page boundary AND the full table body fits on one page.
@@ -868,6 +963,7 @@ namespace PeachPDF.Html.Core.Dom
             // Restricted to tables without repeating headers/footers to avoid repositioning
             // proxy boxes that were already placed above.
             if (_bodyRows.Count > 0
+                && !_continuesAPreviousPass
                 && pageHeight < double.MaxValue - 1
                 && _tableBox.HtmlContainer != null
                 && !_shouldRepeatHeaders
@@ -905,6 +1001,7 @@ namespace PeachPDF.Html.Core.Dom
             // on the next page rather than orphan its header, and fragments normally via the
             // per-row check from there.
             if (_bodyRows.Count > 0
+                && !_continuesAPreviousPass
                 && pageHeight < double.MaxValue - 1
                 && container != null
                 && _shouldRepeatHeaders && _headerBox != null)
