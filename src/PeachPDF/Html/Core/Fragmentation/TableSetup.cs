@@ -27,14 +27,14 @@ namespace PeachPDF.Html.Core.Fragmentation
     /// The engine is constructed afresh every time it runs, so everything it decides lives either on the
     /// table's <see cref="CssBox"/> or in one method call. That is correct for the reasons it usually runs
     /// again over the same table — the per-page-width reflow loop, <c>ShrinkToFit</c>, a
-    /// <see href="https://www.w3.org/TR/css-break-3/#break-propagation">§4.3</see> relocation laying the
+    /// <see href="https://www.w3.org/TR/css-break-3/#possible-breaks">§4.3</see> relocation laying the
     /// subtree out again at its destination — because each of those is a fresh layout that must start from
     /// the markup. A resumed pass is the one case that is <b>not</b> a fresh layout: it continues the table
     /// whose earlier rows are already emitted, and the once-per-table half of the engine's work is
     /// destructive when repeated on top of that.
     /// </para>
     /// <para>
-    /// Four of those, each measured against the code that does them
+    /// Five of those, each measured against the code that does them
     /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/390">#390</see> stage 4):
     /// <list type="bullet">
     /// <item><description>
@@ -48,9 +48,11 @@ namespace PeachPDF.Html.Core.Fragmentation
     /// </description></item>
     /// <item><description>
     /// <b>The two whole-table pre-checks</b> move the table's own <c>Location</c>, and so would move a
-    /// table whose earlier rows have already been emitted at their own coordinates. The
-    /// <c>margin-left: auto</c> centering in the engine's entry point is the same hazard on the other
-    /// axis: it adds an offset derived from the containing block rather than from where the table
+    /// table whose earlier rows have already been emitted at their own coordinates.
+    /// </description></item>
+    /// <item><description>
+    /// <b>The <c>margin-left: auto</c> centering</b> in the engine's entry point is the same hazard on the
+    /// other axis: it adds an offset derived from the containing block rather than from where the table
     /// currently is, so applying it twice centers it twice.
     /// </description></item>
     /// <item><description>

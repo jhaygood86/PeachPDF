@@ -371,9 +371,11 @@ namespace PeachPDF.Html.Core.Dom
         /// until its first layout.
         /// </summary>
         /// <remarks>
-        /// Replaced wholesale by every layout of this table that is not a resumed fragmentainer pass, which
-        /// is what keeps a re-layout — the per-page-width reflow loop, <c>ShrinkToFit</c>, a §4.3 relocation
-        /// — starting from the markup. See <see cref="TableSetup"/> for what a resumed pass inherits from it
+        /// Replaced wholesale by every layout of this table that does not continue an earlier fragmentainer
+        /// pass, which is what keeps a re-layout — the per-page-width reflow loop, <c>ShrinkToFit</c>, a
+        /// §4.3 relocation — starting from the markup. A resumed pass over a table that has settled nothing
+        /// replaces it too, since there is nothing to inherit and nothing an earlier pass could be
+        /// destroyed by. See <see cref="Fragmentation.TableSetup"/> for what a resumed pass inherits from it
         /// and why each of those things is destructive when done twice.
         /// </remarks>
         internal TableSetup? TableSetup { get; set; }

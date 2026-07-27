@@ -60,7 +60,7 @@ corpus green, so not one table in either receives a record — which is what mak
 unreachable, and is the specific claim the neutrality of this step rests on.
 
 **Every guard is load-bearing, measured by neutralizing each one in turn** — the point being that a
-guard nothing can reach from markup is exactly the kind that rots silently. Of the 13 tests in
+guard nothing can reach from markup is exactly the kind that rots silently. Of the 14 tests in
 `TableOncePerTableTests`:
 
 | neutralization | tests failing |
@@ -72,6 +72,7 @@ guard nothing can reach from markup is exactly the kind that rots silently. Of t
 | `margin-left: auto` centering unconditional | 1 |
 | `AssignBoxKinds` stops skipping proxies | 7 |
 | `AssignBoxKinds` stops inheriting the setup | 3 |
+| the setup published in the constructor rather than at the end | 1 |
 
 **A pre-check that stays put proves nothing on its own**, which is why those two tests run the engine
 twice from the *same* position — once as a continuation and once fresh — and assert the fresh run
@@ -83,6 +84,28 @@ what makes the centering test mean something.
 continuations are given two different `TableSetup.Header.Height` values (40pt and 90pt) and the first
 body row's top differs by exactly 50pt. A run that measured the header for itself would place both
 rows identically, and no assertion about `_headerHeight` could tell the difference from outside.
+
+## What the review changed, and the one worth carrying forward
+
+Three findings were real and are in the diff. Two are doc defects — a `cref="TableSetup"` written
+inside `CssBox` binds to the *property* rather than the type (confirmed in the generated
+`PeachPDF.xml`), and `#break-propagation` is a §3.1 heading, not §4.3, so the repo's own
+`#possible-breaks` anchor is the right one. The third is worth more words.
+
+**The setup is published at the end of `Layout`, not in the constructor.** Publishing on construction
+means a fresh run that dies between `RemoveHeaderFooterFromTree` and the two `_setup.Header/Footer`
+assignments leaves a **non-null but empty** setup on a table whose `<thead>` is already detached — and
+a later continuation then inherits nothing *and* skips the restore, which is the only path back to
+that group through its proxies. The header disappears with no exception anywhere. Leaving the setup
+null until the run finishes is the same clear-then-publish shape `UnfinishedTableCells` already has in
+this file, for the same reason, and it is now pinned by a header cell that throws while it is being
+measured (`AFreshRunThatDiesWhileMeasuringTheHeader_LeavesNoSettledSetup`) rather than argued.
+
+One finding was about a guard keyed off the wrong fact: `AssignBoxKinds` seeded the header/footer from
+the setup unconditionally, correct today only because a fresh run always allocates an empty one. It is
+now explicitly `if (_continuesAPreviousPass)`, because the seed would otherwise run *after* the restore
+put the real `<thead>` back and push a second header group onto `_bodyRows` — #353's double-count
+exactly.
 
 ## Deliberately not done
 

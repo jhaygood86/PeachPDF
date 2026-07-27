@@ -82,7 +82,9 @@ namespace PeachPDF.Html.Core.Dom
         /// Every other reason this engine runs again over the same box — the per-page-width reflow loop,
         /// <c>ShrinkToFit</c>, a §4.3 relocation laying the subtree out again at its destination — is a
         /// fresh layout and has to start from the markup, which is why the question is asked of the
-        /// resumption record rather than of anything the box carries from a previous run.
+        /// resumption record. It is asked of the settled <see cref="TableSetup"/> as well: a record for a
+        /// table that has settled nothing names a continuation there is nothing to continue, and starting
+        /// from the markup is both the safe reading and the total one.
         /// </remarks>
         private readonly bool _continuesAPreviousPass;
 
@@ -111,9 +113,14 @@ namespace PeachPDF.Html.Core.Dom
             }
             else
             {
-                // A fresh layout discards whatever the last one settled - the markup is the input again.
+                // A fresh layout discards whatever the last one settled - the markup is the input again -
+                // and does not publish its own until Layout has finished. Publishing here instead would
+                // leave a run that threw part-way with a non-null but *empty* setup on a table whose
+                // <thead> is already detached, and a later continuation would inherit nothing while
+                // skipping the restore, which is the only way back to that group through its proxies.
+                // Same shape, and the same reason, as UnfinishedTableCells' clear-then-publish below.
                 _setup = new TableSetup();
-                tableBox.TableSetup = _setup;
+                tableBox.TableSetup = null;
             }
         }
 
@@ -171,7 +178,7 @@ namespace PeachPDF.Html.Core.Dom
         /// being laid out from the start. A continuation inherits what the table already settled rather
         /// than settling it again — see <see cref="TableSetup"/>.
         /// </param>
-        public static async ValueTask PerformLayout(RGraphics g, CssBox tableBox, BreakToken? resume = null)
+        public static async ValueTask PerformLayout(RGraphics g, CssBox tableBox, BreakToken? resume)
         {
             ArgumentNullException.ThrowIfNull(g);
             ArgumentNullException.ThrowIfNull(tableBox);
@@ -250,6 +257,10 @@ namespace PeachPDF.Html.Core.Dom
 
             //Actually layout cells!
             await LayoutCells(g);
+
+            // Published only now that the run has finished - see the constructor for what a half-settled
+            // setup would cost a later continuation. A continuation re-publishes the instance it inherited.
+            _tableBox.TableSetup = _setup;
         }
 
         /// <summary>
@@ -260,8 +271,16 @@ namespace PeachPDF.Html.Core.Dom
             // A continuation's header/footer are not in the table's child list to be found: an earlier
             // pass detached them, and skipping the restore is what keeps every earlier page's repeated
             // copy alive. They come from what that pass settled instead.
-            if (_setup.Header is { } header) (_headerBox, _headerIndex, _headerHeight) = header;
-            if (_setup.Footer is { } footer) (_footerBox, _footerIndex, _footerHeight) = footer;
+            //
+            // Explicitly only on a continuation, though a fresh run's setup is empty anyway: seeding
+            // _headerBox from a setup a fresh run had somehow inherited would run *after* the restore put
+            // the real <thead> back, and AssignBoxKinds pushes a second header group onto _bodyRows -
+            // which is exactly #353's double-count.
+            if (_continuesAPreviousPass)
+            {
+                if (_setup.Header is { } header) (_headerBox, _headerIndex, _headerHeight) = header;
+                if (_setup.Footer is { } footer) (_footerBox, _footerIndex, _footerHeight) = footer;
+            }
 
             foreach (var box in _tableBox.Boxes)
             {

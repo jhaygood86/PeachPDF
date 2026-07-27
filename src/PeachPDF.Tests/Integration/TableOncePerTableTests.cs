@@ -167,6 +167,51 @@ namespace PeachPDF.Tests.Integration
             });
         }
 
+        /// <summary>
+        /// A run publishes what it settled only once it has finished. A fresh run that dies between
+        /// detaching the repeating group and recording it would otherwise leave a <b>non-null but empty</b>
+        /// setup on a table whose <c>&lt;thead&gt;</c> is already out of the tree — and a later continuation
+        /// would then inherit nothing while skipping the restore, which is the only way back to that group
+        /// through its proxies. Leaving the setup null is what lets such a table be laid out again at all.
+        /// </summary>
+        [Fact]
+        public async Task AFreshRunThatDiesWhileMeasuringTheHeader_LeavesNoSettledSetup()
+        {
+            await WithALaidOutTable(RepeatingHeaderTable(3), async (table, container, g) =>
+            {
+                var headerRow = table.TableSetup!.Header!.Box.Boxes
+                    .First(b => b.Display == CssConstants.TableRow);
+
+                // Replaces a header cell in place rather than being inserted beside it - a row's cells are
+                // its columns, and ParentBox's setter appends.
+                var thrower = new ThrowingCell(headerRow);
+                headerRow.Boxes.Remove(thrower);
+                headerRow.Boxes[0] = thrower;
+
+                await Assert.ThrowsAnyAsync<Exception>(
+                    async () => await RunEngine(g, container, table, resume: null));
+
+                Assert.Null(table.TableSetup);
+            });
+        }
+
+        /// <summary>
+        /// A table cell whose layout fails, so a run can be stopped between two steps that no markup can
+        /// separate. It overrides <c>PerformLayoutImp</c> wholesale, as the stopping cell in
+        /// <see cref="TableCellBreakTokenTests"/> does and for the same reason.
+        /// </summary>
+        private sealed class ThrowingCell : CssBox
+        {
+            internal ThrowingCell(CssBox row) : base(row, null)
+            {
+                InheritStyle(row, everything: true);
+                Display = CssConstants.TableCell;
+            }
+
+            protected override ValueTask PerformLayoutImp(RGraphics g) =>
+                throw new InvalidOperationException("layout failed while the header was being measured");
+        }
+
         // ─── 2. The page-break bottoms earlier passes recorded accumulate ────────────────────────
 
         /// <summary>
@@ -290,11 +335,12 @@ namespace PeachPDF.Tests.Integration
         /// out of where the first body row lands. A run that measured the header itself would place both
         /// rows identically.
         /// </remarks>
-        [Theory]
-        [InlineData(40d, 90d)]
-        public async Task AContinuation_ReservesTheHeaderHeightTheEarlierPassMeasured(
-            double inheritedA, double inheritedB)
+        [Fact]
+        public async Task AContinuation_ReservesTheHeaderHeightTheEarlierPassMeasured()
         {
+            const double inheritedA = 40d;
+            const double inheritedB = 90d;
+
             var firstRowTops = new List<double>();
 
             foreach (var inherited in new[] { inheritedA, inheritedB })
