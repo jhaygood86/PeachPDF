@@ -212,7 +212,31 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (attempt >= MaxFillAttempts) break;
 
-                if (carry is not null)
+                // A forced page break ends the flow for this fragment as surely as running out of content
+                // does, so this *is* the fragment that balances - but it was filled at a target estimated
+                // over content that reaches past the break, which leaves the columns before it unbalanced.
+                // The two steps are a continuation's own: fill the budget to learn the real height of what
+                // precedes the break, then take an even share of it. Growing the target is never an answer
+                // here; nothing about a column height can avoid a page break.
+                if (carry is BlockBreakToken { EscapesNestedFragmentainer: true })
+                {
+                    if (!balances || rebalanced) break;
+
+                    if (target < pageBudget)
+                    {
+                        target = pageBudget;
+                    }
+                    else if (contentBottom > boxTop)
+                    {
+                        rebalanced = true;
+                        target = Math.Max(1, (contentBottom - boxTop) / columnCount);
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+                else if (carry is not null)
                 {
                     if (target >= pageBudget) break;
 
@@ -339,6 +363,15 @@ namespace PeachPDF.Html.Core.Dom
                 if (!stopped)
                 {
                     carry = null;
+                    break;
+                }
+
+                // A forced page break is not this container's to satisfy: every column it could open is
+                // on the page the break is leaving. The record says so, so the column loop ends here and
+                // the remainder travels up to the page driver with the target and slot it already names.
+                if (columnsBox.PendingBreakToken is BlockBreakToken { EscapesNestedFragmentainer: true })
+                {
+                    carry = columnsBox.TakePendingBreakToken();
                     break;
                 }
 
@@ -636,10 +669,18 @@ namespace PeachPDF.Html.Core.Dom
         /// Restates a column-relative resumption record in page terms, for the content the last column
         /// could not hold.
         /// </summary>
+        /// <remarks>
+        /// A record that <see cref="BlockBreakToken.EscapesNestedFragmentainer">escapes</see> this
+        /// container is already in page terms and is left exactly as it is — that is the whole of what the
+        /// mark buys. Its target may be several slots on (a directional break reserves a blank page to
+        /// land on the requested side), which "the slot after this one" would quietly discard.
+        /// </remarks>
         private static BreakToken? RetargetToTheNextPage(
             BreakToken carry, HtmlContainerInt container, int startSlot)
         {
             if (carry is not BlockBreakToken block) return carry;
+
+            if (block.EscapesNestedFragmentainer) return block;
 
             var nextSlot = startSlot + 1;
 
