@@ -3677,6 +3677,20 @@ var multicolHtml = "<!DOCTYPE html><html><head>" + MulticolCss + "</head><body>"
         McEntries(4, "moved") +
         "</div></div>") +
 
+    // A break that falls one level below the container's own child loop. The entries here are wrapped in
+    // a <section> of their own, so the boundary is between two of *its* children rather than between two
+    // of the container's - and the record has to travel up through the wrapper before the columns engine
+    // can read it. Left alone, the wrapper neither moved nor broke: it kept flowing past the column band
+    // and past the page. The wrapper carries a background and a border so both of its fragments are
+    // visible, one per column.
+    McSection("12 &mdash; a break below the container's own child",
+        "<div class=\"frame\"><div class=\"label\">columns: 2; the entries sit inside a &lt;section&gt; of their own, so the break falls between two of its children rather than between two of the container's</div>" +
+        "<div class=\"mc\" style=\"columns:2;column-gap:20px;column-rule:0.5pt solid #000\">" +
+        McEntries(1, "lead") +
+        "<section style=\"background:#eef9f0;border:0.5pt solid #27ae60;padding:3pt;margin:0\">" +
+        McEntries(10, "nested") +
+        "</section></div></div>") +
+
     "</body></html>";
 
 await SaveShowcaseAsync("multicol", "Layout", "Multi-column Layout",

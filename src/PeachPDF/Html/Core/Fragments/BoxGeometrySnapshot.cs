@@ -63,14 +63,23 @@ namespace PeachPDF.Html.Core.Fragments
         }
 
         /// <summary>
-        /// Captures the current geometry of each of <paramref name="roots"/> and their descendants.
+        /// Captures the current geometry of each of <paramref name="roots"/> and their descendants, minus
+        /// the subtrees rooted at <paramref name="excluded"/>.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// The subtree-set form exists for a nested fragmentainer, which holds <i>some</i> of a container's
         /// children rather than all of them: the ones a column's fill never reached still carry the
         /// measurement pass's geometry, and capturing that would describe content in a column it is not in.
+        /// </para>
+        /// <para>
+        /// <paramref name="excluded"/> says the same thing about content <i>inside</i> a root. A break can
+        /// be raised below a container's own child, which leaves that child in this fragmentainer while
+        /// everything from the break onward belongs to the next one — so the root is captured and the walk
+        /// stops at each excluded box.
+        /// </para>
         /// </remarks>
-        internal static BoxGeometrySnapshot Capture(IEnumerable<CssBox> roots)
+        internal static BoxGeometrySnapshot Capture(IEnumerable<CssBox> roots, IReadOnlySet<CssBox>? excluded = null)
         {
             ArgumentNullException.ThrowIfNull(roots);
 
@@ -78,13 +87,13 @@ namespace PeachPDF.Html.Core.Fragments
 
             foreach (var root in roots)
             {
-                snapshot.CaptureBox(root);
+                snapshot.CaptureBox(root, excluded);
             }
 
             return snapshot;
         }
 
-        private void CaptureBox(CssBox box)
+        private void CaptureBox(CssBox box, IReadOnlySet<CssBox>? excluded = null)
         {
             var geometry = new BoxGeometry
             {
@@ -108,7 +117,9 @@ namespace PeachPDF.Html.Core.Fragments
 
             foreach (var childBox in box.Boxes)
             {
-                CaptureBox(childBox);
+                if (excluded is not null && excluded.Contains(childBox)) continue;
+
+                CaptureBox(childBox, excluded);
             }
         }
 

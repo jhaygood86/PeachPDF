@@ -1654,6 +1654,215 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(claimed.Count, claimed.Distinct().Count());
         }
 
+        // ─── A break raised below the container's own child (css-break-3 §2) ───────
+
+        /// <summary>
+        /// A wrapper holding <paramref name="rowCount"/> 20pt rows, with a 20pt lead sibling above it, in a
+        /// two-column container. Nothing about the rows is special: the point is only that the break falls
+        /// between two of them, which puts it one level below the container's own child loop — the loop
+        /// whose record the columns engine reads.
+        /// </summary>
+        private static string NestedRowsFixture(int rowCount, string fill)
+        {
+            var rows = string.Concat(Enumerable.Range(0, rowCount)
+                .Select(i => $"<div id='r{i}' class='row' style='height:20pt; margin:0'>r{i}</div>"));
+
+            return Wrap($@"
+                <div id='mc' style='columns:2; column-gap:0; width:300pt; {fill}'>
+                    <div id='lead' style='height:20pt; margin:0'>lead</div>
+                    <div id='wrap' style='margin:0'>{rows}</div>
+                </div>");
+        }
+
+        /// <summary>
+        /// The break falls between two rows of a wrapper rather than between two children of the
+        /// container, and the content after it starts the next column at that column's own top. It used to
+        /// neither move nor break: the record travelled up correctly, but the child it named was then
+        /// placed after the previous sibling it had just left behind in the column being vacated, so it
+        /// straddled the boundary and everything after it ran past the page.
+        /// </summary>
+        [Fact]
+        public async Task ABreakBelowTheContainersOwnChild_StartsTheNextColumnAtItsTop()
+        {
+            // A 394pt band holds the 20pt lead plus eighteen 20pt rows exactly; the nineteenth cannot stay.
+            var (root, container) = await BuildAndLayout(NestedRowsFixture(24, "column-fill:auto"), pageHeight: 400);
+
+            var mc = FindById(root, "mc")!;
+            var rows = FindAllByClass(root, "row");
+            var secondColumnLeft = FindById(root, "r18")!.Location.X;
+
+            // Everything up to the break stays where the first column put it.
+            Assert.Equal(mc.ClientLeft, FindById(root, "lead")!.Location.X, 1);
+            for (var i = 0; i <= 17; i++)
+            {
+                Assert.Equal(mc.ClientLeft, rows[i].Location.X, 1);
+                Assert.Equal(mc.ClientTop + 20 * (i + 1), rows[i].Location.Y, 1);
+            }
+
+            // Everything after it is in the next column, which begins at the band top rather than at the
+            // bottom of the row it followed.
+            Assert.True(secondColumnLeft > mc.ClientLeft + 100,
+                $"the continuation is at x={secondColumnLeft}, still in the column it should have left");
+
+            for (var i = 18; i <= 23; i++)
+            {
+                Assert.Equal(secondColumnLeft, rows[i].Location.X, 1);
+                Assert.Equal(mc.ClientTop + 20 * (i - 18), rows[i].Location.Y, 1);
+                Assert.Equal(rows[i].Location.Y + 20, rows[i].ActualBottom, 1);
+            }
+
+            // The wrapper itself is a fragment in each column, and the box carries the second one.
+            var wrap = FindById(root, "wrap")!;
+            Assert.Equal(secondColumnLeft, wrap.Location.X, 1);
+            Assert.Equal(mc.ClientTop, wrap.Location.Y, 1);
+
+            // And the container no longer reports a height past the page it is on: it ends where its
+            // deepest column's content ends, and one page holds the lot.
+            Assert.Equal(rows[17].ActualBottom, mc.ActualBottom, 1);
+            Assert.Single(container.FragmentTree!.Fragmentainers);
+        }
+
+        /// <summary>
+        /// The invariant over the fragment tree, which catches both directions at once: the rows after the
+        /// break claimed by the column they left as well as by the one they moved to (they were captured
+        /// into both), and rows the fill never reached claimed at the measurement pass's position, a whole
+        /// virtual column down the document.
+        /// </summary>
+        [Theory]
+        [InlineData("column-fill:auto", 24, 400)]
+        [InlineData("column-fill:balance", 24, 400)]
+        [InlineData("column-fill:auto", 60, 400)]
+        [InlineData("column-fill:auto", 24, 200)]
+        public async Task ABreakBelowTheContainersOwnChild_ClaimsEveryWordExactlyOnce(
+            string fill, int rowCount, double pageHeight)
+        {
+            var (root, container) = await BuildAndLayout(NestedRowsFixture(rowCount, fill), pageHeight);
+
+            var authored = FindAllByClass(root, "row")
+                .SelectMany(LayoutHarness.Descendants)
+                .SelectMany(b => b.Words)
+                .Where(w => !w.IsSpaces)
+                .ToList();
+
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => FlattenFragments(f.Root))
+                .SelectMany(f => f.Words)
+                .Select(w => w.Word)
+                .ToList();
+
+            Assert.Equal(rowCount, authored.Count);
+            Assert.All(authored, word => Assert.Contains(word, claimed));
+            Assert.Equal(claimed.Count, claimed.Distinct().Count());
+        }
+
+        /// <summary>
+        /// A <i>resumed</i> container fills its second column too. Each link of the record was worked out
+        /// against the page grid, and only the outermost was being restated in the next column's terms — so
+        /// a deeper link carried a slot several pages on and a target down the document, and the second
+        /// column of the resumed page was filled at that target instead of at its own top.
+        /// </summary>
+        [Fact]
+        public async Task AResumedContainer_FillsItsSecondColumnWhenTheBreakIsNested()
+        {
+            // 60 rows against a 400pt page: two columns of the first page, two of the second, and nothing
+            // left over.
+            var (root, container) = await BuildAndLayout(NestedRowsFixture(60, "column-fill:auto"), pageHeight: 400);
+
+            var rows = FindAllByClass(root, "row");
+            var mc = FindById(root, "mc")!;
+            var secondPageTop = container.PageTopOf(1);
+
+            // The tail of the flow is in the second column of the second page, not on a third page.
+            for (var i = 57; i <= 59; i++)
+            {
+                Assert.True(rows[i].Location.X > mc.ClientLeft + 100,
+                    $"r{i} is at x={rows[i].Location.X}, in the first column of the resumed page");
+                Assert.Equal(secondPageTop + 20 * (i - 57), rows[i].Location.Y, 1);
+            }
+
+            Assert.Equal(2, container.FragmentTree!.Fragmentainers.Count);
+        }
+
+        /// <summary>
+        /// Two levels below the container, so the record's chain has an intermediate link that is itself
+        /// <i>continuing</i>. The target for the box that begins the next column is its own containing
+        /// block's content top, which is inside that block's padding — not the column's band top, and not
+        /// knowable when the record was written, since the block had not been re-placed there yet.
+        /// </summary>
+        [Fact]
+        public async Task ABreakTwoLevelsBelowTheContainer_StartsInsideItsOwnContainingBlock()
+        {
+            var rows = string.Concat(Enumerable.Range(0, 24)
+                .Select(i => $"<div id='r{i}' class='row' style='height:20pt; margin:0'>r{i}</div>"));
+
+            var (root, container) = await BuildAndLayout(Wrap($@"
+                <div id='mc' style='columns:2; column-gap:0; width:300pt; column-fill:auto'>
+                    <div id='lead' style='height:20pt; margin:0'>lead</div>
+                    <div id='wrap' style='margin:0; padding-left:5pt'>
+                        <div id='inner' style='margin:0; padding-top:4pt'>{rows}</div>
+                    </div>
+                </div>"), pageHeight: 400);
+
+            var mc = FindById(root, "mc")!;
+            var inner = FindById(root, "inner")!;
+            var rowBoxes = FindAllByClass(root, "row");
+
+            // The continuation begins at its own containing block's content top - the inner block's
+            // padding is inside the column, not swallowed by it - and at that block's own left edge.
+            Assert.Equal(inner.ClientTop, rowBoxes[18].Location.Y, 1);
+            Assert.Equal(inner.ClientLeft, rowBoxes[18].Location.X, 1);
+            Assert.Equal(mc.ClientTop + 4, rowBoxes[18].Location.Y, 1);
+            Assert.True(rowBoxes[18].Location.X > mc.ClientLeft + 100);
+
+            for (var i = 19; i <= 23; i++)
+            {
+                Assert.Equal(rowBoxes[18].Location.X, rowBoxes[i].Location.X, 1);
+                Assert.Equal(rowBoxes[18].Location.Y + 20 * (i - 18), rowBoxes[i].Location.Y, 1);
+            }
+
+            Assert.Single(container.FragmentTree!.Fragmentainers);
+        }
+
+        /// <summary>
+        /// <see href="https://www.w3.org/TR/css-break-3/#break-decoration">§6.2</see>'s <c>clone</c> at a
+        /// column boundary, for a box whose content is <i>blocks</i>. There was no break inside such a box
+        /// to reserve room at, which is what bounded the multi-column half of the clone reservation; now
+        /// that the break happens, the reservation the word path already makes is what the fill obeys —
+        /// the first column stops a whole row short of where <c>slice</c> stops, leaving the cloned bottom
+        /// border its room.
+        /// </summary>
+        [Fact]
+        public async Task CloneDecorationsAtAColumnBreak_ReserveTheirRoomInABoxOfBlocks()
+        {
+            async Task<IReadOnlyList<CssBox>> RowsWith(string decorationBreak)
+            {
+                var rows = string.Concat(Enumerable.Range(0, 16)
+                    .Select(i => $"<div id='r{i}' class='row' style='height:20pt; margin:0'>r{i}</div>"));
+
+                var (root, _) = await BuildAndLayout(Wrap($@"
+                    <div id='mc' style='columns:2; column-gap:0; width:300pt; column-fill:auto'>
+                        <div id='wrap' style='margin:0; padding:0; border-top:12pt solid red;
+                             border-bottom:12pt solid red; box-decoration-break:{decorationBreak}'>{rows}</div>
+                    </div>"), pageHeight: 200);
+
+                return FindAllByClass(root, "row");
+            }
+
+            var sliced = await RowsWith("slice");
+            var cloned = await RowsWith("clone");
+
+            // Both split at the boundary at all, which is the part that did not happen.
+            Assert.True(sliced[15].Location.X > sliced[0].Location.X + 100);
+            Assert.True(cloned[15].Location.X > cloned[0].Location.X + 100);
+
+            // `slice` fills the band; `clone` stops one row earlier, by the 12pt border it has to close
+            // with. Read off which row is the last one still in the first column.
+            var lastSliced = sliced.Count(r => r.Location.X <= sliced[0].Location.X + 0.5);
+            var lastCloned = cloned.Count(r => r.Location.X <= cloned[0].Location.X + 0.5);
+
+            Assert.Equal(lastSliced - 1, lastCloned);
+        }
+
         /// <summary>
         /// Asserts no two boxes' bounding rectangles overlap — the structural invariant a
         /// two-axis (page, column) fragmentation engine must never violate, since an overlap
