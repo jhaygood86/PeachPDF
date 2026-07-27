@@ -539,6 +539,10 @@ One boundary: this holds for a forced break carried by the container's own child
 
 **Migration note.** Before content could split at a column boundary, a child was atomic per column — a paragraph that did not fit moved to the next column whole, and one too tall for any column overflowed it. Documents relying on that (a container sized so that exactly one child fit per column, say) may now paginate differently, because the boundary is a real break point rather than a whole-child packing decision. See [Forward compatibility](#forward-compatibility).
 
+**A column is at least as tall as its unbreakable content.** A child a multi-column container cannot fragment — a `<table>`, or another layout engine's container — is placed in one column whole, and where it is taller than the height balancing chose, the column it lands in grows to hold it rather than the overflow being clipped away. A `<table>` nested in a multi-column container therefore renders in full.
+
+A **grid** container nested in a multi-column container is a known exception: it takes the column's width correctly, but its items' content is laid out at the *outer container's* width and overflows the column, so whatever falls past the column's right edge is not painted. Give such a grid an explicit width, or take it out of the multi-column container.
+
 A multi-column container whose content is only text, with no block-level child of its own, is not columnized at all — its content needs a block box to be moved between columns as.
 
 - A box split at a column boundary leaves that edge open, per `box-decoration-break: slice` — no border is drawn where the break is, only where the box really starts and ends. See [Decorations at a break](#decorations-at-a-break).

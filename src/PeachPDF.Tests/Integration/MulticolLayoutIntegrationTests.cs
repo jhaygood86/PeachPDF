@@ -1576,6 +1576,78 @@ namespace PeachPDF.Tests.Integration
             return (root, FindById(root, "mc")!, FindById(root, "long")!, container);
         }
 
+        // A column is at least as tall as its unbreakable content (css-multicol-1 §3.3). The band a
+        // column is *given* comes from balancing, and a child this engine cannot fragment - a table,
+        // another engine's container - is placed whole and overflows it. Recording the target rather
+        // than the band the column actually filled left everything below the target claimed by no
+        // fragmentainer at all: laid out, and painted nowhere (issue #406). No break value is needed;
+        // the plain nesting is enough.
+        [Fact]
+        public async Task AnUnbreakableChildTallerThanTheBalancedTarget_EmitsAllOfItsContent()
+        {
+            var blocks = string.Concat(Enumerable.Range(1, 4)
+                .Select(i => $"<p class='item'>block {i} alpha beta gamma delta</p>"));
+
+            var (root, container) = await BuildAndLayout(
+                Wrap("<div id='mc' style='columns:2; column-gap:20px; width:300px'>"
+                     + $"<table style='width:100%'><tr><td>{blocks}</td></tr></table></div>"),
+                pageHeight: 400);
+
+            var authored = FindAllByClass(root, "item")
+                .SelectMany(LayoutHarness.Descendants)
+                .SelectMany(b => b.Words)
+                .Where(w => !w.IsSpaces)
+                .ToList();
+
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => FlattenFragments(f.Root))
+                .SelectMany(f => f.Words)
+                .Select(w => w.Word)
+                .ToList();
+
+            Assert.NotEmpty(authored);
+            Assert.All(authored, word => Assert.Contains(word, claimed));
+
+            // And the widening cannot have let a neighbouring column claim the same word: columns are
+            // told apart by the inline axis, which the band says nothing about.
+            Assert.Equal(claimed.Count, claimed.Distinct().Count());
+        }
+
+        // Characterization, and a different loss from the one above: a grid container inside a
+        // multi-column container has the column's width, but its items' content is laid out at the
+        // *container's* width and overflows the column's inline span - so the words past the column's
+        // right edge are claimed by no fragmentainer. The band widening above cannot help, because the
+        // inline axis is what tells two columns apart and it is exactly the axis this overflows.
+        // Filed as issue #414; closing it turns this into the equality above.
+        [Fact]
+        public async Task AGridChildOfAMulticol_OverflowsTheColumnInlineAxis_AndLosesTheOverflow()
+        {
+            var blocks = string.Concat(Enumerable.Range(1, 4)
+                .Select(i => $"<p class='item'>block {i} alpha beta gamma delta</p>"));
+
+            var (root, container) = await BuildAndLayout(
+                Wrap("<div id='mc' style='columns:2; column-gap:20px; width:300px'>"
+                     + $"<div id='g' style='display:grid'>{blocks}</div></div>"),
+                pageHeight: 400);
+
+            var grid = FindById(root, "g")!;
+
+            var overflowing = FindAllByClass(root, "item")
+                .SelectMany(LayoutHarness.Descendants)
+                .SelectMany(b => b.Words)
+                .Where(w => !w.IsSpaces && w.Left > grid.ActualRight)
+                .ToList();
+
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => FlattenFragments(f.Root))
+                .SelectMany(f => f.Words)
+                .Select(w => w.Word)
+                .ToHashSet();
+
+            Assert.NotEmpty(overflowing);
+            Assert.All(overflowing, word => Assert.DoesNotContain(word, claimed));
+        }
+
         /// <summary>
         /// Asserts no two boxes' bounding rectangles overlap — the structural invariant a
         /// two-axis (page, column) fragmentation engine must never violate, since an overlap
