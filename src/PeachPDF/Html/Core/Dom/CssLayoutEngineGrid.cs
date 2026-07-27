@@ -311,10 +311,6 @@ namespace PeachPDF.Html.Core.Dom
             // baseline items in the row share a common first baseline.
             AlignRowBaselines(placements);
 
-            // ── The break points between rows are real ones now that the items sit where they will
-            // finally sit - see RelocateRowsAcrossFragmentainers.
-            RelocateRowsAcrossFragmentainers(placements);
-
             // ── Container size when auto.
             var gridHeight = rows.Sum(t => t.Size) + (rowCount > 1 ? rowGap * (rowCount - 1) : 0);
             if (!hasDefiniteHeight)
@@ -322,6 +318,12 @@ namespace PeachPDF.Html.Core.Dom
                 _gridBox.ActualBottom = _gridBox.ClientTop + gridHeight
                     + _gridBox.ActualPaddingBottom + _gridBox.ActualBorderBottomWidth;
             }
+
+            // ── The break points between rows are real ones now that the items sit where they will
+            // finally sit - see RelocateRowsAcrossFragmentainers. Run *after* the container has been
+            // sized from its tracks, because that sizing reads the track sizes rather than the boxes and
+            // so would overwrite the displacement this adds.
+            RelocateRowsAcrossFragmentainers(placements);
 
             // Inline-grid shrinks to the content extent in the inline axis (like inline-block).
             if (_gridBox.Display == CssConstants.InlineGrid && !CssValueParser.IsValidLength(_gridBox.Width) && columns.Length > 0)
@@ -367,29 +369,21 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var boxes = row.Select(p => p.Box).ToList();
 
-                var top = boxes.Min(b => b.Location.Y) + shift;
-                var bottom = boxes.Max(b => b.ActualBottom) + shift;
+                shift += LineRelocation.DeltaFor(
+                    container,
+                    boxes.Min(b => b.Location.Y) + shift,
+                    boxes.Max(b => b.ActualBottom) + shift,
+                    boxes.Any(b => BreakValues.IsForcedPageBreak(b.BreakBefore)),
+                    boxes.Any(b => BreakValues.AvoidsBreak(b.BreakInside, FragmentationContext.Page)
+                                   || MonolithicContent.IsMonolithic(b)));
 
-                var slot = container.SlotStartingAt(top);
-
-                var forced = boxes.Any(b => BreakValues.IsForcedPageBreak(b.BreakBefore));
-                var straddles = bottom - HtmlContainerInt.PageBoundaryEpsilon > container.PageBottomOf(slot)
-                                && boxes.Any(b => BreakValues.AvoidsBreak(b.BreakInside, FragmentationContext.Page)
-                                                  || MonolithicContent.IsMonolithic(b));
-
-                if (!forced && !straddles) continue;
-
-                if (!forced && bottom - top > container.PageBandHeightOf(slot + 1)) continue;
-
-                var delta = container.PageTopOf(slot + 1) - top;
-
-                if (delta <= 0) continue;
-
-                shift += delta;
+                // Every row from the first relocated one onward moves by the *accumulated* displacement -
+                // see LineRelocation for why the delta is returned rather than applied there.
+                if (shift <= 0) continue;
 
                 foreach (var box in boxes)
                 {
-                    box.OffsetTop(delta);
+                    box.OffsetTop(shift);
                 }
             }
 

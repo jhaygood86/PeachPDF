@@ -221,5 +221,66 @@ namespace PeachPDF.Tests.Integration
             Assert.True(a!.Location.Y >= cell.Location.Y - 0.5,
                 $"expected the item to stay within its cell (cell at {cell.Location.Y}, item at {a.Location.Y})");
         }
+
+        // ─── The lines after a relocated one follow it ────────────────────────────
+
+        // A line or row is moved by the *accumulated* displacement, not by its own. Everything below a
+        // line that moved to the next fragmentainer has to follow it there: applying only the moving
+        // line's own delta left the lines after it sitting on top of it, and the container reported a
+        // height a whole displacement short of the content it holds.
+        private const string ThreeLines =
+            "<div style='height:260pt'>filler</div>"
+            + "<div id='c' style='{0}; width:300pt'>"
+            + "<div class='it' id='i1' style='width:45%;height:60pt;break-inside:avoid'>1</div>"
+            + "<div class='it' id='i2' style='width:45%;height:60pt;break-inside:avoid'>2</div>"
+            + "<div class='it' id='i3' style='width:45%;height:60pt;break-inside:avoid'>3</div>"
+            + "<div class='it' id='i4' style='width:45%;height:60pt;break-inside:avoid'>4</div>"
+            + "<div class='it' id='i5' style='width:45%;height:60pt;break-inside:avoid'>5</div>"
+            + "<div class='it' id='i6' style='width:45%;height:60pt;break-inside:avoid'>6</div>"
+            + "</div>";
+
+        [Theory]
+        [InlineData("display:flex; flex-wrap:wrap")]
+        [InlineData("display:grid; grid-template-columns:auto auto")]
+        public async Task ALineAfterARelocatedOne_FollowsItRatherThanOverlapping(string containerStyle)
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(string.Format(ThreeLines, containerStyle)),
+                pageHeight: 400, margin: 20);
+
+            var items = Enumerable.Range(1, 6)
+                .Select(i => LayoutHarness.FindById(root, $"i{i}")!)
+                .ToList();
+
+            // The middle line straddled the boundary and moved; the last one has to end up below it.
+            Assert.True(items[2].Location.Y > items[0].ActualBottom - 0.5,
+                "the relocated line must still be below the one before it");
+            Assert.True(items[4].Location.Y >= items[2].ActualBottom - 0.5,
+                $"the line after the relocated one overlaps it: it starts at {items[4].Location.Y:F1} "
+                + $"while the line above ends at {items[2].ActualBottom:F1}");
+
+            // And it really did relocate - otherwise this asserts nothing.
+            Assert.True(items[2].Location.Y > items[0].ActualBottom + 0.5,
+                "the fixture no longer relocates a line; it asserts nothing as written");
+        }
+
+        [Theory]
+        [InlineData("display:flex; flex-wrap:wrap")]
+        [InlineData("display:grid; grid-template-columns:auto auto")]
+        public async Task ARelocatingContainer_ReportsAHeightThatHoldsItsContent(string containerStyle)
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(string.Format(ThreeLines, containerStyle)),
+                pageHeight: 400, margin: 20);
+
+            var container = LayoutHarness.FindById(root, "c")!;
+            var lowest = Enumerable.Range(1, 6)
+                .Max(i => LayoutHarness.FindById(root, $"i{i}")!.ActualBottom);
+
+            // Sized from its lines before the relocation ran, the container was a whole displacement
+            // short of the content it holds.
+            Assert.True(container.ActualBottom >= lowest - 0.5,
+                $"container ends at {container.ActualBottom:F1} but its content reaches {lowest:F1}");
+        }
     }
 }
