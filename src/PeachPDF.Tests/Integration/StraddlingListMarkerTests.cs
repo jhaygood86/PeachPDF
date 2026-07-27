@@ -18,15 +18,25 @@ namespace PeachPDF.Tests.Integration
     /// paint on any page (issue #444).
     /// </summary>
     /// <remarks>
-    /// The fixture is the issue's own — 40 items of 60 words each on A4 — and its margin is production's
-    /// (<c>PdfGenerateConfig</c>'s 10pt) rather than <see cref="LayoutHarness"/>'s tidier 20pt default. The
-    /// line geometry is deliberately <i>not</i> pinned: which item lands across a boundary is the whole
-    /// subject here, so the fixture is checked for one rather than arranged to avoid the question.
+    /// <para>
+    /// The margin is production's (<c>PdfGenerateConfig</c>'s 10pt) rather than
+    /// <see cref="LayoutHarness"/>'s tidier 20pt default — the same reason <c>UnreachedWordClaimTests</c>
+    /// records, since a fixture that picks its margin for tidiness can hide a whole family of defects here.
+    /// </para>
+    /// <para>
+    /// A straddling item is <i>guaranteed</i> rather than hoped for: the middle item is long enough to span
+    /// several pages by itself, so which item breaks is not a function of the platform's font metrics. The
+    /// issue's own fixture — 40 items of 60 words each, where <c>li26</c> is the one that breaks — reproduces
+    /// the same thing, but only at whatever line geometry the default font happens to give, so it is not what
+    /// is pinned here. The line geometry that <i>is</i> pinned (a 20pt line against an 830pt band, plus
+    /// <c>orphans: 1; widows: 1</c>) leaves every page's last line 10pt clear of the boundary, keeping these
+    /// fixtures out of the 0.5pt window where layout and the emitter disagree about membership (#446) — a
+    /// different defect, reached on <c>windows-latest</c> only.
+    /// </para>
     /// </remarks>
     public class StraddlingListMarkerTests
     {
-        private const int Items = 40;
-        private const int WordsPerItem = 60;
+        private const string ItemStyle = "margin:0;font-size:10pt;line-height:20pt;orphans:1;widows:1";
 
         /// <summary>
         /// #374's claimed-exactly-once invariant, over the whole document. A marker is a thing that can be
@@ -153,10 +163,11 @@ namespace PeachPDF.Tests.Integration
             // A margin big enough to carry the item across a page boundary by itself is §5.2's own case:
             // the margin is truncated and the item starts flush at the next boundary instead.
             var html = LayoutHarness.Wrap(
-                "<ul><li id='first'>first item</li>"
-                + "<li id='pushed' style='margin-top:900pt'>pushed onto the next page by its margin</li></ul>");
+                "<ul style='margin:0;padding-left:40pt'>"
+                + $"<li id='first' style='{ItemStyle}'>first item</li>"
+                + $"<li id='pushed' style='{ItemStyle};margin-top:900pt'>pushed by its own margin</li></ul>");
 
-            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: 842, margin: 10);
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: 850, margin: 10);
 
             var pushed = LayoutHarness.FindById(root, "pushed")!;
             var claims = ClaimsByWord(container);
@@ -173,14 +184,21 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal([SlotsOf(container, pushed).First()], slots!);
         }
 
+        /// <summary>
+        /// Three items, the middle one long enough to run over several pages, so exactly one of them
+        /// straddles and it does so whatever the platform's text measurement says.
+        /// </summary>
         private static Task<(CssBox Root, HtmlContainerInt Container)> LayoutAsync(string listStyleType = "disc")
         {
-            var items = string.Join("", Enumerable.Range(0, Items).Select(i =>
-                $"<li id='li{i}'>" + string.Join(" ", Enumerable.Range(0, WordsPerItem).Select(w => $"i{i}w{w}")) + "</li>"));
+            var items = string.Join("", new[] { 12, 1200, 12 }.Select((words, i) =>
+                $"<li id='li{i}' style='{ItemStyle}'>"
+                + string.Join(" ", Enumerable.Range(0, words).Select(w => $"i{i}w{w}"))
+                + "</li>"));
 
             return LayoutHarness.LayoutAsync(
-                LayoutHarness.Wrap($"<ul style='list-style-type:{listStyleType}'>{items}</ul>"),
-                pageHeight: 842, margin: 10);
+                LayoutHarness.Wrap(
+                    $"<ul style='margin:0;padding-left:40pt;list-style-type:{listStyleType}'>{items}</ul>"),
+                pageHeight: 850, margin: 10);
         }
 
         /// <summary>

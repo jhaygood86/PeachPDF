@@ -35,14 +35,18 @@ claimed by nothing, exactly as before — being positioned is what clears the fl
 (`CssRect.Top`'s setter), so the marker has to be positioned last. This is invisible in a diff and
 would be reintroduced by anyone "simplifying" the call to sit next to `PlaceBlockBox`.
 
-**What running it bought, twice.** First, the fixture: the bug does not reproduce with the line
-geometry pinned. `UnreachedWordClaimTests` pins `font-size: 10pt; line-height: 20pt` to stay clear of
-[#446](https://github.com/jhaygood86/PeachPDF/issues/446)'s 0.5pt window, and with those values no
-item in a 40×60 list lands across a boundary at all — 40/40 markers claimed on the *unfixed* build.
-Which item straddles is the whole subject here, so `StraddlingListMarkerTests` leaves the geometry to
-the platform's default font and *checks* the fixture for a straddler instead of arranging one away.
-The margin matters for the same reason #433 records: 10pt is production's, and `LayoutHarness`
-defaults to 20pt.
+**What running it bought, twice.** First, the fixture, which had to satisfy two constraints that pull
+against each other. Pinning the line geometry the way `UnreachedWordClaimTests` does — a 20pt line
+against an 830pt band, to stay clear of
+[#446](https://github.com/jhaygood86/PeachPDF/issues/446)'s 0.5pt window on `windows-latest` — makes
+the issue's own 40×60 list report **40/40 markers claimed on the unfixed build**: with those values
+no item lands across a boundary at all, and a fixture that arranges the straddle away tests nothing.
+Leaving the geometry unpinned reproduces it exactly (39/40, `li26`) but makes *which* item straddles
+a function of the platform's font metrics, and the whole-document claimed-exactly-once assertion is
+then exposed to #446. The way out is to stop leaving the straddle to chance: the middle item is
+1,200 words, so it spans several pages by itself and breaks under any measurement, and the geometry
+stays pinned. The margin is production's 10pt for the reason #433 records — `LayoutHarness` defaults
+to 20pt, and a fixture that picks its margin for tidiness can hide this whole family.
 
 Second, the guard. `resume is null && RequestedBreakBeforeTop is null` — the pass that *places* the
 item — is the condition, and only the first half is observably load-bearing. §5.2's margin truncation
@@ -72,8 +76,8 @@ Tests: `StraddlingListMarkerTests` (5 — the claimed-exactly-once invariant ove
 the same narrowed to markers *and to the slot the item begins in*, the paint calls themselves
 (`TestRecordingGraphics`, every numbered marker drawn on exactly one page), the marker's geometry
 being unchanged by the move, and the declined-placement guard), plus the list shape added to
-`UnreachedWordClaimTests.AParagraphSplitAtAPageBoundary_ClaimsEveryWordExactlyOnce`. Reverting the
-one moved call fails **3 of the 5**, naming `li26` by id. Full net8.0 suite green
+`UnreachedWordClaimTests.AParagraphSplitAtAPageBoundary_ClaimsEveryWordExactlyOnce`. Moving the one
+call back to the epilogue fails **3 of the 5**, naming the straddling item by id. Full net8.0 suite green
 (6,722 passed / 6,731 total), CLI green (96); **100% diff coverage** (14/14 changed library lines);
 0 warnings on `dotnet build PeachPDF.slnx -t:Rebuild`.
 
