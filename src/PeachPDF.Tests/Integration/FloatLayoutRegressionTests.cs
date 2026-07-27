@@ -109,13 +109,17 @@ namespace PeachPDF.Tests.Integration
             // in one job), and every raise of such a bound costs it more of the sensitivity it exists for.
             var (root, container) = await BuildAndLayout(BuildRepeatedSectionsHtml(sectionCount: 40));
 
-            // Without this, "visited no boxes" could just as well mean layout never asked - see the
-            // companion test below, which pins the counter to real work when floats ARE present.
+            // Without this, "visited no boxes" could just as well mean layout never asked - and
+            // FloatScanCounters_CountTheWalkTheyGuard_WhenAFloatIsPresent pins the same counter to real
+            // work in the case where the walk does run.
             Assert.True(container.FloatScanCalls > 0,
                 "layout should have asked for an intersecting float many times over a document this size; " +
                 "a zero call count means this test no longer exercises the float scan at all");
 
-            Assert.Equal(0, container.FloatScanBoxVisits);
+            Assert.True(container.FloatScanBoxVisits == 0,
+                $"the float scan examined {container.FloatScanBoxVisits} boxes over a document with no floats " +
+                "in it; HasFloatedBoxes should have answered every one of those lookups without a tree walk, " +
+                "so any non-zero count is the O(document size) walk per box returning");
 
             // Sanity: the counted calls really are spread over the whole document, not a handful of boxes.
             Assert.True(container.FloatScanCalls > CountBoxes(root) / 2,
