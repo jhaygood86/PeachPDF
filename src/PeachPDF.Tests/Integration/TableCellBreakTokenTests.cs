@@ -19,7 +19,7 @@ namespace PeachPDF.Tests.Integration
     /// and the next layout of the same box clearing it in <c>CssBox.BeginLayoutPass</c> — and until now
     /// the row loop spent that instant reading only <c>ActualBottom</c>. It now asks the cell whether it
     /// finished, and records the answer on the cursor, which <c>LayoutCells</c> publishes on the table as
-    /// <see cref="CssBox.UnfinishedTableCells"/>.
+    /// <see cref="CssBox.TableContinuation"/>.
     /// </para>
     /// <para>
     /// <b>Nothing acts on the answer yet, and the answer is always "yes, it finished".</b> The engine runs
@@ -78,7 +78,7 @@ namespace PeachPDF.Tests.Integration
             Assert.True(table.ActualBottom - table.Location.Y > PageHeight - 2 * Margin,
                 $"fixture does not paginate: table spans {table.ActualBottom - table.Location.Y:F1}pt");
 
-            Assert.Empty(table.UnfinishedTableCells);
+            Assert.Null(table.TableContinuation);
             Assert.All(CellsOf(root), cell => Assert.Null(cell.PendingBreakToken));
         }
 
@@ -98,7 +98,7 @@ namespace PeachPDF.Tests.Integration
                 .Where(b => b.Display == CssConstants.Table).ToList();
 
             Assert.Equal(2, tables.Count);
-            Assert.All(tables, t => Assert.Empty(t.UnfinishedTableCells));
+            Assert.All(tables, t => Assert.Null(t.TableContinuation));
         }
 
         /// <summary>
@@ -112,7 +112,7 @@ namespace PeachPDF.Tests.Integration
                 LayoutHarness.Wrap("<table style='width:150pt'><tr><td>" + Words(244) + "</td></tr>"
                                    + "<tr><td>tail</td></tr></table>"),
                 passes: 2,
-                snapshot: (root, _) => TableOf(root).UnfinishedTableCells.Count,
+                snapshot: (root, _) => TableOf(root).TableContinuation?.UnfinishedCells.Count ?? 0,
                 pageHeight: PageHeight, margin: Margin);
 
             Assert.Equal([0, 0], counts);
@@ -209,7 +209,7 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotNull(stopping);
 
-            var recorded = Assert.Single(TableOf(root).UnfinishedTableCells);
+            var recorded = Assert.Single(TableOf(root).TableContinuation!.UnfinishedCells);
             Assert.Same(stopping, recorded.Cell);
             Assert.Same(stopping.Record, recorded.Token);
 
