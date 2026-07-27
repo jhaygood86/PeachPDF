@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
@@ -209,10 +210,45 @@ namespace PeachPDF.Html.Core.Fragmentation
             CssBox subject, double subjectTop, double ownPageTop, double subjectExtent, double destinationBand)
         {
             var run = DomUtils.GetPrecedingKeepWithNextRun(subject, FragmentationContext.Page);
+            var tops = new double[run.Count];
 
-            for (var head = 0; head < run.Count; head++)
+            for (var member = 0; member < run.Count; member++)
             {
-                var extraAbove = subjectTop - run[head].Location.Y;
+                tops[member] = run[member].Location.Y;
+            }
+
+            var head = TravellingRunHead(tops, subjectTop, ownPageTop, subjectExtent, destinationBand);
+
+            return head < run.Count
+                ? (run.GetRange(head, run.Count - head), subjectTop - run[head].Location.Y, head > 0)
+                : ([], 0, false);
+        }
+
+        /// <summary>
+        /// Which member of a keep-with-next run the retained run starts at — §4.3's ladder, one tier at a
+        /// time. <paramref name="memberTops"/>.Count means none of it can travel, which is the rung where
+        /// the constraint is given up altogether.
+        /// </summary>
+        /// <remarks>
+        /// The ladder itself is arithmetic over coordinates, and deliberately says nothing about what a
+        /// run <i>member</i> is: <see cref="TravellingRun"/> reads a chain of preceding siblings, while
+        /// <see cref="LineRelocation"/> reads a chain of flex lines or grid rows, which have no sibling
+        /// relationship at all. Both ask the same two questions in the same order, and stating them once
+        /// is what stops the second copy relaxing differently from the first. A span rather than a list
+        /// because both callers already hold their candidates contiguously, so neither has to copy.
+        /// </remarks>
+        /// <param name="memberTops">the candidate members' tops, in document order (topmost first)</param>
+        /// <param name="subjectTop">the coordinate the subject would move away from</param>
+        /// <param name="ownPageTop">the content top of the fragmentainer being left</param>
+        /// <param name="subjectExtent">how much room the subject itself still needs in the destination</param>
+        /// <param name="destinationBand">the destination fragmentainer's content height</param>
+        internal static int TravellingRunHead(
+            ReadOnlySpan<double> memberTops, double subjectTop, double ownPageTop,
+            double subjectExtent, double destinationBand)
+        {
+            for (var head = 0; head < memberTops.Length; head++)
+            {
+                var extraAbove = subjectTop - memberTops[head];
 
                 // A member at or below the subject cannot be "above" it, and neither can anything after it
                 // in the run — so there is nothing left to trim towards.
@@ -221,10 +257,10 @@ namespace PeachPDF.Html.Core.Fragmentation
                 if (extraAbove >= subjectTop - ownPageTop) continue;
                 if (extraAbove + subjectExtent > destinationBand) continue;
 
-                return (run.GetRange(head, run.Count - head), extraAbove, head > 0);
+                return head;
             }
 
-            return ([], 0, false);
+            return memberTops.Length;
         }
 
         /// <summary>

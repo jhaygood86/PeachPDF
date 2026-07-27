@@ -367,7 +367,7 @@ namespace PeachPDF.Html.Core.Dom
             var endingAt = BoxesByEndRow(placements);
             var endRows = endingAt.Keys.OrderBy(row => row).ToList();
 
-            double shift = 0;
+            var groups = new List<LineGroup>(rows.Count);
 
             // How many entries of endRows lie above the row being placed. Both lists ascend, so this only
             // moves forward — the "nearest end row above" question costs one step per row rather than a
@@ -378,25 +378,12 @@ namespace PeachPDF.Html.Core.Dom
             {
                 while (above < endRows.Count && endRows[above] < row.Key) above++;
 
-                var boxes = row.Select(p => p.Box).ToList();
-
-                shift += LineRelocation.DeltaFor(
-                    container,
-                    boxes.Min(b => b.Location.Y) + shift,
-                    boxes.Max(b => b.ActualBottom) + shift,
-                    LineRelocation.ForcedBreakBetween(above > 0 ? endingAt[endRows[above - 1]] : null, boxes),
-                    boxes.Any(b => BreakValues.AvoidsBreak(b.BreakInside, FragmentationContext.Page)
-                                   || MonolithicContent.IsMonolithic(b)));
-
-                // Every row from the first relocated one onward moves by the *accumulated* displacement -
-                // see LineRelocation for why the delta is returned rather than applied there.
-                if (shift <= 0) continue;
-
-                foreach (var box in boxes)
-                {
-                    box.OffsetTop(shift);
-                }
+                groups.Add(new LineGroup(
+                    row.Select(p => p.Box).ToList(),
+                    above > 0 ? endingAt[endRows[above - 1]] : null));
             }
+
+            var shift = LineRelocation.Relocate(container, groups);
 
             if (shift > 0)
             {
