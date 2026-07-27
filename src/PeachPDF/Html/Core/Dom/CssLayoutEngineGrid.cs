@@ -370,7 +370,7 @@ namespace PeachPDF.Html.Core.Dom
                 var top = boxes.Min(b => b.Location.Y) + shift;
                 var bottom = boxes.Max(b => b.ActualBottom) + shift;
 
-                var slot = container.PageIndexOf(top + HtmlContainerInt.PageBoundaryEpsilon);
+                var slot = container.SlotStartingAt(top);
 
                 var forced = boxes.Any(b => BreakValues.IsForcedPageBreak(b.BreakBefore));
                 var straddles = bottom - HtmlContainerInt.PageBoundaryEpsilon > container.PageBottomOf(slot)

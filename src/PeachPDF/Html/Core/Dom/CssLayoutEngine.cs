@@ -1431,7 +1431,7 @@ namespace PeachPDF.Html.Core.Dom
                                         blockBox,
                                         // The fragmentainer after the one this line was trying to sit
                                         // in, which is not in general the one after the pass's own.
-                                        box.HtmlContainer!.PageIndexOf(word.Top + HtmlContainerInt.PageBoundaryEpsilon) + 1,
+                                        box.HtmlContainer!.SlotStartingAt(word.Top) + 1,
                                         [], coordinates.LineStartOrdinal, CompletedLineCount: 0);
                                     return;
                                 }
