@@ -1385,6 +1385,37 @@ namespace PeachPDF.Html.Core
         internal int SlotEndingAt(double y) => PageIndexOf(y - PageBoundaryEpsilon);
 
         /// <summary>
+        /// The block-axis band pagination slot <paramref name="slot"/> occupies.
+        /// </summary>
+        internal PageBand BandOfSlot(int slot) => new(PageTopOf(slot), PageBottomOf(slot));
+
+        /// <summary>
+        /// The band of the fragmentainer a <b>top</b> edge at <paramref name="y"/> starts in.
+        /// </summary>
+        internal PageBand BandStartingAt(double y) => BandOfSlot(SlotStartingAt(y));
+
+        /// <summary>
+        /// Whether a bottom edge at <paramref name="bottom"/> falls past <paramref name="band"/> — the
+        /// one question "did this cross out of its fragmentainer?" is asked as.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Stated against a band rather than as a comparison of two slot indices, because a slot index is
+        /// a fact about the page grid while a band is a fact about a <i>fragmentainer</i> — and a column
+        /// has one of those and no slot of its own. This is the form both of
+        /// <c>CssRect.WouldStraddleFragmentainer</c>'s arms can be written in, and the shape the rest of
+        /// the block-flow path has to move to before a child's layout can stop reading its own absolute Y
+        /// (see the staging in the fragmentainer-relative issue).
+        /// </para>
+        /// <para>
+        /// The epsilon is <see cref="SlotEndingAt"/>'s convention, in coordinates: a bottom edge flush on
+        /// the band's own bottom has not left it, and neither has one within the tolerance past it.
+        /// </para>
+        /// </remarks>
+        internal static bool FallsPast(double bottom, PageBand band) =>
+            bottom - PageBoundaryEpsilon >= band.Bottom;
+
+        /// <summary>
         /// The document Y-coordinate of the content-top of pagination slot <paramref name="pageIndex"/>,
         /// per the same shifted-grid convention as <see cref="PageIndexOf"/> - the inverse operation.
         /// </summary>

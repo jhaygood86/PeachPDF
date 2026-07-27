@@ -316,13 +316,15 @@ namespace PeachPDF.Html.Core.Dom
             if (container.CurrentFragmentainer is { HasOwnBand: true } columnBand)
             {
                 return MonolithicContent.FitsInBand(Height, clonedTop, clonedBottom, columnBand.BandHeight)
-                       && Bottom + clonedBottom - HtmlContainerInt.PageBoundaryEpsilon > columnBand.BandBottom;
+                       && HtmlContainerInt.FallsPast(
+                           Bottom + clonedBottom, new PageBand(columnBand.BandTop, columnBand.BandBottom));
             }
 
-            // The epsilons make a line ending exactly ON a slot boundary a non-break (it fits wholly in
-            // the earlier slot).
-            return container.SlotStartingAt(Top)
-                   < container.SlotEndingAt(Bottom + clonedBottom);
+            // The same question, of the band this word started in rather than of the column's. Asking it
+            // as "does the bottom edge fall past that band" rather than as "are the top and bottom in
+            // different slots" is what makes the two arms one question with two bands, instead of two
+            // questions - a slot index is a fact about the page grid, and a column has no slot of its own.
+            return HtmlContainerInt.FallsPast(Bottom + clonedBottom, container.BandStartingAt(Top));
         }
 
         public bool BreakPage()
