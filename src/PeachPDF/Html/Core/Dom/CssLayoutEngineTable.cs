@@ -1485,7 +1485,10 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     // Its content continues in another fragmentainer, so this fragment has no spare room
                     // to align within and its own bottom is where its content stopped - see the comment
-                    // where it was recorded.
+                    // where it was recorded. Asked after the CssSpacingBox arm rather than beside the
+                    // FinishedCells guard above, because a spacer that stopped still has to align the
+                    // cell it stands in for.
+                    continue;
                 }
                 else if (GetRowSpan(cell) == 1 || (boxesThatEndOnRow?.Contains(cell) ?? false))
                 {
