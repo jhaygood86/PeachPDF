@@ -975,6 +975,12 @@ p.info span::after {
             Assert.Equal(RuleType.Media, sheet.Rules[2].Type);
         }
 
+        // The Timeout on this and the two tests after it is a hang guard, not a performance bound: each
+        // of these inputs once sent the parser into a loop it never left, and the only assertion the
+        // timeout makes is that parsing terminates at all. Each parse takes well under a millisecond, so
+        // the value is ~4 orders of magnitude of headroom and says nothing about how fast parsing is.
+        // A wall-clock number that IS meant as a complexity bound does not belong in a test - see
+        // FloatLayoutRegressionTests, which counts the work instead.
         [Fact(Timeout = 10000)]
         public async Task CssParseSheetWithAtAndCommentDoesNotTakeForever()
         {
