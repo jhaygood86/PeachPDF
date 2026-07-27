@@ -50,6 +50,19 @@ namespace PeachPDF.Html.Core
         /// <summary>True for the synthetic document-root wrapper, which the universal selector must never match.</summary>
         bool IsRoot { get; }
 
+        /// <summary>
+        /// True when this element has no children other than white-space-only text nodes and comments -
+        /// the <c>:empty</c> test (Selectors 4 §9.5).
+        /// </summary>
+        /// <remarks>
+        /// Asked of the node rather than derived from <see cref="Children"/> because what counts as child
+        /// content differs per tree. The HTML box tree keeps text in anonymous child boxes and may already
+        /// have grown a generated <c>::before</c>/<c>::after</c>/<c>::marker</c> box that <c>:empty</c> must
+        /// ignore (it is defined over the source tree), while a standalone SVG's <see cref="Children"/>
+        /// deliberately exposes elements only, leaving its text nodes invisible to a generic walk.
+        /// </remarks>
+        bool IsEmpty { get; }
+
         /// <summary>The node's CSS custom properties (<c>--x</c>), inherited+overlaid by the cascade; read by <c>var()</c> resolution.</summary>
         Dictionary<string, string>? CustomProperties { get; set; }
     }

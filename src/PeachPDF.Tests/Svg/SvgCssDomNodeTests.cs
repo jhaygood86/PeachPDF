@@ -318,6 +318,7 @@ namespace PeachPDF.Tests.Svg
             public ICssDomNode? Parent => null;
             public IReadOnlyList<ICssDomNode> Children => [];
             public bool IsRoot => false;
+            public bool IsEmpty => true;
             public Dictionary<string, string>? CustomProperties { get; set; } = customProperties;
         }
     }

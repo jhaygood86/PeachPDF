@@ -16,13 +16,16 @@ namespace PeachPDF.CSS
 
         private static Dictionary<string, ISelector> BuildSelectors()
         {
-            // :root and :link are the only two ident-form pseudo-classes CssData.DoesSelectorMatch can
-            // actually answer; everything else here parses and selects nothing, and lives in the one
-            // list that says so (UnmatchableSelectors.PseudoClasses).
+            // The ident-form pseudo-classes CssData.DoesSelectorMatch can actually answer; everything
+            // else here parses and selects nothing, and lives in the one list that says so
+            // (UnmatchableSelectors.PseudoClasses).
             var selectors = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                 {
                     PseudoClassNames.Root,
+                    PseudoClassNames.Scope,
                     PseudoClassNames.Link,
+                    PseudoClassNames.AnyLink,
+                    PseudoClassNames.Empty,
                 }
                 .Union(UnmatchableSelectors.PseudoClasses, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(x => x, PseudoClassSelector.Create, StringComparer.OrdinalIgnoreCase);

@@ -5234,6 +5234,84 @@ await SaveShowcaseAsync("unmatchable_selectors", "Selectors & Cascade", "Unmatch
     "shaped `:root, :host` design-token block.",
     unmatchableSelectorHtml, pdfConfig);
 
+// ── The pseudo-classes a document tree alone can answer (issue #417) ───────────────────────
+// :empty, :any-link and :scope used to sit in the recognized-but-unmatchable list with :hover and
+// :host. They depend only on the document tree, so a static renderer can evaluate all three - and
+// this page is styled entirely through them: the design tokens arrive via :scope, every link colour
+// via :any-link, and the gaps in the table are filled by :empty alone.
+var documentTreeSelectorHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head><style>
+      /* :scope with no scoping root in play IS the root element, so this is the :root token block. */
+      :scope { --ink: #1e293b; --muted: #64748b; --brand: #2563eb; --line: #cbd5e1; --gap: #fef3c7; }
+      :scope > body { font-family: sans-serif; color: var(--ink); margin: 28pt; font-size: 12px; }
+      :scope h2 { font-size: 20px; margin: 0 0 4px; }
+      .note { color: var(--muted); font-size: 12px; margin: 0 0 18px; max-width: 460px; }
+      h3 { font-size: 13px; margin: 18px 0 6px; }
+
+      /* Reset the UA sheet's blanket `a { color: #0055BB; text-decoration: underline }` first, so the
+         only thing distinguishing a real link below is :any-link - the union of :link and :visited,
+         which stylesheets increasingly prefer over :link. An <a> with no href is not a link source. */
+      a { color: var(--ink); text-decoration: none; }
+      :any-link { color: var(--brand); font-weight: bold; text-decoration: underline; }
+      a.tag:any-link { display: inline-block; padding: 2px 8px; border-radius: 999px;
+                       background: var(--brand); color: #fff; text-decoration: none; font-size: 11px; }
+
+      table { border-collapse: collapse; font-size: 12px; }
+      th, td { border: 1px solid var(--line); padding: 4px 10px; text-align: left; }
+      th { background: #f1f5f9; font-size: 11px; text-transform: uppercase; color: var(--muted); }
+      /* The "mark the holes in the data" idiom: only cells with no content at all. */
+      td:empty { background: var(--gap); }
+      td:empty::after { content: "not supplied"; color: #92400e; font-style: italic; }
+      /* And its inverse - a cell that DOES have content keeps the plain treatment. */
+      td:not(:empty) { color: var(--ink); }
+
+      /* The other half of the idiom: a container the document left empty collapses away. */
+      .callout { border-left: 3px solid var(--brand); background: #eff6ff; padding: 8px 12px;
+                 margin: 6px 0; max-width: 460px; }
+      .callout:empty { display: none; }
+    </style></head>
+    <body>
+      <h2>Document-tree pseudo-classes</h2>
+      <p class="note">Nothing on this page is selected by a class or an id alone. The colours come from a
+      <code>:scope</code> token block, the links from <code>:any-link</code>, and every highlight in the
+      table below from <code>:empty</code> - three selectors that need only the document tree.</p>
+
+      <h3>:empty marks the gaps</h3>
+      <table>
+        <tr><th>Part</th><th>Supplier</th><th>Lead time</th></tr>
+        <tr><td>Hinge, 40mm</td><td>Ferrant &amp; Co.</td><td>3 weeks</td></tr>
+        <tr><td>Bracket, L</td><td></td><td>2 weeks</td></tr>
+        <tr><td>Spacer, 6mm</td><td>Ferrant &amp; Co.</td><td>   </td></tr>
+      </table>
+      <p class="note">Row 2's supplier cell is written <code>&lt;td&gt;&lt;/td&gt;</code> and row 3's lead
+      time holds three spaces. Both are <code>:empty</code> - white space is not content. A cell holding a
+      non-breaking space would not be, and neither would one holding a <code>&lt;br&gt;</code>.</p>
+
+      <h3>:empty collapses an unused container</h3>
+      <div class="callout">This callout has content, so it stays.</div>
+      <div class="callout"></div>
+      <div class="callout">The template emitted an empty callout between these two. <code>.callout:empty
+      { display: none }</code> removed it, so no stray blue rule prints.</div>
+
+      <h3>:any-link, and what it leaves alone</h3>
+      <p>A <a href="https://peachpdf.net">real hyperlink</a> is styled by <code>:any-link</code>; a
+      named <a name="section">anchor with no href</a> is not a link source, so it keeps the plain body
+      treatment this page's <code>a { }</code> reset gives every anchor.</p>
+      <p><a class="tag" href="https://peachpdf.net/showcase.html">showcase</a>
+         <a class="tag" href="https://peachpdf.net/docs">docs</a></p>
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("document_tree_selectors", "Selectors & Cascade", "Document-Tree Pseudo-Classes",
+    "`:empty`, `:any-link` and `:scope` — the three pseudo-classes that depend only on the document tree, " +
+    "so a static renderer can evaluate them. The design tokens here come from a `:scope` block, the link " +
+    "styling from `:any-link`, and the table's flagged gaps plus the collapsed callout from `:empty` (which " +
+    "counts white space as no content, and ignores generated `::before`/`::after` boxes entirely).",
+    documentTreeSelectorHtml, pdfConfig);
+
 // ─── CSS Grid layout showcase ──────────────────────────────────────────────
 
 // Exercises the grid engine (issue #232): fixed + fr tracks, item spanning, dense auto-placement
