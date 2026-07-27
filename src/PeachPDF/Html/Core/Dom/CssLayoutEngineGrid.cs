@@ -378,9 +378,12 @@ namespace PeachPDF.Html.Core.Dom
             {
                 while (above < endRows.Count && endRows[above] < row.Key) above++;
 
-                groups.Add(new LineGroup(
-                    row.Select(p => p.Box).ToList(),
-                    above > 0 ? endingAt[endRows[above - 1]] : null));
+                // Grid rows are stacked in the block axis in row order, so flow order and block-axis
+                // order are the same list - the later-in-flow side of the break point above a row is
+                // always the row itself.
+                var boxes = row.Select(p => p.Box).ToList();
+
+                groups.Add(new LineGroup(boxes, above > 0 ? endingAt[endRows[above - 1]] : null, boxes));
             }
 
             var shift = LineRelocation.Relocate(container, groups);
