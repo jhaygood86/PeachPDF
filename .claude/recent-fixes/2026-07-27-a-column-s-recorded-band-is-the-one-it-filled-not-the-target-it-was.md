@@ -31,9 +31,10 @@ target. Nothing in the unit suite noticed either loss.
 **The grid case looked like the same bug and was not**, which is worth remembering before assuming a
 nesting defect: a `display: grid` in the same position was losing content past the column's *inline*
 edge. Filed as [#414](https://github.com/jhaygood86/PeachPDF/issues/414) as an engine-independence
-(#166/#315) problem — and that reading was wrong. See the grid-track entry beside this one: it
-reproduces with no multi-column container in sight, and the column merely exposed it. The thing that
-showed this was measuring the same fixture *without* the container.
+(#166/#315) problem — and that reading was wrong. See
+[2026-07-27-a-grid-track-grows-toward-its-limit-with-the-space-that-is-there.md](2026-07-27-a-grid-track-grows-toward-its-limit-with-the-space-that-is-there.md):
+it reproduces with no multi-column container in sight, and the column merely exposed it. The thing
+that showed this was measuring the same fixture *without* the container.
 
 Tests: `MulticolLayoutIntegrationTests` (+2) and `SuppressedPassFragmentainerTests`' own case
 **promoted from the characterization it was drafted as** (0 → 5 → all 10). Full net8.0 suite green
