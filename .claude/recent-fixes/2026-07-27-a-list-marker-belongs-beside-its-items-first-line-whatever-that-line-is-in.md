@@ -46,6 +46,19 @@ one rule for both fragmentainer kinds, and `FragmentainerContext.HasOwnBand` is 
   `display: none`/absolute/fixed/float skips it already had, and
   `AnItemWhoseContentIsBlockLevel_LaysThatContentOutBelowTheItemsTop` pins it.
 
+## Two more the review pass found, both real, both fixed
+
+- **§3.1 propagation never fired for a list item.** `BreakPropagation.IsInFlow` documents that it must
+  name the same set as `GetPreviousSibling`; it did not once the marker was excluded from the latter.
+  Counting the marker made an item's first *real* child look like a second one, so an item whose
+  content asked to start on the next page stayed behind as an empty stub with its bullet beside
+  nothing and its content carried on unnumbered. This one is only reachable *because* #467 closed —
+  before it there was no marker to strand.
+- **"Kept nothing" was asked of words alone**, so an item keeping wordless block children read as
+  keeping nothing and lost its marker to a later fragmentainer. `HasPlacedContent` counts a placed
+  in-flow block child too. The obvious alternative (words only) is much worse and was measured: over
+  162 wordless-content documents it turns 55 late markers into 52 claimed zero or twice.
+
 ## Deliberately not done
 
 - **No new geometry channel for the marker**, which is what the gap file expected to be needed. See
@@ -54,6 +67,11 @@ one rule for both fragmentainer kinds, and `FragmentainerContext.HasOwnBand` is 
   and browsers give it its own anonymous block above a block-level child rather than putting it on
   that child's first line. `AnInsideMarker_IsStillWrappedWithTheItemsInlineRun` pins the narrowing.
 - **No attempt at CSS Lists 3 §3.1.1 marker-box layout** — a separate, still-accepted gap.
+- **A block-content list item inside a multi-column container is not settled** — the page grid is
+  clean, columns are not. Recorded as
+  [its own gap](../accepted-gaps/marker-on-a-block-content-list-item-inside-a-multi-column-container.md)
+  with tracking issue #483, because it is the columns engine's fragmentation of a block-level item
+  rather than the marker rule: disabling the take-back entirely leaves the counts unchanged.
 
 ## Evidence
 

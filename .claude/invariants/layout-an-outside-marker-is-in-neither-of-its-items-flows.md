@@ -1,11 +1,11 @@
-# An outside `::marker` is in neither of its item's flows — and four places have to agree on that
+# An outside `::marker` is in neither of its item's flows — and five places have to agree on that
 
 _CSS 2.1 §12.5.1 / CSS Lists Level 3 §3.1. Tracker: [#467](https://github.com/jhaygood86/PeachPDF/issues/467)._
 
 An *outside* `::marker` is `Boxes[0]` of every list item and is positioned beside the item's principal
 block box, not inside it. It is therefore **not** an inline in the item's inline flow and **not** a
-block child in its block flow, and the four places that walk those flows all ask one predicate,
-`CssBox.IsOutsideMarker` — do not restate the grammar inline, and do not add a fifth walk without
+block child in its block flow, and the five places that walk those flows all ask one predicate,
+`CssBox.IsOutsideMarker` — do not restate the grammar inline, and do not add a sixth walk without
 asking it:
 
 - `CssLayoutEngine.FlowBox` — the inline flow, where the marker sits for an item with inline content.
@@ -15,6 +15,17 @@ asking it:
 - `DomParser.JoinsTheInlineRun` — the parser pass that gathers an inline run into an anonymous block
   (`CorrectInlineBoxesParent`) and the `ContainsVariantBoxes` gate in front of it.
 - `DomUtils.GetPreviousSibling` — see below.
+- `BreakPropagation.IsInFlow` — whose own doc comment requires it to name the same set as
+  `GetPreviousSibling` with floats excluded, so that "the first in-flow child" and "has no previous
+  in-flow sibling" cannot name different boxes. Counting the marker made every list item's first
+  *real* child look like a second one, so §3.1's "a break before a container's own first in-flow child
+  is the break point before the container" never fired for a list item: an item whose content asked to
+  start on the next page stayed behind as an empty stub with its bullet beside nothing, while its
+  content carried on unnumbered. Pinned by
+  `BlockContentListMarkerTests.AnItemDeferredBeforeItsContentWasEverFlowed_TravelsWholeWithItsMarker`.
+
+`CssCounterEngine`'s own private `GetPreviousSibling` deliberately does **not** ask: the marker *is* a
+counter participant, and the counter walk is over the document tree rather than over a flow.
 
 **The parser must not wrap it.** Re-parented into the anonymous block built for the item's inline run,
 the marker becomes a *grand*child, and both the call that positions it (`CssBox.LayoutOutsideMarker`)

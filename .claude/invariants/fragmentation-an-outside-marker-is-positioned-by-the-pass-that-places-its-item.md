@@ -43,6 +43,16 @@ resumed pass pick it up: the marker's own word flag is the entire bookkeeping ch
 second one to keep in step. Same sweep, 9 markers — every one of them `column-fill: balance`, where
 the extra fill attempts make a placement that keeps nothing ordinary rather than exotic.
 
+**"Kept nothing" is not "placed no word."** An item can keep content carrying no words at all — a run
+of empty block children with heights of their own — and a words-only test reports "kept nothing" for
+it, handing its marker to a later fragmentainer. Measured over 162 wordless-content documents, the
+words-only test turns 55 late markers into **52 claimed zero or twice**, which is strictly worse: a
+marker in the wrong column is visible, one claimed zero times is not. `CssBox.HasPlacedContent`
+therefore counts a placed in-flow block child as well — one given a height is one this pass found room
+for, and a box with a pending record has `ActualBottom == Location.Y`, so a child that stopped without
+placing anything does not answer true through that arm. It also skips `display: none` and out-of-flow
+subtrees, since a hidden text node would otherwise make any item look like it kept something.
+
 **And it must run last within its pass.** A block opening its inline flow declares that this layout
 has placed none of its subtree's words yet (`CssBox.AwaitPlacement`, from
 `CssLayoutEngine.CreateLineBoxes`), and that walk reaches the marker even though the flow never visits

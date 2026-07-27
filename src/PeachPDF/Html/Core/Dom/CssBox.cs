@@ -1594,16 +1594,8 @@ namespace PeachPDF.Html.Core.Dom
         /// (<see cref="TakeBackTheMarkerOfAnItemThisPassKeptNothingOf"/>), or an abandoned multi-column fill
         /// attempt did (<see cref="ResetForRefill"/>), and the marker is still owed a fragmentainer.
         /// </remarks>
-        private bool OutsideMarkerAwaitsPlacement()
-        {
-            foreach (var childBox in Boxes)
-            {
-                if (IsOutsideMarker(childBox))
-                    return childBox.Words.Count > 0 && childBox.Words[0].AwaitsTheNextFragmentainer;
-            }
-
-            return false;
-        }
+        private bool OutsideMarkerAwaitsPlacement() =>
+            OutsideMarkerChild is { Words.Count: > 0 } marker && marker.Words[0].AwaitsTheNextFragmentainer;
 
         /// <summary>
         /// Un-positions this list item's <c>outside</c> <c>::marker</c> when the pass that placed the item
@@ -1620,9 +1612,9 @@ namespace PeachPDF.Html.Core.Dom
         /// other direction. Measured on a 660-document multi-column sweep: 9 markers, every one of them
         /// <c>column-fill: balance</c>.
         /// <para>
-        /// "Kept nothing" is asked of the item's own words rather than of the break record, because the
+        /// "Kept nothing" is asked of the item's own content rather than of the break record, because the
         /// decision that drops it is the <i>parent's</i> and is not made until this box's layout has
-        /// returned. A word placed by an earlier pass counts as kept: the item does have a fragment
+        /// returned. Content placed by an earlier pass counts as kept: the item does have a fragment
         /// somewhere, and taking the marker back again would be how it goes missing.
         /// </para>
         /// </remarks>
@@ -1630,21 +1622,49 @@ namespace PeachPDF.Html.Core.Dom
         {
             if (Display != CssConstants.ListItem) return;
 
-            foreach (var childBox in Boxes)
+            if (OutsideMarkerChild is not { } marker) return;
+
+            if (!HasPlacedContent(this, marker)) marker.AwaitPlacement();
+        }
+
+        /// <summary>
+        /// This box's <c>outside</c> <c>::marker</c> child, or null when it has none — the single scan every
+        /// caller shares, so the three that need it cannot drift apart.
+        /// </summary>
+        private CssBox? OutsideMarkerChild
+        {
+            get
             {
-                if (!IsOutsideMarker(childBox)) continue;
+                foreach (var childBox in Boxes)
+                {
+                    if (IsOutsideMarker(childBox)) return childBox;
+                }
 
-                if (!HasAPlacedWord(this, childBox)) childBox.AwaitPlacement();
-
-                return;
+                return null;
             }
         }
 
         /// <summary>
-        /// Whether any word of <paramref name="box"/>'s subtree has been positioned by some pass of this
+        /// Whether any content of <paramref name="box"/>'s subtree has been placed by some pass of this
         /// layout, skipping the subtree rooted at <paramref name="excluded"/>.
         /// </summary>
-        private static bool HasAPlacedWord(CssBox box, CssBox excluded)
+        /// <remarks>
+        /// <b>Two kinds of content, because a word alone does not answer it.</b> A positioned word says so
+        /// directly (<see cref="AwaitPlacement"/> marks them all as owed a fragmentainer and
+        /// <c>CssRect.Top</c>'s setter clears each as it is placed). But an item can keep content carrying no
+        /// words at all — a run of empty block children with heights of their own — and reading only words
+        /// there reports "kept nothing" for an item that plainly did keep something, handing its marker to a
+        /// later fragmentainer than the one its first line is in. So a placed in-flow block child counts too:
+        /// one that has been given a height is one this pass found room for. A box with a pending record has
+        /// <c>ActualBottom == Location.Y</c>, so a child that stopped without placing anything does not
+        /// answer true through this arm.
+        /// <para>
+        /// <c>display: none</c> and out-of-flow subtrees are skipped: neither contributes to the fragment the
+        /// question is about, and a hidden text node would otherwise make any item look like it kept
+        /// something.
+        /// </para>
+        /// </remarks>
+        private static bool HasPlacedContent(CssBox box, CssBox excluded)
         {
             foreach (var word in box.Words)
             {
@@ -1654,8 +1674,11 @@ namespace PeachPDF.Html.Core.Dom
             foreach (var childBox in box.Boxes)
             {
                 if (ReferenceEquals(childBox, excluded)) continue;
+                if (childBox.Display == CssConstants.None || childBox.IsOutOfFlow) continue;
 
-                if (HasAPlacedWord(childBox, excluded)) return true;
+                if (childBox.PlacesItselfAsBlockBox && childBox.ActualBottom > childBox.Location.Y) return true;
+
+                if (HasPlacedContent(childBox, excluded)) return true;
             }
 
             return false;
@@ -1667,7 +1690,9 @@ namespace PeachPDF.Html.Core.Dom
         /// block-children loop (<see cref="LayoutBlockChildren"/>) alike, so this is the one call that
         /// positions it. An <c>inside</c> marker is an ordinary flowed child that has already positioned
         /// itself, and no-ops here (<see cref="CssBoxMarker.PerformLayoutImp"/>'s own
-        /// <c>ListStylePosition</c> check).
+        /// <c>ListStylePosition</c> check) — which is why this scans for any marker rather than through
+        /// <see cref="OutsideMarkerChild"/>: that no-op still measures the marker's words on its way to
+        /// returning, and narrowing the scan would take the measurement with it.
         /// </summary>
         /// <remarks>
         /// Called after <see cref="LayoutContents"/> rather than immediately after placement, and that

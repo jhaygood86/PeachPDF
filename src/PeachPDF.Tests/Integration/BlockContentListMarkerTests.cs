@@ -192,7 +192,84 @@ namespace PeachPDF.Tests.Integration
             Assert.Contains(wrapper.Boxes, b => b.IsMarkerPseudoElement);
         }
 
+        /// <summary>
+        /// An item whose only content asks to start on the next page has nothing to keep here, so css-break-3
+        /// §3.1 moves the whole item — "a break before a container's own first in-flow child is the break
+        /// point before the container". The marker is <c>Boxes[0]</c>, so counting it left the <c>&lt;p&gt;</c>
+        /// looking like a *second* in-flow child and that rule never fired for a list item: the item stayed
+        /// behind as an empty stub with its bullet beside nothing, and its content carried on unnumbered.
+        /// </summary>
+        [Fact]
+        public async Task AnItemDeferredBeforeItsContentWasEverFlowed_TravelsWholeWithItsMarker()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<p style='margin:0'>before</p>"
+                + "<ol style='margin:0;padding-left:40pt'>"
+                + "<li id='deferred'><p style='margin:0;break-before:page'>content here</p></li></ol>"));
+
+            var item = LayoutHarness.FindById(root, "deferred")!;
+            var word = Assert.Single(MarkerOf(item).Words);
+            var fragments = FragmentsOf(container, item);
+
+            Assert.True(container.FragmentTree!.Fragmentainers.Count > 1,
+                "the fixture must span more than one page");
+
+            // One fragment, on the page the item's content is on — no stub left behind on the page it was
+            // declined on, and the marker with it.
+            var fragment = Assert.Single(fragments);
+
+            Assert.True(fragment.FragmentainerIndex > 0);
+            Assert.Contains(fragment.Children, c => c.Box.IsMarkerPseudoElement);
+            Assert.Single(ClaimsByWord(container)[word]);
+        }
+
+        /// <summary>
+        /// An item can keep content that carries no words at all — a run of empty block children with heights
+        /// of their own. Asking "did this pass keep anything?" of the item's <i>words</i> answers no for such
+        /// an item, and its marker was handed to a later fragmentainer than the one its first line is in
+        /// (<c>CssBox.HasPlacedContent</c>). Stated across a column boundary, which is where the answer is
+        /// acted on.
+        /// </summary>
+        [Fact]
+        public async Task AnItemWhoseKeptContentCarriesNoWords_KeepsItsMarkerWhereItBegins()
+        {
+            var items = string.Join("", Enumerable.Range(0, 3).Select(i =>
+                $"<li id='li{i}' style='margin:0'>"
+                + string.Join("", Enumerable.Range(0, 4).Select(_ => "<div style='height:40pt'></div>"))
+                + "</li>"));
+
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    $"<div style='column-count:2'><ul style='margin:0;padding-left:40pt'>{items}</ul></div>"),
+                pageHeight: 300, margin: 10);
+
+            var claims = ClaimsByWord(container);
+            var crossings = 0;
+
+            foreach (var item in ListItems(root))
+            {
+                var word = Assert.Single(MarkerOf(item).Words);
+                var fragments = FragmentsOf(container, item);
+
+                if (fragments.Count > 1) crossings++;
+
+                Assert.True(claims.TryGetValue(word, out var slots),
+                    $"the marker of '{Id(item)}' is claimed by no fragment at all");
+                Assert.Single(slots!);
+                Assert.Equal(0, fragments.FindIndex(f => f.Children.Any(c => c.Box.IsMarkerPseudoElement)));
+            }
+
+            Assert.True(crossings > 0, "the fixture must have some item cross a column boundary");
+        }
+
         private static CssBox MarkerOf(CssBox item) => item.Boxes.Single(b => b.IsMarkerPseudoElement);
+
+        /// <summary>Every fragment <paramref name="box"/> produced, in fill order.</summary>
+        private static List<BoxFragment> FragmentsOf(HtmlContainerInt container, CssBox box) =>
+            container.FragmentTree!.Fragmentainers
+                .SelectMany(f => Flatten(f.Root))
+                .Where(f => ReferenceEquals(f.Box, box))
+                .ToList();
 
         private static List<CssBox> ListItems(CssBox root) =>
             LayoutHarness.Descendants(root)
