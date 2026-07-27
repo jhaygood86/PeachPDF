@@ -1506,7 +1506,7 @@ namespace PeachPDF.Html.Core.Dom
         private void RequestBreakBefore(double top)
         {
             RequestedBreakBeforeTop = top;
-            RequestedBreakBeforeSlot = HtmlContainer!.PageIndexOf(top + HtmlContainerInt.PageBoundaryEpsilon);
+            RequestedBreakBeforeSlot = HtmlContainer!.SlotStartingAt(top);
         }
 
         /// <summary>
@@ -1665,10 +1665,10 @@ namespace PeachPDF.Html.Core.Dom
                     var container = HtmlContainer!;
                     var prevBottom = breakAnchor.StaticBottom;
                     var prevTop = breakAnchor.Location.Y - breakAnchor.RelativeOffsetY;
-                    var slot = container.PageIndexOf(prevBottom - HtmlContainerInt.PageBoundaryEpsilon) + 1;
+                    var slot = container.SlotEndingAt(prevBottom) + 1;
                     if (prevTop >= container.PageTopOf(slot) - HtmlContainerInt.PageBoundaryEpsilon)
                     {
-                        slot = container.PageIndexOf(prevTop + HtmlContainerInt.PageBoundaryEpsilon) + 1;
+                        slot = container.SlotStartingAt(prevTop) + 1;
                     }
 
                     _forcedBreakTop = container.PageTopOf(slot);
@@ -2179,7 +2179,7 @@ namespace PeachPDF.Html.Core.Dom
                         if (KeepsFewerLinesThanOrphans(childToken, childBox) && i > start
                             && OrphansAndWidowsMayMoveABreak
                             && HtmlContainer!.MeasureIsSharedBetween(
-                                HtmlContainer.PageIndexOf(childBox.Location.Y + HtmlContainerInt.PageBoundaryEpsilon),
+                                HtmlContainer.SlotStartingAt(childBox.Location.Y),
                                 childToken.ResumeSlotIndex)
                             && !childBox._orphansBreakTaken
                             && HasRoomAboveInThisFragmentainer(childBox))
@@ -2633,7 +2633,7 @@ namespace PeachPDF.Html.Core.Dom
                              && guard < 4;
                              guard++)
                         {
-                            var landing = child.HtmlContainer.PageIndexOf(top + HtmlContainerInt.PageBoundaryEpsilon);
+                            var landing = child.HtmlContainer.SlotStartingAt(top);
 
                             if (BreakValues.SlotIsOn(landing, child._forcedBreakSide))
                                 break;
@@ -2666,11 +2666,16 @@ namespace PeachPDF.Html.Core.Dom
                             // Same shifted grid the fragment builder/the forced-break logic above use
                             // (see HtmlContainer.PageIndexOf's own doc comment) - matching
                             // BreakInside_Avoid_PositionsAtTopOfNextPage's already-established
-                            // convention. The epsilons attribute a value flush ON a boundary to
-                            // the earlier slot (a sibling ending exactly at a slot boundary is
-                            // wholly inside it), mirroring the forced-break flush-fit rule above.
-                            var prevSlot = child.HtmlContainer.PageIndexOf(baseTop - HtmlContainerInt.PageBoundaryEpsilon);
-                            var naturalSlot = child.HtmlContainer.PageIndexOf(top - HtmlContainerInt.PageBoundaryEpsilon);
+                            // convention, and mirroring the forced-break flush-fit rule above.
+                            // Both ask SlotEndingAt, including of the child's own top, and that is
+                            // deliberate rather than a slip: baseTop *is* the predecessor's bottom
+                            // edge, and asking the same of `top` is what makes a child landing flush
+                            // ON a boundary not count as having crossed it - it is the first thing in
+                            // the next band, so there is nothing for the margin to be truncated
+                            // against. SlotStartingAt here would call that a crossing and truncate a
+                            // margin that never spanned anything.
+                            var prevSlot = child.HtmlContainer.SlotEndingAt(baseTop);
+                            var naturalSlot = child.HtmlContainer.SlotEndingAt(top);
                             if (naturalSlot > prevSlot)
                             {
                                 var newTop = child.HtmlContainer.PageTopOf(prevSlot + 1);
@@ -2696,8 +2701,11 @@ namespace PeachPDF.Html.Core.Dom
                                 {
                                     var runTop = keepWithNextRun[0].Location.Y;
                                     var extraAbove = top - runTop;
+                                    // Asked the same way as prevSlot above, so the two are comparable
+                                    // - a run head flush on the boundary belongs to the band prevSlot
+                                    // names, not the one after it.
                                     var runStartsOnSamePage =
-                                        child.HtmlContainer.PageIndexOf(runTop - HtmlContainerInt.PageBoundaryEpsilon) == prevSlot;
+                                        child.HtmlContainer.SlotEndingAt(runTop) == prevSlot;
 
                                     if (extraAbove > 0 && runStartsOnSamePage
                                         && extraAbove <= child.HtmlContainer.PageBandHeightOf(prevSlot + 1))
@@ -3996,8 +4004,8 @@ namespace PeachPDF.Html.Core.Dom
             // ending exactly ON a boundary is wholly inside the earlier slot (css-break-3 - no
             // spurious relocation for exact-fit content), where the historical modulo formulation
             // relocated it by a page.
-            if (container.PageIndexOf(Location.Y + HtmlContainerInt.PageBoundaryEpsilon)
-                >= container.PageIndexOf(ActualBottom - HtmlContainerInt.PageBoundaryEpsilon))
+            if (container.SlotStartingAt(Location.Y)
+                >= container.SlotEndingAt(ActualBottom))
                 return false;
 
             Location = Location with { Y = container.NextPageTopOf(Location.Y) };
@@ -4125,7 +4133,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             var container = HtmlContainer!;
             return container.HasRealPageGrid
-                ? container.PageTopOf(container.PageIndexOf(Location.Y + HtmlContainerInt.PageBoundaryEpsilon))
+                ? container.PageTopOf(container.SlotStartingAt(Location.Y))
                 : Location.Y;
         }
 

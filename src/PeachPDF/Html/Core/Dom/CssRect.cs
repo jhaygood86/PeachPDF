@@ -321,8 +321,8 @@ namespace PeachPDF.Html.Core.Dom
 
             // The epsilons make a line ending exactly ON a slot boundary a non-break (it fits wholly in
             // the earlier slot).
-            return container.PageIndexOf(Top + HtmlContainerInt.PageBoundaryEpsilon)
-                   < container.PageIndexOf(Bottom + clonedBottom - HtmlContainerInt.PageBoundaryEpsilon);
+            return container.SlotStartingAt(Top)
+                   < container.SlotEndingAt(Bottom + clonedBottom);
         }
 
         public bool BreakPage()

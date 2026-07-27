@@ -781,7 +781,7 @@ namespace PeachPDF.Html.Core
             if (side is PageSide.Any)
                 return;
 
-            var lastSlot = PageIndexOf(MarginTop + ActualSize.Height - PageBoundaryEpsilon);
+            var lastSlot = SlotEndingAt(MarginTop + ActualSize.Height);
 
             if (!BreakValues.SlotIsOn(lastSlot + 1, side))
                 _trailingBlankSlot = lastSlot + 1;
@@ -992,7 +992,7 @@ namespace PeachPDF.Html.Core
                 || !HasRealPageGrid
                 || CurrentFragmentainer is { HasOwnBand: true }
                 || _passesRewoundFor.Contains(head)
-                || PassEntryFilling(PageIndexOf(head.Location.Y + PageBoundaryEpsilon)) < 0)
+                || PassEntryFilling(SlotStartingAt(head.Location.Y)) < 0)
             {
                 return false;
             }
@@ -1019,7 +1019,7 @@ namespace PeachPDF.Html.Core
         /// </remarks>
         private bool TryRewindForRunPull((CssBox Head, double Top) pull, ref BreakToken? token, ref int slot)
         {
-            var entry = PassEntryFilling(PageIndexOf(pull.Head.Location.Y + PageBoundaryEpsilon));
+            var entry = PassEntryFilling(SlotStartingAt(pull.Head.Location.Y));
 
             if (entry < 0) return false;
 
@@ -1144,7 +1144,7 @@ namespace PeachPDF.Html.Core
         /// overflows its page — extends past the slot the pass that laid it out was filling.
         /// </summary>
         private int LastSlotAnyGeometryTouches(int from) =>
-            Math.Max(from, PageIndexOf(MarginTop + ActualSize.Height - PageBoundaryEpsilon));
+            Math.Max(from, SlotEndingAt(MarginTop + ActualSize.Height));
 
         /// <summary>
         /// The fragments the current (or last) <see cref="LayoutDocument"/> invocation's passes emitted.
@@ -1353,6 +1353,36 @@ namespace PeachPDF.Html.Core
         internal int PageIndexOf(double y) => UseVariablePageGeometry
             ? PageGeometry.PageIndexOf(y)
             : (int)((y - MarginTop) / PageSize.Height);
+
+        /// <summary>
+        /// The pagination slot a <b>top</b> edge at <paramref name="y"/> starts in.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <see cref="PageIndexOf"/> applies no boundary convention: it answers about a coordinate, and a
+        /// coordinate exactly on a slot boundary is ambiguous — it is both the end of one band and the
+        /// start of the next. An <i>edge</i> is not ambiguous, and which way it resolves depends on which
+        /// edge it is, so the two cases have a name each rather than a
+        /// <see cref="PageBoundaryEpsilon"/> spelt out at every call site (there were a dozen, and getting
+        /// the sign wrong lands a box a whole page out).
+        /// </para>
+        /// <para>
+        /// A top edge flush on a boundary — or within the epsilon <i>above</i> it, which is the arithmetic
+        /// noise a relocated or fragmented box's Y accumulates — begins the later slot: it is the first
+        /// thing in that band, not the last thing in the one before.
+        /// </para>
+        /// </remarks>
+        internal int SlotStartingAt(double y) => PageIndexOf(y + PageBoundaryEpsilon);
+
+        /// <summary>
+        /// The pagination slot a <b>bottom</b> edge at <paramref name="y"/> ends in.
+        /// </summary>
+        /// <remarks>
+        /// The mirror of <see cref="SlotStartingAt"/>: a bottom edge flush on a boundary — or within the
+        /// epsilon below it — ends the earlier slot, because content ending exactly at a band's bottom fits
+        /// wholly inside that band and has not entered the next one.
+        /// </remarks>
+        internal int SlotEndingAt(double y) => PageIndexOf(y - PageBoundaryEpsilon);
 
         /// <summary>
         /// The document Y-coordinate of the content-top of pagination slot <paramref name="pageIndex"/>,

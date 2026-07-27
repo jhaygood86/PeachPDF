@@ -126,5 +126,38 @@ namespace PeachPDF.Tests.Html.Core
 
             Assert.False(box.BreakPage());
         }
+        [Fact]
+        public void SlotStartingAt_ATopEdgeFlushOnABoundary_BeginsTheLaterSlot()
+        {
+            var container = CreateContainer();
+
+            Assert.Equal(1, container.SlotStartingAt(MarginTop + BandHeight));
+            Assert.Equal(0, container.SlotStartingAt(MarginTop + BandHeight - 1));
+        }
+
+        [Fact]
+        public void SlotEndingAt_ABottomEdgeFlushOnABoundary_EndsTheEarlierSlot()
+        {
+            var container = CreateContainer();
+
+            Assert.Equal(0, container.SlotEndingAt(MarginTop + BandHeight));
+            Assert.Equal(1, container.SlotEndingAt(MarginTop + BandHeight + 1));
+        }
+
+        [Fact]
+        public void TheTwoConventions_DisagreeOnlyWithinTheEpsilonOfABoundary()
+        {
+            var container = CreateContainer();
+            var boundary = MarginTop + BandHeight;
+
+            // The whole point of having two: on a boundary they answer differently, and everywhere
+            // else they agree — so a call site that picks the wrong one is wrong only where it matters.
+            Assert.NotEqual(container.SlotStartingAt(boundary), container.SlotEndingAt(boundary));
+
+            foreach (var y in new[] { boundary - 100, boundary + 100, MarginTop + 5 })
+            {
+                Assert.Equal(container.SlotStartingAt(y), container.SlotEndingAt(y));
+            }
+        }
     }
 }
