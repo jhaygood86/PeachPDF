@@ -2102,7 +2102,11 @@ var flexHtml = "<!DOCTYPE html><html><head>" + FlexCss + "</head><body>" +
         FContainer("wrap", "flex-wrap:wrap;width:200px;gap:4px;",
             FItems3("width:90px;height:24px;")) +
         FContainer("wrap-reverse", "flex-wrap:wrap-reverse;width:200px;gap:4px;",
-            FItems3("width:90px;height:24px;"))
+            FItems3("width:90px;height:24px;")) +
+        FContainer("wrap-reverse, unequal line heights", "flex-wrap:wrap-reverse;width:200px;gap:4px;",
+            FItem("A 12px", "#e74c3c", "width:90px;height:12px;") +
+            FItem("B 40px", "#3498db", "width:90px;height:40px;") +
+            FItem("C 24px", "#27ae60", "width:90px;height:24px;"))
     ) +
 
     FSection("7 — align-self (overrides align-items)",
@@ -3686,6 +3690,20 @@ var multicolHtml = "<!DOCTYPE html><html><head>" + MulticolCss + "</head><body>"
         "<h3 style=\"font-size:9pt;margin:0 0 0.3em;break-before:page\">After the break, on a page of its own</h3>" +
         McEntries(4, "moved") +
         "</div></div>") +
+
+    // A break that falls one level below the container's own child loop. The entries here are wrapped in
+    // a <section> of their own, so the boundary is between two of *its* children rather than between two
+    // of the container's - and the record has to travel up through the wrapper before the columns engine
+    // can read it. Left alone, the wrapper neither moved nor broke: it kept flowing past the column band
+    // and past the page. The wrapper carries a background and a border so both of its fragments are
+    // visible, one per column.
+    McSection("12 &mdash; a break below the container's own child",
+        "<div class=\"frame\"><div class=\"label\">columns: 2; the entries sit inside a &lt;section&gt; of their own, so the break falls between two of its children rather than between two of the container's</div>" +
+        "<div class=\"mc\" style=\"columns:2;column-gap:20px;column-rule:0.5pt solid #000\">" +
+        McEntries(1, "lead") +
+        "<section style=\"background:#eef9f0;border:0.5pt solid #27ae60;padding:3pt;margin:0\">" +
+        McEntries(10, "nested") +
+        "</section></div></div>") +
 
     "</body></html>";
 

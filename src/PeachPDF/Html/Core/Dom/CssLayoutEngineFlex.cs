@@ -164,7 +164,8 @@ namespace PeachPDF.Html.Core.Dom
             double totalCrossGap = lines.Count > 1 ? crossGap * (lines.Count - 1) : 0;
             double totalCross = lines.Sum(l => l.CrossSize);
             double crossFree = Math.Max(0, containerCrossSize - totalCross - totalCrossGap);
-            DistributeCrossSpace(lines, crossFree, crossGap);
+            // A column container's cross axis is the inline one, which is resolved before any of this.
+            DistributeCrossSpace(lines, crossFree, crossGap, containerCrossSize, !_isRow || hasDefiniteHeight);
 
             // Phase 7: justify-content — main-axis positions
             foreach (var line in lines)
@@ -196,7 +197,11 @@ namespace PeachPDF.Html.Core.Dom
                 if (_isRow)
                     _flexBox.ActualBottom = _flexBox.ClientTop + maxCrossEnd
                         + _flexBox.ActualPaddingBottom + _flexBox.ActualBorderBottomWidth;
-                else
+                // A column container's cross axis is the inline one, and `hasDefiniteHeight` says nothing
+                // about it: a container with a `width` has been sized already, and sizing it again from
+                // where its lines happen to end would *discard* that width wherever the lines do not
+                // reach the far edge — which is anywhere align-content has free space to distribute.
+                else if (!CssValueParser.IsValidLength(_flexBox.Width))
                     _flexBox.ActualRight = _flexBox.ClientLeft + maxCrossEnd
                         + _flexBox.ActualPaddingRight + _flexBox.ActualBorderRightWidth;
             }
@@ -499,7 +504,21 @@ namespace PeachPDF.Html.Core.Dom
 
         // ─── Phase 6: align-content ───────────────────────────────────────────────
 
-        private void DistributeCrossSpace(List<FlexLine> lines, double remaining, double crossGap)
+        /// <summary>
+        /// Places every line on the cross axis: <c>align-content</c> against the container's free cross
+        /// space, then <c>flex-wrap: wrap-reverse</c>'s reversal of the stacking direction.
+        /// </summary>
+        /// <param name="lines">the container's lines, in flow order</param>
+        /// <param name="remaining">free cross space left over once every line has its cross size</param>
+        /// <param name="crossGap">the used cross-axis gap between two adjacent lines</param>
+        /// <param name="containerCrossSize">the container's inner cross size</param>
+        /// <param name="crossSizeIsDefinite">
+        /// whether <paramref name="containerCrossSize"/> is the container's own definite size, rather
+        /// than a placeholder for one the lines themselves decide. Always true in a column direction,
+        /// where the cross axis is the (already resolved) inline one
+        /// </param>
+        private void DistributeCrossSpace(List<FlexLine> lines, double remaining, double crossGap,
+            double containerCrossSize, bool crossSizeIsDefinite)
         {
             if (lines.Count == 0) return;
 
@@ -551,15 +570,31 @@ namespace PeachPDF.Html.Core.Dom
                     break;
             }
 
-            if (_isWrapReverse)
-            {
-                // Reverse line stacking: exchange the cross offset computed for line[i] with
-                // the offset computed for line[n-1-i]. This correctly handles any align-content
-                // value (including ones with non-uniform spacing) and preserves inter-line gaps.
-                var reversedOffsets = lines.Select(l => l.CrossOffset).Reverse().ToList();
-                for (int i = 0; i < lines.Count; i++)
-                    lines[i].CrossOffset = reversedOffsets[i];
-            }
+            if (!_isWrapReverse) return;
+
+            // `wrap-reverse` swaps the cross-start and cross-end directions
+            // (https://www.w3.org/TR/css-flexbox-1/#flex-wrap-property), so the lines are stacked the
+            // other way round — each still occupying its own cross size, in sequence, with whatever
+            // align-content put between them. Reflecting each line's placed strip about the middle of
+            // the container's cross axis is exactly that stack: it reverses the order while every line
+            // keeps its own size and every gap keeps its own width, read in the new direction.
+            //
+            // Permuting the *offsets* instead — giving line[i] the offset computed for line[n-1-i] —
+            // is only the same thing when every line has the same cross size. Where they differ, a line
+            // lands at an offset computed for a line of another size and the two overlap, and the
+            // container is sized from the wrong end of the stack (issue #458).
+            //
+            // The reflection is about the container's own cross size, so lines that do not fit overflow
+            // the cross-end edge, which wrap-reverse has put at the top (row) / left (column). Only an
+            // *indefinite* cross size reflects about the lines' own extent instead — there it is the
+            // lines that decide the container's size, so nothing can overflow it. A definite size of
+            // zero is a real size and belongs to the first case, not the second.
+            double crossExtent = crossSizeIsDefinite
+                ? Math.Max(0, containerCrossSize)
+                : lines.Max(l => l.CrossOffset + l.CrossSize);
+
+            foreach (var l in lines)
+                l.CrossOffset = crossExtent - (l.CrossOffset + l.CrossSize);
         }
 
         // ─── Phase 7: justify-content ─────────────────────────────────────────────
@@ -831,7 +866,7 @@ namespace PeachPDF.Html.Core.Dom
         /// somewhere other than "one below the next".
         /// </para>
         /// <para>
-        /// <b><c>flex-wrap: wrap-reverse</c></b> reverses the cross offsets after they are assigned
+        /// <b><c>flex-wrap: wrap-reverse</c></b> stacks the lines in the opposite cross-axis direction
         /// (<see cref="DistributeCrossSpace"/>), so the first line in flow is the <i>last</i> one down the
         /// page. The walk needs it the other way round — a displacement accumulates onto the lines
         /// <i>below</i> the one that moved, and a fragmentainer boundary leaves a particular line above

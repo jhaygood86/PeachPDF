@@ -2287,7 +2287,9 @@ namespace PeachPDF.Html.Core.Dom
                     if (i == start && resumeAt is not null && !resumeConsumed)
                     {
                         resumeConsumed = true;
-                        childBox.ResumeAt(resumeAt.ChildToken, resumeAt.ResumeTopOverride);
+                        childBox.ResumeAt(
+                            resumeAt.ChildToken,
+                            resumeAt.ResumeTopOverride ?? ColumnTopForTheChildThisFillBeginsAt(resumeAt, childBox));
                     }
 
                     await childBox.PerformLayout(g);
@@ -2469,6 +2471,44 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Where <paramref name="childBox"/> goes when it is the child a <i>column's</i> fill begins at and
+        /// the record that named it carries no target of its own — the content top of the column being
+        /// filled, per <see href="https://www.w3.org/TR/css-break-3/#fragmentainer">§2</see>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The arms that raise a column break deliberately record no target: every column of a container
+        /// begins at the same block-axis coordinate, so the columns engine states that coordinate on the
+        /// record it hands to the next column
+        /// (<c>CssLayoutEngineColumns.ResumeInTheNextColumn</c>). It can only state it on the record's
+        /// <b>outermost</b> link, though, because that is the only one it holds — so a break raised inside a
+        /// block nested below the container's own child arrives at that block's loop with nothing, and
+        /// <see cref="PlaceBlockChild"/> falls back to deriving the child's top from its previous sibling.
+        /// That sibling is still in the column just left, so the continuation was laid out at the foot of a
+        /// column it is not in, straddling the boundary it was moved to avoid.
+        /// </para>
+        /// <para>
+        /// Only for a child laid out here <i>afresh</i>. One that carries a record of its own is
+        /// <i>continuing</i>, and moves itself in both axes
+        /// (<see cref="ResumeInTheNextFragmentainer"/>) — writing a target for it would place it twice.
+        /// </para>
+        /// <para>
+        /// The destination is the lower of the column's own content edge and this box's, for the same reason
+        /// <see cref="ResumeInTheNextFragmentainer"/> takes that maximum: the containing block has just been
+        /// re-placed in this column and its content edge sits inside its own border and padding, while a
+        /// container that began on an earlier page names a coordinate this column does not reach.
+        /// </para>
+        /// </remarks>
+        private double? ColumnTopForTheChildThisFillBeginsAt(BlockBreakToken resumeAt, CssBox childBox)
+        {
+            if (resumeAt.ChildToken is not null) return null;
+
+            if (HtmlContainer?.CurrentFragmentainer is not { HasOwnBand: true } column) return null;
+
+            return Math.Max(column.ResumeContentTop, childBox.ContainingBlock.ClientTop);
         }
 
         /// <summary>
