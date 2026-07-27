@@ -695,9 +695,10 @@ namespace PeachPDF.Tests.Integration
         {
             // A column container's lines stack along the inline axis. wrap-reverse puts the cross-start
             // edge on the right, so the first line in flow is the rightmost one and the lines are packed
-            // against the right edge — each still occupying its own cross size.
+            // against the right edge — each still occupying its own cross size. align-content is stated
+            // rather than left to its initial value, which this engine still packs at flex-start.
             var html = Wrap(@"
-                <div id='container' style='display:flex; flex-direction:column; flex-wrap:wrap-reverse; width:200pt; height:100pt;'>
+                <div id='container' style='display:flex; flex-direction:column; flex-wrap:wrap-reverse; align-content:flex-start; width:200pt; height:100pt;'>
                     <div id='a' style='width:20pt; height:60pt; flex-shrink:0;'></div>
                     <div id='b' style='width:50pt; height:60pt; flex-shrink:0;'></div>
                     <div id='c' style='width:30pt; height:60pt; flex-shrink:0;'></div>
@@ -716,6 +717,103 @@ namespace PeachPDF.Tests.Integration
                 $"C [{c.Location.X:F1}, {c.ActualRight:F1}] overlaps B [{b.Location.X:F1}, {b.ActualRight:F1}]");
             Assert.True(b.ActualRight <= a.Location.X + 0.5,
                 $"B [{b.Location.X:F1}, {b.ActualRight:F1}] overlaps A [{a.Location.X:F1}, {a.ActualRight:F1}]");
+        }
+
+        [Theory]
+        // 100pt of cross space holding a 10pt and a 40pt line leaves 50pt free. Each distribution is
+        // its own mirror image, so the reversed stack keeps the spacing the value asks for.
+        [InlineData("space-around", 12.5, 77.5)]   // half a share above each line: 12.5 / 25 / 12.5
+        [InlineData("space-evenly", 16.67, 73.33)] // three equal shares: 16.67 each
+        public async Task WrapReverse_DistributedAlignContent_UnequalLines_KeepsTheSpacingReversed(
+            string alignContent, double expectedB, double expectedA)
+        {
+            var html = Wrap($@"
+                <div id='container' style='display:flex; flex-wrap:wrap-reverse; align-content:{alignContent}; width:200pt; height:100pt;'>
+                    <div id='a' style='width:150pt; height:10pt; flex-shrink:0;'></div>
+                    <div id='b' style='width:150pt; height:40pt; flex-shrink:0;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            double top = container.ClientTop;
+
+            Assert.Equal(top + expectedB, b.Location.Y, 0.5);
+            Assert.Equal(top + expectedA, a.Location.Y, 0.5);
+            Assert.True(b.ActualBottom <= a.Location.Y + 0.5,
+                $"B [{b.Location.Y:F1}, {b.ActualBottom:F1}] overlaps A [{a.Location.Y:F1}, {a.ActualBottom:F1}]");
+        }
+
+        [Fact]
+        public async Task WrapReverse_RowGap_UnequalLines_KeepsEachGapInTheReversedStack()
+        {
+            // Three lines of 10 / 40 / 20 with an 8pt row-gap: 70pt of lines and 16pt of gaps, so the
+            // auto-height container is 86pt tall and each gap is still 8pt wide after the reversal.
+            var html = Wrap(@"
+                <div id='container' style='display:flex; flex-wrap:wrap-reverse; row-gap:8pt; width:200pt;'>
+                    <div id='a' style='width:150pt; height:10pt; flex-shrink:0;'></div>
+                    <div id='b' style='width:150pt; height:40pt; flex-shrink:0;'></div>
+                    <div id='c' style='width:150pt; height:20pt; flex-shrink:0;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            var c = FindById(root, "c")!;
+            double top = container.ClientTop;
+
+            Assert.Equal(top, c.Location.Y, 0.5);
+            Assert.Equal(top + 28, b.Location.Y, 0.5);
+            Assert.Equal(top + 76, a.Location.Y, 0.5);
+            Assert.Equal(8, b.Location.Y - c.ActualBottom, 0.5);
+            Assert.Equal(8, a.Location.Y - b.ActualBottom, 0.5);
+            Assert.Equal(86, container.ActualBoxSizingHeight, 0.5);
+        }
+
+        [Fact]
+        public async Task WrapReverse_DefiniteZeroCrossSize_StacksFromThatEdge()
+        {
+            // A definite cross size of zero is a real size, not an absent one: the lines are packed
+            // flush with the cross-start edge — which wrap-reverse puts at the container's bottom, here
+            // its top edge as well — and overflow upwards from there.
+            var html = Wrap(@"
+                <div id='container' style='display:flex; flex-wrap:wrap-reverse; width:200pt; height:0pt;'>
+                    <div id='a' style='width:150pt; height:10pt; flex-shrink:0;'></div>
+                    <div id='b' style='width:150pt; height:40pt; flex-shrink:0;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            double top = container.ClientTop;
+
+            Assert.Equal(top - 10, a.Location.Y, 0.5);
+            Assert.Equal(top, a.ActualBottom, 0.5);
+            Assert.Equal(top - 50, b.Location.Y, 0.5);
+            Assert.Equal(top - 10, b.ActualBottom, 0.5);
+        }
+
+        [Fact]
+        public async Task WrapReverse_Column_WithADefiniteWidth_KeepsIt()
+        {
+            // A column container's cross axis is its inline one, so an explicit width has already sized
+            // it. Its *height* being auto says nothing about that, and re-deriving the width from where
+            // the lines end would discard it wherever align-content has free space to distribute —
+            // here packing the one line against the cross-end edge, which wrap-reverse puts on the left.
+            var html = Wrap(@"
+                <div id='container' style='display:flex; flex-direction:column; flex-wrap:wrap-reverse; align-content:flex-end; width:200pt;'>
+                    <div id='a' style='width:20pt; height:20pt; flex-shrink:0;'></div>
+                    <div id='b' style='width:50pt; height:20pt; flex-shrink:0;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            double left = container.ClientLeft;
+
+            Assert.Equal(200, container.ActualBoxSizingWidth, 0.5);
+            Assert.Equal(left, a.Location.X, 0.5);
+            Assert.Equal(left, b.Location.X, 0.5);
         }
 
         // ─── Showcase scenario regression ────────────────────────────────────────
