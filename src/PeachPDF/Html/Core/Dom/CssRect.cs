@@ -316,14 +316,22 @@ namespace PeachPDF.Html.Core.Dom
             if (container.CurrentFragmentainer is { HasOwnBand: true } columnBand)
             {
                 return MonolithicContent.FitsInBand(Height, clonedTop, clonedBottom, columnBand.BandHeight)
-                       && HtmlContainerInt.FallsPast(
-                           Bottom + clonedBottom, new PageBand(columnBand.BandTop, columnBand.BandBottom));
+                       && HtmlContainerInt.FallsPast(Bottom + clonedBottom, columnBand.Band);
             }
 
             // The same question, of the band this word started in rather than of the column's. Asking it
             // as "does the bottom edge fall past that band" rather than as "are the top and bottom in
             // different slots" is what makes the two arms one question with two bands, instead of two
             // questions - a slot index is a fact about the page grid, and a column has no slot of its own.
+            //
+            // Still the *grid's* band rather than the one the pass is filling
+            // (CurrentFragmentainer.Band), even though the cursor now tracks a forced break's step-overs.
+            // Block and inline flow may still put content in a later fragmentainer without recording a
+            // break: a line whose bottom lands within PageBoundaryEpsilon of the band bottom is tolerated,
+            // the next line starts in the following band, and from there everything after it resolves
+            // against that band instead. Naming the pass's own band would call every one of those a
+            // straddle, which is a different layout and a worse one - measured at 63 of 69 showcases changed,
+            // with visibly overlapping content. Tracked as #435.
             return HtmlContainerInt.FallsPast(Bottom + clonedBottom, container.BandStartingAt(Top));
         }
 

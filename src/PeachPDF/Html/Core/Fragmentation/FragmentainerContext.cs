@@ -67,8 +67,44 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </summary>
         internal CssBox ContextRoot { get; }
 
-        /// <summary>The pagination slot this pass is filling.</summary>
-        internal int SlotIndex { get; }
+        /// <summary>
+        /// The pagination slot this pass is filling <i>now</i> — a cursor, not the slot the pass opened
+        /// with, because <see cref="StepOverTo"/> moves it on as the pass steps over one.
+        /// </summary>
+        internal int SlotIndex { get; private set; }
+
+        /// <summary>
+        /// Moves the cursor onto <paramref name="slot"/>, which a forced break has just stepped this pass
+        /// over to without ending it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A pass does not always fill one fragmentainer.</b> A forced break is realized by
+        /// <i>placement</i> — the box is put at the content top of the slot the break names and the pass
+        /// carries on from there — so a pass that opened on slot <c>k</c> can be flowing content into
+        /// <c>k + n</c> with no resumption record in between. The emitter has always known this
+        /// (<c>FragmentEmitter.EmitPass</c> takes a <c>throughSlot</c> for exactly this reason); without
+        /// this the context did not, and every question about "the fragmentainer being filled" — its band,
+        /// whether anything precedes a box inside it — answered about a fragmentainer the pass had left.
+        /// </para>
+        /// <para>
+        /// Monotonic, because a pass fills fragmentainers in document order and never goes back to an
+        /// earlier one; a pass that has to reconsider an earlier fragmentainer is re-entered from the
+        /// driver with a context of its own (<c>HtmlContainerInt.TryRewindForRunPull</c>).
+        /// </para>
+        /// <para>
+        /// A no-op for a nested fragmentainer. A multi-column column's band is not a slot of the page grid
+        /// at all — <see cref="SlotIndex"/> there names only the page the column sits on, which a break
+        /// stepping over pages inside the column would have to escape the column to reach
+        /// (<c>CssBox.PlaceBlockChild</c>'s escaping-break arm).
+        /// </para>
+        /// </remarks>
+        internal void StepOverTo(int slot)
+        {
+            if (_ownBand is not null || slot <= SlotIndex) return;
+
+            SlotIndex = slot;
+        }
 
         /// <summary>
         /// Whether this context names a fragmentainer of its own rather than a page — a multi-column
@@ -83,6 +119,13 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// sits on, so a break that escapes the column resumes against the ordinary grid.
         /// </remarks>
         internal bool HasOwnBand => _ownBand is not null;
+
+        /// <summary>
+        /// This fragmentainer's block-axis extent, in the one continuous document space layout runs in —
+        /// the value form of <see cref="BandTop"/>/<see cref="BandBottom"/>, so
+        /// <see cref="HtmlContainerInt.FallsPast"/> can be asked of it directly.
+        /// </summary>
+        internal PageBand Band => new(BandTop, BandBottom);
 
         internal double BandTop => _ownBand?.Top ?? Container.PageTopOf(SlotIndex);
 
