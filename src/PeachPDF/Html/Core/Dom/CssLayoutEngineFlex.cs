@@ -662,6 +662,11 @@ namespace PeachPDF.Html.Core.Dom
             // it has no line-box content anywhere (e.g. an empty or image-only item), which
             // also falls back to flex-start.
             double maxBaseline = 0;
+            // The same distance measured to the *other* end: from an item's baseline to its cross-end
+            // margin edge. §8.3 flushes the baseline-sharing group against the line's cross-start edge,
+            // which `wrap-reverse` has moved to the far side, so the item that lands flush there is the
+            // one furthest from the baseline in that direction — not the one with the largest ascent.
+            double maxBaselineTail = 0;
             Dictionary<FlexItem, double>? baselineOffsets = null;
             if (_isRow)
             {
@@ -676,6 +681,8 @@ namespace PeachPDF.Html.Core.Dom
                     baselineOffsets ??= [];
                     baselineOffsets[item] = offset.Value;
                     maxBaseline = Math.Max(maxBaseline, offset.Value);
+                    maxBaselineTail = Math.Max(maxBaselineTail,
+                        item.Box.ActualBoxSizingHeight - offset.Value + item.Box.ActualMarginBottom);
                 }
             }
 
@@ -686,11 +693,28 @@ namespace PeachPDF.Html.Core.Dom
                 double crossMarginAfter  = _isRow ? item.Box.ActualMarginBottom : item.Box.ActualMarginRight;
                 double itemCrossSize = _isRow ? item.Box.ActualBoxSizingHeight : item.Box.ActualBoxSizingWidth;
 
+                // `flex-wrap: wrap-reverse` swaps the cross-start and cross-end directions
+                // (https://www.w3.org/TR/css-flexbox-1/#flex-wrap-property), and that swap applies inside a
+                // line as much as it does to the stack of lines: "flush with the line's cross-start edge"
+                // (§8.3) names the *bottom* of a row line under wrap-reverse, and cross-end names its top.
+                // So the two flush arms exchange places, while everything else here is unaffected — center
+                // is symmetric even with unequal cross margins (the margin box is centred either way), and
+                // an item that really stretches fills the line and is on both edges at once.
+                //
+                // This is a different reversal from the one DistributeCrossSpace applies, which stacks the
+                // *lines* the other way round. They compose; applying either one twice cancels it.
+                double flushCrossStart = _isWrapReverse
+                    ? line.CrossSize - itemCrossSize - crossMarginAfter
+                    : crossMarginBefore;
+                double flushCrossEnd = _isWrapReverse
+                    ? crossMarginBefore
+                    : line.CrossSize - itemCrossSize - crossMarginAfter;
+
                 switch (align)
                 {
                     case CssConstants.FlexEnd:
                     case "end":
-                        item.CrossOffset = line.CrossSize - itemCrossSize - crossMarginAfter;
+                        item.CrossOffset = flushCrossEnd;
                         break;
                     case CssConstants.Center:
                         item.CrossOffset = (line.CrossSize - itemCrossSize - crossMarginBefore - crossMarginAfter) / 2
@@ -743,14 +767,34 @@ namespace PeachPDF.Html.Core.Dom
                                 }
                             }
                         }
-                        item.CrossOffset = crossMarginBefore;
+                        // An item that could not stretch (it has a definite cross size) falls back to
+                        // flex-start, so it takes the swapped edge with it — that fallback, not an explicit
+                        // `align-items: flex-start`, is the common way a wrap-reverse container reaches here.
+                        // The cross size is re-read rather than reused from above: the branch that just ran
+                        // may have re-laid the item out at the line's cross size, and the swapped edge is
+                        // measured against the size the item actually ended up with.
+                        //
+                        // An item that does fill its line is on both edges at once, and its re-laid-out size
+                        // goes through a string round-trip on the way (FormatLayoutUnits), so subtracting it
+                        // back off the line's own cross size does not land exactly on the margin it started
+                        // from. Below the same 0.5 tolerance the re-layout itself uses, take the margin —
+                        // otherwise a stretched item moves by ~1e-4 and redraws its whole border.
+                        double stretchedCross = _isRow ? item.Box.ActualBoxSizingHeight : item.Box.ActualBoxSizingWidth;
+                        double stretchedCrossStart = line.CrossSize - stretchedCross - crossMarginAfter;
+                        item.CrossOffset = _isWrapReverse && stretchedCrossStart - crossMarginBefore > 0.5
+                            ? stretchedCrossStart
+                            : crossMarginBefore;
                         break;
                     }
                     case CssConstants.Baseline when baselineOffsets != null && baselineOffsets.TryGetValue(item, out var itemBaseline):
-                        item.CrossOffset = crossMarginBefore + (maxBaseline - itemBaseline);
+                        // The group's baselines align with each other either way; what the swap changes is
+                        // which end of the line the group is flushed against.
+                        item.CrossOffset = _isWrapReverse
+                            ? line.CrossSize - maxBaselineTail - itemBaseline
+                            : crossMarginBefore + (maxBaseline - itemBaseline);
                         break;
                     default: // flex-start / start / baseline fallback (column-direction, or no discoverable baseline)
-                        item.CrossOffset = crossMarginBefore;
+                        item.CrossOffset = flushCrossStart;
                         break;
                 }
             }

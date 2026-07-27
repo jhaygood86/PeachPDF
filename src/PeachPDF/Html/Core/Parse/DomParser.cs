@@ -2051,12 +2051,17 @@ namespace PeachPDF.Html.Core.Parse
         /// <returns>true - only inline child boxes, false - otherwise</returns>
         private static bool ContainsInlinesOnlyDeep(CssBox box)
         {
-            // A replaced element (<img>, inline <svg>) is an atomic inline-level box; its descendants
-            // (SVG foreign content) are not HTML flow content and must not be inspected here - otherwise a
-            // block-ish child inside the SVG (e.g. a display:none <style>) would make an ancestor look like
-            // it has block-in-inline content and trigger a restructuring split that hoists the SVG's own
-            // children out of it. See CssBoxSvg / issue #159.
-            if (box is CssBoxImage or CssBoxSvg)
+            // An atomic inline-level box is a single opaque item in its parent's inline formatting context:
+            // its own contents live in an independent formatting context of their own (CSS Display 3 §2.3),
+            // so they are not the parent's block-in-inline problem and must not be inspected here. A
+            // replaced element (<img>, inline <svg>) is one - a block-ish child inside the SVG (e.g. a
+            // display:none <style>) would otherwise make an ancestor look like it has block-in-inline
+            // content and trigger a restructuring split that hoists the SVG's own children out of it (see
+            // CssBoxSvg / issue #159) - and so is every inline-level box that runs a layout engine of its
+            // own. Descending into one of those hoisted its first block-level child out of the box
+            // altogether: an `inline-flex` holding two <div> items kept only the second, drew the first
+            // above its own top edge and reported the height of what was left (issue #462).
+            if (box is CssBoxImage or CssBoxSvg || IsAtomicInlineLevel(box))
             {
                 return true;
             }
@@ -2071,6 +2076,25 @@ namespace PeachPDF.Html.Core.Parse
 
             return true;
         }
+
+        /// <summary>
+        /// Whether the box is an inline-level box that the inline layout path places as one atomic item and
+        /// then hands to an engine of its own — today that is <c>inline-flex</c>
+        /// (<c>CssLayoutEngine.FlowBox</c>'s inline-flex branch).
+        /// </summary>
+        /// <remarks>
+        /// <c>inline-block</c>, <c>inline-grid</c> and <c>inline-table</c> are atomic inline-level boxes too
+        /// (CSS Display 3 §2.3) and belong here on paper, but no branch places them atomically: their
+        /// children are walked as the parent line's own inline content, which places nothing at all for a
+        /// block-level child. Naming them here would stop the split without giving them a layout path, so a
+        /// box that renders something wrong today would render nothing — measured on an
+        /// <c>inline-block</c>/<c>inline-grid</c>/<c>inline-table</c> holding two &lt;div&gt;s. Tracked as
+        /// issue #473.
+        /// </remarks>
+        /// <param name="box">the box to check</param>
+        /// <returns>true - an atomic inline-level box with a layout path of its own, false - otherwise</returns>
+        private static bool IsAtomicInlineLevel(CssBox box) =>
+            box.Display is CssConstants.InlineFlex;
 
         /// <summary>
         /// Check if the given box contains inline and block child boxes.

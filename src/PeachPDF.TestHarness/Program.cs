@@ -2106,7 +2106,20 @@ var flexHtml = "<!DOCTYPE html><html><head>" + FlexCss + "</head><body>" +
         FContainer("wrap-reverse, unequal line heights", "flex-wrap:wrap-reverse;width:200px;gap:4px;",
             FItem("A 12px", "#e74c3c", "width:90px;height:12px;") +
             FItem("B 40px", "#3498db", "width:90px;height:40px;") +
-            FItem("C 24px", "#27ae60", "width:90px;height:24px;"))
+            FItem("C 24px", "#27ae60", "width:90px;height:24px;")) +
+        // wrap-reverse swaps cross-start and cross-end inside a line as well as between them: A shares a
+        // line with the taller B, so flex-start puts it against that line's bottom and flex-end against
+        // its top - the mirror of what the same two values do without wrap-reverse. The items are narrow
+        // enough (80px + FItem's 12px of padding = 92px, twice, inside 200px) for two to share a line;
+        // one item per line has nowhere else to be and would show none of this.
+        FContainer("wrap-reverse + align-items:flex-start", "flex-wrap:wrap-reverse;align-items:flex-start;width:200px;gap:4px;",
+            FItem("A 12px", "#e74c3c", "width:80px;height:12px;") +
+            FItem("B 40px", "#3498db", "width:80px;height:40px;") +
+            FItem("C 24px", "#27ae60", "width:80px;height:24px;")) +
+        FContainer("wrap-reverse + align-items:flex-end", "flex-wrap:wrap-reverse;align-items:flex-end;width:200px;gap:4px;",
+            FItem("A 12px", "#e74c3c", "width:80px;height:12px;") +
+            FItem("B 40px", "#3498db", "width:80px;height:40px;") +
+            FItem("C 24px", "#27ae60", "width:80px;height:24px;"))
     ) +
 
     FSection("7 — align-self (overrides align-items)",
@@ -2162,6 +2175,14 @@ var flexHtml = "<!DOCTYPE html><html><head>" + FlexCss + "</head><body>" +
         "  <span style='background:#27ae60;color:#fff;font:6pt Arial;padding:2px 4px;'>B</span>" +
         "</span>" +
         " text after — inline-flex sits in the text flow." +
+        // A wrapping inline-flex holding block-level items: its children belong to the flex formatting
+        // context inside it, not to the line the box itself sits on, so both rows stay in the box.
+        "<div style='margin-top:5px'>Wrapping inline-flex with block-level items: " +
+        "<span style='display:inline-flex;flex-wrap:wrap;width:120px;gap:2px;vertical-align:middle;border:1px solid #bbb;padding:2px;'>" +
+        "  <div style='background:#e74c3c;color:#fff;font:6pt Arial;padding:2px;width:110px;'>row 1</div>" +
+        "  <div style='background:#3498db;color:#fff;font:6pt Arial;padding:2px;width:110px;height:16px;'>row 2</div>" +
+        "</span>" +
+        " text after.</div>" +
         "</td></tr>"
     ) +
 
