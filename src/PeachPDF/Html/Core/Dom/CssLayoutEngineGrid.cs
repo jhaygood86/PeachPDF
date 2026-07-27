@@ -374,7 +374,7 @@ namespace PeachPDF.Html.Core.Dom
                     container,
                     boxes.Min(b => b.Location.Y) + shift,
                     boxes.Max(b => b.ActualBottom) + shift,
-                    boxes.Any(b => BreakValues.IsForcedPageBreak(b.BreakBefore)),
+                    LineRelocation.ForcedBreakBetween(BoxesEndingAbove(placements, row.Key), boxes),
                     boxes.Any(b => BreakValues.AvoidsBreak(b.BreakInside, FragmentationContext.Page)
                                    || MonolithicContent.IsMonolithic(b)));
 
@@ -392,6 +392,34 @@ namespace PeachPDF.Html.Core.Dom
             {
                 _gridBox.ActualBottom += shift;
             }
+        }
+
+        /// <summary>
+        /// The items immediately above the break point before row <paramref name="rowIndex"/> — those
+        /// whose <i>last</i> row is the nearest one that ends before it, or none for the grid's first row.
+        /// </summary>
+        /// <remarks>
+        /// Keyed by where an item <b>ends</b> rather than where it starts, because that is what makes it
+        /// the earlier sibling at this break point. An item spanning rows 1–2 is not above the break point
+        /// before row 2 at all — that boundary runs through the middle of it — so its <c>break-after</c>
+        /// belongs to the break point after row 2, which is exactly where this puts it.
+        /// </remarks>
+        private static List<CssBox>? BoxesEndingAbove(List<Placement> placements, int rowIndex)
+        {
+            var lastRowAbove = int.MinValue;
+
+            foreach (var placement in placements)
+            {
+                var end = placement.RowStart + placement.RowSpan - 1;
+                if (end < rowIndex && end > lastRowAbove) lastRowAbove = end;
+            }
+
+            if (lastRowAbove == int.MinValue) return null;
+
+            return placements
+                .Where(p => p.RowStart + p.RowSpan - 1 == lastRowAbove)
+                .Select(p => p.Box)
+                .ToList();
         }
 
         private sealed class Placement

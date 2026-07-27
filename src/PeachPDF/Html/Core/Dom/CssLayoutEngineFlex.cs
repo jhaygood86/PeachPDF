@@ -803,13 +803,21 @@ namespace PeachPDF.Html.Core.Dom
 
             double shift = 0;
 
+            // The line above the break point being asked about. Both sides of a class-A break point can
+            // force it (§3.1), and this walk has the earlier one in hand.
+            FlexLine? above = null;
+
             foreach (var line in lines)
             {
                 if (LineBounds(line) is not { } bounds) continue;
 
                 shift += LineRelocation.DeltaFor(
                     container, bounds.Top + shift, bounds.Bottom + shift,
-                    LineTakesAForcedBreak(line), LineMayNotBeCut(line));
+                    LineRelocation.ForcedBreakBetween(
+                        above?.Items.Select(i => i.Box), line.Items.Select(i => i.Box)),
+                    LineMayNotBeCut(line));
+
+                above = line;
 
                 // Every line from the first relocated one onward moves by the *accumulated* displacement,
                 // not by its own: a line below one that moved to the next fragmentainer follows it there,
@@ -845,13 +853,6 @@ namespace PeachPDF.Html.Core.Dom
 
             return (top, bottom);
         }
-
-        /// <summary>
-        /// Whether a forced break falls before this line — <c>break-before</c> on any of its items, since
-        /// the line is what moves and they begin it together.
-        /// </summary>
-        private static bool LineTakesAForcedBreak(FlexLine line) =>
-            line.Items.Any(i => BreakValues.IsForcedPageBreak(i.Box.BreakBefore));
 
         /// <summary>
         /// Whether anything in this line may not be cut by a fragmentainer boundary: an item asking not

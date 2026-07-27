@@ -1,3 +1,7 @@
+using PeachPDF.Html.Core.Dom;
+using System.Collections.Generic;
+using System.Linq;
+
 namespace PeachPDF.Html.Core.Fragmentation
 {
     /// <summary>
@@ -21,13 +25,43 @@ namespace PeachPDF.Html.Core.Fragmentation
     internal static class LineRelocation
     {
         /// <summary>
+        /// Whether a forced page break falls at the break point between two adjacent lines — the one
+        /// ending with <paramref name="above"/> and the one beginning with <paramref name="below"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// §3.1 states this of the break <i>point</i>, not of either box: a forced break occurs there if
+        /// the earlier sibling's <c>break-after</c> <b>or</b> the later sibling's <c>break-before</c> has
+        /// a forced value, so one side asking is sufficient and neither side can veto the other. Reading
+        /// only the later side is what made <c>break-after: page</c> on a flex or grid item inert while
+        /// the same intent spelt as <c>break-before</c> on the following line took effect.
+        /// </para>
+        /// <para>
+        /// Both sides are read one box deep rather than through the chains they begin and end
+        /// (<see cref="BreakPropagation"/>): a break travelling out of an item would name a position the
+        /// engine is about to overwrite, which is why propagation stops before a box whose children an
+        /// engine places for itself.
+        /// </para>
+        /// </remarks>
+        /// <param name="above">
+        /// the items of the line immediately above the break point, or null where there is none — the
+        /// first line of a container has nothing before it for a <c>break-after</c> to be declared on
+        /// </param>
+        /// <param name="below">the items of the line immediately below it</param>
+        internal static bool ForcedBreakBetween(IEnumerable<CssBox>? above, IEnumerable<CssBox> below) =>
+            below.Any(box => BreakValues.IsForcedPageBreak(box.BreakBefore))
+            || (above is not null && above.Any(box => BreakValues.IsForcedPageBreak(box.BreakAfter)));
+
+        /// <summary>
         /// How far the line spanning <paramref name="top"/>..<paramref name="bottom"/> must move down,
         /// or 0 to leave it where it is.
         /// </summary>
         /// <param name="container">the layout container, for the page grid</param>
         /// <param name="top">the line's top, already displaced by everything above it that moved</param>
         /// <param name="bottom">the line's bottom, displaced the same way</param>
-        /// <param name="takesAForcedBreak">a <c>break-before</c> on any of its items forces a break here</param>
+        /// <param name="takesAForcedBreak">
+        /// a forced break falls at the break point before it — see <see cref="ForcedBreakBetween"/>
+        /// </param>
         /// <param name="mayNotBeCut">
         /// something in it asks not to be broken, or §2 says no user agent may break it. A line that
         /// neither asks nor forbids is left where it is and the boundary cuts it — the same answer
