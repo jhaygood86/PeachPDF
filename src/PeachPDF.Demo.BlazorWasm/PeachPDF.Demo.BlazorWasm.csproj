@@ -57,6 +57,45 @@
     <Content Include="@(SharedFontAsset)" LinkBase="wwwroot\fonts" />
   </ItemGroup>
 
+  <!--
+    Bakes in what the page needs to say which build of PeachPDF it is running: the library's own
+    PackageVersion, this commit, and whether the two agree - a release is tagged v{PackageVersion}, so a
+    commit that is not that tag's commit is a prerelease of it. Both git calls tolerate failure, since the
+    demo has to build from a source archive with no repository at all; with no commit to compare, the
+    version alone is the honest answer.
+  -->
+  <Target Name="GenerateDemoBuildInfo" BeforeTargets="BeforeBuild">
+    <XmlPeek XmlInputPath="$(MSBuildThisFileDirectory)..\PeachPDF\PeachPDF.csproj"
+             Query="/Project/PropertyGroup/PackageVersion/text()">
+      <Output TaskParameter="Result" PropertyName="PeachPdfVersion" />
+    </XmlPeek>
+
+    <Exec Command="git rev-parse HEAD" WorkingDirectory="$(MSBuildThisFileDirectory)"
+          ConsoleToMSBuild="true" StandardOutputImportance="low"
+          IgnoreExitCode="true" ContinueOnError="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="DemoBuildCommit" />
+    </Exec>
+
+    <!-- rev-list rather than rev-parse: an annotated tag's rev-parse is the tag object, not the commit. -->
+    <Exec Command="git rev-list -n 1 v$(PeachPdfVersion)" WorkingDirectory="$(MSBuildThisFileDirectory)"
+          ConsoleToMSBuild="true" StandardOutputImportance="low"
+          IgnoreExitCode="true" ContinueOnError="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="DemoReleaseCommit" />
+    </Exec>
+
+    <PropertyGroup>
+      <DemoIsPrerelease Condition="'$(DemoBuildCommit)' != '' And '$(DemoBuildCommit)' != '$(DemoReleaseCommit)'">true</DemoIsPrerelease>
+      <DemoIsPrerelease Condition="'$(DemoIsPrerelease)' == ''">false</DemoIsPrerelease>
+    </PropertyGroup>
+
+    <WriteLinesToFile File="$(IntermediateOutputPath)DemoBuildInfo.g.cs" Overwrite="true"
+                      Lines="namespace PeachPDF.Demo.BlazorWasm { internal static class DemoBuildInfo { public const string Version = &quot;$(PeachPdfVersion)&quot;%3B public const string Commit = &quot;$(DemoBuildCommit)&quot;%3B public static readonly bool IsPrerelease = $(DemoIsPrerelease)%3B } }" />
+
+    <ItemGroup>
+      <Compile Include="$(IntermediateOutputPath)DemoBuildInfo.g.cs" />
+    </ItemGroup>
+  </Target>
+
   <Target Name="StageSharedFontAssets"
           BeforeTargets="ResolveStaticWebAssetsInputs;BeforeBuild"
           Inputs="@(SharedFontAsset)"

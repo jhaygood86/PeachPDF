@@ -90,6 +90,12 @@
             so a long document will make this page unresponsive for a few seconds. It is working, not stuck.
         </li>
         <li>
+            <strong>Don't judge PeachPDF's speed by this page.</strong> A browser runs .NET on a different,
+            much slower runtime — your code is interpreted here rather than compiled to native code the way
+            it is on a server or desktop. The same document renders far faster outside the browser. This is
+            a demonstration of what PeachPDF produces, not of how fast it produces it.
+        </li>
+        <li>
             <strong>Fonts are Liberation Sans, Serif and Mono</strong> — metrically compatible with Arial,
             Times New Roman and Courier New, so documents laid out for those keep their measure. A browser
             exposes no system fonts to WebAssembly, so these are the fonts that exist here.
@@ -102,6 +108,11 @@
         <li>
             <strong>Nothing external loads.</strong> An HTML file's images must be <code>data:</code> URIs;
             an MHTML or ZIP carries its own. References to the web or to local files resolve to nothing.
+        </li>
+        <li>
+            <strong><code>hyphens: auto</code> does nothing here.</strong> PeachPDF's hyphenation patterns
+            are Brotli-compressed, and a browser has no Brotli decoder — so text lays out unhyphenated
+            rather than the render failing. Everywhere else PeachPDF runs, it hyphenates normally.
         </li>
         <li>WebP images are not supported by the renderer's image decoder.</li>
     </ul>
