@@ -275,7 +275,23 @@ namespace PeachPDF.Html.Core.Dom
             // A resumed flow continues the same block: its earlier lines live in a fragmentainer that
             // has already been filled, so they are neither cleared nor re-finalized.
             var completedLines = resume?.CompletedLineCount ?? 0;
-            if (resume is null) blockBox.LineBoxes.Clear();
+
+            if (resume is null)
+            {
+                blockBox.LineBoxes.Clear();
+
+                // A word carries no position of its own until the flow reaches it, and the position it
+                // carries instead — document Y 0, or whatever an earlier layout of the same box left on
+                // it — describes nothing. Y 0 lies inside the *first* slot's own band, so the first page's
+                // fragment claimed every word a stopped flow never got to (issue #433). Saying up front
+                // that this layout has placed none of them, and letting being positioned clear it
+                // (CssRect.Top's setter), makes what survives the flow exactly what the flow did not
+                // reach — the rule §4.1's own discarded line already follows, asked of the whole block.
+                //
+                // Only on the pass that opens the block: a resumed pass would otherwise take back the
+                // words an earlier fragmentainer has already placed and frozen a fragment around.
+                blockBox.AwaitPlacementAgain();
+            }
 
             var limitRight = blockBox.ClientRight;
 

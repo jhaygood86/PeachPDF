@@ -483,10 +483,10 @@ namespace PeachPDF.Tests.Integration
         /// to a fragmentainer already filled.
         /// </summary>
         /// <remarks>
-        /// Asked of the two blocks rather than of the whole document: a word the pass that froze the first
-        /// slot never reached still carries document Y 0, which lies inside that slot's own band, so the
-        /// first page's fragment claims it — a pre-existing defect this fixture would otherwise trip over
-        /// (issue #433), present identically with and without the pull.
+        /// Asked of the whole document since #433: a word the pass that froze the first slot never reached
+        /// used to carry document Y 0, which lies inside that slot's own band, so the first page's fragment
+        /// claimed it — a pre-existing defect this fixture tripped over, which is why the assertion was
+        /// originally scoped to the two blocks the pull moves.
         /// </remarks>
         [Theory]
         [InlineData(50, 30, 120)]
@@ -497,20 +497,17 @@ namespace PeachPDF.Tests.Integration
             var (root, container) = await LayoutHarness.LayoutAsync(
                 ResumedParagraphDocument(leadWords, cardWords), pageWidth: 300, pageHeight: pageHeight, margin: 10);
 
-            var blockWords = new[] { 1, 2 }
-                .SelectMany(n => WordsIn(LayoutHarness.FindById(root, $"card{n}")!))
-                .ToHashSet(ReferenceEqualityComparer.Instance);
+            var authored = WordsIn(root);
 
-            Assert.NotEmpty(blockWords);
+            Assert.NotEmpty(authored);
 
             var claimed = container.FragmentTree!.Fragmentainers
                 .SelectMany(f => Flatten(f.Root))
                 .SelectMany(f => f.Words)
                 .Select(w => (object)w.Word)
-                .Where(blockWords.Contains)
                 .ToList();
 
-            Assert.Equal(blockWords.Count, claimed.Count);
+            Assert.Equal(authored.Count, claimed.Count);
             Assert.Equal(claimed.Count, claimed.Distinct(ReferenceEqualityComparer.Instance).Count());
         }
 
