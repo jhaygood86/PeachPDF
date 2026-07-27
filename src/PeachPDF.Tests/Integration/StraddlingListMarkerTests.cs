@@ -153,54 +153,148 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
-        /// The page grid's answer does not transfer to a column: a box that does not finish in a column is
-        /// laid out <i>again</i> at the next column's inline position, so only its last fragment's geometry
-        /// survives and the marker has to be positioned on the pass that completes it. Positioned on the
-        /// pass that starts it instead, the marker of the item that crosses the column boundary stayed in
-        /// the column its item had left — a bullet beside nothing in column 1, and none at all beside the
-        /// item's own text in column 2, on a single page with no page break anywhere in it.
+        /// A column is a fragmentainer like any other, so the same statement holds there: the marker goes
+        /// with the column the item <b>begins</b> in. It is the one case where the item's own live geometry
+        /// cannot be asked, because a box that does not finish in a column is laid out <i>again</i> at the
+        /// next column's inline position (<c>CssBox.ResumeInTheNextFragmentainer</c>) and only its last
+        /// fragment survives on the box — so this asks the fragment tree instead. Positioned by the pass that
+        /// <i>completed</i> the item, the bullet appeared beside the continuation in the later column and the
+        /// earlier column's captured geometry held a second origin for the same word, so it was claimed
+        /// twice (issue #468).
         /// </summary>
         /// <remarks>
-        /// The item is the one thing a column-boundary fixture cannot pin: it is settled by how much text
-        /// fits, so this asserts over <i>every</i> item rather than naming one, and checks separately that
-        /// some item really did cross into the second column.
+        /// Which item crosses is the one thing a column-boundary fixture cannot pin — it is settled by how
+        /// much text fits — so this asserts over <i>every</i> item and checks separately that some item
+        /// really did produce fragments in more than one column.
         /// </remarks>
         [Fact]
-        public async Task AnItemCrossingAColumnBoundary_KeepsItsMarkerBesideItsOwnColumn()
+        public async Task AnItemCrossingAColumnBoundary_KeepsItsMarkerInTheColumnItBeginsIn()
         {
-            var items = string.Join("", Enumerable.Range(0, 4).Select(i =>
-                $"<li id='li{i}' style='{ItemStyle}'>"
-                + string.Join(" ", Enumerable.Range(0, 25).Select(w => $"i{i}w{w}"))
-                + "</li>"));
-
-            var (root, container) = await LayoutHarness.LayoutAsync(
-                LayoutHarness.Wrap(
-                    $"<div style='column-count:2'><ul style='margin:0;padding-left:40pt'>{items}</ul></div>"),
-                pageHeight: 260, margin: 10);
+            var (root, container) = await LayoutColumnsAsync();
 
             var claims = ClaimsByWord(container);
-            var columns = new List<double>();
             var offsets = new List<double>();
+            var crossings = 0;
 
             foreach (var item in ListItems(root))
             {
                 var word = Assert.Single(item.Boxes.Single(b => b.IsMarkerPseudoElement).Words);
+                var fragments = FragmentsOf(container, item);
+
+                Assert.NotEmpty(fragments);
+
+                if (fragments.Count > 1) crossings++;
 
                 Assert.True(claims.TryGetValue(word, out var slots),
                     $"the marker of '{Id(item)}' is claimed by no fragment at all");
                 Assert.Single(slots!);
 
-                columns.Add(item.Location.X);
-                offsets.Add(item.ClientLeft - word.Left);
+                // The marker belongs to the item's FIRST fragment, in fill order — the column its first
+                // line is in, not whichever one it happened to finish in.
+                var holder = fragments.FindIndex(f => f.Children.Any(c => c.Box.IsMarkerPseudoElement));
+
+                Assert.Equal(0, holder);
+
+                // And it hangs outside that fragment's own left edge by the distance every other item's
+                // marker hangs outside its own — the statement that it was positioned against the column
+                // the item begins in rather than against the item's live, last-column position. Both
+                // rectangles come from the fragment tree, so both are in the same local space.
+                var markerFragment = fragments[0].Children.Single(c => c.Box.IsMarkerPseudoElement);
+
+                offsets.Add(fragments[0].Rect.Left - markerFragment.Rect.Left);
             }
 
-            Assert.True(columns.Distinct().Count() > 1,
-                "the fixture must put some item in the second column");
-
-            // Every marker hangs the same distance outside its own item's content edge — which is exactly
-            // what a marker left behind in the previous column does not do.
+            Assert.True(crossings > 0, "the fixture must have some item cross a column boundary");
             Assert.Single(offsets.Select(o => Math.Round(o, 3)).Distinct());
         }
+
+        /// <summary>
+        /// #374's claimed-exactly-once invariant again, over a document whose list items break across
+        /// <i>columns</i> rather than pages. A marker that is positioned twice — once per column the item
+        /// passes through — is a duplicate this states directly, and it is what the shipped behaviour did.
+        /// </summary>
+        [Fact]
+        public async Task AListWhoseItemsCrossColumnBoundaries_ClaimsEveryWordExactlyOnce()
+        {
+            var (root, container) = await LayoutColumnsAsync();
+
+            var authored = LayoutHarness.Descendants(root).SelectMany(b => b.Words).ToList();
+            var claims = ClaimsByWord(container);
+
+            Assert.NotEmpty(authored);
+            Assert.All(authored, w => Assert.True(
+                claims.TryGetValue(w, out var slots) && slots.Count == 1,
+                $"'{w.Text}' is claimed by [{(claims.TryGetValue(w, out var s) ? string.Join(",", s) : "")}]"));
+            Assert.Equal(authored.Count, claims.Count);
+        }
+
+        /// <summary>
+        /// A pass places a box before it knows how much of it fits, and the answer can be "none": the fill
+        /// then breaks <i>before</i> the item and drops it from that fragmentainer's geometry, leaving the
+        /// marker it had already positioned there as the only trace of an item that is not in that column —
+        /// claimed by nothing, drawn nowhere. The marker has to be handed back to the pass that does keep
+        /// content (<c>CssBox.TakeBackTheMarkerOfAnItemThisPassKeptNothingOf</c>).
+        /// </summary>
+        /// <remarks>
+        /// This fixture is one of the nine the 660-document multi-column sweep turned up, and every one of
+        /// them was <c>column-fill: balance</c> — the extra fill attempts a balanced container makes are what
+        /// make a placement that keeps nothing ordinary rather than exotic.
+        /// </remarks>
+        [Fact]
+        public async Task AnItemAColumnPlacedButKeptNothingOf_StillClaimsItsMarkerExactlyOnce()
+        {
+            var items = string.Join("", Enumerable.Range(0, 7).Select(i =>
+                $"<li id='li{i}' style='{ItemStyle}'>"
+                + string.Join(" ", Enumerable.Range(0, 40).Select(w => $"i{i}w{w}"))
+                + "</li>"));
+
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='column-count:3;column-fill:balance'>"
+                    + $"<ul style='margin:0;padding-left:40pt'>{items}</ul></div>"),
+                pageHeight: 120, margin: 10);
+
+            var claims = ClaimsByWord(container);
+
+            foreach (var item in ListItems(root))
+            {
+                var word = Assert.Single(item.Boxes.Single(b => b.IsMarkerPseudoElement).Words);
+                var fragments = FragmentsOf(container, item);
+
+                Assert.True(claims.TryGetValue(word, out var slots),
+                    $"the marker of '{Id(item)}' is claimed by no fragment at all");
+                Assert.Single(slots!);
+                Assert.Equal(0, fragments.FindIndex(f => f.Children.Any(c => c.Box.IsMarkerPseudoElement)));
+            }
+        }
+
+        /// <summary>
+        /// Three items long enough that the middle one runs past the end of the first column, so at least
+        /// one item genuinely continues into the next one.
+        /// </summary>
+        private static Task<(CssBox Root, HtmlContainerInt Container)> LayoutColumnsAsync()
+        {
+            var items = string.Join("", Enumerable.Range(0, 3).Select(i =>
+                $"<li id='li{i}' style='{ItemStyle}'>"
+                + string.Join(" ", Enumerable.Range(0, 70).Select(w => $"i{i}w{w}"))
+                + "</li>"));
+
+            return LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    $"<div style='column-count:2'><ul style='margin:0;padding-left:40pt'>{items}</ul></div>"),
+                pageHeight: 260, margin: 10);
+        }
+
+        /// <summary>
+        /// Every fragment <paramref name="box"/> produced, in fill order. A box split across two columns of
+        /// one page produces two fragments in the same pagination slot, which
+        /// <see cref="SlotsOf"/> cannot tell apart.
+        /// </summary>
+        private static List<BoxFragment> FragmentsOf(HtmlContainerInt container, CssBox box) =>
+            container.FragmentTree!.Fragmentainers
+                .SelectMany(f => Flatten(f.Root))
+                .Where(f => ReferenceEquals(f.Box, box))
+                .ToList();
 
         /// <summary>
         /// A pass that <i>declines</i> to place the item — §5.2's margin truncation concluding the break

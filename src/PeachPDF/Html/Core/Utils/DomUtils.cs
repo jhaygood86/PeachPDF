@@ -96,6 +96,15 @@ namespace PeachPDF.Html.Core.Utils
         /// <summary>
         /// Gets the previous sibling of this box.
         /// </summary>
+        /// <remarks>
+        /// Boxes that are not in the flow this walk is about are stepped over: a <c>display: none</c> box, an
+        /// absolutely- or fixed-positioned one, optionally a float — and an <c>outside</c> <c>::marker</c>,
+        /// which is positioned beside its list item's principal block box rather than among its children
+        /// (CSS 2.1 §12.5.1). The marker is <c>Boxes[0]</c> of every list item, so for an item whose content
+        /// is block-level it is the box the item's first real child would otherwise resolve its own top
+        /// against: that child was placed at the marker's <c>ActualBottom</c>, which is 0 until the marker is
+        /// positioned — after the children are — and the item laid out with no height at all.
+        /// </remarks>
         /// <returns>Box before this one on the tree. Null if it is the first</returns>
         public static CssBox? GetPreviousSibling(CssBox b, bool includeFloats = true)
         {
@@ -106,12 +115,12 @@ namespace PeachPDF.Html.Core.Utils
             var diff = 1;
             var sib = b.ParentBox.Boxes[index - diff];
 
-            while ((sib.Display == CssConstants.None || sib.Position == CssConstants.Absolute || sib.Position == CssConstants.Fixed || (!includeFloats && sib.IsFloated)) && index - diff - 1 >= 0)
+            while ((sib.Display == CssConstants.None || sib.Position == CssConstants.Absolute || sib.Position == CssConstants.Fixed || (!includeFloats && sib.IsFloated) || CssBox.IsOutsideMarker(sib)) && index - diff - 1 >= 0)
             {
                 sib = b.ParentBox.Boxes[index - ++diff];
             }
 
-            sib = sib.Display == CssConstants.None || sib.Position == CssConstants.Fixed || (!includeFloats && sib.IsFloated) ? null : sib;
+            sib = sib.Display == CssConstants.None || sib.Position == CssConstants.Fixed || (!includeFloats && sib.IsFloated) || CssBox.IsOutsideMarker(sib) ? null : sib;
 
             return sib;
         }

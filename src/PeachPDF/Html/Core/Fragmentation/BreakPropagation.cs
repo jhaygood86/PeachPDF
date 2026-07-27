@@ -177,9 +177,18 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// The same set of boxes <see cref="DomUtils.GetPreviousSibling"/> walks with floats excluded, so
         /// "the first in-flow child" and "has no previous in-flow sibling" cannot name different boxes.
         /// </summary>
+        /// <remarks>
+        /// That is why an <c>outside</c> <c>::marker</c> is excluded here too: it is <c>Boxes[0]</c> of every
+        /// list item, so counting it left the item's first <i>real</i> child looking like a second one, and
+        /// §3.1's "a break before a container's own first in-flow child is the break point before the
+        /// container" never fired for a list item. The item stayed behind as an empty stub of its own chrome
+        /// with the bullet beside nothing, while its content — and no number — went to the next
+        /// fragmentainer.
+        /// </remarks>
         private static bool IsInFlow(CssBox box) =>
             box.Display != CssConstants.None
             && box.Position is not (CssConstants.Absolute or CssConstants.Fixed)
-            && !box.IsFloated;
+            && !box.IsFloated
+            && !CssBox.IsOutsideMarker(box);
     }
 }
