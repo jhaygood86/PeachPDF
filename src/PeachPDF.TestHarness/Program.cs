@@ -1817,6 +1817,37 @@ var tableRowBreaksHtml = """
     </body></html>
     """;
 
+// ── a cell's own text across a page boundary ───────────────────────────────
+// A line box is monolithic (CSS Fragmentation §4.1), so it belongs to exactly one page. A table
+// cell's own text used to be exempt from word flow's boundary check, which left nothing to stop a
+// line straddling the break - the emitter then claimed it on both pages and it painted sliced in
+// half on each.
+var tallCellHtml = """
+    <!DOCTYPE html>
+    <html><head><style>
+    @page { size: a6; margin: 12mm }
+    body { font: 9pt Helvetica, Arial, sans-serif; margin: 0; color: #1f2937 }
+    h1 { font-size: 11pt; margin: 0 0 0.4em }
+    p.intro { color: #6b7280; font-size: 8pt; margin: 0 0 0.8em }
+    table { width: 100%; border-collapse: collapse }
+    td { padding: 5pt 6pt; border: 0.75pt solid #94a3b8; line-height: 1.5; text-align: justify }
+    </style></head><body>
+    <h1>A cell with more text than a page holds</h1>
+    <p class="intro">The cell's own text - no wrapper block - runs past the page boundary. Every line
+    lands whole on one page or the other; none is cut through the middle.</p>
+    <table><tr><td>
+    """
+    + string.Join(" ", Enumerable.Range(1, 240).Select(i => $"word{i}"))
+    + """
+    </td></tr></table>
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("paged_media_table_cell_lines", "Paged Media", "Table Cell Text Across Pages",
+    "CSS Fragmentation §4.1: a line box is a monolithic break unit, so a table cell's own text breaks "
+    + "between lines rather than through one.",
+    tallCellHtml, new PdfGenerateConfig { PageSize = PageSize.A6 });
+
 await SaveShowcaseAsync("paged_media_table_row_breaks", "Paged Media", "Table Row Break Values",
     "CSS Fragmentation §3.1's forced break values honored at the break point between two table rows, "
     + "with the table's repeating header carried onto the page the break opens.",

@@ -1413,7 +1413,14 @@ namespace PeachPDF.Html.Core.Dom
                         word.Left = coordinates.CurrentX;
                         word.Top = coordinates.CurrentY;
 
-                        if (box is { IsFixed: false, IsTableCell: false } && box.HtmlContainer?.SuppressWordPageBreaks != true)
+                        // A fixed box repeats at the same page-box position on every page (CSS 2.1
+                        // §13.3.1), so a boundary means nothing to its words. A *table cell* used to be
+                        // exempt here too, and that was a defect rather than a rule: a cell's own text
+                        // then had no mechanism to stop a line straddling the boundary, so the emitter
+                        // claimed that line in both bands and it painted sliced in half on each. The
+                        // giveaway is that wrapping the identical text in a block inside the same cell
+                        // was already correct - the nested box is not a cell, so it never took this arm.
+                        if (box is { IsFixed: false } && box.HtmlContainer?.SuppressWordPageBreaks != true)
                         {
                             if (coordinates.Fragmentainer is not null)
                             {
@@ -1710,8 +1717,8 @@ namespace PeachPDF.Html.Core.Dom
             // Word flow already ran CssRect.BreakPage per word; the inset shift below can push
             // a line that legitimately fit above a page boundary back across it, so the shifted
             // words re-check - a monolithic line must land fully within one fragmentainer
-            // (css-break §4). Same exemptions as the flow-time call.
-            var breakPages = flowContext is { IsFixed: false, IsTableCell: false };
+            // (css-break §4). Same exemption as the flow-time call.
+            var breakPages = flowContext is { IsFixed: false };
             var maxWordBottom = OffsetFlowedWords(b, topInset, breakPages);
 
             if (maxWordBottom > double.MinValue
