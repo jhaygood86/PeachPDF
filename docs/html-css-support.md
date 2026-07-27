@@ -653,6 +653,8 @@ Two limits are worth knowing. A flex or grid container **inside a table** is pos
 
 **A table that did not break moves whole.** A table breaks between two of its rows when the next row does not fit, and where no row break was taken at all — most often a single-row table, or one whose cells hold tall block content the row-height estimate could not see — the table did not fragment, and it is carried onto the next page in one piece rather than painting sliced across the boundary. This applies to every table, including one repeating a `<thead>` or a `<tfoot>`: the header follows it onto the page it lands on. A table taller than one page is left where it is, since moving it would only recreate the straddle. A heading chained to the table by `break-after: avoid` — the user-agent print default for `h1`–`h6` — travels with it, as at every other relocation.
 
+**A cell's text breaks between lines, not through one.** Where a cell holds more text than the page has room for, the text continues on the next page and each line lands whole on one page or the other — a line is never cut through the middle and drawn on both. This holds for the cell's own text and for text inside a block within it alike.
+
 Two limits. Keep-with-next (`break-after: avoid`) between two rows is not honored — the chain is read among block-flow siblings, and a table's rows are placed by the table itself. And a break value on a box *inside* a cell is likewise the table's row grid to answer, not the page grid's.
 
 <a id="monolithic-content"></a>
