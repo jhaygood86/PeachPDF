@@ -37,10 +37,9 @@ namespace PeachPDF.Tests.Integration
         /// </summary>
         /// <remarks>
         /// Asked of several shapes because what stops is the fill rather than the paragraph: an inline box,
-        /// a float and a multi-column container each reach <c>CreateLineBoxes</c> by their own route. Two
-        /// shapes are deliberately absent, each with a pre-existing residual measured identical with and
-        /// without this fix — a list item drops its own <c>::marker</c> (#444), and an absolutely-positioned
-        /// inline drops its words (#318).
+        /// a float, a list item and a multi-column container each reach <c>CreateLineBoxes</c> by their own
+        /// route. One shape is deliberately absent, with a pre-existing residual measured identical with and
+        /// without this fix — an absolutely-positioned inline drops its words (#318).
         /// </remarks>
         [Theory]
         [InlineData("<p style='orphans:1;widows:1;font-size:10pt;line-height:20pt'>{F}</p>")]
@@ -48,6 +47,7 @@ namespace PeachPDF.Tests.Integration
         [InlineData("<p style='orphans:1;widows:1;font-size:10pt;line-height:20pt'><span style='color:red'>{F}</span></p>")]
         [InlineData("<div style='orphans:1;widows:1;font-size:10pt;line-height:20pt'>{F}<span style='float:left;width:40pt'>fl oa ted</span>{F}</div>")]
         [InlineData("<div style='column-count:2'><p style='orphans:1;widows:1;font-size:10pt;line-height:20pt'>{F}</p></div>")]
+        [InlineData("<ul><li style='orphans:1;widows:1;font-size:10pt;line-height:20pt'>{F}</li></ul>")]
         public async Task AParagraphSplitAtAPageBoundary_ClaimsEveryWordExactlyOnce(string template)
         {
             var (root, container) = await LayoutHarness.LayoutAsync(Document(template, 2500), pageHeight: 850, margin: 10);

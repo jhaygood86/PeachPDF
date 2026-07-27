@@ -1489,6 +1489,15 @@ namespace PeachPDF.Html.Core.Dom
             {
                 await LayoutContents(g, resume);
 
+                // Positioned on the pass that *starts* this box, before the break record below can
+                // unwind out of it - see the method's own remarks. `resume is null` is that pass, and
+                // a requested break-before means this pass declined to place the box at all, so there
+                // is no position for the marker to be relative to yet.
+                if (resume is null && RequestedBreakBeforeTop is null)
+                {
+                    await LayoutOutsideMarker(g);
+                }
+
                 if (PendingBreakToken is not null || RequestedBreakBeforeTop is not null)
                 {
                     // This box did not finish in this fragmentainer. Its epilogue judges a *complete*
@@ -1512,6 +1521,47 @@ namespace PeachPDF.Html.Core.Dom
                 // already consumed or overridden by the target above, and re-running it would register
                 // this box's named strings and named page a second time.
                 resume = null;
+            }
+        }
+
+        /// <summary>
+        /// Lays out this list item's <c>outside</c> <c>::marker</c> (the CSS default), which is deliberately
+        /// excluded from the item's own inline flow (<c>CssLayoutEngine.FlowBox</c>) and never reached by the
+        /// generic block-children loop either, so this is the one call that positions it. An <c>inside</c>
+        /// marker is an ordinary flowed child that has already positioned itself, and no-ops here
+        /// (<see cref="CssBoxMarker.PerformLayoutImp"/>'s own <c>ListStylePosition</c> check).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The marker belongs to the fragmentainer its item begins in, and that is settled the moment the
+        /// item is placed</b> — it is positioned against the item's own border box (CSS 2.1 §12.5.1: beside
+        /// the item's first line box), not against the item's content, so nothing about the item's height or
+        /// where it ends is an input. Run from the epilogue instead, it was positioned only on the pass that
+        /// <i>completed</i> the item, which for an item straddling a fragmentainer boundary is a later pass
+        /// than the one whose slot the marker's own coordinates fall in — and that slot was frozen by then,
+        /// so the marker was claimed by no fragment at all and simply did not paint
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/444">#444</see>).
+        /// </para>
+        /// <para>
+        /// After <see cref="LayoutContents"/> rather than immediately after placement, and that ordering is
+        /// load-bearing: an item whose content is inline opens its flow by saying it has placed none of its
+        /// subtree's words yet (<c>CssBox.AwaitPlacement</c>, reaching the marker even though the flow never
+        /// visits it), so positioning the marker first would have that statement take it straight back.
+        /// Being positioned is what clears the flag (<c>CssRect.Top</c>'s setter), so the marker has to be
+        /// positioned last.
+        /// </para>
+        /// </remarks>
+        private async ValueTask LayoutOutsideMarker(RGraphics g)
+        {
+            if (Display != CssConstants.ListItem) return;
+
+            foreach (var childBox in Boxes)
+            {
+                if (childBox.IsMarkerPseudoElement)
+                {
+                    await childBox.PerformLayout(g);
+                    return;
+                }
             }
         }
 
@@ -3159,21 +3209,6 @@ namespace PeachPDF.Html.Core.Dom
         {
             CssLayoutEngine.ApplyHeight(this);
             CssLayoutEngine.ApplyParentHeight(this);
-
-            // An "outside" ::marker (the CSS default) is deliberately excluded from this box's own
-            // inline flow (CssLayoutEngine.FlowBox) and never gets a PerformLayoutImp call via the
-            // generic block-children loop either (it's not a block child) - so it needs this one
-            // explicit call, now that Location is final, to lay itself out (see
-            // CssBoxMarker.PerformLayoutImp). An "inside" marker already laid itself out as an
-            // ordinary flowed child above and no-ops here (ListStylePosition check).
-            if (Display == CssConstants.ListItem)
-            {
-                var markerBox = Boxes.FirstOrDefault(b => b.IsMarkerPseudoElement);
-                if (markerBox != null)
-                {
-                    await markerBox.PerformLayout(g);
-                }
-            }
 
             // css-break keep-with-next at the word-flow fragmentation site: word flow relocates any
             // line that would straddle a page boundary to the next page (CssRect.BreakPage, called
