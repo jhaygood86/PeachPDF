@@ -881,6 +881,40 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(2, container.FragmentTree!.Fragmentainers.Count);
         }
 
+        // Two wrap-reverse lines of *unequal* cross size. Whether a fragmentainer boundary falls between
+        // two lines is only a question worth asking while they occupy separate block-axis ranges: B
+        // (60pt) fills 120–180 and A (20pt) begins at 180, so the boundary is exactly at the break point
+        // above A, and A's `break-after: avoid` forbids it — which brings B onto the next page too.
+        // While the offsets were permuted the two lines were *nested* (B 120–180 with A inside it at
+        // 140–160), no boundary fell between them, and the avoid had nothing to answer.
+        [Fact]
+        public async Task UnderWrapReverse_AnAvoidBetweenLinesOfUnequalCrossSize_MovesBoth()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:100pt'>filler</div>"
+                    + "<div id='c' style='display:flex; flex-wrap:wrap-reverse; width:300pt'>"
+                    + "<div id='a' style='width:100%;height:20pt;break-after:avoid'>A</div>"
+                    + "<div id='b' style='width:100%;height:60pt'>B</div>"
+                    + "</div>"),
+                pageHeight: PageHeight);
+
+            var a = LayoutHarness.FindById(root, "a")!;
+            var b = LayoutHarness.FindById(root, "b")!;
+
+            // The fixture is only meaningful while the two lines really are stacked, not nested.
+            Assert.True(b.ActualBottom <= a.Location.Y + 0.5,
+                $"the lines overlap: B runs to {b.ActualBottom:F1} and A starts at {a.Location.Y:F1}");
+
+            Assert.Equal(1, SlotOf(container, a));
+            Assert.Equal(1, SlotOf(container, b));
+            Assert.Equal(container.PageTopOf(1), b.Location.Y, 1);
+            Assert.Equal(b.ActualBottom, a.Location.Y, 1);
+
+            Assert.NotNull(container.FragmentTree);
+            Assert.Equal(2, container.FragmentTree!.Fragmentainers.Count);
+        }
+
         // A wrapping column flex container stacks its lines along the *inline* axis: they sit side by
         // side sharing one block-axis range. Two items 40pt tall in a 60pt-tall column container take a
         // line each, beside one another.
