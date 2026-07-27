@@ -2538,15 +2538,6 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Resolves this box's own inline size and position, and registers its used page name.
-        /// </summary>
-        /// <remarks>
-        /// Runs on the pass that first places the box and never again: a resumed pass continues the
-        /// box's <i>content</i>, and re-deriving its top from the previous sibling would now read the
-        /// end of the whole flow. Skipping it is also what keeps a box that spans a fragmentainer
-        /// boundary on one inline size across its fragments, per CSS Fragmentation Level 3 §2.
-        /// </remarks>
-        /// <summary>
         /// Moves this box to the origin of the fragmentainer a resumed pass is filling, where that
         /// fragmentainer is one of its own rather than a page — a multi-column column.
         /// </summary>
@@ -2594,7 +2585,47 @@ namespace PeachPDF.Html.Core.Dom
             ActualBottom = Location.Y;
         }
 
+        /// <summary>
+        /// Resolves this box's own inline size, then has the frame above it assign its position.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>This is the seam a block-level box's position is written at, and it is the parent's.</b> The
+        /// two halves are different questions: how wide this box is, is the box's own to answer from its
+        /// style and its containing block; <i>where</i> it goes is a question about the break point between
+        /// it and whatever this frame placed before it — which only the frame above knows, because the
+        /// answer is margin collapsing against a previous sibling, the fragmentainer that sibling ended in,
+        /// and the run chained to it by break avoidance.
+        /// </para>
+        /// <para>
+        /// The root has no frame above it, so it stands in for its own. Nothing is lost by that:
+        /// <see cref="PreviousInFlowSibling"/> reports null for a box the frame does not own, which is what
+        /// <c>DomUtils.GetPreviousSibling</c> already answered for a box with no parent.
+        /// </para>
+        /// <para>
+        /// Runs on the pass that first places the box and never again: a resumed pass continues the
+        /// box's <i>content</i>, and re-deriving its top from the previous sibling would now read the
+        /// end of the whole flow. Skipping it is also what keeps a box that spans a fragmentainer
+        /// boundary on one inline size across its fragments, per CSS Fragmentation Level 3 §2.
+        /// </para>
+        /// </remarks>
         private async ValueTask PlaceBlockBox(RGraphics g)
+        {
+            await ResolveOwnInlineSize(g);
+
+            (ParentBox ?? this).PlaceBlockChild(this);
+        }
+
+        /// <summary>
+        /// Resolves this box's own inline size — the half of placing a block-level box that is the box's
+        /// own to answer.
+        /// </summary>
+        /// <remarks>
+        /// Written as an extent rather than a width: <see cref="CssBoxProperties.ActualRight"/>'s setter
+        /// stores it as a size against the current <see cref="CssBoxProperties.Location"/>, so the frame
+        /// above is free to move the box afterwards and take the size with it.
+        /// </remarks>
+        private async ValueTask ResolveOwnInlineSize(RGraphics g)
         {
             // Because their width and height are set by CssTable, CssLayoutEngineFlex or CssLayoutEngineGrid
             if (Display != CssConstants.TableCell && Display != CssConstants.Table && Display != CssConstants.Flex && Display != CssConstants.InlineFlex && Display != CssConstants.Grid && Display != CssConstants.InlineGrid)
@@ -2603,13 +2634,40 @@ namespace PeachPDF.Html.Core.Dom
                 ActualRight = Location.X + width + ActualBoxSizeIncludedWidth;
             }
 
-            if (Display != CssConstants.TableCell)
-            {
-                if (Position is CssConstants.Static or CssConstants.Relative)
-                {
-                    var prevSibling = DomUtils.GetPreviousSibling(this, false);
+        }
 
-                    var left = ContainingBlock.ClientLeft;
+        /// <summary>
+        /// Assigns <paramref name="child"/>'s position in this frame, and registers the used page name it
+        /// lands on.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Everything here is resolved against boxes only this frame can see — the previous in-flow sibling
+        /// this frame placed, the keep-with-next run chained to it, and the fragmentainer that run started
+        /// in. That is why it is the parent's and not the child's, even though every field it writes belongs
+        /// to the child: a break point is between two children, so no child can answer it alone.
+        /// </para>
+        /// <para>
+        /// Synchronous, deliberately. Assigning an offset consults nothing that has to be fetched or
+        /// measured — the child's own size is already resolved by <see cref="ResolveOwnInlineSize"/> before
+        /// this runs — so a position is decided from what is already known.
+        /// </para>
+        /// <para>
+        /// The child may decline to be placed here at all: <c>§5.2</c>'s margin truncation can conclude that
+        /// the break falls <i>before</i> it, in which case this records the request and returns without
+        /// writing a position or a registration, and the child contributes no fragment to the fragmentainer
+        /// being filled.
+        /// </para>
+        /// </remarks>
+        private void PlaceBlockChild(CssBox child)
+        {
+            if (child.Display != CssConstants.TableCell)
+            {
+                if (child.Position is CssConstants.Static or CssConstants.Relative)
+                {
+                    var prevSibling = PreviousInFlowSibling(child);
+
+                    var left = child.ContainingBlock.ClientLeft;
                     // prevSibling.ActualBottom is already the outer border-box edge (CssBoxProperties.
                     // ActualBottom = Location.Y + content height + padding + border, per its own
                     // getter/ApplyHeight/MarginBottomCollapse - all three fold border-bottom in
@@ -2622,16 +2680,16 @@ namespace PeachPDF.Html.Core.Dom
                     // self-collapsing prevSibling always has zero border by definition
                     // (IsMarginCollapseThrough requires it), so the residual term vanishes there too.
                     // StaticBottom (not ActualBottom) so a relatively-positioned previous sibling's
-                    // visual offset doesn't shift this box - CSS 2.1 §9.4.3, relative offsets never
+                    // visual offset doesn't shift the child - CSS 2.1 §9.4.3, relative offsets never
                     // affect the layout of following content.
-                    var baseTop = (prevSibling == null ? ContainingBlock.ClientTop : ParentBox == null ? Location.Y : 0) + (prevSibling?.StaticBottom ?? 0);
-                    var top = baseTop + MarginTopCollapse(prevSibling);
+                    var baseTop = (prevSibling == null ? child.ContainingBlock.ClientTop : child.ParentBox == null ? child.Location.Y : 0) + (prevSibling?.StaticBottom ?? 0);
+                    var top = baseTop + child.MarginTopCollapse(prevSibling);
 
                     // CSS Fragmentation Level 3 §5.2: "When an unforced break occurs before or
                     // after a block-level box, any margins adjoining the break are truncated to
-                    // zero." A margin big enough to push this box across one or more page
+                    // zero." A margin big enough to push the child across one or more page
                     // boundaries by itself (as opposed to actual content straddling a boundary,
-                    // which BreakInside/orphans-widows handles separately, later in this method) is
+                    // which BreakInside/orphans-widows handles separately, later in this frame) is
                     // exactly that case - real UAs (and Prince, which this mirrors) discard the
                     // whole margin and start the box flush at the very next page boundary rather
                     // than paginating through a wall of blank pages. Acid2's own
@@ -2643,33 +2701,33 @@ namespace PeachPDF.Html.Core.Dom
                     // section, a margin AFTER a *forced* break is explicitly preserved, not
                     // truncated (only the margin BEFORE a forced break is - already handled above by
                     // bumping previousSiblingForBreak.ActualBottom to the next page's top) - so this
-                    // only applies when this box's own placement isn't already forced-break-governed.
-                    if (_resumeTopOverride is { } resumedTop)
+                    // only applies when the child's own placement isn't already forced-break-governed.
+                    if (child._resumeTopOverride is { } resumedTop)
                     {
-                        // The break before this box was taken on an earlier pass, which already worked
+                        // The break before the child was taken on an earlier pass, which already worked
                         // out where it lands and already pulled any keep-with-next run along. This pass
                         // places it there. Re-deriving the decision instead would reach the same
                         // "does not fit" conclusion and break again, forever.
-                        _resumeTopOverride = null;
+                        child._resumeTopOverride = null;
                         top = resumedTop;
                     }
-                    else if (_forcedBreakTop is { } forcedTop)
+                    else if (child._forcedBreakTop is { } forcedTop)
                     {
                         // The prologue worked out which slot the forced break lands in. Applied here,
-                        // to this box, rather than by inflating the previous sibling's height to reach
+                        // to the child, rather than by inflating the previous sibling's height to reach
                         // it: that predecessor's own geometry is not the break's to change.
                         //
                         // §5.2 truncates margins adjoining an *unforced* break only, so the margin on
                         // the new page's side of a forced break survives and opens that page. That is
-                        // this box's own margin collapsed with its adjoining first-child chain - which
+                        // the child's own margin collapsed with its adjoining first-child chain - which
                         // is what MarginTopCollapse computes for a box with no previous sibling, and
-                        // the break makes this box exactly that. The group computed against the real
+                        // the break makes the child exactly that. The group computed against the real
                         // previous sibling is the wrong quantity: it also holds that sibling's
                         // margin-bottom, which belongs to the page being left.
-                        _forcedBreakTop = null;
-                        PlacedByForcedBreak = true;
+                        child._forcedBreakTop = null;
+                        child.PlacedByForcedBreak = true;
 
-                        var forcedBreakMargin = MarginTopCollapse(null);
+                        var forcedBreakMargin = child.MarginTopCollapse(null);
                         top = forcedTop + forcedBreakMargin;
 
                         // §3.1's "one or two page breaks": the content after the break has to *begin*
@@ -2680,7 +2738,7 @@ namespace PeachPDF.Html.Core.Dom
                         //
                         // Gated on IsFragmenting because inside monolithic content (multicol's virtual
                         // single-column first pass, and the flex/grid/table engines) and during a
-                        // measurement pass at a provisional position, this box's coordinates are not
+                        // measurement pass at a provisional position, the child's coordinates are not
                         // where it ends up - a reservation made from them would materialize a blank
                         // page nowhere near the real content. A directional break degrades to a plain
                         // page break there, the same engine-independence boundary the other break
@@ -2697,40 +2755,40 @@ namespace PeachPDF.Html.Core.Dom
                         // reserving a page while the box merely moved to the next column honoured half of
                         // a decision.
                         for (var guard = 0;
-                             _forcedBreakSide is not PageSide.Any
-                             && HtmlContainer!.IsFragmenting
+                             child._forcedBreakSide is not PageSide.Any
+                             && child.HtmlContainer!.IsFragmenting
                              && guard < 4;
                              guard++)
                         {
-                            var landing = HtmlContainer.PageIndexOf(top + HtmlContainerInt.PageBoundaryEpsilon);
+                            var landing = child.HtmlContainer.PageIndexOf(top + HtmlContainerInt.PageBoundaryEpsilon);
 
-                            if (BreakValues.SlotIsOn(landing, _forcedBreakSide))
+                            if (BreakValues.SlotIsOn(landing, child._forcedBreakSide))
                                 break;
 
-                            HtmlContainer.SetBlankSlotReservation(this, landing);
-                            top = HtmlContainer.PageTopOf(landing + 1) + forcedBreakMargin;
+                            child.HtmlContainer.SetBlankSlotReservation(child, landing);
+                            top = child.HtmlContainer.PageTopOf(landing + 1) + forcedBreakMargin;
                         }
 
                         // §3.1: a forced *page* break is not a nested fragmentainer's to satisfy. The page
-                        // vehicle is realized by placement, and placing this box at `top` inside a column
+                        // vehicle is realized by placement, and placing the child at `top` inside a column
                         // puts it past that column's band - which the container's own overflow arm then
                         // reads as "start the next column", one column over instead of one page over. So
                         // the break is stated as a record instead, marked as escaping: the columns engine
                         // stops opening columns for it and hands it up to the page driver, which already
                         // knows how to open the page this target names.
-                        if (HtmlContainer!.IsFragmenting
-                            && HtmlContainer.CurrentFragmentainer is { HasOwnBand: true })
+                        if (child.HtmlContainer!.IsFragmenting
+                            && child.HtmlContainer.CurrentFragmentainer is { HasOwnBand: true })
                         {
-                            RequestBreakBefore(top, escapesNestedFragmentainer: true);
+                            child.RequestBreakBefore(top, escapesNestedFragmentainer: true);
                             return;
                         }
                     }
                     // A previous sibling that a forced break placed and that contributes no height of
                     // its own - the empty "<div class='page-break'>" marker - puts the break
-                    // immediately before this box, so this box's margin adjoins a *forced* break and
+                    // immediately before the child, so the child's margin adjoins a *forced* break and
                     // §5.2 preserves it rather than truncating it. Without this the flush-boundary
                     // convention below reads the marker's position (exactly a slot top, so one epsilon
-                    // earlier is the previous slot) as a boundary this box's margin crossed, and
+                    // earlier is the previous slot) as a boundary the child's margin crossed, and
                     // discards the margin.
                     //
                     // A *first* in-flow child has no previous sibling to resolve against, but the break
@@ -2740,10 +2798,10 @@ namespace PeachPDF.Html.Core.Dom
                     // root is excluded - it has nothing before it for a break to fall between, and a
                     // break-before published from the context root would have no parent link to travel
                     // up (see PublishBreakToTheContextRoot).
-                    else if (!_adjoinsForcedBreakPoint && ParentBox is not null
+                    else if (!child._adjoinsForcedBreakPoint && child.ParentBox is not null
                              && !(prevSibling is { PlacedByForcedBreak: true } marker && marker.IsMarginCollapseThrough()))
                     {
-                        var pageHeight = HtmlContainer!.PageSize.Height;
+                        var pageHeight = child.HtmlContainer!.PageSize.Height;
                         if (pageHeight > 0)
                         {
                             // Same shifted grid the fragment builder/the forced-break logic above use
@@ -2752,13 +2810,13 @@ namespace PeachPDF.Html.Core.Dom
                             // convention. The epsilons attribute a value flush ON a boundary to
                             // the earlier slot (a sibling ending exactly at a slot boundary is
                             // wholly inside it), mirroring the forced-break flush-fit rule above.
-                            var prevSlot = HtmlContainer.PageIndexOf(baseTop - HtmlContainerInt.PageBoundaryEpsilon);
-                            var naturalSlot = HtmlContainer.PageIndexOf(top - HtmlContainerInt.PageBoundaryEpsilon);
+                            var prevSlot = child.HtmlContainer.PageIndexOf(baseTop - HtmlContainerInt.PageBoundaryEpsilon);
+                            var naturalSlot = child.HtmlContainer.PageIndexOf(top - HtmlContainerInt.PageBoundaryEpsilon);
                             if (naturalSlot > prevSlot)
                             {
-                                var newTop = HtmlContainer.PageTopOf(prevSlot + 1);
+                                var newTop = child.HtmlContainer.PageTopOf(prevSlot + 1);
 
-                                // css-break §3.1 keep-with-next: this box is about to relocate to
+                                // css-break §3.1 keep-with-next: the child is about to relocate to
                                 // the next page's content top, which would otherwise strand a
                                 // preceding break-after/break-before: avoid run (e.g. the UA default
                                 // `h1-h6 { page-break-after: avoid }`) alone at the bottom of the
@@ -2766,24 +2824,24 @@ namespace PeachPDF.Html.Core.Dom
                                 // pre-check (LayoutCells) and OffsetTopWithKeepWithNextRun, which this
                                 // mirrors. Pull the run along when it starts on this same page and its
                                 // own height still fits the destination page's band; an unsatisfiable
-                                // avoid is relaxed per spec and this box moves alone, exactly as
+                                // avoid is relaxed per spec and the child moves alone, exactly as
                                 // before. Unlike those two siblings' guards, this one doesn't also
-                                // require this box's own (not-yet-laid-out) content to fit alongside
+                                // require the child's own (not-yet-laid-out) content to fit alongside
                                 // the run: a break-inside:avoid/orphans-widows box must land whole or
-                                // the move is pointless, but this box is free to fragment across
+                                // the move is pointless, but the child is free to fragment across
                                 // further pages on its own afterward (a table re-applies its per-row
                                 // break logic, an ordinary block just keeps flowing) - only the run
                                 // needs a page to itself.
-                                var keepWithNextRun = DomUtils.GetPrecedingKeepWithNextRun(this, FragmentationContext.Page);
+                                var keepWithNextRun = DomUtils.GetPrecedingKeepWithNextRun(child, FragmentationContext.Page);
                                 if (keepWithNextRun.Count > 0)
                                 {
                                     var runTop = keepWithNextRun[0].Location.Y;
                                     var extraAbove = top - runTop;
                                     var runStartsOnSamePage =
-                                        HtmlContainer.PageIndexOf(runTop - HtmlContainerInt.PageBoundaryEpsilon) == prevSlot;
+                                        child.HtmlContainer.PageIndexOf(runTop - HtmlContainerInt.PageBoundaryEpsilon) == prevSlot;
 
                                     if (extraAbove > 0 && runStartsOnSamePage
-                                        && extraAbove <= HtmlContainer.PageBandHeightOf(prevSlot + 1))
+                                        && extraAbove <= child.HtmlContainer.PageBandHeightOf(prevSlot + 1))
                                     {
                                         var groupOffset = newTop - runTop;
 
@@ -2796,15 +2854,15 @@ namespace PeachPDF.Html.Core.Dom
                                     }
                                 }
 
-                                // The margin pushed this box out of the fragmentainer being filled, so
+                                // The margin pushed the child out of the fragmentainer being filled, so
                                 // the break falls *before* it: it produces no fragment here at all, and
                                 // resumes at newTop in the next one (css-break-3 §4.4). Where breaking
                                 // is not live - a measurement pass, or monolithic content - the box is
                                 // simply placed at that target, exactly as it was before this became a
                                 // break decision.
-                                if (HtmlContainer.IsFragmenting)
+                                if (child.HtmlContainer.IsFragmenting)
                                 {
-                                    RequestBreakBefore(newTop);
+                                    child.RequestBreakBefore(newTop);
                                     return;
                                 }
 
@@ -2813,14 +2871,14 @@ namespace PeachPDF.Html.Core.Dom
                         }
                     }
 
-                    Location = new RPoint(left + ActualMarginLeft, top);
-                    ActualBottom = top;
+                    child.Location = new RPoint(left + child.ActualMarginLeft, top);
+                    child.ActualBottom = top;
 
 
-                    CssLayoutEngine.FloatBox(this);
+                    CssLayoutEngine.FloatBox(child);
                 }
 
-                if (Position is CssConstants.Relative)
+                if (child.Position is CssConstants.Relative)
                 {
                     // CSS 2.1 §9.4.3: for each axis, the "near" offset (left/top) wins when set; if
                     // it's auto and the "far" offset (right/bottom) isn't, the far offset applies
@@ -2834,22 +2892,22 @@ namespace PeachPDF.Html.Core.Dom
                     // StaticBottom recovers by backing RelativeOffsetY out again. Acid2's
                     // ".smile div { position: relative; bottom: -1em }" is exactly this: the mouth
                     // bar paints 1em lower, but ".chin"'s position must not move with it.
-                    var offsetX = Left is not CssConstants.Auto || Right is CssConstants.Auto
-                        ? CssValueParser.ParseLength(Left, ActualWidth, this)
-                        : -CssValueParser.ParseLength(Right, ActualWidth, this);
-                    var offsetY = Top is not CssConstants.Auto || Bottom is CssConstants.Auto
-                        ? CssValueParser.ParseLength(Top, ActualHeight, this)
-                        : -CssValueParser.ParseLength(Bottom, ActualHeight, this);
+                    var offsetX = child.Left is not CssConstants.Auto || child.Right is CssConstants.Auto
+                        ? CssValueParser.ParseLength(child.Left, child.ActualWidth, child)
+                        : -CssValueParser.ParseLength(child.Right, child.ActualWidth, child);
+                    var offsetY = child.Top is not CssConstants.Auto || child.Bottom is CssConstants.Auto
+                        ? CssValueParser.ParseLength(child.Top, child.ActualHeight, child)
+                        : -CssValueParser.ParseLength(child.Bottom, child.ActualHeight, child);
 
-                    RelativeOffsetX = offsetX;
-                    RelativeOffsetY = offsetY;
-                    Location = new RPoint(Location.X + offsetX, Location.Y + offsetY);
-                    ActualBottom = Location.Y;
+                    child.RelativeOffsetX = offsetX;
+                    child.RelativeOffsetY = offsetY;
+                    child.Location = new RPoint(child.Location.X + offsetX, child.Location.Y + offsetY);
+                    child.ActualBottom = child.Location.Y;
                 }
 
-                if (Position is CssConstants.Absolute)
+                if (child.Position is CssConstants.Absolute)
                 {
-                    var nearestPositionedAncestor = DomUtils.GetNearestPositionedAncestor(this);
+                    var nearestPositionedAncestor = DomUtils.GetNearestPositionedAncestor(child);
 
                     // CSS 2.1 §10.3.7: `left`/`top` on an absolutely positioned box are measured
                     // from the containing block's PADDING edge (ClientLeft/ClientTop - inside the
@@ -2860,16 +2918,16 @@ namespace PeachPDF.Html.Core.Dom
                     // "[class~=one].first.one { position:absolute; margin: 36px 0 0 60px; }" inside
                     // ".picture" (which has a 1em border) exercises both of these: the missing
                     // margin alone lands the box ~36px/60px off, on top of the next sibling.
-                    var left = nearestPositionedAncestor.ClientLeft + ActualMarginLeft +
-                               CssValueParser.ParseLength(Left, nearestPositionedAncestor.ActualWidth, this);
+                    var left = nearestPositionedAncestor.ClientLeft + child.ActualMarginLeft +
+                               CssValueParser.ParseLength(child.Left, nearestPositionedAncestor.ActualWidth, child);
 
-                    var top = nearestPositionedAncestor.ClientTop + ActualMarginTop +
-                              CssValueParser.ParseLength(Top, nearestPositionedAncestor.ActualHeight, this);
+                    var top = nearestPositionedAncestor.ClientTop + child.ActualMarginTop +
+                              CssValueParser.ParseLength(child.Top, nearestPositionedAncestor.ActualHeight, child);
 
-                    Location = new RPoint(left, top);
+                    child.Location = new RPoint(left, top);
                 }
 
-                if (Position is CssConstants.Fixed)
+                if (child.Position is CssConstants.Fixed)
                 {
                     // Like every other positioning scheme (see the Absolute branch above, fixed for
                     // the same omission), the box's own margin still applies on top of the left/top
@@ -2881,16 +2939,16 @@ namespace PeachPDF.Html.Core.Dom
                     // (CSS2.1 §10.1: the initial containing block), not ScrollOffset (a scroll
                     // position, not a size) - not exercised by this fixture (uses em, not %) but
                     // wrong regardless.
-                    var left = ActualMarginLeft + CssValueParser.ParseLength(Left, HtmlContainer!.PageSize.Width, this);
-                    var top = ActualMarginTop + CssValueParser.ParseLength(Top, HtmlContainer!.PageSize.Height, this);
-                    Location = new RPoint(left, top);
+                    var left = child.ActualMarginLeft + CssValueParser.ParseLength(child.Left, child.HtmlContainer!.PageSize.Width, child);
+                    var top = child.ActualMarginTop + CssValueParser.ParseLength(child.Top, child.HtmlContainer!.PageSize.Height, child);
+                    child.Location = new RPoint(left, top);
                 }
             }
 
             // Register the used page name BEFORE any child lays out: descendants' page-break
-            // decisions consult the per-page geometry table, whose slot bands from this box's
+            // decisions consult the per-page geometry table, whose slot bands from the child's
             // page onward depend on this name being visible (PageRuleResolver.
-            // ActiveNameAtSlotStart) - registering only after child layout (this method's tail,
+            // ActiveNameAtSlotStart) - registering only after child layout (the epilogue's tail,
             // formerly the sole registration point) let a multi-page named element's own content
             // paginate against the PREVIOUS name's bands. We register the *used* name whenever this
             // box either carries its own explicit name or is a used-name transition (see
@@ -2901,21 +2959,32 @@ namespace PeachPDF.Html.Core.Dom
             // through OffsetTop, which keeps the registration in sync via MoveNamedPageElement;
             // engines that relocate this box directly (e.g. CssLayoutEngineTable's whole-table
             // pre-check) are re-synced by the tail check.
-            if (_shouldRegisterPage)
+            if (child._shouldRegisterPage)
             {
                 // Registration appends, and this box can be placed more than once inside one layout: a
                 // break before it is taken on a later pass, or a column driver re-places it in the next
                 // column. Withdraw what the previous placement registered rather than accumulating one
                 // entry per position it has occupied - the same leak the prologue's own withdrawal
                 // closes for the paths that do re-run it.
-                if (RegisteredNamedPageElement is { } stale)
+                if (child.RegisteredNamedPageElement is { } stale)
                 {
-                    HtmlContainer!.UnregisterNamedPageElement(stale);
+                    child.HtmlContainer!.UnregisterNamedPageElement(stale);
                 }
 
-                RegisteredNamedPageElement = HtmlContainer!.RegisterNamedPageElement(UsedPageName, NamedPageRegistrationY());
+                child.RegisteredNamedPageElement = child.HtmlContainer!.RegisterNamedPageElement(child.UsedPageName, child.NamedPageRegistrationY());
             }
         }
+
+        /// <summary>
+        /// The in-flow sibling this frame placed immediately before <paramref name="child"/>, or null when
+        /// nothing in this frame precedes it.
+        /// </summary>
+        /// <remarks>
+        /// Null for a box this frame does not own, which is how the root — standing in for its own frame —
+        /// gets the answer it has always had: a box with no parent has no previous sibling.
+        /// </remarks>
+        private CssBox? PreviousInFlowSibling(CssBox child) =>
+            ReferenceEquals(child.ParentBox, this) ? DomUtils.GetPreviousSibling(child, false) : null;
 
         /// <summary>
         /// Everything that must happen exactly once, after this box's content is complete: resolving its
