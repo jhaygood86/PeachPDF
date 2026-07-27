@@ -929,9 +929,18 @@ namespace PeachPDF.CSS
             var parent = _nodes.OfType<StyleRule>().FirstOrDefault();
             var preludeText = _lexer.Source.Text.Substring(preludeStart, braceStart - preludeStart);
 
-            var selector = parent is null
+            // The enclosing rule has to have a RESOLVED selector, not merely exist: CreateStyle pushes
+            // its rule onto _nodes before filling declarations and only drops it afterwards, so a rule
+            // whose own selector failed to parse is on the stack while its block is being consumed.
+            // Reading `parent.SelectorText` there dereferences a null Selector. Asking for the text
+            // directly also keeps the "no parent selector" case distinct from "empty parent selector",
+            // which ResolveNestedSelector would scope under `:is(*)` - resolving a nested rule against
+            // the universal selector would apply it to the whole document instead of discarding it.
+            var parentText = parent?.Selector?.Text;
+
+            var selector = parentText is null
                 ? null
-                : _parser.ParseSelector(ResolveNestedSelector(preludeText, parent.SelectorText));
+                : _parser.ParseSelector(ResolveNestedSelector(preludeText, parentText));
 
             // Always consume the block (via a rule pushed on _nodes so nested-within-nested resolves) to
             // keep the parser in sync; only attach it when the selector actually resolved.

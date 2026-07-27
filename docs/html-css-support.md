@@ -740,6 +740,25 @@ PeachPDF evaluates a subset of CSS selectors. Selectors that are parsed but not 
 
 CSS comments (`/* ... */`) are supported anywhere in a stylesheet, including between selectors and declarations, and are stripped before parsing.
 
+### Recognized but unmatchable selectors
+
+A selector list is only as valid as its least-understood member: per [CSS Selectors 3 §4](https://www.w3.org/TR/selectors-3/#Conformance), an unknown pseudo-class or pseudo-element invalidates the **whole** list it appears in, discarding the declarations for the selectors alongside it too. PeachPDF therefore **recognizes** the selectors it can never match, rather than treating them as unknown — they parse, they select nothing, and the rest of their list still applies:
+
+```css
+/* The :root half applies; :host selects nothing. Both declarations survive. */
+:root, :host { --brand: #2563eb; --spacing: .25rem; }
+```
+
+This covers the state-based pseudo-classes a static PDF has no state for (`:hover`, `:focus`, `:visited`, `:checked`, `:disabled`, `:enabled`, `:valid`, `:user-invalid`, `:autofill`, `:target`, `:open`, `:popover-open`, `:modal`, `:fullscreen`, `:picture-in-picture`, the media-playback set `:playing`/`:paused`/`:seeking`/`:buffering`/`:stalled`/`:muted`/`:volume-locked`, …), the Shadow DOM selectors PeachPDF builds no shadow trees for (`:host`, `:host()`, `:host-context()`, `:defined`, `:state()`, `::part()`, `::slotted()`), the pseudo-elements it generates no box for (`::placeholder`, `::backdrop`, `::file-selector-button`, `::details-content`, `::selection`, `::target-text`, `::spelling-error`, `::grammar-error`, `::cue`, `::highlight()`, `::view-transition*`), and **any vendor extension** — a leading hyphen ([CSS Syntax 3 §2](https://www.w3.org/TR/css-syntax-3/)) marks a UA-internal box or state, so `::-webkit-file-upload-button`, `::-moz-focus-inner`, `::-webkit-input-placeholder`, `:-moz-focusring` and their kin are all accepted wholesale. `:-webkit-any()`/`:-moz-any()` are the legacy vendor spellings of `:is()` and behave exactly like it.
+
+Pseudo-class and pseudo-element names are matched ASCII case-insensitively, so `:HOVER` and `::Before` are recognized too.
+
+This is deliberately **not** blanket acceptance of anything unknown: a genuine typo (`:bogus-pseudo`) still invalidates its selector list, exactly as it does in a browser.
+
+Three of the recognized names are unmatched only because they are unimplemented, not because a PDF lacks the state for them: `:empty`, `:any-link` and `:scope` depend solely on the document tree and are evaluable in principle. They currently select nothing.
+
+> **Migration note.** Earlier versions dropped these rules entirely. A rule that names one of the selectors above *alongside* a selector PeachPDF does match now applies to the matching half, where before it applied to nothing — so a document that (knowingly or not) depended on such a rule being discarded will render differently. See [Forward compatibility](#forward-compatibility).
+
 ### Basic Selectors
 
 | Selector | Syntax | Notes |
@@ -790,7 +809,7 @@ A nested selector is resolved against its parent (`&` takes the parent's specifi
 
 ### Pseudo-elements
 
-`::before`, `::after`, `::marker`, `::first-letter`, and `::first-line` are supported. All other pseudo-elements are parsed but have no effect.
+`::before`, `::after`, `::marker`, `::first-letter`, and `::first-line` are supported. All other pseudo-elements are parsed but have no effect — see [Recognized but unmatchable selectors](#recognized-but-unmatchable-selectors) for which names are recognized and why that matters for the rest of their selector list.
 
 | Pseudo-element | Notes |
 |----------------|-------|
@@ -856,11 +875,12 @@ Because PeachPDF renders a static PDF with no interactive or dynamic state, stat
 | `:is(S)`, `:matches(S)` | Matches an element that matches any selector in the (comma-separated, forgiving) list `S`. `:matches()` is the legacy alias for `:is()` |
 | `:where(S)` | Like `:is(S)`, but always contributes **zero specificity** (CSS Selectors 4 §16) — so a rule written with `:where(…)` is overridden by any normal selector, which is how reset/normalize layers stay low-priority |
 | `:has(S)` | Matches an element with a descendant matching `S`; `S` may be a comma-separated selector list. Only the default descendant relationship is supported — CSS4 leading-combinator forms (`:has(> S)`, `:has(+ S)`, `:has(~ S)`) are not supported and are silently discarded by the parser |
+| `:-webkit-any(S)`, `:-moz-any(S)` | The legacy vendor spellings of `:is(S)`, with identical behaviour |
 | All others | Parsed but not matched — rules are silently ignored |
 
 Known gap: `:nth-column()`/`:nth-last-column()`'s same-row-only limitation described above.
 
-State-based pseudo-classes other than `:link` (`:hover`, `:focus`, `:active`, `:visited`, `:checked`, `:disabled`, `:empty`, etc.) are parsed but not applied — PeachPDF renders a static PDF with no browsing history or interaction state, so `:visited`/`:active` never match by design.
+State-based pseudo-classes other than `:link` (`:hover`, `:focus`, `:active`, `:visited`, `:checked`, `:disabled`, `:empty`, etc.) are parsed but not applied — PeachPDF renders a static PDF with no browsing history or interaction state, so `:visited`/`:active` never match by design. Crucially they are *recognized*, so they do not invalidate a selector list they share with a selector that does match; see [Recognized but unmatchable selectors](#recognized-but-unmatchable-selectors) for the full set and for the vendor-extension rule.
 
 ### Cascade & Specificity
 

@@ -36,7 +36,11 @@ namespace PeachPDF.CSS
 
         public string SelectorText
         {
-            get => Selector.Text;
+            // Null-safe because a rule whose selector failed to parse has no Selector child at all (the
+            // setter removes it), and such a rule is observable through ToCss above while it is still on
+            // StylesheetComposer's node stack. Callers that must tell "no selector" from "empty selector"
+            // read Selector?.Text instead - see CreateNestedStyleRule.
+            get => Selector?.Text ?? string.Empty;
             set => Selector = Parser.ParseSelector(value);
         }
 
