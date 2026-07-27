@@ -5,6 +5,38 @@
 </main>
 
 <footer>
-    Rendered by <a href="https://peachpdf.net">PeachPDF</a> — a pure .NET HTML&nbsp;→&nbsp;PDF engine, here
-    running entirely in your browser via WebAssembly.
+    <p>
+        Rendered by <a href="https://peachpdf.net">PeachPDF</a> — a pure .NET HTML&nbsp;→&nbsp;PDF engine,
+        here running entirely in your browser via WebAssembly.
+    </p>
+    <p>
+        @if (DemoBuildInfo.IsPrerelease)
+        {
+            <text>
+                This is running a prerelease version of PeachPDF on commit
+                <a href="@CommitUrl">@ShortCommit</a>.
+            </text>
+        }
+        else
+        {
+            <text>
+                This is running on <a href="@ReleaseUrl">@ReleaseLabel</a>.
+            </text>
+        }
+    </p>
 </footer>
+
+@code {
+    // Composed here rather than interpolated into the markup: Razor reads an `@` sitting between word
+    // characters - as in `v@DemoBuildInfo.Version` - as an email address and emits it literally.
+    private const string RepositoryUrl = "https://github.com/jhaygood86/PeachPDF";
+
+    private static string ShortCommit =>
+        DemoBuildInfo.Commit.Length >= 7 ? DemoBuildInfo.Commit[..7] : DemoBuildInfo.Commit;
+
+    private static string CommitUrl => $"{RepositoryUrl}/commit/{DemoBuildInfo.Commit}";
+
+    private static string ReleaseUrl => $"{RepositoryUrl}/releases/tag/v{DemoBuildInfo.Version}";
+
+    private static string ReleaseLabel => $"PeachPDF v{DemoBuildInfo.Version}";
+}

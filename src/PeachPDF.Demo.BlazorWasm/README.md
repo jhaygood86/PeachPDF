@@ -33,12 +33,22 @@ web or to a local file resolves to nothing.
 - **The tab freezes while rendering.** WebAssembly in the browser is single-threaded and PeachPDF's
   pipeline is synchronous once it starts. Making this genuinely responsive needs
   `WasmEnableThreads`, which requires COOP/COEP response headers that GitHub Pages cannot serve.
+- **This is not a performance benchmark.** Blazor WebAssembly interprets IL rather than JIT-compiling it,
+  so the same document renders far faster on any non-browser host. Enabling `RunAOTCompilation` would
+  narrow the gap at a large cost in download size and build time, and it is not what this demo is for.
 - **Fonts are WOFF 1.0, not WOFF2.** WOFF2 is Brotli-compressed and a browser/WebAssembly host has no
   Brotli decoder — `System.IO.Compression.Brotli` throws there, and installing the `wasm-tools` workload
   to natively relink the runtime does not change it (measured; the limitation is managed-side). WOFF 1.0
   uses deflate and works, at about 2.3 MB for the twelve faces against WOFF2's 1.6 MB.
 - **`hyphens: auto` does nothing here**, for the same reason: the hyphenation patterns are
-  Brotli-compressed. Text lays out unhyphenated rather than the render failing.
+  Brotli-compressed. Text lays out unhyphenated rather than the render failing. The page says so.
+- **The footer names the build it is running.** A `GenerateDemoBuildInfo` target bakes in the library's
+  `PackageVersion`, this commit, and whether the two agree — a release is tagged `v{PackageVersion}`, so a
+  commit that is not that tag's commit is a prerelease of it, and the footer links the commit instead of
+  the release. Both git calls tolerate failure, so the demo still builds from a source archive with no
+  repository; with no commit to compare, the version alone is the honest answer. Note this makes
+  `pages.yml` check out full history — a shallow clone has no tags, and every deploy would otherwise
+  describe itself as a prerelease.
 - **`Arial Narrow` renders at normal width.** Liberation Sans Narrow is not part of Liberation 2.x — it
   ships separately under a different licence — so no metrically compatible narrow face is bundled.
 - **WebP images do not render.** PeachPDF's image decoder does not support the format.

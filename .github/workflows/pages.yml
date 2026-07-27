@@ -19,7 +19,12 @@ jobs:
     if: "!github.event.release.prerelease"
     runs-on: ubuntu-latest
     steps:
+      # Full history, so the demo's build-info step can tell whether this commit is the one tagged
+      # v<PackageVersion> - a shallow checkout has no tags to compare against, and every deploy would
+      # then describe itself as a prerelease.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -131,6 +136,10 @@ jobs:
           # here would publish a demo that 404s every one of its own files.
           grep -q '<base href="/" />' demo-publish/wwwroot/index.html
           sed -i 's|<base href="/" />|<base href="/demo/" />|' demo-publish/wwwroot/index.html
+
+          # jekyll-build-pages runs in a container as root, so it leaves _site owned by root while
+          # this step runs as the runner user - writing into it fails outright without this.
+          sudo chown -R "$(id -u):$(id -g)" _site
 
           mkdir -p _site/demo
           cp -r demo-publish/wwwroot/. _site/demo/
