@@ -1729,6 +1729,34 @@ var monolithicHtml = """
         <span class="tag">same line</span><h2>Its neighbour</h2>
         <p>The two lines arrive together, with the spacing between them preserved.</p></div>
     </div>
+
+    <h1>Wrap-reverse reads down the page, not down the source</h1>
+    <p><code>flex-wrap: wrap-reverse</code> reverses where the lines sit, so the first line in the source
+    is the <i>last</i> one down the page. What follows a line that moves is the line physically below it,
+    which here is the <i>earlier</i> one in the source; and the break point between the two is the one
+    above it. Read the source order as though it ran down the page and the moved line is drawn over the
+    top of a line that stayed where it was.</p>
+    """
+    + string.Concat(Enumerable.Range(120, 8).Select(i =>
+        $"<p>Filler paragraph {i}. This run puts the container's upper line &mdash; the second of the two "
+        + "in the source &mdash; across the page boundary.</p>"))
+    + """
+    <div style="display:flex; flex-wrap:wrap-reverse; gap:8pt; border:1px dashed #a3a3a3; padding:6pt">
+      <div class="card" style="width:38%; margin:0; break-inside:avoid">
+        <span class="tag">source line 1</span><h2>Item 1</h2>
+        <p>Last down the page, though first in the source. It follows the line above it rather than
+        staying behind when that line leaves.</p></div>
+      <div class="card" style="width:38%; margin:0; break-inside:avoid">
+        <span class="tag">source line 1</span><h2>Item 2</h2>
+        <p>Its neighbour on the same line, travelling with it as a line always does.</p></div>
+      <div class="card" style="width:38%; margin:0; break-inside:avoid">
+        <span class="tag">source line 2</span><h2>Item 3</h2>
+        <p>First down the page. This line meets the boundary and may not be cut, so it opens the next
+        page.</p></div>
+      <div class="card" style="width:38%; margin:0; break-inside:avoid">
+        <span class="tag">source line 2</span><h2>Item 4</h2>
+        <p>The two lines arrive in the order they are drawn in, one below the other.</p></div>
+    </div>
     </body></html>
     """;
 
@@ -1739,7 +1767,8 @@ await SaveShowcaseAsync("paged_media_monolithic_content", "Paged Media", "Monoli
     + "moved one follow it rather than staying put. A forced break is taken from either side of a break "
     + "point, so break-after on one line opens the next page for the line after it — and break-after: "
     + "avoid there moves the earlier line too, so a heading is not stranded on the page its section "
-    + "body just left.",
+    + "body just left. Under flex-wrap: wrap-reverse all of this is read down the page rather than down "
+    + "the source, which is the reverse order there.",
     monolithicHtml, new PdfGenerateConfig { PageSize = PageSize.A5 });
 
 // ── orphans / widows showcase ──────────────────────────────────────────────
