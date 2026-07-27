@@ -557,14 +557,36 @@ namespace PeachPDF.Html.Core.Utils
 
         public static CssBox? GetFirstIntersectingFloatBox(CssBox reference, CssFloatCoordinates coordinates, string floatProp)
         {
+            var container = reference.HtmlContainer;
+
+            // Counted before the short-circuit below, so the count says how often layout asked the
+            // question - which is what makes "the scan visited no boxes" evidence that the short-circuit
+            // worked rather than evidence that nothing ever called it.
+            container?.RecordFloatScanCall();
+
             // Walking up to the root and re-scanning every preceding sibling's whole subtree below is
             // O(document size) per call; for the very common case of a document with no floated boxes
             // at all, skip it entirely rather than pay that cost for a lookup that can never succeed.
-            if (reference.HtmlContainer?.HasFloatedBoxes != true)
+            if (container?.HasFloatedBoxes != true)
             {
                 return null;
             }
 
+            var boxesVisited = 0;
+            var found = FindIntersectingFloatBox(reference, coordinates, floatProp, ref boxesVisited);
+            container.RecordFloatScanBoxVisits(boxesVisited);
+            return found;
+        }
+
+        /// <summary>
+        /// The walk itself: climb to the root, scanning each level's preceding siblings' subtrees.
+        /// </summary>
+        /// <param name="reference">The box the lookup starts from.</param>
+        /// <param name="coordinates">The area a float has to intersect to be returned.</param>
+        /// <param name="floatProp">Which side's floats to look for.</param>
+        /// <param name="boxesVisited">Accumulator, not an input: every box the walk examines is added to it.</param>
+        private static CssBox? FindIntersectingFloatBox(CssBox reference, CssFloatCoordinates coordinates, string floatProp, ref int boxesVisited)
+        {
             while (true)
             {
                 if (reference.ParentBox is null)
@@ -576,7 +598,7 @@ namespace PeachPDF.Html.Core.Utils
 
                 for (var i = 0; i < currentBoxIdx; i++)
                 {
-                    var next = GetNextIntersectingFloatBox(reference.ParentBox.Boxes[i], coordinates, floatProp);
+                    var next = GetNextIntersectingFloatBox(reference.ParentBox.Boxes[i], coordinates, floatProp, ref boxesVisited);
 
                     if (next is not null)
                     {
@@ -916,8 +938,10 @@ namespace PeachPDF.Html.Core.Utils
             return false;
         }
 
-        private static CssBox? GetNextIntersectingFloatBox(CssBox box, CssFloatCoordinates coordinates, string floatProp)
+        private static CssBox? GetNextIntersectingFloatBox(CssBox box, CssFloatCoordinates coordinates, string floatProp, ref int boxesVisited)
         {
+            boxesVisited++;
+
             if (IsFloatIntersecting(coordinates, floatProp, box))
             {
                 return box;
@@ -925,7 +949,7 @@ namespace PeachPDF.Html.Core.Utils
 
             foreach (var childBox in box.Boxes)
             {
-                var foundBox = GetNextIntersectingFloatBox(childBox, coordinates, floatProp);
+                var foundBox = GetNextIntersectingFloatBox(childBox, coordinates, floatProp, ref boxesVisited);
                 if (foundBox != null)
                 {
                     return foundBox;

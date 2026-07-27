@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text;
 using PeachPDF;
 using PeachPDF.Adapters;
@@ -17,7 +16,14 @@ namespace PeachPDF.Tests.Integration
     /// line layout, at every ancestor level - regardless of whether the document had any floated content
     /// at all. These tests confirm float-avoidance still works correctly when floats ARE present, and
     /// that a float-free document (the common case, and the one the short-circuit targets) still lays
-    /// out and renders within a sane time bound.
+    /// out doing a constant amount of float-scan work per box rather than an O(document size) amount.
+    /// <para>
+    /// The complexity guard asserts <see cref="HtmlContainerInt.FloatScanBoxVisits"/> and
+    /// <see cref="HtmlContainerInt.FloatScanCalls"/> - counts, not elapsed time. A wall-clock bound here
+    /// was flaky on a contended CI runner (one job runs both target frameworks' suites under coverage
+    /// instrumentation, with xUnit running collections in parallel) and could not be fixed by raising
+    /// the bound, since raising it is exactly what removes its ability to see the regression it guards.
+    /// </para>
     /// </summary>
     public class FloatLayoutRegressionTests
     {
@@ -90,30 +96,128 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task ManyNestedBlocksWithoutFloats_RendersWithinASaneTimeBound()
+        public async Task ManyNestedBlocksWithoutFloats_FloatScanVisitsNoBoxes()
         {
-            // Regression guard for the O(document size) walk that GetFirstIntersectingFloatBox used
-            // to perform for every box, at every ancestor level, even with zero floats anywhere. This
-            // document has no floats, so HasFloatedBoxes should short-circuit the whole thing; if that
-            // regresses, this - a fairly modest document - would take dramatically longer than the
-            // generous bound below (the original bug scaled towards seconds even for smaller documents
-            // than the 100-section one used here).
+            // Regression guard for the O(document size) walk that GetFirstIntersectingFloatBox used to
+            // perform for every box, at every ancestor level, even with zero floats anywhere. This
+            // document has no floats, so HasFloatedBoxes should short-circuit the whole thing - which is
+            // an exact, countable statement: the scan is asked its question thousands of times and must
+            // answer every one of them without examining a single box.
+            //
+            // The count is what is asserted, deliberately, and not the elapsed time: a wall-clock bound
+            // cannot be made reliable on a shared CI runner, and every raise of such a bound costs it
+            // more of the sensitivity it exists for.
+            var (root, container) = await BuildAndLayout(BuildRepeatedSectionsHtml(sectionCount: 40));
+            var boxCount = CountBoxes(root);
+
+            // Without this, "visited no boxes" could just as well mean layout never asked - and
+            // FloatScanCounters_CountTheWalkTheyGuard_WhenAFloatIsPresent pins the same counter to real
+            // work in the case where the walk does run.
+            Assert.True(container.FloatScanCalls > 0,
+                "layout should have asked for an intersecting float many times over a document this size; " +
+                "a zero call count means this test no longer exercises the float scan at all");
+
+            Assert.True(container.FloatScanBoxVisits == 0,
+                $"the float scan examined {container.FloatScanBoxVisits} boxes over a document with no floats " +
+                "in it; HasFloatedBoxes should have answered every one of those lookups without a tree walk, " +
+                "so any non-zero count is the O(document size) walk per box returning");
+
+            // Sanity: the counted calls really are spread over the whole document, not a handful of boxes.
+            Assert.True(container.FloatScanCalls > boxCount / 2,
+                $"{container.FloatScanCalls} float lookups over {boxCount} boxes is far fewer than " +
+                "expected - the fixture has probably stopped laying out the document it means to");
+        }
+
+        [Fact]
+        public async Task FloatFreeDocument_FloatScanWorkPerBoxDoesNotGrowWithDocumentSize()
+        {
+            // The property the guard above protects, stated as a growth curve rather than a single point:
+            // quadruple the document and the float scan's work per box must stay put.
+            //
+            // The load-bearing assertion is the one on Visits. Removing the short-circuit does not change
+            // how OFTEN layout asks for an intersecting float - only how far each ask walks - so the call
+            // count is flat either way (measured: calls = 5 x line count + 3, with and without it). Visits
+            // is the measure that moves, from 0 to the O(document size) walk per box, and asserting it
+            // against the box count is the O(n) vs O(n^2) statement.
+            //
+            // The two assertions on Calls guard a different hypothetical: a future caller that asks the
+            // scan once per descendant rather than once per box needing line layout. Keeping both means
+            // this test still says something if the regression arrives from that direction instead.
+            //
+            // Both measures are counts, so a contended runner cannot move them: the numbers below are
+            // identical on a loaded machine and an idle one.
+            List<(int Sections, int Boxes, long Calls, long Visits)> samples = [];
+
+            foreach (var sections in new[] { 10, 20, 40 })
+            {
+                var (root, container) = await BuildAndLayout(BuildRepeatedSectionsHtml(sections));
+                samples.Add((sections, CountBoxes(root), container.FloatScanCalls, container.FloatScanBoxVisits));
+            }
+
+            foreach (var sample in samples)
+            {
+                // O(n) vs O(n^2), as one bound: with the short-circuit this is 0 at every size. Without it,
+                // each of the ~2 lookups per box walks to the root re-scanning every preceding sibling's
+                // subtree, so the total lands in the millions for the largest sample here.
+                Assert.True(sample.Visits <= sample.Boxes,
+                    $"the float scan examined {sample.Visits} boxes laying out {sample.Boxes} float-free boxes " +
+                    $"({sample.Sections} sections); with no floats in the document it should examine none, and " +
+                    "anything growing faster than the box count is the O(document size) walk per box returning");
+
+                // The lookups themselves must also stay proportional to the document. Measured at ~2.1 per
+                // box here, but the constant is deliberately loose: the count aggregates across every
+                // LayoutDocument invocation one PerformLayout makes, and a fixture with per-page margins
+                // re-runs that loop several times (see FloatScanCalls' own documentation).
+                Assert.True(sample.Calls <= 20 * sample.Boxes,
+                    $"{sample.Calls} float lookups for {sample.Boxes} boxes ({sample.Sections} sections) is more " +
+                    "than a constant number of lookups per box");
+            }
+
+            // Lookups per box across a 4x document (measured 2.068 -> 2.079, i.e. a ratio of 1.005): a
+            // caller that asked per descendant instead of per box would push this towards 4.
+            var smallest = samples[0];
+            var largest = samples[^1];
+            var smallestRate = (double)smallest.Calls / smallest.Boxes;
+            var largestRate = (double)largest.Calls / largest.Boxes;
+
+            Assert.True(largestRate <= 2.0 * smallestRate,
+                $"float lookups per box grew from {smallestRate:F2} at {smallest.Sections} sections to " +
+                $"{largestRate:F2} at {largest.Sections} sections - how often the scan is asked should not " +
+                "depend on how big the document is");
+        }
+
+        [Fact]
+        public async Task FloatScanCounters_CountTheWalkTheyGuard_WhenAFloatIsPresent()
+        {
+            // The counters above are only evidence if they can be non-zero. With a float in the document
+            // the short-circuit does not fire, the walk runs for real, and both counters move - so a
+            // future change that quietly stopped counting would fail here rather than silently turn the
+            // two guards above into assertions about nothing.
+            var (_, container) = await BuildAndLayout(Wrap(@"
+                <div style='width:300pt;'>
+                    <div style='float:left; width:100pt; height:50pt;'></div>
+                    <p id='text' style='margin:0;'>Hello world</p>
+                </div>"));
+
+            Assert.True(container.FloatScanCalls > 0, "a document with a float should still ask for intersecting floats");
+            Assert.True(container.FloatScanBoxVisits > 0,
+                "with a float present the scan has to examine boxes to find it - a zero visit count means the " +
+                "counter is not wired to the walk it is supposed to measure");
+        }
+
+        [Fact]
+        public async Task ManyNestedBlocksWithoutFloats_StillRendersEveryPage()
+        {
+            // End-to-end companion to the counter guards: the same document through the real generator,
+            // asserting output rather than duration.
             var html = BuildRepeatedSectionsHtml(sectionCount: 40);
 
             var generator = new PdfGenerator();
-            var sw = Stopwatch.StartNew();
             var document = await generator.GeneratePdf(html, PageSize.A4, margin: 20);
-            sw.Stop();
 
-            Assert.True(document.PageCount > 0);
-            // Bound is generous (well beyond the sub-second time this actually takes) to absorb CI
-            // noise from shared/contended runners - e.g. the net8.0 and net10.0 TFM test runs executing
-            // concurrently in the same job. A real regression back to an O(document size) walk per box
-            // scales towards many seconds even for smaller documents than this, so it still trips this.
-            Assert.True(sw.ElapsedMilliseconds < 15000,
-                $"rendering {40} float-free repeated sections took {sw.ElapsedMilliseconds}ms - " +
-                "this should complete in well under a second; a multi-second time suggests the float " +
-                "scan short-circuit (HasFloatedBoxes) has regressed back to an O(document size) walk per box.");
+            // 40 bordered sections of 8 table rows each overflow one A4 page under any font metrics, so
+            // this says the document paginated rather than merely that a PDF came back.
+            Assert.True(document.PageCount > 1, $"expected the document to span pages, got {document.PageCount}");
         }
 
         // ── Helpers ────────────────────────────────────────────────────────────
@@ -160,6 +264,18 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotNull(container.Root);
             return (container.Root!, container);
+        }
+
+        private static int CountBoxes(CssBox box)
+        {
+            var count = 1;
+
+            foreach (var child in box.Boxes)
+            {
+                count += CountBoxes(child);
+            }
+
+            return count;
         }
 
         private static CssRect? FindFirstWord(CssBox box)

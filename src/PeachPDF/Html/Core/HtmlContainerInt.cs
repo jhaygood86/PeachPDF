@@ -440,6 +440,41 @@ namespace PeachPDF.Html.Core
         internal bool HasFloatedBoxes { get; private set; }
 
         /// <summary>
+        /// How many float-intersection lookups (<see cref="Utils.DomUtils.GetFirstIntersectingFloatBox"/>)
+        /// layout made during the current <see cref="PerformLayout"/> call, counted before the
+        /// <see cref="HasFloatedBoxes"/> short-circuit is consulted. Reset at the start of each
+        /// <see cref="PerformLayout"/>, so it describes one layout rather than the container's lifetime -
+        /// and note that one <see cref="PerformLayout"/> can invoke <c>LayoutDocument</c> several times
+        /// (the per-page reflow loop re-runs it until the box-to-page assignment settles), so this is the
+        /// total across all of them rather than a per-pass figure.
+        /// Exists so a regression test can assert the *complexity* of the float scan - the work it does per
+        /// box - deterministically, instead of timing a render and hoping a contended CI runner cooperates.
+        /// </summary>
+        internal long FloatScanCalls { get; private set; }
+
+        /// <summary>
+        /// How many boxes those lookups actually examined during the current <see cref="PerformLayout"/>
+        /// call. The short-circuit makes this exactly zero for a document with no floats; without it, each
+        /// lookup walks to the root re-scanning every preceding sibling's whole subtree, so the total grows
+        /// with the square of the document size. A bound of this against the document's box count is
+        /// therefore the O(n) vs O(n²) assertion itself, and it does not depend on the clock.
+        /// </summary>
+        internal long FloatScanBoxVisits { get; private set; }
+
+        /// <summary>
+        /// Records that one float-intersection lookup was made. Called by
+        /// <see cref="Utils.DomUtils.GetFirstIntersectingFloatBox"/>.
+        /// </summary>
+        internal void RecordFloatScanCall() => FloatScanCalls++;
+
+        /// <summary>
+        /// Records how many boxes one float-intersection lookup examined. Called by
+        /// <see cref="Utils.DomUtils.GetFirstIntersectingFloatBox"/>.
+        /// </summary>
+        /// <param name="boxesVisited">Number of boxes the lookup's tree walk examined.</param>
+        internal void RecordFloatScanBoxVisits(int boxesVisited) => FloatScanBoxVisits += boxesVisited;
+
+        /// <summary>
         /// Whether any box in the current document asks for <c>box-decoration-break: clone</c>. Reserving room
         /// for a cloned border and padding at a break (css-break-3 §6.2) means asking, for a great many words,
         /// what a box's ancestors declared; this settles the answer once so a document that clones nothing —
@@ -691,6 +726,8 @@ namespace PeachPDF.Html.Core
             ArgumentNullException.ThrowIfNull(g);
 
             ActualSize = RSize.Empty;
+            FloatScanCalls = 0;
+            FloatScanBoxVisits = 0;
             if (Root is null) return;
 
             // A document with per-page left/right margins settles its box->page assignment in the reflow
