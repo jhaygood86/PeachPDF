@@ -84,8 +84,16 @@ namespace PeachPDF.Html.Core.Fragmentation
         }
 
         /// <summary>
-        /// The side required at the break point immediately above <paramref name="line"/>, or null where
-        /// no forced break falls there.
+        /// The side required at the break point immediately above <paramref name="group"/>, or null where
+        /// no forced break falls there — see <see cref="ForcedBreakBetween"/>.
+        /// </summary>
+        private static PageSide? ForcedBreakAbove(LineGroup group) =>
+            ForcedBreakBetween(group.Earlier, group.Later);
+
+        /// <summary>
+        /// The side required at the break point whose earlier-in-flow side is <paramref name="earlier"/>
+        /// and whose later-in-flow side is <paramref name="later"/>, or null where no forced break falls
+        /// there. Either side may be absent.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -109,14 +117,6 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// engine places for itself.
         /// </para>
         /// </remarks>
-        private static PageSide? ForcedBreakAbove(LineGroup line) =>
-            ForcedBreakBetween(line.Earlier, line.Later);
-
-        /// <summary>
-        /// The side required at the break point whose earlier-in-flow side is <paramref name="earlier"/>
-        /// and whose later-in-flow side is <paramref name="later"/>, or null where no forced break falls
-        /// there. Either side may be absent.
-        /// </summary>
         private static PageSide? ForcedBreakBetween(
             IReadOnlyList<CssBox>? earlier, IReadOnlyList<CssBox>? later)
         {
@@ -158,13 +158,13 @@ namespace PeachPDF.Html.Core.Fragmentation
 
         /// <summary>
         /// Whether a break-avoidance value on either side of the break point immediately above
-        /// <paramref name="line"/> forbids an unforced break there (§3.1).
+        /// <paramref name="group"/> forbids an unforced break there (§3.1).
         /// </summary>
-        private static bool AvoidsBreakAbove(LineGroup line) =>
-            (line.Later is not null
-             && line.Later.Any(box => BreakValues.AvoidsBreak(box.BreakBefore, FragmentationContext.Page)))
-            || (line.Earlier is not null
-                && line.Earlier.Any(box => BreakValues.AvoidsBreak(box.BreakAfter, FragmentationContext.Page)));
+        private static bool AvoidsBreakAbove(LineGroup group) =>
+            (group.Later is not null
+             && group.Later.Any(box => BreakValues.AvoidsBreak(box.BreakBefore, FragmentationContext.Page)))
+            || (group.Earlier is not null
+                && group.Earlier.Any(box => BreakValues.AvoidsBreak(box.BreakAfter, FragmentationContext.Page)));
 
         /// <summary>
         /// Whether anything in a line may not be cut by a fragmentainer boundary: an item asking not to be

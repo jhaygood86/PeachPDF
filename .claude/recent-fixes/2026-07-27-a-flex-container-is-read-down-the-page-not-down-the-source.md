@@ -46,6 +46,28 @@ instead walks off the front of it — worth knowing before "simplifying" the bra
 `CssLayoutEngineFlex.PerformLayout` swallows the exception into a `RenderError` and the failure surfaces
 as five unrelated-looking test failures rather than an index error.
 
+**The post-change review found two defects in `BuildLineGroups`, both in the one arm that decides what
+speaks for the boundary above the container — and both were mine, not pre-existing.**
+
+- The column arm handed the predicate the *whole* of `flowLines[0]`, which reads `break-before` off every
+  item of the first line. In a column container that line is a block-axis stack, so a `break-before: page`
+  on its **second** item forced the container's entire content a page on, carrying the first item — which
+  sits *before* that break point — with it. §3.1 requires content before a forced break to stay in the
+  earlier fragmentainer, so this was a worse deviation than the gap it was covering, and it contradicted
+  what the gap file, the tracking issue and `docs/**` all said the arm did. Measured at three 30pt items:
+  all three moved. Only `flowLines[0][0]` speaks for that boundary now.
+- Giving the first group down the page its own `break-before` (`flowIndex == 0 ? boxes : null`) **dropped
+  the declaration entirely** under `wrap-reverse`, where the first line in flow is the last one down the
+  page. Measured at 40pt of filler: `break-before: page` on the first item moved nothing, where the same
+  document without `wrap-reverse` moves it — a capability `main` had and this change would have removed.
+  The fix is that §3.1's break point before the container's first in-flow child is the break point before
+  the **container**, so the first line *in flow* speaks for it however the lines are stacked; forcing it
+  moves the topmost group and the accumulation carries the rest, which is the container starting a page.
+
+Both are pinned by tests that fail when the fix is neutralized (1 each). Neither was caught by the 9 cases
+the change shipped with, which is the third review in a row on this code to find something the author's
+own tests missed.
+
 **The showcase needed 8 filler paragraphs, not 11.** At 11 the container cleared the boundary entirely
 and the fixed and unfixed builds produced byte-identical pages — the section demonstrated nothing while
 looking correct, which is
@@ -55,13 +77,17 @@ cards are drawn 29.7pt too high, overlapping the bottom edge of the cards above 
 
 ## Evidence
 
-Tests: `FlexGridFragmentationIntegrationTests` +9 cases counting theory rows. Verified load-bearing by
+Tests: `FlexGridFragmentationIntegrationTests` +11 cases counting theory rows. Verified load-bearing by
 neutralizing each part in turn: the whole wrap-reverse arm (order **and** pair) → **5 fail**; the pair
-swap alone, with the order kept → **3** (the forced-break rows only, geometry intact); the first group's
-"this line is not the first in flow, so nothing above it is a break point" arm → **1**; the column
-single-group arm → **3**.
+swap alone, with the order kept → **3** (the forced-break rows only, geometry intact); the column
+single-group arm → **3**; the column arm's first-in-flow-child restriction → **1**; the first-in-flow
+line speaking for the container's own boundary → **1**.
 
-Full net8.0 suite green (6714), CLI green (96), **100% diff coverage**, zero-warning
+A `wrap-reverse` forced break is pinned by `FragmentTree.Fragmentainers.Count` as well as the slot index,
+per [the directional-break trap](../invariants/fragmentation-a-flush-line-begins-its-fragmentainer-so-that-is-the-slot-a-directional-break-vacates.md):
+a slot index can be right while a page is lost downstream in the emitter.
+
+Full net8.0 suite green, CLI green (96), **100% diff coverage**, zero-warning
 `dotnet build PeachPDF.slnx -t:Rebuild`.
 
 **68 of 69 showcases identical**; `paged_media_monolithic_content` gained the wrap-reverse section above.

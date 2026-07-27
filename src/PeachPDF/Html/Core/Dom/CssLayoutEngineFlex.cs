@@ -856,15 +856,24 @@ namespace PeachPDF.Html.Core.Dom
             if (!_isRow)
             {
                 // The break point before the container's first in-flow child is the one before the
-                // container itself (§3.1), and that boundary *is* above this group - so the first line
-                // still speaks for it, while the points between the lines say nothing here. A column
-                // container that did not wrap has one line and comes out of this identical to the walk
-                // below, which is why the arm needs no line count to guard it.
-                return [new LineGroup(flowLines.SelectMany(line => line).ToList(), null, flowLines[0])];
+                // container itself (§3.1), and that boundary *is* above this group - so that one child
+                // speaks for it. Only that one: the rest of its line is stacked *below* it in the block
+                // axis, so a break-before there names a boundary inside the container, which is the
+                // break point this arm does not take. Reading the whole line would move content that
+                // sits before the break point along with it.
+                //
+                // A column container that did not wrap has one line, and with a single item comes out
+                // of this identical to the walk below, which is why the arm needs no line count.
+                return
+                [
+                    new LineGroup(flowLines.SelectMany(line => line).ToList(), null, [flowLines[0][0]])
+                ];
             }
 
             var groups = new List<LineGroup>(flowLines.Count);
 
+            // `index` is the position down the page; `flowIndex` is the position in the source. They are
+            // the same list read in opposite directions under wrap-reverse, and the same list otherwise.
             for (var index = 0; index < flowLines.Count; index++)
             {
                 var flowIndex = _isWrapReverse ? flowLines.Count - 1 - index : index;
@@ -875,13 +884,15 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (index == 0)
                 {
-                    // Nothing sits above the first line down the page but the container's own top edge.
-                    // Where that line is also the first in flow, the break point before the container's
-                    // first child is there and its own break-before speaks for it; under wrap-reverse
-                    // with more than one line the first in flow is the *last* down the page, so no break
-                    // point is above this one at all.
+                    // Nothing sits above the first line down the page but the container's own top edge,
+                    // and the break point there is §3.1's before the container's first in-flow child —
+                    // which is the break point before the *container*. So the first line **in flow**
+                    // speaks for it however the lines are stacked: forcing it moves this line, and the
+                    // accumulation carries the rest with it, which is the container starting a new page.
+                    // Reading this group's own break-before instead would drop the declaration entirely
+                    // under wrap-reverse, where the first line in flow is the last one down the page.
                     earlier = null;
-                    later = flowIndex == 0 ? boxes : null;
+                    later = flowLines[0];
                 }
                 else if (_isWrapReverse)
                 {

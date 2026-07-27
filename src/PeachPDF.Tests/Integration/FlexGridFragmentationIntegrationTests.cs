@@ -850,6 +850,35 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(0, SlotOf(container, b));
             Assert.Equal(1, SlotOf(container, a));
             Assert.Equal(container.PageTopOf(1), a.Location.Y, 1);
+
+            // A slot index can be right while a page is lost downstream in the emitter, so the page
+            // count is asserted too rather than inferred from it.
+            Assert.NotNull(container.FragmentTree);
+            Assert.Equal(2, container.FragmentTree!.Fragmentainers.Count);
+        }
+
+        // §3.1's break point before a container's first in-flow child *is* the break point before the
+        // container, so it is the first line **in flow** that speaks for it — even under wrap-reverse,
+        // where that line is the last one down the page. Forcing it starts the whole container on the
+        // next page rather than tearing the bottom line off the rest.
+        [Fact]
+        public async Task UnderWrapReverse_AForcedBreakBeforeTheFirstLineInFlow_MovesTheWholeContainer()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                WrapReverse(40, "break-before:page", string.Empty), pageHeight: PageHeight);
+
+            var a = LayoutHarness.FindById(root, "a")!;
+            var b = LayoutHarness.FindById(root, "b")!;
+
+            Assert.Equal(1, SlotOf(container, a));
+            Assert.Equal(1, SlotOf(container, b));
+
+            // And in the order wrap-reverse put them in: B above A, still touching.
+            Assert.Equal(container.PageTopOf(1), b.Location.Y, 1);
+            Assert.Equal(b.ActualBottom, a.Location.Y, 1);
+
+            Assert.NotNull(container.FragmentTree);
+            Assert.Equal(2, container.FragmentTree!.Fragmentainers.Count);
         }
 
         // A wrapping column flex container stacks its lines along the *inline* axis: they sit side by
@@ -905,6 +934,42 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Equal(container.PageTopOf(1), b.Location.Y, 1);
             Assert.Equal(b.Location.Y, a.Location.Y, 1);
+        }
+
+        // The one value a column container *does* read at the boundary above it is the break point
+        // before its first in-flow child, which §3.1 makes the break point before the container. A
+        // break-before on any *later* item names a boundary inside the container — between items in
+        // the block axis — which this pass does not take. Reading the whole first line instead moves
+        // content that sits before the break point along with it.
+        [Fact]
+        public async Task InAColumnContainer_AForcedBreakBeforeANonFirstItem_MovesNothing()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:60pt'>filler</div>"
+                    + "<div id='c' style='display:flex; flex-direction:column; flex-wrap:wrap;"
+                    + " height:60pt; width:300pt'>"
+                    + "<div id='a' style='width:100pt;height:30pt'>A</div>"
+                    + "<div id='b' style='width:100pt;height:30pt;break-before:page'>B</div>"
+                    + "<div id='d' style='width:100pt;height:30pt'>D</div>"
+                    + "</div>"),
+                pageHeight: PageHeight);
+
+            var a = LayoutHarness.FindById(root, "a")!;
+            var b = LayoutHarness.FindById(root, "b")!;
+            var d = LayoutHarness.FindById(root, "d")!;
+
+            // The fixture asserts nothing unless A and B really share the first line and D wrapped.
+            Assert.Equal(a.Location.X, b.Location.X, 1);
+            Assert.True(d.Location.X > a.Location.X,
+                $"expected D on a second line beside the first; it is at x {d.Location.X:F1}");
+
+            Assert.Equal(80, a.Location.Y, 1);
+            Assert.Equal(110, b.Location.Y, 1);
+            Assert.Equal(80, d.Location.Y, 1);
+            Assert.Equal(0, SlotOf(container, a));
+            Assert.Equal(0, SlotOf(container, b));
+            Assert.Equal(0, SlotOf(container, d));
         }
 
         // A column container that did not wrap has one line, which is all of its content — that line is

@@ -26,12 +26,21 @@ sides swap: at the boundary above a group, the group's **own** items carry the g
 That is the only realizable reading — a boundary can only start the content *below* it on a new page, so
 the pair's later-in-flow member cannot be the thing that moves when it is the thing sitting above.
 
-Two corollaries that a future change can plausibly get wrong:
+Three corollaries that a future change can plausibly get wrong, each measured:
 
 - **A container whose lines share one block-axis range has no break points between them.** A wrapping
   `flex-direction: column` container stacks its lines along the *inline* axis; a value declared at that
   point names no boundary. Acting on it moves one line down the page alone, out of line with the lines
   beside it, which is what the pass used to do.
-- **A flow-order neighbour is not necessarily a geometric neighbour, but the reverse holds too**: the
-  first group down the page is only entitled to read its own `break-before` as "the break point before
-  the container's first child" when it really is the first child in flow.
+- **The break point above the container's topmost content is §3.1's break point before the container's
+  first in-flow child — and "first in flow" is not "first down the page".** Under `wrap-reverse` the
+  first line in flow is the *last* one down the page, so the group that must read its `break-before` is
+  the one at the top. Reading each group's own `break-before` there instead drops the declaration
+  entirely: measured on two full-width lines with 40pt of filler, `break-before: page` on the first
+  item moved nothing at all, where the same document without `wrap-reverse` moves it.
+- **Only the first in-flow child speaks for that break point, not its whole line.** In a column
+  container a line is a block-axis stack, so a `break-before` on its *second* item names a boundary
+  inside the container. Handing the whole line to the predicate let that value move the container's
+  entire content — including the item that sits *before* the break point, which §3.1 requires to stay
+  in the earlier fragmentainer. Measured: three 30pt items, `break-before: page` on the second, and all
+  three moved a page.

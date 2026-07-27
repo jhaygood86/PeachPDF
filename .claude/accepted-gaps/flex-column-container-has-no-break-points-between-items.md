@@ -15,6 +15,14 @@ css-flexbox-1 §11 states directly ("flex containers can break across pages betw
 `break-inside: avoid` on one item moves the whole container's content rather than that item and the ones
 after it.
 
+Inert is the deliberate answer, and it took a correction to get there. The arm first handed the predicate
+the whole of `flowLines[0]` as the later-in-flow side of the boundary above the container, which reads
+`break-before` off *every* item of the first line — so a `break-before: page` on the second item forced the
+container's entire content onto the next page, carrying the first item, which sits **before** that break
+point, along with it. §3.1 requires content before a forced break to stay in the earlier fragmentainer, so
+that was a worse deviation than the gap it was covering. Only the container's first in-flow child speaks
+for that boundary now.
+
 Left out because it is a different unit of work, not a refinement: the thing that moves stops being "a
 line" and becomes "a run of items inside a line", and two side-by-side lines each have their own sequence
 of block-axis break points that must not disturb one another — while `LineRelocation`'s running
