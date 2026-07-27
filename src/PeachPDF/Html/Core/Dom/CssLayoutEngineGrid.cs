@@ -364,17 +364,27 @@ namespace PeachPDF.Html.Core.Dom
                 .OrderBy(group => group.Key)
                 .ToList();
 
+            var endingAt = BoxesByEndRow(placements);
+            var endRows = endingAt.Keys.OrderBy(row => row).ToList();
+
             double shift = 0;
+
+            // How many entries of endRows lie above the row being placed. Both lists ascend, so this only
+            // moves forward — the "nearest end row above" question costs one step per row rather than a
+            // scan of every placement.
+            var above = 0;
 
             foreach (var row in rows)
             {
+                while (above < endRows.Count && endRows[above] < row.Key) above++;
+
                 var boxes = row.Select(p => p.Box).ToList();
 
                 shift += LineRelocation.DeltaFor(
                     container,
                     boxes.Min(b => b.Location.Y) + shift,
                     boxes.Max(b => b.ActualBottom) + shift,
-                    LineRelocation.ForcedBreakBetween(BoxesEndingAbove(placements, row.Key), boxes),
+                    LineRelocation.ForcedBreakBetween(above > 0 ? endingAt[endRows[above - 1]] : null, boxes),
                     boxes.Any(b => BreakValues.AvoidsBreak(b.BreakInside, FragmentationContext.Page)
                                    || MonolithicContent.IsMonolithic(b)));
 
@@ -395,31 +405,33 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// The items immediately above the break point before row <paramref name="rowIndex"/> — those
-        /// whose <i>last</i> row is the nearest one that ends before it, or none for the grid's first row.
+        /// The items of the grid, grouped by the <i>last</i> row each of them covers.
         /// </summary>
         /// <remarks>
-        /// Keyed by where an item <b>ends</b> rather than where it starts, because that is what makes it
-        /// the earlier sibling at this break point. An item spanning rows 1–2 is not above the break point
-        /// before row 2 at all — that boundary runs through the middle of it — so its <c>break-after</c>
-        /// belongs to the break point after row 2, which is exactly where this puts it.
+        /// Which items are above a break point is a question about where they <b>end</b>, not where they
+        /// start, because that is what makes one the earlier sibling there. An item spanning rows 1–2 is
+        /// not above the break point before row 2 at all — that boundary runs through the middle of it —
+        /// so its <c>break-after</c> belongs to the break point after row 2. A row every item above it
+        /// merely spans through therefore has nothing ending above it in this map, and the nearest row
+        /// that does is the one the caller wants.
         /// </remarks>
-        private static List<CssBox>? BoxesEndingAbove(List<Placement> placements, int rowIndex)
+        private static Dictionary<int, List<CssBox>> BoxesByEndRow(List<Placement> placements)
         {
-            var lastRowAbove = int.MinValue;
+            var byEndRow = new Dictionary<int, List<CssBox>>();
 
             foreach (var placement in placements)
             {
                 var end = placement.RowStart + placement.RowSpan - 1;
-                if (end < rowIndex && end > lastRowAbove) lastRowAbove = end;
+
+                if (!byEndRow.TryGetValue(end, out var boxes))
+                {
+                    byEndRow[end] = boxes = [];
+                }
+
+                boxes.Add(placement.Box);
             }
 
-            if (lastRowAbove == int.MinValue) return null;
-
-            return placements
-                .Where(p => p.RowStart + p.RowSpan - 1 == lastRowAbove)
-                .Select(p => p.Box)
-                .ToList();
+            return byEndRow;
         }
 
         private sealed class Placement

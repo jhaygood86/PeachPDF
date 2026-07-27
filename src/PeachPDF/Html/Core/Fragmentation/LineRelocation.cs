@@ -5,7 +5,8 @@ using System.Linq;
 namespace PeachPDF.Html.Core.Fragmentation
 {
     /// <summary>
-    /// How far a flex line or grid row has to move to stop being cut by a fragmentainer boundary, per
+    /// Whether a forced break falls between two flex lines or grid rows, and how far one has to move to
+    /// stop being cut by a fragmentainer boundary, per
     /// <see href="https://www.w3.org/TR/css-break-3/#break-between">CSS Fragmentation Level 3 §3.1</see>.
     /// </summary>
     /// <remarks>
@@ -25,8 +26,8 @@ namespace PeachPDF.Html.Core.Fragmentation
     internal static class LineRelocation
     {
         /// <summary>
-        /// Whether a forced page break falls at the break point between two adjacent lines — the one
-        /// ending with <paramref name="above"/> and the one beginning with <paramref name="below"/>.
+        /// Whether a forced page break falls at the break point between two adjacent lines — the line
+        /// whose items are <paramref name="above"/> and the line whose items are <paramref name="below"/>.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -41,6 +42,11 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// (<see cref="BreakPropagation"/>): a break travelling out of an item would name a position the
         /// engine is about to overwrite, which is why propagation stops before a box whose children an
         /// engine places for itself.
+        /// </para>
+        /// <para>
+        /// This answers <i>whether</i>, not <i>which</i>. <see cref="BreakPropagation"/> resolves the
+        /// winning value where the two sides differ, which is what a directional break's side would need;
+        /// a line moved from here goes to the next fragmentainer whichever side it falls on.
         /// </para>
         /// </remarks>
         /// <param name="above">

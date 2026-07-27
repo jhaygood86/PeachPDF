@@ -46,6 +46,8 @@ flex or grid item. `paged_media_monolithic_content` gained a section that does, 
 its second line sits directly under the first on the same page** instead of opening the next one. Verified
 in both PDFium and MuPDF.
 
+**Two pre-existing deviations the review turned up, both in `DeltaFor` and both filed rather than fixed:** a directional value forces the break but not its *side* — there is no parity walk and no blank-slot reservation, so the line opens the next page whichever side it is ([#450](https://github.com/jhaygood86/PeachPDF/issues/450)); and a line whose top is already flush on a fragmentainer boundary is pushed a whole further page, because `SlotStartingAt` resolves a flush top to the later slot ([#451](https://github.com/jhaygood86/PeachPDF/issues/451), measured at exactly 160pt of filler on a 160pt band). Both predate `break-after` being read; see [the accepted-gap note](../accepted-gaps/flex-grid-forced-break-side-and-flush-boundary.md).
+
 **A fixture trap worth not repeating:** `.card` is `content-box` with 12px of horizontal padding and a
 border, so two items at `width: 44%` do not share a line in that showcase — they wrapped into a line each,
 and the demo then read as a chain of two breaks with a near-empty page between them. The sibling section
