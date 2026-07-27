@@ -16,6 +16,8 @@ migration is part of the deletion, not a follow-up.
 ### 2026-07-27
 
 - [§4.3's last resort runs, and the method that stopped it now returns the exception instead of throwing it](2026-07-27-4-3-s-last-resort-runs-and-the-method-that-stopped-it-now-return.md)
+- [A grid track grows toward its limit with the space that is there](2026-07-27-a-grid-track-grows-toward-its-limit-with-the-space-that-is-there.md)
+- [A column's recorded band is the one it filled, not the target it was given](2026-07-27-a-columns-recorded-band-is-the-one-it-filled-not-the-target-it-w.md)
 - [A selector PeachPDF cannot match is recognized rather than unknown](2026-07-27-a-selector-peachpdf-cannot-match-is-recognized-rather-than-unkno.md)
 - [A table that did not break is moved by the same mover as everything else that cannot be broken](2026-07-27-a-table-that-did-not-break-is-moved-by-the-same-mover-as-everyth.md)
 - [A break value between two table rows is read](2026-07-27-a-break-value-between-two-table-rows-is-read.md)

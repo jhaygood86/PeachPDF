@@ -650,43 +650,55 @@ namespace PeachPDF.Html.Core.Dom
             var bases = new double[n];
             var limits = new double[n];    // double.PositiveInfinity for an unbounded growth limit
             var flexes = new double[n];
+            var stretches = new bool[n];   // the track's max sizing function is `auto`, so §12.8 stretches it
 
             for (var i = 0; i < n; i++)
             {
-                if (collapsed[i]) { bases[i] = 0; limits[i] = 0; flexes[i] = 0; continue; }
-                InitTrack(defs[i], contentWidth, minContent[i], maxContent[i], out bases[i], out limits[i], out flexes[i]);
+                if (collapsed[i]) { bases[i] = 0; limits[i] = 0; flexes[i] = 0; stretches[i] = false; continue; }
+                InitTrack(defs[i], contentWidth, minContent[i], maxContent[i],
+                    out bases[i], out limits[i], out flexes[i], out stretches[i]);
             }
 
             var nonCollapsed = collapsed.Count(c => !c);
             var totalGap = nonCollapsed > 1 ? gap * (nonCollapsed - 1) : 0;
             var totalFlex = flexes.Sum();
 
+            // Every track starts at its base, and §12.6 "Maximize Tracks" grows it toward its growth limit
+            // with the space that is actually available. Splitting that from the base is what stops a track
+            // overflowing its container: seeding an `auto` track's base at max-content and calling its limit
+            // unbounded is the same answer whenever the space is there and an overflowing track when it is
+            // not, and the difference is a grid narrower than its own content, which then painted outside
+            // itself. This runs before either branch below, because §12.7's flex resolution and §12.8's
+            // stretch both distribute what *remains* after it.
+            double baseTotal = 0;
+            for (var i = 0; i < n; i++) { tracks[i].Size = bases[i]; baseTotal += bases[i]; }
+
+            var free = GrowTowardLimits(
+                tracks, limits, collapsed, flexes, Math.Max(0, contentWidth - baseTotal - totalGap));
+
             if (totalFlex > 0)
             {
-                // fr tracks absorb the leftover after the non-flex tracks' bases and the gaps.
-                double nonFlexBase = 0;
+                // §12.7: fr tracks absorb the leftover after the non-flex tracks - at their *maximized*
+                // sizes, not their bases - and the gaps.
+                double nonFlexSize = 0;
                 for (var i = 0; i < n; i++)
                     if (flexes[i] <= 0)
-                        nonFlexBase += bases[i];
+                        nonFlexSize += tracks[i].Size;
 
-                var spaceToFill = Math.Max(0, contentWidth - nonFlexBase - totalGap);
+                var spaceToFill = Math.Max(0, contentWidth - nonFlexSize - totalGap);
                 var frSize = FindFlexFraction(bases, flexes, spaceToFill);
 
                 for (var i = 0; i < n; i++)
-                    tracks[i].Size = flexes[i] > 0 ? Math.Max(bases[i], flexes[i] * frSize) : bases[i];
+                    if (flexes[i] > 0)
+                        tracks[i].Size = Math.Max(bases[i], flexes[i] * frSize);
             }
             else
             {
-                // No flex: start each track at its base, then grow the intrinsic (unbounded-limit) tracks
-                // to share the remaining free space.
-                double baseTotal = 0;
-                for (var i = 0; i < n; i++) { tracks[i].Size = bases[i]; baseTotal += bases[i]; }
-
-                var free = Math.Max(0, contentWidth - baseTotal - totalGap);
-                // Grow the unbounded (auto) tracks to fill only under a normal/stretch content-distribution;
-                // an explicit justify-content leaves the free space for PositionTracks to distribute.
+                // §12.8: what is still free goes to the tracks whose max sizing function is `auto`, under a
+                // normal/stretch content distribution; an explicit justify-content leaves it for
+                // PositionTracks to distribute instead.
                 var growable = stretchTracks
-                    ? Enumerable.Range(0, n).Where(i => !collapsed[i] && double.IsPositiveInfinity(limits[i])).ToArray()
+                    ? Enumerable.Range(0, n).Where(i => !collapsed[i] && stretches[i]).ToArray()
                     : [];
                 if (growable.Length > 0 && free > 0)
                 {
@@ -705,11 +717,12 @@ namespace PeachPDF.Html.Core.Dom
         /// intrinsic sides of a <c>minmax()</c> now size to the appropriate one, so a min-content track is no
         /// longer over-sized to its max-content width (§11.5).</summary>
         private void InitTrack(GridTrackSize def, double contentBase, double minContent, double maxContent,
-            out double baseSize, out double limit, out double flex)
+            out double baseSize, out double limit, out double flex, out bool stretches)
         {
             baseSize = 0;
             limit = double.PositiveInfinity;
             flex = 0;
+            stretches = false;
 
             switch (def.Kind)
             {
@@ -741,10 +754,14 @@ namespace PeachPDF.Html.Core.Dom
                     baseSize = limit = Math.Min(maxContent, CssValueParser.ParseLength(def.Value, contentBase, _gridBox));
                     break;
                 case GridTrackKind.Auto:
-                    // Max-content is the floor; an unbounded limit lets a normal/stretch content-distribution
-                    // grow the track to share leftover space.
-                    baseSize = maxContent;
-                    limit = double.PositiveInfinity;
+                    // §12.4: `auto` is minmax(auto, auto) - the base comes from the *min* function (the
+                    // items' minimum contributions) and the growth limit from the *max* one (their
+                    // max-content contributions), with §12.6 growing the base toward that limit using the
+                    // space that is actually there. Seeding the base at max-content instead is the same
+                    // answer whenever the space is available and an overflowing track when it is not.
+                    baseSize = minContent;
+                    limit = maxContent;
+                    stretches = true;
                     break;
                 case GridTrackKind.MaxContent:
                     baseSize = limit = maxContent;   // content-sized, does not stretch
@@ -753,6 +770,67 @@ namespace PeachPDF.Html.Core.Dom
                     baseSize = limit = minContent;   // narrowest unbreakable content, does not stretch
                     break;
             }
+        }
+
+        /// <summary>
+        /// <see href="https://www.w3.org/TR/css-grid-1/#algo-grow-tracks">CSS Grid §12.6 "Maximize
+        /// Tracks"</see>: grows every track from its base toward its growth limit, sharing
+        /// <paramref name="free"/> equally and freezing each track as it reaches its limit. Returns what is
+        /// left over, which <see href="https://www.w3.org/TR/css-grid-1/#algo-stretch">§12.8</see> then
+        /// stretches the <c>auto</c>-max tracks with.
+        /// </summary>
+        /// <remarks>
+        /// The redistribution loop matters rather than one equal share: a track that reaches its limit
+        /// early leaves room the others can still use, which is the difference between a two-track grid
+        /// filling its container and leaving a gap in the middle of it.
+        /// </remarks>
+        /// <remarks>
+        /// A flexible track takes none of this: its growth limit is its base, and what it gets is decided
+        /// by <see href="https://www.w3.org/TR/css-grid-1/#algo-flex-tracks">§12.7</see> out of what is
+        /// left. Its <paramref name="limits"/> entry is unbounded, so it would otherwise absorb everything
+        /// here and leave the flex resolution nothing to distribute.
+        /// </remarks>
+        private static double GrowTowardLimits(
+            Track[] tracks, double[] limits, bool[] collapsed, double[] flexes, double free)
+        {
+            if (free <= 0) return 0;
+
+            List<int> growing = [];
+
+            for (var i = 0; i < tracks.Length; i++)
+            {
+                if (!collapsed[i] && flexes[i] <= 0 && limits[i] > tracks[i].Size) growing.Add(i);
+            }
+
+            while (growing.Count > 0 && free > 0)
+            {
+                var share = free / growing.Count;
+                var froze = false;
+
+                for (var k = growing.Count - 1; k >= 0; k--)
+                {
+                    var i = growing[k];
+                    var room = limits[i] - tracks[i].Size;
+
+                    if (room > share) continue;
+
+                    tracks[i].Size = limits[i];
+                    free -= room;
+                    growing.RemoveAt(k);
+                    froze = true;
+                }
+
+                if (froze) continue;
+
+                foreach (var i in growing)
+                {
+                    tracks[i].Size += share;
+                }
+
+                return 0;
+            }
+
+            return free;
         }
 
         /// <summary>The base-side intrinsic size of a <c>minmax()</c> min breadth: min-content for

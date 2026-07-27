@@ -343,10 +343,19 @@ namespace PeachPDF.Html.Core.Dom
                     // continuing into the next column is laid out again there, at that column's own
                     // inline position, so nothing read afterwards could tell the two fragments apart -
                     // a box carries one Location, and both halves sit in the same page band (#366).
+                    //
+                    // The band is the one this column *filled*, which unbreakable content can make taller
+                    // than the target it was given (css-multicol-1 §3.3: a column is at least as tall as
+                    // its unbreakable content). A child this engine cannot fragment - a table, another
+                    // engine's container - is placed whole and overflows a target derived from balancing,
+                    // and recording the target would leave everything of it below that target claimed by
+                    // no fragmentainer at all: laid out, and painted nowhere. Extending the block axis
+                    // cannot claim a neighbouring column's content, because columns are told apart by the
+                    // inline axis, and nothing outside this container is ever asked about this region.
                     htmlContainer.RecordNestedFragmentainer(
                         columnsBox,
                         startSlot,
-                        (boxTop, boxTop + target),
+                        (boxTop, Math.Max(boxTop + target, columnBottom)),
                         (columnInlineLeft, columnInlineLeft + columnWidth),
                         BoxGeometrySnapshot.Capture(ChildrenIn(children, columnStart, placedBelow)),
                         ContinuingPast(columnsBox.PendingBreakToken));

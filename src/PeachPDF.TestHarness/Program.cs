@@ -5422,6 +5422,14 @@ var gridIntrinsicHtml = """
       .baseline { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8pt; align-items: baseline;
                   background: #edf2f7; padding: 8pt; border-radius: 4pt; }
       .baseline span { display: block; }
+      /* Two auto tracks in a container too narrow for both max-contents. */
+      .cramped { display: grid; grid-template-columns: auto auto; gap: 8pt; width: 200pt;
+                 border: 1pt dashed #a0aec0; }
+      .roomy   { display: grid; grid-template-columns: auto auto; gap: 8pt; width: 460pt;
+                 border: 1pt dashed #a0aec0; }
+      .cramped .h, .roomy .h { background: #6b46c1; }
+      .cramped .i, .roomy .i { background: #dd6b20; }
+
       .baseline .big   { font-size: 30pt; color: #2d3748; }
       .baseline .mid   { font-size: 18pt; color: #4a90d9; }
       .baseline .small { font-size: 11pt; color: #4caf72; }
@@ -5432,8 +5440,9 @@ var gridIntrinsicHtml = """
 
       <h2>Track functions &mdash; min-content, calc() in minmax()/fit-content()</h2>
       <p class="note"><code>min-content</code> fits the longest word; <code>minmax(calc(30pt + 20pt), 80pt)</code>
-      floors at a calc()-resolved 50pt; <code>fit-content(calc(60pt + 20pt))</code> caps at 80pt; <code>1fr</code>
-      takes the rest.</p>
+      floors at a calc()-resolved 50pt and grows to its 80pt limit while the space is there;
+      <code>fit-content(calc(60pt + 20pt))</code> caps at 80pt; <code>1fr</code> takes what is left after
+      all three.</p>
       <div class="tracks">
         <div class="cell a">Antidisestablishmentarianism sample</div>
         <div class="cell b">flex floor</div>
@@ -5460,6 +5469,19 @@ var gridIntrinsicHtml = """
         <div class="cell far">column&nbsp;5</div>
       </div>
 
+      <h2>Auto tracks stop where the space runs out</h2>
+      <p class="note">The same two <code>auto</code> columns twice. Given room, each grows to its own
+      max-content width; given a container narrower than both together, they share what there is instead of
+      growing past it &mdash; the dashed outline is the container, and nothing may reach outside it.</p>
+      <div class="roomy">
+        <div class="cell h">alpha beta gamma delta</div>
+        <div class="cell i">epsilon zeta eta theta</div>
+      </div>
+      <div class="cramped" style="margin-top: 8pt">
+        <div class="cell h">alpha beta gamma delta</div>
+        <div class="cell i">epsilon zeta eta theta</div>
+      </div>
+
       <h2>Baseline item alignment</h2>
       <p class="note">With <code>align-items: baseline</code>, the three differently-sized labels rest on a
       single shared text baseline.</p>
@@ -5475,7 +5497,8 @@ var gridIntrinsicHtml = """
 await SaveShowcaseAsync("css_grid_intrinsic", "Layout", "CSS Grid Intrinsic Sizing & Baseline",
     "CSS Grid sizing/placement depth: `min-content` vs `max-content` tracks, `calc()` inside " +
     "`minmax()`/`fit-content()`, a spanning item growing the shared intrinsic columns it covers, an explicit " +
-    "line past the grid generating implicit columns, and `align-items: baseline` sharing one text baseline.",
+    "line past the grid generating implicit columns, `auto` tracks stopping at the container rather than " +
+    "overflowing it, and `align-items: baseline` sharing one text baseline.",
     gridIntrinsicHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // ── Responsive @media feature queries ──────────────────────────────────────
