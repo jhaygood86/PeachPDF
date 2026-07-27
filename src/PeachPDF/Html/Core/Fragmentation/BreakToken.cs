@@ -52,13 +52,23 @@ namespace PeachPDF.Html.Core.Fragmentation
     /// band top. Set by the margin-truncation and keep-with-next paths, which have already computed an
     /// adjusted target and must not have it re-derived.
     /// </param>
+    /// <param name="EscapesNestedFragmentainer">
+    /// whether this break is not the enclosing nested fragmentainer's to satisfy — a forced <i>page</i>
+    /// break raised while a column was being filled
+    /// (<see href="https://www.w3.org/TR/css-break-3/#break-between">§3.1</see>). No column of a container
+    /// is on another page, so an engine driving fragmentainers of its own reads this as "stop opening
+    /// them" and hands the record up unchanged rather than restating it in its own terms. The record has
+    /// to say this because the page vehicle cannot: a forced page break is realized by <i>placement</i>,
+    /// and placement cannot escape a container whose engine decides which fragmentainer content lands in.
+    /// </param>
     internal sealed record BlockBreakToken(
         CssBox Box,
         int ResumeSlotIndex,
         int ResumeChildIndex,
         BreakToken? ChildToken,
         bool IsBreakBefore,
-        double? ResumeTopOverride) : BreakToken(Box, ResumeSlotIndex);
+        double? ResumeTopOverride,
+        bool EscapesNestedFragmentainer = false) : BreakToken(Box, ResumeSlotIndex);
 
     /// <summary>
     /// A block container's inline flow stopped part-way through its content.

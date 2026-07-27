@@ -1292,6 +1292,13 @@ namespace PeachPDF.Html.Core.Dom
         internal int RequestedBreakBeforeSlot { get; private set; }
 
         /// <summary>
+        /// Whether the requested break is a forced <i>page</i> break raised while a nested fragmentainer
+        /// was being filled, and so is not that fragmentainer's to satisfy
+        /// (<see cref="BlockBreakToken.EscapesNestedFragmentainer"/>).
+        /// </summary>
+        internal bool RequestedBreakEscapesNestedFragmentainer { get; private set; }
+
+        /// <summary>
         /// How this box resumes on the current pass, or null when it is being laid out from the start.
         /// </summary>
         private BreakToken? _incomingToken;
@@ -1474,6 +1481,7 @@ namespace PeachPDF.Html.Core.Dom
             _incomingToken = null;
             PendingBreakToken = null;
             RequestedBreakBeforeTop = null;
+            RequestedBreakEscapesNestedFragmentainer = false;
 
             // One §4.3 correction per box per fragmentainer pass. A resumed pass is a fresh chance to
             // make one, at coordinates the previous pass had not settled.
@@ -1503,10 +1511,11 @@ namespace PeachPDF.Html.Core.Dom
         /// is leaving, and resumes at <paramref name="top"/> in the next one
         /// (<see href="https://www.w3.org/TR/css-break-3/#break-between">css-break-3 §4.4</see>).
         /// </summary>
-        private void RequestBreakBefore(double top)
+        private void RequestBreakBefore(double top, bool escapesNestedFragmentainer = false)
         {
             RequestedBreakBeforeTop = top;
             RequestedBreakBeforeSlot = HtmlContainer!.PageIndexOf(top + HtmlContainerInt.PageBoundaryEpsilon);
+            RequestedBreakEscapesNestedFragmentainer = escapesNestedFragmentainer;
         }
 
         /// <summary>
@@ -2115,6 +2124,25 @@ namespace PeachPDF.Html.Core.Dom
                         TranslateForEarlyBreak(restart);
                     }
 
+                    // A forced page break raised inside a nested fragmentainer escapes it (§3.1). Asked
+                    // before every column question below, because it is the one break the container being
+                    // filled may not answer: its own columns are all on the page the break is leaving, so
+                    // converting it into a column break - which is what each of those arms would do - is
+                    // honouring half of a stated choice. Every link the record passes through while still
+                    // inside a nested fragmentainer carries the mark, so a container reads it whatever
+                    // depth below itself the break was raised at, and a nested container hands it to the
+                    // one enclosing it.
+                    //
+                    // Asked only while such a fragmentainer is being filled. Once the record is out of the
+                    // last of them the mark names nothing - no page-grid site reads it - and intercepting
+                    // here would skip the two arms below that a page-context loop does have answers for.
+                    if (HtmlContainer?.CurrentFragmentainer is { HasOwnBand: true }
+                        && EscapingBreakBefore(childBox, i) is { } escaping)
+                    {
+                        PendingBreakToken = escaping;
+                        return true;
+                    }
+
                     // §3.1's `column` forced break, and §3.2's `avoid-column`. Both are questions about the
                     // fragmentainer being filled, so both are asked here, where a column is what that is -
                     // and both are answered the same way, by breaking *before* the child, because a column
@@ -2134,7 +2162,8 @@ namespace PeachPDF.Html.Core.Dom
                         // and the columns engine restates the record in the next column's terms
                         // (CssLayoutEngineColumns.ResumeInTheNextColumn).
                         PendingBreakToken = new BlockBreakToken(
-                            this, columnContext.SlotIndex, i, null, IsBreakBefore: true, null);
+                            this, columnContext.SlotIndex, ColumnBreakFallsBefore(i, start, childBox, columnContext),
+                            null, IsBreakBefore: true, null);
                         return true;
                     }
 
@@ -2235,7 +2264,8 @@ namespace PeachPDF.Html.Core.Dom
                         && childBox.ActualBottom > columnBand.BandBottom)
                     {
                         PendingBreakToken = new BlockBreakToken(
-                            this, columnBand.SlotIndex, i, null, IsBreakBefore: true, null);
+                            this, columnBand.SlotIndex, ColumnBreakFallsBefore(i, start, childBox, columnBand),
+                            null, IsBreakBefore: true, null);
                         return true;
                     }
 
@@ -2315,6 +2345,114 @@ namespace PeachPDF.Html.Core.Dom
         private static bool AvoidsBreakingAcrossThisColumn(CssBox childBox) =>
             childBox.PendingBreakToken is not null
             && BreakValues.AvoidsBreak(childBox.BreakInside, FragmentationContext.Column);
+
+        /// <summary>
+        /// The link of the chain to record when <paramref name="childBox"/> raised — or is passing on — a
+        /// forced page break that escapes the nested fragmentainer being filled
+        /// (<see cref="BlockBreakToken.EscapesNestedFragmentainer"/>), or null when it did neither.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Two shapes, because the break can be raised at any depth: the child asked for it itself, or the
+        /// child is a container whose own record already carries the mark. In both the target and the slot
+        /// travel unchanged — they name the page grid, which is exactly what nothing between here and the
+        /// driver may restate.
+        /// </para>
+        /// <para>
+        /// Asked before §3.1 propagation, and safe to be: a forced break on a container's first in-flow
+        /// child propagates outward at the prologue, so the box that requests the escape is already the
+        /// outermost container the break begins. A record that names a first child which propagates
+        /// outward therefore never carries this mark.
+        /// </para>
+        /// <para>
+        /// The carried shape is what a nested multi-column container needs: its own engine hands the record
+        /// up marked, and the column of the container enclosing it may not answer the break either. It is
+        /// not reachable through an ordinary wrapper, because a forced break below a container's own child
+        /// is lost before it is ever raised — the measurement pass that sizes the fill spends the one-shot
+        /// target, since only the container's own children have their prologue re-opened
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/395">#395</see>, characterized by
+        /// <c>AForcedPageBreak_BelowTheContainersOwnChild_IsLostEntirely_KnownBoundary</c>).
+        /// </para>
+        /// </remarks>
+        private BlockBreakToken? EscapingBreakBefore(CssBox childBox, int childIndex)
+        {
+            if (childBox.RequestedBreakEscapesNestedFragmentainer && childBox.RequestedBreakBeforeTop is { } top)
+            {
+                return new BlockBreakToken(
+                    this, childBox.RequestedBreakBeforeSlot, childIndex, null, IsBreakBefore: true, top,
+                    EscapesNestedFragmentainer: true);
+            }
+
+            if (childBox.PendingBreakToken is BlockBreakToken { EscapesNestedFragmentainer: true } carried)
+            {
+                return new BlockBreakToken(
+                    this, carried.ResumeSlotIndex, childIndex, carried, IsBreakBefore: false, null,
+                    EscapesNestedFragmentainer: true);
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// The child a break at this column boundary really falls before: <paramref name="childIndex"/>,
+        /// unless a run of preceding siblings is chained to that child by break avoidance
+        /// (<see href="https://www.w3.org/TR/css-break-3/#break-between">§3.1</see>), in which case the
+        /// head of that run — an <c>h2 { break-after: avoid }</c> heading must not be left at the foot of
+        /// the column whose content has just moved into the next one.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Keep-with-next is a question about a run of <i>preceding siblings</i>, and every page-context
+        /// site answers it by <b>moving</b> them to a lower coordinate. A column has none to move them to
+        /// — its columns all begin at the same block-axis coordinate — so the answer here is the one
+        /// <c>avoid-column</c> already takes: state the break before the head instead, and let the next
+        /// column's fill lay the whole run out there. Nothing is translated, and no group offset is
+        /// computed.
+        /// </para>
+        /// <para>
+        /// <b>The index test does two jobs at once, and that is what makes it the column analogue of the
+        /// page question.</b> A member at or below <paramref name="start"/> is in a column already filled,
+        /// or is the very child this column's fill began at — so breaking before it moves nothing and puts
+        /// the same question to the next column forever. It is also the only test that <i>can</i>
+        /// distinguish them: every column of a container shares one block-axis band, so an earlier
+        /// column's member has a document Y indistinguishable from this one's, and the geometric "does the
+        /// run start in the fragmentainer being left" guard the page sites use says nothing here.
+        /// </para>
+        /// <para>
+        /// §4.3's ladder otherwise applies as it does on the page grid: a run that cannot fit a whole
+        /// column with the content it is chained to is trimmed from its <i>front</i> — the members nearest
+        /// the breaking box are what the chain is about — and where no member can travel, the content
+        /// moves alone.
+        /// </para>
+        /// </remarks>
+        private int ColumnBreakFallsBefore(int childIndex, int start, CssBox childBox, FragmentainerContext column)
+        {
+            var run = DomUtils.GetPrecedingKeepWithNextRun(childBox, FragmentationContext.Column);
+
+            if (run.Count == 0) return childIndex;
+
+            // Only a box that positions itself owns its ActualBottom; anything else holds its previous
+            // sibling's, so measuring it would ask the fit question about the wrong box.
+            var extent = childBox.PlacesItselfAsBlockBox
+                ? childBox.ActualBottom - childBox.Location.Y
+                : 0;
+
+            for (var head = 0; head < run.Count; head++)
+            {
+                var headIndex = Boxes.IndexOf(run[head]);
+
+                if (headIndex <= start) continue;
+
+                var extraAbove = childBox.Location.Y - run[head].Location.Y;
+
+                if (extraAbove <= 0) continue;
+                if (extraAbove + extent > column.BandHeight) continue;
+
+                return headIndex;
+            }
+
+            return childIndex;
+        }
 
         /// <summary>
         /// Re-runs this box's children from the head of a keep-with-next run, so the run and everything
@@ -2552,16 +2690,15 @@ namespace PeachPDF.Html.Core.Dom
                         // because a margin taller than a band can carry the box past the slot the step
                         // just chose; two rounds settle every case a single alternation can produce,
                         // and the small cap keeps a degenerate band from spinning.
-                        // Also excluded while filling a column, and for the same reason one step further
-                        // in: the fragmentainer this box is being placed into is a column, so where it
-                        // ends up is a question about columns, not about which side of the sheet a page
-                        // falls on. Reserving a page from here manufactured a blank one while the box
-                        // itself simply moved to the next column - honouring half of a decision. Inside a
-                        // multi-column container a forced page break degrades to a column break.
+                        // Asked while filling a column too, now that the break genuinely reaches the page
+                        // it names (below): the coordinates it steps through are the page grid's either
+                        // way, so a directional break inside a multi-column container reserves its blank
+                        // page exactly as it does outside one. It used to be excluded here, because
+                        // reserving a page while the box merely moved to the next column honoured half of
+                        // a decision.
                         for (var guard = 0;
                              _forcedBreakSide is not PageSide.Any
                              && HtmlContainer!.IsFragmenting
-                             && HtmlContainer.CurrentFragmentainer is not { HasOwnBand: true }
                              && guard < 4;
                              guard++)
                         {
@@ -2572,6 +2709,20 @@ namespace PeachPDF.Html.Core.Dom
 
                             HtmlContainer.SetBlankSlotReservation(this, landing);
                             top = HtmlContainer.PageTopOf(landing + 1) + forcedBreakMargin;
+                        }
+
+                        // §3.1: a forced *page* break is not a nested fragmentainer's to satisfy. The page
+                        // vehicle is realized by placement, and placing this box at `top` inside a column
+                        // puts it past that column's band - which the container's own overflow arm then
+                        // reads as "start the next column", one column over instead of one page over. So
+                        // the break is stated as a record instead, marked as escaping: the columns engine
+                        // stops opening columns for it and hands it up to the page driver, which already
+                        // knows how to open the page this target names.
+                        if (HtmlContainer!.IsFragmenting
+                            && HtmlContainer.CurrentFragmentainer is { HasOwnBand: true })
+                        {
+                            RequestBreakBefore(top, escapesNestedFragmentainer: true);
+                            return;
                         }
                     }
                     // A previous sibling that a forced break placed and that contributes no height of
@@ -2623,7 +2774,7 @@ namespace PeachPDF.Html.Core.Dom
                                 // further pages on its own afterward (a table re-applies its per-row
                                 // break logic, an ordinary block just keeps flowing) - only the run
                                 // needs a page to itself.
-                                var keepWithNextRun = DomUtils.GetPrecedingKeepWithNextRun(this);
+                                var keepWithNextRun = DomUtils.GetPrecedingKeepWithNextRun(this, FragmentationContext.Page);
                                 if (keepWithNextRun.Count > 0)
                                 {
                                     var runTop = keepWithNextRun[0].Location.Y;
@@ -2817,7 +2968,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (firstLinePage > ownPage)
                 {
-                    var keepWithNextRun = DomUtils.GetPrecedingKeepWithNextRun(this);
+                    var keepWithNextRun = DomUtils.GetPrecedingKeepWithNextRun(this, FragmentationContext.Page);
                     if (keepWithNextRun.Count > 0)
                     {
                         var runTop = keepWithNextRun[0].Location.Y;
@@ -4182,7 +4333,7 @@ namespace PeachPDF.Html.Core.Dom
             // "Fits on a single page" is judged against the destination page's band (the page this
             // box's top lands on after the offset), not the page it is leaving.
             var targetPageBand = HtmlContainer!.PageBandHeightOf(HtmlContainer.PageIndexOf(Location.Y + offset));
-            var keepWithNextRun = DomUtils.GetPrecedingKeepWithNextRun(this);
+            var keepWithNextRun = DomUtils.GetPrecedingKeepWithNextRun(this, FragmentationContext.Page);
 
             if (keepWithNextRun.Count > 0)
             {

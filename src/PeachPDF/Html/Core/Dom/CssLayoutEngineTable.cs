@@ -15,6 +15,7 @@ using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Entities;
+using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System;
@@ -1532,7 +1533,7 @@ namespace PeachPDF.Html.Core.Dom
         private double PullKeepWithNextRun(HtmlContainerInt container, double currentY, double pageBreakOffset,
             int currentPageNumber, double availableHeight, double trailingHeight)
         {
-            var keepWithNextRun = DomUtils.GetPrecedingKeepWithNextRun(_tableBox);
+            var keepWithNextRun = DomUtils.GetPrecedingKeepWithNextRun(_tableBox, FragmentationContext.Page);
             if (keepWithNextRun.Count == 0)
                 return pageBreakOffset;
 

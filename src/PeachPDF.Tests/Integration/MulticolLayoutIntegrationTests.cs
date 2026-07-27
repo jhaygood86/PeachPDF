@@ -3,6 +3,7 @@ using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.PdfSharpCore.Drawing;
 using System.Collections.Generic;
@@ -391,7 +392,7 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task NamedPageElement_RegistersOnceForTheColumnItLandsIn()
+        public async Task NamedPageElement_RegistersOnceForThePageItLandsIn()
         {
             var html = Wrap(@"
                 <div id='mc' style='columns:2; column-gap:0; width:200px'>
@@ -400,14 +401,16 @@ namespace PeachPDF.Tests.Integration
                     <div class='item' style='height:10px'></div>
                 </div>");
             var (root, container) = await BuildAndLayout(html, pageHeight: 100);
-            var mc = FindById(root, "mc")!;
             var i2 = FindById(root, "i2")!;
 
-            Assert.True(i2.Location.X > mc.ClientLeft + 50, "expected i2 to be placed in column 2");
+            // A named-page transition forces a *page* break (CSS Paged Media 3 §3), and a page break is
+            // not this container's to satisfy - none of its columns is on another page. It used to arrive
+            // one column over instead.
+            Assert.True(container.PageIndexOf(i2.Location.Y) > 0, "expected i2 to open a page of its own");
 
             // Exactly one entry is the regression guard. The box is laid out twice - once by the
-            // measurement pass that sizes the fill, once for real - and once more again if a column
-            // break re-places it, and each placement registers. Its Y is the top of the pagination slot
+            // measurement pass that sizes the fill, once for real - and once more again if a break
+            // re-places it, and each placement registers. Its Y is the top of the pagination slot
             // the box lands on, which is the attribution NamedPageRegistrationY defines rather than the
             // box's own coordinate.
             var registered = Assert.Single(container.NamedPageElements, e => e.Name == "chapter");
@@ -1086,28 +1089,173 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
-        /// A value that forces a <i>page</i> break is left to the page vehicle rather than converted here.
-        /// Inside a multi-column container that vehicle degrades to a column break — which column the
-        /// content lands in is a question the container answers — so the box does start the next column;
-        /// what this pins is that it gets there once, by one decision.
+        /// A value that forces a <i>page</i> break says nothing about columns, and none of this
+        /// container's columns is on another page — so it escapes the container rather than being answered
+        /// by it. It used to arrive one column over instead of one page over, because the page vehicle is
+        /// realized by placement and placement cannot leave a container whose engine decides which
+        /// fragmentainer content lands in.
         /// </summary>
         [Fact]
-        public async Task AForcedPageBreak_InsideAColumn_StartsTheNextColumn()
+        public async Task AForcedPageBreak_InsideAColumn_StartsTheNextPage()
         {
             var html = Wrap(@"
                 <div id='mc' style='columns:2; column-gap:0; width:200px; column-fill:auto'>
                     <div id='a' style='height:20px'>A</div>
                     <div id='b' style='height:20px; break-before:page'>B</div>
                 </div>");
-            var (root, _) = await BuildAndLayout(html, pageHeight: 200);
+            var (root, container) = await BuildAndLayout(html, pageHeight: 200);
 
             var mc = FindById(root, "mc")!;
             var a = FindById(root, "a")!;
             var b = FindById(root, "b")!;
 
-            Assert.True(a.Location.X < mc.ClientLeft + 50);
-            Assert.True(b.Location.X > mc.ClientLeft + 50,
-                $"expected the box to start the next column, it is at x={b.Location.X}");
+            Assert.Equal(0, container.PageIndexOf(a.Location.Y));
+            Assert.True(container.PageIndexOf(b.Location.Y) > container.PageIndexOf(a.Location.Y),
+                $"expected the box to start the next page, it is at y={b.Location.Y}");
+
+            // And it opens that page in the first column, rather than carrying the column it left.
+            Assert.True(b.Location.X < mc.ClientLeft + 50,
+                $"expected the box to begin the next page's first column, it is at x={b.Location.X}");
+        }
+
+        /// <summary>
+        /// A boundary rather than the behaviour, and a <i>pre-existing</i> one: a forced break carried by a
+        /// box that is not the container's own child is lost entirely — no page break and no column break —
+        /// so there is nothing here for an escaping record to carry. Its cause is one level down from
+        /// anything about columns: <c>_forcedBreakTop</c> is a one-shot, and the measurement pass that sizes
+        /// the fill spends it, because <c>ResetChildrenForRefill</c> re-opens the prologue for the
+        /// container's own children only.
+        /// </summary>
+        /// <remarks>
+        /// This is why the direct-child case had an observable behaviour to fix at all. Filed as
+        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/395">#395</see>; closing it should turn
+        /// this into the invariant it was drafted as — b starting the next page, exactly as its own sibling
+        /// does one level up.
+        /// </remarks>
+        [Fact]
+        public async Task AForcedPageBreak_BelowTheContainersOwnChild_IsLostEntirely_KnownBoundary()
+        {
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:200px; column-fill:auto'>
+                    <div id='wrap'>
+                        <div id='a' style='height:20px'>A</div>
+                        <div id='b' style='height:20px; break-before:page'>B</div>
+                    </div>
+                </div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 200);
+
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            Assert.Equal(0, container.PageIndexOf(a.Location.Y));
+            Assert.Equal(0, container.PageIndexOf(b.Location.Y));
+            Assert.Equal(a.Location.X, b.Location.X, 1);
+        }
+
+        /// <summary>
+        /// §3.1's "one or two page breaks". The parity step used to be suppressed inside a column, because
+        /// reserving a page while the box merely moved to the next column honoured half of a decision.
+        /// Now that the break reaches the page it names, the side it names is honoured too.
+        /// </summary>
+        [Theory]
+        [InlineData("right")]
+        [InlineData("left")]
+        public async Task ADirectionalBreak_InsideAColumn_LandsOnAPageOfThatSide(string side)
+        {
+            var html = Wrap($@"
+                <div id='mc' style='columns:2; column-gap:0; width:200px; column-fill:auto'>
+                    <div id='a' style='height:20px'>A</div>
+                    <div id='b' style='height:20px; break-before:{side}'>B</div>
+                </div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 200);
+
+            var b = FindById(root, "b")!;
+            var landing = container.PageIndexOf(b.Location.Y);
+
+            Assert.True(landing > 0, $"expected the box to leave the first page, it is at y={b.Location.Y}");
+            Assert.True(
+                BreakValues.SlotIsOn(landing, side == "right" ? PageSide.Right : PageSide.Left),
+                $"expected a {side}-hand page, the box landed in slot {landing}");
+        }
+
+        /// <summary>
+        /// A forced page break ends the flow for this fragment as surely as running out of content does,
+        /// so it is the fragment that balances — over what precedes the break, not over the content the
+        /// balance estimate was made for. Without this the four boxes before the break pile into the first
+        /// column and the second is left empty, because the estimate was taken over a flow sixteen boxes
+        /// longer than the one this fragment actually holds.
+        /// </summary>
+        [Fact]
+        public async Task AForcedPageBreak_LeavesTheColumnsBeforeItBalanced()
+        {
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:200px'>
+                    <div class='before' style='height:20px'>1</div>
+                    <div class='before' style='height:20px'>2</div>
+                    <div class='before' style='height:20px'>3</div>
+                    <div class='before' style='height:20px'>4</div>
+                    <div id='rest' style='height:240px; break-before:page'>rest</div>
+                </div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 400);
+
+            var mc = FindById(root, "mc")!;
+            var before = FindAllByClass(root, "before");
+
+            Assert.Equal(4, before.Count);
+            Assert.Equal(2, before.Count(b => b.Location.X < mc.ClientLeft + 50));
+            Assert.Equal(2, before.Count(b => b.Location.X > mc.ClientLeft + 50));
+            Assert.True(container.PageIndexOf(FindById(root, "rest")!.Location.Y) > 0);
+        }
+
+        /// <summary>
+        /// A page break is no nested fragmentainer's to satisfy, so a container nested inside another hands
+        /// the record up marked rather than answering it with a column of its own — and the column of the
+        /// container enclosing it does not answer it either.
+        /// </summary>
+        [Fact]
+        public async Task AForcedPageBreak_InsideANestedContainer_EscapesBothOfThem()
+        {
+            var html = Wrap(@"
+                <div id='outer' style='columns:2; column-gap:0; width:400px; column-fill:auto'>
+                    <div id='inner' style='columns:2; column-gap:0; column-fill:auto'>
+                        <div id='a' style='height:20px'>A</div>
+                        <div id='b' style='height:20px; break-before:page'>B</div>
+                    </div>
+                </div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 200);
+
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            Assert.Equal(0, container.PageIndexOf(a.Location.Y));
+            Assert.True(container.PageIndexOf(b.Location.Y) > 0,
+                $"expected the break to leave both containers, the box is at y={b.Location.Y}");
+        }
+
+        /// <summary>
+        /// The invariant that catches both directions of getting an escape wrong: a ghost left in the
+        /// column the content escaped from, or content dropped along with the columns the container
+        /// stopped opening.
+        /// </summary>
+        [Fact]
+        public async Task AForcedPageBreak_InsideAColumn_ClaimsEveryWordExactlyOnce()
+        {
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:200px; column-fill:auto'>
+                    <div id='a' style='height:20px'>alpha</div>
+                    <div id='b' style='height:20px; break-before:page'>beta</div>
+                    <div id='c' style='height:20px'>gamma</div>
+                </div>");
+            var (_, container) = await BuildAndLayout(html, pageHeight: 200);
+
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => FlattenFragments(f.Root))
+                .SelectMany(f => f.Words)
+                .Select(w => w.Word)
+                .ToList();
+
+            Assert.Equal(3, claimed.Count);
+            Assert.Equal(claimed.Count, claimed.Distinct().Count());
         }
 
         /// <summary>
@@ -1212,6 +1360,160 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotEmpty(claimed);
             Assert.Equal(claimed.Count, claimed.Distinct().Count());
+        }
+
+        // ─── Keep-with-next at a column boundary (css-break-3 §3.1) ────────────────
+
+        /// <summary>
+        /// The stranded heading. A run chained to the moving box by <c>break-after: avoid</c> travels with
+        /// it — but a column has no lower coordinate to move a run to, so the break is stated before the
+        /// run's head and the next column's fill lays the whole run out there.
+        /// </summary>
+        [Theory]
+        [InlineData("break-after:avoid", "")]
+        [InlineData("break-after:avoid-column", "")]
+        [InlineData("", "break-before:avoid")]
+        public async Task KeepWithNext_AtAColumnBoundary_MovesTheHeadWithTheContent(string onHead, string onBody)
+        {
+            var (root, mc) = await StrandedHeadingAsync(onHead, onBody);
+
+            var head = FindById(root, "head")!;
+            var body = FindById(root, "body")!;
+
+            Assert.True(body.Location.X > mc.ClientLeft + 50,
+                $"the fixture must move the content to the next column, it is at x={body.Location.X}");
+            Assert.True(head.Location.X > mc.ClientLeft + 50,
+                $"the heading must travel with it, it is at x={head.Location.X}");
+            Assert.True(head.Location.Y < body.Location.Y, "the heading must still precede its content");
+        }
+
+        /// <summary>
+        /// The control. Without the chain the same fixture strands the heading, which is what makes the
+        /// assertion above about the run rather than about the packing.
+        /// </summary>
+        [Fact]
+        public async Task WithoutTheChain_TheHeadingStaysInTheColumnItsContentLeaves()
+        {
+            var (root, mc) = await StrandedHeadingAsync(string.Empty, string.Empty);
+
+            Assert.True(FindById(root, "body")!.Location.X > mc.ClientLeft + 50);
+            Assert.True(FindById(root, "head")!.Location.X < mc.ClientLeft + 50);
+        }
+
+        /// <summary>
+        /// The context, asked of the run itself: <c>avoid-page</c> forbids nothing at a column boundary,
+        /// so the pair is not kept together there. The counterpart to
+        /// <see cref="APageContextAvoidValue_DoesNotSuppressAColumnBreak"/>, one level up.
+        /// </summary>
+        [Fact]
+        public async Task APageContextAvoidValue_DoesNotChainARunAtAColumnBoundary()
+        {
+            var (root, mc) = await StrandedHeadingAsync("break-after:avoid-page", string.Empty);
+
+            Assert.True(FindById(root, "body")!.Location.X > mc.ClientLeft + 50);
+            Assert.True(FindById(root, "head")!.Location.X < mc.ClientLeft + 50);
+        }
+
+        /// <summary>
+        /// §4.3's ladder: a run that does not fit a whole column with the content it is chained to is
+        /// trimmed from its <i>front</i>, because the members nearest the breaking box are what the chain
+        /// is about. Here only the nearer heading can come.
+        /// </summary>
+        [Fact]
+        public async Task ARunTooTallForTheDestinationColumn_IsTrimmedFromItsFront()
+        {
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:300px; column-fill:auto'>
+                    <div id='filler' style='height:40pt'>F</div>
+                    <div id='far' style='height:20pt; break-after:avoid'>Far</div>
+                    <div id='near' style='height:10pt; break-after:avoid'>Near</div>
+                    <div id='body' style='height:70pt'>B</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 100);
+
+            var mc = FindById(root, "mc")!;
+
+            Assert.True(FindById(root, "body")!.Location.X > mc.ClientLeft + 50);
+            Assert.True(FindById(root, "near")!.Location.X > mc.ClientLeft + 50,
+                "the member nearest the breaking box is the one the chain is about");
+            Assert.True(FindById(root, "far")!.Location.X < mc.ClientLeft + 50,
+                "the whole run does not fit the destination column, so its front is left behind");
+        }
+
+        /// <summary>
+        /// The termination argument, which the index test states rather than measures. A run whose head is
+        /// the very child this column's fill began at cannot be moved: breaking before it would start the
+        /// next column at the same place and put the identical question to it again. Every column of a
+        /// container shares one block-axis band, so nothing geometric could tell those two columns apart —
+        /// which is why this is the index's job and not a coordinate's.
+        /// </summary>
+        [Fact]
+        public async Task ARunHeadingTheColumnsOwnFill_IsNotMovedAgain()
+        {
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:300px; column-fill:auto'>
+                    <div id='head' style='height:20pt; break-after:avoid'>H</div>
+                    <div id='body' style='height:50pt'>B</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 60);
+
+            var mc = FindById(root, "mc")!;
+
+            Assert.True(FindById(root, "body")!.Location.X > mc.ClientLeft + 50);
+            Assert.True(FindById(root, "head")!.Location.X < mc.ClientLeft + 50,
+                "the head of this column's own fill has nowhere to travel to");
+        }
+
+        /// <summary>
+        /// The other arm that raises a column break — a box that asks not to be broken by one — pulls its
+        /// run too, and the workhorse invariant holds across the move.
+        /// </summary>
+        [Fact]
+        public async Task KeepWithNext_AtAnAvoidColumnBreak_MovesTheHeadAndClaimsEveryWordOnce()
+        {
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:300px; column-fill:auto'>
+                    <div id='top' style='height:40pt'>Top</div>
+                    <div id='head' style='height:20pt; break-after:avoid; margin:0; font-size:10pt; line-height:20pt'>Heading</div>
+                    <p id='long' style='break-inside:avoid-column; margin:0; font-size:10pt; line-height:20pt'>
+                    L1<br>L2<br>L3</p>
+                </div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 100);
+
+            var mc = FindById(root, "mc")!;
+            var words = LayoutHarness.Descendants(FindById(root, "long")!).SelectMany(b => b.Words).ToList();
+
+            Assert.NotEmpty(words);
+            Assert.All(words, w => Assert.True(w.Left >= mc.ClientLeft + 50,
+                $"every word of the avoiding box must be in the second column, one is at x={w.Left}"));
+            Assert.True(FindById(root, "head")!.Location.X > mc.ClientLeft + 50,
+                "the heading must travel with it");
+
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => FlattenFragments(f.Root))
+                .SelectMany(f => f.Words)
+                .Select(w => w.Word)
+                .ToList();
+
+            Assert.NotEmpty(claimed);
+            Assert.Equal(claimed.Count, claimed.Distinct().Count());
+        }
+
+        private static async Task<(CssBox Root, CssBox Mc)> StrandedHeadingAsync(string onHead, string onBody)
+        {
+            // 40pt of filler, then a 20pt heading, then 60pt of content in a column that holds a little
+            // under 100pt: the content cannot stay, and the heading plus the content fit a column of their
+            // own - so whether the heading comes along says whether the chain was read, with no dependence
+            // on font metrics.
+            var html = Wrap($@"
+                <div id='mc' style='columns:2; column-gap:0; width:300px; column-fill:auto'>
+                    <div id='filler' style='height:40pt'>F</div>
+                    <div id='head' style='height:20pt; {onHead}'>H</div>
+                    <div id='body' style='height:60pt; {onBody}'>B</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 100);
+
+            return (root, FindById(root, "mc")!);
         }
 
         private static async Task<(CssBox Root, CssBox Mc, CssBox LongBox, HtmlContainerInt Container)>

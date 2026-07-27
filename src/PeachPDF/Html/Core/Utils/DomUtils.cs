@@ -118,22 +118,28 @@ namespace PeachPDF.Html.Core.Utils
         /// <summary>
         /// Collects the maximal run of preceding in-flow siblings chained to <paramref name="box"/> by
         /// break avoidance (css-break §3.1, class A break points): for each consecutive pair, the earlier
-        /// sibling's break-after or the later sibling's break-before forbids a page break
-        /// (<see cref="BreakValues.AvoidsBreak"/> — <c>avoid</c> or <c>avoid-page</c>, but not
-        /// <c>avoid-column</c>/<c>avoid-region</c>, which name other fragmentation contexts).
+        /// sibling's break-after or the later sibling's break-before forbids a break in
+        /// <paramref name="context"/> (<see cref="BreakValues.AvoidsBreak"/> — <c>avoid</c> in either,
+        /// plus the value naming that context alone).
         /// Returned in top-to-bottom document order; empty when no avoid chain exists. Callers use this
         /// to pull e.g. an <c>h2 { break-after: avoid }</c> heading (the UA default for h1-h6 under
-        /// @media print) along whenever they move <paramref name="box"/> to the next page.
+        /// @media print) along whenever they move <paramref name="box"/> to the next fragmentainer.
         /// </summary>
         /// <remarks>
-        /// The <i>page</i> question, asked unconditionally, because every caller is a page-context mover:
-        /// the two in <c>CssBox</c>'s placement and word-flow paths relocate to <c>PageTopOf</c>, the
-        /// table engine's does the same, and <see cref="Fragmentation.EarlyBreak.Discover"/> measures a
-        /// destination page band. A run is <i>moved</i>, and inside a column there is no lower coordinate
-        /// to move it to — which is why the column-context break decisions deliberately do not collect
-        /// one.
+        /// <para>
+        /// The context is asked for rather than assumed, because the same chain says different things in
+        /// each: <c>avoid-column</c> forbids nothing at a page boundary and <c>avoid-page</c> forbids
+        /// nothing at a column one, and a forced break of the other context does not break the chain.
+        /// </para>
+        /// <para>
+        /// What the two contexts do <i>not</i> share is how the run then travels. Every page-context
+        /// caller <b>moves</b> the run to a lower coordinate; a column has none — every column of a
+        /// container begins at the same block-axis coordinate — so a column-context caller states the
+        /// break <i>before the head</i> instead and lets the next column's fill lay the run out there
+        /// (<see cref="CssBox.FillFragmentainerWithBlockChildren"/>).
+        /// </para>
         /// </remarks>
-        public static List<CssBox> GetPrecedingKeepWithNextRun(CssBox box)
+        public static List<CssBox> GetPrecedingKeepWithNextRun(CssBox box, FragmentationContext context)
         {
             var run = new List<CssBox>();
             var current = box;
@@ -157,14 +163,14 @@ namespace PeachPDF.Html.Core.Utils
                 // over a break-avoidance value on the other - such a pair is never kept together. Both
                 // sides are read through the chains they end and begin, for the same reason the break
                 // point itself is (BreakPropagation).
-                if (BreakPropagation.ForcedBreakAfterAt(prev, FragmentationContext.Page) is not null
-                    || BreakPropagation.ForcedBreakBeforeAt(current, FragmentationContext.Page) is not null)
+                if (BreakPropagation.ForcedBreakAfterAt(prev, context) is not null
+                    || BreakPropagation.ForcedBreakBeforeAt(current, context) is not null)
                 {
                     break;
                 }
 
-                if (!BreakValues.AvoidsBreak(prev.BreakAfter, FragmentationContext.Page)
-                    && !BreakValues.AvoidsBreak(current.BreakBefore, FragmentationContext.Page))
+                if (!BreakValues.AvoidsBreak(prev.BreakAfter, context)
+                    && !BreakValues.AvoidsBreak(current.BreakBefore, context))
                 {
                     break;
                 }
