@@ -13,10 +13,11 @@ showing 1,153).
 `CssRect.Top`'s setter clears it, so being positioned is what makes a word this layout's. The
 corollary is the rule to keep: **any mechanism that can leave a word unreached has to say so before
 the attempt starts**, because afterwards there is nothing to read — the position the word carries is
-indistinguishable from a real one. Three callers say it (`CssBox.ResetForRefill`,
-`CssBox.DiscardLineBoxesFrom`, and the block's own inline flow in
-`CssLayoutEngine.CreateLineBoxes`), and all three say it the same way: mark, then let placement
-clear it.
+indistinguishable from a real one. Four sites say it — `CssBox.AwaitPlacement` (over a whole
+subtree, for a discarded fill via `ResetForRefill` and for a block's inline flow on the pass that
+opens it), `CssBox.DiscardLineBoxesFrom`, and §4.1's own discarded line in
+`CssLayoutEngine.CreateLineBoxes` — and all of them say it the same way: mark, then let placement
+clear it. One reader: `FragmentEmitter.BuildDraft`.
 
 **The position an unreached word carries is not always 0**, which is what makes "just check for the
 origin" the wrong fix. A box laid out a second time — the reflow loop settling per-page widths, a
