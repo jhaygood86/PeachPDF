@@ -593,7 +593,8 @@ namespace PeachPDF.Html.Core.Dom
             }
             catch (Exception ex)
             {
-                HtmlContainer?.ReportError(HtmlRenderErrorType.Layout, "Exception in box layout", ex);
+                if (HtmlContainer is { } container)
+                    throw container.RenderError(HtmlRenderErrorType.Layout, "Exception in box layout", ex);
             }
         }
 

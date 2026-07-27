@@ -33,7 +33,8 @@ namespace PeachPDF.Html.Core.Dom
             }
             catch (Exception ex)
             {
-                flexBox.HtmlContainer?.ReportError(HtmlRenderErrorType.Layout, "Failed flex layout", ex);
+                if (flexBox.HtmlContainer is { } container)
+                    throw container.RenderError(HtmlRenderErrorType.Layout, "Failed flex layout", ex);
             }
         }
 

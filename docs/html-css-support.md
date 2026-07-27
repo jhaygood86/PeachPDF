@@ -691,6 +691,10 @@ Two cases still move the box instead. A box that fits on **no** page cannot be h
 
 > **Migration note:** continuation content used to begin one layout unit (1/96in) below the content edge, so everything after a page break sat very slightly lower than the page's own top margin implied. It now starts exactly at the edge, which shifts continuation content up by that amount and can let one more line fit on a page. See [Forward compatibility](#forward-compatibility).
 
+**Layout gives up pagination before it gives up content** ([CSS Fragmentation Level 3 §4.3](https://www.w3.org/TR/css-break-3/#possible-breaks)). Every rule above may decline to place content where it would rather not go — `break-inside: avoid`, a keep-with-next chain, monolithic content, `orphans` and `widows` — and §4.3 asks that such constraints be given up progressively rather than at the cost of content. The last thing given up is pagination itself: if a page is reached that layout cannot get past, the rest of the document is laid out from that page on in one piece, with no further break decisions, so it runs past the page's edge and is cut at each boundary rather than broken at one. Those pages will look wrong, but the document renders.
+
+> **Migration note:** reaching that state used to fail the whole render with an exception instead, so a caller got no document at all. It now produces a document, with the pages from that point on laid out in one piece. See [Forward compatibility](#forward-compatibility).
+
 #### Decorations at a break
 
 When a break splits a box, `box-decoration-break` ([CSS Fragmentation Level 3 §6.2](https://www.w3.org/TR/css-break-3/#break-decoration)) decides whether its border, padding, background, `border-radius` and `box-shadow` belong to the box as a whole or to each piece. Both values are honored, and — as the spec requires — at **every** kind of break: the page breaks of a block box, the column breaks of a box in a [multi-column container](#multi-column-layout), and the line-box breaks of an inline box that wraps.

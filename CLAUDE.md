@@ -23,9 +23,10 @@ Read these before making non-trivial changes in their area — they are the sour
 
 Not documentation, but read alongside it — the internal dev notes, one file per entry:
 [.claude/accepted-gaps/](.claude/accepted-gaps/) (limitations already argued through; don't relitigate
-one without new information) and [.claude/recent-fixes/](.claude/recent-fixes/) (the reasoning and
-traps behind each recent change). See [Out of scope / accepted gaps](#out-of-scope--accepted-gaps-dont-relitigate-without-new-information)
-and [Recent fixes](#recent-fixes) below.
+one without new information), [.claude/recent-fixes/](.claude/recent-fixes/) (the reasoning and
+traps behind each recent change) and [.claude/invariants/](.claude/invariants/) (what a future change
+must not break or re-derive). See [Out of scope / accepted gaps](#out-of-scope--accepted-gaps-dont-relitigate-without-new-information),
+[Recent fixes](#recent-fixes) and [Invariants and traps](#invariants-and-traps) below.
 
 When you add or change user-facing features, update the relevant doc page (and its `README.md`/`docs/getting-started.md` cross-links) in the same change, rather than as a follow-up — this repo's convention (established by the SVG 1.0 coverage work) is docs land with the feature.
 
@@ -180,6 +181,20 @@ reader still needs should already live somewhere durable: user-facing behaviour 
 a follow-up — the deletion is the last moment that knowledge is guaranteed to be written down
 anywhere. A stale entry is worse than no entry: it describes code that has since moved on, and
 every future change pays to read past it.
+
+## Invariants and traps
+
+Each invariant lives in its own file under [.claude/invariants/](.claude/invariants/), named
+`<area>-<the invariant>.md` — the directory listing is the index, so `ls` reads as a list of rules
+grouped by area and grep finds one by any term in its body. **Read the files for an area before
+making a non-trivial change in it**: each records something this repo has already paid for at least
+once — a rule the code depends on, or a trap that cost real debugging time.
+
+These outlive both sibling folders. A recent fix expires at 30 days and an accepted gap describes
+what we chose not to build; an invariant describes what a *future* change must not break, and stays
+true long after the issue that discovered it is closed. Add a file when a change turns up a rule the
+next one could plausibly violate, and state the measured symptom — that is what a future reader
+recognizes. **Recording one adds exactly one new file and edits nothing else.**
 
 ## Thread safety
 
