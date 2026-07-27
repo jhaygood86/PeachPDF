@@ -1,0 +1,5 @@
+# `AttributeSelectorFactory` made trim/AOT-safe
+
+_Landed 2026-07-23._
+
+**`AttributeSelectorFactory` made trim/AOT-safe** (issue #243): the factory resolved the seven `Attr*Selector` types via a `Dictionary<string, Type>` + `Activator.CreateInstance(type, name, value)`. Since the library sets `IsTrimmable=true`/`EnableTrimAnalyzer=true` and nothing kept those two-arg constructors alive, a trimmed/AOT build could drop them, turning every attribute selector (`[a=b]`, `[a~=b]`, `[a|=b]`, `[a^=b]`, `[a$=b]`, `[a*=b]`, `[a!=b]`) into a runtime `MissingMethodException`. Replaced with a reflection-free `switch` expression over the `combinator` string (matching upstream ExCSS `c497ca7`), so every constructor is statically reachable; the `_` arm keeps the bare-`[attr]` presence fallback (`AttrAvailableSelector`). Required making `Combinators`' `=`/`~=`/… fields `const` (were `static readonly`) so they're valid `switch` constant patterns — interned string literals, so equality behaviour is unchanged. The pre-existing `AttrSelectorTests` already cover all seven combinator→type mappings; added a presence-selector case for the fallback branch.
