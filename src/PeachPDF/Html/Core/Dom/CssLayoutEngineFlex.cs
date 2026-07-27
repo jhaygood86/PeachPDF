@@ -804,7 +804,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 var (top, bottom) = (bounds.Top + shift, bounds.Bottom + shift);
 
-                var slot = container.PageIndexOf(top + HtmlContainerInt.PageBoundaryEpsilon);
+                var slot = container.SlotStartingAt(top);
                 var slotBottom = container.PageBottomOf(slot);
 
                 var forced = LineTakesAForcedBreak(line);

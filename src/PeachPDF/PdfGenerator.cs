@@ -521,7 +521,7 @@ namespace PeachPDF
 
                         if (!anchorRect.HasValue) continue;
 
-                        var anchorSlot = inner.PageIndexOf(anchorRect.Value.Top * ppp + HtmlContainerInt.PageBoundaryEpsilon);
+                        var anchorSlot = inner.SlotStartingAt(anchorRect.Value.Top * ppp);
                         // An anchor inside a skipped (content-empty) slot attributes to the next
                         // materialized page - the nearest place a reader can actually land.
                         var anchorPage = -1;

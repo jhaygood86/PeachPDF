@@ -136,7 +136,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         internal static EarlyBreak Discover(CssBox box, double targetTop, EarlyBreakReason reason)
         {
             var container = box.HtmlContainer!;
-            var slot = container.PageIndexOf(targetTop + HtmlContainerInt.PageBoundaryEpsilon);
+            var slot = container.SlotStartingAt(targetTop);
             var alone = new EarlyBreak(box, box, targetTop, slot, reason)
             {
                 Relaxation = BreakRelaxation.RunDropped

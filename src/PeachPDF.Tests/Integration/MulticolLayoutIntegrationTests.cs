@@ -415,7 +415,7 @@ namespace PeachPDF.Tests.Integration
             // box's own coordinate.
             var registered = Assert.Single(container.NamedPageElements, e => e.Name == "chapter");
             Assert.Equal(
-                container.PageTopOf(container.PageIndexOf(i2.Location.Y + HtmlContainerInt.PageBoundaryEpsilon)),
+                container.PageTopOf(container.SlotStartingAt(i2.Location.Y)),
                 registered.Y, 1);
         }
 
