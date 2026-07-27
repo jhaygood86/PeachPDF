@@ -113,7 +113,7 @@ Example:
 | `dt` | [dt](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/dt) | Full support |
 | `fieldset` | [fieldset](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/fieldset) | Rendered as a block with a border; no interactive behavior |
 | `form` | [form](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/form) | Rendered as a block; form submission is not supported |
-| `hr` | [hr](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/hr) | Full support |
+| `hr` | [hr](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/hr) | Full support. The rule is positioned by the same block-flow code as every other block-level box, so it follows [CSS 2.1 §9.4.3](https://www.w3.org/TR/CSS21/visuren.html#relative-positioning) (a relatively-offset preceding sibling does not move it) and [§8.3.1](https://www.w3.org/TR/CSS21/box.html#collapsing-margins) (its margin collapses against the nearest *in-flow* predecessor, never a float). |
 | `li` | [li](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/li) | Full support |
 | `menu` | [menu](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/menu) | Deprecated element; rendered as an unordered list |
 | `ol` | [ol](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/ol) | Full support |
