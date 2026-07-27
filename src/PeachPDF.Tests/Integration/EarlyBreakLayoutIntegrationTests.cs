@@ -411,6 +411,158 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(1, container.PageIndexOf(card.Location.Y));
         }
 
+        // ── the re-entered pass is one that resumed into a paragraph ─────────────────────────────────
+
+        /// <summary>
+        /// Re-entering a pass undoes the layout the passes from it on produced, which is what lets the box
+        /// that pass resumes <i>into</i> be continued a second time. Its line boxes are the case: a resumed
+        /// flow deliberately does not clear them and the box's prologue is once per layout, so lines the
+        /// discarded passes appended are still there — and <c>CssLayoutEngine.FinalizeLineBoxes</c> runs
+        /// from the record's own <c>CompletedLineCount</c>, handing every one of them to
+        /// <see cref="CssLineBox.AssignRectanglesToBoxes"/> a second time.
+        /// </summary>
+        /// <remarks>
+        /// The fixture is #415's: a paragraph long enough to break at the first page boundary, then two
+        /// headings each chained to a <c>break-inside: avoid</c> block. The second block is what raises the
+        /// decision, on a pass later than the one that placed its heading, so the driver goes back to a pass
+        /// that was entered mid-paragraph. Each combination below was found by sweep and each throws without
+        /// the rollback.
+        /// </remarks>
+        [Theory]
+        [InlineData(50, 30, 120)]
+        [InlineData(60, 50, 140)]
+        [InlineData(80, 30, 140)]
+        [InlineData(100, 40, 160)]
+        [InlineData(100, 50, 120)]
+        public async Task PulledRun_ReEnteringAPassThatResumedIntoAParagraph_LaysItOutAgain(
+            int leadWords, int cardWords, double pageHeight)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                ResumedParagraphDocument(leadWords, cardWords), pageWidth: 300, pageHeight: pageHeight, margin: 10);
+
+            // The paragraph the re-entered pass continued holds each of its own words on exactly one of its
+            // own line boxes. A line the rollback failed to discard shows up here as a word on two of them.
+            var lead = LayoutHarness.FindById(root, "lead")!;
+            var hosted = lead.LineBoxes.SelectMany(l => l.Words).ToList();
+
+            Assert.NotEmpty(hosted);
+            Assert.Equal(hosted.Count, hosted.Distinct().Count());
+            Assert.Equal(WordsIn(lead).Count, hosted.Count);
+        }
+
+        /// <summary>
+        /// And the correction itself still happens: each heading lands on the page its own block starts on,
+        /// with the block below it.
+        /// </summary>
+        [Theory]
+        [InlineData(50, 30, 120)]
+        [InlineData(80, 30, 140)]
+        public async Task PulledRun_FromAPassThatResumedIntoAParagraph_KeepsEachHeadingWithItsBlock(
+            int leadWords, int cardWords, double pageHeight)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                ResumedParagraphDocument(leadWords, cardWords), pageWidth: 300, pageHeight: pageHeight, margin: 10);
+
+            foreach (var n in new[] { 1, 2 })
+            {
+                var heading = LayoutHarness.FindById(root, $"h{n}")!;
+                var card = LayoutHarness.FindById(root, $"card{n}")!;
+
+                Assert.Equal(
+                    container.PageIndexOf(heading.Location.Y + HtmlContainerInt.PageBoundaryEpsilon),
+                    container.PageIndexOf(card.Location.Y + HtmlContainerInt.PageBoundaryEpsilon));
+                Assert.True(heading.ActualBottom <= card.Location.Y + 1.0,
+                    $"heading {n} must still sit above the block it is chained to");
+            }
+        }
+
+        /// <summary>
+        /// #374's workhorse invariant, over the content the pull moves: every word of each relocated block is
+        /// claimed by exactly one fragment. It fails one way if the re-entered pass leaves a ghost from the
+        /// layout it replaced, and the other way if the rollback discards content that legitimately belonged
+        /// to a fragmentainer already filled.
+        /// </summary>
+        /// <remarks>
+        /// Asked of the two blocks rather than of the whole document: a word the pass that froze the first
+        /// slot never reached still carries document Y 0, which lies inside that slot's own band, so the
+        /// first page's fragment claims it — a pre-existing defect this fixture would otherwise trip over
+        /// (issue #433), present identically with and without the pull.
+        /// </remarks>
+        [Theory]
+        [InlineData(50, 30, 120)]
+        [InlineData(80, 30, 140)]
+        public async Task PulledRun_FromAPassThatResumedIntoAParagraph_ClaimsEachBlockWordExactlyOnce(
+            int leadWords, int cardWords, double pageHeight)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                ResumedParagraphDocument(leadWords, cardWords), pageWidth: 300, pageHeight: pageHeight, margin: 10);
+
+            var blockWords = new[] { 1, 2 }
+                .SelectMany(n => WordsIn(LayoutHarness.FindById(root, $"card{n}")!))
+                .ToHashSet(ReferenceEqualityComparer.Instance);
+
+            Assert.NotEmpty(blockWords);
+
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => Flatten(f.Root))
+                .SelectMany(f => f.Words)
+                .Select(w => (object)w.Word)
+                .Where(blockWords.Contains)
+                .ToList();
+
+            Assert.Equal(blockWords.Count, claimed.Count);
+            Assert.Equal(claimed.Count, claimed.Distinct(ReferenceEqualityComparer.Instance).Count());
+        }
+
+        /// <summary>
+        /// The fixture family really does send the driver back to a pass it had already finished — which is
+        /// what makes the theory above a test of this correction rather than of layout in general, and what
+        /// a future guard silently declining the rewind would break.
+        /// </summary>
+        /// <remarks>
+        /// Asked of the family rather than of each row: which row reaches the re-entry depends on where the
+        /// page boundary falls in the paragraph, and that is a function of the platform's font metrics — the
+        /// same sensitivity that has caught §5.4 regressions on <c>windows-latest</c> only. That the family
+        /// reaches it is stable; which member does is not.
+        /// </remarks>
+        [Fact]
+        public async Task PulledRun_FromAPassThatResumedIntoAParagraph_ReEntersThatPass()
+        {
+            var rewound = 0;
+
+            foreach (var (leadWords, cardWords, pageHeight) in new[]
+                     {
+                         (50, 30, 120.0), (60, 50, 140.0), (80, 30, 140.0), (100, 40, 160.0), (100, 50, 120.0)
+                     })
+            {
+                var (_, container) = await LayoutHarness.LayoutAsync(
+                    ResumedParagraphDocument(leadWords, cardWords),
+                    pageWidth: 300, pageHeight: pageHeight, margin: 10);
+
+                rewound += container.PassRewinds;
+            }
+
+            Assert.True(rewound > 0, "no member of the fixture family sent the driver back to a finished pass");
+        }
+
+        private static List<CssRect> WordsIn(CssBox box) =>
+            LayoutHarness.Descendants(box).SelectMany(b => b.Words).ToList();
+
+        /// <summary>
+        /// A paragraph that breaks at the first page boundary, followed by two headings each chained to a
+        /// block that asks not to be broken.
+        /// </summary>
+        private static string ResumedParagraphDocument(int leadWords, int cardWords) =>
+            LayoutHarness.Wrap(
+                $"<p id='lead'>{Filler(leadWords, "lead")}</p>"
+                + "<h2 id='h1'>Head</h2>"
+                + $"<div id='card1' style='break-inside:avoid'>{Filler(cardWords, "a")}</div>"
+                + "<h2 id='h2'>Head</h2>"
+                + $"<div id='card2' style='break-inside:avoid'>{Filler(cardWords, "b")}</div>");
+
+        private static string Filler(int count, string prefix) =>
+            string.Join(" ", Enumerable.Range(0, count).Select(i => $"{prefix}{i}"));
+
         private static string WrappedCardDocument(double fillerHeight, string cardCss, string wrapperCss = "") =>
             LayoutHarness.Wrap(
                 $"<div style='height:{fillerHeight}pt'>filler</div>"
