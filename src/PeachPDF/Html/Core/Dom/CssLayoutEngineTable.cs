@@ -752,12 +752,14 @@ namespace PeachPDF.Html.Core.Dom
         {
             var startX = Math.Max(_tableBox.ClientLeft + GetHorizontalSpacing(), 0);
             var startY = Math.Max(_tableBox.ClientTop + GetVerticalSpacing(), 0);
-            var currentY = startY;
-            var maxRight = startX;
-            var maxBottom = 0d;
 
             var container = _tableBox.HtmlContainer;
             var pageHeight = container?.PageSize.Height ?? double.MaxValue;
+
+            // The slot is seeded below rather than here - it is a question about the page grid, and the
+            // header/footer measurement between here and there lays cells out, which can register a named
+            // page and so re-derive the grid's own geometry.
+            var cursor = new TableRowCursor(top: startY, maxRight: startX, slotIndex: 0);
 
             // Reset page-break tracking so re-layout doesn't accumulate stale entries
             _tableBox.PageBreakBottoms = null;
@@ -773,15 +775,19 @@ namespace PeachPDF.Html.Core.Dom
             if (_shouldRepeatHeaders && _headerBox != null)
             {
                 // Layout header rows directly using table layout logic
-                var headerRowsLayoutY = currentY;
+                var headerRowsLayoutY = cursor.CurrentY;
+                var headerCursor = cursor.ForRowGroupMeasurement(headerRowsLayoutY);
+
                 foreach (var row in _headerBox.Boxes)
                 {
                     if (row.Display != CssConstants.TableRow)
                         continue;
 
-                    var (newMaxRight, newMaxBottom) = await LayoutBodyRow(g, row, startX, headerRowsLayoutY, -1, new Dictionary<int, List<CssBox>>(), maxRight, headerRowsLayoutY);
-                    maxRight = newMaxRight;
-                    headerRowsLayoutY = newMaxBottom + GetVerticalSpacing();
+                    headerCursor.CurrentY = headerRowsLayoutY;
+                    headerCursor.MaxBottom = headerRowsLayoutY;
+
+                    await LayoutBodyRow(g, row, startX, headerCursor);
+                    headerRowsLayoutY = headerCursor.MaxBottom + GetVerticalSpacing();
 
                     // Unlike the regular body-row loop below, this never set the row's own
                     // Location/ActualRight/ActualBottom (only each cell's) - left it at a
@@ -790,12 +796,14 @@ namespace PeachPDF.Html.Core.Dom
                     // bug at the row-group level) then silently drops from painting entirely.
                     row.Location = new RPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
                     row.ActualRight = row.Boxes.Max(x => x.ActualRight);
-                    row.ActualBottom = newMaxBottom;
+                    row.ActualBottom = headerCursor.MaxBottom;
                 }
 
+                cursor.MaxRight = headerCursor.MaxRight;
+
                 // Set header box dimensions
-                _headerBox.Location = new RPoint(startX, currentY);
-                _headerBox.ActualRight = maxRight;
+                _headerBox.Location = new RPoint(startX, cursor.CurrentY);
+                _headerBox.ActualRight = cursor.MaxRight;
                 _headerBox.ActualBottom = headerRowsLayoutY - GetVerticalSpacing();
                 _headerHeight = _headerBox.ActualBottom - _headerBox.Location.Y;
             }
@@ -805,20 +813,26 @@ namespace PeachPDF.Html.Core.Dom
             {
                 // Layout footer rows directly
                 var footerRowsLayoutY = 0d;
+                var footerCursor = cursor.ForRowGroupMeasurement(footerRowsLayoutY);
+
                 foreach (var row in _footerBox.Boxes)
                 {
                     if (row.Display != CssConstants.TableRow)
                         continue;
 
-                    var (newMaxRight, newMaxBottom) = await LayoutBodyRow(g, row, startX, footerRowsLayoutY, -1, new Dictionary<int, List<CssBox>>(), maxRight, footerRowsLayoutY);
-                    maxRight = newMaxRight;
-                    footerRowsLayoutY = newMaxBottom + GetVerticalSpacing();
+                    footerCursor.CurrentY = footerRowsLayoutY;
+                    footerCursor.MaxBottom = footerRowsLayoutY;
+
+                    await LayoutBodyRow(g, row, startX, footerCursor);
+                    footerRowsLayoutY = footerCursor.MaxBottom + GetVerticalSpacing();
 
                     // See the identical fix in the header-rows loop above for why this is needed.
                     row.Location = new RPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
                     row.ActualRight = row.Boxes.Max(x => x.ActualRight);
-                    row.ActualBottom = newMaxBottom;
+                    row.ActualBottom = footerCursor.MaxBottom;
                 }
+
+                cursor.MaxRight = footerCursor.MaxRight;
 
                 // Unlike Location/ActualBottom above, ActualRight is a computed property derived
                 // from Size.Width, which is never otherwise set on the footer row-group box itself
@@ -830,7 +844,7 @@ namespace PeachPDF.Html.Core.Dom
                 // painted on any page. Mirrors the identical `_headerBox.ActualRight = maxRight`
                 // assignment above. See GitHub issue #124.
                 _footerBox.Location = new RPoint(startX, 0);
-                _footerBox.ActualRight = maxRight;
+                _footerBox.ActualRight = cursor.MaxRight;
                 _footerBox.ActualBottom = footerRowsLayoutY - GetVerticalSpacing();
                 _footerHeight = _footerBox.ActualBottom - _footerBox.Location.Y;
             }
@@ -843,9 +857,9 @@ namespace PeachPDF.Html.Core.Dom
             // a page boundary. Reading it there names the page the table just left, and the pre-check
             // below then nudges the table one point onto the next one - which is what a table relocated
             // by CssBox's own §4.3 mover, and so placed exactly at a page top, does every time.
-            var currentPageNumber = pageHeight < double.MaxValue - 1
+            cursor.PlaceAt(startY, pageHeight < double.MaxValue - 1
                 ? container!.SlotStartingAt(_tableBox.ClientTop)
-                : 0;
+                : 0);
 
             // Pre-check: move the entire table to the next page when the first body row
             // would cross a page boundary AND the full table body fits on one page.
@@ -859,24 +873,24 @@ namespace PeachPDF.Html.Core.Dom
                 && !_shouldRepeatHeaders
                 && !_shouldRepeatFooters)
             {
+                var slot = cursor.SlotIndex;
                 var firstRowHeight = EstimateRowHeight(_bodyRows[0]);
                 // The band height already excludes both margins (PdfGenerator.SetContent) -
                 // subtracting them again here double-counted a marginTop+marginBottom-sized band
                 // out of every page's real capacity.
-                var availableHeight = container!.PageBandHeightOf(currentPageNumber) - _footerHeight;
+                var availableHeight = container!.PageBandHeightOf(slot) - _footerHeight;
                 var estimatedBodyHeight = _bodyRows.Sum(EstimateRowHeight);
 
-                if (WillCrossPageBoundary(container, currentY + firstRowHeight, availableHeight, currentPageNumber)
+                if (WillCrossPageBoundary(container, cursor.CurrentY + firstRowHeight, availableHeight, slot)
                     && estimatedBodyHeight <= availableHeight)
                 {
-                    var pageBreakOffset = CalculatePageBreakOffset(container, currentY, currentPageNumber);
-                    pageBreakOffset = PullKeepWithNextRun(container, currentY, pageBreakOffset,
-                        currentPageNumber, availableHeight, estimatedBodyHeight);
+                    var pageBreakOffset = CalculatePageBreakOffset(container, cursor.CurrentY, slot);
+                    pageBreakOffset = PullKeepWithNextRun(container, cursor.CurrentY, pageBreakOffset,
+                        slot, availableHeight, estimatedBodyHeight);
 
                     _tableBox.Location = _tableBox.Location with { Y = _tableBox.Location.Y + pageBreakOffset };
                     startY = Math.Max(_tableBox.ClientTop + GetVerticalSpacing(), 0);
-                    currentY = startY;
-                    currentPageNumber = container.PageIndexOf(startY);
+                    cursor.PlaceAt(startY, container.PageIndexOf(startY));
                 }
             }
 
@@ -895,22 +909,22 @@ namespace PeachPDF.Html.Core.Dom
                 && container != null
                 && _shouldRepeatHeaders && _headerBox != null)
             {
+                var slot = cursor.SlotIndex;
                 var firstRowHeight = EstimateRowHeight(_bodyRows[0]);
-                var availableHeight = container.PageBandHeightOf(currentPageNumber) - _footerHeight;
+                var availableHeight = container.PageBandHeightOf(slot) - _footerHeight;
                 var afterHeaderY = startY + _headerHeight + GetVerticalSpacing();
 
-                if (WillCrossPageBoundary(container, afterHeaderY + firstRowHeight, availableHeight, currentPageNumber))
+                if (WillCrossPageBoundary(container, afterHeaderY + firstRowHeight, availableHeight, slot))
                 {
-                    var pageBreakOffset = CalculatePageBreakOffset(container, startY, currentPageNumber);
+                    var pageBreakOffset = CalculatePageBreakOffset(container, startY, slot);
                     pageBreakOffset = PullKeepWithNextRun(container, startY, pageBreakOffset,
-                        currentPageNumber, availableHeight, _headerHeight + firstRowHeight);
+                        slot, availableHeight, _headerHeight + firstRowHeight);
 
                     _tableBox.Location = _tableBox.Location with { Y = _tableBox.Location.Y + pageBreakOffset };
                     _headerBox.OffsetTop(pageBreakOffset);
 
                     startY = Math.Max(_tableBox.ClientTop + GetVerticalSpacing(), 0);
-                    currentY = startY;
-                    currentPageNumber = container.PageIndexOf(startY);
+                    cursor.PlaceAt(startY, container.PageIndexOf(startY));
                 }
             }
 
@@ -923,38 +937,41 @@ namespace PeachPDF.Html.Core.Dom
             // overlap) but wasted content-stream bytes and duplicate structure-tree entries.
             if (_shouldRepeatHeaders && _headerBox != null)
             {
-                var headerProxy = CreateHeaderProxy(currentY);
+                var headerProxy = CreateHeaderProxy(cursor.CurrentY);
                 if (headerProxy != null)
                 {
                     await headerProxy.PerformLayout(g);
 
-                    currentY += _headerHeight + GetVerticalSpacing();
-                    maxBottom = currentY;
+                    cursor.CurrentY += _headerHeight + GetVerticalSpacing();
+                    cursor.MaxBottom = cursor.CurrentY;
                 }
             }
-
-            Dictionary<int, List<CssBox>> rowSpannedBoxes = new();
 
             for (var i = 0; i < _bodyRows.Count; i++)
             {
                 var row = _bodyRows[i];
+                cursor.RowIndex = i;
+
+                // The band the loop last opened, which is not in general the band the cursor has reached -
+                // see TableRowCursor for why it is nevertheless what every question here is asked of.
+                var slot = cursor.SlotIndex;
                 var estimatedRowHeight = EstimateRowHeight(row);
                 // See the identical fix/comment on the pre-check's availableHeight above.
-                var availableHeight = (container?.PageBandHeightOf(currentPageNumber) ?? pageHeight) - _footerHeight;
+                var availableHeight = (container?.PageBandHeightOf(slot) ?? pageHeight) - _footerHeight;
 
                 // Check for page break: either the row does not fit, or a break value says the break
                 // falls here regardless (css-break-3 §3.1's class-A break point between two rows).
                 if (i > 0 && container != null
                     && (ForcedBreakFallsBeforeRow(i)
-                        || WillCrossPageBoundary(container, currentY + estimatedRowHeight, availableHeight, currentPageNumber)))
+                        || WillCrossPageBoundary(container, cursor.CurrentY + estimatedRowHeight, availableHeight, slot)))
                 {
                     // Start with the last body-row bottom; may be extended by the footer below.
-                    var pageBreakBottomY = maxBottom;
+                    var pageBreakBottomY = cursor.MaxBottom;
 
                     // Create footer proxy for current page
                     if (_shouldRepeatFooters && _footerHeight > 0)
                     {
-                        var footerY = CalculateFooterPositionAtPageBottom(container!, currentY, currentPageNumber);
+                        var footerY = CalculateFooterPositionAtPageBottom(container, cursor.CurrentY, slot);
                         var footerProxy = CreateFooterProxy(footerY);
                         if (footerProxy != null)
                         {
@@ -966,50 +983,47 @@ namespace PeachPDF.Html.Core.Dom
 
                     // Record after footer so the border clip includes the footer area.
                     _tableBox.PageBreakBottoms ??= new Dictionary<int, double>();
-                    _tableBox.PageBreakBottoms[currentPageNumber] = pageBreakBottomY;
+                    _tableBox.PageBreakBottoms[slot] = pageBreakBottomY;
 
                     // Move to next page
-                    var pageBreakOffset = CalculatePageBreakOffset(container!, currentY, currentPageNumber);
-                    currentY += pageBreakOffset;
-                    currentPageNumber++;
+                    cursor.OpenNextSlot(
+                        cursor.CurrentY + CalculatePageBreakOffset(container, cursor.CurrentY, slot));
 
                     // Create new header proxy for new page
                     if (_shouldRepeatHeaders && _headerHeight > 0)
                     {
-                        var headerProxy = CreateHeaderProxy(currentY);
+                        var headerProxy = CreateHeaderProxy(cursor.CurrentY);
                         if (headerProxy != null)
                         {
                             await headerProxy.PerformLayout(g);
-                            currentY += _headerHeight + GetVerticalSpacing();
-                            maxRight = Math.Max(maxRight, headerProxy.ActualRight);
+                            cursor.CurrentY += _headerHeight + GetVerticalSpacing();
+                            cursor.MaxRight = Math.Max(cursor.MaxRight, headerProxy.ActualRight);
                         }
                     }
 
-                    maxBottom = currentY;
+                    cursor.MaxBottom = cursor.CurrentY;
                 }
 
                 // Layout body row
-                var (newMaxRight, newMaxBottom) = await LayoutBodyRow(g, row, startX, currentY, i, rowSpannedBoxes, maxRight, maxBottom);
-                maxRight = newMaxRight;
-                maxBottom = newMaxBottom;
+                await LayoutBodyRow(g, row, startX, cursor);
 
-                currentY = maxBottom + GetVerticalSpacing();
+                cursor.CurrentY = cursor.MaxBottom + GetVerticalSpacing();
 
                 row.Location = new RPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
                 row.ActualRight = row.Boxes.Max(x => x.ActualRight);
-                row.ActualBottom = maxBottom;
+                row.ActualBottom = cursor.MaxBottom;
             }
 
             // Step 5: Create final footer proxy
             if (_shouldRepeatFooters && _footerHeight > 0)
             {
-                var finalFooterProxy = CreateFooterProxy(currentY);
+                var finalFooterProxy = CreateFooterProxy(cursor.CurrentY);
                 if (finalFooterProxy != null)
                 {
                     await finalFooterProxy.PerformLayout(g);
-                    currentY += _footerHeight + GetVerticalSpacing();
-                    maxBottom = Math.Max(maxBottom, finalFooterProxy.ActualBottom);
-                    maxRight = Math.Max(maxRight, finalFooterProxy.ActualRight);
+                    cursor.CurrentY += _footerHeight + GetVerticalSpacing();
+                    cursor.MaxBottom = Math.Max(cursor.MaxBottom, finalFooterProxy.ActualBottom);
+                    cursor.MaxRight = Math.Max(cursor.MaxRight, finalFooterProxy.ActualRight);
                 }
             }
 
@@ -1029,9 +1043,9 @@ namespace PeachPDF.Html.Core.Dom
             SetRowGroupBoxDimensions();
 
             // Step 7: Set final table dimensions
-            maxRight = Math.Max(maxRight, _tableBox.Location.X + _tableBox.ActualWidth);
-            _tableBox.ActualRight = maxRight + GetHorizontalSpacing() + _tableBox.ActualBorderRightWidth;
-            _tableBox.ActualBottom = Math.Max(maxBottom, startY) + GetVerticalSpacing() + _tableBox.ActualBorderBottomWidth;
+            var tableRight = Math.Max(cursor.MaxRight, _tableBox.Location.X + _tableBox.ActualWidth);
+            _tableBox.ActualRight = tableRight + GetHorizontalSpacing() + _tableBox.ActualBorderRightWidth;
+            _tableBox.ActualBottom = Math.Max(cursor.MaxBottom, startY) + GetVerticalSpacing() + _tableBox.ActualBorderBottomWidth;
 
             // What the pre-checks above decide from EstimateRowHeight - a one-line-of-text heuristic
             // that can grossly undershoot a row whose cells hold tall block content - only real layout
@@ -1108,15 +1122,23 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Layout a single body row
+        /// Lays one row's cells out at <paramref name="cursor"/>'s current position, advancing the
+        /// cursor's <see cref="TableRowCursor.MaxRight"/>/<see cref="TableRowCursor.MaxBottom"/> over them.
         /// </summary>
-        private async ValueTask<(double maxRight, double maxBottom)> LayoutBodyRow(RGraphics g, CssBox row, double startX, double currentY, int rowIndex,
-    Dictionary<int, List<CssBox>> rowSpannedBoxes, double initialMaxRight, double initialMaxBottom)
+        /// <param name="g">the graphics device to measure with</param>
+        /// <param name="row">the row whose cells are being placed</param>
+        /// <param name="startX">the table's own content left edge, where each row's first cell starts</param>
+        /// <param name="cursor">where the row loop has got to; read and advanced</param>
+        private async ValueTask LayoutBodyRow(RGraphics g, CssBox row, double startX, TableRowCursor cursor)
         {
+            var currentY = cursor.CurrentY;
+            var rowIndex = cursor.RowIndex;
+            var rowSpannedBoxes = cursor.RowSpannedBoxes;
+
             var currentX = startX;
             var currentColumn = 0;
-            var rowMaxBottom = initialMaxBottom;
-            var rowMaxRight = initialMaxRight;
+            var rowMaxBottom = cursor.MaxBottom;
+            var rowMaxRight = cursor.MaxRight;
 
             foreach (var cell in row.Boxes)
             {
@@ -1190,7 +1212,8 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
-            return (rowMaxRight, rowMaxBottom);
+            cursor.MaxRight = rowMaxRight;
+            cursor.MaxBottom = rowMaxBottom;
         }
         /// <summary>
         /// Gets the spanned width of a cell (With of all columns it spans minus one).
