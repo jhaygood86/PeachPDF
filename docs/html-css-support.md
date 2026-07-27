@@ -508,6 +508,7 @@ CSS Multi-column Layout (`column-count`/`column-width`/`columns`) is supported, 
 - `orphans` and [margin truncation](#page-breaks) apply at a column boundary the same way they apply at a page boundary (`widows`, which is enforced after the fact by re-running the pass that filled a fragmentainer, is a page-context rule only).
 - A container whose content outlasts its columns continues on the next page, resuming where its last column stopped rather than starting over, and balances the fragment that holds the end of the flow.
 - A child continues **into** the next column rather than moving to it whole: a paragraph's first lines stay in one column and the rest flow into the next, each fragment carrying its own background, border and padding.
+- The break need not fall between two of the container's own children. A block nested any distance below one is split at the column boundary too, and the content after the break starts the next column at that column's top — inside its own containing block's border and padding, and inside the wrapper's own fragment there.
 
 `column-fill: balance` (the default) aims for equal-height columns, and `column-fill: auto` fills each column before starting the next.
 
@@ -727,7 +728,7 @@ Margin is cloned at a line break, alongside the border and padding, so each line
 
 Limitations:
 
-- Room is reserved for `clone`'s border and padding in normal block and inline flow, and at a column break for a box whose own content is text. Inside a flex, grid or table, whose own engine positions its children, a cloned decoration at a break is painted but no room is made for it, so it can overlap content. The same is true of a box in a multi-column container whose content is blocks rather than text, since such a box is not split at a column boundary at all.
+- Room is reserved for `clone`'s border and padding in normal block and inline flow, and at a column break — including for a box whose own content is blocks rather than text, which is split at a column boundary like any other. Inside a flex, grid or table, whose own engine positions its children, a cloned decoration at a break is painted but no room is made for it, so it can overlap content.
 - A page break is decided against the text itself, so a large `line-height`'s own leading below the last line on a page is not counted. A cloned bottom border can therefore sit within that leading — at most `line-height` minus the text's own height. Ordinary line heights leave this invisible.
 - An inline box that wraps *and* is split at a column boundary has its unbroken width measured within each column rather than across both, so a gradient on such a box restarts in the second column. A block-level box is unaffected, and so is an inline box that only crosses page breaks.
 - `border-image` is parsed but never painted, so §6.2's treatment of it has no visible effect either way. A replaced element (an image, an inline `<svg>`, an `<iframe>`) is never split at all, so it always paints its whole box regardless of the value.
