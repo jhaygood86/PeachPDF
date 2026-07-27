@@ -440,12 +440,6 @@ namespace PeachPDF.Tests.Integration
             var (root, container) = await LayoutHarness.LayoutAsync(
                 ResumedParagraphDocument(leadWords, cardWords), pageWidth: 300, pageHeight: pageHeight, margin: 10);
 
-            // A pass really was re-entered: the driver ran more of them than there are fragmentainers to
-            // show for it. Without this the theory is load-bearing only because the un-rolled-back path
-            // happens to throw, and a future guard that silently declined the rewind would leave it green.
-            Assert.True(container.PassRewinds > 0,
-                "fixture must send the driver back to a pass it had already finished");
-
             // The paragraph the re-entered pass continued holds each of its own words on exactly one of its
             // own line boxes. A line the rollback failed to discard shows up here as a word on two of them.
             var lead = LayoutHarness.FindById(root, "lead")!;
@@ -518,6 +512,37 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Equal(blockWords.Count, claimed.Count);
             Assert.Equal(claimed.Count, claimed.Distinct(ReferenceEqualityComparer.Instance).Count());
+        }
+
+        /// <summary>
+        /// The fixture family really does send the driver back to a pass it had already finished — which is
+        /// what makes the theory above a test of this correction rather than of layout in general, and what
+        /// a future guard silently declining the rewind would break.
+        /// </summary>
+        /// <remarks>
+        /// Asked of the family rather than of each row: which row reaches the re-entry depends on where the
+        /// page boundary falls in the paragraph, and that is a function of the platform's font metrics — the
+        /// same sensitivity that has caught §5.4 regressions on <c>windows-latest</c> only. That the family
+        /// reaches it is stable; which member does is not.
+        /// </remarks>
+        [Fact]
+        public async Task PulledRun_FromAPassThatResumedIntoAParagraph_ReEntersThatPass()
+        {
+            var rewound = 0;
+
+            foreach (var (leadWords, cardWords, pageHeight) in new[]
+                     {
+                         (50, 30, 120.0), (60, 50, 140.0), (80, 30, 140.0), (100, 40, 160.0), (100, 50, 120.0)
+                     })
+            {
+                var (_, container) = await LayoutHarness.LayoutAsync(
+                    ResumedParagraphDocument(leadWords, cardWords),
+                    pageWidth: 300, pageHeight: pageHeight, margin: 10);
+
+                rewound += container.PassRewinds;
+            }
+
+            Assert.True(rewound > 0, "no member of the fixture family sent the driver back to a finished pass");
         }
 
         private static List<CssRect> WordsIn(CssBox box) =>
