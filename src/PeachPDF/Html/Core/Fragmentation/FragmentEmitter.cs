@@ -836,8 +836,11 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// content survives the boundary at all. Applied unconditionally, the tie-break deleted it — measured
         /// at 45 words, one line per break, on a four-page flex document
         /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/477">#477</see>).
-        /// <see cref="HtmlContainerInt.FallsPast"/> is exactly the "layout could not fix this" test, in the
-        /// same tolerance as the rest.
+        /// <see cref="HtmlContainerInt.FallsPast"/> is the "layout could not fix this" test, in the same
+        /// tolerance as the rest — though deliberately a looser form of it than layout's own: the emitter
+        /// drops <c>MonolithicContent.ClonedBlockInsets</c>' bottom inset, and asks the page band even
+        /// inside a column, where layout asks the column's. Both only ever make it fire more readily, which
+        /// is safe because it is intersected with the region test and so can still only remove claims.
         /// </para>
         /// <para>
         /// It is a <i>tie-break on top of</i> the region test rather than a replacement for it, and that is

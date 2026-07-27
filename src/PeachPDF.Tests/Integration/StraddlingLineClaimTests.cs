@@ -102,7 +102,7 @@ namespace PeachPDF.Tests.Integration
         public async Task AWordTallerThanTheBand_IsClaimedByEveryBandItCovers()
         {
             var (root, container) = await LayoutHarness.LayoutAsync(
-                LayoutHarness.Wrap("<p style='font-size:900pt;line-height:1;margin:0'>T</p>"),
+                LayoutHarness.Wrap("<p style='font-size:1800pt;line-height:1;margin:0'>T</p>"),
                 pageHeight: 842, margin: 10);
 
             var word = LayoutHarness.Descendants(root).SelectMany(b => b.Words).Single(w => w.Text == "T");
@@ -111,7 +111,16 @@ namespace PeachPDF.Tests.Integration
             Assert.True(word.Height > container.PageBottomOf(band) - container.PageTopOf(band),
                 $"the fixture must produce a word taller than the band, not {word.Height}");
 
-            Assert.Contains(band + 1, SlotsClaiming(container, word));
+            // Every band the word covers, from the grid's own coordinates — "claimed by band + 1" alone
+            // would still pass if a taller word silently lost the bands below its second.
+            var covered = container.FragmentTree!.Fragmentainers
+                .Select(f => f.SlotIndex)
+                .Where(slot => word.Bottom > container.PageTopOf(slot)
+                               && word.Top < container.PageBottomOf(slot))
+                .ToList();
+
+            Assert.True(covered.Count > 2, $"the fixture must span more than two bands, not {covered.Count}");
+            Assert.Equal(covered, SlotsClaiming(container, word));
         }
 
         private static Task<(CssBox Root, HtmlContainerInt Container)> LayoutAsync(string display)
@@ -122,11 +131,11 @@ namespace PeachPDF.Tests.Integration
             var items = string.Join("", Enumerable.Range(0, 120).Select(i =>
                 $"<div style='width:100%;font-size:10pt;line-height:13pt'>w{i * 3} w{i * 3 + 1} w{i * 3 + 2}</div>"));
 
-            var container = display == "flex"
+            var markup = display == "flex"
                 ? $"<div style='display:flex;flex-wrap:wrap'>{items}</div>"
                 : $"<div style='display:grid;grid-template-columns:1fr'>{items}</div>";
 
-            return LayoutHarness.LayoutAsync(LayoutHarness.Wrap(container), pageHeight: 842, margin: 10);
+            return LayoutHarness.LayoutAsync(LayoutHarness.Wrap(markup), pageHeight: 842, margin: 10);
         }
 
         /// <summary>Every word left crossing the bottom of the band its own top starts in.</summary>
