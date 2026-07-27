@@ -2894,18 +2894,22 @@ namespace PeachPDF.Html.Core.Dom
                             // (see HtmlContainer.PageIndexOf's own doc comment) - matching
                             // BreakInside_Avoid_PositionsAtTopOfNextPage's already-established
                             // convention, and mirroring the forced-break flush-fit rule above.
-                            // Both ask SlotEndingAt, including of the child's own top, and that is
-                            // deliberate rather than a slip: baseTop *is* the predecessor's bottom
-                            // edge, and asking the same of `top` is what makes a child landing flush
-                            // ON a boundary not count as having crossed it - it is the first thing in
-                            // the next band, so there is nothing for the margin to be truncated
-                            // against. SlotStartingAt here would call that a crossing and truncate a
-                            // margin that never spanned anything.
+                            // The band is the one baseTop *ends* in - baseTop is the predecessor's
+                            // bottom edge - and the question asked of it is FallsPast, which carries the
+                            // same bottom-edge convention. That is deliberate rather than a slip: a child
+                            // landing flush ON the band's bottom has not crossed it, because it is the
+                            // first thing in the next band and there is nothing for the margin to be
+                            // truncated against. The top-edge convention here would call that a crossing
+                            // and truncate a margin that never spanned anything.
                             var prevSlot = child.HtmlContainer.SlotEndingAt(baseTop);
-                            var naturalSlot = child.HtmlContainer.SlotEndingAt(top);
-                            if (naturalSlot > prevSlot)
+                            var band = child.HtmlContainer.BandOfSlot(prevSlot);
+                            if (HtmlContainerInt.FallsPast(top, band))
                             {
-                                var newTop = child.HtmlContainer.PageTopOf(prevSlot + 1);
+                                // The band's own bottom, which is the next one's top: bands are
+                                // contiguous, so "start at the next slot" and "start where this band
+                                // ends" are the same coordinate, and the second is the one the question
+                                // above was asked in.
+                                var newTop = band.Bottom;
 
                                 // css-break §3.1 keep-with-next: the child is about to relocate to
                                 // the next page's content top, which would otherwise strand a
@@ -2935,7 +2939,7 @@ namespace PeachPDF.Html.Core.Dom
                                         child.HtmlContainer.SlotEndingAt(runTop) == prevSlot;
 
                                     if (extraAbove > 0 && runStartsOnSamePage
-                                        && extraAbove <= child.HtmlContainer.PageBandHeightOf(prevSlot + 1))
+                                        && extraAbove <= child.HtmlContainer.BandOfSlot(prevSlot + 1).Height)
                                     {
                                         var groupOffset = newTop - runTop;
 

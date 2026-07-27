@@ -159,5 +159,47 @@ namespace PeachPDF.Tests.Html.Core
                 Assert.Equal(container.SlotStartingAt(y), container.SlotEndingAt(y));
             }
         }
+        [Theory]
+        [InlineData(0)]
+        [InlineData(1)]
+        [InlineData(4)]
+        public void BandOfSlot_IsContiguousWithTheNext(int slot)
+        {
+            var container = CreateContainer();
+
+            // The identity the band form of every boundary question rests on: "the next slot's top" and
+            // "this band's bottom" are the same coordinate.
+            Assert.Equal(container.BandOfSlot(slot + 1).Top, container.BandOfSlot(slot).Bottom);
+        }
+
+        [Fact]
+        public void FallsPast_ABottomEdgeFlushOnTheBandBottom_HasNotLeftIt()
+        {
+            var container = CreateContainer();
+            var band = container.BandOfSlot(0);
+
+            Assert.False(HtmlContainerInt.FallsPast(band.Bottom, band));
+            Assert.True(HtmlContainerInt.FallsPast(band.Bottom + HtmlContainerInt.PageBoundaryEpsilon, band));
+        }
+
+        [Theory]
+        [InlineData(0, 10)]
+        [InlineData(0, BandHeight)]
+        [InlineData(0, BandHeight + 1)]
+        [InlineData(10, BandHeight * 2)]
+        [InlineData(BandHeight, BandHeight + 5)]
+        [InlineData(BandHeight - 1, BandHeight)]
+        public void FallsPast_AgreesWithTheSlotComparisonItReplaces(double topOffset, double bottomOffset)
+        {
+            var container = CreateContainer();
+            var top = MarginTop + topOffset;
+            var bottom = MarginTop + bottomOffset;
+
+            // The rewrite's whole claim: asking the band is the same question as comparing the slot the
+            // top starts in against the slot the bottom ends in.
+            Assert.Equal(
+                container.SlotStartingAt(top) < container.SlotEndingAt(bottom),
+                HtmlContainerInt.FallsPast(bottom, container.BandStartingAt(top)));
+        }
     }
 }
