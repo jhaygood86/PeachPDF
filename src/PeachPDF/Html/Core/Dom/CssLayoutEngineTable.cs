@@ -1364,6 +1364,11 @@ namespace PeachPDF.Html.Core.Dom
             var rowMaxBottom = cursor.MaxBottom;
             var rowMaxRight = cursor.MaxRight;
 
+            // The cells of this row that ran out of fragmentainer, which the two steps below have to leave
+            // alone: a cell whose content continues elsewhere has no leftover room in this fragment to
+            // distribute, and its box does not describe its content.
+            var stoppedCells = new List<CssBox>();
+
             foreach (var cell in row.Boxes)
             {
                 if (currentColumn >= _columnWidths!.Length)
@@ -1372,6 +1377,19 @@ namespace PeachPDF.Html.Core.Dom
                 var rowSpan = GetRowSpan(cell);
                 var columnIndex = GetCellRealColumnIndex(row, cell);
                 var width = GetCellWidth(columnIndex, cell);
+
+                // A cell an earlier pass finished has its whole content in the fragment that pass emitted,
+                // so this one places nothing for it: not its position, not its content, not its alignment.
+                // Only the column cursor moves on, which is what keeps the cells beside it in their
+                // columns. The distinction this rests on is the record's - see TableRowCursor.FinishedCells
+                // for why a finished cell and one no pass entered cannot be told apart without it.
+                if (cursor.FinishedOnAnEarlierPass(cell))
+                {
+                    rowMaxRight = Math.Max(rowMaxRight, currentX + width);
+                    currentColumn++;
+                    currentX += width + GetHorizontalSpacing();
+                    continue;
+                }
 
                 cell.Location = new RPoint(currentX, currentY);
                 cell.ActualRight = cell.Location.X + width;
@@ -1389,6 +1407,23 @@ namespace PeachPDF.Html.Core.Dom
                 // still places every remaining row, which is what keeps this step behaviour-neutral while
                 // the engine runs with the fragmentainer detached and no cell can answer yes.
                 cursor.RecordIfUnfinished(cell);
+
+                // A cell that stopped never reached the line that would have set its own ActualBottom
+                // (CssLayoutEngine.CreateLineBoxes returns on the break before it), so the box still holds
+                // the pre-flow value its placement gave it - its own top. Two steps below read that as the
+                // cell's height: the row's own MaxBottom, and the vertical alignment, which distributes
+                // (box bottom - content bottom) and so pushes a whole fragment's worth of lines *up* out
+                // of the fragmentainer being filled. Measured with the monolithic gate lifted: a 244-word
+                // <td> put its first line 104pt above the document origin and emitted 121 of its words.
+                //
+                // What the cell's fragment is worth here is where its content actually reached, and there
+                // is no leftover room to distribute at all - a cell that continues elsewhere overfills its
+                // fragment by definition, which is why the alignment is skipped rather than re-based.
+                if (cell.PendingBreakToken is not null)
+                {
+                    stoppedCells.Add(cell);
+                    cell.ActualBottom = Math.Max(cell.ActualBottom, CssBox.GetMaximumBottom(cell, 0d));
+                }
 
                 // Track max bottom
                 if (cell is CssSpacingBox sb)
@@ -1433,6 +1468,11 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var cell in boxesToVerticallyAlign)
             {
+                // Nothing of this cell belongs to this fragmentainer, so neither does its geometry: giving
+                // it this fragment's bottom and re-aligning against that would drag the content an earlier
+                // pass emitted down onto this page.
+                if (cursor.FinishedOnAnEarlierPass(cell)) continue;
+
                 if (cell is CssSpacingBox spacer)
                 {
                     if (spacer.EndRow == rowIndex)
@@ -1440,6 +1480,12 @@ namespace PeachPDF.Html.Core.Dom
                         spacer.ExtendedBox.ActualBottom = rowMaxBottom;
                         CssLayoutEngine.ApplyCellVerticalAlignment(g, spacer.ExtendedBox);
                     }
+                }
+                else if (stoppedCells.Contains(cell))
+                {
+                    // Its content continues in another fragmentainer, so this fragment has no spare room
+                    // to align within and its own bottom is where its content stopped - see the comment
+                    // where it was recorded.
                 }
                 else if (GetRowSpan(cell) == 1 || (boxesThatEndOnRow?.Contains(cell) ?? false))
                 {

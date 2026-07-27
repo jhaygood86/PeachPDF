@@ -84,7 +84,21 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c> group is being measured — those rows are not part of
         /// the body's own row numbering, and a rowspan inside one must not reach the body's bookkeeping.
         /// </summary>
-        internal int RowIndex { get; set; } = -1;
+        /// <remarks>
+        /// Moving to another row clears <see cref="FinishedCells"/>: which cells finished is a fact about
+        /// one row, and only the row the loop stops in ever has to hand it on.
+        /// </remarks>
+        internal int RowIndex
+        {
+            get => _rowIndex;
+            set
+            {
+                _rowIndex = value;
+                _finishedCells.Clear();
+            }
+        }
+
+        private int _rowIndex = -1;
 
         /// <summary>
         /// Cells with <c>rowspan &gt; 1</c>, keyed by the <b>absolute</b> body-row index they end on, so a
@@ -151,7 +165,35 @@ namespace PeachPDF.Html.Core.Fragmentation
             {
                 _unfinishedCells.Add(new UnfinishedTableCell(RowIndex, cell, token));
             }
+            else
+            {
+                _finishedCells.Add(cell);
+            }
         }
+
+        private readonly List<CssBox> _finishedCells = [];
+
+        /// <summary>
+        /// The cells of the row now being placed that <b>finished</b> — every cell this cursor has entered
+        /// on this row and not recorded in <see cref="UnfinishedCells"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The point of recording these is that a finished cell and a cell no pass has entered are
+        /// otherwise the same thing on a continuation: both are simply absent from the record, and the
+        /// resumed row loop enters both from the start. A cell that finished has its whole content in the
+        /// fragment an earlier fragmentainer already holds, so entering it again re-places that content in
+        /// the fragmentainer this pass is filling —
+        /// <see href="https://www.w3.org/TR/css-tables-3/#fragmentation">css-tables-3 §6.1</see> says each
+        /// cell of a fragmented row continues where <i>that</i> cell stopped, and a cell that stopped
+        /// nowhere continues nowhere.
+        /// </para>
+        /// <para>
+        /// Per row, not per pass: cleared whenever <see cref="RowIndex"/> moves on, so what a stopped
+        /// cursor hands over is the row it stopped in and nothing else.
+        /// </para>
+        /// </remarks>
+        internal IReadOnlyList<CssBox> FinishedCells => _finishedCells;
 
         /// <summary>
         /// Whether any cell this cursor has placed did not finish — which, because the row loop stops at
@@ -172,6 +214,12 @@ namespace PeachPDF.Html.Core.Fragmentation
         private readonly List<UnfinishedTableCell> _carriedRecords = [];
 
         /// <summary>
+        /// The cells an earlier pass finished in the row this cursor re-enters, matched by reference for
+        /// the same reason <see cref="_carriedRecords"/> is.
+        /// </summary>
+        private readonly List<CssBox> _carriedFinished = [];
+
+        /// <summary>
         /// The record <paramref name="cell"/> resumes from on this pass, or null when it is being entered
         /// from the start.
         /// </summary>
@@ -183,6 +231,21 @@ namespace PeachPDF.Html.Core.Fragmentation
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="cell"/> is one an earlier pass finished, so this pass has nothing to
+        /// place for it — as against a cell no pass has entered, which this pass enters from the start.
+        /// See <see cref="FinishedCells"/> for why the two have to be told apart.
+        /// </summary>
+        internal bool FinishedOnAnEarlierPass(CssBox cell)
+        {
+            foreach (var finished in _carriedFinished)
+            {
+                if (ReferenceEquals(finished, cell)) return true;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -215,6 +278,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             };
 
             cursor._carriedRecords.AddRange(carried.UnfinishedCells);
+            cursor._carriedFinished.AddRange(carried.FinishedCells);
 
             foreach (var (endRow, boxes) in carried.RowSpannedBoxes)
             {
@@ -246,7 +310,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             }
 
             return new TableBreakToken(tableBox, resumeSlot, _unfinishedCells[0].RowIndex, MaxRight,
-                [.. _unfinishedCells], spanned);
+                [.. _unfinishedCells], [.. _finishedCells], spanned);
         }
 
         /// <summary>Moves the cursor onto the next slot, at <paramref name="top"/>.</summary>
