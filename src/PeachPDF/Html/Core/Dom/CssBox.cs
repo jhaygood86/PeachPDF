@@ -1142,7 +1142,7 @@ namespace PeachPDF.Html.Core.Dom
 
             _prologueDone = false;
 
-            AwaitPlacementAgain();
+            AwaitPlacement();
         }
 
         /// <summary>
@@ -1163,7 +1163,7 @@ namespace PeachPDF.Html.Core.Dom
         /// that opens it (<c>CssLayoutEngine.CreateLineBoxes</c>).
         /// </para>
         /// </remarks>
-        internal void AwaitPlacementAgain()
+        internal void AwaitPlacement()
         {
             foreach (var word in Words)
             {
@@ -1172,7 +1172,7 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var childBox in Boxes)
             {
-                childBox.AwaitPlacementAgain();
+                childBox.AwaitPlacement();
             }
         }
 

@@ -290,7 +290,7 @@ namespace PeachPDF.Html.Core.Dom
                 //
                 // Only on the pass that opens the block: a resumed pass would otherwise take back the
                 // words an earlier fragmentainer has already placed and frozen a fragment around.
-                blockBox.AwaitPlacementAgain();
+                blockBox.AwaitPlacement();
             }
 
             var limitRight = blockBox.ClientRight;

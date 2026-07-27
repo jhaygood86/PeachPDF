@@ -15,7 +15,7 @@ slot's own band, and `FragmentEmitter.BuildDraft` asks nothing but `region.Conta
 and `AwaitsTheNextFragmentainer` — a flag §4.1's *discarded line* sets and nothing else did. After
 the pass there is nothing left to read: a word that was never placed and a word placed at the top of
 page 1 carry the same coordinates. So the statement has to be made **before** the attempt, which is
-what `CssBox.AwaitPlacementAgain` already exists to do for a discarded multicol fill. The block's
+what `CssBox.AwaitPlacement` already exists to do for a discarded multicol fill. The block's
 own inline flow now says the same thing about itself on the pass that opens it, and
 `CssRect.Top`'s setter clears it per word — so what survives the flow is exactly what the flow did
 not reach. One call; the mechanism was already there and self-healing, as the issue predicted.
@@ -50,13 +50,24 @@ laid out by `CssBox.PerformLayoutEpilogue`, which the pass that breaks never rea
 positioned only on the completing pass — after the slot it belongs to was frozen. Filed as
 [#444](https://github.com/jhaygood86/PeachPDF/issues/444).
 
-Tests: `UnreachedWordClaimTests` (3 — #374's claimed-exactly-once invariant over the *whole*
-document at two lengths, and the symptom stated directly: the first page's fragment holds exactly
-the words whose own position falls in its band), plus
+**One residual the review chased and the numbers closed.** `AwaitPlacement` marks a subtree
+strictly larger than `FlowBox` visits — an outside `::marker` is skipped by the flow — so the
+question is whether anything is now newly *un*painted. Measured over seven shapes at 2,500 words
+each, with and without the fix: duplicates go 1,330–1,397 → **0** in every shape that had any, and
+the two shapes with an unclaimed word (a list's own marker, an absolutely-positioned inline's words)
+report the **same** count either way. So the marking loses nothing; both residuals are pre-existing,
+and the second one belongs to [#318](https://github.com/jhaygood86/PeachPDF/issues/318). The
+regression guard for the class is `AListWhoseItemsDoNotBreak_StillClaimsEveryMarker`, which passes on
+both builds by design — an item that does not itself break reaches its own epilogue on the same
+pass, so its marker is positioned before the slot freezes.
+
+Tests: `UnreachedWordClaimTests` (7 — #374's claimed-exactly-once invariant over the *whole*
+document for five shapes, since what stops is the fill rather than the paragraph; the symptom stated
+from the page grid rather than from the flag the fix sets; and the marker guard), plus
 `EarlyBreakLayoutIntegrationTests.PulledRun_FromAPassThatResumedIntoAParagraph_ClaimsEachBlockWordExactlyOnce`
-**promoted** from the two blocks the pull moves to the whole document. Removing the one call fails 4
-of those 5. Full net8.0
-suite green (6,636 passed / 6,645 total), CLI green (96); **100% diff coverage**; 0 warnings on
+**promoted** from the two blocks the pull moves to the whole document. Removing the one call fails 6
+of those 9. Full net8.0
+suite green (6,640 passed / 6,649 total), CLI green (96); **100% diff coverage**; 0 warnings on
 `dotnet build PeachPDF.slnx -t:Rebuild`.
 
 The durable half is in
