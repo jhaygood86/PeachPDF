@@ -1504,11 +1504,10 @@ namespace PeachPDF.Html.Core.Dom
             {
                 await LayoutContents(g, resume);
 
-                // Positioned on the pass that *starts* this box, before the break record below can
-                // unwind out of it - see the method's own remarks. `resume is null` is that pass, and
-                // a requested break-before means this pass declined to place the box at all, so there
-                // is no position for the marker to be relative to yet.
-                if (resume is null && RequestedBreakBeforeTop is null)
+                // Positioned here rather than from the epilogue, so that a box which does not finish in
+                // this fragmentainer still has its marker - see the method's own remarks for which pass
+                // that has to be, and why it is not the same pass on the page grid as inside a column.
+                if (MarkerBelongsToTheFragmentainerBeingFilled())
                 {
                     await LayoutOutsideMarker(g);
                 }
@@ -1540,6 +1539,41 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Whether the pass now running is the one whose fragmentainer this list item's <c>outside</c>
+        /// <c>::marker</c> belongs to — the pass that must position it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The marker belongs to the fragmentainer holding the geometry its item keeps</b>, because it is
+        /// positioned against the item's own border box (CSS 2.1 §12.5.1: beside the item's first line box)
+        /// rather than against the item's content — so which fragmentainer that is, is the same question as
+        /// which one the item's own <see cref="CssBoxProperties.Location"/> describes.
+        /// </para>
+        /// <para>
+        /// <b>The page grid and a nested fragmentainer answer it differently, and one rule cannot serve
+        /// both.</b> On the page grid a box that does not finish keeps the position the pass that placed it
+        /// gave it, so the marker belongs to that first pass — positioning it from
+        /// <see cref="PerformLayoutEpilogue"/>, which runs only on the pass that <i>completes</i> the item,
+        /// gave it its coordinates after the slot those coordinates fall in had been frozen, and the marker
+        /// was claimed by no fragment at all and painted on no page
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/444">#444</see>). Inside a column a box
+        /// that does not finish is laid out <i>again</i> at the next column's inline position
+        /// (<see cref="ResumeInTheNextFragmentainer"/>, gated on the very same
+        /// <c>HasOwnBand</c>), so only its last fragment's geometry survives and positioning the marker on an
+        /// earlier pass puts it in a column its item has left — and leaves that column's
+        /// <see cref="Fragments.BoxGeometrySnapshot"/> holding a second copy of it.
+        /// </para>
+        /// <para>
+        /// A pass that requested a break <i>before</i> this box declined to place it at all, so there is no
+        /// position for the marker to sit against and neither answer applies.
+        /// </para>
+        /// </remarks>
+        private bool MarkerBelongsToTheFragmentainerBeingFilled() =>
+            RequestedBreakBeforeTop is null
+            && (PendingBreakToken is null
+                || HtmlContainer?.CurrentFragmentainer is not { HasOwnBand: true });
+
+        /// <summary>
         /// Lays out this list item's <c>outside</c> <c>::marker</c> (the CSS default), which is deliberately
         /// excluded from the item's own inline flow (<c>CssLayoutEngine.FlowBox</c>) and never reached by the
         /// generic block-children loop either, so this is the one call that positions it. An <c>inside</c>
@@ -1547,24 +1581,12 @@ namespace PeachPDF.Html.Core.Dom
         /// (<see cref="CssBoxMarker.PerformLayoutImp"/>'s own <c>ListStylePosition</c> check).
         /// </summary>
         /// <remarks>
-        /// <para>
-        /// <b>The marker belongs to the fragmentainer its item begins in, and that is settled the moment the
-        /// item is placed</b> — it is positioned against the item's own border box (CSS 2.1 §12.5.1: beside
-        /// the item's first line box), not against the item's content, so nothing about the item's height or
-        /// where it ends is an input. Run from the epilogue instead, it was positioned only on the pass that
-        /// <i>completed</i> the item, which for an item straddling a fragmentainer boundary is a later pass
-        /// than the one whose slot the marker's own coordinates fall in — and that slot was frozen by then,
-        /// so the marker was claimed by no fragment at all and simply did not paint
-        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/444">#444</see>).
-        /// </para>
-        /// <para>
-        /// After <see cref="LayoutContents"/> rather than immediately after placement, and that ordering is
-        /// load-bearing: an item whose content is inline opens its flow by saying it has placed none of its
-        /// subtree's words yet (<c>CssBox.AwaitPlacement</c>, reaching the marker even though the flow never
-        /// visits it), so positioning the marker first would have that statement take it straight back.
-        /// Being positioned is what clears the flag (<c>CssRect.Top</c>'s setter), so the marker has to be
-        /// positioned last.
-        /// </para>
+        /// Called after <see cref="LayoutContents"/> rather than immediately after placement, and that
+        /// ordering is load-bearing: an item whose content is inline opens its flow by saying it has placed
+        /// none of its subtree's words yet (<see cref="AwaitPlacement"/>, reaching the marker even though the
+        /// flow never visits it), so positioning the marker first would have that statement take it straight
+        /// back. Being positioned is what clears the flag (<c>CssRect.Top</c>'s setter), so the marker has to
+        /// be positioned last.
         /// </remarks>
         private async ValueTask LayoutOutsideMarker(RGraphics g)
         {

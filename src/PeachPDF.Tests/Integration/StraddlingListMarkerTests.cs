@@ -3,6 +3,7 @@ using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Tests.TestSupport;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -147,8 +148,58 @@ namespace PeachPDF.Tests.Integration
 
             // The straddling item's marker is offset from its own item exactly as every other item's is,
             // which is the statement that it was not positioned against something else.
-            Assert.Single(offsets.Select(o => System.Math.Round(o, 3)).Distinct());
+            Assert.Single(offsets.Select(o => Math.Round(o, 3)).Distinct());
             Assert.Contains(straddler, ListItems(root));
+        }
+
+        /// <summary>
+        /// The page grid's answer does not transfer to a column: a box that does not finish in a column is
+        /// laid out <i>again</i> at the next column's inline position, so only its last fragment's geometry
+        /// survives and the marker has to be positioned on the pass that completes it. Positioned on the
+        /// pass that starts it instead, the marker of the item that crosses the column boundary stayed in
+        /// the column its item had left — a bullet beside nothing in column 1, and none at all beside the
+        /// item's own text in column 2, on a single page with no page break anywhere in it.
+        /// </summary>
+        /// <remarks>
+        /// The item is the one thing a column-boundary fixture cannot pin: it is settled by how much text
+        /// fits, so this asserts over <i>every</i> item rather than naming one, and checks separately that
+        /// some item really did cross into the second column.
+        /// </remarks>
+        [Fact]
+        public async Task AnItemCrossingAColumnBoundary_KeepsItsMarkerBesideItsOwnColumn()
+        {
+            var items = string.Join("", Enumerable.Range(0, 4).Select(i =>
+                $"<li id='li{i}' style='{ItemStyle}'>"
+                + string.Join(" ", Enumerable.Range(0, 25).Select(w => $"i{i}w{w}"))
+                + "</li>"));
+
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    $"<div style='column-count:2'><ul style='margin:0;padding-left:40pt'>{items}</ul></div>"),
+                pageHeight: 260, margin: 10);
+
+            var claims = ClaimsByWord(container);
+            var columns = new List<double>();
+            var offsets = new List<double>();
+
+            foreach (var item in ListItems(root))
+            {
+                var word = Assert.Single(item.Boxes.Single(b => b.IsMarkerPseudoElement).Words);
+
+                Assert.True(claims.TryGetValue(word, out var slots),
+                    $"the marker of '{Id(item)}' is claimed by no fragment at all");
+                Assert.Single(slots!);
+
+                columns.Add(item.Location.X);
+                offsets.Add(item.ClientLeft - word.Left);
+            }
+
+            Assert.True(columns.Distinct().Count() > 1,
+                "the fixture must put some item in the second column");
+
+            // Every marker hangs the same distance outside its own item's content edge — which is exactly
+            // what a marker left behind in the previous column does not do.
+            Assert.Single(offsets.Select(o => Math.Round(o, 3)).Distinct());
         }
 
         /// <summary>
@@ -212,8 +263,8 @@ namespace PeachPDF.Tests.Integration
 
             var straddler = ListItems(root).FirstOrDefault(item => SlotsOf(container, item).Count > 1);
 
-            Assert.True(straddler is not null, "no list item in the fixture straddles a page boundary");
-            return straddler!;
+            Assert.NotNull(straddler);
+            return straddler;
         }
 
         private static List<CssBox> ListItems(CssBox root) =>
