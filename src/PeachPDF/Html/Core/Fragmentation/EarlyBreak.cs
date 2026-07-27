@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
@@ -211,7 +212,10 @@ namespace PeachPDF.Html.Core.Fragmentation
             var run = DomUtils.GetPrecedingKeepWithNextRun(subject, FragmentationContext.Page);
             var tops = new double[run.Count];
 
-            for (var i = 0; i < run.Count; i++) tops[i] = run[i].Location.Y;
+            for (var member = 0; member < run.Count; member++)
+            {
+                tops[member] = run[member].Location.Y;
+            }
 
             var head = TravellingRunHead(tops, subjectTop, ownPageTop, subjectExtent, destinationBand);
 
@@ -230,7 +234,8 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// run <i>member</i> is: <see cref="TravellingRun"/> reads a chain of preceding siblings, while
         /// <see cref="LineRelocation"/> reads a chain of flex lines or grid rows, which have no sibling
         /// relationship at all. Both ask the same two questions in the same order, and stating them once
-        /// is what stops the second copy relaxing differently from the first.
+        /// is what stops the second copy relaxing differently from the first. A span rather than a list
+        /// because both callers already hold their candidates contiguously, so neither has to copy.
         /// </remarks>
         /// <param name="memberTops">the candidate members' tops, in document order (topmost first)</param>
         /// <param name="subjectTop">the coordinate the subject would move away from</param>
@@ -238,10 +243,10 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <param name="subjectExtent">how much room the subject itself still needs in the destination</param>
         /// <param name="destinationBand">the destination fragmentainer's content height</param>
         internal static int TravellingRunHead(
-            IReadOnlyList<double> memberTops, double subjectTop, double ownPageTop,
+            ReadOnlySpan<double> memberTops, double subjectTop, double ownPageTop,
             double subjectExtent, double destinationBand)
         {
-            for (var head = 0; head < memberTops.Count; head++)
+            for (var head = 0; head < memberTops.Length; head++)
             {
                 var extraAbove = subjectTop - memberTops[head];
 
@@ -255,7 +260,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                 return head;
             }
 
-            return memberTops.Count;
+            return memberTops.Length;
         }
 
         /// <summary>

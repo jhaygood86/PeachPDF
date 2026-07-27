@@ -50,8 +50,21 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </summary>
         /// <param name="container">the layout container, for the page grid</param>
         /// <param name="lines">the container's lines or rows, each holding at least one box</param>
-        internal static double Relocate(HtmlContainerInt container, IReadOnlyList<LineGroup> lines) =>
-            new Walk(container, lines).Run();
+        internal static double Relocate(HtmlContainerInt container, IReadOnlyList<LineGroup> lines)
+        {
+            // Every reservation this walk makes is re-decided from scratch below, and a pass the driver
+            // re-enters runs the walk again over content that has moved. Retracting first is what stops a
+            // blank page an earlier attempt asked for outliving the attempt — the same shape
+            // CssBox.PlaceBlockChild's prologue has, which cannot cover an engine because it runs once per
+            // layout generation rather than once per pass. Keyed on exactly the box DeltaFor keys on, so it
+            // can touch no other reservation.
+            foreach (var line in lines)
+            {
+                container.SetBlankSlotReservation(line.Boxes[0], null);
+            }
+
+            return new Walk(container, lines).Run();
+        }
 
         /// <summary>
         /// The side required at the break point between two adjacent lines — the line whose items are
@@ -81,7 +94,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// engine places for itself.
         /// </para>
         /// </remarks>
-        internal static PageSide? ForcedBreakBetween(IEnumerable<CssBox>? above, IEnumerable<CssBox> below)
+        internal static PageSide? ForcedBreakBetween(IReadOnlyList<CssBox>? above, IReadOnlyList<CssBox> below)
         {
             var later = MostDemandingForcedValue(below.Select(box => box.BreakBefore));
             var earlier = above is null ? null : MostDemandingForcedValue(above.Select(box => box.BreakAfter));
@@ -90,23 +103,31 @@ namespace PeachPDF.Html.Core.Fragmentation
         }
 
         /// <summary>
-        /// The forced value one side of a break point speaks with, or null where it declares none. A
-        /// directional value wins over a plain <c>page</c>, since §3.1 asks that all specified breaking
-        /// requirements be honored and a directional break satisfies both.
+        /// The forced value one side of a break point speaks with, or null where it declares none.
         /// </summary>
+        /// <remarks>
+        /// §3.1's combination rule, within one side of the break point: a directional value wins over a
+        /// plain <c>page</c>, since the spec asks that all specified breaking requirements be honored and a
+        /// directional break satisfies both. Two <i>conflicting</i> directional values cannot both be
+        /// honored, and there the value on the latest element in flow wins — so the walk does not stop at
+        /// the first directional value it meets. <see cref="BreakValues.RequiredSide"/> applies the same
+        /// rule across the two sides.
+        /// </remarks>
         private static string? MostDemandingForcedValue(IEnumerable<string?> values)
         {
             string? forced = null;
+            string? directional = null;
 
             foreach (var value in values)
             {
                 if (!BreakValues.IsForcedPageBreak(value)) continue;
-                if (BreakValues.SideOf(value) is not PageSide.Any) return value;
+
+                if (BreakValues.SideOf(value) is not PageSide.Any) directional = value;
 
                 forced ??= value;
             }
 
-            return forced;
+            return directional ?? forced;
         }
 
         /// <summary>
@@ -155,18 +176,20 @@ namespace PeachPDF.Html.Core.Fragmentation
         {
             var slot = container.SlotStartingAt(top);
 
+            // Whether the line's top already sits on this slot's own content top. SlotStartingAt resolves a
+            // top edge flush on a boundary to the *later* slot, so such a line does not merely reach this
+            // fragmentainer — it *begins* it.
+            var flush = top - container.PageTopOf(slot) <= HtmlContainerInt.PageBoundaryEpsilon;
+
             // §4.4: a forced break must not produce an empty fragmentainer, and a break at a point that
-            // already *is* a fragmentainer boundary has already happened. SlotStartingAt resolves a top
-            // edge flush on a boundary to the *later* slot, so without this the line is moved a whole
-            // further page — measured at exactly one band of filler, where 1pt less and 1pt more both
+            // already *is* a fragmentainer boundary has already happened. Without this the line is moved a
+            // whole further page — measured at exactly one band of filler, where 1pt less and 1pt more both
             // land correctly and only the flush case skips a slot.
             //
             // The *side* is part of what is being asked, so a directional value is satisfied by a flush
             // boundary only where the slot it begins is the side it named: §3.1 asks that the content
             // begin on a page of that side, which an already-taken break on the wrong side has not done.
-            if (forcedBreak is { } already
-                && top - container.PageTopOf(slot) <= HtmlContainerInt.PageBoundaryEpsilon
-                && BreakValues.SlotIsOn(slot, already))
+            if (forcedBreak is { } already && flush && BreakValues.SlotIsOn(slot, already))
             {
                 forcedBreak = null;
             }
@@ -185,11 +208,17 @@ namespace PeachPDF.Html.Core.Fragmentation
             if (forcedBreak is { } side)
             {
                 // §3.1's "one or two page breaks": the content after the break has to *begin* on a page of
-                // the requested side. Page parity alternates from slot to slot, so at most one page is ever
-                // stepped over — and the slot stepped over is reserved, because a slot holding no printable
-                // content is otherwise dropped (CSS Paged Media 3 §3.2), which would leave `recto`
-                // indistinguishable from `page`. Retracted where no step is needed, so a pass that
-                // re-decides the same line cannot leave behind a blank page the final layout does not want.
+                // the requested side. The walk starts at the slot the line would begin unsatisfied — which
+                // for a flush line is *this* one, since it begins this fragmentainer rather than merely
+                // reaching it, and the slot it vacates is what has to stay blank.
+                //
+                // Page parity alternates from slot to slot, so at most one page is ever stepped over — and
+                // that slot is reserved, because a slot holding no printable content is otherwise dropped
+                // (CSS Paged Media 3 §3.2), which would leave `recto` indistinguishable from `page`.
+                // Retracted where no step is needed, so a pass that re-decides the same line cannot leave
+                // behind a blank page the final layout does not want.
+                target = flush ? slot : slot + 1;
+
                 var stepsOver = !BreakValues.SlotIsOn(target, side);
 
                 container.SetBlankSlotReservation(owner, stepsOver ? target : null);
@@ -336,12 +365,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                     chainStart--;
                 }
 
-                var candidates = new double[index - chainStart];
-
-                for (var member = chainStart; member < index; member++)
-                {
-                    candidates[member - chainStart] = _tops[member];
-                }
+                var candidates = _tops.AsSpan(chainStart, index - chainStart);
 
                 var head = EarlyBreak.TravellingRunHead(
                     candidates,

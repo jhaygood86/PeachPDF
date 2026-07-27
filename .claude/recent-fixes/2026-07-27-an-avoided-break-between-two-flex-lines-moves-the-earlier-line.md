@@ -83,6 +83,27 @@ straddle is indistinguishable from a fix that works. Verified the other way roun
 library against the *new* harness: on the unfixed build the "Heading line" card sits alone at the foot of
 page 8 with its section body on page 9, which is the defect exactly.
 
+**The §4.4 guard and the parity walk have to agree about which slot the line *begins*, and getting that
+wrong made `recto` a no-op again in exactly the case the guard was written for.** A flush line does not
+merely *reach* its slot, it **begins** it — so where the flush guard finds the side unsatisfied, the slot
+that has to stay blank is *that* one, not the next. Starting the walk at `slot + 1` regardless meant parity
+was already satisfied one slot on, so nothing was reserved (worse: the reservation was actively *retracted*),
+the vacated slot held no printable content, and CSS Paged Media 3 §3.2 dropped it — leaving the line printed
+on precisely the page it was moved off. **Measured against block flow on the same fixture**: 160pt of filler
+and `break-before: recto` gives 3 pages in block flow (blank p2, content p3, a right page) and gave **2** in
+flex, with the content on a left page. The test that missed it asserted the *slot index*, which was already
+right — the loss happened downstream in the emitter. Any test for a directional break has to assert
+`FragmentTree.Fragmentainers.Count` as well as the slot.
+
+**A blank-slot reservation outlives the pass that made it unless something retracts it.** `DeltaFor` reaches
+`SetBlankSlotReservation` only inside its forced-break arm, so every other exit — no break, a line taller
+than the band, the §4.4 guard clearing the value, the engines' own early returns — leaves an earlier
+attempt's reservation standing, and `ClearBlankSlotReservations` runs once per `LayoutDocument` while the
+driver re-enters passes within one. Block flow's equivalent retraction lives in the prologue, which is once
+per layout *generation*, so it does not repeat on a re-entered pass and could not have covered this.
+`Relocate` now retracts for every line's own key before the walk re-decides. No fixture reaches it — it is
+latent, not observed — which is why it is a two-line unconditional retraction rather than a mechanism.
+
 **The cursor #443 introduced is not part of this.** Adding `CurrentFragmentainer?.StepOverTo(target)` to
 `DeltaFor` — the relocation does put the pass into a later slot — changes **nothing** measurable: the full
 suite is identical with and without it (6683 either way). The staleness is unreachable from here, because
@@ -92,14 +113,19 @@ the engine, and every following sibling is below it. Left out rather than shippe
 
 ## Evidence
 
-Tests: `FlexGridFragmentationIntegrationTests` +21 cases (13 for #447 across both engines, 7 for #450,
-4 for #451, counting theory rows). Verified load-bearing by neutralizing each part in turn:
-the flush guard → **2 fail**; the parity walk and reservation → **5 fail**; the directional *value*
-(`RequiredSide` → `PageSide.Any`) → the same **5**; avoidance entirely → **10 fail**; §4.3's ladder (head
-forced to 0) → **2 fail**, and they are the two relaxation cases, so the ladder is pinned in both
-directions rather than only being present.
+Tests: `FlexGridFragmentationIntegrationTests` +27 cases across both engines, counting theory rows.
+Verified load-bearing by neutralizing each part in turn: the §4.4 flush guard → **2 fail**; its side check
+→ **1**; the flush parity-walk start → **1**; the parity walk and reservation → **5**; the directional
+*value* (`RequiredSide` → `PageSide.Any`) → the same **5**; §3.1's latest-in-flow tie-break within one side
+→ **2**; avoidance entirely → **10**; §4.3's ladder (head forced to 0) → **2**, and those two are the
+relaxation cases, so the ladder is pinned in both directions rather than only being present.
 
-Full net8.0 suite green (6704), CLI green (96), zero-warning `dotnet build PeachPDF.slnx -t:Rebuild`.
-**68 of 69 showcases byte-identical**; `acid2` differs only in the generating worktree's path inside a
-`file://` annotation URI and rasterizes to identical bytes; `paged_media_monolithic_content` gained the
-section above. Verified in PDFium.
+Full net8.0 suite green (6685), CLI green (96), **100% diff coverage**, zero-warning
+`dotnet build PeachPDF.slnx -t:Rebuild`. **68 of 69 showcases byte-identical**; `acid2` differs only in the
+generating worktree's path inside a `file://` annotation URI and rasterizes to identical bytes;
+`paged_media_monolithic_content` gained the section above. Verified in PDFium.
+
+**The three defects the post-change review turned up were all in the same method**, and only one of them
+(the redundant chain stop) was benign — the flush/parity interaction and the stale reservation are both
+above. Worth reading `DeltaFor` as a whole rather than as a sequence of guards: `slot`, `flush` and `side`
+are one decision about where the line begins, and each guard that treats them separately has been wrong.

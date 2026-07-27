@@ -457,6 +457,12 @@ namespace PeachPDF.Tests.Integration
             var a = LayoutHarness.FindById(root, "a");
             Assert.NotNull(a);
             Assert.Equal(expectedSlot, SlotOf(container, a!));
+
+            // The slot the line vacates has to be reserved, or it holds nothing printable, the fragment
+            // tree drops it, and the line prints on exactly the page it was moved off - which would make
+            // `recto` indistinguishable from `page` again in precisely the case this test is about.
+            Assert.NotNull(container.FragmentTree);
+            Assert.Equal(expectedSlot + 1, container.FragmentTree!.Fragmentainers.Count);
         }
 
         // ─── §3.1: a directional break selects the side, not merely the next page ────────
@@ -488,6 +494,37 @@ namespace PeachPDF.Tests.Integration
                 "the slot stepped over must be reserved, or nothing blank is printed and recto reads as page");
             Assert.NotNull(container.FragmentTree);
             Assert.Equal(3, container.FragmentTree!.Fragmentainers.Count);
+        }
+
+        // §3.1 combines the values that apply at one break point. Within one side of it a directional value
+        // subsumes a plain `page`, and two conflicting directional values resolve to the one on the latest
+        // element in flow - so the second item's `right` wins over the first item's `left`, and the line
+        // opens slot 2 (page 3, a right page) rather than slot 1.
+        [Theory]
+        [InlineData("break-before:left", "break-before:right", 2)]
+        [InlineData("break-before:right", "break-before:left", 1)]
+        [InlineData("break-before:right", "break-before:page", 2)]
+        [InlineData("break-before:page", "break-before:right", 2)]
+        public async Task ConflictingBreakValuesInOneLine_CombineByTheirPositionInFlow(
+            string first, string second, int expectedSlot)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:40pt'>filler</div>"
+                    + "<div id='c' style='display:flex; flex-wrap:wrap; width:300pt'>"
+                    + $"<div id='a' style='width:40%;height:20pt;{first}'>A</div>"
+                    + $"<div id='b' style='width:40%;height:20pt;{second}'>B</div>"
+                    + "</div>"),
+                pageHeight: PageHeight);
+
+            var a = LayoutHarness.FindById(root, "a");
+            var b = LayoutHarness.FindById(root, "b");
+            Assert.NotNull(a);
+            Assert.NotNull(b);
+
+            // Both items share one line, so the whole line takes the combined value.
+            Assert.Equal(a!.Location.Y, b!.Location.Y, 1);
+            Assert.Equal(expectedSlot, SlotOf(container, a));
         }
 
         // The same rule read from the earlier side of the break point (§3.1 takes it from either side),
