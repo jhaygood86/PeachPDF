@@ -1018,8 +1018,9 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Gap4_CalcInsideMinmax_ResolvesFloor()
         {
-            // minmax(calc(40pt + 20pt), 100pt): the calc()-resolved 60pt is the used base (the engine has no
-            // maximize-tracks step, so with an fr present the track stays at its base and 1fr takes the rest).
+            // minmax(calc(40pt + 20pt), 100pt): the calc()-resolved 60pt is the base, and §12.6 grows the
+            // track to its 100pt growth limit before §12.7 hands what is left to the fr. This was
+            // characterized at 60/240 while there was no maximize-tracks step.
             var html = Wrap(@"
                 <div id='container' style='display:grid; width:300pt; grid-template-columns:minmax(calc(40pt + 20pt), 100pt) 1fr;'>
                     <div id='a' style='height:10pt;'></div>
@@ -1028,8 +1029,8 @@ namespace PeachPDF.Tests.Integration
             var (root, _) = await BuildAndLayout(html);
             var a = FindById(root, "a")!;
             var b = FindById(root, "b")!;
-            Assert.Equal(60, a.ActualBoxSizingWidth, 1.0);    // the calc()-resolved minmax floor
-            Assert.Equal(240, b.ActualBoxSizingWidth, 1.0);   // 1fr absorbs the remainder
+            Assert.Equal(100, a.ActualBoxSizingWidth, 1.0);   // maximized to the minmax growth limit
+            Assert.Equal(200, b.ActualBoxSizingWidth, 1.0);   // 1fr absorbs what is left after it
         }
 
         [Fact]
@@ -1080,8 +1081,9 @@ namespace PeachPDF.Tests.Integration
         public async Task Gap7_MinmaxIntrinsicBreadths_UseMinAndMaxContent()
         {
             // minmax(min-content, max-content): the base is the min-content (longest word) and the growth
-            // limit is the max-content (whole line). With a second fr column absorbing the leftover, the
-            // track stays at its min-content base — narrower than the same content's max-content track.
+            // limit is the max-content (whole line), and §12.6 grows the track to that limit with the space
+            // the 400pt container has to spare, before §12.7 hands the rest to the fr. This was
+            // characterized at the min-content base while there was no maximize-tracks step.
             var html = Wrap(@"
                 <div id='container' style='display:grid; width:400pt;
                      grid-template-columns:minmax(min-content, max-content) 1fr;'>
@@ -1090,9 +1092,16 @@ namespace PeachPDF.Tests.Integration
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var a = FindById(root, "a")!;
-            // The minmax base is min-content ("aaaa"), so the track is far narrower than the ~full line.
-            Assert.True(a.ActualBoxSizingWidth < 45,
-                $"minmax(min-content, max-content) base should be the min-content width, was {a.ActualBoxSizingWidth}");
+            var container = FindById(root, "container")!;
+
+            // Grown to its max-content growth limit - the whole line - and no further: the fr beside it
+            // still takes the rest, so the track is nowhere near the container's own width.
+            Assert.True(a.ActualBoxSizingWidth > 45,
+                $"minmax(min-content, max-content) should be maximized to its max-content growth limit, "
+                + $"was {a.ActualBoxSizingWidth}");
+            Assert.True(a.ActualBoxSizingWidth < container.ActualWidth / 2,
+                $"the fr beside it should still have taken most of the 400pt, but the track is "
+                + $"{a.ActualBoxSizingWidth}");
         }
 
         [Fact]
@@ -1190,6 +1199,89 @@ namespace PeachPDF.Tests.Integration
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
+
+        // ─── §12.6 Maximize Tracks: a track grows toward its limit with the space that is there ──
+
+        // An `auto` track is minmax(auto, auto): its base is the items' minimum contribution and its
+        // growth limit their max-content contribution (CSS Grid §12.4). Seeding the base at max-content
+        // instead is the same answer whenever the space is available and an overflowing track when it is
+        // not - a grid narrower than its own content painted outside itself.
+        [Fact]
+        public async Task AutoTrack_NarrowerThanItsMaxContent_StopsAtTheContainer()
+        {
+            var html = Wrap(
+                "<div id='container' style='display:grid; width:105pt'>"
+                + "<p class='item'>block one alpha beta gamma delta</p></div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var item = FindAllByClass(root, "item")[0];
+
+            Assert.Equal(105, container.ActualWidth, 1);
+            Assert.Equal(container.ActualWidth, item.ActualWidth, 1);
+        }
+
+        // The other side of the same rule, and the one every existing fixture exercises: with room to
+        // spare the track still reaches its max-content contribution and then stretches to the container.
+        [Fact]
+        public async Task AutoTrack_WithRoomToSpare_StillReachesTheContainer()
+        {
+            var html = Wrap(
+                "<div id='container' style='display:grid; width:440pt'>"
+                + "<p class='item'>block one alpha beta gamma delta</p></div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var item = FindAllByClass(root, "item")[0];
+
+            Assert.Equal(440, container.ActualWidth, 1);
+            Assert.Equal(container.ActualWidth, item.ActualWidth, 1);
+        }
+
+        // Two `auto` tracks in a container too narrow for both max-contents share what there is rather
+        // than each taking its own max-content and overflowing together.
+        [Fact]
+        public async Task TwoAutoTracks_TooNarrowForBoth_ShareTheContainerWithoutOverflowing()
+        {
+            var html = Wrap(
+                "<div id='container' style='display:grid; grid-template-columns:auto auto; "
+                + "column-gap:10pt; width:160pt'>"
+                + "<p class='item'>alpha beta gamma delta epsilon</p>"
+                + "<p class='item'>zeta eta theta iota kappa</p></div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var items = FindAllByClass(root, "item");
+
+            Assert.Equal(2, items.Count);
+            Assert.All(items, item =>
+                Assert.True(item.ActualRight <= container.ActualRight + 0.5,
+                    $"item ends at {item.ActualRight:F1}, past the container's {container.ActualRight:F1}"));
+
+            // And they fill it: the space is shared, not abandoned.
+            Assert.Equal(160, items[1].ActualRight - items[0].Location.X, 1);
+        }
+
+        // §12.6 redistributes rather than handing out one equal share: a track that reaches its growth
+        // limit early leaves room the other can still use, which is the difference between filling the
+        // container and leaving a gap in the middle of it.
+        [Fact]
+        public async Task ATrackThatReachesItsLimit_LeavesItsRemainderToTheOther()
+        {
+            var html = Wrap(
+                "<div id='container' style='display:grid; grid-template-columns:auto auto; "
+                + "column-gap:0; width:400pt'>"
+                + "<p class='item'>hi</p>"
+                + "<p class='item'>alpha beta gamma delta epsilon zeta eta theta</p></div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var items = FindAllByClass(root, "item");
+
+            Assert.Equal(container.ActualRight, items[1].ActualRight, 1);
+            Assert.True(items[1].ActualWidth > items[0].ActualWidth,
+                "the wider content's track should have taken the larger share");
+        }
 
         private static string Wrap(string body) =>
             $"<!DOCTYPE html><html><head></head><body>{body}</body></html>";

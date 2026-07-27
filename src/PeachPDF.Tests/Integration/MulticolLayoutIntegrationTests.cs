@@ -1613,14 +1613,13 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(claimed.Count, claimed.Distinct().Count());
         }
 
-        // Characterization, and a different loss from the one above: a grid container inside a
-        // multi-column container has the column's width, but its items' content is laid out at the
-        // *container's* width and overflows the column's inline span - so the words past the column's
-        // right edge are claimed by no fragmentainer. The band widening above cannot help, because the
-        // inline axis is what tells two columns apart and it is exactly the axis this overflows.
-        // Filed as issue #414; closing it turns this into the equality above.
+        // The same equality for a grid container, which reached it by a different route. Its items'
+        // content used to be laid out at a width that ignored the column entirely - an `auto` track was
+        // seeded at its max-content contribution and only ever grown - so it overflowed the column's
+        // *inline* span, the one axis that must stay exact because it is what tells two columns of one
+        // band apart. Fixing the track sizing (CSS Grid §12.6) is what makes the overflow not exist.
         [Fact]
-        public async Task AGridChildOfAMulticol_OverflowsTheColumnInlineAxis_AndLosesTheOverflow()
+        public async Task AGridChildOfAMulticol_KeepsItsContentInsideTheColumn()
         {
             var blocks = string.Concat(Enumerable.Range(1, 4)
                 .Select(i => $"<p class='item'>block {i} alpha beta gamma delta</p>"));
@@ -1632,20 +1631,27 @@ namespace PeachPDF.Tests.Integration
 
             var grid = FindById(root, "g")!;
 
-            var overflowing = FindAllByClass(root, "item")
+            var authored = FindAllByClass(root, "item")
                 .SelectMany(LayoutHarness.Descendants)
                 .SelectMany(b => b.Words)
-                .Where(w => !w.IsSpaces && w.Left > grid.ActualRight)
+                .Where(w => !w.IsSpaces)
                 .ToList();
 
             var claimed = container.FragmentTree!.Fragmentainers
                 .SelectMany(f => FlattenFragments(f.Root))
                 .SelectMany(f => f.Words)
                 .Select(w => w.Word)
-                .ToHashSet();
+                .ToList();
 
-            Assert.NotEmpty(overflowing);
-            Assert.All(overflowing, word => Assert.DoesNotContain(word, claimed));
+            Assert.NotEmpty(authored);
+
+            // Nothing reaches past the column the grid is in, so nothing is refused for being outside it.
+            Assert.All(authored, word =>
+                Assert.True(word.Right <= grid.ActualRight + 0.5,
+                    $"'{word.Text}' ends at {word.Right:F1}, past the grid's own right edge {grid.ActualRight:F1}"));
+
+            Assert.All(authored, word => Assert.Contains(word, claimed));
+            Assert.Equal(claimed.Count, claimed.Distinct().Count());
         }
 
         /// <summary>
