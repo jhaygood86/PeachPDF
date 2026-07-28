@@ -12,8 +12,9 @@ namespace PeachPDF.Html.Core.Fragmentation
     /// <para>
     /// One home for every question layout asks about breakability, in the same shape as
     /// <see cref="BreakValues"/> — and for the same reason. Before this existed, "monolithic" was spelled
-    /// five different ways in five places, and the one spelling that was explicit
-    /// (<c>CssBox.LayoutMonolithicContent</c>) encoded a different rule from the spec's.
+    /// five different ways in five places, and the one spelling that was explicit — a
+    /// <c>CssBox.LayoutMonolithicContent</c> that detached the fragmentainer around an engine's whole run,
+    /// since deleted — encoded a different rule from the spec's.
     /// </para>
     /// <para>
     /// <b>The two questions below are not the same question, and keeping them apart is the point of this
@@ -105,14 +106,21 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// table and multi-column.
         /// </summary>
         /// <remarks>
-        /// <b>Not a spec claim.</b> Each of these engines paginates its own content (the table engine's
-        /// per-row breaks and repeated header/footer proxies, the columns engine's re-banding), so the
-        /// fragmentation driver must not stop partway through one and hand it back half laid out. Narrowing
-        /// this set — so flex and grid items, and multi-column columns, genuinely fragment — is what
+        /// <para>
+        /// <b>Not a spec claim.</b> Each of these engines decides where its own children go, so a break
+        /// value inside one does not name a break point its parent's flow could take
+        /// (<c>BreakPropagation.CanTravelOutOf</c>, this predicate's only caller). Narrowing this set — so
+        /// flex and grid items, and multi-column columns, genuinely fragment — is what
         /// <see href="https://github.com/jhaygood86/PeachPDF/issues/315">#315</see> and
-        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/322">#322</see> amount to. The table is
-        /// the one member expected to stay: <c>CssLayoutEngineTable.LayoutCells</c> is itself a page-aware
-        /// fragmentation driver, so removing it is a rewrite rather than a narrowing.
+        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/322">#322</see> amount to.
+        /// </para>
+        /// <para>
+        /// <b>This is no longer "runs with breaking suppressed".</b> Every one of these engines now fills
+        /// one fragmentainer per pass and can hand the driver a resumption record: the multi-column engine
+        /// since <see href="https://github.com/jhaygood86/PeachPDF/issues/322">#322</see>, and the table
+        /// engine since <see href="https://github.com/jhaygood86/PeachPDF/issues/464">#464</see> stopped
+        /// running it behind a detached fragmentainer.
+        /// </para>
         /// </remarks>
         /// <seealso cref="RunsAnEngineOfItsOwn"/>
         internal static bool PaginatesItsOwnContent(CssBox box) =>

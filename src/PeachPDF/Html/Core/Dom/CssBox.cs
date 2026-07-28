@@ -345,23 +345,29 @@ namespace PeachPDF.Html.Core.Dom
         internal Dictionary<int, double>? PageBreakBottoms { get; set; }
 
         /// <summary>
-        /// Where this table's row loop stopped, or null when it reached the end of its body rows — which
-        /// it does for every document today. Null on every box that is not a table.
+        /// Where this table's row loop stopped, or null when it reached the end of its body rows. Null on
+        /// every box that is not a table.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// A table paginates itself inside one fragmentainer pass and hands the driver nothing, so its own
-        /// row loop is the only thing that ever sees a cell stop. This is where it says so, and it is
-        /// already a <see cref="BreakToken"/> — the second thing a table pass hands the next, alongside
-        /// <see cref="Fragmentation.TableSetup"/>.
+        /// The second thing a table pass hands the next, alongside <see cref="Fragmentation.TableSetup"/>,
+        /// and it is already a <see cref="BreakToken"/>. The row loop is the only thing that ever sees a
+        /// cell stop, because a box's record is readable only at the instant its layout returns; this is
+        /// where the loop says so.
         /// </para>
         /// <para>
-        /// It is deliberately <b>not</b> <see cref="PendingBreakToken"/>, and that is the whole of what
-        /// separates this from a table the rest of the engine can resume. That record means "resume me" to
-        /// three consumers at once: <see cref="PerformLayoutImp"/> returns early on it,
+        /// The same record is also published as this box's <see cref="PendingBreakToken"/>, and that is
+        /// the copy the rest of layout acts on: <see cref="PerformLayoutImp"/> returns early on it,
         /// <see cref="PublishBreakToTheContextRoot"/> hands it to the fragmentation context, and the
-        /// parent's child loop stops and wraps it. Nothing outside <c>CssLayoutEngineTable</c> reads this
-        /// one, which is what lets the row loop stop and record where before anything acts on it.
+        /// parent's child loop stops and wraps it into a link naming this table, which is how the driver
+        /// comes back for the rows after the stop.
+        /// </para>
+        /// <para>
+        /// The two are not redundant, because they have different lifetimes. <see cref="BeginLayoutPass"/>
+        /// clears <see cref="PendingBreakToken"/> at the top of every layout of this box, so it answers
+        /// only at the instant that layout returns; this field is cleared by the engine's own constructor
+        /// instead, so it still says what the last run concluded once the whole document is laid out —
+        /// which is the only form of the answer anything after layout can ask for.
         /// </para>
         /// </remarks>
         internal TableBreakToken? TableContinuation { get; set; }
@@ -2047,19 +2053,31 @@ namespace PeachPDF.Html.Core.Dom
                 // needs to know *which* one, which is why it cannot ask the combined predicate.
                 if (Display is CssConstants.Flex or CssConstants.InlineFlex)
                 {
-                    await LayoutEngineContent(g, CssLayoutEngineFlex.PerformLayout);
+                    await LayoutEngineContent(
+                        g, static (graphics, box, _) => CssLayoutEngineFlex.PerformLayout(graphics, box), resume: null);
                 }
                 else if (Display is CssConstants.Grid or CssConstants.InlineGrid)
                 {
-                    await LayoutEngineContent(g, CssLayoutEngineGrid.PerformLayout);
+                    await LayoutEngineContent(
+                        g, static (graphics, box, _) => CssLayoutEngineGrid.PerformLayout(graphics, box), resume: null);
                 }
                 else if (Display is CssConstants.Table or CssConstants.InlineTable)
                 {
                     // The record travels into the engine so it can tell a resumed pass from a fresh layout
                     // of the same box - the once-per-table half of its work is destructive when repeated
-                    // on top of rows another pass has already emitted (see TableSetup). It is null at this
-                    // arm for every document today: a table paginates itself inside one pass.
-                    await LayoutMonolithicContent(g, CssLayoutEngineTable.PerformLayout, resume);
+                    // on top of rows another pass has already emitted (see TableSetup).
+                    //
+                    // Not behind a detached fragmentainer any more (issue #464). While it was, nothing
+                    // inside a cell had a fragmentainer to run out of, so a cell could not stop, the row
+                    // loop could not record where it stopped, and the whole of a table's pagination had to
+                    // happen inside one pass by relocating words one at a time. The engine now fills one
+                    // fragmentainer per pass like every other content, and publishes where it stopped as
+                    // this box's own PendingBreakToken.
+                    await LayoutEngineContent(g, CssLayoutEngineTable.PerformLayout, resume);
+
+                    // The row loop stopped, so the rows after it belong to the next fragmentainer and this
+                    // box's epilogue - which judges a complete table - waits for the pass that completes it.
+                    if (PendingBreakToken is not null) return;
                 }
                 else
                 {
@@ -2203,37 +2221,16 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Runs a layout engine that paginates its own content, with breaking suppressed for the
-        /// duration.
-        /// </summary>
-        /// <remarks>
-        /// <para>
-        /// The set of boxes this covers is
-        /// <see cref="MonolithicContent.PaginatesItsOwnContent"/>: flex, grid, table and multi-column
-        /// containers. Each lays its subtree out in one go, inside whichever fragmentainer it starts in,
-        /// and keeps the pagination it already does for itself — the table engine's per-row breaks and
-        /// repeated header/footer proxies, the columns engine's re-banding. Suppressing breaks here also
-        /// stops a provisional placement made during those engines' measurement passes from being mistaken
-        /// for a real break decision, which is the hazard <c>SuppressWordPageBreaks</c> was introduced for.
-        /// </para>
-        /// <para>
-        /// <b>This is an implementation constraint, not
-        /// <see href="https://www.w3.org/TR/css-break-3/#monolithic">§2</see>'s own set</b> — which is
-        /// <see cref="MonolithicContent.IsMonolithic"/>, and which these boxes need not be members of.
-        /// The two used to be one undifferentiated notion of "monolithic"; see that type.
-        /// </para>
-        /// </remarks>
-        /// <summary>
         /// Runs a layout engine that positions its own children, leaving breaking live for it.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// Flex and grid, as against <see cref="LayoutMonolithicContent"/>'s table. Their items are still
-        /// <i>measured</i> with breaking suppressed — every measurement lays an item out at the
-        /// container's content origin, and a break decided there names a position the item is about to be
-        /// translated away from — but the engine itself needs to know whether breaking is live at all, so
-        /// that the pass it runs once its items are finally placed can tell "this container is being
-        /// paginated" from "this container is inside something that is measuring it".
+        /// Flex, grid and — since issue #464 — table. Their items are still <i>measured</i> with breaking
+        /// suppressed — every measurement lays an item out at the container's content origin, and a break
+        /// decided there names a position the item is about to be translated away from — but the engine
+        /// itself needs to know whether breaking is live at all, so that the pass it runs once its items
+        /// are finally placed can tell "this container is being paginated" from "this container is inside
+        /// something that is measuring it".
         /// </para>
         /// <para>
         /// <see cref="LayoutOutOfFlowChildren"/> keeps a suppressed scope of its own, and that is not
@@ -2243,35 +2240,24 @@ namespace PeachPDF.Html.Core.Dom
         /// making that explicit is what keeps it safe now that the caller does not.
         /// </para>
         /// </remarks>
-        private async ValueTask LayoutEngineContent(RGraphics g, Func<RGraphics, CssBox, ValueTask> engine)
+        /// <param name="g">the graphics context layout is running against</param>
+        /// <param name="engine">the engine to run over this box</param>
+        /// <param name="resume">
+        /// how this engine resumes on the current fragmentainer pass, or null when it is laying the box out
+        /// from the start. The record is what lets it tell a <i>continuation</i> — earlier fragments already
+        /// emitted — from a fresh layout of the same box, which is a distinction only the engine can act on.
+        /// Only the table engine reads one today; flex and grid pass null.
+        /// </param>
+        private async ValueTask LayoutEngineContent(
+            RGraphics g, Func<RGraphics, CssBox, BreakToken?, ValueTask> engine, BreakToken? resume)
         {
-            await engine(g, this);
+            await engine(g, this, resume);
 
             var previous = HtmlContainer?.DetachFragmentainer();
 
             try
             {
                 await LayoutOutOfFlowChildren(g);
-            }
-            finally
-            {
-                HtmlContainer?.RestoreFragmentainer(previous);
-            }
-        }
-
-        private async ValueTask LayoutMonolithicContent(
-            RGraphics g, Func<RGraphics, CssBox, BreakToken?, ValueTask> engine, BreakToken? resume,
-            bool layoutOutOfFlowChildren = true)
-        {
-            var previous = HtmlContainer?.DetachFragmentainer();
-
-            try
-            {
-                await engine(g, this, resume);
-
-                // The multi-column engine lays out every child itself, including out-of-flow ones; the
-                // flex/table/grid engines deliberately place only in-flow items.
-                if (layoutOutOfFlowChildren) await LayoutOutOfFlowChildren(g);
             }
             finally
             {

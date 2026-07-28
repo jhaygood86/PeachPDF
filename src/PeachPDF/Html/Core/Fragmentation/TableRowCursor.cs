@@ -126,11 +126,10 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// flows</see>, so each has a stopping point of its own to record.
         /// </para>
         /// <para>
-        /// Empty for every fixture measured so far, and that is a fact about the gate rather than about
-        /// tables: <c>CssBox.LayoutMonolithicContent</c> detaches the fragmentainer around the whole
-        /// engine, so nothing inside a cell has a fragmentainer to run out of. The list is what the gate
-        /// is waiting on — a row loop that can be told a cell stopped is the prerequisite for lifting it,
-        /// not a consequence.
+        /// Empty until issue #464 stopped running the engine behind a detached fragmentainer: while it
+        /// was, nothing inside a cell had a fragmentainer to run out of, so no cell could stop and this
+        /// list could never fill. A row loop that can be told a cell stopped was the prerequisite for
+        /// lifting that gate, not a consequence of it.
         /// </para>
         /// </remarks>
         internal IReadOnlyList<UnfinishedTableCell> UnfinishedCells => _unfinishedCells;
@@ -170,6 +169,23 @@ namespace PeachPDF.Html.Core.Fragmentation
                 _finishedCells.Add(cell);
             }
         }
+
+        /// <summary>
+        /// Notes that <paramref name="cell"/> finished on a pass <i>before</i> this one, so the record this
+        /// cursor publishes says so too.
+        /// </summary>
+        /// <remarks>
+        /// "Finished" is a fact about the cell, not about one pass, and the row loop cannot re-derive it: it
+        /// places nothing at all for such a cell, so <see cref="RecordIfUnfinished"/> never sees it and its
+        /// <c>PendingBreakToken</c> is whatever some earlier layout left behind. Without this the answer
+        /// <b>oscillates</b> — the pass that is told a cell finished forgets to say so, the pass after that
+        /// is not told, enters the cell from the start and re-places content two fragmentainers back, and
+        /// the pass after <i>that</i> is told again. Measured on a row whose second cell never finishes: the
+        /// record alternated between naming one finished cell and none, which also kept the driver's
+        /// no-progress backstop from ever seeing two equal records in a row (it compares consecutive passes,
+        /// and a two-cycle has none), so layout ran to the 100,000-pass cap.
+        /// </remarks>
+        internal void CarryForwardFinished(CssBox cell) => _finishedCells.Add(cell);
 
         private readonly List<CssBox> _finishedCells = [];
 
@@ -232,6 +248,18 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             return null;
         }
+
+        /// <summary>
+        /// Whether <paramref name="cell"/> is one an earlier pass began and did not finish, so the
+        /// fragment this pass gives it <i>continues</i> an earlier one rather than opening the cell.
+        /// </summary>
+        /// <remarks>
+        /// The same question <see cref="CarriedTokenFor"/> answers, asked where only the yes/no matters:
+        /// a cell whose content began in an earlier fragmentainer has no leftover room of its own here to
+        /// distribute, because where its content sits was settled by where that earlier fragment stopped
+        /// (<see href="https://www.w3.org/TR/css-tables-3/#fragmentation">css-tables-3 §6.1</see>).
+        /// </remarks>
+        internal bool ResumedFromAnEarlierPass(CssBox cell) => CarriedTokenFor(cell) is not null;
 
         /// <summary>
         /// Whether <paramref name="cell"/> is one an earlier pass finished, so this pass has nothing to

@@ -276,7 +276,23 @@ namespace PeachPDF.Html.Core.Dom
             // has already been filled, so they are neither cleared nor re-finalized.
             var completedLines = resume?.CompletedLineCount ?? 0;
 
-            if (resume is null)
+            if (resume is not null)
+            {
+                // The record says this block had produced exactly `completedLines` lines when the break was
+                // taken. Holding more than that means an attempt that has since been abandoned added them,
+                // and re-finalizing a line that already carries its per-line rectangles throws
+                // `An item with the same key has already been added` out of
+                // CssLineBox.AssignRectanglesToBoxes. Conservative in both directions: a record naming line
+                // n was written by the pass that finalized lines 0..n-1, so nothing an earlier
+                // fragmentainer emitted can be inside the range this drops.
+                //
+                // Reachable since the table engine stopped running behind a detached fragmentainer
+                // (issue #464): a multi-column container drives fragmentainers of its own and can abandon a
+                // fill attempt, so a table inside one is laid out again over cells that still hold the
+                // abandoned attempt's lines while the record still names the earlier count.
+                blockBox.DiscardLineBoxesFrom(completedLines);
+            }
+            else
             {
                 blockBox.LineBoxes.Clear();
 
@@ -350,7 +366,7 @@ namespace PeachPDF.Html.Core.Dom
                     word.AwaitsTheNextFragmentainer = true;
                 }
 
-                FinalizeLineBoxes(blockBox, completedLines);
+                FinalizeLineBoxes(blockBox, completedLines, blockFinished: false);
 
                 return stopped with
                 {
@@ -384,12 +400,23 @@ namespace PeachPDF.Html.Core.Dom
         /// fragmentainer; re-running alignment over them would re-align and re-bubble geometry that has
         /// already been consumed, against a later pass's <c>MaxRight</c>.
         /// </summary>
-        private static void FinalizeLineBoxes(CssBox blockBox, int firstLine)
+        /// <param name="blockBox">the block whose lines are being finalized</param>
+        /// <param name="firstLine">the first line this pass produced; everything below it is already done</param>
+        /// <param name="blockFinished">
+        /// whether the flow reached the end of the block's content. False when it stopped at a
+        /// fragmentation break, and <c>text-align: justify</c> is the one caller that has to know: a line
+        /// that ends at a break is <b>not</b> the block's last line — the block continues in the next
+        /// fragmentainer — so
+        /// <see href="https://www.w3.org/TR/css-text-3/#text-align-property">CSS Text §7.3</see>'s
+        /// "except the last line" exemption does not apply to it. Reading it off the list alone justified
+        /// nothing at a page boundary, because the line the pass stopped on is the last one the list holds.
+        /// </param>
+        private static void FinalizeLineBoxes(CssBox blockBox, int firstLine, bool blockFinished = true)
         {
             for (var i = firstLine; i < blockBox.LineBoxes.Count; i++)
             {
                 var lineBox = blockBox.LineBoxes[i];
-                ApplyHorizontalAlignment(lineBox);
+                ApplyHorizontalAlignment(lineBox, blockFinished);
                 ApplyRightToLeft(blockBox, lineBox);
                 BubbleRectangles(blockBox, lineBox);
                 ApplyVerticalAlignment(lineBox);
@@ -1826,8 +1853,12 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Applies vertical and horizontal alignment to words in line-boxes
         /// </summary>
-        /// <param name="lineBox"></param>
-        private static void ApplyHorizontalAlignment(CssLineBox lineBox)
+        /// <param name="lineBox">the line to align</param>
+        /// <param name="blockFinished">
+        /// whether the flow reached the end of the owning block's content — see
+        /// <see cref="FinalizeLineBoxes"/>, whose parameter this is.
+        /// </param>
+        private static void ApplyHorizontalAlignment(CssLineBox lineBox, bool blockFinished)
         {
             switch (lineBox.OwnerBox.TextAlign)
             {
@@ -1838,7 +1869,7 @@ namespace PeachPDF.Html.Core.Dom
                     ApplyCenterAlignment(lineBox);
                     break;
                 case CssConstants.Justify:
-                    ApplyJustifyAlignment(lineBox);
+                    ApplyJustifyAlignment(lineBox, blockFinished);
                     break;
             }
         }
@@ -2047,12 +2078,22 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Applies centered alignment to the text on the line-box
+        /// Spreads the words of <paramref name="lineBox"/> to fill its measure, per
+        /// <see href="https://www.w3.org/TR/css-text-3/#text-align-property">CSS Text §7.3</see>'s
+        /// <c>justify</c>.
         /// </summary>
-        /// <param name="lineBox"></param>
-        private static void ApplyJustifyAlignment(CssLineBox lineBox)
+        /// <param name="lineBox">the line to justify</param>
+        /// <param name="blockFinished">
+        /// whether the flow reached the end of the owning block's content, which is what decides whether
+        /// the last line in the list is §7.3's exempt <i>last line of the block</i> — see
+        /// <see cref="FinalizeLineBoxes"/>.
+        /// </param>
+        private static void ApplyJustifyAlignment(CssLineBox lineBox, bool blockFinished)
         {
-            if (lineBox.Equals(lineBox.OwnerBox.LineBoxes[^1]))
+            // The block's last line is exempt (CSS Text §7.3) - but only a block whose flow actually
+            // finished has one. A pass that stopped at a fragmentation break leaves the line it stopped on
+            // at the end of the list without it being the end of the block.
+            if (blockFinished && lineBox.Equals(lineBox.OwnerBox.LineBoxes[^1]))
                 return;
 
             var indent = lineBox.Equals(lineBox.OwnerBox.LineBoxes[0]) ? lineBox.OwnerBox.ActualTextIndent : 0f;
