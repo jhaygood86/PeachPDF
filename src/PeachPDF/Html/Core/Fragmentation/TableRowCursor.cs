@@ -419,10 +419,13 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </para>
         /// <para>
         /// So is the continuation geometry a row states
-        /// (<c>HtmlContainerInt.RecordContinuationShell</c>), and that one rests on an argument worth
-        /// stating because it is not local: a row states a shell only for a cell an <i>earlier pass</i>
-        /// finished, those cells are named by the carried record, and a record names only the row a
-        /// continuation re-enters — which is the one row the loop never retracts.
+        /// (<c>HtmlContainerInt.RecordContinuationShell</c>), but only half of it, and the half that is
+        /// <b>not</b> covered here is worth naming. A shell for a cell an <i>earlier pass</i> finished is
+        /// safe by an argument that is not local: those cells are named by the carried record, and a record
+        /// names only the row a continuation re-enters — which is the one row the loop never retracts. A
+        /// shell for a <c>rowspan</c> cell fragmented at a band boundary has no such protection, because
+        /// the row that states it is exactly the row the straddle correction moves. The row loop sweeps
+        /// those itself, before calling this, using <see cref="ForeignCellsWritten"/>.
         /// </para>
         /// </remarks>
         internal readonly struct RowPlacement(double maxBottom, double maxRight, Dictionary<int, int>? spannedCounts)
@@ -449,7 +452,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// recorded rather than recomputed: it <i>offsets a subtree</i> rather than assigning a position,
         /// so it is neither idempotent nor derivable after the fact.
         /// </param>
-        internal readonly record struct ForeignCellWrite(CssBox Cell, double PreviousBottom, double AppliedOffset);
+        private readonly record struct ForeignCellWrite(CssBox Cell, double PreviousBottom, double AppliedOffset);
 
         private readonly List<ForeignCellWrite> _foreignWrites = [];
 
@@ -467,11 +470,40 @@ namespace PeachPDF.Html.Core.Fragmentation
         internal void RecordForeignWrite(CssBox cell, double previousBottom, double appliedOffset) =>
             _foreignWrites.Add(new ForeignCellWrite(cell, previousBottom, appliedOffset));
 
+        /// <summary>
+        /// Whether the row being placed has already written to <paramref name="cell"/>, so a caller reached
+        /// by more than one route does not write to it twice.
+        /// </summary>
+        /// <remarks>
+        /// A row reaches a spanning cell both as a <c>CssSpacingBox</c>'s <c>ExtendedBox</c> and through
+        /// <see cref="RowSpannedBoxes"/>, and what it does to the cell —
+        /// <c>CssLayoutEngine.ApplyCellVerticalAlignment</c> — composes rather than settling.
+        /// </remarks>
+        internal bool AlreadyWroteTo(CssBox cell)
+        {
+            foreach (var write in _foreignWrites)
+            {
+                if (ReferenceEquals(write.Cell, cell)) return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>The cells belonging to earlier rows that the row being placed has written to.</summary>
+        internal IEnumerable<CssBox> ForeignCellsWritten
+        {
+            get
+            {
+                foreach (var write in _foreignWrites) yield return write.Cell;
+            }
+        }
+
         /// <summary>What this cursor holds before the row about to be placed touches it.</summary>
         internal RowPlacement BeginRow()
         {
-            // Per row rather than per placement: only the row now being placed can have written to a
-            // foreign cell, and the list is either replayed by Retract or spent by the next row.
+            // Per row rather than per placement, and this is the clear that carries the invariant: a row
+            // that is *not* retracted leaves its entries behind, and the next row's Retract would otherwise
+            // undo a previous row's writes. The one in Retract is belt against a second retraction.
             _foreignWrites.Clear();
 
             if (RowSpannedBoxes.Count == 0) return new RowPlacement(MaxBottom, MaxRight, null);

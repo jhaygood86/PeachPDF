@@ -8,6 +8,14 @@ A `rowspan` cell belongs to the row that **opens** the span, but its bottom is w
 different bands, giving the cell the ending row's bottom makes one box that spans a page boundary, and
 its borders and background are then drawn straight through the page edge.
 
+[css-tables-3 §6.1](https://www.w3.org/TR/css-tables-3/#breaking-rules) names both halves, and it is
+worth quoting because the terms are the spec's own: a row is preserved unfragmented only *"if the cells
+spanning the row do not span any subsequent row"* — so the row that **ends** a span is moved whole, while
+a row in the **middle** of one is *freely fragmentable* and *"user agents must attribute all the remaining
+height in the fragmentainer to the cells of that row"*. Either way the cell continues rather than
+travelling, and *"top borders must not be repainted in continuation fragments"* — which is what
+`TheSpanningCellsFragments_OwnOnlyTheBlockEdgesTheBreakDidNotMake` pins.
+
 **`CloseSpanningCell` is the one place that may write a spanning cell's bottom, and it asks the bands,
 not the caller.** Three different mechanisms put a break between two rows a span covers — the straddle
 correction moving the ending row, the row loop's `EstimateRowHeight` prediction breaking before a row in
@@ -21,6 +29,16 @@ Three rules the close depends on, each of which cost something to find:
   band's foot.** `FragmentPainter` clips the table's bottom border to the same record, so a cell closed
   lower is a tint drawn past the table's own edge — visible in the first rasterization of
   `paged_media_table_rowspan_break` as a strip hanging below the last row on the page.
+- **The gate is `CurrentFragmentainer is { HasOwnBand: false }`, not `is not { HasOwnBand: true }`.**
+  The two differ on **null**, which is a measurement pass — a flex or grid item's layout runs behind a
+  detached fragmentainer at a provisional position it is about to be translated away from, with the
+  emitter still live. The `is not` form treats that as "the page grid answers", and a close decided there
+  states continuation geometry at coordinates nothing ends up at and no later run sweeps.
+- **The table's slice on the band follows the cell where the cell reaches lowest.** `MaxBottom` never
+  counts a spanning cell before the row that ends it, so a tall cell opened by a *short* row closes below
+  the `PageBreakBottoms` entry its own table wrote, and the bottom border clipped to that entry would be
+  drawn across the cell. Raise the record rather than closing the cell at it — see the next rule for why
+  the close cannot give way.
 - **It may never close above the cell's own content.** Only the *box* is fragmented; what lies below the
   close is then inside no fragment at all. Measured as ~100 unclaimed words in
   `TableCellBreakTokenTests.APaginatingTable_DropsNoWord`, which is the suite's word census and the

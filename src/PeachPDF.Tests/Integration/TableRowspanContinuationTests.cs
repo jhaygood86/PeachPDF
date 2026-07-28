@@ -224,6 +224,39 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
+        /// The continuation does not repaint the cell's top border, which
+        /// <see href="https://www.w3.org/TR/css-tables-3/#breaking-rules">css-tables-3 §6.1</see> requires
+        /// in as many words — <i>"top borders must not be repainted in continuation fragments"</i> — and
+        /// which <see href="https://www.w3.org/TR/css-break-3/#break-decoration">css-break-3 §6.2</see>
+        /// says the same way for `box-decoration-break: slice`: no border is drawn at a break on either
+        /// side of it.
+        /// </summary>
+        [Fact]
+        public async Task TheSpanningCellsFragments_OwnOnlyTheBlockEdgesTheBreakDidNotMake()
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(
+                EndingRowWouldStraddle(), pageHeight: PageHeight, margin: Margin);
+
+            var fragments = SpanFragments(container);
+            var last = fragments.Count - 1;
+
+            Assert.True(last > 0, "the spanning cell has one fragment, so there is no break edge to state");
+
+            for (var i = 0; i <= last; i++)
+            {
+                var slice = Assert.Single(fragments[i].Fragment.Lines).Slice;
+
+                Assert.Equal(i == 0, slice.HasTopEdge);
+                Assert.Equal(i == last, slice.HasBottomEdge);
+
+                // A page's fragmentainers differ in the block axis alone, so the inline edges are nobody's
+                // break and both survive on every fragment.
+                Assert.True(slice.HasLeftEdge);
+                Assert.True(slice.HasRightEdge);
+            }
+        }
+
+        /// <summary>
         /// The control. A span that stays inside one band is one box and one fragment — without this,
         /// "the cell has a continuation" would pass against a change that gave every cell one.
         /// </summary>
@@ -344,6 +377,90 @@ namespace PeachPDF.Tests.Integration
                 reachedOnce.ContentTop - reachedOnce.CellTop,
                 reachedTwice.ContentTop - reachedTwice.CellTop,
                 0.01);
+        }
+
+        /// <summary>
+        /// Where the spanning cell's own content is what reaches lowest on its band, the table's slice
+        /// follows it — the cell is not closed above its content, and the table's bottom border is not
+        /// then drawn across the cell.
+        /// </summary>
+        /// <remarks>
+        /// The row cursor's <c>MaxBottom</c> never counts a spanning cell before the row that ends it, so a
+        /// tall cell opened by a <i>short</i> row closes below the `PageBreakBottoms` record its own table
+        /// wrote — and `FragmentPainter` clips the bottom border to that record. Closing the cell at the
+        /// record instead would cut its content, which is the one thing the close may never do.
+        /// </remarks>
+        [Fact]
+        public async Task WhereTheSpanningCellReachesLowest_TheTablesSliceFollowsIt()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(@"
+                    <table style='width:100%;border-collapse:collapse'>
+                      <tr><td colspan='2'><div style='height:40pt'>row 0</div></td></tr>
+                      <tr><td colspan='2'><div style='height:40pt'>row 1</div></td></tr>
+                      <tr><td colspan='2'><div style='height:40pt'>row 2</div></td></tr>
+                      <tr><td colspan='2'><div style='height:40pt'>row 3</div></td></tr>
+                      <tr><td><div style='height:20pt'>short</div></td>
+                          <td id='span' rowspan='2'><div style='height:90pt'>tall span</div></td></tr>
+                      <tr><td><div style='height:120pt'>row 5</div></td></tr>
+                    </table>"),
+                pageHeight: PageHeight, margin: Margin);
+
+            var cell = SpanningCell(root);
+            var table = LayoutHarness.Descendants(root).First(b => b.Display == CssConstants.Table);
+            var rows = RowsOf(root);
+
+            // The fixture only asserts anything if the cell really does outreach the row that opened it.
+            Assert.True(cell.ActualBottom > rows[4].ActualBottom,
+                $"the spanning cell ends at {cell.ActualBottom:F1}, not past its opening row's "
+                + $"{rows[4].ActualBottom:F1}");
+
+            Assert.True(cell.ActualBottom >= CssBox.GetMaximumBottom(cell, 0d) - 0.01,
+                "the cell was closed above its own content");
+
+            Assert.True(table.PageBreakBottoms![0] >= cell.ActualBottom - 0.01,
+                $"the table's slice on band 0 ends at {table.PageBreakBottoms[0]:F1}, above the spanning "
+                + $"cell's {cell.ActualBottom:F1} — its bottom border would be drawn across the cell");
+        }
+
+        /// <summary>
+        /// A row can end more than one span, and each of those cells is closed. The guard that stops a
+        /// single cell being written to twice must not stop a <i>second</i> cell being written to at all.
+        /// </summary>
+        [Fact]
+        public async Task ARowEndingTwoSpans_ClosesBothOfThem()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(@"
+                    <table style='width:100%;border-collapse:collapse'>
+                      <tr><td colspan='3'><div style='height:40pt'>row 0</div></td></tr>
+                      <tr><td colspan='3'><div style='height:40pt'>row 1</div></td></tr>
+                      <tr><td colspan='3'><div style='height:40pt'>row 2</div></td></tr>
+                      <tr><td colspan='3'><div style='height:40pt'>row 3</div></td></tr>
+                      <tr><td id='left' rowspan='2'>spans 4-5</td>
+                          <td id='right' rowspan='2'>also spans 4-5</td>
+                          <td><div style='height:40pt'>row 4</div></td></tr>
+                      <tr><td><div style='height:120pt'>row 5</div></td></tr>
+                    </table>"),
+                pageHeight: PageHeight, margin: Margin);
+
+            var cells = LayoutHarness.Descendants(root)
+                .Where(b => b.HtmlTag?.TryGetAttribute("id") is "left" or "right")
+                .ToList();
+
+            Assert.Equal(2, cells.Count);
+
+            foreach (var cell in cells)
+            {
+                var cellSlot = container.SlotStartingAt(cell.Location.Y);
+
+                Assert.False(
+                    HtmlContainerInt.FallsPast(cell.ActualBottom, container.BandOfSlot(cellSlot)),
+                    $"a spanning cell runs {cell.Location.Y:F1}..{cell.ActualBottom:F1}, out of band {cellSlot}");
+            }
+
+            // Both closed at the same place, which is what says neither was skipped by the other's guard.
+            Assert.Equal(cells[0].ActualBottom, cells[1].ActualBottom, 0.01);
         }
 
         /// <summary>
