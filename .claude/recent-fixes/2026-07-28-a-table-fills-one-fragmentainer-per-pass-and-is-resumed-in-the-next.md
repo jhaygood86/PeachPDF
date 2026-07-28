@@ -132,11 +132,26 @@ all — a rig that measures nothing while looking like it measures everything.
 | flex in `<td>` / grid in `<td>` | 6 twice each | **identical** |
 | `rowspan` | 244 twice, all in slot 0 | **identical** |
 
-So this also closes [#430](https://github.com/jhaygood86/PeachPDF/issues/430) (a multicol inside a
-cell losing content). The last two rows are **pre-existing and unchanged**, which is why they are in a
-separate theory: the flex/grid one is the documented "a page boundary can cut through a line of a flex
-or grid item" limitation, and the `rowspan` one is a `CssSpacingBox` placeholder emitting the same
-subtree once per spanned row into one fragmentainer. Neither is this change's to claim either way.
+The last two rows are **pre-existing and unchanged**, which is why they are in a separate theory: the
+flex/grid one is the documented "a page boundary can cut through a line of a flex or grid item"
+limitation, and the `rowspan` one is a `CssSpacingBox` placeholder emitting the same subtree once per
+spanned row into one fragmentainer. Neither is this change's to claim either way.
+
+**[#430](https://github.com/jhaygood86/PeachPDF/issues/430) closed half-way, and the PR claimed it
+whole — a mistake worth recording.** That issue is "a multicol inside a table cell **or a flex item**",
+and the PR carried `Fixes #430`, which auto-closed it. Re-measured on the issue's own fixture (40
+paragraphs, two columns, 260pt band) after the merge:
+
+| nesting | emitted / authored | word span |
+|---|---|---|
+| top level (control) | 640 / 640 | `[32, 913]` |
+| inside `<td>` | **640 / 640** (was 384) | `[34, 1133]` (was `[-873, 916]`) |
+| inside `display:flex` | **176 / 640** (was 148) | `[32, 1508]` |
+
+The cell half is completely fixed, negative document Y included. The flex half is **not** — 72% of the
+content is still lost, and 148 → 176 is noise. The issue was reopened and retitled to the flex half.
+The lesson is narrow and general: `Fixes #NNN` claims the *whole* issue, so an issue whose title
+carries an "or" needs checking against both halves before the keyword goes in the PR body.
 
 **[#439](https://github.com/jhaygood86/PeachPDF/issues/439) is improved but not closed, and the
 showcase is why.** A repeating `<thead>` now repeats above a continuation in the harness — pinned by
