@@ -36,9 +36,17 @@ namespace PeachPDF.Html.Core.Fragmentation
     /// <see cref="SlotIndex"/> used to be a <i>counter</i> — advanced by one per break — so it named the
     /// band the loop last <b>opened</b> rather than the band <see cref="CurrentY"/> had reached, and a row
     /// taller than a band left the two several fragmentainers apart. It is now a <b>floor</b>: the lowest
-    /// band the loop may still be filling, raised by <see cref="MoveToSlot"/> and <see cref="RestartAt"/>
-    /// and never read on its own. <see cref="BandReached"/> is what the row loop asks, and it takes the
-    /// later of the floor and the band <see cref="CurrentY"/> is actually in.
+    /// band the loop may still be filling. <see cref="BandReached"/> is what raises it, and it is the one
+    /// the row loop asks — the floor unless <see cref="CurrentY"/> has fallen past that band, in which
+    /// case the band the coordinate lies in. <see cref="MoveToSlot"/> and <see cref="RestartAt"/> assign
+    /// it outright, for a break and a whole-table relocation respectively.
+    /// </para>
+    /// <para>
+    /// It is still read directly in four places, and each is asking something other than "which band is
+    /// this row in": the two whole-table pre-checks, which run before any row is placed; the sweep of the
+    /// continuation geometry an earlier run stated, which wants the slot this pass <i>resumes</i> at; and
+    /// the shells a row states, which are keyed by the field <see cref="BandReached"/> has just written.
+    /// A fifth is the unpaginated fallback, where there is no page grid to derive anything from.
     /// </para>
     /// <para>
     /// That derivation was unsafe while the loop's only question was <c>EstimateRowHeight</c>, one line of
@@ -356,14 +364,30 @@ namespace PeachPDF.Html.Core.Fragmentation
         }
 
         /// <summary>
-        /// The band this cursor has actually reached: the later of <see cref="SlotIndex"/>'s floor and the
-        /// band <see cref="CurrentY"/> lies in. Raises the floor to it, so everything keyed to "the band
-        /// the loop is filling" — <c>CssBox.PageBreakBottoms</c>, the continuation shells a row states —
-        /// names the same one.
+        /// The band this cursor has actually reached: the band it was filling, unless
+        /// <see cref="CurrentY"/> has fallen past that band, in which case the band the coordinate lies
+        /// in. Raises the floor to it, so everything keyed to "the band the loop is filling" —
+        /// <c>CssBox.PageBreakBottoms</c>, the continuation shells a row states — names the same one.
         /// </summary>
+        /// <remarks>
+        /// The gate is <see cref="HtmlContainerInt.FallsPast"/> rather than
+        /// <see cref="HtmlContainerInt.SlotStartingAt"/> alone, and the difference is a real case rather
+        /// than a nicety. <c>SlotStartingAt</c> applies the <i>top-edge</i> convention — a coordinate
+        /// within <c>PageBoundaryEpsilon</c> above a boundary begins the later band — which is right for a
+        /// box that was placed at a band top and has accumulated arithmetic noise, and wrong for this
+        /// cursor, which is a derived position (the last row's bottom plus the table's vertical spacing).
+        /// Reading it that way let a row whose predecessor ended half a point short of the band bottom
+        /// count as beginning the next band, so the loop asked its questions of a band it had not reached,
+        /// took no break, and left the table crossing a page boundary with no slice bottom recorded for
+        /// the page it left. Caught on Windows only, where the font metrics put that row half a point
+        /// further up than they do elsewhere — the tolerance is the same everywhere, but only some metrics
+        /// land inside it.
+        /// </remarks>
         /// <param name="container">the container whose page grid resolves the coordinate</param>
         internal int BandReached(HtmlContainerInt container)
         {
+            if (!HtmlContainerInt.FallsPast(CurrentY, container.BandOfSlot(SlotIndex))) return SlotIndex;
+
             var reached = container.SlotStartingAt(CurrentY);
 
             if (reached > SlotIndex) SlotIndex = reached;
@@ -387,17 +411,38 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// can be taken back before the row is placed again.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// <see cref="UnfinishedCells"/> is deliberately absent: the loop only retracts a row no cell
         /// stopped in, so there is nothing there to take back. <see cref="FinishedCells"/> is absent for a
         /// different reason — re-assigning <see cref="RowIndex"/> clears it, which the re-placement does
         /// anyway.
+        /// </para>
+        /// <para>
+        /// So is the continuation geometry a row states
+        /// (<c>HtmlContainerInt.RecordContinuationShell</c>), and that one rests on an argument worth
+        /// stating because it is not local: a row states a shell only for a cell an <i>earlier pass</i>
+        /// finished, those cells are named by the carried record, and a record names only the row a
+        /// continuation re-enters — which is the one row the loop never retracts.
+        /// </para>
         /// </remarks>
-        internal readonly record struct RowPlacement(
-            double MaxBottom, double MaxRight, Dictionary<int, int> SpannedCounts);
+        internal readonly struct RowPlacement(double maxBottom, double maxRight, Dictionary<int, int>? spannedCounts)
+        {
+            internal double MaxBottom { get; } = maxBottom;
+
+            internal double MaxRight { get; } = maxRight;
+
+            /// <summary>
+            /// How many boxes each <see cref="RowSpannedBoxes"/> list held, or null where the map was
+            /// empty — which is every table with no <c>rowspan</c>, so it is worth not allocating for.
+            /// </summary>
+            internal Dictionary<int, int>? SpannedCounts { get; } = spannedCounts;
+        }
 
         /// <summary>What this cursor holds before the row about to be placed touches it.</summary>
         internal RowPlacement BeginRow()
         {
+            if (RowSpannedBoxes.Count == 0) return new RowPlacement(MaxBottom, MaxRight, null);
+
             var spanned = new Dictionary<int, int>(RowSpannedBoxes.Count);
 
             foreach (var (endRow, boxes) in RowSpannedBoxes)
@@ -424,11 +469,13 @@ namespace PeachPDF.Html.Core.Fragmentation
             MaxBottom = placement.MaxBottom;
             MaxRight = placement.MaxRight;
 
-            foreach (var endRow in new List<int>(RowSpannedBoxes.Keys))
+            if (RowSpannedBoxes.Count == 0) return;
+
+            foreach (var endRow in (int[])[.. RowSpannedBoxes.Keys])
             {
                 var boxes = RowSpannedBoxes[endRow];
 
-                if (!placement.SpannedCounts.TryGetValue(endRow, out var count))
+                if (placement.SpannedCounts?.TryGetValue(endRow, out var count) is not true)
                 {
                     RowSpannedBoxes.Remove(endRow);
                     continue;

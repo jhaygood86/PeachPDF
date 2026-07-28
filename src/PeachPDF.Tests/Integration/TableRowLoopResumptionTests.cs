@@ -1036,6 +1036,38 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
+        /// The band a cursor has reached is the one it is filling until its position has genuinely fallen
+        /// past that band — not merely come within the boundary tolerance of the next one.
+        /// </summary>
+        /// <remarks>
+        /// <c>SlotStartingAt</c>'s top-edge convention counts a coordinate within
+        /// <c>PageBoundaryEpsilon</c> <i>above</i> a boundary as beginning the later band, which is right
+        /// for a box placed at a band top and wrong for this cursor, a derived position. Reading it that
+        /// way let the row loop ask its questions of a band it had not reached, take no break, and leave
+        /// the table crossing a page boundary with no slice bottom recorded for the page it left. Font
+        /// metrics decide whether a given fixture lands inside the half point — this reproduced on Windows
+        /// and nowhere else — which is why it is asserted on the coordinate rather than through a document.
+        /// </remarks>
+        [Fact]
+        public async Task ACursorWithinTheBoundaryToleranceOfTheNextBand_HasNotReachedIt()
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap("<p>a</p>"), pageHeight: PageHeight, margin: Margin);
+
+            var cursor = new TableRowCursor(top: container.PageTopOf(0), maxRight: 0, slotIndex: 0);
+
+            // Inside the band, but within the epsilon of the next band's top.
+            cursor.CurrentY = container.PageBottomOf(0) - (HtmlContainerInt.PageBoundaryEpsilon / 2);
+            Assert.Equal(0, cursor.BandReached(container));
+            Assert.Equal(0, cursor.SlotIndex);
+
+            // Genuinely past it.
+            cursor.CurrentY = container.PageTopOf(1) + 1;
+            Assert.Equal(1, cursor.BandReached(container));
+            Assert.Equal(1, cursor.SlotIndex);
+        }
+
+        /// <summary>
         /// Retracting a row's placement takes back exactly what that row added to the rowspan
         /// bookkeeping: a list it extended is truncated to the length it had, and a key it created
         /// outright is removed rather than left empty for <c>Continuation</c> to publish.

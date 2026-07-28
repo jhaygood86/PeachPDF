@@ -1515,7 +1515,8 @@ namespace PeachPDF.Html.Core.Dom
         /// </description></item>
         /// <item><description>
         /// <b>The row begins the band.</b> Moving it would leave the fragmentainer empty, which
-        /// <see href="https://www.w3.org/TR/css-break-3/#break-between">§4.4</see> forbids, and the next
+        /// §4.4 forbids — cited bare because <c>#break-between</c> is the property section this file
+        /// links elsewhere as §3.1, and the rule is not there — and the next
         /// band would only cut it in the same place. A row taller than a whole band lands here, which is
         /// exactly the case <see href="https://github.com/jhaygood86/PeachPDF/issues/432">#432</see> is
         /// about: it stays, overflows, and the rows after it are placed below it rather than inside it.
@@ -1797,6 +1798,12 @@ namespace PeachPDF.Html.Core.Dom
             // grid the two agree, and inside a multi-column column they do not - the cell's Location.X
             // names the column its first fragment was in, while currentX names the one this pass is
             // filling, which is where a continuation with a band of its own belongs.
+            //
+            // cursor.SlotIndex rather than the row loop's own derived band, and they are the same thing:
+            // TableRowCursor.BandReached writes the field before the loop asks anything of it. Nothing
+            // here has to be undone when a placement is retracted, either - a shell is stated only for a
+            // cell an *earlier pass* finished, those cells are named by the carried record, and a record
+            // names only the row a continuation re-enters, which is the one row never retracted.
             if (finishedCells.Count > 0 && rowMaxBottom > currentY
                 && _tableBox.HtmlContainer is { } htmlContainer)
             {

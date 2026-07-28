@@ -96,6 +96,32 @@ header and all three following rows painted on top of the tall row's gradient.
 derived. `FragmentPainter` reads the record by the fragment's own fragmentainer index, so the old key was
 the second half of the defect.
 
+## The boundary tolerance, which only Windows produced
+
+The first draft of `BandReached` was `Math.Max(SlotIndex, SlotStartingAt(CurrentY))`. `SlotStartingAt`
+applies the **top-edge** convention — a coordinate within `PageBoundaryEpsilon` *above* a boundary begins
+the later band — which is right for a box placed at a band top and carrying arithmetic noise, and wrong
+for this cursor, which is a *derived* position: the last row's bottom plus the table's vertical spacing.
+
+`AnOrdinaryTableBreaksBetweenTheBandsItsRowsActuallyFill` failed on **Windows only**, at 279.5 against an
+expected 280. The second row ends half a point higher there than it does on Linux and macOS, so the
+cursor landed inside the epsilon, the loop believed it was already filling band 1, took no break, and the
+table crossed a page boundary with **no slice bottom recorded for the page it left**. Nothing is visibly
+misplaced — the row is half a point from where it should be — but the border clip and any repeated header
+for that page are gone, which is the class of defect the whole change is about, reintroduced by a
+tolerance.
+
+The gate is now `FallsPast(CurrentY, BandOfSlot(SlotIndex))` — the same question the correction itself
+asks, per [one membership question, one tolerance](../invariants/fragmentation-one-membership-question-is-asked-with-one-tolerance.md).
+Pinned by `TableRowLoopResumptionTests.ACursorWithinTheBoundaryToleranceOfTheNextBand_HasNotReachedIt`,
+which asserts on the coordinate rather than through a document, because whether a fixture lands inside
+the half point is a fact about font metrics. Changed no showcase.
+
+**What to take from it:** a three-platform CI matrix is the only thing that produced this, and the
+failure looked like a rounding disagreement rather than a missing record. `SlotStartingAt` /
+`SlotEndingAt` / `FallsPast` are three different questions, and picking one because it is nearby rather
+than because the edge is the kind it names is how a tolerance becomes a defect.
+
 ## What this change gives up, and it is filed
 
 A repeating `<thead>` is created only before the loop and inside `TakeBreakBeforeRow`, so it lands on the
@@ -110,6 +136,38 @@ and a reader-facing limitation in `docs/html-css-support.md`. Not fixed here bec
 is the wrong question and the right one — which bands the table's slice covers — is the same set
 `PageBreakBottoms` needs entries for, so half of it trades a missing header for a border drawn across the
 middle of a row.
+
+## What the review caught, and two of them are filed
+
+**A row that ends a `rowspan` is left straddling, and the docs edit said the opposite.** The correction
+declines there because `ApplyCellVerticalAlignment` has already deep-offset the spanning cell — a child
+of an *earlier* row — and neither `Retract` nor `PassRewind` restores geometry the row does not own. The
+first docs wording ("a row that would straddle and could fit a page of its own is already carried onto
+the next page whole") is a specific, checkable claim and is false for exactly that case; the old vaguer
+sentence was less wrong. [#511](https://github.com/jhaygood86/PeachPDF/issues/511), with
+[a gap file](../accepted-gaps/table-a-row-that-ends-a-rowspan-is-not-relocated.md). The guard is exact
+rather than conservative — `InsertEmptyBoxes` and `LayoutBodyRow` key the spacer and the registration the
+same way — with one hole at `LayoutBodyRow`'s `currentColumn >= _columnWidths.Length` early `break`.
+
+**A forced break inside a cell is not always a stop, and the gap it leaves is read as height.** The
+going-in reading was that `break-before: page` inside a `<td>` sets the cell's `PendingBreakToken`, so
+`cursor.Stopped` is true and the correction never runs. That is only true for *some* positions: measured,
+a break in row 3's cell was serviced by relocating the block, the cell did not stop, and `MaxBottom -
+rowTop` came back as 144pt for 40pt of content — gap included — which is then what the destination's
+capacity is compared against. **Re-measured against `77e845d`, `main` drops the same break in every
+fixture that could be built**, so this is a route rather than a regression;
+[#512](https://github.com/jhaygood86/PeachPDF/issues/512), the same class as
+[#434](https://github.com/jhaygood86/PeachPDF/issues/434) one level out.
+
+**Three claims in the first draft were simply wrong**, and are the kind a future reader would trust:
+`SlotIndex` is "never read on its own" (it is, in five places, each asking something else); `#break-between`
+cited as §4.4 when this file links that anchor as §3.1 nine times elsewhere; and `#possible-breaks` cited
+as §4.1 in the docs while the repo cites it as §4.3 everywhere else, including #432's own body.
+
+The review also **destroyed the working tree** by reverting the changed files to `main` to test a
+hypothesis and staging the revert. Nothing was lost that was not recoverable from the commit, but a
+review agent turned loose in the repository is a writer, and the two uncommitted edits at the time were
+gone. Commit before reviewing.
 
 ## Deliberately not done
 
@@ -129,7 +187,7 @@ middle of a row.
 
 ## Evidence
 
-Full net8.0 suite green (6,882 passed, 9 skipped), CLI suite green (96),
+Full net8.0 suite green (6,885 passed, 9 skipped, up 3), net10.0 green, CLI suite green (96),
 `dotnet build PeachPDF.slnx -t:Rebuild` with zero warnings. **70 of 70 existing showcases
 byte-identical** to `main` after normalizing creation date/time, `/ID`, subset tags and the annotation
 `/M`/`/NM` — the change is confined to the case the issue is about. One showcase is new.
@@ -138,9 +196,13 @@ Tests: `TableRowCursorBandTests`'s characterization theory became
 `RowsAfterARowTallerThanABand_ContinueBelowIt`, asserting the three positions *and* that no row starts
 above the bottom of the row before it, plus `ARowTallerThanABand_IsNotMovedAndRecordsNoBreak`,
 `NoRowStraddlesABandBoundaryWhenTheEstimateUndershootsIt`,
-`EverySliceBottomIsKeyedToTheBandItFallsIn` and `ARepeatedHeaderIsNeverDrawnOverTheRowBeforeIt`. **All
-seven fail on `main`'s engine and pass with this change**, checked by reverting the two source files and
-re-running; the three "must not lose" tests in the same class pass both ways. The header one is worth
+`EverySliceBottomIsKeyedToTheBandItFallsIn`, `ARepeatedHeaderIsNeverDrawnOverTheRowBeforeIt` and
+`ARowThatOpensARowspanCanStillBeCorrectedOntoTheNextBand`. **Every one of them fails on `main`'s
+engine — seven test cases, counting the theory's three — and passes with this change**, checked by
+reverting the two source files and re-running; the three "must not lose" tests in the same class pass
+both ways. Two more in `TableRowLoopResumptionTests` pin the cursor directly:
+`RetractingARowsPlacement_TakesBackOnlyWhatThatRowAddedToTheRowspanMap` and
+`ACursorWithinTheBoundaryToleranceOfTheNextBand_HasNotReachedIt`. The header one is worth
 keeping: it is the assertion `RepeatedTableHeaderClipIntegrationTests` was missing — that fixture's third
 page existed only because the header proxy was drawn 2pt *inside* the row before it, #432 at small scale,
 green the whole time.
