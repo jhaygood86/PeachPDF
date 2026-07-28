@@ -16,6 +16,7 @@ namespace PeachPDF.Tests.Integration
     /// meaningful file system to reach. Each denial test has an allowed-variant twin, so a fixture that
     /// silently stopped exercising the feature would fail rather than pass vacuously.
     /// </summary>
+    [Collection("CWD-Dependent")]
     public class LocalFileAccessTests
     {
         // A real, loadable 1x1 pixel PNG (same constant used across the image integration tests).
