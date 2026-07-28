@@ -2108,6 +2108,58 @@ await SaveShowcaseAsync("paged_media_table_tall_row", "Paged Media", "Table Row 
     + "the tall row merely overflows onto, since no break falls there.",
     tallRowHtml, new PdfGenerateConfig { PageSize = PageSize.A6 });
 
+// ── a rowspan crossing a page boundary ─────────────────────────────────────
+// css-tables-3 §6.1: a cell is fragmented like anything else. The "Q1" cell spans three rows and the
+// page boundary falls inside it, so its box closes at the foot of the page it began on and continues at
+// the head of the next - rather than being one box stretched across the boundary and drawn straight
+// through the page edge (issue #511). The row that *ends* the span is carried onto the next page whole,
+// like any other row; it used to be the one case the row loop declined to move.
+//
+// The tint and the border on the spanning cell are the whole point of the fixture: the change is
+// entirely in where that cell's box begins and ends, and a cell with no background cannot show it.
+var rowspanBreakHtml = """
+    <!DOCTYPE html>
+    <html><head><style>
+    @page { size: a6; margin: 10mm }
+    body { font: 9pt Helvetica, Arial, sans-serif; margin: 0; color: #1f2937 }
+    h1 { font-size: 11pt; margin: 0 0 0.4em }
+    p.intro { color: #6b7280; font-size: 8pt; margin: 0 0 0.8em }
+    table { width: 100%; border-collapse: collapse }
+    th, td { border: 0.75pt solid #94a3b8; padding: 4pt 5pt; vertical-align: top }
+    thead th { background: #e2e8f0; font-size: 8pt; text-align: left }
+    td.quarter { background: #cffafe; border-left: 2pt solid #0e7490; font-weight: bold;
+                 vertical-align: middle; text-align: center }
+    td.wide { height: 46pt }
+    </style></head><body>
+    <h1>A rowspan across a page break</h1>
+    <p class="intro">Each quarter's cell spans its three months. The page boundary falls inside the
+    second one, so that cell closes at the foot of the page and opens again at the head of the next.</p>
+    <table>
+      <thead><tr><th>Quarter</th><th>Month</th><th>Note</th></tr></thead>
+      <tbody>
+        <tr><td class="quarter" rowspan="3">Q1</td><td>January</td><td class="wide">Opening balance carried forward.</td></tr>
+        <tr><td>February</td><td class="wide">Nothing remarkable.</td></tr>
+        <tr><td>March</td><td class="wide">Quarter closes.</td></tr>
+        <tr><td class="quarter" rowspan="3">Q2</td><td>April</td><td class="wide">The spanning cell starts here.</td></tr>
+        <tr><td>May</td><td class="wide">And the page boundary falls below this row.</td></tr>
+        <tr><td>June</td><td class="wide">So this row, which ends the span, is carried over whole.</td></tr>
+        <tr><td class="quarter" rowspan="2">Q3</td><td>July</td><td class="wide">A third span, after the break.</td></tr>
+        <tr><td>August</td><td class="wide">Closing the table.</td></tr>
+      </tbody>
+    </table>
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("paged_media_table_rowspan_break", "Paged Media", "Rowspan Across a Page Break",
+    "css-tables-3 §6.1: a cell whose rowspan reaches out of the page it was placed in is fragmented "
+    + "like any other content - its box closes at the foot of that page and continues at the head of the "
+    + "next, its tint and borders running the full depth of each fragment. The row that ends the span is "
+    + "carried onto the next page whole, like any other row, rather than being left straddling the "
+    + "boundary and drawn cut through by it. This is what both other engines do: Gecko re-reflows the "
+    + "spanning cell against the remaining space and continues it, and Blink treats every cell as its "
+    + "own §2.1 parallel flow.",
+    rowspanBreakHtml, new PdfGenerateConfig { PageSize = PageSize.A6 });
+
 // ── whether a <thead> repeats at all ───────────────────────────────────────
 // css-tables-3 §6.2 makes repetition conditional: the group repeats only where it carries an avoiding
 // break-inside and where it costs under a quarter of the page (#494). The UA print stylesheet supplies

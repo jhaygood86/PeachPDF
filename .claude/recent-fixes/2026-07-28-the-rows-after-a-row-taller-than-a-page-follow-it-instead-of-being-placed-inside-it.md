@@ -144,10 +144,10 @@ declines there because `ApplyCellVerticalAlignment` has already deep-offset the 
 of an *earlier* row — and neither `Retract` nor `PassRewind` restores geometry the row does not own. The
 first docs wording ("a row that would straddle and could fit a page of its own is already carried onto
 the next page whole") is a specific, checkable claim and is false for exactly that case; the old vaguer
-sentence was less wrong. [#511](https://github.com/jhaygood86/PeachPDF/issues/511), with
-[a gap file](../accepted-gaps/table-a-row-that-ends-a-rowspan-is-not-relocated.md). The guard is exact
-rather than conservative — `InsertEmptyBoxes` and `LayoutBodyRow` key the spacer and the registration the
-same way — with one hole at `LayoutBodyRow`'s `currentColumn >= _columnWidths.Length` early `break`.
+sentence was less wrong. [#511](https://github.com/jhaygood86/PeachPDF/issues/511), **since closed** —
+see [that fix](2026-07-28-a-rowspan-cell-is-fragmented-at-the-boundary-rather-than-stretched-across-it.md),
+which also measured the claim recorded here about the guard being exact and found it **false**:
+`InsertEmptyBoxes` inserts no spacer at all when the spanning cell is in the last column.
 
 **A forced break inside a cell is not always a stop, and the gap it leaves is read as height.** The
 going-in reading was that `break-before: page` inside a `<td>` sets the cell's `PendingBreakToken`, so

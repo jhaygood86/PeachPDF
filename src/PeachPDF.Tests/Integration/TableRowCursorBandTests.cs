@@ -246,8 +246,8 @@ namespace PeachPDF.Tests.Integration
         {
             // The spanning cell is opened by the row that straddles — the seventh, which at 40pt a row
             // starts inside the estimate's blind spot and ends past the band — so the correction has an
-            // entry keyed to the row two below it to take back. A row that *ends* a span is a different
-            // case and is declined outright.
+            // entry keyed to the row two below it to take back. A row that *ends* a span is moved too,
+            // and what that costs the spanning cell is TableRowspanContinuationTests' subject.
             var rows = string.Concat(Enumerable.Range(1, 8).Select(i =>
                 i == 7
                     ? "<tr><td><div style='height:40pt'>row 7</div></td>"

@@ -438,9 +438,42 @@ namespace PeachPDF.Html.Core.Fragmentation
             internal Dictionary<int, int>? SpannedCounts { get; } = spannedCounts;
         }
 
+        /// <summary>
+        /// A write one row made to a cell belonging to a <b>different, earlier</b> row — the cell a
+        /// <c>rowspan</c> begun there ends on this one.
+        /// </summary>
+        /// <param name="Cell">the spanning cell, a child of the row that opened the span</param>
+        /// <param name="PreviousBottom">the <c>ActualBottom</c> it held before this row wrote one</param>
+        /// <param name="AppliedOffset">
+        /// how far <c>CssLayoutEngine.ApplyCellVerticalAlignment</c> moved its children, which has to be
+        /// recorded rather than recomputed: it <i>offsets a subtree</i> rather than assigning a position,
+        /// so it is neither idempotent nor derivable after the fact.
+        /// </param>
+        internal readonly record struct ForeignCellWrite(CssBox Cell, double PreviousBottom, double AppliedOffset);
+
+        private readonly List<ForeignCellWrite> _foreignWrites = [];
+
+        /// <summary>
+        /// Notes that the row being placed wrote to <paramref name="cell"/>, which belongs to an earlier
+        /// row, so <see cref="Retract"/> can put it back.
+        /// </summary>
+        /// <remarks>
+        /// This is the geometry a retraction could not reach before, and the reason the row loop used to
+        /// decline to move a row that <i>ends</i> a <c>rowspan</c> at all
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/511">issue #511</see>):
+        /// <see cref="Retract"/> takes back what the row added to this cursor and
+        /// <c>PassRewind.RollBackTo</c> resets the row's own boxes, and the spanning cell is neither.
+        /// </remarks>
+        internal void RecordForeignWrite(CssBox cell, double previousBottom, double appliedOffset) =>
+            _foreignWrites.Add(new ForeignCellWrite(cell, previousBottom, appliedOffset));
+
         /// <summary>What this cursor holds before the row about to be placed touches it.</summary>
         internal RowPlacement BeginRow()
         {
+            // Per row rather than per placement: only the row now being placed can have written to a
+            // foreign cell, and the list is either replayed by Retract or spent by the next row.
+            _foreignWrites.Clear();
+
             if (RowSpannedBoxes.Count == 0) return new RowPlacement(MaxBottom, MaxRight, null);
 
             var spanned = new Dictionary<int, int>(RowSpannedBoxes.Count);
@@ -458,16 +491,38 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// seen where the row landed and decided the break falls before it instead.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// The rowspan map is truncated rather than rebuilt: <c>CssLayoutEngineTable.LayoutBodyRow</c>
         /// appends to the list for the row a <c>rowspan &gt; 1</c> cell <i>ends</i> on, so a retracted row
         /// leaves entries a row several fragmentainers later would otherwise align against twice. A key
         /// whose list the row created outright is removed, so an empty list is never left behind for
         /// <see cref="Continuation"/> to publish.
+        /// </para>
+        /// <para>
+        /// The spanning cells the row wrote to go back too (<see cref="RecordForeignWrite"/>), which
+        /// neither this cursor's own totals nor <c>PassRewind.RollBackTo(null, row.Boxes)</c> covers: the
+        /// cell is a child of an <i>earlier</i> row. Undone in reverse, since the alignment offsets a
+        /// subtree and two writes to the same cell would otherwise compose.
+        /// </para>
         /// </remarks>
         internal void Retract(RowPlacement placement)
         {
             MaxBottom = placement.MaxBottom;
             MaxRight = placement.MaxRight;
+
+            for (var i = _foreignWrites.Count - 1; i >= 0; i--)
+            {
+                var (cell, previousBottom, appliedOffset) = _foreignWrites[i];
+
+                if (appliedOffset != 0d)
+                {
+                    foreach (var child in cell.Boxes) child.OffsetTop(-appliedOffset);
+                }
+
+                cell.ActualBottom = previousBottom;
+            }
+
+            _foreignWrites.Clear();
 
             if (RowSpannedBoxes.Count == 0) return;
 
