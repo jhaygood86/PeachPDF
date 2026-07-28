@@ -2009,9 +2009,10 @@ await SaveShowcaseAsync("paged_media_table_row_breaks", "Paged Media", "Table Ro
 // cells are fragmented independently (css-break-3 §2.1 parallel flows). The narrow cell finishes on
 // the first page and is not drawn again; the wide one picks up exactly where it stopped. The repeating
 // <thead> is carried onto each page the row continues onto, and css-tables-3 §6.2's "leave room" is what
-// keeps the continuation beneath it rather than overlapped by it (issue #439). The finished cell's
-// borders still stop at the boundary rather than running the continuation's depth (#478), and a
-// repeating <tfoot> is not carried onto a continuation at all (#493).
+// keeps the continuation beneath it rather than overlapped by it (issue #439). The narrow cell's *box*
+// continues with the row's, so its background and borders run the full depth of every continuation with
+// no content in them (#478) - which is what its tinted background is here to show. A repeating <tfoot>
+// is still not carried onto a continuation at all (#493).
 var rowContinuationHtml = """
     <!DOCTYPE html>
     <html><head><style>
@@ -2022,13 +2023,14 @@ var rowContinuationHtml = """
     table { width: 100%; border-collapse: collapse }
     th, td { border: 0.75pt solid #94a3b8; padding: 4pt 5pt; vertical-align: top }
     thead th { background: #e2e8f0; font-size: 8pt; text-align: left }
-    td.note { width: 30%; color: #6b7280; font-size: 8pt }
+    td.note { width: 30%; color: #6b7280; font-size: 8pt; background: #f1f5f9 }
     td.body { line-height: 1.5; text-align: justify }
     </style></head><body>
     <h1>One row, several pages</h1>
     <p class="intro">The right-hand cell holds more than a page of text, so the row continues onto the
-    next page. The left-hand cell finished on the first one and is not drawn again there - the cells of
-    a row are fragmented independently.</p>
+    next page. The left-hand cell finished on the first one, so none of its content is drawn again - the
+    cells of a row are fragmented independently. Its box still continues with the row, which is why its
+    tint runs the full depth of every continuation.</p>
     <table>
       <thead><tr><th>Note</th><th>Clause</th></tr></thead>
       <tbody><tr>
@@ -2045,8 +2047,10 @@ var rowContinuationHtml = """
 
 await SaveShowcaseAsync("paged_media_table_row_continuation", "Paged Media", "Table Row Continuation",
     "css-tables-3 §6.1: a row whose cell runs out of room continues on the next page, and the cells of "
-    + "that row are fragmented independently - a short cell finishes where it finishes. The repeating "
-    + "header is carried onto every page the row reaches, above the continuation rather than over it.",
+    + "that row are fragmented independently - a short cell finishes where it finishes, while its box "
+    + "continues with the row, its tint and borders running the full depth of each continuation with no "
+    + "content in it. The repeating header is carried onto every page the row reaches, above the "
+    + "continuation rather than over it.",
     rowContinuationHtml, new PdfGenerateConfig { PageSize = PageSize.A6 });
 
 // ── Margin box explicit sizing showcase ────────────────────────────────────

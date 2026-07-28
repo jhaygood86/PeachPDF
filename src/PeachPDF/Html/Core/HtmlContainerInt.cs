@@ -1425,6 +1425,27 @@ namespace PeachPDF.Html.Core
             _emitter?.ClearNestedFragmentainers(contextRoot, slot);
 
         /// <summary>
+        /// States that <paramref name="box"/> occupies <paramref name="rect"/> in the fragmentainer that
+        /// rectangle falls in while holding none of its content there — see
+        /// <see cref="FragmentEmitter.RecordContinuationShell"/>.
+        /// </summary>
+        /// <remarks>
+        /// Null on a measurement or detached-fragmentainer run, which has no emitter to state anything to.
+        /// </remarks>
+        /// <param name="box">the box whose continuation this is</param>
+        /// <param name="slot">the slot layout believed it was filling, for the sweep below</param>
+        /// <param name="rect">the box's border box there, in document space</param>
+        internal void RecordContinuationShell(CssBox box, int slot, RRect rect) =>
+            _emitter?.RecordContinuationShell(box, slot, rect);
+
+        /// <summary>
+        /// Discards what <paramref name="box"/> stated from <paramref name="fromSlot"/> on — or, with no
+        /// slot, in every slot — see <see cref="FragmentEmitter.ClearContinuationShells"/>.
+        /// </summary>
+        internal void ClearContinuationShells(CssBox box, int? fromSlot = null) =>
+            _emitter?.ClearContinuationShells(box, fromSlot);
+
+        /// <summary>
         /// The box whose background fills the whole page canvas, per
         /// <see href="https://www.w3.org/TR/CSS21/colors.html#background">CSS 2.1 §14.2</see>:
         /// <c>body</c>'s background if it declares one, else <c>html</c>'s, else none. Null when

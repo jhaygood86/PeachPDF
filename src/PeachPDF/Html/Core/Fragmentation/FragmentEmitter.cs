@@ -219,6 +219,14 @@ namespace PeachPDF.Html.Core.Fragmentation
             internal bool UsesOwnBounds { get; set; }
 
             /// <summary>
+            /// The geometry layout <i>stated</i> for a fragment that holds none of the box's content, or
+            /// null for an ordinary fragment. Read in place of the box's own bounds wherever this
+            /// fragment's extent is asked for, because the box's bounds describe a different
+            /// fragmentainer entirely. See <see cref="_continuationShells"/>.
+            /// </summary>
+            internal RRect? ShellRect { get; set; }
+
+            /// <summary>
             /// The box's own per-line decoration rectangles that landed in this slot, in document space.
             /// Kept raw because <see cref="SliceGeometry"/> is defined over <i>every</i> rectangle the box
             /// produces across every fragmentainer, and a later pass can still add one.
@@ -265,6 +273,27 @@ namespace PeachPDF.Html.Core.Fragmentation
         private readonly HashSet<CssBox> _frozen = new(ReferenceEqualityComparer.Instance);
         private readonly SortedSet<int> _stale = [];
         private readonly Dictionary<(CssBox Root, int Slot), List<NestedFragmentainer>> _nested = [];
+
+        /// <summary>
+        /// Where a box's <i>content-free</i> continuation sits — the geometry of a fragment holding none of
+        /// the box's own content, in document space, stated by layout because nothing can read it off the
+        /// box. <see href="https://www.w3.org/TR/css-tables-3/#fragmentation">css-tables-3 §6.1</see>'s
+        /// finished table cell is the case this exists for: the cells of one row are §2.1 parallel flows, so
+        /// a row can continue with one of its cells already complete, and that cell's box continues with the
+        /// row while its single <see cref="CssBoxProperties.Location"/> keeps describing the fragmentainer that placed
+        /// it.
+        /// </summary>
+        /// <remarks>
+        /// The slot key is what <see cref="ClearContinuationShells"/> sweeps by, and is <b>never</b> used to
+        /// decide which fragmentainer a shell belongs to: the table row loop's own band counter is stale by
+        /// construction (see <see cref="TableRowCursor"/>'s remarks), so membership is asked of the
+        /// rectangle through <see cref="FragmentRegion.Contains"/> exactly as it is for every other piece of
+        /// geometry here. Staleness in the key is harmless in the direction it errs — a low counter clears
+        /// more than it had to, and the pass doing the clearing re-records.
+        /// </remarks>
+        private readonly Dictionary<CssBox, SortedDictionary<int, RRect>> _continuationShells =
+            new(ReferenceEqualityComparer.Instance);
+
         private int _lastEmittedSlot = -1;
 
         /// <summary>The empty box set the first nested fragmentainer of a slot resumes nothing from.</summary>
@@ -328,6 +357,68 @@ namespace PeachPDF.Html.Core.Fragmentation
             {
                 if (ReferenceEquals(key.Root, contextRoot)) _nested.Remove(key);
             }
+        }
+
+        /// <summary>
+        /// States that <paramref name="box"/> occupies <paramref name="rect"/> in the fragmentainer that
+        /// rectangle falls in, while holding none of its content there —
+        /// <see href="https://www.w3.org/TR/css-tables-3/#fragmentation">css-tables-3 §6.1</see>'s cell that
+        /// finished in an earlier fragmentainer, whose box continues with its row's.
+        /// </summary>
+        /// <remarks>
+        /// The second place layout <i>states</i> geometry rather than leaving it to be read off the boxes,
+        /// and for the sharper of the two reasons. <see cref="RecordNestedFragmentainer"/> exists because a
+        /// box's live geometry describes only its last column; this exists because the box has no geometry
+        /// here <i>at all</i> — a continuation deliberately leaves its one <see cref="CssBoxProperties.Location"/>
+        /// naming the fragmentainer that placed it, and giving it a second retracts the earlier fragment.
+        /// Nothing downstream could re-derive this: a cell that finished and a cell no pass ever entered are
+        /// indistinguishable from geometry alone, which is the whole reason
+        /// <see cref="TableBreakToken.FinishedCells"/> exists.
+        /// </remarks>
+        /// <param name="box">the box whose continuation this is</param>
+        /// <param name="slot">
+        /// the pagination slot layout believed it was filling — bookkeeping for
+        /// <see cref="ClearContinuationShells"/> only; see <see cref="_continuationShells"/> for why
+        /// membership is never decided from it.
+        /// </param>
+        /// <param name="rect">the box's border box in that fragmentainer, in document space</param>
+        internal void RecordContinuationShell(CssBox box, int slot, RRect rect)
+        {
+            if (!_continuationShells.TryGetValue(box, out var shells))
+            {
+                _continuationShells[box] = shells = [];
+            }
+
+            shells[slot] = rect;
+        }
+
+        /// <summary>
+        /// Discards what <paramref name="box"/> stated from <paramref name="fromSlot"/> on — or, with no
+        /// slot, in every slot — because the pass about to run decides it again.
+        /// </summary>
+        /// <remarks>
+        /// Both forms are needed, and they are <see cref="ClearNestedFragmentainers"/>' two forms for the
+        /// same two reasons. A run continuing an earlier pass re-decides only the slots from the one it
+        /// resumes in onward; the earlier ones were settled by the passes that filled them and are still
+        /// true, which is what lets a row spanning three fragmentainers keep a shell in each. A run laid out
+        /// afresh — three of the four reasons a table is laid out again — re-decides all of them.
+        /// </remarks>
+        internal void ClearContinuationShells(CssBox box, int? fromSlot = null)
+        {
+            if (fromSlot is not { } from)
+            {
+                _continuationShells.Remove(box);
+                return;
+            }
+
+            if (!_continuationShells.TryGetValue(box, out var shells)) return;
+
+            foreach (var slot in new List<int>(shells.Keys))
+            {
+                if (slot >= from) shells.Remove(slot);
+            }
+
+            if (shells.Count == 0) _continuationShells.Remove(box);
         }
 
         /// <summary>
@@ -665,11 +756,57 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// two column fragments of one box occupy the same block-axis range.
         /// </remarks>
         private bool ResumesAnEarlierFragment(Draft draft) =>
-            draft.ContinuedFromThePrevious && HasFragmentBeside(draft, before: true);
+            (draft.ContinuedFromThePrevious || draft.ShellRect is not null)
+            && HasFragmentBeside(draft, before: true);
 
         /// <inheritdoc cref="ResumesAnEarlierFragment"/>
         private bool ContinuesIntoALaterFragment(Draft draft) =>
-            draft.ContinuesIntoTheNext && HasFragmentBeside(draft, before: false);
+            (draft.ContinuesIntoTheNext || HasShellBeyond(draft))
+            && HasFragmentBeside(draft, before: false);
+
+        /// <summary>
+        /// The rectangle stated for <paramref name="box"/> in <paramref name="region"/>, or null when
+        /// nothing was stated there.
+        /// </summary>
+        /// <remarks>
+        /// Asked of the rectangle rather than of the slot the caller recorded against, so a stale band
+        /// counter cannot make a stated fragment land nowhere. See <see cref="_continuationShells"/>.
+        /// </remarks>
+        private RRect? ShellIn(CssBox box, FragmentRegion region)
+        {
+            if (!_continuationShells.TryGetValue(box, out var shells)) return null;
+
+            foreach (var rect in shells.Values)
+            {
+                if (region.Contains(rect)) return rect;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Whether a fragment was stated for this draft's box in a <i>later</i> fragmentainer, which is
+        /// §6.2's block-end break for a box whose continuation layout states rather than places.
+        /// </summary>
+        /// <remarks>
+        /// Asked here rather than recorded on the draft, because it cannot be known when the draft is
+        /// built: the slot a box continues into is filled by a <i>later</i> pass than the one that freezes
+        /// this slot, so the statement does not exist yet. That is the general rule that everything defined
+        /// over the whole box is resolved at materialization. Expressed as a coordinate comparison because
+        /// bands are contiguous, so "a later fragmentainer" and "at or past this region's bottom" are the
+        /// same statement — and the coordinate form owes nothing to the row loop's band counter.
+        /// </remarks>
+        private bool HasShellBeyond(Draft draft)
+        {
+            if (!_continuationShells.TryGetValue(draft.Key.Box, out var shells)) return false;
+
+            foreach (var rect in shells.Values)
+            {
+                if (rect.Top >= draft.Region.Bottom - BandOverlapEpsilon) return true;
+            }
+
+            return false;
+        }
 
         private bool HasFragmentBeside(Draft draft, bool before)
         {
@@ -722,6 +859,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             List<(CssLineBox Line, RRect Rect)> lines = [];
             List<TextFragment> words = [];
             var usesOwnBounds = false;
+            RRect? shellRect = null;
 
             // A proxy carries no content of its own - it stands in for its source subtree, whose
             // styles it copied wholesale, so painting its own decoration would draw a repeated
@@ -777,10 +915,24 @@ namespace PeachPDF.Html.Core.Fragmentation
             if (lines.Count == 0 && words.Count == 0 && children.Count == 0
                 && !(usesOwnBounds && region.Contains(BoundsOf(box, snapshot))))
             {
-                return null;
+                // A shell continues a fragment; it never invents one. Requiring the box to already hold a
+                // frozen fragment somewhere is what keeps this from changing _frozen membership, and so
+                // from changing which frozen slots are emitted a second time - see the invariant
+                // "which drafts exist decides whether a frozen slot is emitted again". The set is
+                // monotone and the fragmentainer a box began in is always frozen before the one it
+                // continues into is emitted, so this never rejects a shell that should stand.
+                if (!_frozen.Contains(box) || ShellIn(box, region) is not { } stated) return null;
+
+                shellRect = stated;
+
+                // One whole-box rectangle by construction: a shell holds no content, so there are no
+                // per-line rectangles for it to be a set of.
+                usesOwnBounds = true;
             }
 
-            if (!hasPrintableContent && IsPrintableContentIn(box, snapshot, isFixed, slot))
+            // A shell is backgrounds and borders and nothing else, which CSS Paged Media Level 3 §3.2
+            // excludes from printable content by name - so it can never on its own make a slot into a page.
+            if (shellRect is null && !hasPrintableContent && IsPrintableContentIn(box, snapshot, isFixed, slot))
                 hasPrintableContent = true;
 
             _frozen.Add(box);
@@ -793,6 +945,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             draft.IsFixed = isFixed;
             draft.IsMonolithic = MonolithicContent.IsMonolithic(box);
             draft.UsesOwnBounds = usesOwnBounds;
+            draft.ShellRect = shellRect;
             draft.BoundsEndAtItsContent = nested is { } fragmentainer && fragmentainer.Continuing.Contains(box);
 
             // Which of the box's block-axis edges are its own, from the two records that state it: the pass's
@@ -1222,7 +1375,9 @@ namespace PeachPDF.Html.Core.Fragmentation
         {
             if (_extents.TryGetValue(draft, out var cached)) return cached;
 
-            var bounds = BoundsOf(draft.Box, draft.Snapshot);
+            // A stated fragment's extent is what was stated: the box's own bounds describe the
+            // fragmentainer that placed it, which is a different one.
+            var bounds = draft.ShellRect ?? BoundsOf(draft.Box, draft.Snapshot);
 
             if (draft.BoundsEndAtItsContent)
             {
