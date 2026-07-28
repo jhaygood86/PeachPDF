@@ -137,7 +137,7 @@ The parser maintains a _current box_ cursor that advances up and down the tree a
 - **Opening tag** — a new `CssBox` is created as a child of the current box. If the tag is a container element the cursor descends into the new box; if it is a void element (`<br>`, `<img>`, `<hr>`, etc.) the cursor stays at the current level.
 - **Closing tag** — the parser calls `DomUtils.FindParent` to walk back up to the matching open box, then moves the cursor there. This makes the parser resilient to mis-nested HTML.
 - **Optional end tags** — HTML5 allows certain end tags to be omitted (e.g. `</li>`, `</p>`, `</td>`). `HtmlUtils.CanEndTagBeOmitted` checks the current tag name against the incoming tag name and automatically closes the implied parent before opening the new element.
-- **Text data** — a lightweight anonymous `CssBox` is created to hold the raw text string; the text is later tokenised into individual words during the layout phase.
+- **Text data** — a lightweight anonymous `CssBox` is created to hold the raw text string; the text is later tokenised into individual words during the layout phase. **HTML character references** (`&amp;`, `&nbsp;`, `&#65;`, etc.) are decoded once by `HtmlTokenizer` at parse time; the text stored in `CssBox.Text` is always post-decode, so later phases (word-splitting, rendering) never decode again.
 - **Ignored token kinds** — `Comment`, `DocType`, and `ScriptData` tokens are discarded; `CData` content is also silently dropped.
 - **`<noscript>`** — its text content is recursively re-parsed as HTML so that the fallback markup is included in the box tree (PeachPDF never executes JavaScript).
 

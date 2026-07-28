@@ -1,0 +1,342 @@
+using PeachPDF.Adapters;
+using PeachPDF.Html.Core;
+using PeachPDF.Html.Core.Dom;
+using PeachPDF.PdfSharpCore.Drawing;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace PeachPDF.Tests.Integration
+{
+    /// <summary>
+    /// Tests for correct handling of HTML character references (entities).
+    /// Regression tests for the double-decoding bug where &amp;nbsp; would render
+    /// as a space instead of the literal text &amp;nbsp;.
+    /// 
+    /// The fix: MimeKit's HtmlTokenizer already decodes entities once, so word-splitting
+    /// code should NOT decode again. Text in CssBox.Text is always pre-decoded.
+    /// </summary>
+    public class HtmlEntityDecodingIntegrationTests
+    {
+        #region Double-Escaped Entities (Should Render as Literal Entity References)
+
+        [Fact]
+        public async Task DoubleEscapedNbsp_RendersAsLiteralEntityReference()
+        {
+            // &amp;nbsp; should render as the literal text "&nbsp;" not as a non-breaking space
+            var html = Wrap("<p id='p'>Use &amp;nbsp; here</p>");
+            var (root, _) = await BuildAndLayout(html);
+            var box = FindById(root, "p")!;
+
+            // The DOM should have "&nbsp;" (decoded once by tokenizer, not decoded again during layout)
+            var textContent = GetTextContent(box);
+            Assert.NotNull(textContent);
+            Assert.Contains("&nbsp;", textContent);
+        }
+
+        [Fact]
+        public async Task DoubleEscapedAmp_RendersAsLiteralEntityReference()
+        {
+            // &amp;amp; should render as the literal text "&amp;" not as "&"
+            var html = Wrap("<p id='p'>Use &amp;amp; here</p>");
+            var (root, _) = await BuildAndLayout(html);
+            var box = FindById(root, "p")!;
+
+            var textContent = GetTextContent(box);
+            Assert.NotNull(textContent);
+            Assert.Contains("&amp;", textContent);
+        }
+
+        [Fact]
+        public async Task DoubleEscapedLt_RendersAsLiteralEntityReference()
+        {
+            // &amp;lt; should render as the literal text "&lt;" not as "<"
+            var html = Wrap("<p id='p'>Use &amp;lt; here</p>");
+            var (root, _) = await BuildAndLayout(html);
+            var box = FindById(root, "p")!;
+
+            var textContent = GetTextContent(box);
+            Assert.NotNull(textContent);
+            Assert.Contains("&lt;", textContent);
+        }
+
+        [Fact]
+        public async Task DoubleEscapedNumericEntity_RendersAsLiteralEntityReference()
+        {
+            // &amp;#65; should render as the literal text "&#65;" not as "A"
+            var html = Wrap("<p id='p'>Use &amp;#65; here</p>");
+            var (root, _) = await BuildAndLayout(html);
+            var box = FindById(root, "p")!;
+
+            var textContent = GetTextContent(box);
+            Assert.NotNull(textContent);
+            Assert.Contains("&#65;", textContent);
+        }
+
+        #endregion
+
+        #region Single-Escaped Entities (Should Render as Decoded Characters)
+
+        [Fact]
+        public async Task SingleEscapedNbsp_RendersAsNonBreakingSpace()
+        {
+            // &nbsp; should render as U+00A0 (non-breaking space character)
+            var html = Wrap("<p id='p'>Use&nbsp;here</p>");
+            var (root, _) = await BuildAndLayout(html);
+            var box = FindById(root, "p")!;
+
+            // The DOM should have U+00A0 (decoded by tokenizer)
+            var textContent = GetTextContent(box);
+            Assert.NotNull(textContent);
+            Assert.Contains("\u00A0", textContent);
+        }
+
+        [Fact]
+        public async Task SingleEscapedAmp_RendersAsAmpersand()
+        {
+            // &amp; should render as "&"
+            var html = Wrap("<p id='p'>Use &amp; here</p>");
+            var (root, _) = await BuildAndLayout(html);
+            var box = FindById(root, "p")!;
+
+            var textContent = GetTextContent(box);
+            Assert.NotNull(textContent);
+            Assert.Contains("&", textContent);
+        }
+
+        [Fact]
+        public async Task SingleEscapedLt_RendersAsLessThan()
+        {
+            // &lt; should render as "<"
+            var html = Wrap("<p id='p'>Use &lt; here</p>");
+            var (root, _) = await BuildAndLayout(html);
+            var box = FindById(root, "p")!;
+
+            var textContent = GetTextContent(box);
+            Assert.NotNull(textContent);
+            Assert.Contains("<", textContent);
+        }
+
+        [Fact]
+        public async Task SingleEscapedNumericEntity_RendersAsCharacter()
+        {
+            // &#65; should render as "A"
+            var html = Wrap("<p id='p'>Use &#65; here</p>");
+            var (root, _) = await BuildAndLayout(html);
+            var box = FindById(root, "p")!;
+
+            var textContent = GetTextContent(box);
+            Assert.NotNull(textContent);
+            Assert.Contains("A", textContent);
+        }
+
+        #endregion
+
+        #region Code Blocks and Pre Elements
+
+        [Fact]
+        public async Task DoubleEscapedEntitiesInCodeBlock_RenderCorrectly()
+        {
+            // Common use case: showing HTML markup in a <code> block
+            var html = Wrap("<code id='c'>Use &amp;nbsp; for spaces</code>");
+            var (root, _) = await BuildAndLayout(html);
+            var box = FindById(root, "c")!;
+
+            var textContent = GetTextContent(box);
+            Assert.NotNull(textContent);
+            Assert.Equal("Use &nbsp; for spaces", textContent);
+        }
+
+        [Fact]
+        public async Task DoubleEscapedEntitiesInPreElement_RenderCorrectly()
+        {
+            // Pre-formatted text should preserve entity references
+            var html = Wrap("<pre id='p'>&amp;lt;html&amp;gt;</pre>");
+            var (root, _) = await BuildAndLayout(html);
+            var box = FindById(root, "p")!;
+
+            var textContent = GetTextContent(box);
+            Assert.NotNull(textContent);
+            Assert.Equal("&lt;html&gt;", textContent);
+        }
+
+        [Fact]
+        public async Task MixedEntitiesInParagraph_RenderCorrectly()
+        {
+            // Mixed single and double escaped entities
+            var html = Wrap("<p id='p'>A &amp; B &amp;amp; C</p>");
+            var (root, _) = await BuildAndLayout(html);
+            var box = FindById(root, "p")!;
+
+            // Should be: "A & B &amp; C"
+            Assert.Equal("A & B &amp; C", GetTextContent(box));
+        }
+
+        #endregion
+
+        #region CSS Content Strings
+
+        [Fact]
+        public async Task CssContentWithCssEscape_RendersLiterally()
+        {
+            // CSS uses \26 escape syntax, not HTML entity syntax
+            // content: "\26" should render as literal "&" character
+            var html = @"<!DOCTYPE html>
+<html>
+<head>
+<style>
+p::before { content: ""\26""; }
+</style>
+</head>
+<body>
+<p id='p'>text</p>
+</body>
+</html>";
+            var (root, _) = await BuildAndLayout(html);
+            var box = FindById(root, "p")!;
+
+            // Find the ::before pseudo-element
+            var beforeBox = box.Boxes.FirstOrDefault(b => b.IsBeforePseudoElement);
+            Assert.NotNull(beforeBox);
+
+            // CSS escape \26 should produce "&" character (not decoded to something else)
+            Assert.Equal("&", beforeBox.Text);
+            if (beforeBox.Words.Count > 0)
+            {
+                var word = beforeBox.Words[0] as CssRectWord;
+                Assert.NotNull(word);
+                Assert.Equal("&", word.Text);
+            }
+        }
+
+        [Fact]
+        public async Task CssContentWithCssEscapeInString_RendersLiterally()
+        {
+            // Another CSS escape test: \3C is "<" in Unicode
+            var html = @"<!DOCTYPE html>
+<html>
+<head>
+<style>
+p::after { content: "" \3C tag\3E ""; }
+</style>
+</head>
+<body>
+<p id='p'>text</p>
+</body>
+</html>";
+            var (root, _) = await BuildAndLayout(html);
+            var box = FindById(root, "p")!;
+
+            var afterBox = box.Boxes.FirstOrDefault(b => b.IsAfterPseudoElement);
+            Assert.NotNull(afterBox);
+
+            // Should contain < and > characters from CSS escapes
+            Assert.Contains("<", afterBox.Text);
+            Assert.Contains(">", afterBox.Text);
+        }
+
+        #endregion
+
+        #region Edge Cases
+
+        [Fact]
+        public async Task WhitespacePreservation_WithEntities()
+        {
+            // white-space: pre should preserve entities
+            var html = Wrap("<p id='p' style='white-space:pre'>&amp;nbsp;  test</p>");
+            var (root, _) = await BuildAndLayout(html);
+            var box = FindById(root, "p")!;
+
+            Assert.Equal("&nbsp;  test", GetTextContent(box));
+        }
+
+        [Fact]
+        public async Task MultipleDoubleEscapedEntities_InSentence()
+        {
+            // Real-world scenario: documentation showing multiple entity examples
+            var html = Wrap("<p id='p'>Entities: &amp;lt;, &amp;gt;, &amp;amp;, &amp;nbsp;</p>");
+            var (root, _) = await BuildAndLayout(html);
+            var box = FindById(root, "p")!;
+
+            var expected = "Entities: &lt;, &gt;, &amp;, &nbsp;";
+            Assert.Equal(expected, GetTextContent(box));
+        }
+
+        [Fact]
+        public async Task TripleEscapedEntity_RendersWithTwoLevels()
+        {
+            // Edge case: &amp;amp;nbsp; should be "&amp;nbsp;" (decoded twice becomes once-escaped)
+            var html = Wrap("<p id='p'>&amp;amp;nbsp;</p>");
+            var (root, _) = await BuildAndLayout(html);
+            var box = FindById(root, "p")!;
+
+            // Tokenizer decodes &amp; to & once, so we get "&amp;nbsp;"
+            Assert.Equal("&amp;nbsp;", GetTextContent(box));
+        }
+
+        [Fact]
+        public async Task EntityInAttributeValue_DecodedCorrectly()
+        {
+            // Attributes are also decoded by the tokenizer
+            var html = Wrap("<p id='p' title='A &amp; B'>text</p>");
+            var (root, _) = await BuildAndLayout(html);
+            var box = FindById(root, "p")!;
+
+            var title = box.GetAttribute("title", "");
+            Assert.Equal("A & B", title);
+        }
+
+        #endregion
+
+        #region Helper Methods
+
+        private static string Wrap(string body) =>
+            $"<!DOCTYPE html><html><head></head><body>{body}</body></html>";
+
+        private static async Task<(CssBox root, HtmlContainerInt container)> BuildAndLayout(string html)
+        {
+            var adapter = new PdfSharpAdapter();
+            adapter.PixelsPerPoint = 1.0;
+            var container = new HtmlContainerInt(adapter);
+            await container.SetHtml(html, null);
+
+            var size = new XSize(595, 842);
+            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+
+            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
+            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            await container.PerformLayout(graphics);
+
+            Assert.NotNull(container.Root);
+            return (container.Root!, container);
+        }
+
+        private static CssBox? FindById(CssBox box, string id)
+        {
+            var val = box.HtmlTag?.TryGetAttribute("id", "");
+            if (val != null && val.Equals(id, System.StringComparison.OrdinalIgnoreCase))
+                return box;
+            foreach (var child in box.Boxes)
+            {
+                var found = FindById(child, id);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Gets the text content from a box - either from its own Text property (if it's a text box)
+        /// or from the first child text box.
+        /// </summary>
+        private static string? GetTextContent(CssBox box)
+        {
+            if (box.Text != null)
+                return box.Text;
+
+            var textBox = box.Boxes.FirstOrDefault(b => b.Text != null);
+            return textBox?.Text;
+        }
+
+        #endregion
+    }
+}
