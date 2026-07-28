@@ -125,6 +125,13 @@ namespace PeachPDF.Html.Core.Dom
         private double RepeatedFooterHeight => _footerRepeats && _footerHeight > 0 ? _footerHeight : 0;
 
         /// <summary>
+        /// What a repeated <c>&lt;thead&gt;</c> takes from the top of every band the table covers, spacing
+        /// included, or zero where nothing repeats.
+        /// </summary>
+        private double RepeatedHeaderRoom =>
+            _headerRepeats && _headerHeight > 0 ? _headerHeight + GetVerticalSpacing() : 0;
+
+        /// <summary>
         /// Whether this run continues a table layout an earlier fragmentainer pass began, rather than
         /// laying the table out from the start.
         /// </summary>
@@ -1411,6 +1418,16 @@ namespace PeachPDF.Html.Core.Dom
                 // again on the other side of it. At most one correction per row, so this cannot loop.
                 if (StraddleCorrectionAppliesTo(i, container, cursor, rowTop, slot))
                 {
+                    // A placement that closed a spanning cell also stated the geometry that cell occupies
+                    // in the bands after its own (CloseSpanningCell), and that is keyed by (box, slot) -
+                    // so a re-placement stating fewer slots than the abandoned one would leave the
+                    // difference behind to be painted. Swept before the retraction, which is what still
+                    // knows which cells the row wrote to.
+                    foreach (var spanning in cursor.ForeignCellsWritten)
+                    {
+                        container!.ClearContinuationShells(spanning);
+                    }
+
                     cursor.Retract(placement);
                     PassRewind.RollBackTo(null, row.Boxes);
 
@@ -1781,7 +1798,7 @@ namespace PeachPDF.Html.Core.Dom
         /// asks the same question of what the row actually measured, which is only knowable here.
         /// </para>
         /// <para>
-        /// Five things make it decline, and each is a case where moving the row would be worse than
+        /// Four things make it decline, and each is a case where moving the row would be worse than
         /// leaving it:
         /// <list type="bullet">
         /// <item><description>
@@ -1802,14 +1819,18 @@ namespace PeachPDF.Html.Core.Dom
         /// where it is; moving a row that will straddle again walks it down the document one band per row.
         /// </description></item>
         /// <item><description>
-        /// <b>The row ends a <c>rowspan</c>.</b> Its alignment has already deep-offset a cell that belongs
-        /// to an earlier row, and that is not this row's geometry to take back.
-        /// </description></item>
-        /// <item><description>
         /// <b>The fragmentainer has a band of its own.</b> Inside a multi-column column the page grid does
         /// not describe the fragmentainer being filled, so its bands answer nothing here.
         /// </description></item>
         /// </list>
+        /// </para>
+        /// <para>
+        /// A row that <i>ends</i> a <c>rowspan</c> used to be a fifth decline, because moving it meant
+        /// taking back geometry belonging to a cell of an earlier row
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/511">issue #511</see>). It is now
+        /// moved like any other: <see cref="CloseSpanningCell"/> records what the row wrote to that cell so
+        /// <see cref="TableRowCursor.Retract"/> can put it back, and fragments the cell rather than
+        /// stretching it across the boundary the moved row opens.
         /// </para>
         /// </remarks>
         /// <param name="rowIndex">the body row just placed</param>
@@ -1828,9 +1849,7 @@ namespace PeachPDF.Html.Core.Dom
 
             if (rowTop - HtmlContainerInt.PageBoundaryEpsilon <= container.PageTopOf(slot)) return false;
 
-            if (cursor.MaxBottom - rowTop > RoomForARowIn(container, slot + 1)) return false;
-
-            return !cursor.RowSpannedBoxes.TryGetValue(rowIndex, out var endingHere) || endingHere.Count == 0;
+            return cursor.MaxBottom - rowTop <= RoomForARowIn(container, slot + 1);
         }
 
         /// <summary>
@@ -1839,14 +1858,8 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         /// <param name="container">the container whose page grid the band comes from</param>
         /// <param name="slot">the band to measure</param>
-        private double RoomForARowIn(HtmlContainerInt container, int slot)
-        {
-            var room = container.PageBandHeightOf(slot) - RepeatedFooterHeight;
-
-            if (_headerRepeats && _headerHeight > 0) room -= _headerHeight + GetVerticalSpacing();
-
-            return room;
-        }
+        private double RoomForARowIn(HtmlContainerInt container, int slot) =>
+            container.PageBandHeightOf(slot) - RepeatedFooterHeight - RepeatedHeaderRoom;
 
         /// <summary>
         /// Discards the continuation geometry an earlier run of this table's row loop stated, from
@@ -2038,8 +2051,7 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     if (spacer.EndRow == rowIndex)
                     {
-                        spacer.ExtendedBox.ActualBottom = rowMaxBottom;
-                        CssLayoutEngine.ApplyCellVerticalAlignment(g, spacer.ExtendedBox);
+                        CloseSpanningCell(g, spacer.ExtendedBox, cursor, rowMaxBottom);
                     }
                 }
                 else if (stoppedCells.Contains(cell) || cursor.ResumedFromAnEarlierPass(cell))
@@ -2054,7 +2066,11 @@ namespace PeachPDF.Html.Core.Dom
                     // align the cell it stands in for.
                     continue;
                 }
-                else if (GetRowSpan(cell) == 1 || (boxesThatEndOnRow?.Contains(cell) ?? false))
+                else if (boxesThatEndOnRow?.Contains(cell) ?? false)
+                {
+                    CloseSpanningCell(g, cell, cursor, rowMaxBottom);
+                }
+                else if (GetRowSpan(cell) == 1)
                 {
                     cell.ActualBottom = rowMaxBottom;
                     CssLayoutEngine.ApplyCellVerticalAlignment(g, cell);
@@ -2090,6 +2106,166 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
         }
+
+        /// <summary>
+        /// Closes a cell whose <c>rowspan</c> ends on the row now being placed — a cell belonging to an
+        /// <b>earlier</b> row — over the depth that row reached.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Where the span stays inside one band this gives the cell the row's bottom, which is what a
+        /// <c>rowspan</c> means. Where it does not, the cell's box is closed at the foot of the band it was
+        /// placed in and <b>fragmented</b> instead, its remaining depth stated as continuation geometry in
+        /// each later band (<see cref="StateSpanningCellContinuation"/>). Stretching one box across the
+        /// boundary drew its borders and background straight through the page edge, which is what
+        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/511">issue #511</see> is about — and it
+        /// reached that state by three different routes (the straddle correction declining, the row loop's
+        /// prediction breaking before a row in the middle of a span, and a forced break declared on one),
+        /// which is why the question is asked of the <i>bands</i> here rather than of whichever arm broke.
+        /// </para>
+        /// <para>
+        /// <see href="https://www.w3.org/TR/css-tables-3/#breaking-rules">css-tables-3 §6.1</see> names
+        /// both halves of this. A row is to be preserved unfragmented only "if the cells spanning the row
+        /// do not span any subsequent row" — so the row that <i>ends</i> a span is moved whole, which is
+        /// what the straddle correction now does, while a row in the middle of one is
+        /// <i>freely fragmentable</i> and the remaining height goes to its cells. Either way the spanning
+        /// cell itself continues rather than travelling, and both other engines agree: Gecko re-reflows it
+        /// against the remaining block-size in <c>nsTableRowGroupFrame::SplitSpanningCells</c>, and Blink
+        /// treats each cell as its own §2.1 parallel flow. Neither keeps the spanned rows together, which
+        /// is why the run is not relocated with the row that opened it.
+        /// </para>
+        /// <para>
+        /// Only the cell's <i>box</i> is fragmented, and that is not a shortcut: a spanning cell whose
+        /// content did not fit the band it was placed in stopped when its own row was placed, and the row
+        /// loop stops at a row a cell stopped in — so a spanning cell that reaches its ending row at all is
+        /// one whose content fits where it already is.
+        /// </para>
+        /// <para>
+        /// Every write here is recorded on the cursor
+        /// (<see cref="TableRowCursor.RecordForeignWrite"/>), because this is geometry the row does not
+        /// own: <see cref="TableRowCursor.Retract"/> takes back what the row added to the cursor and
+        /// <c>PassRewind.RollBackTo</c> resets the row's own boxes, and the spanning cell is neither.
+        /// Without it the straddle correction could not move this row at all.
+        /// </para>
+        /// </remarks>
+        /// <param name="g">the graphics context layout is running against</param>
+        /// <param name="cell">the spanning cell, a child of the row that opened the span</param>
+        /// <param name="cursor">
+        /// this pass's row cursor, which names the band the row is in and records the write
+        /// </param>
+        /// <param name="rowMaxBottom">the bottom the row being placed reached</param>
+        private void CloseSpanningCell(RGraphics g, CssBox cell, TableRowCursor cursor, double rowMaxBottom)
+        {
+            // The same cell arrives twice on a row that reaches it both as a CssSpacingBox's ExtendedBox
+            // and through RowSpannedBoxes, and the alignment below composes rather than settling, so it may
+            // only run once. Asked of the cursor's own record rather than of a set kept beside it: the
+            // record is written for every cell closed here and cleared per row, so it already is the
+            // answer. A rowspan cell ends on exactly one row, so the row-group measurement cursors - which
+            // place rows without ever calling BeginRow - cannot dedupe one row's cell against another's.
+            if (cursor.AlreadyWroteTo(cell)) return;
+
+            // Nothing of a cell an earlier pass finished belongs to this fragmentainer, so neither does
+            // its geometry. The loop's own guard above tests the CssSpacingBox, not the cell it stands in
+            // for, so that route reaches here with a finished cell.
+            if (cursor.FinishedOnAnEarlierPass(cell)) return;
+
+            var previousBottom = cell.ActualBottom;
+            var bottom = rowMaxBottom;
+            var container = _tableBox.HtmlContainer;
+            var slot = cursor.SlotIndex;
+
+            // Two fragmentainers answer nothing about where this cell has to close, and the difference
+            // between them matters. One with a band of its own - a multi-column column - is not described
+            // by the page grid. And a *detached* one names no fragmentainer at all: that is the
+            // measurement pass a flex or grid item's layout runs behind, at a provisional position it is
+            // about to be translated away from, so a close decided there would state continuation
+            // geometry at coordinates nothing ends up at and no later run sweeps.
+            if (container is { HasRealPageGrid: true }
+                && container.CurrentFragmentainer is { HasOwnBand: false })
+            {
+                var cellSlot = container.SlotStartingAt(cell.Location.Y);
+
+                // Only the cell's box is fragmented, so its box may not be closed above its own content:
+                // what lies below the close would then be inside no fragment at all, which is a word the
+                // document authored and no page claims. A cell whose content runs past its band keeps the
+                // stretched box it had - it needs the flow-level continuation §6.1 asks for, which is not
+                // this fragment's to invent.
+                var contentBottom = CssBox.GetMaximumBottom(cell, 0d);
+                var band = cellSlot < slot ? container.BandOfSlot(cellSlot) : default;
+
+                if (cellSlot < slot
+                    && HtmlContainerInt.FallsPast(rowMaxBottom, band)
+                    && !HtmlContainerInt.FallsPast(contentBottom, band))
+                {
+                    // Where the table's own slice on that band ends, which is what the cell has to close
+                    // level with: FragmentPainter clips the table's bottom border to the same record, so a
+                    // cell closing below it is a tint drawn past the table's own edge. Bounded by the foot
+                    // of the band less the room a repeated <tfoot> holds there, since that record includes
+                    // the footer, and never taken above the cell's own content.
+                    bottom = container.PageBottomOf(cellSlot) - RepeatedFooterHeight;
+
+                    if (_tableBox.PageBreakBottoms?.TryGetValue(cellSlot, out var sliceBottom) is true)
+                        bottom = Math.Min(bottom, sliceBottom);
+
+                    bottom = Math.Max(bottom, contentBottom);
+
+                    // And the slice follows the cell where the cell's own content is what reaches lowest.
+                    // MaxBottom never counts a spanning cell before the row that ends it, so a tall cell
+                    // opened by a short row closes below the record its own table wrote - and the bottom
+                    // border clipped to that record would then be drawn across the cell.
+                    if (_tableBox.PageBreakBottoms is { } bottoms
+                        && bottoms.TryGetValue(cellSlot, out var recorded) && bottom > recorded)
+                    {
+                        bottoms[cellSlot] = bottom;
+                    }
+
+                    StateSpanningCellContinuation(container, cell, cellSlot, slot, rowMaxBottom);
+                }
+            }
+
+            cell.ActualBottom = bottom;
+
+            var applied = CssLayoutEngine.ApplyCellVerticalAlignment(g, cell);
+
+            cursor.RecordForeignWrite(cell, previousBottom, applied);
+        }
+
+        /// <summary>
+        /// States the geometry a fragmented <c>rowspan</c> cell occupies in every band after the one its
+        /// box closes in, down to the bottom the row ending the span reached.
+        /// </summary>
+        /// <remarks>
+        /// One rectangle per band, because a span can cross more than one: a whole band for each it passes
+        /// through, and the row's own bottom for the one it ends in. Each starts below the room that band
+        /// leaves a repeated <c>&lt;thead&gt;</c>, and a whole band's worth is
+        /// <see cref="RoomForARowIn"/> — the same quantity the straddle correction fits a row against, so
+        /// the two cannot disagree about what a repeated group costs.
+        /// </remarks>
+        /// <param name="container">the container holding this layout's emitter</param>
+        /// <param name="cell">the spanning cell whose box was closed in <paramref name="fromSlot"/></param>
+        /// <param name="fromSlot">the band the cell's own box ends in</param>
+        /// <param name="toSlot">the band the row ending the span is in</param>
+        /// <param name="rowMaxBottom">the bottom that row reached</param>
+        private void StateSpanningCellContinuation(
+            HtmlContainerInt container, CssBox cell, int fromSlot, int toSlot, double rowMaxBottom)
+        {
+            var left = cell.Location.X;
+            var width = cell.ActualRight - left;
+
+            if (width <= 0) return;
+
+            for (var s = fromSlot + 1; s <= toSlot; s++)
+            {
+                var top = container.PageTopOf(s) + RepeatedHeaderRoom;
+                var height = s == toSlot ? rowMaxBottom - top : RoomForARowIn(container, s);
+
+                if (height > 0)
+                {
+                    container.RecordContinuationShell(cell, s, new RRect(left, top, width, height));
+                }
+            }
+        }
+
         /// <summary>
         /// Gets the spanned width of a cell (With of all columns it spans minus one).
         /// </summary>

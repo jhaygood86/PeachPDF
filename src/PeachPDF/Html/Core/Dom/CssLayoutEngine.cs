@@ -425,17 +425,28 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Applies special vertical alignment for table-cells
+        /// Applies special vertical alignment for table-cells, and returns how far it moved the cell's
+        /// content.
         /// </summary>
-        /// <param name="g"></param>
-        /// <param name="cell"></param>
-        public static void ApplyCellVerticalAlignment(RGraphics g, CssBox cell)
+        /// <remarks>
+        /// The distance is returned because this <b>offsets a subtree rather than assigning a
+        /// position</b>, so it is neither idempotent nor self-reversing: a caller that has to take the
+        /// alignment back — the table row loop, retracting a placement it decided against — can only do so
+        /// by knowing what was applied. Measured before it was returned: a <c>rowspan</c> cell reached
+        /// both as a <see cref="CssSpacingBox"/>'s <c>ExtendedBox</c> and as itself was aligned twice, and
+        /// under the <c>vertical-align: middle</c> a <c>&lt;td&gt;</c> uses by default the second pass
+        /// added a further quarter of the leftover room (24.75pt of 99pt on the fixture that found it).
+        /// </remarks>
+        /// <param name="g">the graphics context layout is running against</param>
+        /// <param name="cell">the table cell whose content is being aligned in its box</param>
+        /// <returns>the distance every child of <paramref name="cell"/> was offset by, zero where none was</returns>
+        public static double ApplyCellVerticalAlignment(RGraphics g, CssBox cell)
         {
             ArgumentNullException.ThrowIfNull(g);
             ArgumentNullException.ThrowIfNull(cell);
 
             if (cell.VerticalAlign is CssConstants.Top or CssConstants.Baseline)
-                return;
+                return 0d;
 
             var cellBottom = cell.ClientBottom;
             var bottom = CssBox.GetMaximumBottom(cell, 0f);
@@ -451,6 +462,8 @@ namespace PeachPDF.Html.Core.Dom
             {
                 b.OffsetTop(dist);
             }
+
+            return dist;
         }
 
         public static void FloatBox(CssBox box)

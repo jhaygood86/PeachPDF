@@ -1140,6 +1140,53 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
+        /// And it puts back what the row wrote to a cell it does <b>not own</b> — the spanning cell a
+        /// <c>rowspan</c> begun in an earlier row ends on.
+        /// </summary>
+        /// <remarks>
+        /// This is the geometry the retraction could not reach, and the reason the row loop used to decline
+        /// to move a row that ends a span at all
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/511">issue #511</see>): the cursor's
+        /// own totals go back and <c>PassRewind.RollBackTo</c> resets the row's own boxes, and the spanning
+        /// cell is neither. The offset has to be <i>recorded</i> rather than recomputed because
+        /// <c>ApplyCellVerticalAlignment</c> offsets a subtree instead of assigning a position, so it is
+        /// neither idempotent nor derivable after the fact.
+        /// </remarks>
+        [Fact]
+        public async Task RetractingARowsPlacement_PutsBackTheSpanningCellItWroteTo()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap("<table><tr><td id='a'><div id='inner'>a</div></td></tr></table>"),
+                pageHeight: PageHeight, margin: Margin);
+
+            var cell = LayoutHarness.FindById(root, "a")!;
+            var inner = LayoutHarness.FindById(root, "inner")!;
+
+            var bottomBefore = cell.ActualBottom;
+            var innerTopBefore = inner.Location.Y;
+
+            var cursor = new TableRowCursor(top: 10, maxRight: 5, slotIndex: 0) { MaxBottom = 20 };
+            var placement = cursor.BeginRow();
+
+            // What closing a spanning cell does: writes a bottom the row decided and offsets the cell's
+            // whole subtree to align its content in it.
+            cell.ActualBottom = bottomBefore + 500;
+            foreach (var child in cell.Boxes) child.OffsetTop(37);
+            cursor.RecordForeignWrite(cell, bottomBefore, 37);
+
+            cursor.Retract(placement);
+
+            Assert.Equal(bottomBefore, cell.ActualBottom, 0.001);
+            Assert.Equal(innerTopBefore, inner.Location.Y, 0.001);
+
+            // Spent by the retraction: replaying it would offset the subtree a second time, in the
+            // direction the first replay already took it.
+            cursor.Retract(placement);
+
+            Assert.Equal(innerTopBefore, inner.Location.Y, 0.001);
+        }
+
+        /// <summary>
         /// A <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c> measurement cursor carries none of it: its rows are
         /// not body rows, and by the time a pass resumed the body that group is not in the tree.
         /// </summary>
