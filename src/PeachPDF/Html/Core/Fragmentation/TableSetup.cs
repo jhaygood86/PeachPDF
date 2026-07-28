@@ -3,8 +3,8 @@ using PeachPDF.Html.Core.Dom;
 namespace PeachPDF.Html.Core.Fragmentation
 {
     /// <summary>
-    /// A repeating <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c> group that <c>CssLayoutEngineTable</c> took out
-    /// of the table's child list, and the two facts about it nothing else records.
+    /// A <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c> group that <c>CssLayoutEngineTable</c> took out of the
+    /// table's child list, and the three facts about it nothing else records.
     /// </summary>
     /// <param name="Box">
     /// the detached group. Its <see cref="CssBox.ParentBox"/> is null and it is absent from the table's
@@ -16,7 +16,14 @@ namespace PeachPDF.Html.Core.Fragmentation
     /// what the group measured when it was laid out once for that purpose — the height every proxy of it
     /// reserves on its own page.
     /// </param>
-    internal sealed record DetachedRowGroup(CssBox Box, int Index, double Height);
+    /// <param name="Repeats">
+    /// whether <see href="https://www.w3.org/TR/css-tables-3/#repeated-headers">css-tables-3 §6.2</see>
+    /// lets the group be repeated on every page the table spans, rather than laid out once at the table's
+    /// top. Carried rather than re-derived for the same reason <paramref name="Height"/> is: a continuation
+    /// skips the measurement step entirely, and the two conditions §6.2 puts on repetition are answered
+    /// there — one of them against a height that only the measurement knows.
+    /// </param>
+    internal sealed record DetachedRowGroup(CssBox Box, int Index, double Height, bool Repeats);
 
     /// <summary>
     /// What <c>CssLayoutEngineTable</c> settles once for a table, which a resumed fragmentainer pass

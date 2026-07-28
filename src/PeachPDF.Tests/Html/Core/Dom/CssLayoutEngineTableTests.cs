@@ -308,7 +308,9 @@ var (rootBox, container) = await BuildCssBoxTree(html, pageHeight: 400);
 </body>
 </html>";
 
-var pageHeight = 300.0;
+// Tall enough that css-tables-3 6.2 lets the header repeat at all - it caps a repeated group at a
+// quarter of the page, and this harness's unpinned PixelsPerPoint makes the header ~85 units.
+var pageHeight = 400.0;
             var (rootBox, container) = await BuildCssBoxTree(html, pageHeight);
 
             // Act

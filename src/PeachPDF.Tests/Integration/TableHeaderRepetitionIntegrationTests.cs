@@ -112,7 +112,7 @@ Assert.NotNull(tableBox);
    // Verify header proxies exist (one per page)
     var headerProxies = FindProxyBoxesByDisplay(tableBox, CssConstants.TableHeaderGroup);
          Assert.NotEmpty(headerProxies);
-  Assert.True(headerProxies.Count >= 2, 
+  Assert.True(headerProxies.Count >= 2,
     $"Multi-page table should have at least 2 header proxies, but has {headerProxies.Count}");
 
        // Verify body rows are distributed across multiple page regions
@@ -378,7 +378,10 @@ for (int i = 1; i <= 60; i++)
 </body>
 </html>";
 
-     var (rootBox, container) = await BuildCssBoxTree(html);
+     // Tall enough that css-tables-3 6.2 lets this three-row header repeat at all: 6.2 caps a
+     // repeated group at a quarter of the page, and three rows come to ~255 of this harness's units
+     // (it leaves the adapter's PixelsPerPoint unpinned). 60 rows still span several pages at 1200.
+     var (rootBox, container) = await BuildCssBoxTree(html, pageHeight: 1200);
   var tableBox = FindTableBox(rootBox);
 
 Assert.NotNull(tableBox);
@@ -391,7 +394,7 @@ Assert.True(tableBox.ActualBottom > pageHeight);
         // Verify header proxies exist
     var headerProxies = FindProxyBoxesByDisplay(tableBox, CssConstants.TableHeaderGroup);
   Assert.NotEmpty(headerProxies);
- Assert.True(headerProxies.Count >= 2, 
+ Assert.True(headerProxies.Count >= 2,
         $"Multi-page complex table should have at least 2 header proxies, but has {headerProxies.Count}");
 
  var pageSpan = CalculateTablePageSpan(tableBox, pageHeight, marginTop);
@@ -457,14 +460,15 @@ Assert.True(tableBox.ActualBottom > pageHeight);
 
         #region Helper Methods
 
-        private async Task<(CssBox root, HtmlContainerInt container)> BuildCssBoxTree(string html)
+        private async Task<(CssBox root, HtmlContainerInt container)> BuildCssBoxTree(
+            string html, double pageHeight = 842)
         {
             var adapter = new PdfSharpAdapter();
             var container = new HtmlContainerInt(adapter);
 
             await container.SetHtml(html, null);
 
-            var size = new XSize(595, 842); // A4 size in points
+            var size = new XSize(595, pageHeight); // A4 height by default
             container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
     container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
   container.MarginTop = 20;  // Add margins to match @page CSS

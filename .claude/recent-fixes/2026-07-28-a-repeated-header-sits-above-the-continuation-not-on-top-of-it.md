@@ -143,10 +143,12 @@ it" in the docs said nothing, since those are synonyms.
   what makes that expensive. The same section says a header repeats only where it carries
   `break-inside: avoid` and only while it costs under a quarter of the page; `_shouldRepeatHeaders` is
   "there is a `<thead>`". That was nearly free while the room was not actually reserved, and now costs
-  the header's height out of every band. [#494](https://github.com/jhaygood86/PeachPDF/issues/494),
-  with [a gap file](../accepted-gaps/table-a-repeated-header-ignores-6-2s-two-conditions.md) —
+  the header's height out of every band. [#494](https://github.com/jhaygood86/PeachPDF/issues/494) —
   deliberately not taken here, because the `break-inside` half changes behaviour for every document
   with a `<thead>` and is what all the existing repeating-header tests and two showcases assert.
+  *(Since closed: putting `thead, tfoot { break-inside: avoid }` in the UA print stylesheet made the
+  strict reading behaviour-preserving, so both conditions landed together and the gap file is gone.
+  See [that entry](2026-07-28-a-thead-repeats-only-where-6-2-says-it-may-and-the-ua-sheet-says-it-should.md).)*
 - **Nested repeating-header tables still overlap each other.** The inset composes; the inner table's
   proxy *placement* does not — it lands at `Math.Max(startY, PageTopOf(ResumeSlotIndex))`, the band top
   the outer header occupies. The doc comment claims only what is demonstrated.

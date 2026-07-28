@@ -3302,7 +3302,7 @@ namespace PeachPDF.Html.Core.Dom
                                 // css-break §3.1 keep-with-next: the child is about to relocate to
                                 // the next page's content top, which would otherwise strand a
                                 // preceding break-after/break-before: avoid run (e.g. the UA default
-                                // `h1-h6 { page-break-after: avoid }`) alone at the bottom of the
+                                // `h1-h6 { break-after: avoid }`) alone at the bottom of the
                                 // page it's leaving - see CssLayoutEngineTable's identical whole-table
                                 // pre-check (LayoutCells) and OffsetTopWithKeepWithNextRun, which this
                                 // mirrors. Pull the run along when it starts on this same page and its
@@ -3492,7 +3492,7 @@ namespace PeachPDF.Html.Core.Dom
             // from CssLayoutEngine.FlowBox). When that happens to this block's FIRST line, the break
             // effectively falls right before this box's content - so preceding siblings chained to it
             // by break-after/break-before: avoid (css-break §3.1, e.g. the UA default
-            // `h1-h6 { page-break-after: avoid }`) must not be left behind on the old page. Move the
+            // `h1-h6 { break-after: avoid }`) must not be left behind on the old page. Move the
             // chained run to the top of the page the line landed on, then re-run this box's own layout:
             // its position re-derives from the moved run's new bottom and its lines re-flow without a
             // boundary in the middle (PerformLayoutImp double-execution is already an established

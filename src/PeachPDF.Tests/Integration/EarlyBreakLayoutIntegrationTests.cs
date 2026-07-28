@@ -136,7 +136,7 @@ namespace PeachPDF.Tests.Integration
         {
             var (heading, card, container) = await PulledRunAsync(fillerHeight);
 
-            // The UA print stylesheet's h1-h6 { page-break-after: avoid } is what chains the two.
+            // The UA print stylesheet's h1-h6 { break-after: avoid } is what chains the two.
             var headingPage = container.PageIndexOf(heading.Location.Y + HtmlContainerInt.PageBoundaryEpsilon);
 
             Assert.Equal(headingPage, container.PageIndexOf(card.Location.Y + HtmlContainerInt.PageBoundaryEpsilon));

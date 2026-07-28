@@ -175,7 +175,7 @@ namespace PeachPDF.Tests.Integration
 
         // The post-check's whole-table move introduces a break between the table and whatever
         // precedes it, so it must honor css-break §3.1 keep-with-next exactly like the
-        // pre-check: an avoid-chained heading (the UA default h1-h6 { page-break-after: avoid }
+        // pre-check: an avoid-chained heading (the UA default h1-h6 { break-after: avoid }
         // under print media) comes along instead of being stranded at the old page's bottom.
         [Fact]
         public async Task SingleRowTable_MovedByPostCheck_PullsAvoidChainedHeadingAlong()
