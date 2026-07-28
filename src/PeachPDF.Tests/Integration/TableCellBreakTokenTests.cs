@@ -202,6 +202,75 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
+        /// A repeating <c>&lt;tfoot&gt;</c> closes every page the table covers, including when the break that
+        /// opened those pages fell <i>inside a cell</i> rather than between two rows
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/493">#493</see>).
+        /// </summary>
+        /// <remarks>
+        /// The mirror of <see cref="ARepeatingHeader_RepeatsWhenTheBreakFallsInsideACell"/>, and it used to
+        /// measure <c>0, 0, 0, 0, 0, 0, 1</c> across seven pages against the header's <c>1, 1, 1, 1, 1, 1,
+        /// 1</c>: the engine wrote a footer only at a break between two rows and once under the table's
+        /// last row, and a pass that stops mid-cell reaches neither.
+        /// </remarks>
+        [Theory]
+        [InlineData("<table style='width:150pt'><tfoot><tr><td>FOOTWORD</td></tr></tfoot>"
+                    + "<tbody><tr><td>{W}</td></tr></tbody></table>")]
+        [InlineData("<table style='width:150pt'><tfoot><tr><td>FOOTWORD</td><td>B</td></tr></tfoot>"
+                    + "<tbody><tr><td>{W}</td><td>short</td></tr></tbody></table>")]
+        public async Task ARepeatingFooter_RepeatsWhenTheBreakFallsInsideACell(string markup)
+        {
+            var (_, container) = await Paginate(markup);
+
+            var pages = container.FragmentTree!.Fragmentainers.Count;
+
+            var footer = WordClaims(container).Single(c => c.Key.Text == "FOOTWORD");
+
+            Assert.Equal(pages, footer.Value.Count);
+            Assert.Equal(container.FragmentTree.Fragmentainers.Select(f => f.SlotIndex), footer.Value);
+        }
+
+        /// <summary>
+        /// A repeated <c>&lt;tfoot&gt;</c> sits <i>below</i> the continuation it closes over, not on top of
+        /// it (<see href="https://github.com/jhaygood86/PeachPDF/issues/493">#493</see>).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// #439's ordering constraint mirrored, and the half no count can state: two fragments may each be
+        /// claimed by exactly one fragmentainer and still occupy the same rectangle in it. The row cursor
+        /// leaves the footer's room out of the height a whole row is measured against, which reaches
+        /// nothing inside a cell whose own lines run down toward the band's foot — so the footer drawn
+        /// there lands on top of them unless the flow is told the room is spoken for.
+        /// </para>
+        /// <para>
+        /// Stated of every fragmentainer but the last, since the last is the one the footer has always been
+        /// correct on: that one carries the table's own closing footer, under its final row.
+        /// </para>
+        /// </remarks>
+        [Theory]
+        [InlineData("<table style='width:150pt'><tfoot><tr><td>FOOTWORD</td></tr></tfoot>"
+                    + "<tbody><tr><td>{W}</td></tr></tbody></table>")]
+        [InlineData("<table style='width:150pt'><tfoot><tr><td>FOOTWORD</td><td>B</td></tr></tfoot>"
+                    + "<tbody><tr><td>{W}</td><td>short</td></tr></tbody></table>")]
+        public async Task ARepeatedFooter_SitsBelowTheContinuationItClosesOver(string markup)
+        {
+            var (_, container) = await Paginate(markup);
+
+            foreach (var fragmentainer in container.FragmentTree!.Fragmentainers.SkipLast(1))
+            {
+                var words = Flatten(fragmentainer.Root).SelectMany(f => f.Words).ToList();
+
+                var footer = Assert.Single(words, w => w.Word.Text == "FOOTWORD");
+                var body = words.Where(w => w.Word.Text!.StartsWith("word")).ToList();
+
+                Assert.NotEmpty(body);
+
+                Assert.All(body, word => Assert.True(word.Rect.Bottom <= footer.Rect.Top,
+                    $"'{word.Word.Text}' ends at {word.Rect.Bottom} in slot {fragmentainer.SlotIndex}, "
+                    + $"below the repeated footer's top edge at {footer.Rect.Top}"));
+            }
+        }
+
+        /// <summary>
         /// Lays <paramref name="markup"/> out over 244 words and checks it really does span more than one
         /// fragmentainer, since neither theory above asserts anything if it does not.
         /// </summary>

@@ -294,7 +294,9 @@ namespace PeachPDF.Html.Core.Dom
         /// <para>
         /// Where an enclosing box asks for <c>box-decoration-break: clone</c>, the fragment being left behind
         /// closes with its own bottom border and padding, and §6.2 requires room to be reserved for them. So
-        /// the word has to clear that much more than its own depth to still count as fitting.
+        /// the word has to clear that much more than its own depth to still count as fitting. A table
+        /// repeating a <c>&lt;tfoot&gt;</c> claims the foot of the band the same way
+        /// (<see cref="Fragmentation.FragmentainerContext.BandEndInsetOf"/>), and the two compose.
         /// </para>
         /// </remarks>
         public bool WouldStraddleFragmentainer()
@@ -303,10 +305,24 @@ namespace PeachPDF.Html.Core.Dom
 
             var (clonedTop, clonedBottom) = MonolithicContent.ClonedBlockInsets(OwnerBox, container);
 
-            // The cloned insets count towards "too tall to fit anywhere": a resumed pass re-opens with the top
+            // css-tables-3 §6.2's "leave room", from the other end of the band. A table repeating a
+            // <tfoot> has claimed the foot of every fragmentainer it covers, and a line flowing inside one
+            // of its cells has to clear that as well as its own cloned close - otherwise the footer is
+            // drawn over a continuation that already flowed into the space it occupies, which is #439's
+            // defect mirrored and which the fragment tree cannot show (every word is still claimed by
+            // exactly one fragmentainer).
+            //
+            // Asked with the same slot the band below comes from - BandStartingAt(y) is
+            // BandOfSlot(SlotStartingAt(y)) - so the reservation and the band it is taken out of cannot
+            // name different fragmentainers, which they could if this read the context's own SlotIndex, a
+            // cursor StepOverTo moves.
+            var reservedEnd = clonedBottom
+                              + (container.CurrentFragmentainer?.BandEndInsetOf(container.SlotStartingAt(Top)) ?? 0);
+
+            // The reserved insets count towards "too tall to fit anywhere": a resumed pass re-opens with the top
             // set and still has to clear the bottom one, so if the word cannot fit between them it never will,
             // and calling it a straddle would break to a fresh fragmentainer for every fragmentainer there is.
-            if (MonolithicContent.FitsNoFragmentainer(Height, clonedTop, clonedBottom, container))
+            if (MonolithicContent.FitsNoFragmentainer(Height, clonedTop, reservedEnd, container))
                 return false;
 
             // Inside a multi-column column the question is about that column's own band, not the page grid's:
@@ -315,8 +331,8 @@ namespace PeachPDF.Html.Core.Dom
             // overflows the one it is in rather than breaking to a fresh column for every column there is.
             if (container.CurrentFragmentainer is { HasOwnBand: true } columnBand)
             {
-                return MonolithicContent.FitsInBand(Height, clonedTop, clonedBottom, columnBand.BandHeight)
-                       && HtmlContainerInt.FallsPast(Bottom + clonedBottom, columnBand.Band);
+                return MonolithicContent.FitsInBand(Height, clonedTop, reservedEnd, columnBand.BandHeight)
+                       && HtmlContainerInt.FallsPast(Bottom + reservedEnd, columnBand.Band);
             }
 
             // The same question, of the band this word started in rather than of the column's. Asking it
@@ -332,7 +348,7 @@ namespace PeachPDF.Html.Core.Dom
             // against that band instead. Naming the pass's own band would call every one of those a
             // straddle, which is a different layout and a worse one - measured at 63 of 69 showcases changed,
             // with visibly overlapping content. Tracked as #435.
-            return HtmlContainerInt.FallsPast(Bottom + clonedBottom, container.BandStartingAt(Top));
+            return HtmlContainerInt.FallsPast(Bottom + reservedEnd, container.BandStartingAt(Top));
         }
 
         public bool BreakPage()

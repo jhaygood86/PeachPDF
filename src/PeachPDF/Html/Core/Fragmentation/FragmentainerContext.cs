@@ -204,6 +204,106 @@ namespace PeachPDF.Html.Core.Fragmentation
             _resumeReservation = reservation;
 
         /// <summary>
+        /// The room a repeated group has claimed at the <b>end</b> of every fragmentainer from
+        /// <c>FromSlot</c> on, which fragmentainer that is, and which one the pass was filling when the
+        /// claim was made — see <see cref="ReserveBandEnd"/> for why one of those slots is a floor and the
+        /// other a ceiling.
+        /// </summary>
+        private (int FromSlot, int MadeAtSlot, double Amount)? _bandEndReservation;
+
+        /// <summary>
+        /// How far above fragmentainer <paramref name="slot"/>'s band bottom content in the subtree being
+        /// laid out has to stop, because something drawn at that fragmentainer's foot has already claimed
+        /// the space.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Zero for everything except a table repeating a <c>&lt;tfoot&gt;</c>. That footer is drawn at the
+        /// foot of every fragmentainer the table covers, and
+        /// <see href="https://www.w3.org/TR/css-tables-3/#repeated-headers">css-tables-3 §6.2</see>'s
+        /// "the same applies for footer rows and the table bottom border" requires room to be left for it.
+        /// The row cursor leaves that room for whole rows (<c>CssLayoutEngineTable</c>'s
+        /// <c>availableHeight</c> subtracts the footer's height), and reaches nothing inside a cell whose
+        /// own flow runs down toward the band bottom; without this the footer is drawn over the last lines
+        /// of the continuation it is supposed to close.
+        /// </para>
+        /// <para>
+        /// The mirror of <see cref="ResumeContentInset"/>, at the other end of the band — and deliberately
+        /// not its exact reflection, see <see cref="ReserveBandEnd"/>.
+        /// </para>
+        /// </remarks>
+        /// <param name="slot">the fragmentainer being asked about, which the caller already knows</param>
+        internal double BandEndInsetOf(int slot) =>
+            _bandEndReservation is { } reservation
+            && slot >= reservation.FromSlot
+            && SlotIndex <= reservation.MadeAtSlot
+                ? reservation.Amount
+                : 0;
+
+        /// <summary>
+        /// Records that <paramref name="amount"/> at the end of fragmentainer <paramref name="fromSlot"/>
+        /// and of every fragmentainer after it is spoken for, and returns the reservation that was in force
+        /// so the caller can put it back.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A pair rather than a scope for the same reason <see cref="ReserveResumeContent"/> is one: every
+        /// call site is an <c>async</c> method. Restore in a <c>finally</c>.
+        /// </para>
+        /// <para>
+        /// <b>Three things differ from <see cref="ReserveResumeContent"/>, and a reader who assumes
+        /// symmetry will be wrong about each.</b>
+        /// </para>
+        /// <para>
+        /// <b>The slot is a parameter rather than <see cref="SlotIndex"/>.</b> That property is a cursor
+        /// <see cref="StepOverTo"/> may already have moved past the fragmentainer the caller is filling —
+        /// a table's row loop tracks its own band (<c>TableRowCursor.BandReached</c>) and knows which one
+        /// it is placing a row in, so it says so rather than being guessed at.
+        /// </para>
+        /// <para>
+        /// <b>The claim runs forward from that slot, where the header's applies to its own slot alone.</b>
+        /// A repeated <i>header</i> is drawn by the code that reserves for it, into exactly one
+        /// fragmentainer. A repeated <i>footer</i> is drawn at the foot of every fragmentainer a pass
+        /// <i>fills or leaves</i>, so a claim made in band <c>k</c> is equally true of <c>k+1</c> — and it
+        /// has to be, because inline flow reaches the next band without recording a break at all, under
+        /// the boundary tolerance <c>CssRect.WouldStraddleFragmentainer</c> relies on. Stopping at <c>k</c>
+        /// would drop the reservation exactly where it is needed.
+        /// </para>
+        /// <para>
+        /// <b>It still stops once the pass has stepped over the fragmentainer it was made in</b>, which is
+        /// the rule <see cref="ReserveResumeContent"/> states and the one that is <i>not</i> an asymmetry.
+        /// <see cref="StepOverTo"/> means a forced break was realized by placement rather than by ending
+        /// the pass, and no repeated footer is drawn on the band such a break opens — the per-row block
+        /// only writes one at a break between two rows, and the closing footer belongs under the table's
+        /// last row. Room held there is room held for a footer that is not drawn: measured on a
+        /// <c>&lt;tfoot&gt;</c> table whose cell carries a <c>break-before: page</c> as one page of seven
+        /// with no footer on it whose content still stopped level with the six that had one.
+        /// </para>
+        /// <para>
+        /// <b>Composition keys to the new <paramref name="fromSlot"/>.</b> An inner table reserving in a
+        /// later band composes with an outer one still in force, and restores to the outer's own key. The
+        /// bands below that inner <c>fromSlot</c> read zero while it is in force, which no call site can
+        /// reach today — a nested table's row band is never above its enclosing row's — and which is
+        /// deliberately left unstated rather than modelled as a stack.
+        /// </para>
+        /// </remarks>
+        /// <param name="fromSlot">the first fragmentainer this claim applies to</param>
+        /// <param name="amount">how much room the caller has taken at that fragmentainer's foot</param>
+        internal (int FromSlot, int MadeAtSlot, double Amount)? ReserveBandEnd(int fromSlot, double amount)
+        {
+            var previous = _bandEndReservation;
+
+            _bandEndReservation = (fromSlot, SlotIndex, BandEndInsetOf(fromSlot) + amount);
+
+            return previous;
+        }
+
+        /// <summary>Puts back the reservation <see cref="ReserveBandEnd"/> returned.</summary>
+        /// <param name="reservation">what that call handed back</param>
+        internal void RestoreBandEnd((int FromSlot, int MadeAtSlot, double Amount)? reservation) =>
+            _bandEndReservation = reservation;
+
+        /// <summary>
         /// Where a resumed pass starts flowing: this fragmentainer's own content edge, per
         /// <see href="https://www.w3.org/TR/css-break-3/#fragmentainer">§2</see>, below anything
         /// <see cref="ResumeContentInset"/> says this fragmentainer repeats above it.

@@ -134,10 +134,11 @@ it" in the docs said nothing, since those are synonyms.
   seven pages, against the header's `1, 1, 1, 1, 1, 1, 1`, while a between-rows break gives both
   `1, 1, 1`. The two gates that would have to change are each load-bearing for a different reason, so
   it is a third case rather than a relaxation —
-  [#493](https://github.com/jhaygood86/PeachPDF/issues/493), with
-  [a gap file](../accepted-gaps/table-a-repeating-tfoot-is-not-carried-onto-a-continuation.md) and the
-  docs corrected to say what actually happens. Worth noting that fixing the header's half is what
-  would otherwise have made that sentence *look* verified.
+  [#493](https://github.com/jhaygood86/PeachPDF/issues/493), which has since been fixed the same way
+  from the other end of the band — see
+  [that note](2026-07-28-a-repeating-tfoot-closes-every-page-the-table-covers.md), which is where its
+  gap file went. Worth noting that fixing the header's half is what would otherwise have made that
+  sentence *look* verified.
 - **§6.2's two *conditions* on repeating at all are still not applied**, and honouring "leave room" is
   what makes that expensive. The same section says a header repeats only where it carries
   `break-inside: avoid` and only while it costs under a quarter of the page; `_shouldRepeatHeaders` is

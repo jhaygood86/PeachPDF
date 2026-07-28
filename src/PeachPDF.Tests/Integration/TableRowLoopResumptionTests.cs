@@ -264,12 +264,21 @@ namespace PeachPDF.Tests.Integration
         // ─── A pass that stopped has not closed the table ────────────────────────────────────────
 
         /// <summary>
-        /// A repeating <c>&lt;tfoot&gt;</c>'s closing proxy sits under the table's <i>last</i> row, so a
-        /// pass that never reached the last row would put it in the middle of the table on the page it is
-        /// leaving. The pass that finishes the table writes it.
+        /// A repeating <c>&lt;tfoot&gt;</c>'s <i>closing</i> proxy sits under the table's last row, so a pass
+        /// that never reached the last row would put it in the middle of the table on the page it is
+        /// leaving — measured during
+        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/464">#464</see> at y=36.5 under a row
+        /// ending at 35.0. Such a pass still owes that page a footer, at the page's <b>bottom</b>, which is
+        /// where <see href="https://www.w3.org/TR/css-tables-3/#repeated-headers">css-tables-3 §6.2</see>
+        /// puts one (<see href="https://github.com/jhaygood86/PeachPDF/issues/493">#493</see>).
         /// </summary>
+        /// <remarks>
+        /// The two footers are different footers, which is why the gate on the closing one did not have to
+        /// be relaxed to write this one: that one closes the <i>table</i>, this one closes a <i>page</i>.
+        /// Stated as a position rather than as a count, since a count cannot tell them apart.
+        /// </remarks>
         [Fact]
-        public async Task APassThatStopped_DoesNotCloseTheTableWithItsFooter()
+        public async Task APassThatStopped_PutsItsFooterAtThePageBottom_NotUnderTheRowItStoppedAt()
         {
             var markup = "<table style='width:150pt;font-size:10pt'><tfoot><tr><td>F</td></tr></tfoot><tbody>"
                          + string.Concat(Enumerable.Range(0, 4)
@@ -277,20 +286,43 @@ namespace PeachPDF.Tests.Integration
                          + "</tbody></table>";
 
             CssBox? stopped = null;
-            CssBox? finished = null;
 
-            await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(markup),
+            var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(markup),
                 pageHeight: PageHeight, margin: Margin,
                 prepare: tree => { stopped = tree; StopRow(tree, 1); });
 
             var (control, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(markup),
                 pageHeight: PageHeight, margin: Margin);
-            finished = control;
 
-            // The control is what makes this mean anything: a table that finishes does close itself
-            // with the footer, from the same markup on the same page.
-            Assert.Single(TableOf(finished).Boxes.OfType<CssProxyBox>());
-            Assert.Empty(TableOf(stopped!).Boxes.OfType<CssProxyBox>());
+            var stoppedTable = TableOf(stopped!);
+            var pageFooters = stoppedTable.Boxes.OfType<CssProxyBox>().OrderBy(p => p.Location.Y).ToList();
+            var controlFooter = Assert.Single(TableOf(control).Boxes.OfType<CssProxyBox>());
+
+            // The cell this fixture stops never finishes, so every pass leaves a page and every page it
+            // leaves is closed - one footer each, at that page's own bottom rather than wherever the row
+            // loop happened to leave the cursor. Keyed to the band each footer is actually in, not to its
+            // position in the list: this fixture's stopping record names slot 2, so the pages the passes
+            // leave are not consecutive.
+            Assert.NotEmpty(pageFooters);
+
+            foreach (var footer in pageFooters)
+            {
+                var slot = container.PageIndexOf(footer.Location.Y);
+
+                Assert.Equal(container.PageBottomOf(slot), footer.ActualBottom, 1);
+
+                // And that page has a slice bottom recorded, or FragmentPainter clips the table's bottom
+                // border above the footer just drawn under it.
+                Assert.Equal(footer.ActualBottom, stoppedTable.PageBreakBottoms![slot], 1);
+            }
+
+            // The control is what makes the position mean anything: from the same markup on the same page,
+            // a table that finishes closes itself with the footer tucked under its last row - which is
+            // exactly where a stopped pass must not put one, and it is far above the page's bottom.
+            Assert.True(controlFooter.Location.Y < pageFooters[0].Location.Y - 50,
+                $"the stopped pass's first footer sits at {pageFooters[0].Location.Y:F1}, no lower than the "
+                + $"closing footer of the table that finished ({controlFooter.Location.Y:F1}) - so it is "
+                + "under a row in the middle of the table rather than at the foot of the page it leaves");
         }
 
         /// <summary>

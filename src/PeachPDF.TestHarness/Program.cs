@@ -2009,10 +2009,12 @@ await SaveShowcaseAsync("paged_media_table_row_breaks", "Paged Media", "Table Ro
 // cells are fragmented independently (css-break-3 §2.1 parallel flows). The narrow cell finishes on
 // the first page and is not drawn again; the wide one picks up exactly where it stopped. The repeating
 // <thead> is carried onto each page the row continues onto, and css-tables-3 §6.2's "leave room" is what
-// keeps the continuation beneath it rather than overlapped by it (issue #439). The narrow cell's *box*
+// keeps the continuation beneath it rather than overlapped by it (issue #439). The repeating <tfoot> is
+// the same rule read from the other end of the band: it closes every page the row reaches, with the room
+// for it left at the band's foot so the continuation stops above it rather than under it (#493). Both
+// groups are tinted, so an overlap would be visible rather than merely present. The narrow cell's *box*
 // continues with the row's, so its background and borders run the full depth of every continuation with
-// no content in them (#478) - which is what its tinted background is here to show. A repeating <tfoot>
-// is still not carried onto a continuation at all (#493).
+// no content in them (#478) - which is what its tinted background is here to show.
 var rowContinuationHtml = """
     <!DOCTYPE html>
     <html><head><style>
@@ -2023,6 +2025,7 @@ var rowContinuationHtml = """
     table { width: 100%; border-collapse: collapse }
     th, td { border: 0.75pt solid #94a3b8; padding: 4pt 5pt; vertical-align: top }
     thead th { background: #e2e8f0; font-size: 8pt; text-align: left }
+    tfoot td { background: #e2e8f0; font-size: 8pt; text-align: left }
     td.note { width: 30%; color: #6b7280; font-size: 8pt; background: #f1f5f9 }
     td.body { line-height: 1.5; text-align: justify }
     </style></head><body>
@@ -2033,6 +2036,7 @@ var rowContinuationHtml = """
     tint runs the full depth of every continuation.</p>
     <table>
       <thead><tr><th>Note</th><th>Clause</th></tr></thead>
+      <tfoot><tr><td>Continues</td><td>Overleaf</td></tr></tfoot>
       <tbody><tr>
         <td class="note">Finishes on the first page.</td>
         <td class="body">
@@ -2050,7 +2054,8 @@ await SaveShowcaseAsync("paged_media_table_row_continuation", "Paged Media", "Ta
     + "that row are fragmented independently - a short cell finishes where it finishes, while its box "
     + "continues with the row, its tint and borders running the full depth of each continuation with no "
     + "content in it. The repeating header is carried onto every page the row reaches, above the "
-    + "continuation rather than over it.",
+    + "continuation rather than over it, and the repeating footer closes each of those pages below it - "
+    + "css-tables-3 §6.2's \"leave room\" applied at both ends of the band.",
     rowContinuationHtml, new PdfGenerateConfig { PageSize = PageSize.A6 });
 
 // ── a row taller than the page band ────────────────────────────────────────
