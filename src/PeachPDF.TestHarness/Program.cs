@@ -2007,9 +2007,11 @@ await SaveShowcaseAsync("paged_media_table_row_breaks", "Paged Media", "Table Ro
 // ── a row that continues, cell by cell ─────────────────────────────────────
 // css-tables-3 §6.1: a row whose cell runs out of room continues in the next fragmentainer, and its
 // cells are fragmented independently (css-break-3 §2.1 parallel flows). The narrow cell finishes on
-// the first page and is not drawn again; the wide one picks up exactly where it stopped. The header
-// does not yet repeat above the continuation for this shape (issue #439's remaining tail), and the
-// finished cell's borders stop at the boundary rather than running the continuation's depth (#478).
+// the first page and is not drawn again; the wide one picks up exactly where it stopped. The repeating
+// <thead> is carried onto each page the row continues onto, and css-tables-3 §6.2's "leave room" is what
+// keeps the continuation beneath it rather than overlapped by it (issue #439). The finished cell's
+// borders still stop at the boundary rather than running the continuation's depth (#478), and a
+// repeating <tfoot> is not carried onto a continuation at all (#493).
 var rowContinuationHtml = """
     <!DOCTYPE html>
     <html><head><style>
@@ -2043,7 +2045,8 @@ var rowContinuationHtml = """
 
 await SaveShowcaseAsync("paged_media_table_row_continuation", "Paged Media", "Table Row Continuation",
     "css-tables-3 §6.1: a row whose cell runs out of room continues on the next page, and the cells of "
-    + "that row are fragmented independently - a short cell finishes where it finishes.",
+    + "that row are fragmented independently - a short cell finishes where it finishes. The repeating "
+    + "header is carried onto every page the row reaches, above the continuation rather than over it.",
     rowContinuationHtml, new PdfGenerateConfig { PageSize = PageSize.A6 });
 
 // ── Margin box explicit sizing showcase ────────────────────────────────────

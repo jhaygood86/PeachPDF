@@ -104,6 +104,76 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
             Assert.Equal(4, context.SlotIndex);
         }
 
+        /// <summary>
+        /// A repeated table header claims room at its fragmentainer's content edge, and a flow resuming
+        /// there starts below it — css-tables-3 §6.2's "leave room", which the row cursor cannot state for
+        /// a cell whose content position is the flow's question rather than the cursor's.
+        /// </summary>
+        [Fact]
+        public void ReserveResumeContent_StartsAResumedFlowBelowTheRoomTaken()
+        {
+            var container = CreateContainer();
+            var context = CreateContext(container, slot: 2);
+
+            context.ReserveResumeContent(30);
+
+            Assert.Equal(30, context.ResumeContentInset, 9);
+            Assert.Equal(container.PageTopOf(2) + 30, context.ResumeContentTop, 9);
+
+            // The band itself is untouched: the reservation says where content begins, not where the
+            // fragmentainer does, so nothing that measures against the band moves.
+            Assert.Equal(container.PageTopOf(2), context.BandTop, 9);
+            Assert.Equal(container.PageBandHeightOf(2), context.BandHeight, 9);
+        }
+
+        /// <summary>
+        /// A reservation belongs to the fragmentainer it was made in and stops applying once the pass has
+        /// stepped past it.
+        /// </summary>
+        /// <remarks>
+        /// A forced break is realized by placement, so a pass steps over a fragmentainer without ending —
+        /// and the page such a break opens gets no repeated header, because the table's per-row header
+        /// block only runs at a break between two rows. Room held there is room held for a header that is
+        /// not drawn: measured as a 13pt blank strip at the top of that page before the slot became part
+        /// of the reservation.
+        /// </remarks>
+        [Fact]
+        public void AReservation_StopsApplyingOnceThePassHasSteppedPastItsOwnFragmentainer()
+        {
+            var container = CreateContainer();
+            var context = CreateContext(container, slot: 2);
+
+            context.ReserveResumeContent(30);
+
+            context.StepOverTo(3);
+
+            Assert.Equal(0, context.ResumeContentInset, 9);
+            Assert.Equal(container.PageTopOf(3), context.ResumeContentTop, 9);
+        }
+
+        /// <summary>
+        /// Reservations compose within one fragmentainer and are restored in the order they were taken, so
+        /// a subtree that reserves room owes it only for as long as it is being laid out.
+        /// </summary>
+        [Fact]
+        public void ReserveResumeContent_ComposesWithinAFragmentainer_AndRestoresWhatItReplaced()
+        {
+            var container = CreateContainer();
+            var context = CreateContext(container, slot: 1);
+
+            var outer = context.ReserveResumeContent(20);
+            var inner = context.ReserveResumeContent(12);
+
+            Assert.Equal(32, context.ResumeContentInset, 9);
+
+            context.RestoreResumeContent(inner);
+            Assert.Equal(20, context.ResumeContentInset, 9);
+
+            context.RestoreResumeContent(outer);
+            Assert.Equal(0, context.ResumeContentInset, 9);
+            Assert.Equal(container.PageTopOf(1), context.ResumeContentTop, 9);
+        }
+
         [Fact]
         public void StepOverTo_IsANoOpForANestedFragmentainer()
         {

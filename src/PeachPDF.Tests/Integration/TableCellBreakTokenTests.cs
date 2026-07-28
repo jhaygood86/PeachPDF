@@ -157,6 +157,51 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
+        /// A repeated <c>&lt;thead&gt;</c> sits <i>above</i> the continuation it repeats over, not on top of
+        /// it (<see href="https://github.com/jhaygood86/PeachPDF/issues/439">#439</see>).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The header repeating and the header being in the right place are two different facts, and the
+        /// second is the one no count can state. The row cursor reserved the header's height by advancing,
+        /// which places the rows a pass lays out and the cells it enters fresh — but a cell continuing an
+        /// earlier fragmentainer keeps the <c>Location</c> its first fragment was built from, and its
+        /// content goes where the flow puts it, which was this fragmentainer's own content edge. That is
+        /// exactly where the header had just been drawn, so the two overlapped: measured on
+        /// <c>paged_media_table_row_continuation</c> as six words hidden under the header on each of two
+        /// pages, with every word still claimed exactly once.
+        /// </para>
+        /// <para>
+        /// Stated of every fragmentainer after the first, since the first is the one the header has always
+        /// been correct on — a fixture that only checked page 0 asserts the behaviour that was never
+        /// broken.
+        /// </para>
+        /// </remarks>
+        [Theory]
+        [InlineData("<table style='width:150pt'><thead><tr><th>HEADERWORD</th></tr></thead>"
+                    + "<tbody><tr><td>{W}</td></tr></tbody></table>")]
+        [InlineData("<table style='width:150pt'><thead><tr><th>HEADERWORD</th><th>B</th></tr></thead>"
+                    + "<tbody><tr><td>{W}</td><td>short</td></tr></tbody></table>")]
+        public async Task ARepeatedHeader_SitsAboveTheContinuationItRepeatsOver(string markup)
+        {
+            var (_, container) = await Paginate(markup);
+
+            foreach (var fragmentainer in container.FragmentTree!.Fragmentainers.Skip(1))
+            {
+                var words = Flatten(fragmentainer.Root).SelectMany(f => f.Words).ToList();
+
+                var header = Assert.Single(words, w => w.Word.Text == "HEADERWORD");
+                var body = words.Where(w => w.Word.Text!.StartsWith("word")).ToList();
+
+                Assert.NotEmpty(body);
+
+                Assert.All(body, word => Assert.True(word.Rect.Top >= header.Rect.Bottom,
+                    $"'{word.Word.Text}' starts at {word.Rect.Top} in slot {fragmentainer.SlotIndex}, "
+                    + $"above the repeated header's bottom edge at {header.Rect.Bottom}"));
+            }
+        }
+
+        /// <summary>
         /// Lays <paramref name="markup"/> out over 244 words and checks it really does span more than one
         /// fragmentainer, since neither theory above asserts anything if it does not.
         /// </summary>

@@ -908,6 +908,63 @@ namespace PeachPDF.Html.Core.Dom
                 : Math.Max(startY, container.PageTopOf(carried.ResumeSlotIndex));
 
         /// <summary>
+        /// Lays a row out with its fragmentainer told that a flow resuming inside it begins
+        /// <paramref name="headerRoom"/> further below the band's own content edge than it otherwise
+        /// would, because the repeated header this pass drew is there.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <see href="https://www.w3.org/TR/css-tables-3/#repeated-headers">css-tables-3 §6.2</see> is
+        /// explicit that repeating a header means <i>leaving room</i> for it, and the row cursor cannot
+        /// state that on its own. It reserves the header's height by advancing <c>CurrentY</c>, which
+        /// positions the rows this pass places and the cells it enters fresh — but a cell continuing an
+        /// earlier fragmentainer deliberately keeps the one <c>Location</c> its first fragment was built
+        /// from, and its content goes wherever the flow decides, which is
+        /// <see cref="FragmentainerContext.ResumeContentTop"/>. Those were the same value, so a repeating
+        /// <c>&lt;thead&gt;</c> was drawn <i>over</i> the first lines of the continuation it exists to sit
+        /// above (<see href="https://github.com/jhaygood86/PeachPDF/issues/439">#439</see>): six words
+        /// hidden under the header on each of two pages of
+        /// <c>paged_media_table_row_continuation</c>, with every word still claimed exactly once, so no
+        /// count-based check could see it.
+        /// </para>
+        /// <para>
+        /// The inset <b>composes</b> — it is added to whatever is already reserved and restored in a
+        /// <c>finally</c> — so a sibling flow resuming elsewhere in the same fragmentainer owes nothing.
+        /// That is not the same as nested repeating headers working: an inner table's own proxy is placed
+        /// at the band top the outer header occupies, which this does not address.
+        /// </para>
+        /// </remarks>
+        /// <param name="g">the graphics context layout is running against</param>
+        /// <param name="row">the body row to lay out, which is the one a continuation re-entered</param>
+        /// <param name="startX">the table's own content left, as for <see cref="LayoutBodyRow"/></param>
+        /// <param name="cursor">this pass's row cursor</param>
+        /// <param name="headerRoom">the height the repeated header took, plus the vertical spacing after it</param>
+        private async ValueTask LayoutBodyRowBelowTheRepeatedHeader(
+            RGraphics g, CssBox row, double startX, TableRowCursor cursor, double headerRoom)
+        {
+            // Null on an unpaginated or measurement pass, where nothing resumes and CreateLineBoxes reads
+            // the block's own ClientTop rather than any fragmentainer's content edge.
+            var fragmentainer = _tableBox.HtmlContainer?.CurrentFragmentainer;
+
+            if (fragmentainer is null)
+            {
+                await LayoutBodyRow(g, row, startX, cursor);
+                return;
+            }
+
+            var previousReservation = fragmentainer.ReserveResumeContent(headerRoom);
+
+            try
+            {
+                await LayoutBodyRow(g, row, startX, cursor);
+            }
+            finally
+            {
+                fragmentainer.RestoreResumeContent(previousReservation);
+            }
+        }
+
+        /// <summary>
         /// The record whose row loop this run continues, or null when there is none — including a record
         /// naming a row this table does not have, which belongs to a layout that no longer exists and so
         /// has nothing to continue. Reading it as "start from the markup" is both the safe answer and the
@@ -1106,6 +1163,11 @@ namespace PeachPDF.Html.Core.Dom
             // same proxy instance in the list, causing every header row to be painted (and, once
             // tagged, MCID-tagged) twice at identical coordinates - invisible on the page (exact
             // overlap) but wasted content-stream bytes and duplicate structure-tree entries.
+            //
+            // How much of this fragmentainer the header took, which a continuation owes to the one flow
+            // the cursor cannot speak for - see ReserveHeaderRoomForResumedCells.
+            var resumedHeaderRoom = 0d;
+
             if (_shouldRepeatHeaders && _headerBox != null)
             {
                 var headerProxy = CreateHeaderProxy(cursor.CurrentY);
@@ -1113,7 +1175,10 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     await headerProxy.PerformLayout(g);
 
-                    cursor.CurrentY += _headerHeight + GetVerticalSpacing();
+                    var headerRoom = _headerHeight + GetVerticalSpacing();
+                    if (_continuesAPreviousPass) resumedHeaderRoom = headerRoom;
+
+                    cursor.CurrentY += headerRoom;
                     cursor.MaxBottom = cursor.CurrentY;
                 }
             }
@@ -1190,8 +1255,16 @@ namespace PeachPDF.Html.Core.Dom
                     cursor.MaxBottom = cursor.CurrentY;
                 }
 
-                // Layout body row
-                await LayoutBodyRow(g, row, startX, cursor);
+                // Layout body row. Only the row a continuation re-enters can hold a cell whose own flow
+                // resumes, so only that row owes the repeated header the room it took.
+                if (i == ResumeRowIndex && resumedHeaderRoom > 0)
+                {
+                    await LayoutBodyRowBelowTheRepeatedHeader(g, row, startX, cursor, resumedHeaderRoom);
+                }
+                else
+                {
+                    await LayoutBodyRow(g, row, startX, cursor);
+                }
 
                 cursor.CurrentY = cursor.MaxBottom + GetVerticalSpacing();
 

@@ -136,8 +136,77 @@ namespace PeachPDF.Html.Core.Fragmentation
             : Container.PageBandHeightOf(SlotIndex);
 
         /// <summary>
+        /// The room a repeated group has claimed at the top of one fragmentainer, and <b>which</b>
+        /// fragmentainer it claimed it in — see <see cref="ReserveResumeContent"/> for why the slot is
+        /// part of the answer.
+        /// </summary>
+        private (int Slot, double Amount)? _resumeReservation;
+
+        /// <summary>
+        /// How far below <see cref="BandTop"/> a resumed flow in the subtree currently being laid out
+        /// starts, because something this fragmentainer repeats has already claimed that much of it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Zero for everything except a table repeating a <c>&lt;thead&gt;</c>. A repeated header is laid
+        /// out at the content edge of every fragmentainer the table covers, and
+        /// <see href="https://www.w3.org/TR/css-tables-3/#repeated-headers">css-tables-3 §6.2</see>
+        /// requires room to be left for it. The row cursor reserves that room by advancing, which places
+        /// the rows this pass lays out <i>and</i> the cells it enters fresh — but not a cell whose own flow
+        /// continues from an earlier fragmentainer. That flow asks this type where its fragmentainer's
+        /// content begins, and the answer for it is below the header rather than at the band's edge;
+        /// without this the header is drawn over the first lines of the continuation it is supposed to sit
+        /// above.
+        /// </para>
+        /// <para>
+        /// Zero again once the pass has left the fragmentainer the reservation was made in.
+        /// </para>
+        /// </remarks>
+        internal double ResumeContentInset =>
+            _resumeReservation is { } reservation && reservation.Slot == SlotIndex ? reservation.Amount : 0;
+
+        /// <summary>
+        /// Records that <paramref name="amount"/> at the top of the fragmentainer being filled is spoken
+        /// for, and returns the reservation that was in force so the caller can put it back.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A pair rather than a scope for the same reason
+        /// <see cref="HtmlContainerInt.DetachFragmentainer"/> is one: every call site is an <c>async</c>
+        /// method. Restore in a <c>finally</c>.
+        /// </para>
+        /// <para>
+        /// <b>The slot is part of the reservation, not incidental to it.</b> <see cref="SlotIndex"/> is a
+        /// cursor — <see cref="StepOverTo"/> moves it on when a forced break is realized by placement — so
+        /// a reservation made for the fragmentainer a repeated header was drawn in must stop applying once
+        /// the pass has stepped past it. Without the slot, a forced page break inside a resumed cell left
+        /// the header's room reserved on the page the break opened, where no header is drawn: measured as
+        /// a 13pt blank strip at the top of that page.
+        /// </para>
+        /// <para>
+        /// The amount <b>composes</b> with any reservation still in force for this same fragmentainer, and
+        /// starts from zero against one made for another.
+        /// </para>
+        /// </remarks>
+        /// <param name="amount">how much room the caller has just taken at this fragmentainer's content edge</param>
+        internal (int Slot, double Amount)? ReserveResumeContent(double amount)
+        {
+            var previous = _resumeReservation;
+
+            _resumeReservation = (SlotIndex, ResumeContentInset + amount);
+
+            return previous;
+        }
+
+        /// <summary>Puts back the reservation <see cref="ReserveResumeContent"/> returned.</summary>
+        /// <param name="reservation">what that call handed back</param>
+        internal void RestoreResumeContent((int Slot, double Amount)? reservation) =>
+            _resumeReservation = reservation;
+
+        /// <summary>
         /// Where a resumed pass starts flowing: this fragmentainer's own content edge, per
-        /// <see href="https://www.w3.org/TR/css-break-3/#fragmentainer">§2</see>.
+        /// <see href="https://www.w3.org/TR/css-break-3/#fragmentainer">§2</see>, below anything
+        /// <see cref="ResumeContentInset"/> says this fragmentainer repeats above it.
         /// </summary>
         /// <remarks>
         /// The retired <c>CssRect.BreakPage</c> relocated to <c>NextPageTopOf(Top) + 1</c> instead, so
@@ -145,7 +214,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// existed to keep a relocated word off the exact boundary value, which is a question the page
         /// grid's own epsilons already answer.
         /// </remarks>
-        internal double ResumeContentTop => BandTop;
+        internal double ResumeContentTop => BandTop + ResumeContentInset;
 
         /// <summary>Where this pass stopped, or null when the document finished inside this fragmentainer.</summary>
         internal BreakToken? OutgoingToken { get; private set; }
