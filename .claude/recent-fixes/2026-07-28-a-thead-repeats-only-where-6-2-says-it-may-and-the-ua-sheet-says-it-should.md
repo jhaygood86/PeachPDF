@@ -1,6 +1,7 @@
 # A `<thead>` repeats only where §6.2 says it may, and the UA sheet is what says it should
 
-Closes [#494](https://github.com/jhaygood86/PeachPDF/issues/494) and
+Closes [#494](https://github.com/jhaygood86/PeachPDF/issues/494),
+[#518](https://github.com/jhaygood86/PeachPDF/issues/518) and
 [#520](https://github.com/jhaygood86/PeachPDF/issues/520) (PR #519). Both of §6.2's conditions, not the
 one the issue and the tracker expected to be separable.
 
@@ -80,17 +81,19 @@ decision silently retaken.
   deferred, then pulled in-scope. `HtmlContainerInt.PageSheetHeight` is the quantity, and it needs no
   slot: only the margins vary per page, and the sheet they come out of does not — which incidentally
   removed the one place the settle step had to reason about *which* band the table began in.
-- **The `<tfoot>` risk predicted before implementation reproduced, and was worth measuring rather than
-  assuming.** Sweeping a declined footer's body cell in fours from 120 to 200 words: four consecutive
-  documents put the footer 1.2pt past the band, and the 17 others did not. Bounded by about one row's
-  height, self-correcting once the row itself moves on. Filed as
-  [#518](https://github.com/jhaygood86/PeachPDF/issues/518) with a gap file rather than fixed, because
-  both alternatives cost more — see it.
+- **The `<tfoot>` risk predicted before implementation reproduced — and the first measurement of it was
+  wrong in a way worth remembering.** Sweeping a declined footer's body cell in fours from 120 to 200
+  words, the footer's *text block* came out 1.2pt past the band on four of 21 documents, which read as a
+  boundary curiosity and was filed as #518 to live with. **A text block is not the box.** Re-measured on
+  the footer's own `CssProxyBox` geometry over 8–60 rows: **15 of 53 counts, worst case 64.6pt**, and
+  recurring once per *page cycle* (rows 13–17, 30–34, …) rather than at one transition, because what
+  matters is where the last row lands relative to the band's foot. Windows CI had already found the same
+  defect from the other side, as a footer claimed by two fragmentainers at once. Fixed here rather than
+  lived with. The standing lesson: **a PDF text-extraction bbox answers a question about glyphs, and a
+  layout question has to be asked of layout.**
 
 ## Deliberately not done
 
-- **No break-before-the-footer path.** It would move a *repeating* footer too, and that placement is
-  #493's.
 - **The band is the one the table begins in**, once per table, even under per-page `@page` geometry.
   Deciding per band would let a continuation disagree with the pass that detached the group.
 - **Multicol is not re-asked.** Inside a column the table's fragmentainer is not a page, so §6.2's first
@@ -127,9 +130,30 @@ common `table { display: block }` idiom now gets `break-inside: avoid` as an ord
 a 120pt group moving from page 0 to page 1. That is the property doing what it says, but it is a third
 migration case and is now written down as one.
 
+## The closing footer's own break
+
+Applying §6.2's conditions created the case: a footer the conditions decline gets no reservation, so it
+is placed straight after a last row that may have run to the band's foot.
+`MoveTheClosingFooterOffABoundaryItWouldStraddle` takes the break before it and opens the next band with
+the header the table repeats — §6.2 repeats the header on every page the table spans, and the page such a
+break opens is one of them.
+
+Three things worth keeping:
+
+- **It declines in the row loop's own three cases**, and for the same three reasons: a footer taller than
+  the next band would only straddle again (§4.3's ladder ends in leaving content where it is), a footer
+  already at its band's top would leave that band empty (§4.4), and inside a multi-column column the page
+  grid does not describe the fragmentainer being filled.
+- **It writes `PageBreakBottoms` for the band it leaves**, like `TakeBreakBeforeRow` — without it
+  `FragmentPainter` draws the table's bottom border across the rows above the break.
+- **It is scoped to the declined case rather than left to be a no-op by arithmetic.** A repeating footer's
+  room is reserved by construction, so widening this to it would put a second decision on top of #493's
+  placement rather than beside it. All 72 showcases stay byte-identical, which is what says the scoping
+  holds.
+
 ## Evidence
 
-Full net8.0 suite **6917 passed / 0 failed / 9 skipped** (6895 before). CLI **96/96**. Zero-warning
+Full net8.0 suite **6929 passed / 0 failed / 9 skipped** (6895 before). CLI **96/96**. Zero-warning
 `dotnet build PeachPDF.slnx -t:Rebuild`. Six of the ten behavioural assertions confirmed **failing on
 `main`** with the change stashed, and the three `Repeats` assertions cannot compile there at all. 71 of
 71 pre-existing showcases byte-identical, plus one new one — `paged_media_table_group_repetition`, two

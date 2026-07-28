@@ -1496,6 +1496,8 @@ namespace PeachPDF.Html.Core.Dom
             // the header block above still draws a non-repeating <thead> once at the table's top.
             if (!cursor.Stopped && FooterIsDetached && _footerHeight > 0)
             {
+                await MoveTheClosingFooterOffABoundaryItWouldStraddle(g, container, cursor);
+
                 var finalFooterProxy = CreateFooterProxy(cursor.CurrentY);
                 if (finalFooterProxy != null)
                 {
@@ -1692,6 +1694,80 @@ namespace PeachPDF.Html.Core.Dom
             cursor.MaxBottom = cursor.CurrentY;
 
             return target;
+        }
+
+        /// <summary>
+        /// Takes the break before the table's closing footer where the band it would be drawn in has no
+        /// room left for it, and opens the next one with the header this table repeats.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Only a footer <see href="https://www.w3.org/TR/css-tables-3/#repeated-headers">§6.2</see>
+        /// declined to repeat can get here, and the reason is the declining: the room a repeating footer
+        /// needs is reserved out of every band the table spans, so its last row stops clear of the foot,
+        /// while a declined one is placed straight after a last row that may have run all the way down.
+        /// Measured before this existed as <b>1.2pt past the band</b> on four consecutive word counts of a
+        /// 21-document sweep, and independently by Windows CI on an ordinary 40-row table, where the
+        /// footer came out claimed by two fragmentainers at once
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/518">#518</see>).
+        /// </para>
+        /// <para>
+        /// Moving it whole is the only alternative to drawing it across the boundary: the group carries
+        /// the UA stylesheet's <c>break-inside: avoid</c>, and even where an author has set that back to
+        /// <c>auto</c> this engine cannot split a row group. Deliberately scoped to the declined case —
+        /// a repeating footer's room is reserved by construction, and widening this to it would put a
+        /// second decision on top of #493's placement rather than beside it.
+        /// </para>
+        /// <para>
+        /// The three declines are the row loop's, for the same three reasons. A footer taller than the
+        /// next band would only straddle again there (§4.3's ladder ends in leaving content where it is);
+        /// a footer already at its band's top would leave that band empty (§4.4); and inside a
+        /// multi-column column the page grid does not describe the fragmentainer being filled, so its
+        /// bands answer nothing.
+        /// </para>
+        /// </remarks>
+        /// <param name="g">the graphics context layout is running against</param>
+        /// <param name="container">the container whose page grid the bands come from, or null</param>
+        /// <param name="cursor">this pass's row cursor, sitting under the table's last row</param>
+        private async ValueTask MoveTheClosingFooterOffABoundaryItWouldStraddle(
+            RGraphics g, HtmlContainerInt? container, TableRowCursor cursor)
+        {
+            if (_footerRepeats) return;
+            if (container is null || !container.HasRealPageGrid) return;
+            if (container.CurrentFragmentainer is { HasOwnBand: true }) return;
+
+            var slot = cursor.BandReached(container);
+            var room = _footerHeight + GetVerticalSpacing();
+
+            if (!HtmlContainerInt.FallsPast(cursor.CurrentY + room, container.BandOfSlot(slot))) return;
+            if (room > container.PageBandHeightOf(slot + 1)) return;
+            if (cursor.CurrentY - HtmlContainerInt.PageBoundaryEpsilon <= container.PageTopOf(slot)) return;
+
+            // Where the table's slice on the band being left ends, which is under its last row - the same
+            // record TakeBreakBeforeRow writes, and for the same reason: FragmentPainter clips the table's
+            // bottom border to it, and without the entry that border is drawn across the rows below it.
+            _tableBox.PageBreakBottoms ??= new Dictionary<int, double>();
+            _tableBox.PageBreakBottoms[slot] = cursor.MaxBottom;
+
+            var target = slot + 1;
+            cursor.MoveToSlot(target, container.PageTopOf(target));
+
+            // §6.2 repeats the header on every page the table spans, and the page this break opens is one
+            // of them - so the band the footer lands in gets a header too, exactly as one opened by a
+            // break between two rows does.
+            if (_headerRepeats && _headerHeight > 0)
+            {
+                var headerProxy = CreateHeaderProxy(cursor.CurrentY);
+
+                if (headerProxy != null)
+                {
+                    await headerProxy.PerformLayout(g);
+                    cursor.CurrentY += _headerHeight + GetVerticalSpacing();
+                    cursor.MaxRight = Math.Max(cursor.MaxRight, headerProxy.ActualRight);
+                }
+            }
+
+            cursor.MaxBottom = cursor.CurrentY;
         }
 
         /// <summary>

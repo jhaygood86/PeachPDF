@@ -371,6 +371,139 @@ namespace PeachPDF.Tests.Integration
             Assert.True(RepeatsOf(root, "thead"));
         }
 
+        // ─── A declined footer still has to fit the band it is drawn in ──────────────────────────
+
+        /// <summary>
+        /// A <c>&lt;tfoot&gt;</c> §6.2 declines to repeat is carried onto the next page rather than drawn
+        /// across the foot of the one its last row ended on
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/518">#518</see>).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The room a <i>repeating</i> footer needs is reserved out of every band the table spans, so its
+        /// last row stops clear of the foot. A declined one gets no such reservation — that is exactly what
+        /// declining means — and was placed straight after a last row that may have run all the way down.
+        /// </para>
+        /// <para>
+        /// The row counts are the ones that reproduce it: sweeping 8 to 60 rows over this fixture, 15 of
+        /// the 53 put the footer past its band, by up to 64.6pt — and they recur once per page cycle
+        /// (13–17, 30–34, …) rather than at a single transition, because what matters is where the last
+        /// row happens to land relative to the band's foot. 12 and 20 are neighbours that always fitted,
+        /// so the theory fails if the fix ever starts moving a footer that had room.
+        /// </para>
+        /// </remarks>
+        [Theory]
+        [InlineData(12)]
+        [InlineData(13)]
+        [InlineData(14)]
+        [InlineData(15)]
+        [InlineData(16)]
+        [InlineData(17)]
+        [InlineData(20)]
+        [InlineData(31)]
+        public async Task ADeclinedFooter_IsDrawnInsideTheBandItIsPlacedIn(int rows)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                DeclinedFooterTable(rows), pageHeight: PageHeight, margin: Margin);
+
+            var footer = Assert.Single(
+                TableOf(root).Boxes.OfType<CssProxyBox>(),
+                p => p.Display == CssConstants.TableFooterGroup);
+
+            var slot = container.SlotStartingAt(footer.Location.Y);
+
+            Assert.True(footer.ActualBottom <= container.PageBottomOf(slot) + 0.5,
+                $"the footer runs to {footer.ActualBottom} in a band ending at {container.PageBottomOf(slot)}");
+        }
+
+        /// <summary>
+        /// And it is still drawn exactly once when it moves — carried, not copied.
+        /// </summary>
+        [Theory]
+        [InlineData(14)]
+        [InlineData(31)]
+        public async Task AFooterCarriedOntoTheNextPage_IsStillDrawnOnlyOnce(int rows)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                DeclinedFooterTable(rows), pageHeight: PageHeight, margin: Margin);
+
+            AssertLaidOutOnce(root, "tfoot");
+            AssertDrawnOnlyOn(container, "FOOTWORD", Last(container));
+        }
+
+        /// <summary>
+        /// A <i>repeating</i> footer is untouched by that correction: its room is reserved at every band's
+        /// foot, so it never needed carrying, and the move is deliberately scoped away from it rather than
+        /// left to be a no-op by arithmetic.
+        /// </summary>
+        [Theory]
+        [InlineData(14)]
+        [InlineData(31)]
+        public async Task ARepeatingFooter_IsStillClosedUnderTheLastRow(int rows)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                DeclinedFooterTable(rows).Replace("break-inside:auto", ""),
+                pageHeight: PageHeight, margin: Margin);
+
+            Assert.True(RepeatsOf(root, "tfoot"));
+
+            Assert.Equal(
+                container.FragmentTree!.Fragmentainers.Select(f => f.SlotIndex),
+                SlotsDrawnOn(container, "FOOTWORD"));
+        }
+
+        /// <summary>
+        /// The page a carried footer opens gets the header the table repeats, exactly as a page opened by
+        /// a break between two rows does — §6.2 repeats the header on every page the table <i>spans</i>,
+        /// and that page is one of them.
+        /// </summary>
+        /// <remarks>
+        /// The one combination the other fixtures here cannot reach: a footer §6.2 declines beside a header
+        /// it does not. Both conditions are per-group, so a table can easily have one of each — an author
+        /// writing <c>tfoot { break-inside: auto }</c> and leaving the <c>&lt;thead&gt;</c> alone gets
+        /// exactly this.
+        /// </remarks>
+        [Theory]
+        [InlineData(14)]
+        [InlineData(31)]
+        public async Task ThePageACarriedFooterOpens_StillGetsTheRepeatingHeader(int rows)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                DeclinedFooterTable(rows).Replace(
+                    "<table style='width:150pt'>",
+                    "<table style='width:150pt'><thead><tr><th>HEADWORD</th></tr></thead>"),
+                pageHeight: PageHeight, margin: Margin);
+
+            Assert.True(RepeatsOf(root, "thead"));
+            Assert.False(RepeatsOf(root, "tfoot"));
+
+            var footerSlots = SlotsDrawnOn(container, "FOOTWORD");
+
+            Assert.Equal([Last(container)], footerSlots);
+
+            // The band the footer was carried into is one the table spans, so the header is on it too.
+            Assert.Contains(Last(container), SlotsDrawnOn(container, "HEADWORD"));
+
+            var footer = Assert.Single(
+                TableOf(root).Boxes.OfType<CssProxyBox>(),
+                p => p.Display == CssConstants.TableFooterGroup);
+
+            var slot = container.SlotStartingAt(footer.Location.Y);
+
+            Assert.True(footer.ActualBottom <= container.PageBottomOf(slot) + 0.5,
+                $"the footer runs to {footer.ActualBottom} in a band ending at {container.PageBottomOf(slot)}");
+        }
+
+        /// <summary>
+        /// A table whose <c>&lt;tfoot&gt;</c> §6.2 declines to repeat, over <paramref name="rows"/> short rows.
+        /// </summary>
+        private static string DeclinedFooterTable(int rows) =>
+            LayoutHarness.Wrap(
+                "<table style='width:150pt'><tfoot style='break-inside:auto'><tr><td>"
+                + "<div style='height:60pt'></div>FOOTWORD</td></tr></tfoot><tbody>"
+                + string.Join("", Enumerable.Range(0, rows).Select(i => $"<tr><td>word{i:0000}</td></tr>"))
+                + "</tbody></table>");
+
         // ─── Helpers ─────────────────────────────────────────────────────────────────────────────
 
         private static string Fixture(string markup) =>

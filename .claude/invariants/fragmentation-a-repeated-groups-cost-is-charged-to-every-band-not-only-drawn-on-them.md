@@ -48,13 +48,13 @@ table down a relocation path a table with a `<thead>` never takes.
 
 ## And "drawn once" is not "claimed by one fragmentainer"
 
-For a **footer**, those two come apart. A group §6.2 declines has no room reserved for it — that is the
-point — so where the last row ends flush with the band's foot the footer straddles the boundary and is
-legitimately claimed by two fragmentainers while having been placed exactly once
-([#518](https://github.com/jhaygood86/PeachPDF/issues/518)). Whether it does depends on font metrics:
-Windows CI reported `[2, 3]` for a fixture Linux reported `[3]` for, with the engine doing the same thing
-on both.
+State "laid out once" as **one `CssProxyBox` of the group's display type**, not as a list of the slots
+that claim the group's word. The two are different questions, and the second is answered by geometry that
+font metrics can move.
 
-So state "laid out once" as **one `CssProxyBox` of the group's display type**, not as a slot list. A
-header can be asked either way — it is placed at a band's top and cannot straddle for this reason — but a
-footer cannot.
+Measured: a declined `<tfoot>` came back claimed by `[2, 3]` on Windows where Linux reported `[3]`, with
+the engine doing the same thing on both — one proxy, two claiming bands, because the footer crossed the
+boundary. **That particular cause is now fixed** (#518: a declined closing footer is carried onto the
+next page rather than drawn across the foot of its own), so this is no longer the way to reproduce it —
+but the distinction is not, and anything that straddles by design still separates the two. Ask the
+question you mean.
