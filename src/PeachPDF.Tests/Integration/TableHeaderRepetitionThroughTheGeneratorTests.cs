@@ -9,9 +9,11 @@ using System.Threading.Tasks;
 namespace PeachPDF.Tests.Integration
 {
     /// <summary>
-    /// A repeating <c>&lt;thead&gt;</c> above a row that continues mid-cell, laid out the way the real
-    /// generator lays a document out — with an <c>@page</c> rule, and therefore parsed twice
-    /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/439">#439</see>).
+    /// A repeating <c>&lt;thead&gt;</c> above, and a repeating <c>&lt;tfoot&gt;</c> below, a row that
+    /// continues mid-cell — laid out the way the real generator lays a document out, with an
+    /// <c>@page</c> rule and therefore parsed twice
+    /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/439">#439</see>,
+    /// <see href="https://github.com/jhaygood86/PeachPDF/issues/493">#493</see>).
     /// </summary>
     /// <remarks>
     /// <para>
@@ -42,6 +44,7 @@ namespace PeachPDF.Tests.Integration
             table { width: 100%; border-collapse: collapse }
             th, td { border: 0.75pt solid #94a3b8; padding: 4pt 5pt; vertical-align: top }
             thead th { background: #e2e8f0; font-size: 8pt; text-align: left }
+            tfoot td { background: #e2e8f0; font-size: 8pt; text-align: left }
             td.note { width: 30%; color: #6b7280; font-size: 8pt }
             td.body { line-height: 1.5; text-align: justify }
             </style></head><body>
@@ -50,6 +53,7 @@ namespace PeachPDF.Tests.Integration
             the next page.</p>
             <table>
               <thead><tr><th>Note</th><th>Clause</th></tr></thead>
+              <tfoot><tr><td>Continues</td><td>Overleaf</td></tr></tfoot>
               <tbody><tr>
                 <td class="note">Finishes on the first page.</td>
                 <td class="body">
@@ -133,6 +137,53 @@ namespace PeachPDF.Tests.Integration
                 Assert.All(body, word => Assert.True(word.Rect.Top >= header.Rect.Bottom,
                     $"'{word.Word.Text}' starts at {word.Rect.Top} in slot {fragmentainer.SlotIndex}, "
                     + $"above the repeated header's bottom edge at {header.Rect.Bottom}"));
+            }
+        }
+
+        /// <summary>
+        /// The footer is drawn on every page of this document, and once on each — the mirror of
+        /// <see cref="ARepeatingHeader_IsDrawnOnceOnEveryPageTheTableCovers"/>, which used to measure one
+        /// footer over the whole document however many pages the row continued onto.
+        /// </summary>
+        [Fact]
+        public async Task ARepeatingFooter_IsDrawnOnceOnEveryPageTheTableCovers()
+        {
+            var container = await LayoutFixtureAsync();
+
+            foreach (var fragmentainer in container.FragmentTree!.Fragmentainers)
+            {
+                var words = WordsIn(fragmentainer);
+
+                Assert.Single(words, w => w.Word.Text == "Continues");
+                Assert.Single(words, w => w.Word.Text == "Overleaf");
+            }
+        }
+
+        /// <summary>
+        /// The continued cell's content ends <i>above</i> the repeated footer rather than under it — the
+        /// half no count states, mirrored to the other end of the band.
+        /// </summary>
+        /// <remarks>
+        /// Stated of every page but the last, since the last carries the table's own closing footer under
+        /// its final row, which has always been placed correctly.
+        /// </remarks>
+        [Fact]
+        public async Task AResumedCellsContent_EndsAboveTheRepeatedFooter()
+        {
+            var container = await LayoutFixtureAsync();
+
+            foreach (var fragmentainer in container.FragmentTree!.Fragmentainers.SkipLast(1))
+            {
+                var words = WordsIn(fragmentainer);
+
+                var footer = Assert.Single(words, w => w.Word.Text == "Overleaf");
+                var body = words.Where(w => w.Word.Text!.StartsWith("clause")).ToList();
+
+                Assert.NotEmpty(body);
+
+                Assert.All(body, word => Assert.True(word.Rect.Bottom <= footer.Rect.Top,
+                    $"'{word.Word.Text}' ends at {word.Rect.Bottom} in slot {fragmentainer.SlotIndex}, "
+                    + $"below the repeated footer's top edge at {footer.Rect.Top}"));
             }
         }
 

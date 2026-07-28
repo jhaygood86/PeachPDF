@@ -39,6 +39,34 @@ not drawn, measured as a **13pt blank strip** at the top of that page on a resum
 cell carries the break. The general form: **any state scoped to "the fragmentainer being filled" must
 record which one, because that is a cursor and not a constant.**
 
+**The end of a band has the opposite slot rule from its start, and the asymmetry is the rule.** The
+prediction above came true at the other end: a repeating `<tfoot>` owes the same statement at the band's
+foot, because the cursor leaves the footer's room out of the height a whole *row* is measured against and
+that reaches nothing inside a cell whose own lines run down toward it
+([#493](https://github.com/jhaygood86/PeachPDF/issues/493)). The seam is
+`FragmentainerContext.ReserveBandEnd`/`RestoreBandEnd`, consumed by `CssRect.WouldStraddleFragmentainer`
+alongside §6.2's `box-decoration-break: clone` insets, which already ride that channel.
+
+It applies from the slot it names **onward**, where the header's applies to that slot **only**, and the
+difference is not an oversight to be tidied away: a repeated footer is drawn at the foot of every
+fragmentainer a pass fills or leaves, so a claim in band `k` is equally true of `k+1` — and it has to be,
+because inline flow reaches the next band without recording a break at all, under the boundary tolerance.
+An equality there drops the reservation exactly where it is needed.
+
+**But it still dies at a step-over, and that half is not an asymmetry.** `StepOverTo` means a forced
+break was realized by placement, and no repeated footer is drawn on the band such a break opens — so
+room held there is the 13pt strip above, mirrored. Measured on a `<tfoot>` table whose cell carries a
+`break-before: page`: **one page of seven with no footer on it whose content still stopped level with the
+six that had one.** So the footer's reservation carries *two* slots — the floor it applies from, and the
+fragmentainer it was made in, which is a ceiling.
+
+That is the sharpened form of the rule, and it is what a reader should take from this file: **naming the
+fragmentainer is not the whole answer, because "which fragmentainer does this apply to" and "which
+fragmentainer was it made in" are different questions.** Where a reservation applies to exactly one they
+collapse into one field, which is what made the header's version look like the general case. Anything
+that applies to a *range* needs both, and getting the second wrong reproduces the defect the first was
+introduced to fix.
+
 Note what this does *not* buy. Two nested repeating-header tables still overlap each other: the inner
 table's own proxy is placed at `Math.Max(startY, PageTopOf(ResumeSlotIndex))`, which for a table that
 began on an earlier page is the band top — exactly where the outer header was drawn. The inset

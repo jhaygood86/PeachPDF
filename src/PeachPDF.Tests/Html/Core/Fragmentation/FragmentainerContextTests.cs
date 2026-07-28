@@ -174,6 +174,113 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
             Assert.Equal(container.PageTopOf(1), context.ResumeContentTop, 9);
         }
 
+        /// <summary>
+        /// A repeated table footer claims room at its fragmentainer's foot, and content laid out inside
+        /// the table has to stop above it — css-tables-3 §6.2's "leave room" from the other end of the
+        /// band, which the row cursor cannot state for a cell whose own flow runs down toward it.
+        /// </summary>
+        [Fact]
+        public void ReserveBandEnd_ClaimsTheEndOfTheBandItNames()
+        {
+            var container = CreateContainer();
+            var context = CreateContext(container, slot: 2);
+
+            context.ReserveBandEnd(fromSlot: 2, amount: 30);
+
+            Assert.Equal(30, context.BandEndInsetOf(2), 9);
+
+            // The band itself is untouched, exactly as the top reservation leaves BandTop alone: the
+            // reservation says where content stops, not where the fragmentainer does.
+            Assert.Equal(container.PageBottomOf(2), context.BandBottom, 9);
+            Assert.Equal(container.PageBandHeightOf(2), context.BandHeight, 9);
+        }
+
+        /// <summary>
+        /// A band-end reservation applies to the fragmentainer it names <b>and to every one after it</b> —
+        /// the opposite of the rule
+        /// <see cref="AReservation_StopsApplyingOnceThePassHasSteppedPastItsOwnFragmentainer"/> pins for
+        /// the band's start, and the difference is not an oversight.
+        /// </summary>
+        /// <remarks>
+        /// A repeated header is drawn by the code that reserves for it, into exactly one fragmentainer, so
+        /// room held past that one is room held for a header that is not there. A repeated footer is drawn
+        /// at the foot of every fragmentainer a pass fills or leaves, so a claim made in one band is
+        /// equally true of the next — and it has to be, because inline flow reaches the next band without
+        /// recording a break at all, under the boundary tolerance
+        /// <c>CssRect.WouldStraddleFragmentainer</c> relies on.
+        /// </remarks>
+        [Fact]
+        public void ABandEndReservation_AppliesToEveryFragmentainerFromTheOneItNames()
+        {
+            var container = CreateContainer();
+            var context = CreateContext(container, slot: 1);
+
+            context.ReserveBandEnd(fromSlot: 2, amount: 30);
+
+            Assert.Equal(0, context.BandEndInsetOf(1), 9);
+            Assert.Equal(30, context.BandEndInsetOf(2), 9);
+            Assert.Equal(30, context.BandEndInsetOf(5), 9);
+        }
+
+        /// <summary>
+        /// A band-end reservation still stops applying once the pass has stepped past the fragmentainer it
+        /// was made in — the one rule it shares with
+        /// <see cref="AReservation_StopsApplyingOnceThePassHasSteppedPastItsOwnFragmentainer"/> rather than
+        /// mirroring.
+        /// </summary>
+        /// <remarks>
+        /// A step-over means a forced break was realized by placement, and no repeated footer is drawn on
+        /// the band such a break opens: the per-row block only writes one at a break between two rows, and
+        /// the closing footer belongs under the table's last row. Room held there is room held for a footer
+        /// that is not drawn — measured on a <c>&lt;tfoot&gt;</c> table whose cell carries a
+        /// <c>break-before: page</c> as one page of seven with no footer whose content still stopped level
+        /// with the six that had one.
+        /// </remarks>
+        [Fact]
+        public void ABandEndReservation_StopsApplyingOnceThePassHasSteppedPastWhereItWasMade()
+        {
+            var container = CreateContainer();
+            var context = CreateContext(container, slot: 2);
+
+            context.ReserveBandEnd(fromSlot: 2, amount: 30);
+
+            Assert.Equal(30, context.BandEndInsetOf(3), 9);
+
+            context.StepOverTo(3);
+
+            Assert.Equal(0, context.BandEndInsetOf(2), 9);
+            Assert.Equal(0, context.BandEndInsetOf(3), 9);
+            Assert.Equal(0, context.BandEndInsetOf(4), 9);
+        }
+
+        /// <summary>
+        /// Band-end reservations compose from the slot the inner one names and are restored in the order
+        /// they were taken, so a subtree that reserves room owes it only while it is being laid out.
+        /// </summary>
+        [Fact]
+        public void ReserveBandEnd_ComposesFromTheSlotItNames_AndRestoresWhatItReplaced()
+        {
+            var container = CreateContainer();
+            var context = CreateContext(container, slot: 0);
+
+            var outer = context.ReserveBandEnd(fromSlot: 0, amount: 20);
+            var inner = context.ReserveBandEnd(fromSlot: 2, amount: 12);
+
+            Assert.Equal(32, context.BandEndInsetOf(2), 9);
+
+            // While the inner claim is in force the bands below the slot it names read zero, even though
+            // the outer claim is still owed there. Stated so the behaviour is not mistaken for a stack:
+            // no call site can reach it today, since a nested table's row band is never above its
+            // enclosing row's.
+            Assert.Equal(0, context.BandEndInsetOf(0), 9);
+
+            context.RestoreBandEnd(inner);
+            Assert.Equal(20, context.BandEndInsetOf(0), 9);
+
+            context.RestoreBandEnd(outer);
+            Assert.Equal(0, context.BandEndInsetOf(0), 9);
+        }
+
         [Fact]
         public void StepOverTo_IsANoOpForANestedFragmentainer()
         {

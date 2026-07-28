@@ -21,5 +21,19 @@ table spanning pages without breaking has always had exactly one.
 one is which bands the table's slice covers, which is only knowable once the row loop has finished — and
 it is the same set `CssBox.PageBreakBottoms` would have to grow entries for so the table's border is
 clipped on those pages too. Doing one without the other trades a missing header for a border drawn
-across the middle of a row. `<tfoot>` wants the same answer from the other end of the band, which is what
-[#493](https://github.com/jhaygood86/PeachPDF/issues/493) is about.
+across the middle of a row.
+
+**What is left of this once #493 is fixed, measured while scoping that work.** #493 was the same shape
+read from the other end of the band, and closing it took the mid-cell continuation with it: a pass that
+stops now closes the band it leaves, and the pass that resumes opens the next one with the header. So the
+remaining surface here is a band a table covers that **no pass either fills or leaves** — one crossed by a
+row that is monolithic and overflows, which is exactly the `paged_media_table_tall_row` fixture.
+
+That matters, because it is the one shape where §6.2's "leave room" is **unsatisfiable**. The fixture's
+row is a single 620pt block on a ~260pt band; it is drawn once, at one position, and cannot be made to
+restart below a header on each band it covers — §2's overflow-rather-than-slice is what puts it there. So
+repeating the header on the band it overflows through means drawing the header **on top of the block**,
+which is the defect [#439](https://github.com/jhaygood86/PeachPDF/issues/439) was filed for and PR #495
+removed. Closing this issue as filed trades a missing header for content drawn underneath an opaque box —
+a straight swap of one defect for the other, not a fix — so it wants a decision about which is worse
+before it wants an implementation. `<tfoot>` on such a band has the identical problem at the foot.

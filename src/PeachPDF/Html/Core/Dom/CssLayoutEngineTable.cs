@@ -908,51 +908,72 @@ namespace PeachPDF.Html.Core.Dom
                 : Math.Max(startY, container.PageTopOf(carried.ResumeSlotIndex));
 
         /// <summary>
-        /// Lays a row out with its fragmentainer told that a flow resuming inside it begins
-        /// <paramref name="headerRoom"/> further below the band's own content edge than it otherwise
-        /// would, because the repeated header this pass drew is there.
+        /// Lays a row out with its fragmentainer told what the groups this table repeats have already
+        /// claimed of it — <paramref name="headerRoom"/> below the band's content edge, and
+        /// <paramref name="footerRoom"/> above its foot — so a flow inside the row begins below the one and
+        /// stops above the other.
         /// </summary>
         /// <remarks>
         /// <para>
         /// <see href="https://www.w3.org/TR/css-tables-3/#repeated-headers">css-tables-3 §6.2</see> is
-        /// explicit that repeating a header means <i>leaving room</i> for it, and the row cursor cannot
-        /// state that on its own. It reserves the header's height by advancing <c>CurrentY</c>, which
-        /// positions the rows this pass places and the cells it enters fresh — but a cell continuing an
-        /// earlier fragmentainer deliberately keeps the one <c>Location</c> its first fragment was built
-        /// from, and its content goes wherever the flow decides, which is
-        /// <see cref="FragmentainerContext.ResumeContentTop"/>. Those were the same value, so a repeating
-        /// <c>&lt;thead&gt;</c> was drawn <i>over</i> the first lines of the continuation it exists to sit
-        /// above (<see href="https://github.com/jhaygood86/PeachPDF/issues/439">#439</see>): six words
-        /// hidden under the header on each of two pages of
-        /// <c>paged_media_table_row_continuation</c>, with every word still claimed exactly once, so no
-        /// count-based check could see it.
+        /// explicit that repeating a header means <i>leaving room</i> for it — "the same applies for footer
+        /// rows and the table bottom border" — and the row cursor cannot state that on its own. It reserves
+        /// the header's height by advancing <c>CurrentY</c>, and the footer's by subtracting it from the
+        /// room a row is measured against, which between them position the rows this pass places and the
+        /// cells it enters fresh. Neither reaches a flow <i>inside</i> a cell: a cell continuing an earlier
+        /// fragmentainer deliberately keeps the one <c>Location</c> its first fragment was built from and
+        /// starts its content at <see cref="FragmentainerContext.ResumeContentTop"/>, and any cell's own
+        /// lines then run down toward the band's foot regardless of which pass entered it.
         /// </para>
         /// <para>
-        /// The inset <b>composes</b> — it is added to whatever is already reserved and restored in a
-        /// <c>finally</c> — so a sibling flow resuming elsewhere in the same fragmentainer owes nothing.
-        /// That is not the same as nested repeating headers working: an inner table's own proxy is placed
-        /// at the band top the outer header occupies, which this does not address.
+        /// Both halves were measured as content drawn <i>under</i> the group that repeats over it. The
+        /// header's was <see href="https://github.com/jhaygood86/PeachPDF/issues/439">#439</see>: six words
+        /// hidden under the header on each of two pages of <c>paged_media_table_row_continuation</c>. The
+        /// footer's is its mirror (<see href="https://github.com/jhaygood86/PeachPDF/issues/493">#493</see>),
+        /// and in both cases every word is still claimed by exactly one fragmentainer, so no count-based
+        /// check can see either.
+        /// </para>
+        /// <para>
+        /// Both insets <b>compose</b> — each is added to whatever is already reserved and restored in a
+        /// <c>finally</c> — so a sibling flow elsewhere in the same fragmentainer owes nothing. That is not
+        /// the same as nested repeating headers working: an inner table's own proxy is placed at the band
+        /// top the outer header occupies, which this does not address.
+        /// </para>
+        /// <para>
+        /// The two reservations do <b>not</b> mirror each other in scope, and the difference is argued at
+        /// <see cref="FragmentainerContext.ReserveBandEnd"/>: the header is drawn into one fragmentainer,
+        /// the footer into every one the table covers.
         /// </para>
         /// </remarks>
         /// <param name="g">the graphics context layout is running against</param>
-        /// <param name="row">the body row to lay out, which is the one a continuation re-entered</param>
+        /// <param name="row">the body row to lay out</param>
         /// <param name="startX">the table's own content left, as for <see cref="LayoutBodyRow"/></param>
         /// <param name="cursor">this pass's row cursor</param>
-        /// <param name="headerRoom">the height the repeated header took, plus the vertical spacing after it</param>
-        private async ValueTask LayoutBodyRowBelowTheRepeatedHeader(
-            RGraphics g, CssBox row, double startX, TableRowCursor cursor, double headerRoom)
+        /// <param name="slot">the band the row is being placed in, which the footer's claim is keyed from</param>
+        /// <param name="headerRoom">
+        /// the height the repeated header took plus the vertical spacing after it, or zero where this row
+        /// owes it nothing
+        /// </param>
+        /// <param name="footerRoom">the height the repeated footer holds at the band's foot, or zero</param>
+        private async ValueTask LayoutBodyRowInsideTheRepeatedGroups(
+            RGraphics g, CssBox row, double startX, TableRowCursor cursor,
+            int slot, double headerRoom, double footerRoom)
         {
             // Null on an unpaginated or measurement pass, where nothing resumes and CreateLineBoxes reads
             // the block's own ClientTop rather than any fragmentainer's content edge.
             var fragmentainer = _tableBox.HtmlContainer?.CurrentFragmentainer;
 
-            if (fragmentainer is null)
+            if (fragmentainer is null || (headerRoom <= 0 && footerRoom <= 0))
             {
                 await LayoutBodyRow(g, row, startX, cursor);
                 return;
             }
 
-            var previousReservation = fragmentainer.ReserveResumeContent(headerRoom);
+            // Reserved and restored only where there is something to reserve. Restoring the null a skipped
+            // Reserve would have returned clears a reservation an enclosing scope still owns - and
+            // reserving zero is not a no-op either, since it re-keys the reservation to this call's slot.
+            var previousTop = headerRoom > 0 ? fragmentainer.ReserveResumeContent(headerRoom) : null;
+            var previousEnd = footerRoom > 0 ? fragmentainer.ReserveBandEnd(slot, footerRoom) : null;
 
             try
             {
@@ -960,7 +981,8 @@ namespace PeachPDF.Html.Core.Dom
             }
             finally
             {
-                fragmentainer.RestoreResumeContent(previousReservation);
+                if (footerRoom > 0) fragmentainer.RestoreBandEnd(previousEnd);
+                if (headerRoom > 0) fragmentainer.RestoreResumeContent(previousTop);
             }
         }
 
@@ -1188,6 +1210,20 @@ namespace PeachPDF.Html.Core.Dom
             // its markup, because a row no pass has placed has no geometry to close over.
             var placedRows = _bodyRows.Count;
 
+            // What every row owes the footer this table repeats at the foot of the band it is placed in.
+            // Every row, not only the one a continuation re-enters as the header's room is: the cursor
+            // positions a row's *top*, and any row's cell can be the one whose own flow runs down into the
+            // footer's strip - which row that is cannot be known before it is placed, since
+            // EstimateRowHeight is one line of text per cell and blind to block content.
+            var repeatedFooterRoom = _shouldRepeatFooters && _footerHeight > 0 ? _footerHeight : 0d;
+
+            // The band the loop was filling when it stopped, or null where it did not. Taken from the row's
+            // own iteration rather than re-derived after: cursor.BandReached follows CurrentY past the band
+            // it was filling, so a row that overflowed would name the band after the one this pass is
+            // leaving, and this is also the band a break between two rows would have keyed its slice bottom
+            // to - which keeps the footer sites saying the same thing.
+            int? bandTheStopLeaves = null;
+
             // This run re-decides where every finished cell's box sits, so what an earlier one stated over
             // the same slots goes first. Swept here, once, rather than per cell in the loop below: a cell
             // the loop never reaches - because it stops at a cell that did not finish, or runs out of
@@ -1238,18 +1274,15 @@ namespace PeachPDF.Html.Core.Dom
                 }
 
                 // Layout body row. Only the row a continuation re-enters can hold a cell whose own flow
-                // resumes, so only that row owes the repeated header the room it took.
+                // resumes, so only that row owes the repeated header the room it took - while every row
+                // owes the repeated footer the room it holds at the foot of the band.
                 var placement = cursor.BeginRow();
                 var rowTop = cursor.CurrentY;
 
-                if (i == ResumeRowIndex && resumedHeaderRoom > 0)
-                {
-                    await LayoutBodyRowBelowTheRepeatedHeader(g, row, startX, cursor, resumedHeaderRoom);
-                }
-                else
-                {
-                    await LayoutBodyRow(g, row, startX, cursor);
-                }
+                await LayoutBodyRowInsideTheRepeatedGroups(
+                    g, row, startX, cursor, slot,
+                    headerRoom: i == ResumeRowIndex ? resumedHeaderRoom : 0,
+                    footerRoom: repeatedFooterRoom);
 
                 // The question the estimate could only guess at, now that the row has been placed and its
                 // real bottom is readable: did it cross out of the band it began in? Where it did, the
@@ -1262,9 +1295,12 @@ namespace PeachPDF.Html.Core.Dom
 
                     slot = await TakeBreakBeforeRow(g, container!, cursor, slot);
 
-                    // Re-clears FinishedCells, which the retracted placement filled in.
+                    // Re-clears FinishedCells, which the retracted placement filled in. The footer's room is
+                    // owed again, and against the *new* slot: this row is being placed in the band the
+                    // break just opened. The header's is not - this arm never runs at ResumeRowIndex.
                     cursor.RowIndex = i;
-                    await LayoutBodyRow(g, row, startX, cursor);
+                    await LayoutBodyRowInsideTheRepeatedGroups(
+                        g, row, startX, cursor, slot, headerRoom: 0, footerRoom: repeatedFooterRoom);
                 }
 
                 cursor.CurrentY = cursor.MaxBottom + GetVerticalSpacing();
@@ -1286,14 +1322,53 @@ namespace PeachPDF.Html.Core.Dom
                 if (cursor.Stopped)
                 {
                     placedRows = i + 1;
+                    bandTheStopLeaves = slot;
                     break;
+                }
+            }
+
+            // Step 5a: a pass that ran out of fragmentainer *inside a cell* still owes the band it is
+            // leaving the footer that band repeats. Neither of the two sites that write one reaches it -
+            // the per-row break block only runs where the loop goes on to place another row, and step 5's
+            // closing footer belongs under the table's last row, which this pass has not reached.
+            // css-tables-3 §6.2 asks for the footer at the foot of every page the table covers, and a page
+            // a mid-cell continuation leaves is one of them (#493). A third case rather than a relaxation
+            // of either gate: both are load-bearing, and what makes this one different is that its footer
+            // closes a *page* rather than the table.
+            //
+            // The paginated guard is not decorative: CalculateFooterPositionAtPageBottom hands back
+            // currentY unchanged for an unpaginated container, which is exactly the mid-table position
+            // step 5's gate exists to prevent.
+            if (bandTheStopLeaves is { } leaving && container != null
+                && pageHeight < double.MaxValue - 1
+                && _shouldRepeatFooters && _footerHeight > 0)
+            {
+                var pageFooterProxy = CreateFooterProxy(
+                    CalculateFooterPositionAtPageBottom(container, cursor.CurrentY, leaving));
+
+                if (pageFooterProxy != null)
+                {
+                    await pageFooterProxy.PerformLayout(g);
+
+                    // Same record, and for the same reason, as TakeBreakBeforeRow's: this is where the
+                    // table's slice on that page ends, and FragmentPainter clips the table's bottom border
+                    // to it. Without the entry the border is drawn above the footer just placed under it.
+                    //
+                    // Deliberately inside the footer arm. Writing it for every stopping pass would tell
+                    // CssBox.PaginatedItsOwnContentWithoutBreaking that every mid-cell-continuing table
+                    // fragmented, which is a far wider change than this one.
+                    _tableBox.PageBreakBottoms ??= new Dictionary<int, double>();
+                    _tableBox.PageBreakBottoms[leaving] = pageFooterProxy.ActualBottom;
+
+                    cursor.MaxRight = Math.Max(cursor.MaxRight, pageFooterProxy.ActualRight);
                 }
             }
 
             // Step 5: Create final footer proxy. Not on a pass that stopped: the closing footer sits
             // under the table's last row, and a pass that has not reached the last row would put it in
-            // the middle of the table on the page it is leaving. The footer for that page is the
-            // per-row break block's above, and the pass that finishes the table writes this one.
+            // the middle of the table on the page it is leaving. The footer for that page is step 5a's
+            // above - which is a different footer, closing that page rather than the table - or the
+            // per-row break block's, and the pass that finishes the table writes this one.
             if (!cursor.Stopped && _shouldRepeatFooters && _footerHeight > 0)
             {
                 var finalFooterProxy = CreateFooterProxy(cursor.CurrentY);
