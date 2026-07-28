@@ -1205,9 +1205,14 @@ namespace PeachPDF.Html.Core.Dom
                 var row = _bodyRows[i];
                 cursor.RowIndex = i;
 
-                // The band the loop last opened, which is not in general the band the cursor has reached -
-                // see TableRowCursor for why it is nevertheless what every question here is asked of.
-                var slot = cursor.SlotIndex;
+                // The band the cursor has actually reached, which is the band every question below is
+                // asked of. It is the counter's floor raised to where CurrentY is, so a row that
+                // overflowed the band it was placed in does not leave the loop asking about a band the
+                // content has already passed - which is what made the break offset come out negative and
+                // put the rows after a too-tall row back inside it (issue #432).
+                var slot = container is not null && pageHeight < double.MaxValue - 1
+                    ? cursor.BandReached(container)
+                    : cursor.SlotIndex;
                 var estimatedRowHeight = EstimateRowHeight(row);
                 // See the identical fix/comment on the pre-check's availableHeight above.
                 var availableHeight = (container?.PageBandHeightOf(slot) ?? pageHeight) - _footerHeight;
@@ -1221,57 +1226,44 @@ namespace PeachPDF.Html.Core.Dom
                 // recorded for that page, which is what clips the table's borders there. §4.4's "no
                 // empty fragmentainer" says the same thing from the other side: the resumed row begins
                 // this fragmentainer, so there is nothing before it here to break from.
+                //
+                // The prediction is EstimateRowHeight's, which undershoots a row holding block content by
+                // roughly 2x - so this arm is the cheap one that catches an ordinary text row before it
+                // is ever placed straddling, and the correction below is what makes the answer right.
                 if (i > ResumeRowIndex && container != null
                     && (ForcedBreakFallsBeforeRow(i)
                         || WillCrossPageBoundary(container, cursor.CurrentY + estimatedRowHeight, availableHeight, slot)))
                 {
-                    // Start with the last body-row bottom; may be extended by the footer below.
-                    var pageBreakBottomY = cursor.MaxBottom;
-
-                    // Create footer proxy for current page
-                    if (_shouldRepeatFooters && _footerHeight > 0)
-                    {
-                        var footerY = CalculateFooterPositionAtPageBottom(container, cursor.CurrentY, slot);
-                        var footerProxy = CreateFooterProxy(footerY);
-                        if (footerProxy != null)
-                        {
-                            await footerProxy.PerformLayout(g);
-                            // Footer is part of this page's table slice — extend clip to cover it.
-                            pageBreakBottomY = footerProxy.ActualBottom;
-                        }
-                    }
-
-                    // Record after footer so the border clip includes the footer area.
-                    _tableBox.PageBreakBottoms ??= new Dictionary<int, double>();
-                    _tableBox.PageBreakBottoms[slot] = pageBreakBottomY;
-
-                    // Move to next page
-                    cursor.OpenNextSlot(
-                        cursor.CurrentY + CalculatePageBreakOffset(container, cursor.CurrentY, slot));
-
-                    // Create new header proxy for new page
-                    if (_shouldRepeatHeaders && _headerHeight > 0)
-                    {
-                        var headerProxy = CreateHeaderProxy(cursor.CurrentY);
-                        if (headerProxy != null)
-                        {
-                            await headerProxy.PerformLayout(g);
-                            cursor.CurrentY += _headerHeight + GetVerticalSpacing();
-                            cursor.MaxRight = Math.Max(cursor.MaxRight, headerProxy.ActualRight);
-                        }
-                    }
-
-                    cursor.MaxBottom = cursor.CurrentY;
+                    slot = await TakeBreakBeforeRow(g, container, cursor, slot);
                 }
 
                 // Layout body row. Only the row a continuation re-enters can hold a cell whose own flow
                 // resumes, so only that row owes the repeated header the room it took.
+                var placement = cursor.BeginRow();
+                var rowTop = cursor.CurrentY;
+
                 if (i == ResumeRowIndex && resumedHeaderRoom > 0)
                 {
                     await LayoutBodyRowBelowTheRepeatedHeader(g, row, startX, cursor, resumedHeaderRoom);
                 }
                 else
                 {
+                    await LayoutBodyRow(g, row, startX, cursor);
+                }
+
+                // The question the estimate could only guess at, now that the row has been placed and its
+                // real bottom is readable: did it cross out of the band it began in? Where it did, the
+                // break belongs before it (§4.3), so the placement is taken back and the row is placed
+                // again on the other side of it. At most one correction per row, so this cannot loop.
+                if (StraddleCorrectionAppliesTo(i, container, cursor, rowTop, slot))
+                {
+                    cursor.Retract(placement);
+                    PassRewind.RollBackTo(null, row.Boxes);
+
+                    slot = await TakeBreakBeforeRow(g, container!, cursor, slot);
+
+                    // Re-clears FinishedCells, which the retracted placement filled in.
+                    cursor.RowIndex = i;
                     await LayoutBodyRow(g, row, startX, cursor);
                 }
 
@@ -1434,6 +1426,150 @@ namespace PeachPDF.Html.Core.Dom
 
             return BreakPropagation.ForcedBreakBeforeAt(before, FragmentationContext.Page) is not null
                    || BreakPropagation.ForcedBreakAfterAt(after, FragmentationContext.Page) is not null;
+        }
+
+        /// <summary>
+        /// Closes the table's slice in the band being filled and opens the next one: the footer proxy that
+        /// band repeats, where the slice ended, the move onto the band after it, and the header proxy the
+        /// new band repeats. Returns the band the cursor is now filling.
+        /// </summary>
+        /// <remarks>
+        /// Shared by the row loop's two arms — the one that predicts the row will not fit and the one that
+        /// has seen that it did not — so a break decided either way leaves the same record behind.
+        /// </remarks>
+        /// <param name="g">the graphics context layout is running against</param>
+        /// <param name="container">the container whose page grid the bands come from</param>
+        /// <param name="cursor">this pass's row cursor</param>
+        /// <param name="slot">the band being filled, which the break closes</param>
+        private async ValueTask<int> TakeBreakBeforeRow(
+            RGraphics g, HtmlContainerInt container, TableRowCursor cursor, int slot)
+        {
+            // Start with the last body-row bottom; may be extended by the footer below.
+            var pageBreakBottomY = cursor.MaxBottom;
+
+            // Create footer proxy for current page
+            if (_shouldRepeatFooters && _footerHeight > 0)
+            {
+                var footerY = CalculateFooterPositionAtPageBottom(container, cursor.CurrentY, slot);
+                var footerProxy = CreateFooterProxy(footerY);
+                if (footerProxy != null)
+                {
+                    await footerProxy.PerformLayout(g);
+                    // Footer is part of this page's table slice — extend clip to cover it.
+                    pageBreakBottomY = footerProxy.ActualBottom;
+                }
+            }
+
+            // Record after footer so the border clip includes the footer area. Keyed by the band being
+            // filled, which is where this slice bottom is: FragmentPainter reads the record by the
+            // fragment's own fragmentainer index, so a key naming any other band pulls a table's bottom
+            // border up on a page whose slice did not end there. That was the second half of #432 - the
+            // counter named band 0 while the slice bottom lay five bands below it - and it is right by
+            // construction now that the band is the one the cursor reached rather than the one it counted.
+            _tableBox.PageBreakBottoms ??= new Dictionary<int, double>();
+            _tableBox.PageBreakBottoms[slot] = pageBreakBottomY;
+
+            // css-break-3 §4.3: the break moves the row to the *next* fragmentainer, which is the one
+            // after the band the content already placed ends in. Named rather than derived from an offset
+            // against CurrentY, which is what could come out negative.
+            var target = slot + 1;
+            cursor.MoveToSlot(target, container.PageTopOf(target));
+
+            // Create new header proxy for new page. It takes no ResumeContentInset, and does not need one:
+            // only a cell whose flow continues from an earlier fragmentainer owes the header its room, only
+            // the row a continuation re-enters can hold one, and this arm never runs at that row.
+            if (_shouldRepeatHeaders && _headerHeight > 0)
+            {
+                var headerProxy = CreateHeaderProxy(cursor.CurrentY);
+                if (headerProxy != null)
+                {
+                    await headerProxy.PerformLayout(g);
+                    cursor.CurrentY += _headerHeight + GetVerticalSpacing();
+                    cursor.MaxRight = Math.Max(cursor.MaxRight, headerProxy.ActualRight);
+                }
+            }
+
+            cursor.MaxBottom = cursor.CurrentY;
+
+            return target;
+        }
+
+        /// <summary>
+        /// Whether the row just placed crossed out of the band it began in and should be taken back and
+        /// placed in the next one instead.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The row loop's other break arm predicts from <see cref="EstimateRowHeight"/>, one line of text
+        /// per cell and blind to block content, so it misses any row whose height comes from a block. This
+        /// asks the same question of what the row actually measured, which is only knowable here.
+        /// </para>
+        /// <para>
+        /// Five things make it decline, and each is a case where moving the row would be worse than
+        /// leaving it:
+        /// <list type="bullet">
+        /// <item><description>
+        /// <b>A cell stopped.</b> The row is fragmenting rather than overflowing — it took its break where
+        /// its own flow put it (css-tables-3 §6.1), and retracting that would retract a record a cell has
+        /// already published.
+        /// </description></item>
+        /// <item><description>
+        /// <b>The row begins the band.</b> Moving it would leave the fragmentainer empty, which
+        /// §4.4 forbids — cited bare because <c>#break-between</c> is the property section this file
+        /// links elsewhere as §3.1, and the rule is not there — and the next
+        /// band would only cut it in the same place. A row taller than a whole band lands here, which is
+        /// exactly the case <see href="https://github.com/jhaygood86/PeachPDF/issues/432">#432</see> is
+        /// about: it stays, overflows, and the rows after it are placed below it rather than inside it.
+        /// </description></item>
+        /// <item><description>
+        /// <b>The next band could not hold it either.</b> §4.3's relaxation ladder ends in leaving content
+        /// where it is; moving a row that will straddle again walks it down the document one band per row.
+        /// </description></item>
+        /// <item><description>
+        /// <b>The row ends a <c>rowspan</c>.</b> Its alignment has already deep-offset a cell that belongs
+        /// to an earlier row, and that is not this row's geometry to take back.
+        /// </description></item>
+        /// <item><description>
+        /// <b>The fragmentainer has a band of its own.</b> Inside a multi-column column the page grid does
+        /// not describe the fragmentainer being filled, so its bands answer nothing here.
+        /// </description></item>
+        /// </list>
+        /// </para>
+        /// </remarks>
+        /// <param name="rowIndex">the body row just placed</param>
+        /// <param name="container">the container whose page grid the bands come from, or null</param>
+        /// <param name="cursor">this pass's row cursor, holding the row's real bottom</param>
+        /// <param name="rowTop">where the row was placed</param>
+        /// <param name="slot">the band it was placed in</param>
+        private bool StraddleCorrectionAppliesTo(
+            int rowIndex, HtmlContainerInt? container, TableRowCursor cursor, double rowTop, int slot)
+        {
+            if (rowIndex <= ResumeRowIndex || cursor.Stopped) return false;
+            if (container is null || container.PageSize.Height >= double.MaxValue - 1) return false;
+            if (container.CurrentFragmentainer is { HasOwnBand: true }) return false;
+
+            if (!HtmlContainerInt.FallsPast(cursor.MaxBottom, container.BandOfSlot(slot))) return false;
+
+            if (rowTop - HtmlContainerInt.PageBoundaryEpsilon <= container.PageTopOf(slot)) return false;
+
+            if (cursor.MaxBottom - rowTop > RoomForARowIn(container, slot + 1)) return false;
+
+            return !cursor.RowSpannedBoxes.TryGetValue(rowIndex, out var endingHere) || endingHere.Count == 0;
+        }
+
+        /// <summary>
+        /// What a band leaves a body row once the groups this table repeats on every page have taken
+        /// theirs.
+        /// </summary>
+        /// <param name="container">the container whose page grid the band comes from</param>
+        /// <param name="slot">the band to measure</param>
+        private double RoomForARowIn(HtmlContainerInt container, int slot)
+        {
+            var room = container.PageBandHeightOf(slot) - _footerHeight;
+
+            if (_shouldRepeatHeaders && _headerHeight > 0) room -= _headerHeight + GetVerticalSpacing();
+
+            return room;
         }
 
         /// <summary>
@@ -1662,6 +1798,12 @@ namespace PeachPDF.Html.Core.Dom
             // grid the two agree, and inside a multi-column column they do not - the cell's Location.X
             // names the column its first fragment was in, while currentX names the one this pass is
             // filling, which is where a continuation with a band of its own belongs.
+            //
+            // cursor.SlotIndex rather than the row loop's own derived band, and they are the same thing:
+            // TableRowCursor.BandReached writes the field before the loop asks anything of it. Nothing
+            // here has to be undone when a placement is retracted, either - a shell is stated only for a
+            // cell an *earlier pass* finished, those cells are named by the carried record, and a record
+            // names only the row a continuation re-enters, which is the one row never retracted.
             if (finishedCells.Count > 0 && rowMaxBottom > currentY
                 && _tableBox.HtmlContainer is { } htmlContainer)
             {
