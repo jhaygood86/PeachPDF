@@ -162,18 +162,23 @@ it" in the docs said nothing, since those are synonyms.
 
 ## Evidence
 
-Full net8.0 suite green (6,849 tests, up 5), CLI suite green (96),
-`dotnet build PeachPDF.slnx -t:Rebuild` with zero warnings, `diff-cover` **100% over 29 changed lines**.
+Full net8.0 suite green (6,852 tests, up 8), CLI suite green (96),
+`dotnet build PeachPDF.slnx -t:Rebuild` with zero warnings, `diff-cover` **100% over 33 changed lines**.
 69/70 showcases byte-identical; the changed one rasterized with PDFium and MuPDF on every page and read.
+The suite was run four times on the branch and three times on a clean `origin/main` before any of that
+was believed — an earlier apparently-failing run was `git stash push` leaving untracked files behind,
+not flakiness, and both trees are stable.
 
 Tests: `TableCellBreakTokenTests.ARepeatedHeader_SitsAboveTheContinuationItRepeatsOver` over the same
-two shapes its sibling repetition theory uses, and a new
+two shapes its sibling repetition theory uses; a new
 `TableHeaderRepetitionThroughTheGeneratorTests` over the showcase's own markup — the first test in the
 suite to lay a document out the way `PdfGenerator` does, through the new
-`TestSupport/PdfGeneratorLayoutHarness`. Both fail on `main`: the harness one at `word0036` starting at
-Y 20 against a header bottom of 33.1, the generator one at `clause79` at 34.0 against 48.8. The two
-"already correct" assertions in the generator class (header once per page, every word claimed once)
-pass on `main` too, deliberately — they record what #488 achieved and guard it.
+`TestSupport/PdfGeneratorLayoutHarness`; and three `FragmentainerContextTests` facts over the
+reservation itself. Both geometry tests fail on `main` — the harness one at `word0036` starting at
+Y 20 against a header bottom of 33.1, the generator one at `clause79` at 34.0 against 48.8 — and the
+slot test fails if the slot comparison is removed. The two "already correct" assertions in the
+generator class (header once per page, every word claimed once) pass on `main` too, deliberately —
+they record what #488 achieved and guard it.
 
 **What a future change should take from this:** the defect was invisible to the fragment tree's own
 correctness check and to five green tests, and visible immediately on a rasterized page. It is the
