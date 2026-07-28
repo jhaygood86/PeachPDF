@@ -80,5 +80,54 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
             Assert.Equal(2, token.ResumeWordIndex);
             Assert.Equal(7, token.CompletedLineCount);
         }
+
+        /// <summary>
+        /// A token's equality is what stops a run that gets nowhere, so a record carrying a collection has
+        /// to compare it by contents. The compiler's own equality compares an
+        /// <c>IReadOnlyList&lt;int&gt;</c> by reference, and two passes that stopped at the same word build
+        /// their own list each.
+        /// </summary>
+        [Fact]
+        public void InlineToken_WithTheSamePathBuiltTwice_ComparesEqual()
+        {
+            var box = new CssBox(null, null);
+
+            // Deliberately not a collection expression on both sides: the compiler serves an empty one
+            // from a cached singleton, which is exactly the accident that hid this.
+            var first = new InlineBreakToken(box, 1, new List<int> { 1, 0, 4 }, ResumeWordIndex: 2, CompletedLineCount: 7);
+            var second = new InlineBreakToken(box, 1, new List<int> { 1, 0, 4 }, ResumeWordIndex: 2, CompletedLineCount: 7);
+
+            Assert.Equal(first, second);
+            Assert.Equal(first.GetHashCode(), second.GetHashCode());
+        }
+
+        [Fact]
+        public void InlineToken_WithADifferentPath_ComparesUnequal()
+        {
+            var box = new CssBox(null, null);
+
+            var first = new InlineBreakToken(box, 1, new List<int> { 1, 0, 4 }, ResumeWordIndex: 2, CompletedLineCount: 7);
+            var second = new InlineBreakToken(box, 1, new List<int> { 1, 0, 5 }, ResumeWordIndex: 2, CompletedLineCount: 7);
+
+            Assert.NotEqual(first, second);
+        }
+
+        /// <summary>
+        /// And the rest of its own fields still separate two records — a hand-written <c>Equals</c> that
+        /// forgets one is how a resumed flow silently compares equal to a different resumption point.
+        /// </summary>
+        [Theory]
+        [InlineData(2, 7, 0, 3, 7, 0)]
+        [InlineData(2, 7, 0, 2, 8, 0)]
+        [InlineData(2, 7, 0, 2, 7, 1)]
+        public void InlineToken_DiffersInAnyOfItsOwnFields(
+            int word, int completed, int kept, int otherWord, int otherCompleted, int otherKept)
+        {
+            var box = new CssBox(null, null);
+
+            Assert.NotEqual(
+                new InlineBreakToken(box, 1, new List<int> { 0 }, word, completed, kept),
+                new InlineBreakToken(box, 1, new List<int> { 0 }, otherWord, otherCompleted, otherKept));
+        }
     }
 }

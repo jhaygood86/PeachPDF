@@ -1,5 +1,7 @@
 using PeachPDF.Html.Core.Dom;
+using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace PeachPDF.Html.Core.Fragmentation
 {
@@ -101,5 +103,34 @@ namespace PeachPDF.Html.Core.Fragmentation
         IReadOnlyList<int> ResumePath,
         int ResumeWordIndex,
         int CompletedLineCount,
-        int LinesKeptHere = 0) : BreakToken(Box, ResumeSlotIndex);
+        int LinesKeptHere = 0) : BreakToken(Box, ResumeSlotIndex)
+    {
+        /// <summary>
+        /// Compared by <b>contents</b>, because the driver's no-progress backstop is an equality test —
+        /// the same reason <see cref="TableBreakToken"/> states it, and the same hazard.
+        /// </summary>
+        /// <remarks>
+        /// <c>HtmlContainerInt.LayoutDocument</c> ends a run whose passes keep arriving at a record it has
+        /// already been handed; the compiler's own equality for a record compares
+        /// <see cref="ResumePath"/> — an <see cref="IReadOnlyList{T}"/> — by <i>reference</i>. Two passes
+        /// that stopped at the same word would then compare unequal the moment the path is built rather
+        /// than shared, so a flow that made no progress would spin to the pass cap and silently truncate
+        /// instead of falling back to §4.3's last-resort relayout. Today's single construction site passes
+        /// an empty collection expression, which the compiler serves from a cached singleton, so the
+        /// defect is latent rather than live — and that is precisely the kind of accident a value type's
+        /// equality must not depend on.
+        /// </remarks>
+        public bool Equals(InlineBreakToken? other) =>
+            other is not null
+            && ReferenceEquals(Box, other.Box)
+            && ResumeSlotIndex == other.ResumeSlotIndex
+            && ResumeWordIndex == other.ResumeWordIndex
+            && CompletedLineCount == other.CompletedLineCount
+            && LinesKeptHere == other.LinesKeptHere
+            && ResumePath.SequenceEqual(other.ResumePath);
+
+        public override int GetHashCode() =>
+            HashCode.Combine(Box, ResumeSlotIndex, ResumeWordIndex, CompletedLineCount, LinesKeptHere,
+                ResumePath.Count);
+    }
 }

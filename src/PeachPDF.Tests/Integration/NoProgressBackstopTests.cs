@@ -93,6 +93,52 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
+        /// A box that gets nowhere in a cycle <b>two</b> passes long: it hands back one record, then the
+        /// other, then the first again. Neither pass reproduces the record it was handed, so the
+        /// consecutive-pass equality test says both made progress.
+        /// </summary>
+        /// <remarks>
+        /// This is the second of the two ways the driver's backstop can be defeated, and unlike the first
+        /// it does not depend on any token type's equality being wrong. Before the driver remembered every
+        /// pair it had been entered with, this ran to <c>MaxFragmentainers</c> — 100,000 passes — and then
+        /// left the loop having emitted nothing after the stall, which is a truncated document reported as
+        /// a successful render.
+        /// </remarks>
+        private sealed class AlternatingBox : CssBox
+        {
+            private BreakToken? _even;
+            private BreakToken? _odd;
+            private int _passes;
+
+            internal AlternatingBox(CssBox parent) : base(parent, null)
+            {
+                InheritStyle(parent, everything: true);
+                Display = CssConstants.Block;
+            }
+
+            protected override ValueTask PerformLayoutImp(RGraphics g)
+            {
+                var context = HtmlContainer?.CurrentFragmentainer;
+
+                if (context is not { IsFragmenting: true })
+                {
+                    // See StallingBox: this override never runs BeginLayoutPass, so what the lifecycle
+                    // would have cleared has to be cleared here or the recovery pass places nothing.
+                    SetPendingBreakToken(null);
+                    return default;
+                }
+
+                // Two records naming two different child indices of the same box, alternating. Both are
+                // cached so that each is equal to the one two passes ago rather than merely alike.
+                _even ??= new BlockBreakToken(this, context.SlotIndex, 0, null, IsBreakBefore: true, null);
+                _odd ??= new BlockBreakToken(this, context.SlotIndex, 1, null, IsBreakBefore: true, null);
+
+                SetPendingBreakToken(_passes++ % 2 == 0 ? _even : _odd);
+                return default;
+            }
+        }
+
+        /// <summary>
         /// Lays <paramref name="before"/>, then a box the driver cannot get past, then
         /// <paramref name="after"/> — so everything in <paramref name="after"/> exists only if the
         /// recovery laid it out and the emitter kept it.
@@ -102,6 +148,21 @@ namespace PeachPDF.Tests.Integration
         {
             StallingBox? stall = null;
 
+            var container = await LayoutWith(before, after, pageCss, parent => stall = new StallingBox(parent));
+
+            Assert.NotNull(stall);
+            return (container, stall);
+        }
+
+        /// <summary>
+        /// The same, with a box whose cycle is two passes long rather than one.
+        /// </summary>
+        private static async Task<HtmlContainerInt> LayoutWithATwoPassCycle(string before, string after) =>
+            await LayoutWith(before, after, "", parent => new AlternatingBox(parent));
+
+        private static async Task<HtmlContainerInt> LayoutWith(
+            string before, string after, string pageCss, Func<CssBox, CssBox> makeStall)
+        {
             var (_, container) = await LayoutHarness.LayoutAsync(
                 "<!DOCTYPE html><html><head><style>" + pageCss + "</style></head><body style='margin:0'>"
                     + before + "<div id='stall-anchor'></div>" + after + "</body></html>",
@@ -112,7 +173,7 @@ namespace PeachPDF.Tests.Integration
                     var anchor = LayoutHarness.FindById(root, "stall-anchor")!;
                     var parent = anchor.ParentBox!;
 
-                    stall = new StallingBox(parent);
+                    var stall = makeStall(parent);
 
                     // Constructed at the end of the child list, then moved into the anchor's place, so
                     // the content in `after` really is after it. (CssBox.ParentBox's setter appends,
@@ -121,8 +182,7 @@ namespace PeachPDF.Tests.Integration
                     parent.Boxes.Insert(parent.Boxes.IndexOf(anchor), stall);
                 });
 
-            Assert.NotNull(stall);
-            return (container, stall);
+            return container;
         }
 
         /// <summary>
@@ -226,6 +286,42 @@ namespace PeachPDF.Tests.Integration
                 $"the fixture must lay out more than once, but the box was laid out {stall.FragmentingPerPass.Count} time(s)");
             Assert.Equal(1, container.LastResortRelayouts);
             Assert.Equal(["alpha", "omega"], WordsIn(container).Order());
+        }
+
+        /// <summary>
+        /// A cycle two passes long is a run that gets nowhere just as surely as one pass long, and the
+        /// driver has to end it the same way. The consecutive-pass equality test cannot see it: neither
+        /// pass reproduces the record it was handed.
+        /// </summary>
+        /// <remarks>
+        /// The counter is the assertion, never the clock. Before the driver remembered every pair it had
+        /// been entered with, this took the full 100,000-pass budget and recovered <i>not at all</i> — so
+        /// a bound well under the budget and a recovery that was counted are the two halves of the same
+        /// statement.
+        /// </remarks>
+        [Fact]
+        public async Task ACycleTwoPassesLong_IsAlsoRecognisedAsNoProgress()
+        {
+            var container = await LayoutWithATwoPassCycle(
+                before: "<p style='margin:0'>alpha</p>", after: "<p style='margin:0'>omega</p>");
+
+            Assert.Equal(1, container.LastResortRelayouts);
+            Assert.True(container.FragmentainerPasses < 20,
+                $"the run must be cut short, but took {container.FragmentainerPasses} passes");
+        }
+
+        /// <summary>
+        /// And the content the cycle was deferring survives it, which is the whole reason the recovery is
+        /// preferred to letting the pass budget run out: the budget drops everything after the stall.
+        /// </summary>
+        [Fact]
+        public async Task ACycleTwoPassesLong_KeepsTheDocumentsContent()
+        {
+            var container = await LayoutWithATwoPassCycle(
+                before: "<p style='margin:0'>alpha</p>",
+                after: "<p style='margin:0'>beta</p><p style='margin:0'>gamma</p>");
+
+            Assert.Equal(["alpha", "beta", "gamma"], WordsIn(container).Order());
         }
 
         private static IReadOnlyList<string> WordsIn(HtmlContainerInt container) =>
