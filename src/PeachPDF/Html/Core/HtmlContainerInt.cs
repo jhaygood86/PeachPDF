@@ -933,6 +933,7 @@ namespace PeachPDF.Html.Core
             // method, and a record kept across them would describe passes that no longer exist while the
             // latch silently disabled the correction on every layout after the first.
             _passEntries.Clear();
+            _passEntrySet.Clear();
             _passesRewoundFor.Clear();
 
             // Each invocation re-decides the whole document, so the fragments an earlier one emitted
@@ -954,7 +955,7 @@ namespace PeachPDF.Html.Core
                     // What this pass was entered with, so a decision discovered on a later one can send the
                     // driver back to it. Recorded before the pass runs, since that is the state re-entering
                     // it needs and nothing the pass produces can be part of it.
-                    _passEntries.Add((slot, token));
+                    RecordPassEntry(slot, token);
 
                     Root!.ResumeAt(token, resumeTopOverride: null);
                     await Root.PerformLayout(g);
@@ -990,12 +991,15 @@ namespace PeachPDF.Html.Core
                         break;
                     }
 
-                    if (next == token)
+                    if (next == token || HasAlreadyBeenEntered(next))
                     {
-                        // The pass reproduced the record it was handed, so re-entering would resume at
-                        // the same point forever. Lay the remainder out monolithically instead: an
-                        // overflowing fragmentainer is a far better outcome than dropped content, and
-                        // it is what css-break-3 §4.3's own last-resort relaxation amounts to.
+                        // The run has arrived somewhere it has already been — at the record this very
+                        // pass was handed (a one-pass cycle), or at one an earlier pass was entered with
+                        // (a longer one). Either way every pass from here reproduces the ones between,
+                        // so re-entering would resume at the same points forever. Lay the remainder out
+                        // monolithically instead: an overflowing fragmentainer is a far better outcome
+                        // than dropped content, and it is what css-break-3 §4.3's own last-resort
+                        // relaxation amounts to.
                         //
                         // Deliberately not reported: the only channel there is builds an exception
                         // (RenderError), and this recovery used to sit after a call that threw one -
@@ -1095,6 +1099,68 @@ namespace PeachPDF.Html.Core
         private readonly List<(int Slot, BreakToken? Token)> _passEntries = [];
 
         /// <summary>
+        /// The same entries as a set, so "have we been here before?" is one lookup rather than a scan of
+        /// every pass a long document has run.
+        /// </summary>
+        private readonly HashSet<(int Slot, BreakToken Token)> _passEntrySet = [];
+
+        /// <summary>
+        /// Notes that a fragmentainer pass is about to run at <paramref name="slot"/> with
+        /// <paramref name="token"/>.
+        /// </summary>
+        private void RecordPassEntry(int slot, BreakToken? token)
+        {
+            _passEntries.Add((slot, token));
+
+            if (token is not null) _passEntrySet.Add((slot, token));
+        }
+
+        /// <summary>
+        /// Forgets every pass entry from <paramref name="index"/> on, because those passes are about to
+        /// run again and the record of them describes a layout that no longer exists.
+        /// </summary>
+        private void TruncatePassEntries(int index)
+        {
+            _passEntries.RemoveRange(index, _passEntries.Count - index);
+
+            _passEntrySet.Clear();
+
+            foreach (var (slot, token) in _passEntries)
+            {
+                if (token is not null) _passEntrySet.Add((slot, token));
+            }
+        }
+
+        /// <summary>
+        /// Whether some pass of this layout has already been entered at the fragmentainer
+        /// <paramref name="next"/> names, with <paramref name="next"/> itself — so resuming from it would
+        /// re-run a stretch the driver has already run and arrive back here.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The equality test this one sits beside in <see cref="LayoutDocument"/> compares a pass's
+        /// outgoing record with the <i>incoming</i> record of that same pass, so it recognises a run
+        /// that gets nowhere only when
+        /// the cycle is exactly one pass long. A cycle of two or more slips through it however correct
+        /// the equality is — the real case that found this was a table continuation that alternated
+        /// between one finished cell and none — and what the driver then does is not recover but spin to
+        /// <see cref="MaxFragmentainers"/> and truncate the document without saying so. A pass is a
+        /// function of the slot it fills and the record it resumes from, so arriving at a pair the run
+        /// has already been entered with is the general statement of "this cannot advance", and the
+        /// consecutive test is the special case of it.
+        /// </para>
+        /// <para>
+        /// Asked of the <i>entries</i>, which is why <see cref="TruncatePassEntries"/> exists: a
+        /// keep-with-next run pull deliberately re-enters an earlier pass with the pair it was first
+        /// entered with, and rolls the box tree back so that pass produces something different. Those
+        /// entries describe passes that are being replaced rather than repeated, and leaving them behind
+        /// would make a legitimate rewind look like a stall.
+        /// </para>
+        /// </remarks>
+        private bool HasAlreadyBeenEntered(BreakToken next) =>
+            _passEntrySet.Contains((next.ResumeSlotIndex, next));
+
+        /// <summary>
         /// A request to re-enter the pass that placed <c>Head</c>, with the box re-placed at <c>Top</c>.
         /// </summary>
         private (CssBox Head, double Top)? _runPullRewind;
@@ -1187,7 +1253,7 @@ namespace PeachPDF.Html.Core
 
             // The passes from this one on are about to run again, so the record of them describes a layout
             // that no longer exists.
-            _passEntries.RemoveRange(entry, _passEntries.Count - entry);
+            TruncatePassEntries(entry);
 
             slot = rewoundSlot;
             token = rewoundToken;
