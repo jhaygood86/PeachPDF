@@ -28,7 +28,7 @@ namespace PeachPDF.Tests.Integration
             var box = FindById(root, "p")!;
 
             // The DOM should have "&nbsp;" (decoded once by tokenizer)
-            Assert.Equal("&nbsp;", box.Text);
+            Assert.Equal("&nbsp;", GetTextContent(box));
 
             // The rendered word should also be "&nbsp;" (not decoded again)
             Assert.Single(box.Words);
@@ -45,7 +45,7 @@ namespace PeachPDF.Tests.Integration
             var (root, _) = await BuildAndLayout(html);
             var box = FindById(root, "p")!;
 
-            Assert.Equal("&amp;", box.Text);
+            Assert.Equal("&amp;", GetTextContent(box));
             Assert.Single(box.Words);
             var word = box.Words[0] as CssRectWord;
             Assert.NotNull(word);
@@ -60,7 +60,7 @@ namespace PeachPDF.Tests.Integration
             var (root, _) = await BuildAndLayout(html);
             var box = FindById(root, "p")!;
 
-            Assert.Equal("&lt;", box.Text);
+            Assert.Equal("&lt;", GetTextContent(box));
             Assert.Single(box.Words);
             var word = box.Words[0] as CssRectWord;
             Assert.NotNull(word);
@@ -75,7 +75,7 @@ namespace PeachPDF.Tests.Integration
             var (root, _) = await BuildAndLayout(html);
             var box = FindById(root, "p")!;
 
-            Assert.Equal("&#65;", box.Text);
+            Assert.Equal("&#65;", GetTextContent(box));
             Assert.Single(box.Words);
             var word = box.Words[0] as CssRectWord;
             Assert.NotNull(word);
@@ -95,7 +95,7 @@ namespace PeachPDF.Tests.Integration
             var box = FindById(root, "p")!;
 
             // The DOM should have U+00A0 (decoded by tokenizer)
-            Assert.Equal("\u00A0", box.Text);
+            Assert.Equal("\u00A0", GetTextContent(box));
             Assert.Single(box.Words);
             var word = box.Words[0] as CssRectWord;
             Assert.NotNull(word);
@@ -110,7 +110,7 @@ namespace PeachPDF.Tests.Integration
             var (root, _) = await BuildAndLayout(html);
             var box = FindById(root, "p")!;
 
-            Assert.Equal("&", box.Text);
+            Assert.Equal("&", GetTextContent(box));
             Assert.Single(box.Words);
             var word = box.Words[0] as CssRectWord;
             Assert.NotNull(word);
@@ -125,7 +125,7 @@ namespace PeachPDF.Tests.Integration
             var (root, _) = await BuildAndLayout(html);
             var box = FindById(root, "p")!;
 
-            Assert.Equal("<", box.Text);
+            Assert.Equal("<", GetTextContent(box));
             Assert.Single(box.Words);
             var word = box.Words[0] as CssRectWord;
             Assert.NotNull(word);
@@ -140,7 +140,7 @@ namespace PeachPDF.Tests.Integration
             var (root, _) = await BuildAndLayout(html);
             var box = FindById(root, "p")!;
 
-            Assert.Equal("A", box.Text);
+            Assert.Equal("A", GetTextContent(box));
             Assert.Single(box.Words);
             var word = box.Words[0] as CssRectWord;
             Assert.NotNull(word);
@@ -159,7 +159,7 @@ namespace PeachPDF.Tests.Integration
             var (root, _) = await BuildAndLayout(html);
             var box = FindById(root, "c")!;
 
-            Assert.Equal("Use &nbsp; for spaces", box.Text);
+            Assert.Equal("Use &nbsp; for spaces", GetTextContent(box));
             // Should have 4 words: "Use", "&nbsp;", "for", "spaces"
             var words = box.Words.OfType<CssRectWord>().Where(w => w.Text.Length > 0).ToList();
             Assert.Contains(words, w => w.Text == "&nbsp;");
@@ -173,7 +173,7 @@ namespace PeachPDF.Tests.Integration
             var (root, _) = await BuildAndLayout(html);
             var box = FindById(root, "p")!;
 
-            Assert.Equal("&lt;html&gt;", box.Text);
+            Assert.Equal("&lt;html&gt;", GetTextContent(box));
             var words = box.Words.OfType<CssRectWord>().ToList();
             var text = string.Concat(words.Select(w => w.Text));
             Assert.Equal("&lt;html&gt;", text);
@@ -188,7 +188,7 @@ namespace PeachPDF.Tests.Integration
             var box = FindById(root, "p")!;
 
             // Should be: "A & B &amp; C"
-            Assert.Equal("A & B &amp; C", box.Text);
+            Assert.Equal("A & B &amp; C", GetTextContent(box));
         }
 
         #endregion
@@ -266,7 +266,7 @@ p::after { content: "" \3C tag\3E ""; }
             var (root, _) = await BuildAndLayout(html);
             var box = FindById(root, "p")!;
 
-            Assert.Equal("&nbsp;  test", box.Text);
+            Assert.Equal("&nbsp;  test", GetTextContent(box));
         }
 
         [Fact]
@@ -278,7 +278,7 @@ p::after { content: "" \3C tag\3E ""; }
             var box = FindById(root, "p")!;
 
             var expected = "Entities: &lt;, &gt;, &amp;, &nbsp;";
-            Assert.Equal(expected, box.Text);
+            Assert.Equal(expected, GetTextContent(box));
         }
 
         [Fact]
@@ -290,7 +290,7 @@ p::after { content: "" \3C tag\3E ""; }
             var box = FindById(root, "p")!;
 
             // Tokenizer decodes &amp; to & once, so we get "&amp;nbsp;"
-            Assert.Equal("&amp;nbsp;", box.Text);
+            Assert.Equal("&amp;nbsp;", GetTextContent(box));
         }
 
         [Fact]
@@ -342,6 +342,19 @@ p::after { content: "" \3C tag\3E ""; }
                 if (found != null) return found;
             }
             return null;
+        }
+
+        /// <summary>
+        /// Gets the text content from a box - either from its own Text property (if it's a text box)
+        /// or from the first child text box.
+        /// </summary>
+        private static string? GetTextContent(CssBox box)
+        {
+            if (box.Text != null)
+                return box.Text;
+
+            var textBox = box.Boxes.FirstOrDefault(b => b.Text != null);
+            return textBox?.Text;
         }
 
         #endregion
