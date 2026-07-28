@@ -2053,6 +2053,56 @@ await SaveShowcaseAsync("paged_media_table_row_continuation", "Paged Media", "Ta
     + "continuation rather than over it.",
     rowContinuationHtml, new PdfGenerateConfig { PageSize = PageSize.A6 });
 
+// ── a row taller than the page band ────────────────────────────────────────
+// css-break-3 §4.3: a break moves content to the *next* fragmentainer, so a break target above the
+// content it must follow is not a break at all. The first row here holds a block taller than the page's
+// whole content band, so there is no page that could hold it and it is left where it is, overflowing
+// across pages. What matters is the rows after it: they continue immediately below it, in the band its
+// bottom actually landed in, rather than being placed back on a page it is still filling and painted
+// over its content (issue #432).
+//
+// The repeating <thead> is on the page the table begins on and on the page the break between two
+// ordinary rows opens, and not on the page the tall row merely overflows onto: no break falls there, and
+// the header block is keyed to a break being taken. That is a css-tables-3 §6.2 gap of its own (#509),
+// visible here because this is the fixture that produces a page a table spans without breaking on.
+var tallRowHtml = """
+    <!DOCTYPE html>
+    <html><head><style>
+    @page { size: a6; margin: 10mm }
+    body { font: 9pt Helvetica, Arial, sans-serif; margin: 0; color: #1f2937 }
+    h1 { font-size: 11pt; margin: 0 0 0.4em }
+    p.intro { color: #6b7280; font-size: 8pt; margin: 0 0 0.8em }
+    table { width: 100%; border-collapse: collapse }
+    th, td { border: 0.75pt solid #94a3b8; padding: 4pt 5pt; vertical-align: top }
+    thead th { background: #e2e8f0; font-size: 8pt; text-align: left }
+    td.tall { padding: 0 }
+    .chart { height: 620pt; background: linear-gradient(#dbeafe, #1d4ed8); padding: 5pt;
+             color: #0f172a; font-size: 8pt }
+    tr.after td { background: #fef3c7 }
+    </style></head><body>
+    <h1>A row taller than the page</h1>
+    <p class="intro">The first row holds a 620pt block on a band of roughly 260pt, so it spans three
+    pages on its own. The rows after it start below where it ends, not back inside it.</p>
+    <table>
+      <thead><tr><th>Figure</th></tr></thead>
+      <tbody>
+        <tr><td class="tall"><div class="chart">One block, taller than any page can hold.</div></td></tr>
+        <tr class="after"><td>The row after it, immediately below.</td></tr>
+        <tr class="after"><td>And the row after that.</td></tr>
+        <tr class="after"><td>And one more, so the sequence is visible.</td></tr>
+      </tbody>
+    </table>
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("paged_media_table_tall_row", "Paged Media", "Table Row Taller Than a Page",
+    "CSS Fragmentation §4.3: a table row whose cell holds a block taller than the page's content band "
+    + "has no page that could hold it, so it is left where it is and overflows across pages - and the "
+    + "rows after it continue immediately below where it ends, rather than being placed back on a page "
+    + "it is still filling and drawn over its content. The repeating header is not carried onto the page "
+    + "the tall row merely overflows onto, since no break falls there.",
+    tallRowHtml, new PdfGenerateConfig { PageSize = PageSize.A6 });
+
 // ── Margin box explicit sizing showcase ────────────────────────────────────
 var marginBoxSizingHtml = """
     <!DOCTYPE html>

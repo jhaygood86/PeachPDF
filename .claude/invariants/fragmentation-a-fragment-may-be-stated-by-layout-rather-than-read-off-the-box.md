@@ -28,8 +28,12 @@ Removing either guard widens the change from "a cell keeps its box" to "the emit
 and the evidence for that is a showcase byte-diff rather than the suite.
 
 **Which fragmentainer a statement belongs to is asked of the rectangle, never of the slot it was recorded
-against.** The row loop's band counter is stale by construction and
-[load-bearing for it](fragmentation-a-stale-cursor-can-be-load-bearing-compensation-for-a-bad-estimate.md),
-so a statement keyed to band *k* can carry a rectangle lying in band *k+1*. `FragmentRegion.Contains`
-decides, as it does for words and lines; the slot survives only as what `ClearContinuationShells` sweeps
-by, where a stale-low counter merely clears more than it had to and the pass doing the clearing re-states.
+against.** `FragmentRegion.Contains` decides, as it does for words and lines; the slot survives only as
+what `ClearContinuationShells` sweeps by, where a slot naming a band earlier than the rectangle's merely
+clears more than it had to and the pass doing the clearing re-states. That tolerance was doing real work
+when the row loop's band was a counter — a statement keyed to band *k* could carry a rectangle lying in
+band *k+1*. The counter is now derived from where the cursor is
+([#432](https://github.com/jhaygood86/PeachPDF/issues/432), and
+[the trap that had to go first](fragmentation-a-stale-cursor-can-be-load-bearing-compensation-for-a-bad-estimate.md)),
+so the two agree — but the rule stands, because what makes it right is that a rectangle knows which band
+it is in and a recorded index only knows what its writer believed.

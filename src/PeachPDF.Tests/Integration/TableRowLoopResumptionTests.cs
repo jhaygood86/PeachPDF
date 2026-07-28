@@ -1036,6 +1036,46 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
+        /// Retracting a row's placement takes back exactly what that row added to the rowspan
+        /// bookkeeping: a list it extended is truncated to the length it had, and a key it created
+        /// outright is removed rather than left empty for <c>Continuation</c> to publish.
+        /// </summary>
+        /// <remarks>
+        /// The row loop retracts a row it has placed and seen straddle out of its band, so it can place it
+        /// again on the other side of the break. An entry left behind is a cell the row that ends the span
+        /// would align against twice — the <c>ApplyCellVerticalAlignment</c> deep-offset hazard, which is
+        /// a whole fragment's content moved rather than a cosmetic shift.
+        /// </remarks>
+        [Fact]
+        public async Task RetractingARowsPlacement_TakesBackOnlyWhatThatRowAddedToTheRowspanMap()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap("<table><tr><td id='a'>a</td><td id='b'>b</td></tr></table>"),
+                pageHeight: PageHeight, margin: Margin);
+
+            var a = LayoutHarness.FindById(root, "a")!;
+            var b = LayoutHarness.FindById(root, "b")!;
+
+            var cursor = new TableRowCursor(top: 10, maxRight: 5, slotIndex: 0) { MaxBottom = 20 };
+            cursor.RowSpannedBoxes[4] = [a];
+
+            var placement = cursor.BeginRow();
+
+            // What the placement being retracted did: extended one list and created another.
+            cursor.RowSpannedBoxes[4].Add(b);
+            cursor.RowSpannedBoxes[6] = [b];
+            cursor.MaxBottom = 99;
+            cursor.MaxRight = 77;
+
+            cursor.Retract(placement);
+
+            Assert.Equal([a], cursor.RowSpannedBoxes[4]);
+            Assert.False(cursor.RowSpannedBoxes.ContainsKey(6));
+            Assert.Equal(20, cursor.MaxBottom);
+            Assert.Equal(5, cursor.MaxRight);
+        }
+
+        /// <summary>
         /// A <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c> measurement cursor carries none of it: its rows are
         /// not body rows, and by the time a pass resumed the body that group is not in the tree.
         /// </summary>
