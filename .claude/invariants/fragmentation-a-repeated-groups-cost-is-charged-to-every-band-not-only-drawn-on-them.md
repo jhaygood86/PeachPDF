@@ -44,3 +44,17 @@ detached, still measured, still drawn once — at the table's top, or under its 
 keyed to detachment for three different reasons, and the sharpest is the **headerless** whole-table
 pre-check: it is gated on the *absence* of both groups, so reading repetition there sends a declined
 table down a relocation path a table with a `<thead>` never takes.
+
+
+## And "drawn once" is not "claimed by one fragmentainer"
+
+For a **footer**, those two come apart. A group §6.2 declines has no room reserved for it — that is the
+point — so where the last row ends flush with the band's foot the footer straddles the boundary and is
+legitimately claimed by two fragmentainers while having been placed exactly once
+([#518](https://github.com/jhaygood86/PeachPDF/issues/518)). Whether it does depends on font metrics:
+Windows CI reported `[2, 3]` for a fixture Linux reported `[3]` for, with the engine doing the same thing
+on both.
+
+So state "laid out once" as **one `CssProxyBox` of the group's display type**, not as a slot list. A
+header can be asked either way — it is placed at a band's top and cannot straddle for this reason — but a
+footer cannot.

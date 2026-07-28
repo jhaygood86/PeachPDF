@@ -30,6 +30,15 @@ A6, 12mm margins (352pt band), a declined `<tfoot>`, sweeping the body cell's wo
 Bounded by roughly one row's height, and it self-corrects the moment the last row itself moves on: the
 footer hangs a hairline into the bottom margin rather than being clipped or lost. PDFium and MuPDF agree.
 
+**It is reachable on an ordinary many-row table too, and it is platform-sensitive.** Windows CI found it
+independently: `AGroupDeclinedBySixTwo_IsNotRedrawnAtABreakBetweenTwoRows`'s tall-`<tfoot>` case reported
+the footer claimed by fragmentainers `[2, 3]` where Linux gave `[3]`. One `CssProxyBox`, two claiming
+bands — a straddle, not a repetition. So a test that asks *which fragmentainers claim a declined footer's
+word* is asking a question whose answer depends on font metrics; ask how many times the group was
+**placed** (`AssertLaidOutOnce`) instead, which is the claim §6.2's conditions actually make. The
+fragment-tree slot assertions are kept for the header, which is placed at a band's top and cannot
+straddle for this reason.
+
 ## Why it was not fixed with #494
 
 Both alternatives cost more than the defect. Reserving the room unconditionally is the per-band charge

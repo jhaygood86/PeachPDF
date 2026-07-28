@@ -167,6 +167,8 @@ namespace PeachPDF.Tests.Integration
             AssertDrawnOnlyOn(container, $"{group.ToUpperInvariant()}WORD",
                 group == "thead" ? First(container) : Last(container));
 
+            AssertLaidOutOnce(root, group);
+
             Assert.False(RepeatsOf(root, group));
         }
 
@@ -212,6 +214,8 @@ namespace PeachPDF.Tests.Integration
 
             AssertDrawnOnlyOn(container, $"{group.ToUpperInvariant()}WORD",
                 group == "thead" ? First(container) : Last(container));
+
+            AssertLaidOutOnce(root, group);
 
             Assert.False(RepeatsOf(root, group));
         }
@@ -316,10 +320,9 @@ namespace PeachPDF.Tests.Integration
         public async Task AGroupDeclinedBySixTwo_IsNotRedrawnAtABreakBetweenTwoRows(
             string group, string groupStyle, string cellContent)
         {
-            var (root, container) = await Paginate(RowsTableWith(group, groupStyle, cellContent));
+            var (root, _) = await Paginate(RowsTableWith(group, groupStyle, cellContent));
 
-            AssertDrawnOnlyOn(container, $"{group.ToUpperInvariant()}WORD",
-                group == "thead" ? First(container) : Last(container));
+            AssertLaidOutOnce(root, group);
 
             Assert.False(RepeatsOf(root, group));
         }
@@ -422,6 +425,33 @@ namespace PeachPDF.Tests.Integration
             var drawn = SlotsDrawnOn(container, text);
 
             Assert.Equal([slot], drawn);
+        }
+
+        /// <summary>
+        /// The group was placed exactly once — one <c>CssProxyBox</c> of its own display type, where a
+        /// repeating group gets one per band.
+        /// </summary>
+        /// <remarks>
+        /// Asked of the proxies rather than of which fragmentainers claim the group's word, because the
+        /// two questions come apart for a <b>footer</b>. A declined <c>&lt;tfoot&gt;</c> has no room
+        /// reserved for it — that is the point — so where the last row ends flush with the band's foot it
+        /// straddles the boundary and is legitimately claimed by two fragmentainers while having been drawn
+        /// once (<see href="https://github.com/jhaygood86/PeachPDF/issues/518">#518</see>). Windows font
+        /// metrics put the row-break fixture in exactly that state; Linux's did not, so a slot assertion
+        /// here passes on one platform and fails on the other while the engine does the same thing on both.
+        /// The fragment-tree assertions on the mid-cell fixtures still state where the group is drawn; this
+        /// states how many times it was placed, which is the claim §6.2's conditions actually make.
+        /// </remarks>
+        private static void AssertLaidOutOnce(CssBox root, string group)
+        {
+            var display = group == "thead" ? CssConstants.TableHeaderGroup : CssConstants.TableFooterGroup;
+
+            var proxies = TableOf(root).Boxes
+                .OfType<CssProxyBox>()
+                .Where(p => p.Display == display)
+                .ToList();
+
+            Assert.Single(proxies);
         }
 
         /// <summary>
