@@ -107,7 +107,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="tableBox"></param>
         /// <param name="resume">
         /// how this table resumes on the current fragmentainer pass, or null when it is being laid out
-        /// from the start. Null for every document today.
+        /// from the start.
         /// </param>
         private CssLayoutEngineTable(CssBox tableBox, BreakToken? resume)
         {
@@ -1256,12 +1256,21 @@ namespace PeachPDF.Html.Core.Dom
             // cursor: a caller that kept one alive past this point would otherwise mutate what it has
             // already handed out. Null when the loop reached the end of the body rows.
             //
-            // Deliberately NOT _tableBox.SetPendingBreakToken, though this is a BreakToken and that is the
-            // one line the next step adds. That record means "resume me" to PerformLayoutImp, to
-            // PublishBreakToTheContextRoot and to the parent's child loop at once, and unlike everything
-            // above it, a real document reaches it - so it is a visible change to the table engine rather
-            // than a step that is neutral by construction. This one is read by nothing outside the engine.
+            // Published twice, on purpose. TableContinuation is the engine's own channel and the one a
+            // later run of *this* engine reads back. PendingBreakToken is what says "I did not finish" to
+            // everything else at once - CssBox.PerformLayoutImp returns early on it,
+            // PublishBreakToTheContextRoot hands it to the fragmentation context, and the parent's child
+            // loop stops and wraps it into a link naming this table - which is the whole of how a second
+            // fragmentainer pass is opened for the rows after the stop (issue #464). The engine cannot use
+            // one field for both: BeginLayoutPass clears PendingBreakToken at the top of the table's next
+            // layout, and the record has to survive that in order to be handed back to the run that
+            // continues it.
             _tableBox.TableContinuation = cursor.Continuation(_tableBox);
+
+            if (_tableBox.TableContinuation is { } stopped)
+            {
+                _tableBox.SetPendingBreakToken(stopped);
+            }
 
             // What the pre-checks above decide from EstimateRowHeight - a one-line-of-text heuristic
             // that can grossly undershoot a row whose cells hold tall block content - only real layout
@@ -1385,13 +1394,36 @@ namespace PeachPDF.Html.Core.Dom
                 // for why a finished cell and one no pass entered cannot be told apart without it.
                 if (cursor.FinishedOnAnEarlierPass(cell))
                 {
+                    // Still finished, and this pass's own record has to say so - see CarryForwardFinished
+                    // for what a record that forgets costs.
+                    cursor.CarryForwardFinished(cell);
                     rowMaxRight = Math.Max(rowMaxRight, currentX + width);
                     currentColumn++;
                     currentX += width + GetHorizontalSpacing();
                     continue;
                 }
 
-                cell.Location = new RPoint(currentX, currentY);
+                // Where a cell that continues an earlier fragment goes is the same question
+                // CssBox.ResumeInTheNextFragmentainer answers for every other box, and it has the same two
+                // answers. On the page grid the cell keeps the one Location its first fragment was built
+                // from: a box has exactly one, so writing this pass's row top into it retracts that
+                // fragment's geometry - and the emitter, told the box moved, rebuilds the fragmentainer
+                // from where the box is now and finds nothing of it there. Measured as a whole table
+                // disappearing from the page it began on. Where this pass's own content goes is the flow's
+                // question, which CssLayoutEngine.CreateLineBoxes already answers from the fragmentainer's
+                // own content top.
+                //
+                // Inside a fragmentainer with a band of its own - a multi-column column - the cell does
+                // move, for the reason that method gives: columns differ in exactly the axis the page grid
+                // holds constant, so a continuation left where it was would be laid out over the fragment
+                // it just left. The row cursor is already in the column's own space there, so the ordinary
+                // placement below is the right one.
+                if (!cursor.ResumedFromAnEarlierPass(cell)
+                    || _tableBox.HtmlContainer?.CurrentFragmentainer is { HasOwnBand: true })
+                {
+                    cell.Location = new RPoint(currentX, currentY);
+                }
+
                 cell.ActualRight = cell.Location.X + width;
 
                 // A cell an earlier pass stopped part-way through continues from its own record rather
@@ -1481,13 +1513,16 @@ namespace PeachPDF.Html.Core.Dom
                         CssLayoutEngine.ApplyCellVerticalAlignment(g, spacer.ExtendedBox);
                     }
                 }
-                else if (stoppedCells.Contains(cell))
+                else if (stoppedCells.Contains(cell) || cursor.ResumedFromAnEarlierPass(cell))
                 {
-                    // Its content continues in another fragmentainer, so this fragment has no spare room
-                    // to align within and its own bottom is where its content stopped - see the comment
-                    // where it was recorded. Asked after the CssSpacingBox arm rather than beside the
-                    // FinishedCells guard above, because a spacer that stopped still has to align the
-                    // cell it stands in for.
+                    // Only a cell whose fragment both opens and closes in this fragmentainer has leftover
+                    // room of its own to distribute. One that continues elsewhere overfills its fragment by
+                    // definition, and one that *continues an earlier* fragment had where its content sits
+                    // settled by the pass that opened it - re-aligning that drags content an earlier
+                    // fragmentainer has already emitted onto this page, which is a whole line drawn on two
+                    // pages rather than a cosmetic shift. Asked after the CssSpacingBox arm rather than
+                    // beside the FinishedCells guard above, because a spacer that stopped still has to
+                    // align the cell it stands in for.
                     continue;
                 }
                 else if (GetRowSpan(cell) == 1 || (boxesThatEndOnRow?.Contains(cell) ?? false))

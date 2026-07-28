@@ -1,5 +1,7 @@
 using PeachPDF.Html.Core.Dom;
+using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace PeachPDF.Html.Core.Fragmentation
 {
@@ -16,13 +18,12 @@ namespace PeachPDF.Html.Core.Fragmentation
     /// none.
     /// </para>
     /// <para>
-    /// It is a <see cref="BreakToken"/> already, though nothing hands it to
-    /// <c>CssBox.SetPendingBreakToken</c> yet. That record means "resume me" to three consumers at once —
-    /// <c>CssBox.PerformLayoutImp</c> returns early on it, <c>PublishBreakToTheContextRoot</c> hands it to
-    /// the fragmentation context, and the parent's child loop stops and wraps it — so setting it is the
-    /// step where a table stops being invisible from outside, and it is reachable from real markup today.
-    /// The engine publishes this on <see cref="CssBox.TableContinuation"/> instead, which nothing outside
-    /// the engine reads.
+    /// The engine publishes it on <see cref="CssBox.TableContinuation"/> <i>and</i> as the table's own
+    /// <c>PendingBreakToken</c>. The second is what stops a table being invisible from outside: it means
+    /// "resume me" to three consumers at once — <c>CssBox.PerformLayoutImp</c> returns early on it,
+    /// <c>PublishBreakToTheContextRoot</c> hands it to the fragmentation context, and the parent's child
+    /// loop stops and wraps it — which is the whole of how a second fragmentainer pass is opened for the
+    /// rows after the stop. See <see cref="CssBox.TableContinuation"/> for why both exist.
     /// </para>
     /// </remarks>
     /// <param name="Box">the table to resume</param>
@@ -64,5 +65,45 @@ namespace PeachPDF.Html.Core.Fragmentation
         double MaxRight,
         IReadOnlyList<UnfinishedTableCell> UnfinishedCells,
         IReadOnlyList<CssBox> FinishedCells,
-        IReadOnlyDictionary<int, IReadOnlyList<CssBox>> RowSpannedBoxes) : BreakToken(Box, ResumeSlotIndex);
+        IReadOnlyDictionary<int, IReadOnlyList<CssBox>> RowSpannedBoxes) : BreakToken(Box, ResumeSlotIndex)
+    {
+        /// <summary>
+        /// Compared by <b>contents</b>, because the driver's no-progress backstop is an equality test.
+        /// </summary>
+        /// <remarks>
+        /// <c>HtmlContainerInt.LayoutDocument</c> ends a run that hands back the record it was given —
+        /// otherwise the pass resumes at the same point forever — and the compiler's own equality for a
+        /// record compares these three collections by <i>reference</i>. Every pass builds fresh ones, so a
+        /// table that made no progress compared unequal to itself and spun to the pass cap instead of
+        /// falling back to the last-resort monolithic relayout. Measured before this: a test double whose
+        /// cell never finishes took 100,000 passes and 1m52s.
+        /// </remarks>
+        public bool Equals(TableBreakToken? other) =>
+            other is not null
+            && ReferenceEquals(Box, other.Box)
+            && ResumeSlotIndex == other.ResumeSlotIndex
+            && ResumeRowIndex == other.ResumeRowIndex
+            && MaxRight.Equals(other.MaxRight)
+            && UnfinishedCells.SequenceEqual(other.UnfinishedCells)
+            && FinishedCells.SequenceEqual(other.FinishedCells)
+            && SameSpans(RowSpannedBoxes, other.RowSpannedBoxes);
+
+        public override int GetHashCode() =>
+            HashCode.Combine(Box, ResumeSlotIndex, ResumeRowIndex, MaxRight,
+                UnfinishedCells.Count, FinishedCells.Count, RowSpannedBoxes.Count);
+
+        private static bool SameSpans(
+            IReadOnlyDictionary<int, IReadOnlyList<CssBox>> left,
+            IReadOnlyDictionary<int, IReadOnlyList<CssBox>> right)
+        {
+            if (left.Count != right.Count) return false;
+
+            foreach (var (endRow, boxes) in left)
+            {
+                if (!right.TryGetValue(endRow, out var others) || !boxes.SequenceEqual(others)) return false;
+            }
+
+            return true;
+        }
+    }
 }

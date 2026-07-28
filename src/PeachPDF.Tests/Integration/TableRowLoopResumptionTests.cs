@@ -41,9 +41,12 @@ namespace PeachPDF.Tests.Integration
             LayoutHarness.Descendants(root).First(b => b.Display == CssConstants.Table);
 
         /// <summary>
-        /// Runs the engine the way production does — inside the fragmentainer detach
-        /// <c>CssBox.LayoutMonolithicContent</c> wraps it in, without which a cell would see a
-        /// fragmentainer the real call never gives it.
+        /// Runs the engine with the fragmentainer detached, which is what keeps these fixtures hermetic:
+        /// nothing inside a cell can then run out of one, so the only cell that stops is a double that
+        /// says it did, and every assertion below is about the row loop rather than about where a real
+        /// flow happened to break. Production stopped detaching here with
+        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/464">#464</see>; the end-to-end
+        /// behaviour that came with that is covered by <see cref="TableCellBreakTokenTests"/>.
         /// </summary>
         private static async Task RunEngine(
             RGraphics g, HtmlContainerInt container, CssBox table, BreakToken? resume)
@@ -763,6 +766,154 @@ namespace PeachPDF.Tests.Integration
             Assert.NotEqual(finishing!.PlacedContentTop, finishing.OverflowingContent.Location.Y, 3);
         }
 
+        /// <summary>
+        /// A cell that continues an earlier fragment keeps the one <c>Location</c> that fragment was built
+        /// from. A <see cref="CssBox"/> has exactly one, so writing this pass's row top into it retracts the
+        /// earlier fragment's geometry — and the emitter, notified the box moved, rebuilds that
+        /// fragmentainer from where the box is <i>now</i> and finds nothing of it there.
+        /// </summary>
+        /// <remarks>
+        /// The measured symptom is the whole table disappearing from the page it began on: 149 of a
+        /// 240-word cell's words vanished from the first page of the <c>paged_media_table_cell_lines</c>
+        /// showcase, borders and all, while the second page was unaffected. This is the same rule
+        /// <c>CssBox.ResumeInTheNextFragmentainer</c> follows for every other box, <b>and it has the same
+        /// exception</b>: inside a fragmentainer with a band of its own — a multi-column column — the cell
+        /// does move, because columns differ in exactly the axis the page grid holds constant. Stating the
+        /// rule without that exception cost half the content of a table nested in a multi-column container
+        /// (<see cref="SuppressedPassFragmentainerTests"/> is where that shows up).
+        /// </remarks>
+        [Fact]
+        public async Task ACellResumedFromAnEarlierPass_KeepsTheLocationItsFirstFragmentWasBuiltFrom()
+        {
+            OverflowingStoppingCell? resumed = null;
+            var placedBefore = 0d;
+
+            await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(RowsTable(2)), pageHeight: PageHeight, margin: Margin,
+                prepare: tree => resumed = ReplaceWithAContinuingCell(tree),
+                after: async (root, container, g) =>
+                {
+                    placedBefore = resumed!.Location.Y;
+
+                    // A record naming a slot well below the table, so a re-placement would be unmistakable.
+                    await RunEngine(g, container, TableOf(root), Continuation(
+                        TableOf(root), resumeRow: 0, resumeSlot: 2,
+                        unfinished: [new UnfinishedTableCell(0, resumed, new InlineBreakToken(
+                            resumed, ResumeSlotIndex: 2, ResumePath: [], ResumeWordIndex: 0,
+                            CompletedLineCount: 0))]));
+                });
+
+            Assert.NotNull(resumed);
+            Assert.Equal(placedBefore, resumed!.Location.Y, 3);
+        }
+
+        /// <summary>
+        /// The control: a cell the same continuation enters fresh <i>is</i> placed at the row top this pass
+        /// is filling, so the assertion above is about the cell continuing rather than about this run
+        /// placing nothing.
+        /// </summary>
+        [Fact]
+        public async Task ACellTheContinuationEntersFresh_IsPlacedAtThisPassesRowTop()
+        {
+            OverflowingStoppingCell? entered = null;
+            var placedBefore = 0d;
+
+            await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(RowsTable(2)), pageHeight: PageHeight, margin: Margin,
+                prepare: tree => entered = ReplaceWithAContinuingCell(tree),
+                after: async (root, container, g) =>
+                {
+                    placedBefore = entered!.Location.Y;
+
+                    await RunEngine(g, container, TableOf(root),
+                        Continuation(TableOf(root), resumeRow: 0, resumeSlot: 2));
+                });
+
+            Assert.NotNull(entered);
+            Assert.NotEqual(placedBefore, entered!.Location.Y, 3);
+        }
+
+        /// <summary>
+        /// A cell that <i>continues</i> an earlier fragment is not vertically aligned either, and for a
+        /// reason the guard above does not cover: this one finishes on the pass being run, so it is in
+        /// neither the stopped list nor <c>FinishedCells</c>. Where its content sits was settled by the
+        /// pass that opened it, and <c>ApplyCellVerticalAlignment</c> offsets the whole subtree — so
+        /// aligning it here drags content an earlier fragmentainer has already emitted onto this page.
+        /// Measured before the guard, with the gate moved: a <c>&lt;p&gt;</c> in a <c>&lt;td&gt;</c> moved
+        /// from Y 22.7 to 235.3 between passes, putting one line across the page boundary and both bands
+        /// claiming its 14 words.
+        /// </summary>
+        [Fact]
+        public async Task ACellResumedFromAnEarlierPass_IsNotAlignedAgainstTheRowItFinishesIn()
+        {
+            OverflowingStoppingCell? resumed = null;
+            var placedBefore = 0d;
+
+            await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(RowsTable(2)), pageHeight: PageHeight, margin: Margin,
+                prepare: tree => resumed = ReplaceWithAContinuingCell(tree),
+                after: async (root, container, g) =>
+                {
+                    placedBefore = resumed!.OverflowingContent.Location.Y;
+
+                    await RunEngine(g, container, TableOf(root), Continuation(
+                        TableOf(root), resumeRow: 0,
+                        unfinished: [new UnfinishedTableCell(0, resumed, new InlineBreakToken(
+                            resumed, ResumeSlotIndex: 1, ResumePath: [], ResumeWordIndex: 0,
+                            CompletedLineCount: 0))]));
+                });
+
+            Assert.NotNull(resumed);
+            Assert.Equal(placedBefore, resumed!.OverflowingContent.Location.Y, 3);
+        }
+
+        /// <summary>
+        /// The control: the same cell on the same continuation, named by no record, is entered from the
+        /// start and aligned as any other — so "the resumed cell's content stayed put" above is a fact
+        /// about the cell continuing rather than about this run aligning nothing.
+        /// </summary>
+        [Fact]
+        public async Task ACellTheContinuationEntersFresh_IsStillVerticallyAligned()
+        {
+            OverflowingStoppingCell? entered = null;
+            var placedBefore = 0d;
+
+            await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(RowsTable(2)), pageHeight: PageHeight, margin: Margin,
+                prepare: tree => entered = ReplaceWithAContinuingCell(tree),
+                after: async (root, container, g) =>
+                {
+                    placedBefore = entered!.OverflowingContent.Location.Y;
+
+                    await RunEngine(g, container, TableOf(root), Continuation(TableOf(root), resumeRow: 0));
+                });
+
+            Assert.NotNull(entered);
+            Assert.NotEqual(placedBefore, entered!.OverflowingContent.Location.Y, 3);
+        }
+
+        /// <summary>
+        /// Puts a cell that overflows its own box but <i>finishes</i> in body row 0, beside a sibling deep
+        /// enough that the row's bottom is below it — without which the alignment has nothing to
+        /// distribute and skipping it would be indistinguishable from not skipping it.
+        /// </summary>
+        private static OverflowingStoppingCell ReplaceWithAContinuingCell(CssBox tree)
+        {
+            var anchor = LayoutHarness.FindById(tree, "c0")!;
+            var row = anchor.ParentBox!;
+
+            var cell = new OverflowingStoppingCell(
+                row, stops: false, keepsItsContentAfterTheFirstLayout: true);
+            row.Boxes.Remove(cell);
+            row.Boxes[row.Boxes.IndexOf(anchor)] = cell;
+
+            var tall = new TallCell(row, 320);
+            row.Boxes.Remove(tall);
+            row.Boxes.Add(tall);
+
+            return cell;
+        }
+
         /// <summary>A cell that finishes, deeper than the one beside it, so the row's bottom is below it.</summary>
         private sealed class TallCell : CssBox
         {
@@ -791,13 +942,27 @@ namespace PeachPDF.Tests.Integration
         private sealed class OverflowingStoppingCell : CssBox
         {
             private readonly bool _stops;
+            private readonly bool _keepsItsContentAfterTheFirstLayout;
+            private bool _placed;
 
-            internal OverflowingStoppingCell(CssBox row, bool stops = true) : base(row, null)
+            /// <param name="row">the row to attach to</param>
+            /// <param name="stops">whether it reports that it could not finish</param>
+            /// <param name="keepsItsContentAfterTheFirstLayout">
+            /// whether later layouts leave the content where the first one put it, which is what a box
+            /// continuing across a <i>page</i> boundary really does — <c>ResumeInTheNextFragmentainer</c>
+            /// moves a box only inside a fragmentainer with a band of its own. Without it a second layout
+            /// re-places the content at the cell's new top by itself, and "the alignment did not move it"
+            /// cannot be told from "the double put it back".
+            /// </param>
+            internal OverflowingStoppingCell(
+                CssBox row, bool stops = true, bool keepsItsContentAfterTheFirstLayout = false)
+                : base(row, null)
             {
                 InheritStyle(row, everything: true);
                 Display = CssConstants.TableCell;
                 VerticalAlign = CssConstants.Middle;
                 _stops = stops;
+                _keepsItsContentAfterTheFirstLayout = keepsItsContentAfterTheFirstLayout;
 
                 OverflowingContent = new CssBox(this, null);
                 OverflowingContent.InheritStyle(this, everything: true);
@@ -814,10 +979,15 @@ namespace PeachPDF.Tests.Integration
             {
                 // What a real stopped flow leaves: content 200pt deep, and a box still holding the top it
                 // was placed at.
-                OverflowingContent.Location = new RPoint(Location.X, Location.Y);
-                OverflowingContent.ActualBottom = Location.Y + 200;
+                if (!_placed || !_keepsItsContentAfterTheFirstLayout)
+                {
+                    OverflowingContent.Location = new RPoint(Location.X, Location.Y);
+                    PlacedContentTop = OverflowingContent.Location.Y;
+                    _placed = true;
+                }
+
+                OverflowingContent.ActualBottom = OverflowingContent.Location.Y + 200;
                 OverflowingContent.Height = "200px";
-                PlacedContentTop = OverflowingContent.Location.Y;
                 ActualBottom = Location.Y;
 
                 if (_stops)

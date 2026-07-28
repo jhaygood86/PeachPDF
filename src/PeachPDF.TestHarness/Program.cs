@@ -2004,6 +2004,48 @@ await SaveShowcaseAsync("paged_media_table_row_breaks", "Paged Media", "Table Ro
     + "with the table's repeating header carried onto the page the break opens.",
     tableRowBreaksHtml, new PdfGenerateConfig { PageSize = PageSize.A5 });
 
+// ── a row that continues, cell by cell ─────────────────────────────────────
+// css-tables-3 §6.1: a row whose cell runs out of room continues in the next fragmentainer, and its
+// cells are fragmented independently (css-break-3 §2.1 parallel flows). The narrow cell finishes on
+// the first page and is not drawn again; the wide one picks up exactly where it stopped. The header
+// does not yet repeat above the continuation for this shape (issue #439's remaining tail), and the
+// finished cell's borders stop at the boundary rather than running the continuation's depth (#478).
+var rowContinuationHtml = """
+    <!DOCTYPE html>
+    <html><head><style>
+    @page { size: a6; margin: 12mm }
+    body { font: 9pt Helvetica, Arial, sans-serif; margin: 0; color: #1f2937 }
+    h1 { font-size: 11pt; margin: 0 0 0.4em }
+    p.intro { color: #6b7280; font-size: 8pt; margin: 0 0 0.8em }
+    table { width: 100%; border-collapse: collapse }
+    th, td { border: 0.75pt solid #94a3b8; padding: 4pt 5pt; vertical-align: top }
+    thead th { background: #e2e8f0; font-size: 8pt; text-align: left }
+    td.note { width: 30%; color: #6b7280; font-size: 8pt }
+    td.body { line-height: 1.5; text-align: justify }
+    </style></head><body>
+    <h1>One row, several pages</h1>
+    <p class="intro">The right-hand cell holds more than a page of text, so the row continues onto the
+    next page. The left-hand cell finished on the first one and is not drawn again there - the cells of
+    a row are fragmented independently.</p>
+    <table>
+      <thead><tr><th>Note</th><th>Clause</th></tr></thead>
+      <tbody><tr>
+        <td class="note">Finishes on the first page.</td>
+        <td class="body">
+    """
+    + string.Join(" ", Enumerable.Range(1, 260).Select(i => $"clause{i}"))
+    + """
+        </td>
+      </tr></tbody>
+    </table>
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("paged_media_table_row_continuation", "Paged Media", "Table Row Continuation",
+    "css-tables-3 §6.1: a row whose cell runs out of room continues on the next page, and the cells of "
+    + "that row are fragmented independently - a short cell finishes where it finishes.",
+    rowContinuationHtml, new PdfGenerateConfig { PageSize = PageSize.A6 });
+
 // ── Margin box explicit sizing showcase ────────────────────────────────────
 var marginBoxSizingHtml = """
     <!DOCTYPE html>

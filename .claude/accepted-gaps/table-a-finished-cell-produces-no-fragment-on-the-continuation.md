@@ -30,10 +30,13 @@ fragmentainer and none of its content — which is the same question `box-decora
 unbroken strip already ask, and it belongs in `FragmentEmitter` rather than in another field on the
 record.
 
-## Why it is not visible today
+## It is visible now
 
-Nothing sets a table's own `PendingBreakToken`
-([#464](https://github.com/jhaygood86/PeachPDF/issues/464)), so no fragmentation pass hands a table a
-resumption record and the continuation path is reachable only from a test. Both halves become visible
-on the same step, and the half that is built here is the one whose absence would *duplicate* content
-rather than merely under-decorate it.
+It was not, while nothing set a table's own `PendingBreakToken`: no pass handed a table a resumption
+record, and the continuation path was reachable only from a test.
+[#464](https://github.com/jhaygood86/PeachPDF/issues/464) closed that, so a `<td>` whose content
+overflows a page reaches this from ordinary markup. The half that landed with it is the one whose
+absence would *duplicate* content; this half only under-decorates, which is why the two could be
+separated at all.
+
+Stated reader-facing under [Breaks between table rows](../../docs/html-css-support.md#breaks-in-tables).

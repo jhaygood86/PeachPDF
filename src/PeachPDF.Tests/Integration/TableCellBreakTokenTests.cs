@@ -1,6 +1,8 @@
 using PeachPDF.Html.Adapters;
+using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragmentation;
+using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
@@ -22,11 +24,13 @@ namespace PeachPDF.Tests.Integration
     /// <see cref="CssBox.TableContinuation"/>.
     /// </para>
     /// <para>
-    /// <b>Nothing acts on the answer yet, and the answer is always "yes, it finished".</b> The engine runs
-    /// inside <c>CssBox.LayoutMonolithicContent</c>, which detaches the fragmentainer, so no descendant of
-    /// a cell has one to run out of. Both halves are asserted here: that a real paginating table records
-    /// nothing (which is what makes this step behaviour-neutral), and that the recorder is nevertheless
-    /// wired to the right question rather than being dead code.
+    /// The answer used to be "yes, it finished" for every document, because the engine ran inside a
+    /// detached fragmentainer and no descendant of a cell had one to run out of. Since
+    /// <see href="https://github.com/jhaygood86/PeachPDF/issues/464">#464</see> it does, so the shapes
+    /// below really do stop and continue — and what the theory pins is the property that matters end to
+    /// end, that every word the document authored is claimed by exactly one fragmentainer. The unit tests
+    /// after it pin the recorder itself against cells that answer by construction, which is still the only
+    /// way to state what the record <i>contains</i> at the one instant it is readable.
     /// </para>
     /// </remarks>
     public class TableCellBreakTokenTests
@@ -43,14 +47,28 @@ namespace PeachPDF.Tests.Integration
         private static List<CssBox> CellsOf(CssBox root) =>
             LayoutHarness.Descendants(root).Where(b => b.Display == CssConstants.TableCell).ToList();
 
-        // ─── The record is published, and empty, for a table that really does paginate ───────────
+        // ─── A table that paginates loses nothing and duplicates nothing ─────────────────────────
 
         /// <summary>
-        /// Every table shape that paginates today records no unfinished cell, because the engine's own
-        /// fragmentainer is detached while it runs. This is the measurement the step rests on: the row
-        /// loop's new question cannot change any of these documents, whatever answer it eventually acts
-        /// on. Lifting the monolithic gate makes eight of these ten shapes record exactly one.
+        /// Every table shape that paginates claims each of its words in exactly one fragmentainer. It
+        /// fails one way if a fragment claims a word another one also holds — a line drawn on two pages —
+        /// and the other way if a word is dropped entirely.
         /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Seven shapes, because what stops is not always the same thing: the cell's own inline flow, a
+        /// block inside it, a second row, a repeating <c>&lt;thead&gt;</c> or <c>&lt;tfoot&gt;</c>, a
+        /// multi-column container driving fragmentainers of its own inside a cell, and a table nested in
+        /// one. Three further shapes are in <see cref="APaginatingTable_DropsNoWord"/> only, because they
+        /// duplicate a line at a boundary for reasons that are not the table's — see there.
+        /// </para>
+        /// <para>
+        /// Stated over the words the document <i>authored</i> rather than by comparing counts. A repeated
+        /// <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c> is detached from the tree and drawn through proxies,
+        /// so its words are claimed without being reachable from the root — counting both sides would
+        /// disagree by exactly that group, and pinning the disagreement would pin the repetition count.
+        /// </para>
+        /// </remarks>
         [Theory]
         [InlineData("<table style='width:150pt'><tr><td>{W}</td></tr></table>")]
         [InlineData("<table style='width:150pt'><tr><td><p>{W}</p></td></tr></table>")]
@@ -60,26 +78,143 @@ namespace PeachPDF.Tests.Integration
         [InlineData("<table style='width:150pt'><tfoot><tr><td>F</td></tr></tfoot>"
                     + "<tbody><tr><td>{W}</td></tr></tbody></table>")]
         [InlineData("<table style='width:150pt'><tr><td><div style='column-count:2'>{W}</div></td></tr></table>")]
+        [InlineData("<div style='column-count:2'><table><tr><td>{W}</td></tr></table></div>")]
+        public async Task APaginatingTable_ClaimsEveryWordExactlyOnce(string markup)
+        {
+            var (root, container) = await Paginate(markup);
+
+            var claims = WordClaims(container);
+
+            Assert.All(AuthoredWords(root), word =>
+            {
+                Assert.True(claims.TryGetValue(word, out var slots), $"'{word.Text}' was claimed by no page");
+                Assert.Single(slots!);
+            });
+
+            // The last pass is the one that finished the table, so nothing is left saying otherwise. The
+            // record's own contents are pinned by the unit tests below, at the instant they are readable.
+            Assert.Null(TableOf(root).TableContinuation);
+            Assert.All(CellsOf(root), cell => Assert.Null(cell.PendingBreakToken));
+        }
+
+        /// <summary>
+        /// The weaker half of the invariant above, asked of every shape including the three that cannot
+        /// satisfy the stronger one: no word the document authored goes unclaimed. This is what
+        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/464">#464</see> is about — before the
+        /// table's row loop could be resumed, the rows after a stop were never placed at all.
+        /// </summary>
+        /// <remarks>
+        /// The three extra shapes duplicate rather than drop, each for a reason documented as an accepted
+        /// limitation rather than a table defect. A flex or grid container inside a cell does not fragment
+        /// its item content, so a page boundary can cut through a line of it and that line is drawn on both
+        /// pages. A <c>rowspan</c> cell is reached again through a <c>CssSpacingBox</c> placeholder for
+        /// every row it spans, so its subtree is emitted once per placeholder into the same fragmentainer.
+        /// </remarks>
+        [Theory]
         [InlineData("<table style='width:150pt'><tr><td><div style='display:flex;flex-wrap:wrap'>{W}</div>"
                     + "</td></tr></table>")]
         [InlineData("<table style='width:150pt'><tr><td><div style='display:grid'>{W}</div></td></tr></table>")]
         [InlineData("<table style='width:150pt'><tr><td rowspan='2'>{W}</td><td>a</td></tr>"
                     + "<tr><td>b</td></tr></table>")]
-        [InlineData("<div style='column-count:2'><table><tr><td>{W}</td></tr></table></div>")]
-        public async Task APaginatingTable_RecordsNoUnfinishedCell(string markup)
+        public async Task APaginatingTable_DropsNoWord(string markup)
         {
-            var (root, _) = await LayoutHarness.LayoutAsync(
+            var (root, container) = await Paginate(markup);
+
+            var claims = WordClaims(container);
+
+            Assert.All(AuthoredWords(root),
+                word => Assert.True(claims.ContainsKey(word), $"'{word.Text}' was claimed by no page"));
+        }
+
+        /// <summary>
+        /// A repeating <c>&lt;thead&gt;</c> repeats on every page the table covers, including when the
+        /// break that opened those pages fell <i>inside a cell</i> rather than between two rows
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/439">#439</see>).
+        /// </summary>
+        /// <remarks>
+        /// A single-row table whose cell overflows used to emit its header exactly once: the per-row check
+        /// that carries the header onto a new page only runs between rows, and a cell's own text
+        /// paginated without ever telling the engine. Now the row loop stops where the cell stopped and a
+        /// later pass continues it, so each pass opens its page with the header. The header's own box is
+        /// detached and drawn through one proxy per page, so this is stated on the word it holds — one
+        /// <c>CssRect</c> claimed once by each fragmentainer, at that fragmentainer's own top.
+        /// </remarks>
+        [Theory]
+        [InlineData("<table style='width:150pt'><thead><tr><th>HEADERWORD</th></tr></thead>"
+                    + "<tbody><tr><td>{W}</td></tr></tbody></table>")]
+        [InlineData("<table style='width:150pt'><thead><tr><th>HEADERWORD</th><th>B</th></tr></thead>"
+                    + "<tbody><tr><td>{W}</td><td>short</td></tr></tbody></table>")]
+        public async Task ARepeatingHeader_RepeatsWhenTheBreakFallsInsideACell(string markup)
+        {
+            var (_, container) = await Paginate(markup);
+
+            var pages = container.FragmentTree!.Fragmentainers.Count;
+
+            var header = WordClaims(container).Single(c => c.Key.Text == "HEADERWORD");
+
+            Assert.Equal(pages, header.Value.Count);
+            Assert.Equal(container.FragmentTree.Fragmentainers.Select(f => f.SlotIndex), header.Value);
+        }
+
+        /// <summary>
+        /// Lays <paramref name="markup"/> out over 244 words and checks it really does span more than one
+        /// fragmentainer, since neither theory above asserts anything if it does not.
+        /// </summary>
+        /// <remarks>
+        /// Asked of the fragmentainer count rather than of the table's own extent, which stopped being the
+        /// right question once a table could fragment: a table continuing across a <i>column</i> boundary
+        /// measures one fragment, so its box spans well under a band while the document it is in spans
+        /// several.
+        /// </remarks>
+        private static async Task<(CssBox Root, HtmlContainerInt Container)> Paginate(string markup)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
                 LayoutHarness.Wrap(markup.Replace("{W}", Words(244))),
                 pageHeight: PageHeight, margin: Margin);
 
-            var table = TableOf(root);
+            Assert.True(container.FragmentTree!.Fragmentainers.Count > 1,
+                "fixture does not paginate, so it asserts nothing");
 
-            // The table really is longer than one band - otherwise this asserts nothing.
-            Assert.True(table.ActualBottom - table.Location.Y > PageHeight - 2 * Margin,
-                $"fixture does not paginate: table spans {table.ActualBottom - table.Location.Y:F1}pt");
+            return (root, container);
+        }
 
-            Assert.Null(table.TableContinuation);
-            Assert.All(CellsOf(root), cell => Assert.Null(cell.PendingBreakToken));
+        private static List<CssRect> AuthoredWords(CssBox root)
+        {
+            var words = LayoutHarness.Descendants(root).SelectMany(b => b.Words).ToList();
+
+            Assert.NotEmpty(words);
+
+            return words;
+        }
+
+        /// <summary>
+        /// Which fragmentainer slots claim each word, keyed by the word. A word claimed by more than one
+        /// is a line drawn on two pages; a word in no key at all was dropped.
+        /// </summary>
+        private static Dictionary<CssRect, List<int>> WordClaims(HtmlContainerInt container)
+        {
+            var claims = new Dictionary<CssRect, List<int>>(ReferenceEqualityComparer.Instance);
+
+            foreach (var fragmentainer in container.FragmentTree!.Fragmentainers)
+            {
+                foreach (var word in Flatten(fragmentainer.Root).SelectMany(f => f.Words))
+                {
+                    if (!claims.TryGetValue(word.Word, out var slots)) claims[word.Word] = slots = [];
+                    slots.Add(fragmentainer.SlotIndex);
+                }
+            }
+
+            return claims;
+        }
+
+        private static IEnumerable<BoxFragment> Flatten(BoxFragment fragment)
+        {
+            yield return fragment;
+
+            foreach (var child in fragment.Children)
+            {
+                foreach (var descendant in Flatten(child)) yield return descendant;
+            }
         }
 
         /// <summary>
@@ -187,7 +322,7 @@ namespace PeachPDF.Tests.Integration
         {
             StoppingCell? stopping = null;
 
-            var (root, _) = await LayoutHarness.LayoutAsync(
+            var (root, container) = await LayoutHarness.LayoutAsync(
                 LayoutHarness.Wrap("<table><tr><td>first</td><td id='anchor'>anchor</td></tr>"
                                    + "<tr><td>a</td><td>b</td></tr></table>"),
                 pageHeight: PageHeight, margin: Margin,
@@ -215,6 +350,75 @@ namespace PeachPDF.Tests.Integration
 
             // The row the loop was placing when it asked, not the cell's position within it.
             Assert.Equal(0, recorded.RowIndex);
+
+            // This double never finishes, so the record it publishes is the same one every pass and the
+            // driver's no-progress backstop is what has to end the run - not the pass cap. Stated as a
+            // count rather than as elapsed time, which is a clock and would only say "slow".
+            // This double never finishes, so every pass publishes the same record and the driver's
+            // no-progress backstop is what has to end the run - not the 100,000-pass cap. Stated as counts
+            // rather than as elapsed time, which is a clock and would only ever say "slow".
+            Assert.Equal(1, container.LastResortRelayouts);
+            Assert.InRange(container.FragmentainerPasses, 1, 4);
+        }
+
+        /// <summary>
+        /// Two records naming the same stop are equal even though every pass builds fresh collections for
+        /// them, which is what lets the driver's no-progress backstop recognize a table that got nowhere.
+        /// </summary>
+        /// <remarks>
+        /// A <c>record</c>'s compiler-generated equality compares its members with <c>EqualityComparer</c>,
+        /// so a list member is compared by reference and two identical records never matched. The backstop
+        /// is an equality test, so it silently never fired for a table: measured before this, a cell that
+        /// never finishes drove 100,000 passes instead of one fallback.
+        /// </remarks>
+        [Fact]
+        public async Task TwoRecordsNamingTheSameStop_AreEqual()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap("<table><tr><td id='a'>a</td></tr></table>"),
+                pageHeight: PageHeight, margin: Margin);
+
+            var table = TableOf(root);
+            var cell = LayoutHarness.FindById(root, "a")!;
+            var token = new InlineBreakToken(cell, ResumeSlotIndex: 1, ResumePath: [],
+                ResumeWordIndex: 0, CompletedLineCount: 1);
+
+            Assert.Equal(Record(table, cell, token, row: 0), Record(table, cell, token, row: 0));
+            Assert.NotEqual(Record(table, cell, token, row: 0), Record(table, cell, token, row: 1));
+
+            // The cells are the part the generated equality got wrong, so they need their own statement.
+            Assert.NotEqual(
+                Record(table, cell, token, row: 0),
+                new TableBreakToken(table, 1, 0, 0, [], [], new Dictionary<int, IReadOnlyList<CssBox>>()));
+
+            // Hashing has to agree with equality, or a record put in a set is a record that cannot be
+            // found again - the obligation any hand-written Equals takes on.
+            Assert.Equal(Record(table, cell, token, row: 0).GetHashCode(),
+                Record(table, cell, token, row: 0).GetHashCode());
+            Assert.Single(new HashSet<TableBreakToken>
+            {
+                Record(table, cell, token, row: 0),
+                Record(table, cell, token, row: 0)
+            });
+
+            // The rowspan map is compared by contents too, key by key.
+            var spanned = new TableBreakToken(table, 1, 0, 0, [], [],
+                new Dictionary<int, IReadOnlyList<CssBox>> { [2] = new[] { cell } });
+
+            Assert.Equal(spanned, new TableBreakToken(table, 1, 0, 0, [], [],
+                new Dictionary<int, IReadOnlyList<CssBox>> { [2] = new[] { cell } }));
+            Assert.NotEqual(spanned, new TableBreakToken(table, 1, 0, 0, [], [],
+                new Dictionary<int, IReadOnlyList<CssBox>> { [3] = new[] { cell } }));
+            Assert.NotEqual(spanned, new TableBreakToken(table, 1, 0, 0, [], [],
+                new Dictionary<int, IReadOnlyList<CssBox>>()));
+
+            return;
+
+            // A fresh record every call, with fresh collections - which is the whole point.
+            static TableBreakToken Record(CssBox table, CssBox cell, BreakToken token, int row) =>
+                new(table, ResumeSlotIndex: 1, row, MaxRight: 0,
+                    [new UnfinishedTableCell(row, cell, token)], [],
+                    new Dictionary<int, IReadOnlyList<CssBox>>());
         }
 
         /// <summary>
