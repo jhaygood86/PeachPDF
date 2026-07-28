@@ -1188,6 +1188,15 @@ namespace PeachPDF.Html.Core.Dom
             // its markup, because a row no pass has placed has no geometry to close over.
             var placedRows = _bodyRows.Count;
 
+            // This run re-decides where every finished cell's box sits, so what an earlier one stated over
+            // the same slots goes first. Swept here, once, rather than per cell in the loop below: a cell
+            // the loop never reaches - because it stops at a cell that did not finish, or runs out of
+            // columns - would otherwise keep a statement no pass still stands behind. A run continuing an
+            // earlier pass sweeps only from the slot it resumes in, because the slots before it were
+            // settled by the passes that filled them and are still true, which is what lets a row spanning
+            // three fragmentainers hold a fragment in each.
+            DiscardContinuationShells(container, _continuesAPreviousPass ? cursor.SlotIndex : null);
+
             // A continuation re-enters the row that did not finish, not the one after it: only some of
             // that row's cells stopped, and the cells of a row are §2.1 parallel flows, so the row is
             // where the record points. Every other run starts at the first body row.
@@ -1428,6 +1437,25 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Discards the continuation geometry an earlier run of this table's row loop stated, from
+        /// <paramref name="fromSlot"/> on or — with no slot — in every slot.
+        /// </summary>
+        /// <param name="container">the container holding this layout's emitter, null on a measurement run</param>
+        /// <param name="fromSlot">the first slot this run decides again, or null for all of them</param>
+        private void DiscardContinuationShells(HtmlContainerInt? container, int? fromSlot)
+        {
+            if (container is null) return;
+
+            foreach (var row in _bodyRows)
+            {
+                foreach (var cell in row.Boxes)
+                {
+                    container.ClearContinuationShells(cell, fromSlot);
+                }
+            }
+        }
+
+        /// <summary>
         /// Lays one row's cells out at <paramref name="cursor"/>'s current position, advancing the
         /// cursor's <see cref="TableRowCursor.MaxRight"/>/<see cref="TableRowCursor.MaxBottom"/> over them.
         /// </summary>
@@ -1451,6 +1479,13 @@ namespace PeachPDF.Html.Core.Dom
             // distribute, and its box does not describe its content.
             var stoppedCells = new List<CssBox>();
 
+            // The cells of this row that an earlier fragmentainer finished. css-tables-3 §6.1 has their
+            // boxes continue with the row's, so this row states the geometry they occupy here - nothing
+            // can read it off them, because a continuation deliberately leaves their one Location naming
+            // the fragmentainer that placed them, and a cell that finished is indistinguishable from one
+            // no pass entered by geometry alone.
+            var finishedCells = new List<(CssBox Cell, double Left, double Width)>();
+
             foreach (var cell in row.Boxes)
             {
                 if (currentColumn >= _columnWidths!.Length)
@@ -1470,6 +1505,15 @@ namespace PeachPDF.Html.Core.Dom
                     // Still finished, and this pass's own record has to say so - see CarryForwardFinished
                     // for what a record that forgets costs.
                     cursor.CarryForwardFinished(cell);
+
+                    // A rowspan placeholder reaches this arm too - LayoutBodyRow records every cell it
+                    // enters as finished or not, spacers included - and states nothing here. It is
+                    // constructed with a bare tag and never inherits style, so it has no border or
+                    // background for a continuation to draw; the geometry §6.1 wants belongs to the cell
+                    // it stands in for, which lives in an earlier row and continues on its own terms.
+                    if (cell is not CssSpacingBox)
+                        finishedCells.Add((cell, currentX, width));
+
                     rowMaxRight = Math.Max(rowMaxRight, currentX + width);
                     currentColumn++;
                     currentX += width + GetHorizontalSpacing();
@@ -1607,6 +1651,26 @@ namespace PeachPDF.Html.Core.Dom
 
             cursor.MaxRight = rowMaxRight;
             cursor.MaxBottom = rowMaxBottom;
+
+            // css-tables-3 §6.1: the row's box continues into this fragmentainer and every cell's box
+            // continues with it, so a cell that finished earlier is its borders and background running the
+            // full depth of the row's fragment here, with no content in it. Stated only once the row's own
+            // bottom is settled, which is the line above - a finished cell adds no height of its own, so
+            // the depth is the one the cells that do continue decided.
+            //
+            // The column comes from the cursor rather than from the cell's stale ActualRight: on the page
+            // grid the two agree, and inside a multi-column column they do not - the cell's Location.X
+            // names the column its first fragment was in, while currentX names the one this pass is
+            // filling, which is where a continuation with a band of its own belongs.
+            if (finishedCells.Count > 0 && rowMaxBottom > currentY
+                && _tableBox.HtmlContainer is { } htmlContainer)
+            {
+                foreach (var (cell, left, cellWidth) in finishedCells)
+                {
+                    htmlContainer.RecordContinuationShell(
+                        cell, cursor.SlotIndex, new RRect(left, currentY, cellWidth, rowMaxBottom - currentY));
+                }
+            }
         }
         /// <summary>
         /// Gets the spanned width of a cell (With of all columns it spans minus one).
