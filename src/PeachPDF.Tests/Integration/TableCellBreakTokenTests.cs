@@ -391,6 +391,27 @@ namespace PeachPDF.Tests.Integration
                 Record(table, cell, token, row: 0),
                 new TableBreakToken(table, 1, 0, 0, [], [], new Dictionary<int, IReadOnlyList<CssBox>>()));
 
+            // Hashing has to agree with equality, or a record put in a set is a record that cannot be
+            // found again - the obligation any hand-written Equals takes on.
+            Assert.Equal(Record(table, cell, token, row: 0).GetHashCode(),
+                Record(table, cell, token, row: 0).GetHashCode());
+            Assert.Single(new HashSet<TableBreakToken>
+            {
+                Record(table, cell, token, row: 0),
+                Record(table, cell, token, row: 0)
+            });
+
+            // The rowspan map is compared by contents too, key by key.
+            var spanned = new TableBreakToken(table, 1, 0, 0, [], [],
+                new Dictionary<int, IReadOnlyList<CssBox>> { [2] = new[] { cell } });
+
+            Assert.Equal(spanned, new TableBreakToken(table, 1, 0, 0, [], [],
+                new Dictionary<int, IReadOnlyList<CssBox>> { [2] = new[] { cell } }));
+            Assert.NotEqual(spanned, new TableBreakToken(table, 1, 0, 0, [], [],
+                new Dictionary<int, IReadOnlyList<CssBox>> { [3] = new[] { cell } }));
+            Assert.NotEqual(spanned, new TableBreakToken(table, 1, 0, 0, [], [],
+                new Dictionary<int, IReadOnlyList<CssBox>>()));
+
             return;
 
             // A fresh record every call, with fresh collections - which is the whole point.
