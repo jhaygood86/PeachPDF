@@ -115,9 +115,20 @@ namespace PeachPDF.Html.Core
             *[DIR="ltr"]    { direction: ltr; unicode-bidi: embed }
             *[DIR="rtl"]    { direction: rtl; unicode-bidi: embed }
 
+            /* Spelt with css-break-3's break-* properties rather than the legacy page-break-*
+               aliases. The two share their storage and their initial value (see InitialValues
+               below), so this is the same cascade either way - but the sheet is where a reader
+               learns the house spelling, and thead/tfoot's rule below has no legacy alias at all. */
             @media print {
               h1, h2, h3,
-              h4, h5, h6    { page-break-after: avoid }
+              h4, h5, h6    { break-after: avoid }
+
+              /* css-tables-3 6.2 repeats a header or footer group across the pages a table spans
+                 only where the group carries an avoid break-inside. Every print engine repeats one
+                 unconditionally, so the condition belongs here as the default rather than in the
+                 layout engine as an exception: an author who wants the group laid out once, in
+                 flow, writes break-inside: auto on it. */
+              thead, tfoot  { break-inside: avoid }
             }
 
             /* Not in the specification but necessary */

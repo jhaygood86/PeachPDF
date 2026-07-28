@@ -25,7 +25,7 @@ namespace PeachPDF.Tests.Integration
     /// </remarks>
     public class PrologueReentryRegistrationTests
     {
-        // A heading chained to the paragraph by the UA default `h2 { page-break-after: avoid }`, with
+        // A heading chained to the paragraph by the UA default `h2 { break-after: avoid }`, with
         // the paragraph pinned so word flow pushes its first line across the boundary — which is what
         // makes the retry fire and the paragraph's own prologue run a second time.
         //

@@ -103,7 +103,7 @@ namespace PeachPDF.Tests.Integration
 
         // The move introduces a break between the table and whatever precedes it, so §3.1's keep-with-next
         // applies exactly as it does to every other relocation: the UA print default
-        // h1-h6 { page-break-after: avoid } chains the heading to the table and it travels too.
+        // h1-h6 { break-after: avoid } chains the heading to the table and it travels too.
         [Fact]
         public async Task AnAvoidChainedHeading_TravelsWithTheMovedTable()
         {

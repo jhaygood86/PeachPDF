@@ -195,7 +195,7 @@ namespace PeachPDF.Tests.Integration
             Assert.NotNull(heading);
             Assert.NotNull(body);
 
-            // The UA print stylesheet gives h1-h6 `page-break-after: avoid`. The pull happens in the
+            // The UA print stylesheet gives h1-h6 `break-after: avoid`. The pull happens in the
             // pass that takes the break, and its adjusted target has to survive into the resumed pass -
             // otherwise the heading is stranded on the page its content just left.
             Assert.Equal(

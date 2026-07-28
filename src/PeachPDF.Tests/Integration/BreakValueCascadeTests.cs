@@ -27,10 +27,15 @@ namespace PeachPDF.Tests.Integration
 
         // CssProxyBox's repeated table header: each proxy is a structural duplicate of the same <thead>, so
         // it must carry that element's own resolved break values.
+        // The expected break-inside is "avoid" wherever the author declares nothing, because the UA print
+        // stylesheet gives thead/tfoot one — css-tables-3 6.2's condition on repeating the group at all.
+        // The last case is what keeps this a test of *carrying* rather than of that default: an author
+        // override reaches every proxy too.
         [Theory]
         [InlineData("break-inside: avoid", "avoid", "auto", "auto")]
-        [InlineData("break-after: avoid", "auto", "auto", "avoid")]
-        [InlineData("break-before: page", "auto", "page", "auto")]
+        [InlineData("break-inside: auto", "auto", "auto", "auto")]
+        [InlineData("break-after: avoid", "avoid", "auto", "avoid")]
+        [InlineData("break-before: page", "avoid", "page", "auto")]
         public async Task RepeatedTableHeaderProxy_CarriesTheSourceBreakValues(
             string css, string expectedInside, string expectedBefore, string expectedAfter)
         {

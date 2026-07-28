@@ -13,7 +13,7 @@ namespace PeachPDF.Tests.Integration
 {
     /// <summary>
     /// Regression coverage for a customer bug report: a section heading with the UA default
-    /// <c>h1-h6 { page-break-after: avoid }</c> could be stranded alone at the bottom of a page
+    /// <c>h1-h6 { break-after: avoid }</c> could be stranded alone at the bottom of a page
     /// while the table immediately following it started on the next page.
     ///
     /// Two independent gaps produced this symptom:

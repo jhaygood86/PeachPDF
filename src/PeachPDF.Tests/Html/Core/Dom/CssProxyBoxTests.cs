@@ -120,7 +120,10 @@ namespace PeachPDF.Tests.Html.Core.Dom
         {
 // Arrange
      var html = GetLongTableHtml(30); // 30 rows to force multiple pages
-    var (rootBox, container) = await BuildCssBoxTree(html, pageHeight: 300);
+    // Tall enough that css-tables-3 6.2 lets the header repeat at all: this harness leaves the
+    // adapter's PixelsPerPoint unpinned, so the header measures ~85 of these units, and 6.2 caps a
+    // repeated group at a quarter of the page. 30 rows still span several pages at 400.
+    var (rootBox, container) = await BuildCssBoxTree(html, pageHeight: 400);
 
   // Act
        var table = FindTableBox(rootBox);

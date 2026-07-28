@@ -431,7 +431,11 @@ namespace PeachPDF.Tests.Html.Core.Dom
             // GitHub issue #124's underlying defect (the footer row-group box's ActualRight was
             // never set, unlike the header's, leaving every footer CssProxyBox with a degenerate
             // zero-width Bounds).
-            var pageHeight = 200.0;
+            //
+            // Tall enough that css-tables-3 6.2 lets the footer repeat at all - it caps a repeated group
+            // at a quarter of the page, and this harness leaves the adapter's PixelsPerPoint unpinned, so
+            // the footer row measures ~80 of these units. 20 rows still span several pages at 400.
+            var pageHeight = 400.0;
 
             var html = @"
 <!DOCTYPE html>

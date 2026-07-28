@@ -12,7 +12,7 @@ namespace PeachPDF.Tests.Integration
     // (the whole-table pre-check in CssLayoutEngineTable, break-inside: avoid, orphans/widows).
     // These tests pin the pull-along behavior at those nudge sites, asserting box positions per
     // this repo's layout-test convention. Note the UA default stylesheet already applies
-    // `h1-h6 { page-break-after: avoid }` under @media print (which PeachPDF always uses), so
+    // `h1-h6 { break-after: avoid }` under @media print (which PeachPDF always uses), so
     // the heading tests exercise the exact path every real document hits.
     public class KeepWithNextIntegrationTests
     {

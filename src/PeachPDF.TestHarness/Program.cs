@@ -2108,6 +2108,60 @@ await SaveShowcaseAsync("paged_media_table_tall_row", "Paged Media", "Table Row 
     + "the tall row merely overflows onto, since no break falls there.",
     tallRowHtml, new PdfGenerateConfig { PageSize = PageSize.A6 });
 
+// ── whether a <thead> repeats at all ───────────────────────────────────────
+// css-tables-3 §6.2 makes repetition conditional: the group repeats only where it carries an avoiding
+// break-inside and where it costs under a quarter of the page (#494). The UA print stylesheet supplies
+// `thead, tfoot { break-inside: avoid }`, so repetition is the default - and `break-inside: auto` is the
+// author's way to turn it off, which is what the second table here does. Both tables hold the same rows
+// on the same page, so the difference is the header and nothing else: the first repeats its header onto
+// every page, the second prints its once and gives the pages after it wholly to the rows. The tint is
+// what makes the absence legible rather than merely true.
+var groupRepetitionHtml = """
+    <!DOCTYPE html>
+    <html><head><style>
+      @page { size: a6; margin: 11mm }
+      body { font: 8pt sans-serif; margin: 0 }
+      h2 { font-size: 8.5pt; margin: 0 0 4pt }
+      p.note { color: #6b7280; font-size: 7pt; margin: 0 0 6pt }
+      table { width: 100%; border-collapse: collapse; margin-bottom: 12pt }
+      th, td { border: 0.6pt solid #cbd5e1; padding: 2.5pt 4pt; text-align: left }
+      thead th { background: #1e3a8a; color: #fff; font-size: 7.5pt }
+      table.once thead { break-inside: auto }
+      table.once thead th { background: #64748b }
+      td.n { text-align: right; width: 22% }
+    </style></head><body>
+    <h2>Repeating header (the default)</h2>
+    <p class="note">The UA stylesheet gives every &lt;thead&gt; break-inside: avoid, so §6.2 repeats it.</p>
+    <table>
+      <thead><tr><th>Ledger entry</th><th class="n">Amount</th></tr></thead>
+      <tbody>{{REPEATROWS}}</tbody>
+    </table>
+    <h2>Header laid out once</h2>
+    <p class="note">The same table with break-inside: auto on its &lt;thead&gt; - §6.2's opt-out.</p>
+    <table class="once">
+      <thead><tr><th>Ledger entry</th><th class="n">Amount</th></tr></thead>
+      <tbody>{{ONCEROWS}}</tbody>
+    </table>
+    </body></html>
+    """;
+
+static string RepetitionRows(string prefix, int count) =>
+    string.Concat(Enumerable.Range(1, count).Select(i =>
+        $"<tr><td>{prefix} entry {i:D2}, recorded in sequence</td>"
+        + $"<td class=\"n\">{(i * 137) % 900 + 100}.{(i * 29) % 100:D2}</td></tr>"));
+
+groupRepetitionHtml = groupRepetitionHtml
+    .Replace("{{REPEATROWS}}", RepetitionRows("Repeating", 26))
+    .Replace("{{ONCEROWS}}", RepetitionRows("Single", 26));
+
+await SaveShowcaseAsync("paged_media_table_group_repetition", "Paged Media", "Repeating a Header, or Not",
+    "css-tables-3 §6.2 makes repeating a <thead>/<tfoot> conditional: the group repeats only where it "
+    + "carries an avoiding break-inside and where doing so costs under a quarter of the page. The "
+    + "user-agent print stylesheet supplies break-inside: avoid, so repetition is what a table gets by "
+    + "default - and break-inside: auto is the author's way to turn it off, laying the group out once, in "
+    + "flow, and giving the pages after it wholly to the rows.",
+    groupRepetitionHtml, new PdfGenerateConfig { PageSize = PageSize.A6 });
+
 // ── Margin box explicit sizing showcase ────────────────────────────────────
 var marginBoxSizingHtml = """
     <!DOCTYPE html>
