@@ -1,10 +1,8 @@
-using System;
-using System.IO;
-using System.Threading.Tasks;
 using PeachPDF.Network;
 
 namespace PeachPDF.Tests.Network
 {
+    [Collection("CWD-Dependent")]
     public class FileUriNetworkLoaderTests
     {
         [Fact]

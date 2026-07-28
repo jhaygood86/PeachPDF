@@ -16,6 +16,7 @@ namespace PeachPDF.Tests.Integration
     /// <see cref="FileUriNetworkLoader"/>: a <c>&lt;base href="file:///..."&gt;</c> element under the
     /// default loader, and the current-working-directory base default.
     /// </summary>
+    [Collection("CWD-Dependent")]
     public class FileUriLoaderIntegrationTests
     {
         // A real, loadable 1x1 pixel PNG (same constant used across the image integration tests).
