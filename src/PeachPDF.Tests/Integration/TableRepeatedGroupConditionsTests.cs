@@ -436,13 +436,24 @@ namespace PeachPDF.Tests.Integration
         /// foot, so it never needed carrying, and the move is deliberately scoped away from it rather than
         /// left to be a no-op by arithmetic.
         /// </summary>
+        /// <remarks>
+        /// The footer here is a bare cell rather than <see cref="DeclinedFooterTable"/>'s 60pt one, and
+        /// that matters. Taking the declined fixture and merely dropping its <c>break-inside: auto</c>
+        /// leaves a group measuring 73.2pt against this page's 75pt quarter — 1.8pt of headroom, which
+        /// Windows font metrics ate, declining the footer and collapsing the premise this test is built on
+        /// (see <c>testing-the-reflow-fixtures-are-platform-sensitive-by-design</c>). A fixture that has to
+        /// land on the *repeating* side of a threshold has to be nowhere near it.
+        /// </remarks>
         [Theory]
         [InlineData(14)]
         [InlineData(31)]
         public async Task ARepeatingFooter_IsStillClosedUnderTheLastRow(int rows)
         {
             var (root, container) = await LayoutHarness.LayoutAsync(
-                DeclinedFooterTable(rows).Replace("break-inside:auto", ""),
+                LayoutHarness.Wrap(
+                    "<table style='width:150pt'><tfoot><tr><td>FOOTWORD</td></tr></tfoot><tbody>"
+                    + string.Join("", Enumerable.Range(0, rows).Select(i => $"<tr><td>word{i:0000}</td></tr>"))
+                    + "</tbody></table>"),
                 pageHeight: PageHeight, margin: Margin);
 
             Assert.True(RepeatsOf(root, "tfoot"));
@@ -497,6 +508,13 @@ namespace PeachPDF.Tests.Integration
         /// <summary>
         /// A table whose <c>&lt;tfoot&gt;</c> §6.2 declines to repeat, over <paramref name="rows"/> short rows.
         /// </summary>
+        /// <remarks>
+        /// The footer measures 73.2pt against this page's 75pt quarter, which is deliberate and safe: it is
+        /// declined by <c>break-inside: auto</c>, and both conditions have to hold to repeat, so the answer
+        /// does not depend on which side of the cap the height lands — unlike a fixture that has to come
+        /// out repeating. The 60pt block is what makes the footer big enough to overhang a band's foot,
+        /// which is the thing being tested.
+        /// </remarks>
         private static string DeclinedFooterTable(int rows) =>
             LayoutHarness.Wrap(
                 "<table style='width:150pt'><tfoot style='break-inside:auto'><tr><td>"
