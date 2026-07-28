@@ -694,7 +694,7 @@ namespace PeachPDF.Html.Core.Dom
                     if (endIdx > startIdx)
                     {
                         if (preserveSpaces)
-                            Words.Add(new CssRectWord(this, HtmlUtils.DecodeHtml(text.Substring(startIdx, endIdx - startIdx)), false, false));
+                            Words.Add(new CssRectWord(this, text.Substring(startIdx, endIdx - startIdx), false, false));
                     }
                     else
                     {
@@ -755,8 +755,8 @@ namespace PeachPDF.Html.Core.Dom
                             }
                             else
                             {
-                                cleanWord = HtmlUtils.DecodeHtml(rawWord);
-                                cleanOriginalWord = HtmlUtils.DecodeHtml(rawOriginalWord);
+                                cleanWord = rawWord;
+                                cleanOriginalWord = rawOriginalWord;
 
                                 if (Hyphens == CssConstants.Auto)
                                 {
@@ -990,7 +990,7 @@ namespace PeachPDF.Html.Core.Dom
             for (var i = 0; i < segments.Length; i++)
             {
                 if (i > 0) candidates.Add(sb.Length);
-                sb.Append(HtmlUtils.DecodeHtml(segments[i]));
+                sb.Append(segments[i]);
             }
 
             return (sb.ToString(), candidates);

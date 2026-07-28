@@ -354,7 +354,12 @@ namespace PeachPDF.Html.Core.Utils
 
         /// <summary>
         /// Decode html encoded string to regular string.<br/>
-        /// Handles &lt;, &gt;, "&amp;.
+        /// Handles &lt;, &gt;, &amp;, and numeric character references.<br/>
+        /// <br/>
+        /// <b>Note:</b> This method is NOT used during normal HTML rendering.
+        /// MimeKit's HtmlTokenizer decodes entities once at parse time, so text in
+        /// CssBox.Text is already decoded. This utility is retained for test scenarios
+        /// and any edge cases that need manual entity decoding.
         /// </summary>
         /// <param name="str">the string to decode</param>
         /// <returns>decoded string</returns>
