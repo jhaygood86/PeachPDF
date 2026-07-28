@@ -1811,6 +1811,27 @@ namespace PeachPDF.Html.Core
             : PageSize.Height;
 
         /// <summary>
+        /// The whole page box's height — the sheet, its margins included — in layout space.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <see cref="PageBandHeightOf"/> answers "how much room does content get here", which varies per
+        /// slot once per-page <c>@page</c> margins do. This answers "how big is the page", which does not:
+        /// only the margins vary, and the sheet is what they are taken out of. So there is no slot
+        /// parameter, and <c>PageGeometryTable</c> recovers the same quantity the same way when it needs a
+        /// band — <c>PdfGenerator.SetContent</c> subtracts both margins from the sheet, and the public
+        /// wrappers scale <see cref="PageSize"/> and the margins by the same <c>PixelsPerPoint</c>.
+        /// </para>
+        /// <para>
+        /// Wanted where a specification says "the page height" and means the page box rather than the
+        /// content area — css-tables-3 §6.2's cap on repeating a <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c>
+        /// is the one caller today. Same sentinel caveat as <see cref="PageIndexOf"/>: ask
+        /// <see cref="HasRealPageGrid"/> first.
+        /// </para>
+        /// </remarks>
+        internal double PageSheetHeight => PageSize.Height + MarginTop + MarginBottom;
+
+        /// <summary>
         /// The document Y-coordinate one past the bottom of pagination slot <paramref name="pageIndex"/>'s
         /// content band — bands are contiguous, so this equals <see cref="PageTopOf"/> of the next slot.
         /// </summary>

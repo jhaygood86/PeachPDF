@@ -85,13 +85,13 @@ namespace PeachPDF.Html.Core.Dom
         /// pre-check — which is gated on the *absence* of both groups, so reading repetition here would
         /// send a non-repeating table down a relocation path a table with a <c>&lt;thead&gt;</c> never takes.
         /// </remarks>
-        private bool _headerIsDetached => _headerBox != null && _headerBox.Display == CssConstants.TableHeaderGroup;
+        private bool HeaderIsDetached => _headerBox != null && _headerBox.Display == CssConstants.TableHeaderGroup;
 
         /// <summary>
         /// Whether the table has a <c>&lt;tfoot&gt;</c> this engine took out of the child list. See
-        /// <see cref="_headerIsDetached"/>; <see cref="_footerRepeats"/> is the other question.
+        /// <see cref="HeaderIsDetached"/>; <see cref="_footerRepeats"/> is the other question.
         /// </summary>
-        private bool _footerIsDetached => _footerBox != null && _footerBox.Display == CssConstants.TableFooterGroup;
+        private bool FooterIsDetached => _footerBox != null && _footerBox.Display == CssConstants.TableFooterGroup;
 
         /// <summary>
         /// Whether css-tables-3 §6.2 lets the detached <c>&lt;thead&gt;</c> be repeated on every band the
@@ -116,8 +116,13 @@ namespace PeachPDF.Html.Core.Dom
         /// the tables that draw no repeated footer. That is no longer the same set: a <c>&lt;tfoot&gt;</c>
         /// §6.2 declines is still measured, so subtracting the raw height would keep charging every band
         /// for a footer that is not there — which is the whole cost §6.2's conditions exist to remove.
+        /// <para>
+        /// Clamped at zero because an empty <c>&lt;tfoot&gt;&lt;/tfoot&gt;</c> measures
+        /// <c>-GetVerticalSpacing()</c>, and a negative reservation would <i>add</i> room to a band rather
+        /// than take it. The expression this replaced carried the same guard.
+        /// </para>
         /// </remarks>
-        private double RepeatedFooterHeight => _footerRepeats ? _footerHeight : 0;
+        private double RepeatedFooterHeight => _footerRepeats && _footerHeight > 0 ? _footerHeight : 0;
 
         /// <summary>
         /// Whether this run continues a table layout an earlier fragmentainer pass began, rather than
@@ -1064,7 +1069,7 @@ namespace PeachPDF.Html.Core.Dom
             // position - CssProxyBox.PerformLayoutImp captures a paint-time snapshot of the
             // header at whatever position it's laid out at, so creating the proxy here (before a
             // possible page-break relocation) would bake in a stale, pre-relocation snapshot.
-            if (_headerIsDetached && _headerBox != null)
+            if (HeaderIsDetached && _headerBox != null)
             {
                 // Layout header rows directly using table layout logic
                 var headerRowsLayoutY = cursor.CurrentY;
@@ -1101,7 +1106,7 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             // Step 3: Layout footer rows once to get dimensions (if needed)
-            if (_footerIsDetached && _footerBox != null)
+            if (FooterIsDetached && _footerBox != null)
             {
                 // Layout footer rows directly
                 var footerRowsLayoutY = 0d;
@@ -1141,7 +1146,7 @@ namespace PeachPDF.Html.Core.Dom
                 _footerHeight = _footerBox.ActualBottom - _footerBox.Location.Y;
             }
 
-            SettleWhetherTheGroupsRepeat(cursor.SlotIndex);
+            SettleWhetherTheGroupsRepeat();
 
             _setup.Header = _headerBox is null
                 ? null
@@ -1175,26 +1180,34 @@ namespace PeachPDF.Html.Core.Dom
         /// Called from the measurement step, after both heights are known and before they are published:
         /// the cap needs a measured height, and the measurement is what a repetition flag would have to
         /// gate, so asking the question any earlier is circular. Once per table rather than once per band
-        /// — the answer is carried on <see cref="DetachedRowGroup"/> and a continuation inherits it — which
-        /// is why the band is the one the table <i>begins</i> in even under per-page <c>@page</c> geometry.
-        /// Both groups repeat unconditionally with no real page grid to measure a quarter of.
+        /// — the answer is carried on <see cref="DetachedRowGroup"/> and a continuation inherits it. Both
+        /// groups repeat unconditionally with no real page grid to measure a quarter of.
+        /// </para>
+        /// <para>
+        /// The quarter is taken of <see cref="HtmlContainerInt.PageSheetHeight"/> — the page box, margins
+        /// included — because §6.2 says "the page height" and means the page rather than the content area.
+        /// That is deliberately <i>not</i> the band a repeated group costs its height out of, which is the
+        /// smaller of the two: measuring against the band would decline a group between a quarter of the
+        /// band and a quarter of the sheet, where §6.2's <c>must</c> requires it to repeat. It is also why
+        /// this takes no slot — only the margins vary per page, and the sheet they come out of does not.
         /// </para>
         /// </remarks>
-        /// <param name="slot">the band the table begins in, whose height the quarter is taken of</param>
-        private void SettleWhetherTheGroupsRepeat(int slot)
+        private void SettleWhetherTheGroupsRepeat()
         {
             var container = _tableBox.HtmlContainer;
-            var quarterOfTheBand = container is { HasRealPageGrid: true }
-                ? container.PageBandHeightOf(slot) / 4
+            var quarterOfThePage = container is { HasRealPageGrid: true }
+                ? container.PageSheetHeight / 4
                 : double.MaxValue;
 
-            _headerRepeats = _headerIsDetached
-                             && BreakValues.AvoidsBreak(_headerBox!.BreakInside, FragmentationContext.Page)
-                             && _headerHeight < quarterOfTheBand;
+            _headerRepeats = HeaderIsDetached
+                             && _headerBox is { } header
+                             && BreakValues.AvoidsBreak(header.BreakInside, FragmentationContext.Page)
+                             && _headerHeight < quarterOfThePage;
 
-            _footerRepeats = _footerIsDetached
-                             && BreakValues.AvoidsBreak(_footerBox!.BreakInside, FragmentationContext.Page)
-                             && _footerHeight < quarterOfTheBand;
+            _footerRepeats = FooterIsDetached
+                             && _footerBox is { } footer
+                             && BreakValues.AvoidsBreak(footer.BreakInside, FragmentationContext.Page)
+                             && _footerHeight < quarterOfThePage;
         }
 
         /// <summary>
@@ -1219,8 +1232,8 @@ namespace PeachPDF.Html.Core.Dom
                 && !_continuesAPreviousPass
                 && pageHeight < double.MaxValue - 1
                 && _tableBox.HtmlContainer != null
-                && !_headerIsDetached
-                && !_footerIsDetached)
+                && !HeaderIsDetached
+                && !FooterIsDetached)
             {
                 var slot = cursor.SlotIndex;
                 var firstRowHeight = EstimateRowHeight(_bodyRows[0]);
@@ -1260,7 +1273,7 @@ namespace PeachPDF.Html.Core.Dom
                 && !_continuesAPreviousPass
                 && pageHeight < double.MaxValue - 1
                 && container != null
-                && _headerIsDetached && _headerBox != null)
+                && HeaderIsDetached && _headerBox != null)
             {
                 var slot = cursor.SlotIndex;
                 var firstRowHeight = EstimateRowHeight(_bodyRows[0]);
@@ -1298,7 +1311,7 @@ namespace PeachPDF.Html.Core.Dom
             // about a *later* band and reads _headerRepeats.
             var resumedHeaderRoom = 0d;
 
-            if (_headerIsDetached && _headerBox != null && (_headerRepeats || !_continuesAPreviousPass))
+            if (HeaderIsDetached && _headerBox != null && (_headerRepeats || !_continuesAPreviousPass))
             {
                 var headerProxy = CreateHeaderProxy(cursor.CurrentY);
                 if (headerProxy != null)
@@ -1481,7 +1494,7 @@ namespace PeachPDF.Html.Core.Dom
             // Keyed to the footer being detached rather than to it repeating: this footer closes the
             // *table*, so it is drawn under the last row whether or not §6.2 let it repeat - the same way
             // the header block above still draws a non-repeating <thead> once at the table's top.
-            if (!cursor.Stopped && _footerIsDetached && _footerHeight > 0)
+            if (!cursor.Stopped && FooterIsDetached && _footerHeight > 0)
             {
                 var finalFooterProxy = CreateFooterProxy(cursor.CurrentY);
                 if (finalFooterProxy != null)

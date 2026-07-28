@@ -1,7 +1,8 @@
 # A `<thead>` repeats only where §6.2 says it may, and the UA sheet is what says it should
 
-Closes [#494](https://github.com/jhaygood86/PeachPDF/issues/494) (PR #519). Both of its conditions, not
-the one the issue and the tracker expected to be separable.
+Closes [#494](https://github.com/jhaygood86/PeachPDF/issues/494) and
+[#520](https://github.com/jhaygood86/PeachPDF/issues/520) (PR #519). Both of §6.2's conditions, not the
+one the issue and the tracker expected to be separable.
 
 ## What was true
 
@@ -72,6 +73,13 @@ decision silently retaken.
   `PixelsPerPoint` unpinned *and* use 200–300-unit pages, where a one-row header really is ~85 units,
   i.e. over a quarter. Their pages were raised rather than their expectations lowered: those tests are
   about proxies being made per page, not about repetition eligibility.
+- **The quarter's denominator was wrong first time round.** It measured against the *content band*, on
+  the reasoning that the band is what a repeated group actually costs its height out of. But §6.2 says
+  "the page height" and it is a `must`-repeat rule, so the smaller denominator declines a group in a
+  range the spec requires repeating — roughly 182pt–210pt on A4 with 20mm margins. Filed as #520 to be
+  deferred, then pulled in-scope. `HtmlContainerInt.PageSheetHeight` is the quantity, and it needs no
+  slot: only the margins vary per page, and the sheet they come out of does not — which incidentally
+  removed the one place the settle step had to reason about *which* band the table began in.
 - **The `<tfoot>` risk predicted before implementation reproduced, and was worth measuring rather than
   assuming.** Sweeping a declined footer's body cell in fours from 120 to 200 words: four consecutive
   documents put the footer 1.2pt past the band, and the 17 others did not. Bounded by about one row's
@@ -93,10 +101,38 @@ decision silently retaken.
   the proof. The `page-break-*` entries in `CssDefaults.InitialValues` stay: they are the alias registry
   that makes `initial`/`unset`/`revert` resolve on the legacy spelling.
 
+## What the review pass found that 6,908 green tests did not
+
+The habit #513 earned paid again, and this time against the *tests* rather than the code. Mutating the
+source showed two gates that could be reverted with the **entire suite still green**:
+
+- **`RepeatedFooterHeight` → the raw height.** The single change the repeated-group-cost invariant calls
+  load-bearing, and four of the five gated subtractions are the footer's. Nothing failed. The header had
+  `ATallHeaderThatDoesNotRepeat_…`; the footer had no counterpart, because the two are asked of opposite
+  edges of the band and one test cannot cover both.
+- **Both of `TakeBreakBeforeRow`'s gates.** Every fixture written first time round fragments *inside a
+  cell*, so each later fragmentainer is opened by a continuation and `TakeBreakBeforeRow` never runs at
+  all — while a break *between two rows* is the path an ordinary many-row table takes. A declined group
+  would have been redrawn on every page of the commonest table shape there is, silently.
+
+Both are now pinned, and both mutations were re-run to confirm they fail. The lesson worth keeping is
+narrower than "test more": **a fixture that fragments mid-cell and a fixture that breaks between rows
+exercise disjoint halves of this engine**, and the repeated-group work has now twice written only the
+first kind.
+
+Two smaller review findings were real too: `RepeatedFooterHeight` dropped the `> 0` clamp its
+predecessor expression carried, so an empty `<tfoot></tfoot>` (which measures `-GetVerticalSpacing()`)
+would have *added* room to a band; and the UA rule matches the **elements**, so a `<thead>` under the
+common `table { display: block }` idiom now gets `break-inside: avoid` as an ordinary block — measured as
+a 120pt group moving from page 0 to page 1. That is the property doing what it says, but it is a third
+migration case and is now written down as one.
+
 ## Evidence
 
-Full net8.0 suite **6908 passed / 0 failed / 9 skipped** (6895 before). CLI **96/96**. Zero-warning
+Full net8.0 suite **6917 passed / 0 failed / 9 skipped** (6895 before). CLI **96/96**. Zero-warning
 `dotnet build PeachPDF.slnx -t:Rebuild`. Six of the ten behavioural assertions confirmed **failing on
 `main`** with the change stashed, and the three `Repeats` assertions cannot compile there at all. 71 of
-71 showcases byte-identical. Tall-header, tall-footer and transition documents rasterized with **both**
-PDFium and MuPDF and read.
+71 pre-existing showcases byte-identical, plus one new one — `paged_media_table_group_repetition`, two
+tables of identical rows differing only in `break-inside`, which is both the demonstration of the new
+author control and the two-renderer check this class of change wants. Tall-header, tall-footer,
+transition and showcase documents rasterized with **both** PDFium and MuPDF and read.

@@ -18,8 +18,21 @@ flipped: there, room was drawn on but not reserved.
 
 Measured while applying css-tables-3 §6.2's conditions: with the reservations left in place, the flow on
 the second page of a declined-tall-header document begins at **124.7** instead of **20.0** — a full
-header's worth of nothing. `TableRepeatedGroupConditionsTests.ATallHeaderThatDoesNotRepeat_LeavesTheLaterBandsToTheRows`
-is the assertion that can tell the two apart; nothing else in the suite can.
+header's worth of nothing.
+
+**It takes two assertions, not one, and they are asked of opposite edges.** A header's room comes off the
+band's head, so it is stated as "where does the flow start"; a footer's comes off its foot, so it is
+"where does the flow stop". `TableRepeatedGroupConditionsTests` has one of each
+(`ATallHeaderThatDoesNotRepeat_…` / `ATallFooterThatDoesNotRepeat_…`), and with only the header's,
+reverting the footer's gate left the **entire suite green** — while four of the five gated subtractions
+are the footer's.
+
+**And it takes two fixture shapes.** A table whose single row runs out of room *inside a cell* never
+enters `TakeBreakBeforeRow`, which is where a later band's proxies are written; a table of many short
+rows that breaks *between two rows* never exercises the continuation path. They are disjoint halves of
+this engine, and the repeated-group work has twice reached first for the mid-cell one alone. Reverting
+both of `TakeBreakBeforeRow`'s gates was also invisible to a full green suite until the many-row fixture
+existed — and that is the shape an ordinary document has.
 
 The specific trap the four raw `- _footerHeight` subtractions set: they were correct only because
 `_footerHeight` was zero for exactly the tables that draw no repeated footer. A group that is *measured

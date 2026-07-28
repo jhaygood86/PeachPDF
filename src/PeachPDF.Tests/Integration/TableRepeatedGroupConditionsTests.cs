@@ -40,19 +40,47 @@ namespace PeachPDF.Tests.Integration
         private const double PageHeight = 300;
         private const double Margin = 20;
 
-        /// <summary>The content band <see cref="Paginate"/>'s page grid gives each fragmentainer.</summary>
-        private const double Band = PageHeight - 2 * Margin;
-
-        /// <summary>Comfortably over <see cref="Band"/>/4, and comfortably under <see cref="Band"/>.</summary>
-        private const double OverAQuarterOfTheBand = 90;
+        /// <summary>
+        /// Comfortably over <see cref="PageHeight"/>/4 — §6.2's cap is a quarter of the whole page box,
+        /// not of the smaller content band — and comfortably under the band, so the group still fits a
+        /// page at all.
+        /// </summary>
+        private const double OverAQuarterOfThePage = 90;
 
         private static string Words(int count) =>
             string.Join(" ", Enumerable.Range(0, count).Select(i => $"word{i:0000}"));
 
+        /// <summary>
+        /// A table whose single body row runs out of room <i>inside its cell</i>, so every fragmentainer
+        /// after the first is opened by a pass that resumes the table through <see cref="TableSetup"/>.
+        /// </summary>
         private static string TableWith(string group, string groupStyle = "", string cellContent = "") =>
             $"<table style='width:150pt'><{group} style='{groupStyle}'><tr><td>{cellContent}"
             + $"{group.ToUpperInvariant()}WORD</td></tr></{group}>"
             + "<tbody><tr><td>{W}</td></tr></tbody></table>";
+
+        /// <summary>
+        /// A table of many short rows, which fragments at a break <i>between two rows</i> — the other
+        /// path entirely, and the one an ordinary document takes.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="TableWith"/>'s single row never enters <c>TakeBreakBeforeRow</c>, which is where a
+        /// later band's header and footer proxies are written. Both of its gates could be reverted with the
+        /// whole suite still green until this shape existed.
+        /// </remarks>
+        private static string RowsTableWith(string group, string groupStyle = "", string cellContent = "")
+        {
+            var rows = string.Join("", Enumerable.Range(0, 40).Select(i => $"<tr><td>word{i:0000}</td></tr>"));
+
+            return $"<table style='width:150pt'><{group} style='{groupStyle}'><tr><td>{cellContent}"
+                   + $"{group.ToUpperInvariant()}WORD</td></tr></{group}><tbody>{rows}</tbody></table>";
+        }
+
+        /// <summary>The same rows with no repeatable group at all — the baseline a declined group must match.</summary>
+        private static string RowsTableWithNoGroup() =>
+            "<table style='width:150pt'><tbody>"
+            + string.Join("", Enumerable.Range(0, 40).Select(i => $"<tr><td>word{i:0000}</td></tr>"))
+            + "</tbody></table>";
 
         // ─── The break-inside condition, and the UA rule that makes it behaviour-preserving ──────
 
@@ -177,10 +205,10 @@ namespace PeachPDF.Tests.Integration
         [Theory]
         [InlineData("thead")]
         [InlineData("tfoot")]
-        public async Task AGroupTallerThanAQuarterOfTheBand_IsDrawnOnceAndNotRepeated(string group)
+        public async Task AGroupTallerThanAQuarterOfThePage_IsDrawnOnceAndNotRepeated(string group)
         {
             var (root, container) = await Paginate(TableWith(
-                group, cellContent: $"<div style='height:{OverAQuarterOfTheBand}pt'></div>"));
+                group, cellContent: $"<div style='height:{OverAQuarterOfThePage}pt'></div>"));
 
             AssertDrawnOnlyOn(container, $"{group.ToUpperInvariant()}WORD",
                 group == "thead" ? First(container) : Last(container));
@@ -195,19 +223,27 @@ namespace PeachPDF.Tests.Integration
         /// <remarks>
         /// Self-calibrating rather than hand-computed. A first layout reports what the group really
         /// measured — cell padding, borders and the row's own line height included — and the second is
-        /// given the page whose band is exactly four of it. Hand-picking a height instead would pin the
+        /// given the page that is exactly four of it. Hand-picking a height instead would pin the
         /// arithmetic of the fixture rather than the comparison.
         /// </remarks>
         [Fact]
-        public async Task AGroupExactlyAQuarterOfTheBand_DoesNotRepeat()
+        public async Task AGroupExactlyAQuarterOfThePage_DoesNotRepeat()
         {
             var (measured, _) = await Paginate(TableWith("thead"));
             var height = TableOf(measured).TableSetup!.Header!.Height;
 
             Assert.True(height > 0, "the fixture's header measured nothing, so the page below is degenerate");
 
-            var (exactly, _) = await LayoutHarness.LayoutAsync(
-                Fixture(TableWith("thead")), pageHeight: 4 * height + 2 * Margin, margin: Margin);
+            // The harness's pageHeight is the sheet, which is exactly what §6.2's quarter is taken of.
+            var (exactly, exactlyContainer) = await LayoutHarness.LayoutAsync(
+                Fixture(TableWith("thead")), pageHeight: 4 * height, margin: Margin);
+
+            // Pin the premise before the conclusion. The container recovers the sheet by adding the two
+            // margins back onto the band it was given, and each of those rounds - so a change in font
+            // metrics, or a platform difference, could leave the quarter an ulp either side of the
+            // measured height. An ulp high fails this test for a reason that is not about strictness; an
+            // ulp low would let it pass under `<=` as well, and quietly stop testing anything.
+            Assert.Equal(height, exactlyContainer.PageSheetHeight / 4);
 
             Assert.False(RepeatsOf(exactly, "thead"));
         }
@@ -227,11 +263,94 @@ namespace PeachPDF.Tests.Integration
         public async Task ATallHeaderThatDoesNotRepeat_LeavesTheLaterBandsToTheRows()
         {
             var (_, capped) = await Paginate(TableWith(
-                "thead", cellContent: $"<div style='height:{OverAQuarterOfTheBand}pt'></div>"));
+                "thead", cellContent: $"<div style='height:{OverAQuarterOfThePage}pt'></div>"));
 
             var (_, headerless) = await Paginate("<table style='width:150pt'><tbody><tr><td>{W}</td></tr></tbody></table>");
 
             Assert.Equal(TopOfTheFlowOn(headerless, 1), TopOfTheFlowOn(capped, 1), 3);
+        }
+
+        /// <summary>
+        /// The same fact read from the other end of the band, which is where four of the five gated
+        /// reservations are: a declined <c>&lt;tfoot&gt;</c> leaves the flow running as far down each band
+        /// as it would with no footer at all.
+        /// </summary>
+        /// <remarks>
+        /// Its own test rather than a theory arm of the header's, because the two are asked of opposite
+        /// edges. Without it, reverting <c>RepeatedFooterHeight</c> to the raw height — the single change
+        /// the repeated-group cost invariant calls load-bearing — left the whole suite green: the footer
+        /// would be drawn on one page while every band still paid its height, and content would stop above
+        /// a blank strip at each band's foot with nothing to say so.
+        /// </remarks>
+        [Fact]
+        public async Task ATallFooterThatDoesNotRepeat_LeavesTheLaterBandsToTheRows()
+        {
+            var (_, capped) = await Paginate(TableWith(
+                "tfoot", cellContent: $"<div style='height:{OverAQuarterOfThePage}pt'></div>"));
+
+            var (_, footerless) = await Paginate("<table style='width:150pt'><tbody><tr><td>{W}</td></tr></tbody></table>");
+
+            // The first band, not a later one: the footer's room is reserved from the foot of every band
+            // the table spans, so the first is already charged for it, and the last carries the table's own
+            // closing footer whichever way §6.2 answered.
+            Assert.Equal(BottomOfTheFlowOn(footerless, 0), BottomOfTheFlowOn(capped, 0), 3);
+        }
+
+        // ─── The break between two rows, which is the other path entirely ────────────────────────
+
+        /// <summary>
+        /// A declined group is not redrawn at a break between two rows either — the path an ordinary
+        /// many-row table takes, and the one <c>TakeBreakBeforeRow</c> owns.
+        /// </summary>
+        /// <remarks>
+        /// Every other fixture here fragments <i>inside</i> a cell, so each later fragmentainer is opened by
+        /// a continuation and <c>TakeBreakBeforeRow</c> never runs. Both of its gates could be reverted with
+        /// the full suite green until this existed, which would have redrawn a declined group on every page
+        /// of the most ordinary table shape there is.
+        /// </remarks>
+        [Theory]
+        [InlineData("thead", "break-inside:auto", "")]
+        [InlineData("tfoot", "break-inside:auto", "")]
+        [InlineData("thead", "", "<div style='height:90pt'></div>")]
+        [InlineData("tfoot", "", "<div style='height:90pt'></div>")]
+        public async Task AGroupDeclinedBySixTwo_IsNotRedrawnAtABreakBetweenTwoRows(
+            string group, string groupStyle, string cellContent)
+        {
+            var (root, container) = await Paginate(RowsTableWith(group, groupStyle, cellContent));
+
+            AssertDrawnOnlyOn(container, $"{group.ToUpperInvariant()}WORD",
+                group == "thead" ? First(container) : Last(container));
+
+            Assert.False(RepeatsOf(root, group));
+        }
+
+        /// <summary>
+        /// And the band a break opens is given wholly to the rows, so nothing was reserved there for the
+        /// group that is not drawn on it.
+        /// </summary>
+        /// <remarks>
+        /// The reservation half of the test above, against a table with no group at all: a header's room
+        /// comes off the band's head, a footer's off its foot, and each is asked at the edge it takes.
+        /// </remarks>
+        [Theory]
+        [InlineData("thead", "break-inside:auto", "")]
+        [InlineData("tfoot", "break-inside:auto", "")]
+        [InlineData("thead", "", "<div style='height:90pt'></div>")]
+        [InlineData("tfoot", "", "<div style='height:90pt'></div>")]
+        public async Task ABandOpenedByARowBreak_HoldsAsManyRowsAsItWouldWithNoGroupAtAll(
+            string group, string groupStyle, string cellContent)
+        {
+            var (_, declined) = await Paginate(RowsTableWith(group, groupStyle, cellContent));
+            var (_, plain) = await Paginate(RowsTableWithNoGroup());
+
+            if (group == "thead")
+            {
+                Assert.Equal(TopOfTheFlowOn(plain, 1), TopOfTheFlowOn(declined, 1), 3);
+            }
+            else
+            {
+                Assert.Equal(BottomOfTheFlowOn(plain, 0), BottomOfTheFlowOn(declined, 0), 3);
+            }
         }
 
         /// <summary>
@@ -310,7 +429,22 @@ namespace PeachPDF.Tests.Integration
         /// group's own words are excluded by construction — every fixture that reaches here names its body
         /// words <c>wordNNNN</c>.
         /// </summary>
-        private static double TopOfTheFlowOn(HtmlContainerInt container, int slot)
+        private static double TopOfTheFlowOn(HtmlContainerInt container, int slot) =>
+            BodyWordsOn(container, slot).Min(w => w.Rect.Top);
+
+        /// <summary>
+        /// How far down <paramref name="slot"/> the flow ran — the question a footer's reservation
+        /// answers, where <see cref="TopOfTheFlowOn"/> answers a header's.
+        /// </summary>
+        private static double BottomOfTheFlowOn(HtmlContainerInt container, int slot) =>
+            BodyWordsOn(container, slot).Max(w => w.Rect.Bottom);
+
+        /// <summary>
+        /// The body words drawn on <paramref name="slot"/>, in that fragmentainer's own coordinates. The
+        /// group's own words are excluded by construction — every fixture that reaches here names its body
+        /// words <c>wordNNNN</c> and its group's word <c>THEADWORD</c>/<c>TFOOTWORD</c>.
+        /// </summary>
+        private static List<TextFragment> BodyWordsOn(HtmlContainerInt container, int slot)
         {
             var words = Flatten(container.FragmentTree!.Fragmentainers[slot].Root)
                 .SelectMany(f => f.Words)
@@ -319,7 +453,7 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotEmpty(words);
 
-            return words.Min(w => w.Rect.Top);
+            return words;
         }
 
         private static IEnumerable<BoxFragment> Flatten(BoxFragment fragment)
