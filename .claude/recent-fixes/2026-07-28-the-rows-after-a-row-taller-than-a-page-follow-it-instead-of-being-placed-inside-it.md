@@ -130,12 +130,14 @@ break after a too-tall row drew one on that page too, over the row's own content
 had passed. Removing the break removes the accidental header.
 
 The gap is older than the change (any table spanning pages without breaking has always had one header);
-it is now easy to see. [#509](https://github.com/jhaygood86/PeachPDF/issues/509), with
-[a gap file](../accepted-gaps/table-a-repeated-header-is-only-carried-onto-a-page-a-break-falls-on.md)
-and a reader-facing limitation in `docs/html-css-support.md`. Not fixed here because "a break was taken"
-is the wrong question and the right one — which bands the table's slice covers — is the same set
-`PageBreakBottoms` needs entries for, so half of it trades a missing header for a border drawn across the
-middle of a row.
+it is now easy to see. [#509](https://github.com/jhaygood86/PeachPDF/issues/509). Not fixed here because
+"a break was taken" is the wrong question and the right one — which bands the table's slice covers — is
+the same set `PageBreakBottoms` needs entries for, so half of it trades a missing header for a border
+drawn across the middle of a row.
+
+**Since closed**, by slicing the row rather than by widening that set — see
+[the repeated-group note](2026-07-28-a-repeated-group-is-drawn-on-every-band-the-table-spans.md), which
+also records why the `PageBreakBottoms` half of the objection above was right.
 
 ## What the review caught, and two of them are filed
 

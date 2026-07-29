@@ -2066,10 +2066,13 @@ await SaveShowcaseAsync("paged_media_table_row_continuation", "Paged Media", "Ta
 // bottom actually landed in, rather than being placed back on a page it is still filling and painted
 // over its content (issue #432).
 //
-// The repeating <thead> is on the page the table begins on and on the page the break between two
-// ordinary rows opens, and not on the page the tall row merely overflows onto: no break falls there, and
-// the header block is keyed to a break being taken. That is a css-tables-3 §6.2 gap of its own (#509),
-// visible here because this is the fixture that produces a page a table spans without breaking on.
+// And the repeating <thead> is carried onto every page the table spans, including the ones the tall row
+// merely overflows through - css-tables-3 §6.2 repeats a header "on each page spanned by a table", not on
+// each page it broke on, and asks for room to be left for it (#509). Room on a page nothing breaks on can
+// only come from slicing the row itself, which css-break-3 §4.3 allows in as many words: "the UA may also
+// fragment the contents of monolithic elements by slicing the element's graphical representation". So the
+// block is neither resized nor moved - each page draws it from a different origin, and the strips meet
+// exactly, which is what makes the gradient continuous across the header on every page.
 var tallRowHtml = """
     <!DOCTYPE html>
     <html><head><style>
@@ -2104,8 +2107,10 @@ await SaveShowcaseAsync("paged_media_table_tall_row", "Paged Media", "Table Row 
     "CSS Fragmentation §4.3: a table row whose cell holds a block taller than the page's content band "
     + "has no page that could hold it, so it is left where it is and overflows across pages - and the "
     + "rows after it continue immediately below where it ends, rather than being placed back on a page "
-    + "it is still filling and drawn over its content. The repeating header is not carried onto the page "
-    + "the tall row merely overflows onto, since no break falls there.",
+    + "it is still filling and drawn over its content. The repeating header is carried onto every page "
+    + "the table spans, including the ones the row only overflows through: css-tables-3 6.2 asks for room "
+    + "to be left for it there, and 4.3 allows a UA to slice the graphical representation of content it "
+    + "cannot break, so the block resumes below the header on each page rather than running under it.",
     tallRowHtml, new PdfGenerateConfig { PageSize = PageSize.A6 });
 
 // ── a rowspan crossing a page boundary ─────────────────────────────────────
