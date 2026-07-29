@@ -106,11 +106,11 @@ would flip that predicate for every mid-cell-continuing table, a far wider chang
   [#494](https://github.com/jhaygood86/PeachPDF/issues/494), and it gets more expensive with this change
   for the same reason #439 made it more expensive: the footer's room is now genuinely reserved.
 - **[#509](https://github.com/jhaygood86/PeachPDF/issues/509)** was scoped alongside this and left open,
-  with a finding added to
-  [its gap file](../accepted-gaps/table-a-repeated-header-is-only-carried-onto-a-page-a-break-falls-on.md):
-  what remains of it after this change is a band crossed by a *monolithic* overflowing row, where §6.2's
-  "leave room" is unsatisfiable, so closing it as filed swaps a missing header for a header drawn over a
-  620pt block.
+  with the finding that what remains of it after this change is a band crossed by an overflowing row,
+  where §6.2's "leave room" looked unsatisfiable — so closing it as filed would swap a missing header for
+  a header drawn over a 620pt block. **Since closed**, and that reading turned out to be wrong: the room
+  can be made by slicing the row, which §4.3 expressly allows. See
+  [the repeated-group note](2026-07-28-a-repeated-group-is-drawn-on-every-band-the-table-spans.md).
 - **A monolithic block inside a cell** whose bottom lands in the footer's strip is still drawn under the
   footer: `CssBox`'s §4.3 mover does not consult the reservation. Not what the issue measured.
 - **Multicol.** Inside a column the reservation is subtracted from the *column's* band while the footer is

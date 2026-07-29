@@ -1446,6 +1446,28 @@ namespace PeachPDF.Html.Core
             _emitter?.ClearContinuationShells(box, fromSlot);
 
         /// <summary>
+        /// States that <paramref name="box"/> and its subtree draw <paramref name="shift"/> lower in
+        /// <paramref name="slot"/>, confined to <paramref name="band"/> — see
+        /// <see cref="FragmentEmitter.RecordFragmentDisplacement"/>.
+        /// </summary>
+        /// <remarks>
+        /// Null on a measurement or detached-fragmentainer run, which has no emitter to state anything to.
+        /// </remarks>
+        /// <param name="box">the root of the run being sliced</param>
+        /// <param name="slot">the fragmentainer this displacement applies to</param>
+        /// <param name="shift">how far lower the box draws there</param>
+        /// <param name="band">the content band the fragment is confined to, in document space</param>
+        internal void RecordFragmentDisplacement(CssBox box, int slot, double shift, RRect band) =>
+            _emitter?.RecordFragmentDisplacement(box, slot, shift, band);
+
+        /// <summary>
+        /// Discards what <paramref name="box"/> stated from <paramref name="fromSlot"/> on — or, with no
+        /// slot, in every slot — see <see cref="FragmentEmitter.ClearFragmentDisplacements"/>.
+        /// </summary>
+        internal void ClearFragmentDisplacements(CssBox box, int? fromSlot = null) =>
+            _emitter?.ClearFragmentDisplacements(box, fromSlot);
+
+        /// <summary>
         /// The box whose background fills the whole page canvas, per
         /// <see href="https://www.w3.org/TR/CSS21/colors.html#background">CSS 2.1 §14.2</see>:
         /// <c>body</c>'s background if it declares one, else <c>html</c>'s, else none. Null when

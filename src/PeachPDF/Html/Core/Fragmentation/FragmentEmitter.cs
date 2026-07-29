@@ -227,6 +227,35 @@ namespace PeachPDF.Html.Core.Fragmentation
             internal RRect? ShellRect { get; set; }
 
             /// <summary>
+            /// The band a displaced fragment is confined to, in document space, or null for an ordinary
+            /// fragment — see <see cref="RecordFragmentDisplacement"/>. Intersected into the fragment's
+            /// <see cref="BoxFragment.OverflowClip"/>, because a displaced box's rectangle still spans its
+            /// whole height and would otherwise redraw, under the repeated header, the strip an earlier
+            /// band already showed.
+            /// </summary>
+            internal RRect? ConfinedTo { get; set; }
+
+            /// <summary>
+            /// How far lower than its own geometry this fragment draws — see
+            /// <see cref="RecordFragmentDisplacement"/>, and 0 for an ordinary fragment.
+            /// </summary>
+            /// <remarks>
+            /// Kept on the draft because the whole-box questions are resolved at <i>materialization</i>
+            /// (see the invariant "everything defined over the whole box is resolved at materialization"),
+            /// and every one of them is a membership question that has to be asked of where the geometry
+            /// <b>lands</b>. With the shift reachable only inside <c>BuildDraft</c>, a displaced box whose
+            /// last strip was shorter than the gaps above it tested as being in no band at all and lost
+            /// its background and borders on that page entirely.
+            /// </remarks>
+            internal double Shift { get; set; }
+
+            /// <summary>
+            /// The box whose run this fragment is a slice of, or null for an ordinary fragment — see
+            /// <see cref="ClipIsInsideTheDisplacedRun"/>, its only reader.
+            /// </summary>
+            internal CssBox? DisplacementRoot { get; set; }
+
+            /// <summary>
             /// The box's own per-line decoration rectangles that landed in this slot, in document space.
             /// Kept raw because <see cref="SliceGeometry"/> is defined over <i>every</i> rectangle the box
             /// produces across every fragmentainer, and a later pass can still add one.
@@ -292,6 +321,20 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// more than it had to, and the pass doing the clearing re-records.
         /// </remarks>
         private readonly Dictionary<CssBox, SortedDictionary<int, RRect>> _continuationShells =
+            new(ReferenceEqualityComparer.Instance);
+
+        /// <summary>
+        /// How far a box's own geometry is displaced in a given fragmentainer, and the content band that
+        /// fragment is confined to — <see cref="RecordFragmentDisplacement"/>.
+        /// </summary>
+        /// <remarks>
+        /// Unlike <see cref="_continuationShells"/>, the slot key here <i>is</i> membership: a displacement
+        /// says where a box draws in one named fragmentainer, and the whole point is that the same
+        /// rectangle draws somewhere different in the next one. There is nothing for
+        /// <see cref="FragmentRegion.Contains"/> to decide from, because the un-displaced geometry is the
+        /// same in every band.
+        /// </remarks>
+        private readonly Dictionary<CssBox, Dictionary<int, (CssBox Root, double Shift, RRect Band)>> _displacements =
             new(ReferenceEqualityComparer.Instance);
 
         private int _lastEmittedSlot = -1;
@@ -420,6 +463,83 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             if (shells.Count == 0) _continuationShells.Remove(box);
         }
+
+        /// <summary>
+        /// States that <paramref name="box"/> and everything under it draws <paramref name="shift"/> lower
+        /// in fragmentainer <paramref name="slot"/> than its own geometry says, confined to
+        /// <paramref name="band"/> — the strip that band leaves once the groups its table repeats have
+        /// taken theirs.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <see href="https://www.w3.org/TR/css-break-3/#possible-breaks">css-break-3 §4.3</see>'s "fragment
+        /// the contents of monolithic elements by slicing the element's graphical representation", made
+        /// answerable per band. Content taller than a band is drawn once, from one
+        /// <see cref="CssBoxProperties.Location"/>, and each fragmentainer shows the strip of it that falls
+        /// in that band — which is why a 620pt block already slices correctly across three pages with no
+        /// machinery at all. What it cannot do unaided is <i>resume below</i> a repeated
+        /// <c>&lt;thead&gt;</c>, because that means the strips are no longer contiguous in document space.
+        /// A displacement is exactly that discontinuity: the box keeps its size, and each band draws it
+        /// from a different origin so the strips still meet edge to edge.
+        /// </para>
+        /// <para>
+        /// <b>It applies to the subtree, not to the box.</b> The run being sliced is a row's whole content —
+        /// the cell's border and tint as much as the block inside it — and all of it has to move together
+        /// or the strips disagree. <c>BuildDraft</c> therefore carries the displacement down its recursion
+        /// rather than looking it up per box.
+        /// </para>
+        /// <para>
+        /// <b>The band is not decoration.</b> A displaced box's rectangle still covers its whole height, so
+        /// on any band but the first it reaches up into the room the repeated header is drawn in. Without
+        /// the confinement the strip the earlier band already showed is drawn a second time, underneath the
+        /// header — every word still claimed by exactly one fragmentainer, which is the class of defect the
+        /// per-word census cannot see.
+        /// </para>
+        /// </remarks>
+        /// <param name="box">the root of the run being sliced</param>
+        /// <param name="slot">the fragmentainer this displacement applies to</param>
+        /// <param name="shift">how far lower the box draws there</param>
+        /// <param name="band">the content band the fragment is confined to, in document space</param>
+        internal void RecordFragmentDisplacement(CssBox box, int slot, double shift, RRect band)
+        {
+            if (!_displacements.TryGetValue(box, out var bySlot))
+            {
+                _displacements[box] = bySlot = [];
+            }
+
+            bySlot[slot] = (box, shift, band);
+        }
+
+        /// <summary>
+        /// Discards what <paramref name="box"/> stated from <paramref name="fromSlot"/> on — or, with no
+        /// slot, in every slot — for the same two reasons as <see cref="ClearContinuationShells"/>.
+        /// </summary>
+        internal void ClearFragmentDisplacements(CssBox box, int? fromSlot = null)
+        {
+            if (fromSlot is not { } from)
+            {
+                _displacements.Remove(box);
+                return;
+            }
+
+            if (!_displacements.TryGetValue(box, out var bySlot)) return;
+
+            foreach (var slot in new List<int>(bySlot.Keys))
+            {
+                if (slot >= from) bySlot.Remove(slot);
+            }
+
+            if (bySlot.Count == 0) _displacements.Remove(box);
+        }
+
+        /// <summary>
+        /// What <paramref name="box"/> is displaced by in <paramref name="slot"/>, or null where it states
+        /// nothing there.
+        /// </summary>
+        private (CssBox Root, double Shift, RRect Band)? DisplacementIn(CssBox box, int slot) =>
+            _displacements.TryGetValue(box, out var bySlot) && bySlot.TryGetValue(slot, out var stated)
+                ? stated
+                : null;
 
         /// <summary>
         /// Freezes every slot the pass that has just ended filled, inclusive of both bounds.
@@ -681,7 +801,72 @@ namespace PeachPDF.Html.Core.Fragmentation
                 lines,
                 draft.Words,
                 children,
-                OverflowClipOf(draft.Box, draft.Snapshot, draft.OriginY));
+                ClipOf(draft));
+        }
+
+        /// <summary>
+        /// What this fragment is clipped to in its own local space: the nearest <c>overflow: hidden</c>
+        /// ancestor's padding edge, the band a displaced fragment is confined to, or the tighter of the two
+        /// where a displaced run also sits inside a clipping ancestor.
+        /// </summary>
+        private static RRect? ClipOf(Draft draft)
+        {
+            // Which origin the ancestor's clip is localized against depends on whether that ancestor moves
+            // with this fragment. One inside the displaced run does, so it is already in the box's own
+            // displaced space; one outside it - the ordinary case, since the run being sliced is a table
+            // row and the chain leaves it almost at once - does not, and localizing its clip against the
+            // displaced origin pushes it down by the shift. Measured as content drawn a repeated footer's
+            // worth past the bottom edge of an `overflow: hidden` div wrapping the table.
+            // Default to the draft's own origin, and substitute the slot's *only* for a fragment that is
+            // actually displaced. The two are equal for an undisplaced ordinary box, but not for a fixed
+            // one - its origin is 0, so reaching for the slot's unconditionally moved every
+            // `overflow: hidden` clip on fixed content by a page origin. Invisible in the suite and in
+            // both rasterizers; caught by acid2's content stream, whose fixed bars are clipped.
+            var displacedPastItsClip = draft.Shift != 0 && !ClipIsInsideTheDisplacedRun(draft);
+
+            var overflow = OverflowClipOf(
+                draft.Box, draft.Snapshot, displacedPastItsClip ? draft.Slot.LocalOriginY : draft.OriginY);
+
+            if (draft.ConfinedTo is not { } band) return overflow;
+
+            // The band is stated in document space and, unlike everything else on a displaced draft, is a
+            // fact about the *fragmentainer* rather than about the box - so it is localized against the
+            // slot's own origin, not the displaced one the box draws from.
+            var confinement = Localize(band, draft.Slot.LocalOriginY);
+
+            return overflow is { } clip ? RRect.Intersect(clip, confinement) : confinement;
+        }
+
+        /// <summary>
+        /// Whether the nearest <c>overflow: hidden</c> box on this fragment's containing-block chain lies
+        /// inside the run being sliced, and so is displaced along with it.
+        /// </summary>
+        private static bool ClipIsInsideTheDisplacedRun(Draft draft)
+        {
+            if (draft.DisplacementRoot is not { } root) return false;
+
+            var containingBlock = draft.Box.ContainingBlock;
+
+            while (true)
+            {
+                if (containingBlock.Overflow == CssConstants.Hidden)
+                    return IsSelfOrAncestor(root, containingBlock);
+
+                var next = containingBlock.ContainingBlock;
+                if (ReferenceEquals(next, containingBlock)) return false;
+                containingBlock = next;
+            }
+        }
+
+        /// <summary>Whether <paramref name="box"/> is <paramref name="root"/> or sits beneath it.</summary>
+        private static bool IsSelfOrAncestor(CssBox root, CssBox box)
+        {
+            for (var walk = box; walk is not null; walk = walk.ParentBox)
+            {
+                if (ReferenceEquals(walk, root)) return true;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -709,7 +894,7 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             if (draft.UsesOwnBounds)
             {
-                if (draft.Region.Contains(bounds))
+                if (draft.Region.Contains(Displaced(bounds, draft.Shift)))
                 {
                     var local = Localize(bounds, draft.OriginY);
 
@@ -719,7 +904,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                     lines.Add(new LineFragment(local, null,
                         new SliceGeometry(
                             Localize(UnbrokenBlockStripOf(draft, bounds), draft.OriginY),
-                            Localize(BandCut(bounds, draft.Box, draft.Region), draft.OriginY),
+                            Localize(BandCut(bounds, draft.Box, draft.Region, draft.Shift), draft.OriginY),
                             HasLeftEdge: true, HasRightEdge: true,
                             HasTopEdge: !ResumesAnEarlierFragment(draft),
                             HasBottomEdge: !ContinuesIntoALaterFragment(draft))));
@@ -731,7 +916,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             if (draft.Lines.Count == 0) return lines;
 
             var slices = SliceGeometriesOf(
-                draft.Box, _rectangles[draft.Key], draft.Region, draft.OriginY);
+                draft.Box, _rectangles[draft.Key], draft.Region, draft.OriginY, draft.Shift);
 
             foreach (var (line, rect) in draft.Lines)
             {
@@ -840,7 +1025,8 @@ namespace PeachPDF.Html.Core.Fragmentation
             Slot slot,
             NestedFragmentainer? nested,
             int instance,
-            ref bool hasPrintableContent)
+            ref bool hasPrintableContent,
+            (CssBox Root, double Shift, RRect Band)? displacement = null)
         {
             // A display:none subtree paints nothing at all, so it produces no fragments either.
             if (box.Display == CssConstants.None) return null;
@@ -849,7 +1035,24 @@ namespace PeachPDF.Html.Core.Fragmentation
             // its fragments carry raw document coordinates (CSS Position 3: a fixed box's containing
             // block is the page box itself).
             var isFixed = box.IsFixed;
-            var originY = isFixed ? 0 : slot.LocalOriginY;
+
+            // A run being sliced across bands displaces its whole subtree, so an inherited displacement
+            // stands until a box states one of its own - which only the root of such a run does.
+            //
+            // A fixed box is not part of that run even when it descends from one: its containing block is
+            // the page box, so it does not move with the content being sliced and is not confined to that
+            // content's strip. Dropping the displacement here rather than only from originY is what keeps
+            // the two halves agreeing - the membership test below asks about the *displaced* rectangle,
+            // so a fixed box that kept the shift would be claimed by a band a strip away from the one it
+            // is drawn in, and would then be clipped to that strip as well.
+            displacement = isFixed ? null : DisplacementIn(box, slot.Index) ?? displacement;
+            var shift = displacement?.Shift ?? 0;
+
+            // Subtracting the displacement here is what draws the box lower in this fragmentainer than its
+            // own geometry says, and it reaches every coordinate Localize touches - words, lines, bounds -
+            // in one place. Membership is the other half and cannot ride on it: the region test below is
+            // asked of where the geometry *lands*, so it takes the displaced rectangle explicitly.
+            var originY = isFixed ? 0 : slot.LocalOriginY - shift;
 
             // A fixed box belongs to the page rather than to any nested fragmentainer inside it: it is
             // emitted in every fragmentainer at identical coordinates, so a column's own extent says
@@ -872,7 +1075,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                 {
                     foreach (var (line, rect) in rectangles)
                     {
-                        if (region.Contains(rect)) lines.Add((line, rect));
+                        if (region.Contains(Displaced(rect, shift))) lines.Add((line, rect));
                     }
                 }
                 else
@@ -890,7 +1093,7 @@ namespace PeachPDF.Html.Core.Fragmentation
 
                     if (!TryGetWordRect(box, i, snapshot, out var rect)) continue;
 
-                    if (ClaimsWord(rect, slot.Index, region, isFixed))
+                    if (ClaimsWord(Displaced(rect, shift), slot.Index, region, isFixed))
                         words.Add(new TextFragment(Localize(rect, originY), box.Words[i]));
                 }
             }
@@ -901,7 +1104,8 @@ namespace PeachPDF.Html.Core.Fragmentation
                      in ChildrenOf(box, owner, snapshot, slot, nested, instance))
             {
                 var childDraft = BuildDraft(
-                    childBox, childOwner, childSnapshot, slot, childNested, childInstance, ref hasPrintableContent);
+                    childBox, childOwner, childSnapshot, slot, childNested, childInstance,
+                    ref hasPrintableContent, displacement);
 
                 if (childDraft is not null)
                     children.Add(childDraft);
@@ -913,7 +1117,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             // height is not settled is one that continues into a later fragmentainer, which by construction has
             // content of its own in this one.
             if (lines.Count == 0 && words.Count == 0 && children.Count == 0
-                && !(usesOwnBounds && region.Contains(BoundsOf(box, snapshot))))
+                && !(usesOwnBounds && region.Contains(Displaced(BoundsOf(box, snapshot), shift))))
             {
                 // A shell continues a fragment; it never invents one. Requiring the box to already hold a
                 // frozen fragment somewhere is what keeps this from changing _frozen membership, and so
@@ -946,6 +1150,9 @@ namespace PeachPDF.Html.Core.Fragmentation
             draft.IsMonolithic = MonolithicContent.IsMonolithic(box);
             draft.UsesOwnBounds = usesOwnBounds;
             draft.ShellRect = shellRect;
+            draft.ConfinedTo = displacement?.Band;
+            draft.Shift = shift;
+            draft.DisplacementRoot = displacement?.Root;
             draft.BoundsEndAtItsContent = nested is { } fragmentainer && fragmentainer.Continuing.Contains(box);
 
             // Which of the box's block-axis edges are its own, from the two records that state it: the pass's
@@ -1014,6 +1221,15 @@ namespace PeachPDF.Html.Core.Fragmentation
             && (isFixed
                 || container.SlotStartingAt(rect.Top) == slotIndex
                 || HtmlContainerInt.FallsPast(rect.Bottom, container.BandStartingAt(rect.Top)));
+
+        /// <summary>
+        /// <paramref name="rect"/> where a displacement puts it — the rectangle every membership question
+        /// is asked of, since a displaced box lands somewhere its own geometry does not say.
+        /// </summary>
+        /// <param name="rect">the box's own rectangle, in document space</param>
+        /// <param name="shift">how far lower it draws in the fragmentainer being built</param>
+        private static RRect Displaced(RRect rect, double shift) =>
+            shift == 0 ? rect : new RRect(rect.X, rect.Y + shift, rect.Width, rect.Height);
 
         /// <summary>
         /// The clip an <c>overflow: hidden</c> ancestor imposes on <paramref name="box"/>, in this
@@ -1193,10 +1409,25 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// close on the same line, drawing each border over the last, while layout (which reserves the whole
         /// nested sum) left a gap where the inner borders should have been.
         /// </remarks>
-        private RRect BandCut(RRect rect, CssBox box, FragmentRegion region) =>
-            container.HasCloneDecorations
-                ? region.BlockCut(rect, DomUtils.ClonedBlockStart(box.ParentBox, stopAt: null), DomUtils.ClonedBlockEnd(box.ParentBox))
-                : region.BlockCut(rect, 0, 0);
+        /// <param name="rect">the box's own rectangle, in document space</param>
+        /// <param name="box">the box the rectangle belongs to</param>
+        /// <param name="region">the fragmentainer area to cut against</param>
+        /// <param name="shift">
+        /// how far lower the box draws here (<see cref="RecordFragmentDisplacement"/>). The cut is a
+        /// membership question, so it is asked of where the rectangle <b>lands</b> — displaced before the
+        /// band is applied and un-displaced after, so the caller's <see cref="Localize"/> against the
+        /// already-displaced origin still lands in the right place.
+        /// </param>
+        private RRect BandCut(RRect rect, CssBox box, FragmentRegion region, double shift)
+        {
+            var landed = Displaced(rect, shift);
+
+            var cut = container.HasCloneDecorations
+                ? region.BlockCut(landed, DomUtils.ClonedBlockStart(box.ParentBox, stopAt: null), DomUtils.ClonedBlockEnd(box.ParentBox))
+                : region.BlockCut(landed, 0, 0);
+
+            return Displaced(cut, -shift);
+        }
 
         /// <summary>
         /// The <see cref="SliceGeometry"/> of each of a box's decoration rectangles — the whole unbroken
@@ -1235,11 +1466,12 @@ namespace PeachPDF.Html.Core.Fragmentation
             CssBox box,
             IReadOnlyDictionary<CssLineBox, RRect> rectangles,
             FragmentRegion region,
-            double originY)
+            double originY,
+            double shift)
         {
             var slices = new Dictionary<CssLineBox, SliceGeometry>(rectangles.Count);
 
-            RRect FragmentRectOf(RRect rect) => Localize(BandCut(rect, box, region), originY);
+            RRect FragmentRectOf(RRect rect) => Localize(BandCut(rect, box, region, shift), originY);
 
             var ownsItsLines = false;
             foreach (var line in rectangles.Keys)
@@ -1424,7 +1656,8 @@ namespace PeachPDF.Html.Core.Fragmentation
             {
                 var bounds = ExtentOf(draft);
 
-                if (draft.Region.Contains(bounds)) union = Localize(bounds, draft.OriginY);
+                if (draft.Region.Contains(Displaced(bounds, draft.Shift)))
+                    union = Localize(bounds, draft.OriginY);
             }
             else
             {

@@ -108,6 +108,29 @@ namespace PeachPDF.Html.Core.Dom
         private bool _footerRepeats;
 
         /// <summary>
+        /// The bands a row overflowed <i>through</i> on this pass, which
+        /// <see cref="RepeatTheGroupsOnEveryBandTheTableSpans"/> owes the repeated groups to.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Written by <see cref="SliceARowAcrossTheBandsItOverflows"/>, which is the only thing that knows
+        /// a band was covered without a break falling on it. Cleared per pass, because a band an abandoned
+        /// run overflowed into is not a band this one does.
+        /// </para>
+        /// <para>
+        /// <b>Why this rather than "every band between the table's top and its bottom".</b> A table can
+        /// span a boundary without fragmenting at all, and that table is about to be moved whole by §4.3's
+        /// epilogue mover — so repeating groups onto those bands draws on pages the table will not occupy,
+        /// and writing a slice bottom for them tells
+        /// <c>CssBox.PaginatedItsOwnContentWithoutBreaking</c> the table fragmented, which stops the move
+        /// from happening at all. Measured directly: a footer-only table that should have moved to page 2
+        /// stayed at Y=500. The bands here are the ones no move can help with, which is exactly §4.3's
+        /// last rung and exactly the set §6.2 is unserved on.
+        /// </para>
+        /// </remarks>
+        private readonly HashSet<int> _bandsARowOverflowedInto = [];
+
+        /// <summary>
         /// What a band owes the footer this table repeats at its foot — nothing where §6.2 declined the
         /// repetition, since no footer is drawn there to leave room for.
         /// </summary>
@@ -1361,6 +1384,10 @@ namespace PeachPDF.Html.Core.Dom
             // three fragmentainers hold a fragment in each.
             DiscardContinuationShells(container, _continuesAPreviousPass ? cursor.SlotIndex : null);
 
+            // Per pass: step 5b reads it at the end of this one, and a band an abandoned run overflowed
+            // into is not a band this one does.
+            _bandsARowOverflowedInto.Clear();
+
             // A continuation re-enters the row that did not finish, not the one after it: only some of
             // that row's cells stopped, and the cells of a row are §2.1 parallel flows, so the row is
             // where the record points. Every other run starts at the first body row.
@@ -1428,6 +1455,11 @@ namespace PeachPDF.Html.Core.Dom
                         container!.ClearContinuationShells(spanning);
                     }
 
+                    // And the strips the abandoned placement stated for the row itself: the re-placement
+                    // decides them again from the band the break just opened, and a state left behind
+                    // would displace the row by a gap that placement no longer opens.
+                    container!.ClearFragmentDisplacements(row);
+
                     cursor.Retract(placement);
                     PassRewind.RollBackTo(null, row.Boxes);
 
@@ -1441,11 +1473,20 @@ namespace PeachPDF.Html.Core.Dom
                         g, row, startX, cursor, slot, headerRoom: 0, footerRoom: repeatedFooterRoom);
                 }
 
+                // A row no band could hold was left where it is (§4.3), so it overflows into bands this
+                // table also spans - and §6.2 owes the groups it repeats their room on every one of them.
+                // The only way to pay that is to slice the row's own graphical representation, which is
+                // §4.3's last rung in as many words. Stated after the correction, because a row the
+                // correction moved fits the band it was moved to and has nothing to slice.
+                var slicedRowBottom = SliceARowAcrossTheBandsItOverflows(container, row, cursor, rowTop);
+
                 cursor.CurrentY = cursor.MaxBottom + GetVerticalSpacing();
 
                 row.Location = new RPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
                 row.ActualRight = row.Boxes.Max(x => x.ActualRight);
-                row.ActualBottom = cursor.MaxBottom;
+
+                // A sliced row keeps the bottom its own content reaches; every other row's is the cursor's.
+                row.ActualBottom = slicedRowBottom ?? cursor.MaxBottom;
 
                 // A cell of this row ran out of fragmentainer before it ran out of content, so the rows
                 // after it belong to the fragmentainer this table resumes in - laying them out here would
@@ -1501,6 +1542,12 @@ namespace PeachPDF.Html.Core.Dom
                     cursor.MaxRight = Math.Max(cursor.MaxRight, pageFooterProxy.ActualRight);
                 }
             }
+
+            // Step 5b: css-tables-3 §6.2 repeats the groups on every page the table *spans*, and the three
+            // sites above are all keyed to a break being *taken* - so a band the table merely covers, with
+            // no break falling on it, got neither. That is a row overflowing through a whole band, and the
+            // strips SliceARowAcrossTheBandsItOverflows states are what leave the room to put them in.
+            await RepeatTheGroupsOnEveryBandTheTableSpans(g, container, cursor);
 
             // Step 5: Create final footer proxy. Not on a pass that stopped: the closing footer sits
             // under the table's last row, and a pass that has not reached the last row would put it in
@@ -1862,6 +1909,335 @@ namespace PeachPDF.Html.Core.Dom
             container.PageBandHeightOf(slot) - RepeatedFooterHeight - RepeatedHeaderRoom;
 
         /// <summary>
+        /// One band of a run of content that crosses more than one: which band, where in it the content
+        /// resumes, how much of the content that band holds, and how far the content's own box has to be
+        /// displaced to draw that strip there.
+        /// </summary>
+        /// <param name="Slot">the band</param>
+        /// <param name="ContentTop">where this band's strip begins, below the room a repeated header takes</param>
+        /// <param name="Depth">how much of the run this band holds</param>
+        /// <param name="DrawShift">
+        /// what the run's own box is displaced by on this band — the accumulated depth of the gaps the
+        /// repeated groups have opened above it. Zero on the band the content began in.
+        /// </param>
+        private readonly record struct SpannedBand(int Slot, double ContentTop, double Depth, double DrawShift);
+
+        /// <summary>
+        /// How a run of content <paramref name="depth"/> tall, starting at <paramref name="top"/>, falls
+        /// across the bands below it once each of them has given the groups this table repeats their room.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The one place that answers "which bands does this cover, and where does it resume in each" —
+        /// <see cref="StateSpanningCellContinuation"/> and the too-tall row's own bottom are two readings of
+        /// the same question, and they may not disagree about what a repeated group costs. Every band after
+        /// the first opens at <c>PageTopOf(slot) + RepeatedHeaderRoom</c> and closes at
+        /// <c>PageBottomOf(slot) - RepeatedFooterHeight</c>, which is <see cref="RoomForARowIn"/> read as a
+        /// pair of edges rather than a length.
+        /// </para>
+        /// <para>
+        /// <b>A band must always take some of the run</b>
+        /// (<see href="https://www.w3.org/TR/css-break-3/#possible-breaks">css-break-3 §4.3</see>: "it must
+        /// place at least some content on each fragmentainer … in order to guarantee progress through the
+        /// content"). §6.2's two quarter caps keep the groups under half a uniform band between them, so a
+        /// band that leaves nothing is not reachable from that route — but per-<c>@page</c> geometry can
+        /// make one band far shorter than the page the caps were measured against, and a band that took
+        /// nothing would not terminate. Such a band gives the run its whole height and no room to the
+        /// groups, which is the same trade §4.3 makes everywhere else: the drawn result loses to the
+        /// alternative of never finishing.
+        /// </para>
+        /// </remarks>
+        /// <param name="container">the container whose page grid the bands come from</param>
+        /// <param name="top">where the run begins, in document space</param>
+        /// <param name="depth">how tall the run is</param>
+        private List<SpannedBand> BandsSpannedBy(HtmlContainerInt container, double top, double depth)
+        {
+            var slot = container.SlotStartingAt(top);
+            var contentTop = top;
+            var remaining = Math.Max(depth, 0);
+            var shift = 0d;
+
+            List<SpannedBand> bands = [];
+
+            while (true)
+            {
+                var bandBottom = container.PageBottomOf(slot) - RepeatedFooterHeight;
+                var room = bandBottom - contentTop;
+
+                // §4.3's progress guard, above: a band that leaves this run nothing takes it whole instead.
+                if (room <= 0)
+                {
+                    bandBottom = container.PageBottomOf(slot);
+                    room = bandBottom - contentTop;
+                }
+
+                if (remaining <= room || room <= 0)
+                {
+                    bands.Add(new SpannedBand(slot, contentTop, remaining, shift));
+                    return bands;
+                }
+
+                bands.Add(new SpannedBand(slot, contentTop, room, shift));
+
+                remaining -= room;
+                slot++;
+
+                var resumesAt = container.PageTopOf(slot) + RepeatedHeaderRoom;
+
+                // What the gap between the two strips costs the box that draws them: the run's own
+                // coordinates are continuous, so the displacement is what makes the second strip pick up
+                // exactly where the first stopped.
+                shift += resumesAt - bandBottom;
+                contentTop = resumesAt;
+            }
+        }
+
+        /// <summary>
+        /// Draws the groups this table repeats on every band its slice covers that has not already got
+        /// them — the bands no break opened, which the three per-break sites cannot reach.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <see href="https://www.w3.org/TR/css-tables-3/#repeated-headers">css-tables-3 §6.2</see> repeats
+        /// the groups "on each page spanned by a table", and "a break was taken here" is a different
+        /// question from "does this table's slice cover this band". They agree everywhere except a band a
+        /// row overflows *through*, which is the one case no pass either fills or leaves — so the set is
+        /// taken from <see cref="_bandsARowOverflowedInto"/> rather than from the table's own top and
+        /// bottom, for the reason recorded there.
+        /// </para>
+        /// <para>
+        /// <b>Which bands already have theirs is read off the proxies, not counted.</b> A counter would be
+        /// wrong across passes for the reason <c>TableRowCursor.SlotIndex</c> was: a continuation inherits
+        /// the proxies earlier passes placed (<c>TableOncePerTableTests.AContinuation_LeavesTheProxiesAnEarlierPassPlaced</c>)
+        /// but not their bookkeeping, so anything it re-derived would draw a second header on a band that
+        /// already had one. The proxies are the record, and asking them by
+        /// <see cref="HtmlContainerInt.SlotStartingAt"/> is asking the same question
+        /// <c>FragmentRegion.Contains</c> will ask of the same rectangle later.
+        /// </para>
+        /// <para>
+        /// <b>The room is not reserved here, because it has already been given.</b> The bands this reaches
+        /// are exactly the ones whose strips <see cref="SliceARowAcrossTheBandsItOverflows"/> stated, and
+        /// those strips already begin below <see cref="RepeatedHeaderRoom"/> and end above
+        /// <see cref="RepeatedFooterHeight"/>. Charging the band a second time here would open a gap the
+        /// width of the group with nothing in it — the failure the "a repeated group's cost is charged to
+        /// every band" invariant describes, in its other direction.
+        /// </para>
+        /// </remarks>
+        /// <param name="g">the graphics context layout is running against</param>
+        /// <param name="container">the container whose page grid the bands come from, null on a measurement run</param>
+        /// <param name="cursor">this pass's row cursor; only its widest edge is advanced</param>
+        private async ValueTask RepeatTheGroupsOnEveryBandTheTableSpans(
+            RGraphics g, HtmlContainerInt? container, TableRowCursor cursor)
+        {
+            if (container is not { HasRealPageGrid: true }) return;
+            if (container.CurrentFragmentainer is not { HasOwnBand: false }) return;
+
+            // Not on a pass that stopped. The bands past where a mid-cell continuation gave up are not
+            // bands this table *spans* yet - they are the ones it will be resumed into, and the pass that
+            // resumes opens each of them with its own groups (#493, step 5a and the first header block).
+            // Drawing them here closes pages this pass never reached: measured as an eighth footer on a
+            // seven-page table, on a band with no slice bottom recorded to put it at.
+            if (cursor.Stopped) return;
+
+            var drawsAHeader = _headerRepeats && _headerHeight > 0;
+            var drawsAFooter = _footerRepeats && _footerHeight > 0;
+
+            if (!drawsAHeader && !drawsAFooter) return;
+
+            if (_bandsARowOverflowedInto.Count == 0) return;
+
+            var last = container.SlotEndingAt(cursor.MaxBottom);
+
+            var headerBands = new HashSet<int>();
+            var footerBands = new HashSet<int>();
+
+            foreach (var proxy in _tableBox.Boxes.OfType<CssProxyBox>())
+            {
+                var slot = container.SlotStartingAt(proxy.Location.Y);
+
+                if (proxy.Display == CssConstants.TableHeaderGroup) headerBands.Add(slot);
+                else if (proxy.Display == CssConstants.TableFooterGroup) footerBands.Add(slot);
+            }
+
+            foreach (var slot in _bandsARowOverflowedInto.Order())
+            {
+                if (drawsAHeader && headerBands.Add(slot))
+                {
+                    var headerProxy = CreateHeaderProxy(container.PageTopOf(slot));
+
+                    if (headerProxy != null)
+                    {
+                        await headerProxy.PerformLayout(g);
+                        cursor.MaxRight = Math.Max(cursor.MaxRight, headerProxy.ActualRight);
+                    }
+                }
+
+                // Every band but the one the table ends in. That last one is closed by step 5's footer,
+                // which is drawn under the final row rather than at the page foot and runs *after* this -
+                // so a footer written here would be the second on that page. The header has no such twin:
+                // a band the table's last row overflows into still opens with one.
+                if (drawsAFooter && slot < last && footerBands.Add(slot))
+                {
+                    var footerProxy = CreateFooterProxy(
+                        CalculateFooterPositionAtPageBottom(container, cursor.CurrentY, slot));
+
+                    if (footerProxy != null)
+                    {
+                        await footerProxy.PerformLayout(g);
+
+                        // Where this band's slice ends, for the same reason and in the same place as the
+                        // other footer sites: FragmentPainter clips the table's bottom border to this
+                        // record, and without it the border is drawn above the footer just placed under it.
+                        //
+                        // Deliberately inside the footer arm, as step 5a's is. A header-only table writes
+                        // nothing here, so a band it merely spans does not turn
+                        // CssBox.PaginatedItsOwnContentWithoutBreaking into "this table fragmented" - which
+                        // would send it down a relocation path it has never taken.
+                        _tableBox.PageBreakBottoms ??= new Dictionary<int, double>();
+                        _tableBox.PageBreakBottoms[slot] = footerProxy.ActualBottom;
+
+                        cursor.MaxRight = Math.Max(cursor.MaxRight, footerProxy.ActualRight);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Slices <paramref name="row"/> across the bands it overflows, so each of them resumes it below
+        /// the room the groups this table repeats take there, and grows the cursor's bottom by the gaps
+        /// that opens.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The row is not resized and not moved. Content taller than a band is drawn once, from one
+        /// <see cref="CssBoxProperties.Location"/>, and each fragmentainer already shows the strip of it
+        /// that falls in that band — which is why a block taller than three pages slices correctly today
+        /// with no machinery at all. What it cannot do unaided is <i>resume below</i> a repeated
+        /// <c>&lt;thead&gt;</c>, because that makes the strips non-contiguous in document space. Each band
+        /// is therefore given a displacement (<see cref="HtmlContainerInt.RecordFragmentDisplacement"/>)
+        /// that puts its strip exactly where the previous one stopped.
+        /// </para>
+        /// <para>
+        /// <b>The cursor's bottom has to grow with it.</b> The gaps are real depth on the page, so a row
+        /// sliced across three bands ends lower than its own height says — and that bottom is what places
+        /// every row after it, what <c>PageBreakBottoms</c> records, and what decides how many pages the
+        /// document has. Leaving it at the un-sliced value put the rows after a tall row back inside its
+        /// last strip.
+        /// </para>
+        /// <para>
+        /// <b>Only where a group actually repeats.</b> With neither group repeating there is no room to
+        /// leave, every band's strip is the whole band, and the displacements would all be zero — so the
+        /// early return is what keeps this change confined to tables that repeat something, and is what
+        /// makes it invisible to every fixture that does not.
+        /// </para>
+        /// </remarks>
+        /// <param name="container">the container whose page grid the bands come from, null on a measurement run</param>
+        /// <param name="row">the row being sliced</param>
+        /// <param name="cursor">this pass's row cursor; its bottom is grown by the gaps</param>
+        /// <param name="rowTop">where the row was placed</param>
+        /// <returns>
+        /// the bottom the row's own content reaches, where it was sliced — which is <b>not</b> the bottom
+        /// it reaches on the page, since the gaps the repeated groups open lie between its strips. The
+        /// cursor carries the latter, because that is what places the next row; the row's own box keeps
+        /// the former, because a <c>background-image</c> or a <c>box-shadow</c> on a <c>&lt;tr&gt;</c>
+        /// resolves against its unfragmented border box, and a box grown by the gaps renders stretched —
+        /// the very failure this change is otherwise built to avoid. Null where nothing was sliced.
+        /// </returns>
+        private double? SliceARowAcrossTheBandsItOverflows(
+            HtmlContainerInt? container, CssBox row, TableRowCursor cursor, double rowTop)
+        {
+            // The same two guards CloseSpanningCell states page-grid geometry behind: a measurement pass
+            // has no grid to name, and a multi-column column is a fragmentainer the page grid cannot
+            // describe.
+            if (container is not { HasRealPageGrid: true }) return null;
+            if (container.CurrentFragmentainer is not { HasOwnBand: false }) return null;
+
+            if (RepeatedHeaderRoom <= 0 && RepeatedFooterHeight <= 0) return null;
+
+            // A pass that stopped hands the rest of the table to a continuation, which places what is left
+            // and opens each band with its own groups. Stating strips here would leave room on bands step
+            // 5b then declines to draw anything on - the "gate both" rule, in the direction that leaves a
+            // blank strip.
+            if (cursor.Stopped) return null;
+
+            // The row's *own* cells, not cursor.MaxBottom. MaxBottom is the lowest edge any cell placed so
+            // far reached, and a rowspan cell reaches it only on the row that *ends* the span - a row that
+            // does not contain it. Measured with a three-row span holding a 700pt block: the depth came out
+            // as the spanning cell's, so the ending row (13pt of text) was the one displaced, the rows
+            // actually holding the tall cell got no strips at all, and the table finished 26.4pt taller
+            // than its content. A CssSpacingBox stands in for a cell an earlier row owns, so it is skipped
+            // for the same reason.
+            var ownBottom = double.MinValue;
+
+            foreach (var cell in row.Boxes)
+            {
+                if (cell is CssSpacingBox) continue;
+
+                ownBottom = Math.Max(ownBottom, cell.ActualBottom);
+            }
+
+            if (ownBottom <= double.MinValue) return null;
+
+            var depth = ownBottom - rowTop;
+            if (depth <= 0) return null;
+
+            var bands = BandsSpannedBy(container, rowTop, depth);
+            if (bands.Count < 2) return null;
+
+            // Only a row §4.3 has run out of moves for - one taller than a whole band, so no page could
+            // hold it and leaving it where it is was the last rung. A row that would fit the next band is
+            // moved there by the straddle correction, and a table whose *first* row straddles is moved
+            // whole by the epilogue's mover; slicing either draws it across pages it is about to vacate,
+            // and the slice bottom recorded below then tells CssBox.PaginatedItsOwnContentWithoutBreaking
+            // the table fragmented, which stops the move happening at all. Measured as a footer-only
+            // table that should have moved to page 2 staying at Y=500.
+            //
+            // The same quantity the correction fits a row against, so the two cannot disagree about which
+            // rows are movable.
+            if (depth <= RoomForARowIn(container, bands[0].Slot + 1)) return null;
+
+            // The bands step 5b owes the repeated groups to, recorded here because this is the only thing
+            // that knows a row crossed one without a break falling on it. Including the band the row
+            // *began* in: no break was taken there either, so while its header came from the table's own
+            // top, nothing has closed it with the footer §6.2 repeats at the foot of every page the table
+            // spans. Step 5b skips whatever is already drawn, so listing it costs nothing and leaving it
+            // out measured as a footer on bands 1 and 2 of three.
+            foreach (var band in bands)
+            {
+                _bandsARowOverflowedInto.Add(band.Slot);
+            }
+
+            // This run decides the row's strips again, so what an earlier one stated over the same slots
+            // goes first - the same sweep, for the same reason, as DiscardContinuationShells'.
+            container.ClearFragmentDisplacements(row);
+
+            // The confinement is a block-axis question - it stops a displaced rectangle redrawing, under
+            // the repeated header, the strip an earlier band already showed. So the inline axis is opened
+            // a page's width either side of the row, which is wider than anything that can be drawn on the
+            // page and therefore cannot cut a cell's horizontally-overflowing content. Taking the row's
+            // own width instead would, and PageSize.Width is the *content* width, so it is narrower than
+            // the row's own right edge and clipped the cell short.
+            var margin = Math.Max(container.PageSize.Width, 1);
+            var left = row.Boxes.Count > 0 ? row.Boxes.Min(b => b.Location.X) : _tableBox.Location.X;
+            var right = row.Boxes.Count > 0 ? row.Boxes.Max(b => b.ActualRight) : _tableBox.ActualRight;
+
+            foreach (var band in bands)
+            {
+                container.RecordFragmentDisplacement(
+                    row, band.Slot, band.DrawShift,
+                    new RRect(left - margin, band.ContentTop, right - left + 2 * margin, band.Depth));
+            }
+
+            // The cursor carries where the row really ends on the page - gaps included - because that is
+            // what places the next row, records the slice bottom, and decides how many pages there are.
+            // The row's own box does not: see the returns doc above.
+            var last = bands[^1];
+            cursor.MaxBottom = last.ContentTop + last.Depth;
+
+            return ownBottom;
+        }
+
+        /// <summary>
         /// Discards the continuation geometry an earlier run of this table's row loop stated, from
         /// <paramref name="fromSlot"/> on or — with no slot — in every slot.
         /// </summary>
@@ -1873,6 +2249,11 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var row in _bodyRows)
             {
+                // A row's own strips are stated per band exactly as a finished cell's shell is, and are
+                // re-decided by the same runs, so they are swept by the same walk rather than a parallel
+                // one - see SliceARowAcrossTheBandsItOverflows.
+                container.ClearFragmentDisplacements(row, fromSlot);
+
                 foreach (var cell in row.Boxes)
                 {
                     container.ClearContinuationShells(cell, fromSlot);
