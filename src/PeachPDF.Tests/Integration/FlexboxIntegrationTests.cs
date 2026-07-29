@@ -1575,6 +1575,115 @@ namespace PeachPDF.Tests.Integration
             Assert.True(leftGap > 1, $"expected centered image, left gap {leftGap}");
         }
 
+        // ─── #437: an item's translation must not move geometry that isn't the item's ─────
+
+        [Fact]
+        public async Task AbsoluteDescendantOfAFlexItem_DoesNotTravelWithTheItemsTranslation()
+        {
+            // #437: a flex item is laid out at a provisional position and then translated into its
+            // final one (here, justify-content:flex-end pushes a single column-flex item ~365pt down a
+            // 400pt container). An absolutely-positioned descendant with no positioned ancestor of its
+            // own is laid out against the initial containing block (CSS 2.1 §10.1), which does not move
+            // with the item - so its position must be the same whether or not the item is displaced.
+            var undisplaced = Wrap(@"
+                <div style='display:flex; flex-direction:column; height:400px'>
+                    <div style='height:20px'>
+                        <div id='abs' style='position:absolute; top:5px; left:5px'>Absolute</div>
+                    </div>
+                </div>");
+            var displaced = Wrap(@"
+                <div style='display:flex; flex-direction:column; height:400px; justify-content:flex-end'>
+                    <div id='item' style='height:20px'>
+                        <div id='abs' style='position:absolute; top:5px; left:5px'>Absolute</div>
+                    </div>
+                </div>");
+
+            var (undisplacedRoot, _) = await BuildAndLayout(undisplaced);
+            var (displacedRoot, _) = await BuildAndLayout(displaced);
+
+            var absControl = FindById(undisplacedRoot, "abs")!;
+            var absDisplaced = FindById(displacedRoot, "abs")!;
+            var item = FindById(displacedRoot, "item")!;
+
+            // The item itself really was displaced - otherwise this test would pass trivially.
+            Assert.True(item.Location.Y > 200, $"expected the item pushed down the column, got {item.Location.Y}");
+
+            Assert.Equal(absControl.Location.Y, absDisplaced.Location.Y, 0.5);
+            Assert.Equal(absControl.Location.X, absDisplaced.Location.X, 0.5);
+        }
+
+        [Fact]
+        public async Task RelativeFlexItem_AbsoluteDescendant_StillTravelsWithTheItem()
+        {
+            // The converse of the case above: when the item itself is the descendant's containing block
+            // (position:relative on the item), the descendant is genuinely part of the subtree being
+            // moved and must still translate with it - #437's fix must not stop this.
+            var html = Wrap(@"
+                <div style='display:flex; flex-direction:column; height:400px; justify-content:flex-end'>
+                    <div id='item' style='height:20px; position:relative'>
+                        <div id='abs' style='position:absolute; top:5px; left:5px'>Absolute</div>
+                    </div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+
+            var item = FindById(root, "item")!;
+            var abs = FindById(root, "abs")!;
+
+            Assert.True(item.Location.Y > 200, $"expected the item pushed down the column, got {item.Location.Y}");
+            // Positioned against the item's own padding edge, so it sits just below/right of it.
+            Assert.True(abs.Location.Y > item.Location.Y - 1 && abs.Location.Y < item.Location.Y + 20,
+                $"expected the absolute descendant to travel with its containing-block item; item.Y={item.Location.Y}, abs.Y={abs.Location.Y}");
+        }
+
+        [Fact]
+        public async Task RepeatingTableHeaderProxy_InsideAFlexItem_ReflectsTheItemsFinalPosition()
+        {
+            // #437 mechanism 2: a table's repeating <thead> is detached and shown via a CssProxyBox
+            // (CssLayoutEngineTable.CreateHeaderProxy), whose geometry snapshot is captured while the
+            // table lays out - i.e. at the flex item's *measuring* position, before AssignLocations
+            // translates it. Without OnTranslated moving the snapshot too, the header would be captured
+            // at one position and drawn at another once the item is displaced.
+            var undisplaced = Wrap(@"
+                <div style='display:flex; flex-direction:column; height:400px'>
+                    <table id='t'>
+                        <thead><tr><th>H</th></tr></thead>
+                        <tbody><tr><td>R</td></tr></tbody>
+                    </table>
+                </div>");
+            var displaced = Wrap(@"
+                <div style='display:flex; flex-direction:column; height:400px; justify-content:flex-end'>
+                    <table id='t'>
+                        <thead><tr><th>H</th></tr></thead>
+                        <tbody><tr><td>R</td></tr></tbody>
+                    </table>
+                </div>");
+
+            var (undisplacedRoot, _) = await BuildAndLayout(undisplaced);
+            var (displacedRoot, _) = await BuildAndLayout(displaced);
+
+            var tableControl = FindById(undisplacedRoot, "t")!;
+            var tableDisplaced = FindById(displacedRoot, "t")!;
+
+            Assert.True(tableDisplaced.Location.Y - tableControl.Location.Y > 200,
+                $"expected the table pushed down the column, control={tableControl.Location.Y}, displaced={tableDisplaced.Location.Y}");
+
+            var proxyControl = tableControl.Boxes.OfType<CssProxyBox>().FirstOrDefault(p => p.SourceGeometry is not null);
+            var proxyDisplaced = tableDisplaced.Boxes.OfType<CssProxyBox>().FirstOrDefault(p => p.SourceGeometry is not null);
+            Assert.NotNull(proxyControl);
+            Assert.NotNull(proxyDisplaced);
+
+            // The header's own row/cell was captured relative to its table; once the table moved, the
+            // captured geometry must have moved with it by exactly the table's own displacement.
+            var headerRowControl = proxyControl!.SourceBox.Boxes[0];
+            var headerRowDisplaced = proxyDisplaced!.SourceBox.Boxes[0];
+
+            Assert.True(proxyControl.SourceGeometry!.TryGetGeometry(headerRowControl, out var geomControl));
+            Assert.True(proxyDisplaced.SourceGeometry!.TryGetGeometry(headerRowDisplaced, out var geomDisplaced));
+
+            var tableDelta = tableDisplaced.Location.Y - tableControl.Location.Y;
+            Assert.Equal(geomControl.Location.Y + tableDelta, geomDisplaced.Location.Y, 0.5);
+        }
+
         private static string Wrap(string body) =>
             $"<!DOCTYPE html><html><head></head><body>{body}</body></html>";
 
