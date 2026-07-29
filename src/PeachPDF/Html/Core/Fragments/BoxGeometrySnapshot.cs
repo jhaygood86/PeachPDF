@@ -3,6 +3,7 @@ using PeachPDF.Html.Core.Dom;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 
 namespace PeachPDF.Html.Core.Fragments
 {
@@ -26,9 +27,9 @@ namespace PeachPDF.Html.Core.Fragments
         /// </summary>
         internal sealed class BoxGeometry
         {
-            internal RPoint Location { get; init; }
-            internal double ActualRight { get; init; }
-            internal double ActualBottom { get; init; }
+            internal RPoint Location { get; set; }
+            internal double ActualRight { get; set; }
+            internal double ActualBottom { get; set; }
             internal Dictionary<CssLineBox, RRect> Rectangles { get; } = [];
 
             /// <summary>
@@ -143,5 +144,37 @@ namespace PeachPDF.Html.Core.Fragments
         /// in the fragmentainer this snapshot describes?", which is not the same as whether it has geometry.
         /// </summary>
         internal bool Holds(CssBox box) => _geometry.ContainsKey(box);
+
+        /// <summary>
+        /// Shifts every captured box's geometry by <paramref name="dx"/>/<paramref name="dy"/>.
+        /// </summary>
+        /// <remarks>
+        /// A snapshot's own boxes (<see cref="CssProxyBox.SourceBox"/>'s detached subtree) are not part of
+        /// the live tree, so a mover that translates the proxy holding this snapshot — a flex item, a
+        /// column re-banding pass, a keep-with-next run, table row placement — cannot reach them by walking
+        /// <see cref="CssBox.Boxes"/>; <see cref="CssProxyBox.OnTranslated"/> calls this instead, once per
+        /// such move (see <see href="https://github.com/jhaygood86/PeachPDF/issues/437">#437</see>).
+        /// </remarks>
+        internal void Translate(double dx, double dy)
+        {
+            foreach (var geometry in _geometry.Values)
+            {
+                geometry.Location = new RPoint(geometry.Location.X + dx, geometry.Location.Y + dy);
+                geometry.ActualRight += dx;
+                geometry.ActualBottom += dy;
+
+                foreach (var line in geometry.Rectangles.Keys.ToList())
+                {
+                    var r = geometry.Rectangles[line];
+                    geometry.Rectangles[line] = new RRect(r.X + dx, r.Y + dy, r.Width, r.Height);
+                }
+
+                for (var i = 0; i < geometry.WordOrigins.Count; i++)
+                {
+                    if (geometry.WordOrigins[i] is { } origin)
+                        geometry.WordOrigins[i] = new RPoint(origin.X + dx, origin.Y + dy);
+                }
+            }
+        }
     }
 }

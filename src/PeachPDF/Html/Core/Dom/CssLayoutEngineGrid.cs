@@ -59,7 +59,7 @@ namespace PeachPDF.Html.Core.Dom
     ///
     /// The engine mirrors <see cref="CssLayoutEngineFlex"/>: it resolves the container's content width via
     /// <see cref="CssLayoutEngine.GetBoxWidth"/>, lays each item out at a provisional origin, then translates
-    /// it into its final cell with <see cref="CssBox.OffsetLeft"/>/<see cref="CssBox.OffsetTop"/>.
+    /// it into its final cell with <see cref="CssBox.OffsetLeft(double)"/>/<see cref="CssBox.OffsetTop(double)"/>.
     /// </summary>
     internal sealed class CssLayoutEngineGrid
     {

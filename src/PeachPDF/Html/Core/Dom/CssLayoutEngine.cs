@@ -2067,7 +2067,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Shifts a single box's rectangle and words within one specific line box by <paramref name="delta"/>.
         /// Scoped to this <paramref name="lineBox"/> only (via <see cref="CssLineBox.WordsOf"/>/
-        /// <see cref="CssLineBox.Rectangles"/>) rather than <see cref="CssBox.OffsetTop"/>'s all-lines,
+        /// <see cref="CssLineBox.Rectangles"/>) rather than <see cref="CssBox.OffsetTop(double)"/>'s all-lines,
         /// all-descendants offset - necessary since a single inline box can participate in multiple
         /// line boxes (when its content wraps), each needing independent vertical alignment.
         /// </summary>

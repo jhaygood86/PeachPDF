@@ -170,7 +170,7 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// The <c>page:</c>-selector tracking entry this box registered with <see cref="HtmlContainerInt"/>
-        /// (if any), retained so a later ancestor reposition (<see cref="OffsetTop"/>) can keep it in sync -
+        /// (if any), retained so a later ancestor reposition (<see cref="OffsetTop(double)"/>) can keep it in sync -
         /// mirrors <see cref="NamedStrings"/>'s same purpose for string-set.
         /// </summary>
         internal NamedPageElement? RegisteredNamedPageElement { get; set; }
@@ -2945,7 +2945,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <remarks>
         /// Static, and reading the boxes to move off the decision rather than off a receiver, because the box
         /// that travels is not always the one that discovered the decision: §3.1 propagation can put it on a
-        /// container the discovering box begins, and <see cref="OffsetTop"/> is deep, so moving the container
+        /// container the discovering box begins, and <see cref="OffsetTop(double)"/> is deep, so moving the container
         /// moves the box inside it exactly once.
         /// </remarks>
         internal static void TranslateForEarlyBreak(EarlyBreak decision)
@@ -4781,7 +4781,21 @@ namespace PeachPDF.Html.Core.Dom
         /// Deeply offsets the top of the box and its contents
         /// </summary>
         /// <param name="amount"></param>
-        internal void OffsetTop(double amount)
+        internal void OffsetTop(double amount) => OffsetTop(amount, translationRoot: this);
+
+        /// <remarks>
+        /// <paramref name="translationRoot"/> is the box the caller originally asked to move — fixed for
+        /// the whole recursive walk, not re-derived per frame — so that a descendant's containing block
+        /// (<see cref="DomUtils.GetNearestPositionedAncestor"/>) can be asked "is this inside the subtree
+        /// being moved at all", not merely "is this inside the box recursing into it right now". See
+        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/437">#437</see>: an out-of-flow
+        /// descendant whose containing block sits outside <paramref name="translationRoot"/> was
+        /// positioned against something that is not moving, so translating it here would double-move it
+        /// relative to where CSS 2.1 §10.1 actually places it. A <c>position:relative</c> mover's own
+        /// genuinely-contained absolutely-positioned descendants are unaffected — their containing block is
+        /// inside the subtree being moved, so the walk still reaches them.
+        /// </remarks>
+        private void OffsetTop(double amount, CssBox translationRoot)
         {
             // A relocation that reaches back into a fragmentainer an earlier pass already froze has to
             // un-freeze it, or the frozen copy keeps painting this box where it no longer is. Asked of this
@@ -4822,11 +4836,32 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var b in Boxes)
             {
-                b.OffsetTop(amount);
+                if (b.EscapesTranslationOf(translationRoot)) continue;
+
+                b.OffsetTop(amount, translationRoot);
             }
 
             Location = Location with { Y = Location.Y + amount };
+            OnTranslated(0, amount);
         }
+
+        /// <summary>
+        /// Whether this box's containing block lies outside <paramref name="translationRoot"/>, so a
+        /// subtree translation rooted there must not move it. See the remarks on the private
+        /// <see cref="OffsetTop(double, CssBox)"/> overload for why.
+        /// </summary>
+        private bool EscapesTranslationOf(CssBox translationRoot) =>
+            Position is CssConstants.Absolute or CssConstants.Fixed
+            && !DomUtils.IsSelfOrDescendantOf(DomUtils.GetNearestPositionedAncestor(this), translationRoot);
+
+        /// <summary>
+        /// Called once a subtree translation (<see cref="OffsetTop(double)"/>/<see cref="OffsetLeft(double)"/>)
+        /// has finished moving this box by <paramref name="dx"/>/<paramref name="dy"/>, after
+        /// <see cref="CssBoxProperties.Location"/> has already been updated. A no-op here; overridden by a
+        /// box that holds geometry the ordinary <see cref="Boxes"/>/<see cref="Rectangles"/>/<see cref="Words"/>
+        /// walk cannot reach, such as <see cref="CssProxyBox"/>'s frozen source-subtree snapshot.
+        /// </summary>
+        protected virtual void OnTranslated(double dx, double dy) { }
 
         /// <summary>
         /// Acts on a break decision discovered against this box, and reports whether it was taken by
@@ -4923,10 +4958,16 @@ namespace PeachPDF.Html.Core.Dom
             && FitsInFragmentainer(decision.Slot);
 
         /// <summary>
-        /// Deeply offsets the top of the box and its contents
+        /// Deeply offsets the left of the box and its contents
         /// </summary>
         /// <param name="amount"></param>
-        internal void OffsetLeft(double amount)
+        internal void OffsetLeft(double amount) => OffsetLeft(amount, translationRoot: this);
+
+        /// <remarks>
+        /// See the remarks on the private <see cref="OffsetTop(double, CssBox)"/> overload — the same
+        /// containing-block-aware skip applies to the horizontal axis for the same reason (#437).
+        /// </remarks>
+        private void OffsetLeft(double amount, CssBox translationRoot)
         {
             List<CssLineBox> lines = [];
             foreach (var line in Rectangles.Keys)
@@ -4945,10 +4986,13 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var b in Boxes)
             {
-                b.OffsetLeft(amount);
+                if (b.EscapesTranslationOf(translationRoot)) continue;
+
+                b.OffsetLeft(amount, translationRoot);
             }
 
             Location = Location with { X = Location.X + amount };
+            OnTranslated(amount, 0);
         }
 
         /// <summary>
