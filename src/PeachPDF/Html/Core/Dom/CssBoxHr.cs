@@ -56,8 +56,8 @@ namespace PeachPDF.Html.Core.Dom
         /// <para>
         /// Width is resolved before the placement rather than after it, so a floated rule reaches
         /// <c>CssLayoutEngine.FloatBox</c> at its real width. Height still comes after, because the
-        /// placement writes <see cref="CssBoxProperties.ActualBottom"/> and so clears
-        /// <see cref="CssBoxProperties.ActualHeight"/> — which is exactly what makes the fallback below
+        /// placement writes <see cref="CssBox.ActualBottom"/> and so clears
+        /// <see cref="CssBox.ActualHeight"/> — which is exactly what makes the fallback below
         /// fire on a re-layout instead of reading the previous pass's height.
         /// </para>
         /// </remarks>

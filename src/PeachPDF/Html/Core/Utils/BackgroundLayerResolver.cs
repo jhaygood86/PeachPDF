@@ -53,7 +53,7 @@ namespace PeachPDF.Html.Core.Utils
             string sizeLayerValue,
             double containerWidth, double containerHeight,
             double? intrinsicWidth, double? intrinsicHeight, double? intrinsicRatio,
-            CssBoxProperties box)
+            CssBox box)
         {
             var value = string.IsNullOrWhiteSpace(sizeLayerValue) ? CssConstants.Auto : sizeLayerValue.Trim();
             var hasRatio = intrinsicRatio is > 0;
@@ -123,7 +123,7 @@ namespace PeachPDF.Html.Core.Utils
             string positionLayerValue,
             double containerWidth, double containerHeight,
             double tileWidth, double tileHeight,
-            CssBoxProperties box)
+            CssBox box)
         {
             var value = string.IsNullOrWhiteSpace(positionLayerValue) ? "0% 0%" : positionLayerValue.Trim();
             var tokens = CssValueParser.GetCssTokens(value);
@@ -136,7 +136,7 @@ namespace PeachPDF.Html.Core.Utils
             return (x, y);
         }
 
-        private static double ResolveAxis(BackgroundPositionGrammar.Component component, double containerSize, double tileSize, CssBoxProperties box)
+        private static double ResolveAxis(BackgroundPositionGrammar.Component component, double containerSize, double tileSize, CssBox box)
         {
             var available = containerSize - tileSize;
 

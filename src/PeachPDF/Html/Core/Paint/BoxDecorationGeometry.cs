@@ -118,7 +118,7 @@ namespace PeachPDF.Html.Core.Paint
         /// </para>
         /// <list type="bullet">
         /// <item><description>
-        /// <c>border-radius</c>: <see cref="CssBoxProperties.ComputeRadii"/>'s overlap reduction scales
+        /// <c>border-radius</c>: <see cref="DerivedStyle.ComputeRadii"/>'s overlap reduction scales
         /// with the rectangle's own width.
         /// </description></item>
         /// <item><description>

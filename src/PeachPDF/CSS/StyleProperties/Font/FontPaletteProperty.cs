@@ -4,7 +4,7 @@ namespace PeachPDF.CSS
     /// The <c>font-palette</c> property (CSS Fonts Module Level 4): selects a color palette for a COLR/CPAL
     /// color font. Inherited. The value grammar (<c>normal | light | dark | &lt;dashed-ident&gt; | palette-mix()</c>)
     /// is validated by <see cref="FontPaletteValueConverter"/>; the authored text is preserved for the paint-time
-    /// resolver (<c>CssBoxProperties.ActualFontPalette</c>).
+    /// resolver (<c>DerivedStyle.ActualFontPalette</c>).
     /// </summary>
     internal sealed class FontPaletteProperty : Property
     {

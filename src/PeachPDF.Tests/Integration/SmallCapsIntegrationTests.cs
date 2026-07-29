@@ -15,12 +15,12 @@ namespace PeachPDF.Tests.Integration
 {
     /// <summary>
     /// Regression coverage for real <c>font-variant: small-caps</c> rendering. Previously this property
-    /// was parsed, cascaded, and inherited (<see cref="CssBoxProperties.FontVariant"/>) but never
+    /// was parsed, cascaded, and inherited (<see cref="ComputedStyle.FontVariant"/>) but never
     /// consumed anywhere in layout or paint — a full-tree grep found zero non-storage read sites, so the
     /// property was a complete no-op for any spelling, including the standard keyword. PeachPDF has no
     /// OpenType shaping engine to do real <c>smcp</c>/<c>c2sc</c> glyph substitution, so small-caps is
     /// synthesized: originally-lowercase runs are upper-cased and measured/painted at a reduced size
-    /// (<see cref="CssBoxProperties.ActualSmallCapsFont"/>) relative to the rest of the word.
+    /// (<see cref="DerivedStyle.ActualSmallCapsFont"/>) relative to the rest of the word.
     ///
     /// Per CLAUDE.md's testing conventions: a parser-only test isn't sufficient on its own for a paint
     /// feature (this exact class of gap — a value that parses correctly but never renders — previously
@@ -50,7 +50,7 @@ namespace PeachPDF.Tests.Integration
             var box = FindWordsBox(container.Root!, "w");
 
             Assert.Equal(1.0, box.Words[0].FontSizeScale); // "H"
-            Assert.Equal(CssBoxProperties.SmallCapsFontScale, box.Words[1].FontSizeScale); // "ello" -> "ELLO"
+            Assert.Equal(CssBox.SmallCapsFontScale, box.Words[1].FontSizeScale); // "ello" -> "ELLO"
             Assert.True(box.ActualSmallCapsFont.Size < box.ActualFont.Size);
         }
 

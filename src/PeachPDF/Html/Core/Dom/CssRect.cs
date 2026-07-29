@@ -212,7 +212,7 @@ namespace PeachPDF.Html.Core.Dom
         public virtual string? Text => null;
 
         /// <summary>
-        /// The pre-<see cref="CssBoxProperties.TextTransform"/> source text this word was produced from
+        /// The pre-<see cref="ComputedStyle.TextTransform"/> source text this word was produced from
         /// (still HTML-decoded/soft-hyphen-stripped, just not case-transformed) - null for words that
         /// never carry real text (e.g. line breaks). All 3 CSS1 <c>text-transform</c> values are
         /// character-by-character and length-preserving, so this lets <see cref="FirstLineText"/> be
@@ -234,7 +234,7 @@ namespace PeachPDF.Html.Core.Dom
         public string? FirstLineText { get; set; }
 
         /// <summary>
-        /// Multiplier applied to the owner box's <see cref="CssBoxProperties.ActualFont"/> size when
+        /// Multiplier applied to the owner box's <see cref="DerivedStyle.ActualFont"/> size when
         /// measuring/painting this specific fragment. Used to synthesize <c>font-variant: small-caps</c>
         /// (an upper-cased, originally-lowercase run is drawn smaller than the rest of its word) — 1.0
         /// (no-op) for every other <see cref="CssRect"/>. See <see cref="CssBox.ParseToWords"/>.
@@ -243,8 +243,8 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// When true, this fragment's font is resolved per-codepoint (its <see cref="Text"/>'s first
-        /// <see cref="System.Text.Rune"/> against <see cref="CssBoxProperties.ActualFontForCodepoint"/>)
-        /// rather than from the owner box's single <see cref="CssBoxProperties.ActualFont"/> - the basis of
+        /// <see cref="System.Text.Rune"/> against <see cref="DerivedStyle.ActualFontForCodepoint"/>)
+        /// rather than from the owner box's single <see cref="DerivedStyle.ActualFont"/> - the basis of
         /// <c>@font-face</c> <c>unicode-range</c> selection and glyph-coverage fallback. Set in
         /// <see cref="CssBox.ParseToWords"/> only for boxes whose text actually needs it; every fragment in
         /// such a split shares one resolved face by construction. <c>false</c> for ordinary words.

@@ -25,7 +25,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <paramref name="value"/> is a renderable basic shape; <c>false</c> (and a null path) for
         /// <c>none</c>/invalid, in which case the caller skips clipping.
         /// </returns>
-        public static bool TryBuildClipPath(RGraphics g, string value, RRect referenceBox, CssBoxProperties box, out RGraphicsPath? path, out bool useEvenOdd)
+        public static bool TryBuildClipPath(RGraphics g, string value, RRect referenceBox, CssBox box, out RGraphicsPath? path, out bool useEvenOdd)
         {
             path = null;
             useEvenOdd = false;
@@ -64,7 +64,7 @@ namespace PeachPDF.Html.Core.Utils
             return true;
         }
 
-        private static void BuildPolygon(RGraphicsPath path, BasicShapeGrammar.ParsedBasicShape shape, RRect referenceBox, CssBoxProperties box)
+        private static void BuildPolygon(RGraphicsPath path, BasicShapeGrammar.ParsedBasicShape shape, RRect referenceBox, CssBox box)
         {
             var points = shape.PolygonPoints;
 
@@ -82,7 +82,7 @@ namespace PeachPDF.Html.Core.Utils
             path.CloseFigure();
         }
 
-        private static void BuildInset(RGraphicsPath path, BasicShapeGrammar.ParsedBasicShape shape, RRect referenceBox, CssBoxProperties box)
+        private static void BuildInset(RGraphicsPath path, BasicShapeGrammar.ParsedBasicShape shape, RRect referenceBox, CssBox box)
         {
             var edges = shape.InsetEdges;
             var top = CssValueParser.ParseLength(edges[0], referenceBox.Height, box);
@@ -104,7 +104,7 @@ namespace PeachPDF.Html.Core.Utils
             path.CloseFigure();
         }
 
-        private static void BuildCircle(RGraphicsPath path, BasicShapeGrammar.ParsedBasicShape shape, RRect referenceBox, CssBoxProperties box)
+        private static void BuildCircle(RGraphicsPath path, BasicShapeGrammar.ParsedBasicShape shape, RRect referenceBox, CssBox box)
         {
             var cx = referenceBox.X + CssValueParser.ParseLength(shape.CenterX, referenceBox.Width, box);
             var cy = referenceBox.Y + CssValueParser.ParseLength(shape.CenterY, referenceBox.Height, box);
@@ -114,7 +114,7 @@ namespace PeachPDF.Html.Core.Utils
             AppendEllipse(path, cx, cy, r, r);
         }
 
-        private static void BuildEllipse(RGraphicsPath path, BasicShapeGrammar.ParsedBasicShape shape, RRect referenceBox, CssBoxProperties box)
+        private static void BuildEllipse(RGraphicsPath path, BasicShapeGrammar.ParsedBasicShape shape, RRect referenceBox, CssBox box)
         {
             var cx = referenceBox.X + CssValueParser.ParseLength(shape.CenterX, referenceBox.Width, box);
             var cy = referenceBox.Y + CssValueParser.ParseLength(shape.CenterY, referenceBox.Height, box);
@@ -130,7 +130,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <c>sqrt(w² + h²)/sqrt(2)</c> (CSS Shapes Level 1); <c>closest-side</c>/<c>farthest-side</c>
         /// use the min/max distance from the center to the four edges.
         /// </summary>
-        private static double ResolveCircleRadius(BasicShapeGrammar.ShapeRadius radius, double cx, double cy, RRect referenceBox, CssBoxProperties box)
+        private static double ResolveCircleRadius(BasicShapeGrammar.ShapeRadius radius, double cx, double cy, RRect referenceBox, CssBox box)
         {
             var left = cx - referenceBox.X;
             var right = referenceBox.Right - cx;
@@ -152,7 +152,7 @@ namespace PeachPDF.Html.Core.Utils
         /// min/max of the two per-axis center-to-edge distances (<paramref name="centerToStart"/> and
         /// <c>axisExtent - centerToStart</c>).
         /// </summary>
-        private static double ResolveAxisRadius(BasicShapeGrammar.ShapeRadius radius, double centerToStart, double axisExtent, double hundredPercent, CssBoxProperties box)
+        private static double ResolveAxisRadius(BasicShapeGrammar.ShapeRadius radius, double centerToStart, double axisExtent, double hundredPercent, CssBox box)
         {
             var toStart = centerToStart;
             var toEnd = axisExtent - centerToStart;

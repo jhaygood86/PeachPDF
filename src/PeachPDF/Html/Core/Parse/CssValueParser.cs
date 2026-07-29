@@ -123,7 +123,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <summary>
         /// Whether <paramref name="value"/> is (syntactically) a single calc-family function - e.g. so
         /// callers that do their own lightweight text scanning of a length string (like
-        /// <see cref="Dom.CssBoxProperties"/>'s FontSize setter, which regex-searches for a bare "Nem"
+        /// <see cref="Dom.CssBox"/>'s FontSize setter, which regex-searches for a bare "Nem"
         /// substring to eagerly convert em to points) know to leave a calc() expression alone rather than
         /// mangling it, deferring to <see cref="ParseLength(string, double, double, double, string, bool)"/>'s
         /// real evaluation instead.
@@ -193,7 +193,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="hundredPercent">Equivalent to 100 percent when length is percentage</param>
         /// <param name="box"></param>
         /// <returns>the parsed length value with adjustments</returns>
-        public static double ParseLength(string length, double hundredPercent, CssBoxProperties box)
+        public static double ParseLength(string length, double hundredPercent, CssBox box)
         {
             return ParseLength(length, hundredPercent, box.GetEmHeight(), box.GetRemHeight(), null, false);
         }
@@ -320,7 +320,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="borderValue"></param>
         /// <param name="b"></param>
         /// <returns></returns>
-        public static double GetActualBorderWidth(string borderValue, CssBoxProperties b)
+        public static double GetActualBorderWidth(string borderValue, CssBox b)
         {
             if (string.IsNullOrEmpty(borderValue))
             {
@@ -339,7 +339,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <returns>
         /// The first comma-separated candidate that's actually installed/registered, or null if none of
         /// them are - callers fall back to <see cref="CssConstants.DefaultFont"/> in that case (see
-        /// <c>CssBoxProperties.ActualFont</c>), same as when the whole family list fails to resolve any
+        /// <c>CssBox.ActualFont</c>), same as when the whole family list fails to resolve any
         /// other way. Previously returned the literal string "inherit" as a not-found sentinel, which was
         /// confusable with the real CSS <c>inherit</c> keyword downstream.
         /// </returns>
@@ -474,7 +474,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <c>perspective()</c> is not supported (see docs/html-css-support.md) and is ignored like any other
         /// unrecognized function name, contributing identity.
         /// </remarks>
-        public static RMatrix ParseTransform(string transformValue, string transformOriginValue, CssBoxProperties box)
+        public static RMatrix ParseTransform(string transformValue, string transformOriginValue, CssBox box)
         {
             var built = BuildFinal4(transformValue, transformOriginValue, box);
             if (built is not { } b)
@@ -492,7 +492,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <see cref="BuildFunctionMatrix"/>) in CSS's last-written-applied-first order, and wraps the result
         /// around the box-local transform-origin. Returns null for "none"/empty/unparsable input.
         /// </summary>
-        private static Final4Result? BuildFinal4(string transformValue, string transformOriginValue, CssBoxProperties box)
+        private static Final4Result? BuildFinal4(string transformValue, string transformOriginValue, CssBox box)
         {
             if (string.IsNullOrWhiteSpace(transformValue) ||
                 string.Equals(transformValue.Trim(), CssConstants.None, StringComparison.OrdinalIgnoreCase))
@@ -541,7 +541,7 @@ namespace PeachPDF.Html.Core.Parse
                 return null;
 
             // Origin is resolved relative to the box's own top-left corner treated as local (0, 0).
-            // This matrix is cached and computed once (see CssBoxProperties.ActualTransformMatrix),
+            // This matrix is cached and computed once (see CssBox.ActualTransformMatrix),
             // so it must stay position-independent - the box's actual page position can vary across
             // repeated paint passes (e.g. pagination) and is re-applied at paint time instead, via
             // RMatrix.RebaseOrigin.
@@ -559,7 +559,7 @@ namespace PeachPDF.Html.Core.Parse
         /// Builds the 4x4 matrix for a single CSS transform function. Returns null for unrecognized functions
         /// (which contribute identity - i.e. are silently skipped rather than invalidating the whole declaration).
         /// </summary>
-        private static Matrix4x4? BuildFunctionMatrix(FunctionToken funcToken, CssBoxProperties box)
+        private static Matrix4x4? BuildFunctionMatrix(FunctionToken funcToken, CssBox box)
         {
             var name = funcToken.Data;
             var args = funcToken.ArgumentTokens.ToList();
@@ -692,7 +692,7 @@ namespace PeachPDF.Html.Core.Parse
         /// Parses transform-origin: 1-3 values (X, Y, optional Z). X/Y accept length/percentage/keywords
         /// (resolved against the box's own border-box size), Z is a plain length (no percentage), default 0.
         /// </summary>
-        private static (double X, double Y, double Z) ParseTransformOrigin(string value, CssBoxProperties box)
+        private static (double X, double Y, double Z) ParseTransformOrigin(string value, CssBox box)
         {
             if (string.IsNullOrWhiteSpace(value))
                 return (box.ActualWidth / 2, box.ActualHeight / 2, 0);

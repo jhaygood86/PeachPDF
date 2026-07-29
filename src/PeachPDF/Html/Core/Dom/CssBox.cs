@@ -41,7 +41,7 @@ namespace PeachPDF.Html.Core.Dom
     /// To know more about boxes visit CSS spec:
     /// http://www.w3.org/TR/CSS21/box.html
     /// </remarks>
-    internal class CssBox : CssBoxProperties, IDisposable, ICssDomNode
+    internal partial class CssBox : IDisposable, ICssDomNode
     {
         #region Fields and Consts
 
@@ -98,6 +98,8 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="tag">optional: the html tag associated with this css box</param>
         public CssBox(CssBox? parentBox, HtmlTag? tag)
         {
+            _derivedStyle = new DerivedStyle(this);
+
             if (parentBox != null)
             {
                 _parentBox = parentBox;
@@ -125,8 +127,8 @@ namespace PeachPDF.Html.Core.Dom
             set => _htmlContainer = value;
         }
 
-        /// <inheritdoc/>
-        protected override IReadOnlyDictionary<(string Name, string Family), RegisteredFontPalette>? FontPaletteValuesRegistry
+        /// <summary>The document's <c>@font-palette-values</c> registry, or null when none/unavailable.</summary>
+        internal IReadOnlyDictionary<(string Name, string Family), RegisteredFontPalette>? FontPaletteValuesRegistry
             => HtmlContainer?.FontPaletteValues;
 
         /// <summary>
@@ -699,7 +701,7 @@ namespace PeachPDF.Html.Core.Dom
                     else
                     {
                         // A soft hyphen (U+00AD) is an extra break opportunity honored for hyphens:
-                        // manual/auto (the default is manual - see CssBoxProperties.Hyphens). Unlike a
+                        // manual/auto (the default is manual - see ComputedStyle.Hyphens). Unlike a
                         // literal '-' it's never part of the rendered word text; unlike the old
                         // behavior, it no longer eagerly splits the word here either - at this
                         // pre-layout stage there's no way to know whether a line break will actually
@@ -794,7 +796,7 @@ namespace PeachPDF.Html.Core.Dom
         /// OpenType shaping engine to do real <c>smcp</c>/<c>c2sc</c> glyph substitution, so each
         /// lowercase run is upper-cased and marked (<see cref="CssRect.FontSizeScale"/>) to be
         /// measured/painted smaller than the rest of the word (see
-        /// <see cref="CssBoxProperties.ActualSmallCapsFont"/>). Every fragment after the first is marked
+        /// <see cref="DerivedStyle.ActualSmallCapsFont"/>). Every fragment after the first is marked
         /// <see cref="CssRect.SuppressWrapBefore"/> so this split never introduces a new line-break
         /// opportunity in the middle of what was one word. <paramref name="hyphenationCandidates"/> (see
         /// <see cref="CssRect.HyphenationCandidates"/>) is only attached when the word is kept whole —
@@ -850,7 +852,7 @@ namespace PeachPDF.Html.Core.Dom
                 var runText = text.Substring(start, length);
                 var runOriginalText = originalText.Substring(start, length);
                 var displayText = isLower ? runText.ToUpperInvariant() : runText;
-                var scale = isLower ? CssBoxProperties.SmallCapsFontScale : 1.0;
+                var scale = isLower ? SmallCapsFontScale : 1.0;
                 var runSpaceBefore = i == 0 && hasSpaceBefore;
                 var runSpaceAfter = i == runs.Count - 1 && hasSpaceAfter;
 
@@ -874,7 +876,7 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// Splits <paramref name="text"/> into maximal runs of consecutive codepoints that resolve to the
-        /// same face (via <see cref="CssBoxProperties.ActualFontForCodepoint"/>) and adds one
+        /// same face (via <see cref="DerivedStyle.ActualFontForCodepoint"/>) and adds one
         /// <see cref="CssRectWord"/> per run, each marked <see cref="CssRect.UsesPerCodepointFont"/>. The
         /// split is glued back together for line-breaking (<see cref="CssRect.SuppressWrapBefore"/> on every
         /// fragment after the first) and only the boundary fragments carry the surrounding whitespace flags,
@@ -948,13 +950,13 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// The font a word/fragment is measured and painted with: its per-codepoint face (resolved from its
         /// first <see cref="Rune"/>) when <see cref="CssRect.UsesPerCodepointFont"/>, otherwise the box's
-        /// own <see cref="CssBoxProperties.ActualFont"/> (or <see cref="CssBoxProperties.ActualSmallCapsFont"/>
+        /// own <see cref="DerivedStyle.ActualFont"/> (or <see cref="DerivedStyle.ActualSmallCapsFont"/>
         /// for a synthesized small-caps run). <paramref name="styleSource"/> is the box whose font applies -
         /// the owner box, or a <c>::first-line</c> shadow box for a word on the first formatted line.
         /// Shared by measurement and by <see cref="FragmentPainter"/>, so the two can never disagree
         /// about which face a word is drawn in.
         /// </summary>
-        internal static RFont ResolveWordFont(CssRect word, CssBoxProperties styleSource)
+        internal static RFont ResolveWordFont(CssRect word, CssBox styleSource)
         {
             if (word.UsesPerCodepointFont && word.Text is { Length: > 0 } text)
             {
@@ -1561,7 +1563,7 @@ namespace PeachPDF.Html.Core.Dom
         /// placed — it is positioned against the item's own border box rather than against its content, so
         /// neither the item's height nor how much of it fits here is an input. So the pass that places the
         /// item is the pass that positions the marker, and a pass that <i>resumes</i> it must not: whatever it
-        /// does to the item's own <see cref="CssBoxProperties.Location"/>, the marker's place in the document
+        /// does to the item's own <see cref="CssBox.Location"/>, the marker's place in the document
         /// was decided a fragmentainer ago.
         /// </para>
         /// <para>
@@ -2021,7 +2023,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         /// <remarks>
         /// Everything else falls into that method's else branch, which copies the <i>previous sibling's</i>
-        /// <see cref="CssBoxProperties.Location"/> and <see cref="CssBoxProperties.ActualBottom"/> — a
+        /// <see cref="CssBox.Location"/> and <see cref="CssBox.ActualBottom"/> — a
         /// <c>display: none</c> box, a <c>table-row</c>, a bare inline. So any later code that measures this
         /// box's own height, or moves it, has to ask this first: for those boxes the coordinates belong to
         /// something else and both the measurement and the move are meaningless.
@@ -2652,7 +2654,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="Fragmentation.FragmentainerContext.ResumeContentTop"/> is already inside them.
         /// </para>
         /// <para>
-        /// <b>The maximum against <see cref="CssBoxProperties.ClientTop"/> this replaced is gone for two
+        /// <b>The maximum against <see cref="CssBox.ClientTop"/> this replaced is gone for two
         /// different reasons, depending on which box is asking</b>, and neither is "it was equivalent". For
         /// the container itself that coordinate is its position on the page it <i>began</i>, at or above the
         /// edge of the fragmentainer now being filled, so the maximum never chose it. For any box below the
@@ -2987,7 +2989,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Only this box moves, not its subtree. Its already-placed descendants belong to the fragmentainer
         /// being left and keep the geometry that one's own fragment was built from
         /// (<c>FragmentEmitter.RecordNestedFragmentainer</c>); the content this pass places derives from the
-        /// new <see cref="CssBoxProperties.ClientLeft"/> as it flows. The inline <i>size</i> is preserved —
+        /// new <see cref="CssBox.ClientLeft"/> as it flows. The inline <i>size</i> is preserved —
         /// every column is the same width, so the box is translated rather than re-measured, which keeps §2's
         /// one-inline-size rule intact.
         /// </para>
@@ -3053,8 +3055,8 @@ namespace PeachPDF.Html.Core.Dom
         /// own to answer.
         /// </summary>
         /// <remarks>
-        /// Written as an extent rather than a width: <see cref="CssBoxProperties.ActualRight"/>'s setter
-        /// stores it as a size against the current <see cref="CssBoxProperties.Location"/>, so the frame
+        /// Written as an extent rather than a width: <see cref="CssBox.ActualRight"/>'s setter
+        /// stores it as a size against the current <see cref="CssBox.Location"/>, so the frame
         /// above is free to move the box afterwards and take the size with it.
         /// </remarks>
         private async ValueTask ResolveOwnInlineSize(RGraphics g)
@@ -3893,15 +3895,6 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Get the parent of this css properties instance.
-        /// </summary>
-        /// <returns></returns>
-        protected sealed override CssBoxProperties? GetParent()
-        {
-            return _parentBox;
-        }
-
-        /// <summary>
         /// Searches for the first word occurrence inside the box, on the specified linebox
         /// </summary>
         /// <param name="b"></param>
@@ -4278,14 +4271,6 @@ namespace PeachPDF.Html.Core.Dom
         /// Inline boxes can be split across different LineBoxes, that's why this method
         /// Delivers a rectangle for each LineBox related to this box, if inline.
         /// </remarks>
-        /// <summary>
-        /// Inherits inheritable values from parent.
-        /// </summary>
-        internal new void InheritStyle(CssBox? box = null, bool everything = false)
-        {
-            base.InheritStyle(box ?? ParentBox, everything);
-        }
-
         /// <summary>
         /// Set by an ancestor's lookahead in <see cref="FoldOwnAdjoiningTopMargins"/> when this box is a
         /// non-anchor member of a shared chain of adjoining first-in-flow-child margins: always 0,
@@ -4988,7 +4973,7 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// The topmost document Y this box's own geometry occupies. Its per-line rectangles and words where
-        /// it has them, since an inline box's own <see cref="CssBoxProperties.Location"/> stays at a
+        /// it has them, since an inline box's own <see cref="CssBox.Location"/> stays at a
         /// line-local value layout never updates.
         /// </summary>
         private double OwnGeometryTop()
@@ -5003,20 +4988,20 @@ namespace PeachPDF.Html.Core.Dom
             return top;
         }
 
-        protected override void OnBlockAxisRelocated(double fromY, double toY) =>
+        private void OnBlockAxisRelocated(double fromY, double toY) =>
             NotifyGeometryChanged(Math.Min(fromY, toY), 0);
 
-        protected override RFont? GetCachedFont(string fontFamily, double fsize, RFontStyle st, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null)
+        internal RFont? GetCachedFont(string fontFamily, double fsize, RFontStyle st, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null)
         {
             return FontFamilyResolver.Resolve(HtmlContainer!.Adapter, fontFamily, fsize, st, weight, stretch, obliqueSkewSinus);
         }
 
-        protected override RFont? GetCachedFontForCodepoint(string fontFamily, double fsize, RFontStyle st, System.Text.Rune codepoint, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null)
+        internal RFont? GetCachedFontForCodepoint(string fontFamily, double fsize, RFontStyle st, System.Text.Rune codepoint, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null)
         {
             return FontFamilyResolver.Resolve(HtmlContainer!.Adapter, fontFamily, fsize, st, codepoint, weight, stretch, obliqueSkewSinus);
         }
 
-        protected override RColor GetActualColor(string colorStr)
+        internal RColor GetActualColor(string colorStr)
         {
             return HtmlContainer!.CssParser.ParseColor(colorStr);
         }

@@ -47,7 +47,7 @@ namespace PeachPDF.Html.Core.Handlers
             string repeatList,
             string attachmentList,
             RRect viewportRect,
-            CssBoxProperties box,
+            CssBox box,
             Action<RBrush> drawBrush)
         {
             var attachmentValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(attachmentList), layerIndex);
@@ -96,7 +96,7 @@ namespace PeachPDF.Html.Core.Handlers
             RGraphics g,
             RRect originRect, RRect clipRect, RGraphicsPath? roundedClipPath,
             int layerIndex, string sizeList, string positionList, string repeatList,
-            CssBoxProperties box,
+            CssBox box,
             Func<RGraphics, RRect, RBrush> createBrush,
             Action<RBrush> drawBrush)
         {
@@ -154,7 +154,7 @@ namespace PeachPDF.Html.Core.Handlers
             SvgDocument svgDocument,
             int layerIndex, RRect originRect, RRect clipRect, RGraphicsPath? roundedClipPath,
             string positionList, string sizeList, string repeatList,
-            CssBoxProperties box)
+            CssBox box)
         {
             var (intrinsicWidth, intrinsicHeight) = SvgIntrinsicSize.Resolve(svgDocument);
             // SVG user units are CSS pixels (1px = 1/96in); convert to layout points so the tile

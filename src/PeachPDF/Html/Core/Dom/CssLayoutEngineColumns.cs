@@ -538,7 +538,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         /// <remarks>
         /// <para>
-        /// Deeper than <see cref="CssBoxProperties.ActualBottom"/> for a box that continues into the next
+        /// Deeper than <see cref="CssBox.ActualBottom"/> for a box that continues into the next
         /// column: its height is resolved by the epilogue, which runs only on the pass that <i>completes</i>
         /// it, so mid-flow it still reports the zero-height box it was placed as. Reading that alone sizes the
         /// container to less than the column really holds, and everything after it overlaps the overflow.
@@ -552,7 +552,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="CssBox.LineBoxes"/> is exactly what this fragmentainer holds.
         /// </para>
         /// <para>
-        /// Only a box that positions itself owns its <see cref="CssBoxProperties.ActualBottom"/>: an inline or
+        /// Only a box that positions itself owns its <see cref="CssBox.ActualBottom"/>: an inline or
         /// bare text box holds either its previous sibling's coordinates or a line-local value layout never
         /// finished with, so asking one how far down it reaches names the wrong box.
         /// </para>

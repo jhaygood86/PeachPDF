@@ -66,7 +66,7 @@ namespace PeachPDF.Html.Core.Handlers
             // PaintImpCore) - that source box goes through this same classification independently
             // and correctly reuses one struct element across every page it's proxied onto (see
             // StructureTagBuilder's /MCR handling for content spanning pages). The proxy itself
-            // copies the source's PdfTagType too (CssBoxProperties.InheritStyle's "everything"
+            // copies the source's PdfTagType too (CssBox.InheritStyle's "everything"
             // path), so without this check it would resolve to the exact same structure type and
             // double-wrap the source's own struct element in a redundant duplicate.
             if (box is CssProxyBox)

@@ -24,7 +24,7 @@ namespace PeachPDF.CSS
 
         /// <summary>
         /// Mirrors ParseLength's returnPoints parameter: when the caller's em/rem/percent factors are
-        /// already expressed in points (as CssBoxProperties.FontSize's caller does), a bare <c>pt</c> leaf
+        /// already expressed in points (as CssBox.FontSize's caller does), a bare <c>pt</c> leaf
         /// must bypass the normal pt-&gt;px factor rather than being converted into this already-points space.
         /// </summary>
         public bool ReturnPoints { get; }

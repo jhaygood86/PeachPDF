@@ -33,7 +33,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <param name="g"></param>
         /// <param name="box"></param>
         /// <returns></returns>
-        public static double WhiteSpace(RGraphics g, CssBoxProperties box)
+        public static double WhiteSpace(RGraphics g, CssBox box)
         {
             var w = box.ActualFont.GetWhitespaceWidth(g);
 

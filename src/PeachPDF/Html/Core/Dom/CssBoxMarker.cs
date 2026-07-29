@@ -29,7 +29,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// The default marker shape ("disc"/"circle"/"square") when the effective content is the
         /// procedural default (<c>content: normal</c>) and the owning list item's
-        /// <see cref="CssBoxProperties.ListStyleType"/> is one of those three - vector-drawn directly
+        /// <see cref="ComputedStyle.ListStyleType"/> is one of those three - vector-drawn directly
         /// by <c>MarkerFragmentPainter</c>, not literal text. Null for text/image markers.
         /// </summary>
         internal string? MarkerShape { get; private set; }
@@ -37,7 +37,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Whether <see cref="CssBox.ContentImage"/> is owned by this box (and should be
         /// disposed with it) or merely borrowed from the owning list item's own
-        /// <see cref="CssBoxProperties.ListStyleImage"/> (whose lifecycle belongs to that list item,
+        /// <see cref="ComputedStyle.ListStyleImage"/> (whose lifecycle belongs to that list item,
         /// not this marker) - set false only by <see cref="ResolveDefaultContent"/>'s procedural
         /// <c>list-style-image</c> case; an author <c>content: url(...)</c> override (resolved by
         /// <see cref="CssContentEngine"/> before this box's own content ever needs to be considered)
@@ -56,7 +56,7 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// Resolves the marker's default (<c>content: normal</c>) representation from the owning list
-        /// item's own <see cref="CssBoxProperties.ListStyleType"/>/<see cref="CssBoxProperties.ListStyleImage"/>
+        /// item's own <see cref="ComputedStyle.ListStyleType"/>/<see cref="ComputedStyle.ListStyleImage"/>
         /// and the CSS <c>list-item</c> counter (<see cref="CssCounterEngine"/>) - the same generic
         /// counter machinery <c>content: counter(list-item)</c> already uses, so the two are always
         /// consistent by construction. Called from <c>DomParser.CorrectTextBoxes</c>, right after
