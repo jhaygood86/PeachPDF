@@ -1247,6 +1247,39 @@ namespace PeachPDF.Html.Core.Dom
             _prologueDone = false;
 
             AwaitPlacement();
+
+            // This box's whole subtree is about to be laid out from scratch, so every descendant's own
+            // layout runs again regardless of its _prologueDone - but a descendant whose own prologue does
+            // not re-run (because ResetForRefill was called at this box's level, not its) skips the one
+            // line of that prologue that lets a forced break fire twice: PlacedByForcedBreak = false. A
+            // break-before below a box a pass re-entry replays is then read as already taken and silently
+            // never retaken. A full recursive _prologueDone reset would fix it too, but at the cost of
+            // re-measuring every word and re-running every string-set/named-page registration in the whole
+            // subtree - clearing only the one-shot latch that guards retaking a forced break is the
+            // narrower fix, and safe on its own: _isForcedBreak/_forcedBreakSide/_adjoinsForcedBreakPoint
+            // are settled from style alone and do not go stale between passes.
+            foreach (var child in Boxes)
+            {
+                child.AllowDescendantForcedBreaksToBeRetaken();
+            }
+        }
+
+        /// <summary>
+        /// Clears <see cref="PlacedByForcedBreak"/> on this box and every box in its subtree, without
+        /// touching anything else the prologue owns.
+        /// </summary>
+        /// <remarks>
+        /// The recursive half of <see cref="ResetForRefill"/> - see its remarks for why this is narrower
+        /// than a full prologue reset and why that is safe.
+        /// </remarks>
+        private void AllowDescendantForcedBreaksToBeRetaken()
+        {
+            PlacedByForcedBreak = false;
+
+            foreach (var child in Boxes)
+            {
+                child.AllowDescendantForcedBreaksToBeRetaken();
+            }
         }
 
         /// <summary>
@@ -3652,6 +3685,22 @@ namespace PeachPDF.Html.Core.Dom
 
                         (top, reservedBlankSlot) =
                             StepPastSlotsOnTheWrongSide(child, forcedTop + forcedBreakMargin, forcedBreakMargin);
+
+                        // css-break-3 §4.4's blank-page idiom: a forced break can land a box that carries
+                        // no printable content of its own alone on a slot (an empty break marker between
+                        // two "break-after: always" siblings is the canonical case). Without an explicit
+                        // reservation, CSS Paged Media 3 §3.2's content-empty-page skip
+                        // (FragmentEmitter.Finish) would drop that slot from the output entirely, silently
+                        // discarding the deliberate blank page - the layout-position half of this (which
+                        // slot the box lands on) was already correct without it. Skipped when a directional
+                        // step already reserved a slot for this box: the dictionary holds one slot per
+                        // owner, and the stepped-over slot must keep it - the box's own landing slot is what
+                        // a directional break exists to carry real content to.
+                        if (reservedBlankSlot is null)
+                        {
+                            child.HtmlContainer!.SetBlankSlotReservation(
+                                child, child.HtmlContainer.SlotStartingAt(top));
+                        }
 
                         // §3.1: a forced *page* break is not a nested fragmentainer's to satisfy. The page
                         // vehicle is realized by placement, and placing the child at `top` inside a column

@@ -542,6 +542,46 @@ namespace PeachPDF.Tests.Integration
             Assert.True(rewound > 0, "no member of the fixture family sent the driver back to a finished pass");
         }
 
+        /// <summary>
+        /// #434: a forced break below a box the re-entered pass replays is lost, because
+        /// <c>PassRewind.RollBackTo</c> only lets the resumption chain's own boxes' prologues back in - a
+        /// break on one of THEIR descendants stays latched from the discarded attempt and is never
+        /// retaken. <c>h2</c> here is wrapped in <c>section2</c>, after a <c>section2lead</c> sibling so
+        /// css-break-3 §3.1's first-child propagation does not hoist the break onto <c>section2</c> itself
+        /// - which would make it a direct-reset target instead of the grandchild #434 is about. The
+        /// resumption chain names only <c>lead</c>, so <c>section2</c> is reset outright when the driver
+        /// rewinds to replay <c>lead</c>/<c>h1</c>/<c>card1</c>'s pass; before the fix, that reset reached
+        /// <c>section2</c> itself but not <c>h2</c>, so <c>h2</c>'s already-taken forced break stayed
+        /// latched and was silently skipped on replay - landing directly on <c>section2lead</c>'s own page
+        /// with room to spare, rather than opening a fresh one.
+        /// </summary>
+        [Theory]
+        [InlineData(35, 180.0)]
+        [InlineData(50, 200.0)]
+        [InlineData(115, 180.0)]
+        [InlineData(190, 180.0)]
+        public async Task PulledRun_ReEnteringAPassThatResumedIntoAParagraph_RetakesAForcedBreakOnAGrandchild(
+            int leadWords, double pageHeight)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                ResumedParagraphWithNestedForcedBreakDocument(leadWords, 30),
+                pageWidth: 300, pageHeight: pageHeight, margin: 10);
+
+            Assert.True(container.PassRewinds > 0,
+                "fixture must actually send the driver back to a finished pass");
+
+            var section2lead = LayoutHarness.FindById(root, "section2lead")!;
+            var h2 = LayoutHarness.FindById(root, "h2")!;
+
+            var section2leadPage =
+                container.PageIndexOf(section2lead.ActualBottom - HtmlContainerInt.PageBoundaryEpsilon);
+            var h2Page = container.PageIndexOf(h2.Location.Y + HtmlContainerInt.PageBoundaryEpsilon);
+
+            Assert.True(h2Page > section2leadPage,
+                "break-before:page must push h2 onto a fresh page rather than leaving it on section2lead's page");
+            Assert.Equal(container.PageTopOf(h2Page), h2.Location.Y, 0.1);
+        }
+
         private static List<CssRect> WordsIn(CssBox box) =>
             LayoutHarness.Descendants(box).SelectMany(b => b.Words).ToList();
 
@@ -556,6 +596,23 @@ namespace PeachPDF.Tests.Integration
                 + $"<div id='card1' style='break-inside:avoid'>{Filler(cardWords, "a")}</div>"
                 + "<h2 id='h2'>Head</h2>"
                 + $"<div id='card2' style='break-inside:avoid'>{Filler(cardWords, "b")}</div>");
+
+        /// <summary>
+        /// Same shape as <see cref="ResumedParagraphDocument"/>, except the second heading and its card are
+        /// wrapped in <c>section2</c> and the heading carries <c>break-before:page</c> - making it a
+        /// grandchild, rather than a direct child, of the box the driver's rewind resets when it re-enters
+        /// the pass that placed <c>lead</c>/<c>h1</c>/<c>card1</c> (see #434).
+        /// </summary>
+        private static string ResumedParagraphWithNestedForcedBreakDocument(int leadWords, int cardWords) =>
+            LayoutHarness.Wrap(
+                $"<p id='lead'>{Filler(leadWords, "lead")}</p>"
+                + "<h2 id='h1'>Head</h2>"
+                + $"<div id='card1' style='break-inside:avoid'>{Filler(cardWords, "a")}</div>"
+                + "<div id='section2' style='margin:0'>"
+                + "<div id='section2lead' style='margin:0'>lead-in</div>"
+                + "<h2 id='h2' style='break-before:page;margin:0'>Head</h2>"
+                + $"<div id='card2' style='break-inside:avoid'>{Filler(cardWords, "b")}</div>"
+                + "</div>");
 
         private static string Filler(int count, string prefix) =>
             string.Join(" ", Enumerable.Range(0, count).Select(i => $"{prefix}{i}"));
