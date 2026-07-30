@@ -3,6 +3,7 @@ using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -1633,6 +1634,41 @@ namespace PeachPDF.Tests.Integration
             // Positioned against the item's own padding edge, so it sits just below/right of it.
             Assert.True(abs.Location.Y > item.Location.Y - 1 && abs.Location.Y < item.Location.Y + 20,
                 $"expected the absolute descendant to travel with its containing-block item; item.Y={item.Location.Y}, abs.Y={abs.Location.Y}");
+        }
+
+        [Theory]
+        [InlineData("16 / 9")]
+        [InlineData("1 / 1")]
+        [InlineData("3 / 4")]
+        public async Task NestedFlexItemsInARow_TextDoesNotSpuriouslyWrap(string label)
+        {
+            // A flex-in-flex-in-flex shape (a paginating .row of .cell items, each holding a nested
+            // .box flex container with its own single text item) - .row's commit pass re-lays each
+            // .cell's content out for real (CommitItemContent), which recursively re-enters .box's own
+            // complete flex Layout(), which measures its own text item via MeasureItem again. Before
+            // the fix, MeasureItem's "auto width" branch never reset the item's line boxes before
+            // re-laying it out (unlike ResizeItem/ShrinkColumnItemToContentWidth, which already do),
+            // so a second/third measurement within the same generation accumulated onto the previous
+            // call's un-cleared line boxes and corrupted the word wrap this item's own hypothetical
+            // width is computed from - "1 / 1" wrapped to "1 /" / "1" though the box is plainly wide
+            // enough for it on one line.
+            var html = Wrap($$"""
+                <style>
+                .row { display: flex; gap: 20px; align-items: flex-start; margin-top: 12px; }
+                .cell { text-align: center; font-size: 9pt; color: #555; }
+                .box { width: 130px; background: #e9ecef; border: 1px solid #adb5bd; color: #495057;
+                       font-size: 11pt; display: flex; align-items: center; justify-content: center;
+                       aspect-ratio: 16/9; }
+                </style>
+                <div class='row'>
+                    <div class='cell'><div id='box' class='box'>{{label}}</div>{{label}}</div>
+                </div>
+                """);
+            var (root, _) = await BuildAndLayout(html);
+
+            var box = FindById(root, "box")!;
+            var lineCount = LayoutHarness.Descendants(box).Sum(b => b.LineBoxes.Count);
+            Assert.Equal(1, lineCount);
         }
 
         [Fact]

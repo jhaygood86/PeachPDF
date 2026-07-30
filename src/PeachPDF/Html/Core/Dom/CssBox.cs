@@ -1812,6 +1812,21 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Whether an engine has already decided this box's final <see cref="CssBoxProperties.Location"/>
+        /// for the pass about to run, so <see cref="LayoutContents"/>'s ordinary self-placement
+        /// (<see cref="PlaceBlockBox"/>/<see cref="PlaceAsBlockChild"/>) must not touch it.
+        /// </summary>
+        /// <remarks>
+        /// Set by <c>CssLayoutEngineFlex</c>'s commit pass immediately before re-laying an item's content
+        /// out at the position <see cref="CssLayoutEngineFlex.AssignLocations"/>/line relocation already
+        /// assigned it — every earlier item layout in that engine is a *measurement*, moved into place by
+        /// translation afterward, so it is harmless for <c>PlaceBlockChild</c> to run during those (its
+        /// result is discarded the moment translation overwrites it); this one is the item's real, final
+        /// content layout, with nothing after it to correct a wrong position back.
+        /// </remarks>
+        internal bool PositionAssignedByEngine { get; set; }
+
+        /// <summary>
         /// Everything that must happen exactly once for this box, before any of its content is placed:
         /// measuring its words, applying <c>string-set</c>, resolving its used page name, and taking any
         /// forced break that falls before it.
@@ -2036,7 +2051,20 @@ namespace PeachPDF.Html.Core.Dom
         {
             if (PlacesItselfAsBlockBox)
             {
-                if (resume is null)
+                if (PositionAssignedByEngine)
+                {
+                    // An engine (CssLayoutEngineFlex's commit pass) already decided this box's final
+                    // Location, Width and ActualRight - PlaceBlockChild's previous-sibling block-flow math
+                    // was never part of how it got there, and calling it here would silently reposition
+                    // the box using a relationship (its "previous sibling" in Boxes) that has nothing to do
+                    // with where a flex engine put it. Nor is ResolveOwnInlineSize's own GetBoxWidth safe to
+                    // call again here: its Words.Count > 0 branch measures this box's *own* leftover words
+                    // from the layout this call is about to replace, not the pinned Width the engine set -
+                    // for an inline-content box the two can disagree, corrupting the very re-wrap this pass
+                    // exists to get right. Nothing here needs redoing: Width/Height and the ActualRight/
+                    // ActualBottom they were derived from already agree.
+                }
+                else if (resume is null)
                 {
                     await PlaceBlockBox(g);
 
@@ -2053,8 +2081,12 @@ namespace PeachPDF.Html.Core.Dom
                 // needs to know *which* one, which is why it cannot ask the combined predicate.
                 if (Display is CssConstants.Flex or CssConstants.InlineFlex)
                 {
-                    await LayoutEngineContent(
-                        g, static (graphics, box, _) => CssLayoutEngineFlex.PerformLayout(graphics, box), resume: null);
+                    // The record travels into the engine so a resumed pass can re-enter exactly the items
+                    // that did not finish their own content last time (CssLayoutEngineFlex's commit pass),
+                    // rather than re-measuring and re-positioning the whole container from scratch.
+                    await LayoutEngineContent(g, CssLayoutEngineFlex.PerformLayout, resume);
+
+                    if (PendingBreakToken is not null) return;
                 }
                 else if (Display is CssConstants.Grid or CssConstants.InlineGrid)
                 {
@@ -3500,7 +3532,8 @@ namespace PeachPDF.Html.Core.Dom
             if (!_keepWithNextRetried
                 && Position is CssConstants.Static or CssConstants.Relative && !IsFloated
                 && LineBoxes.Count > 0 && LineBoxes[0].Words.Count > 0
-                && HtmlContainer!.PageSize.Height > 0)
+                && HtmlContainer!.PageSize.Height > 0
+                && !PositionAssignedByEngine)
             {
                 var firstWordTop = LineBoxes[0].Words.Min(w => w.Top);
                 var ownPage = HtmlContainer.PageIndexOf(Location.Y);
@@ -3565,7 +3598,14 @@ namespace PeachPDF.Html.Core.Dom
             // question of the same geometry - an unsatisfiable `avoid` is relaxed rather than skipped
             // (§5.3), so without the latch the answer is "still does not fit" and the box walks down
             // the document one page per pass.
-            if ((avoidsBreak || monolithic) && !_earlyBreakTaken)
+            //
+            // A flex item's own break-inside:avoid/monolithic relocation is CssLayoutEngineFlex's
+            // RelocateLinesAcrossFragmentainers, which already ran and already decided this - by the
+            // commit pass this box's Location is not "wherever the previous phase happened to leave it",
+            // it is the engine's own final answer, and this page-context mover (built for an ordinary
+            // block sibling with siblings and a page grid of its own to relocate against) would ask the
+            // same question again with none of that context and can disagree.
+            if ((avoidsBreak || monolithic) && !_earlyBreakTaken && !PositionAssignedByEngine)
             {
                 // Shifted-grid convention (see HtmlContainer.PageIndexOf) - topRelativeToCurrentPage is
                 // this box's distance from the start of its own page's real content band, not a raw
@@ -3606,7 +3646,7 @@ namespace PeachPDF.Html.Core.Dom
             // where that cannot be arranged, by pushing the whole box to the next fragmentainer. A
             // paragraph taller than one page is not pushed: it would just recreate the violation there.
             if (DomUtils.ContainsInlinesOnly(this) && LineBoxes.Count > 1
-                && !_earlyBreakTaken
+                && !_earlyBreakTaken && !PositionAssignedByEngine
                 && int.TryParse(Orphans, out var orphans) && int.TryParse(Widows, out var widows)
                 && (orphans > 1 || widows > 1))
             {

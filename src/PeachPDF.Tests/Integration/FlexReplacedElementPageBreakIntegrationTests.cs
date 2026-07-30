@@ -32,17 +32,29 @@ namespace PeachPDF.Tests.Integration
     /// Fixed by <see cref="HtmlContainerInt.SuppressWordPageBreaks"/>, set for the duration of every
     /// throwaway/measurement-only layout pass in <see cref="CssLayoutEngineFlex"/>.
     ///
-    /// Accepted trade-off: an earlier version of this fix tried re-running the per-word check
-    /// once, unsuppressed, at each item's <c>AssignLocations</c>-computed "final" position - but
-    /// that position is not always truly final. <c>CssLayoutEngineTable</c>'s whole-table
-    /// page-break post-check can retroactively bulk-relocate an entire already-laid-out cell
-    /// subtree (via the same <c>CssBox.OffsetTop</c> this fix relies on) *after*
-    /// <c>CssLayoutEngineFlex.Layout</c> has already returned for a flex container inside that
-    /// cell - so a re-check at that point could itself fire against a not-yet-relocated position
-    /// and reintroduce the exact word/Location desync bug one level later (confirmed by
+    /// Accepted trade-off (at the time this fix landed): an earlier version tried re-running the
+    /// per-word check once, unsuppressed, at each item's <c>AssignLocations</c>-computed "final"
+    /// position - but that position was not always truly final. <c>CssLayoutEngineTable</c>'s
+    /// whole-table page-break post-check can retroactively bulk-relocate an entire
+    /// already-laid-out cell subtree (via the same <c>CssBox.OffsetTop</c> this fix relies on)
+    /// *after* <c>CssLayoutEngineFlex.Layout</c> has already returned for a flex container inside
+    /// that cell - so a re-check at that point could itself fire against a not-yet-relocated
+    /// position and reintroduce the exact word/Location desync bug one level later (confirmed by
     /// re-generating and visually inspecting the SVG showcase after adding it). Word-level
-    /// page-break avoidance (<c>CssRect.BreakPage</c>) is therefore simply unavailable for
+    /// page-break avoidance (<c>CssRect.BreakPage</c>) was therefore simply unavailable for
     /// content inside any <c>display:flex</c> container, in exchange for correctness.
+    ///
+    /// <b>Superseded, for one shape, by issue #430's fix.</b> <c>CssLayoutEngineFlex</c> now runs a
+    /// real commit pass over a single-item, row-direction, single-line container's content once
+    /// every item sits at its <i>genuinely</i> final position (after line relocation, not merely
+    /// after <c>AssignLocations</c>) - see <c>.claude/recent-fixes/</c> for the fix that added it.
+    /// The table-cell-relocation hazard above does not reappear: the commit pass's content is an
+    /// ordinary part of the box tree by the time a later mover's <c>OffsetTop</c> runs, so it
+    /// translates wholesale exactly like the old suppressed content did. Every other shape - a
+    /// wrapped or column-direction container, a multi-item line whose items do not all finish
+    /// together, a flex container that is not itself paginating - is unchanged and still relies on
+    /// this class's original fix; <see cref="ItemAtDefaultAlignment_TextStraddlingPageBoundary_MovesToTheNextPage"/>
+    /// is the one test in this file whose expectation flipped.
     /// </summary>
     public class FlexReplacedElementPageBreakIntegrationTests
     {
@@ -154,17 +166,20 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task ItemAtDefaultAlignment_TextStraddlingPageBoundary_PaintsConsistentlyWithItsOwnBox()
+        public async Task ItemAtDefaultAlignment_TextStraddlingPageBoundary_MovesToTheNextPage()
         {
-            // Negative-space companion to the two tests above, for the *without* a relocating
-            // ancestor case: with default alignment (flex-start main/cross, no growth), a single
-            // flex item's final position exactly equals the provisional (ClientLeft, ClientTop)
-            // position MeasureItem used to measure it, so OffsetLeft/OffsetTop never fire
-            // (dx == dy == 0) - meaning this item's word position was set entirely by the
-            // (suppressed) measurement pass and never touched again. Confirms that even though
-            // page-break avoidance itself is an accepted, documented gap for flex content (see
-            // this class's own doc comment), the word still stays perfectly consistent with its
-            // own box - it just straddles the boundary rather than jumping across it.
+            // Single-item, row-direction, single-line case: CssLayoutEngineFlex's commit pass
+            // (see .claude/recent-fixes/ for the issue-#430 chain that added it) lays this item's
+            // content out for real once it sits at its final position, with a genuinely live
+            // fragmentainer - so a line that does not fit in what is left of the item's own page
+            // now moves to the next page's content top, the same as it would for an ordinary block.
+            // This used to be an accepted, documented gap (word-level page-break avoidance was
+            // "simply unavailable" for flex content, per this class's own doc comment) - the word
+            // stayed glued to the item's box and straddled the boundary instead of moving. The
+            // straddling half of that gap remains true for every *other* shape this file's other
+            // tests cover (a table-cell-relocation post-check moving an already-committed subtree
+            // wholesale, multi-line/column-direction/wrapped containers), so only this test's own
+            // expectation changes.
             const string html = """
                 <!DOCTYPE html><html><head><style>
                 body { margin: 0; }
@@ -182,8 +197,12 @@ namespace PeachPDF.Tests.Integration
 
             var word = FindFirstWord(item);
             Assert.NotNull(word);
-            Assert.True(Math.Abs(word!.Top - item.Location.Y) < 1.0,
-                $"Word position (Top={word.Top:F1}) must match the item's own Location.Y={item.Location.Y:F1}, page-break avoidance notwithstanding");
+
+            // 830pt + 16pt line-height = 846pt, past the 842pt page boundary - the line does not fit
+            // in what is left of page 0, so it starts page 1's content instead of straddling the
+            // boundary or staying at the item's own (page-0) Location.Y.
+            Assert.True(Math.Abs(word!.Top - PageHeight) < 1.0,
+                $"Word position (Top={word.Top:F1}) should have moved to the next page's content top ({PageHeight:F1})");
         }
 
         // --- Helpers ---
