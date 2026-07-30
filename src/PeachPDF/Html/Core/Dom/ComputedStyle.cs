@@ -36,6 +36,15 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="currentValue">The property's current value on this instance.</param>
         /// <param name="newValue">The value being assigned.</param>
         /// <param name="apply">Produces the updated record via a <c>with</c> expression, e.g. <c>static (s, v) =&gt; s with { Color = v }</c>.</param>
+        /// <remarks>
+        /// The no-op skip relies on <see cref="EqualityComparer{T}"/>.Default, which for
+        /// <see cref="ListStyleImage"/>/<see cref="BackgroundImages"/> means <see cref="CssImage"/>'s
+        /// record equality - and <c>CssImage</c> carries a mutable load-state field that participates in
+        /// it, so two references to what's conceptually "the same" image compare unequal once one has
+        /// started loading. The skip just doesn't fire for these two properties in that case (matching
+        /// the pre-split code, which always overwrote unconditionally) - not a correctness issue, just a
+        /// missed optimization for this pair.
+        /// </remarks>
         internal ComputedStyle SetPropertyValue<T>(T currentValue, T newValue, Func<ComputedStyle, T, ComputedStyle> apply) =>
             EqualityComparer<T>.Default.Equals(currentValue, newValue) ? this : apply(this, newValue);
 
