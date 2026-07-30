@@ -124,6 +124,60 @@ namespace PeachPDF.Tests.Html.Core.Dom
         }
 
         [Fact]
+        public void InheritStyle_UntouchedInheritedArea_ChildReusesParentsAreaInstance_ByReference()
+        {
+            // The whole point of splitting ComputedStyle into per-area records: when a parent customizes
+            // an inheritable area (Font here) and a child never overrides anything in it, InheritStyle
+            // should adopt the parent's actual FontArea object by reference rather than cloning a new one
+            // - the copy-on-write discipline guarantees the parent's instance is never mutated afterwards,
+            // so sharing it is safe and free.
+            var parent = new CssBox(null, null) { FontFamily = "Georgia" };
+            var child = new CssBox(parent, null);
+
+            child.InheritStyle();
+
+            Assert.Same(parent.ComputedStyle.Font, child.ComputedStyle.Font);
+            Assert.Equal("Georgia", child.FontFamily);
+        }
+
+        [Fact]
+        public void InheritStyle_ChildOverridesOneProperty_OnlyThatAreaDiverges_OthersStayShared()
+        {
+            var parent = new CssBox(null, null) { FontFamily = "Georgia", Color = "rgb(1, 2, 3)" };
+            var child = new CssBox(parent, null);
+
+            child.InheritStyle();
+            child.FontFamily = "Verdana";
+
+            // The overridden area gets its own instance...
+            Assert.NotSame(parent.ComputedStyle.Font, child.ComputedStyle.Font);
+            Assert.Equal("Verdana", child.FontFamily);
+            Assert.Equal("Georgia", parent.FontFamily);
+
+            // ...but every other inherited area (untouched by the override) is still literally the same
+            // shared object as the parent's, not merely equal.
+            Assert.Same(parent.ComputedStyle.Text, child.ComputedStyle.Text);
+            Assert.Same(parent.ComputedStyle.Table, child.ComputedStyle.Table);
+            Assert.Same(parent.ComputedStyle.List, child.ComputedStyle.List);
+            Assert.Same(parent.ComputedStyle.Pagination, child.ComputedStyle.Pagination);
+        }
+
+        [Fact]
+        public void InheritStyle_BoxSizing_NoLongerAdoptsParentsBoxModelArea()
+        {
+            // box-sizing was deliberately made non-inherited (CSS Box Sizing 3 §3) - BoxModel (which now
+            // holds BoxSizing) must therefore never be among the areas InheritStyle adopts by reference.
+            var parent = new CssBox(null, null) { BoxSizing = "border-box", Width = "100px" };
+            var child = new CssBox(parent, null);
+
+            child.InheritStyle();
+
+            Assert.NotSame(parent.ComputedStyle.BoxModel, child.ComputedStyle.BoxModel);
+            Assert.Equal("content-box", child.BoxSizing);
+            Assert.Equal("auto", child.Width);
+        }
+
+        [Fact]
         public void InheritStyle_Everything_CopiesBottomAndRight()
         {
             // Pre-refactor, CssBoxProperties.InheritStyle's "everything" branch (used only for structural

@@ -212,7 +212,7 @@ namespace PeachPDF.Html.Core.Dom
         public virtual string? Text => null;
 
         /// <summary>
-        /// The pre-<see cref="ComputedStyle.TextTransform"/> source text this word was produced from
+        /// The pre-<see cref="TextArea.TextTransform"/> source text this word was produced from
         /// (still HTML-decoded/soft-hyphen-stripped, just not case-transformed) - null for words that
         /// never carry real text (e.g. line breaks). All 3 CSS1 <c>text-transform</c> values are
         /// character-by-character and length-preserving, so this lets <see cref="FirstLineText"/> be

@@ -437,6 +437,114 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal("scale(2)", child!.Transform);
         }
 
+        // ── regression: properties CssDefaults was missing entirely (flex/grid/etc.) ──
+        // ── previously made "initial"/"unset"/"revert" a silent no-op for them ────────
+
+        [Fact]
+        public async Task Initial_FlexGrow_ResetsToZero()
+        {
+            // Before CssDefaults grew a "flex-grow" entry, GetInitialValue returned null for it and
+            // DomParser.AssignCssBlock's `if (value is null) continue;` silently skipped the
+            // declaration entirely - so "initial" left flex-grow at whatever the last-applied rule
+            // set it to (here, "3"), instead of resetting it to the real initial value "0".
+            var html = """
+                <!DOCTYPE html><html><head><style>
+                  .item { flex-grow: 3; }
+                </style></head><body>
+                <div id="el" class="item" style="flex-grow: initial">text</div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var el = FindById(root, "el");
+
+            Assert.NotNull(el);
+            Assert.Equal("0", el!.FlexGrow);
+        }
+
+        [Fact]
+        public async Task Initial_JustifyItems_ResetsToNormal()
+        {
+            // Same class of gap as flex-grow above, for a Grid-area property.
+            var html = """
+                <!DOCTYPE html><html><head><style>
+                  .item { justify-items: center; }
+                </style></head><body>
+                <div id="el" class="item" style="justify-items: initial">text</div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var el = FindById(root, "el");
+
+            Assert.NotNull(el);
+            Assert.Equal("normal", el!.JustifyItems);
+        }
+
+        [Fact]
+        public async Task Unset_ObjectFit_BehavesLikeInitial()
+        {
+            // object-fit is not inherited, so "unset" must act like "initial" ("fill") - another
+            // property CssDefaults was previously missing entirely.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <div id="parent" style="object-fit: cover">
+                  <div id="child" style="object-fit: unset">text</div>
+                </div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var child = FindById(root, "child");
+
+            Assert.NotNull(child);
+            Assert.Equal("fill", child!.ObjectFit);
+        }
+
+        // ── regression: box-sizing is spec-correctly not inherited ───────────────────
+
+        [Fact]
+        public async Task BoxSizing_DoesNotInheritFromParent()
+        {
+            // CSS Box Sizing 3 defines box-sizing as inherited: no. It used to be listed in
+            // CssDefaults.InheritedProperties (a PeachPDF-specific deviation), so a child with no
+            // explicit box-sizing picked up its parent's border-box instead of the real initial
+            // value content-box.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <div id="parent" style="box-sizing: border-box">
+                  <div id="child">text</div>
+                </div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var child = FindById(root, "child");
+
+            Assert.NotNull(child);
+            Assert.Equal("content-box", child!.BoxSizing);
+        }
+
+        [Fact]
+        public async Task Inherit_BoxSizing_StillWorksWhenExplicitlyRequested()
+        {
+            // Even though box-sizing no longer inherits by default, the explicit "inherit" keyword
+            // must still force the child to pick up the parent's computed value.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <div id="parent" style="box-sizing: border-box">
+                  <div id="child" style="box-sizing: inherit">text</div>
+                </div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var child = FindById(root, "child");
+
+            Assert.NotNull(child);
+            Assert.Equal("border-box", child!.BoxSizing);
+        }
+
         // ── regression: lazy revert-snapshot (only computed when a matched rule ──
         // ── actually uses revert/revert-layer) must still resolve correctly ─────
 

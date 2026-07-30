@@ -191,10 +191,16 @@ namespace PeachPDF.Html.Core
         /// <summary>
         /// CSS properties that are inherited from a parent element (per CSS spec and PeachPDF's InheritStyle implementation).
         /// </summary>
+        /// <remarks>
+        /// <c>box-sizing</c> is deliberately absent: <a href="https://www.w3.org/TR/css-sizing-3/#box-sizing">CSS
+        /// Box Sizing 3 §3</a> defines it as <c>inherited: no</c>. It used to be listed here (and copied in
+        /// <c>InheritStyle</c>'s "always" section) as a PeachPDF-specific deviation; fixed as part of splitting
+        /// <c>ComputedStyle</c> into per-area records, since <c>box-sizing</c> had to land in exactly one area
+        /// either way and the non-inherited box-model area was the spec-correct home for it.
+        /// </remarks>
         public static readonly FrozenSet<string> InheritedProperties = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
         {
             "border-collapse", "border-spacing",
-            "box-sizing",
             "color",
             "direction",
             "empty-cells",
@@ -332,6 +338,43 @@ namespace PeachPDF.Html.Core
             { "word-spacing", CssConstants.Normal },
             { "letter-spacing", CssConstants.Normal },
             { "z-index", CssConstants.Auto },
+
+            // Flex container/item, Grid container/item, object-fit/position, font-palette, and page were
+            // missing entirely until the ComputedStyle-per-area split - meaning "initial"/"unset"/"revert"
+            // on any of them was a silent no-op (DomParser.AssignCssBlock's `value is null` short-circuit).
+            // Added here so every property has exactly one initial-value source; values match what
+            // ComputedStyle's own field initializers already used.
+            { PropertyNames.FlexDirection, "row" },
+            { PropertyNames.FlexWrap, "nowrap" },
+            { PropertyNames.JustifyContent, CssConstants.Normal },
+            { PropertyNames.AlignItems, CssConstants.Normal },
+            { PropertyNames.AlignContent, CssConstants.Normal },
+            { PropertyNames.FlexGrow, "0" },
+            { PropertyNames.FlexShrink, "1" },
+            { PropertyNames.FlexBasis, CssConstants.Auto },
+            { PropertyNames.AlignSelf, CssConstants.Auto },
+            { PropertyNames.Order, "0" },
+            { PropertyNames.RowGap, "0" },
+            { PropertyNames.ColumnGap, "0" },
+            { PropertyNames.GridTemplateColumns, CssConstants.None },
+            { PropertyNames.GridTemplateRows, CssConstants.None },
+            { PropertyNames.GridTemplateAreas, CssConstants.None },
+            { PropertyNames.GridAutoColumns, CssConstants.Auto },
+            { PropertyNames.GridAutoRows, CssConstants.Auto },
+            { PropertyNames.GridAutoFlow, CssConstants.Row },
+            { PropertyNames.JustifyItems, CssConstants.Normal },
+            { PropertyNames.JustifySelf, CssConstants.Auto },
+            { PropertyNames.GridColumnStart, CssConstants.Auto },
+            { PropertyNames.GridColumnEnd, CssConstants.Auto },
+            { PropertyNames.GridRowStart, CssConstants.Auto },
+            { PropertyNames.GridRowEnd, CssConstants.Auto },
+            { PropertyNames.ObjectFit, CssConstants.Fill },
+            { PropertyNames.ObjectPosition, "50% 50%" },
+            { PropertyNames.FontPalette, CssConstants.Normal },
+            // CSS Paged Media 3's `page` initial value is `auto`; CssBox.HasExplicitPageName already
+            // treats "auto" and empty-string equivalently, so this is safe alongside the pre-existing
+            // string.Empty some code paths use as a sentinel.
+            { PropertyNames.PageName, CssConstants.Auto },
         }.ToFrozenDictionary(System.StringComparer.OrdinalIgnoreCase);
 
         /// <summary>

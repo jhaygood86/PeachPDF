@@ -1,0 +1,396 @@
+using PeachPDF.CSS;
+using PeachPDF.Html.Core.Entities;
+using System;
+using System.Collections.Generic;
+
+namespace PeachPDF.Html.Core.Dom
+{
+    /// <summary>
+    /// The generic copy-on-write mechanism shared by <see cref="ComputedStyle"/> and every area record
+    /// below. Declared once here rather than as an instance method on 18 separate record types
+    /// (<see cref="ComputedStyle"/> plus the 17 areas).
+    /// </summary>
+    internal static class ComputedStyleCow
+    {
+        /// <summary>
+        /// Produces the record that results from changing one property to <paramref name="newValue"/> -
+        /// or, if it already holds that value, returns <paramref name="self"/> unchanged. Safe to call
+        /// unconditionally regardless of whether <paramref name="self"/> is a shared <c>Default</c>
+        /// singleton or already customized, and a no-op write allocates nothing.
+        /// </summary>
+        internal static TSelf SetPropertyValue<TSelf, TValue>(this TSelf self, TValue currentValue, TValue newValue, Func<TSelf, TValue, TSelf> apply) =>
+            EqualityComparer<TValue>.Default.Equals(currentValue, newValue) ? self : apply(self, newValue);
+    }
+
+    #region Border
+
+    /// <summary>
+    /// CSS Backgrounds and Borders Module properties (border widths/styles/colors/radii, box-shadow).
+    /// None of these are inherited.
+    /// </summary>
+    internal sealed record BorderArea
+    {
+        internal static readonly BorderArea Default = new();
+
+        public string BorderTopWidth { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BorderTopWidth)!;
+        public string BorderRightWidth { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BorderRightWidth)!;
+        public string BorderBottomWidth { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BorderBottomWidth)!;
+        public string BorderLeftWidth { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BorderLeftWidth)!;
+
+        public string BorderTopStyle { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BorderTopStyle)!;
+        public string BorderRightStyle { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BorderRightStyle)!;
+        public string BorderBottomStyle { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BorderBottomStyle)!;
+        public string BorderLeftStyle { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BorderLeftStyle)!;
+
+        public string BorderTopColor { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BorderTopColor)!;
+        public string BorderRightColor { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BorderRightColor)!;
+        public string BorderBottomColor { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BorderBottomColor)!;
+        public string BorderLeftColor { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BorderLeftColor)!;
+
+        public string BorderTopLeftRadius { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BorderTopLeftRadius)!;
+        public string BorderTopRightRadius { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BorderTopRightRadius)!;
+        public string BorderBottomRightRadius { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BorderBottomRightRadius)!;
+        public string BorderBottomLeftRadius { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BorderBottomLeftRadius)!;
+
+        // css-backgrounds-3 groups box-shadow with border/radius.
+        public string BoxShadow { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BoxShadow)!;
+    }
+
+    #endregion
+
+    #region VisualEffects
+
+    /// <summary>
+    /// CSS Transforms, Compositing, Masking, and Box Sizing (aspect-ratio) properties. None inherited.
+    /// </summary>
+    internal sealed record VisualEffectsArea
+    {
+        internal static readonly VisualEffectsArea Default = new();
+
+        public string Transform { get; init; } = CssDefaults.GetInitialValue(PropertyNames.Transform)!;
+        public string TransformOrigin { get; init; } = CssDefaults.GetInitialValue(PropertyNames.TransformOrigin)!;
+        public string Opacity { get; init; } = CssDefaults.GetInitialValue(PropertyNames.Opacity)!;
+        public string ClipPath { get; init; } = CssDefaults.GetInitialValue(PropertyNames.ClipPath)!;
+        public string AspectRatio { get; init; } = CssDefaults.GetInitialValue(PropertyNames.AspectRatio)!;
+    }
+
+    #endregion
+
+    #region GeneratedContent
+
+    /// <summary>
+    /// CSS Generated Content / Lists and Counters properties, plus PeachPDF's own tagged-PDF extension.
+    /// None inherited.
+    /// </summary>
+    internal sealed record GeneratedContentArea
+    {
+        internal static readonly GeneratedContentArea Default = new();
+
+        public string Content { get; init; } = CssDefaults.GetInitialValue(PropertyNames.Content)!;
+        public string CounterIncrement { get; init; } = CssDefaults.GetInitialValue(PropertyNames.CounterIncrement)!;
+        public string CounterReset { get; init; } = CssDefaults.GetInitialValue(PropertyNames.CounterReset)!;
+        // No PropertyNames constant for counter-set; use the literal CSS name.
+        public string CounterSet { get; init; } = CssDefaults.GetInitialValue("counter-set")!;
+        public string StringSet { get; init; } = CssDefaults.GetInitialValue(PropertyNames.StringSet)!;
+        public string PageName { get; init; } = CssDefaults.GetInitialValue(PropertyNames.PageName)!;
+        public string PdfTagType { get; init; } = CssDefaults.GetInitialValue(PropertyNames.PdfTagType)!;
+    }
+
+    #endregion
+
+    #region BoxModel
+
+    /// <summary>
+    /// CSS Box Model + Position (offsets) + Box Sizing (box-sizing) properties. None inherited -
+    /// <c>box-sizing</c> lives here (not a separate area) precisely because CSS Box Sizing 3 defines it
+    /// as <c>inherited: no</c>, unlike the rest of this codebase's former treatment of it.
+    /// </summary>
+    internal sealed record BoxModelArea
+    {
+        internal static readonly BoxModelArea Default = new();
+
+        public string MarginTop { get; init; } = CssDefaults.GetInitialValue(PropertyNames.MarginTop)!;
+        public string MarginRight { get; init; } = CssDefaults.GetInitialValue(PropertyNames.MarginRight)!;
+        public string MarginBottom { get; init; } = CssDefaults.GetInitialValue(PropertyNames.MarginBottom)!;
+        public string MarginLeft { get; init; } = CssDefaults.GetInitialValue(PropertyNames.MarginLeft)!;
+
+        public string PaddingTop { get; init; } = CssDefaults.GetInitialValue(PropertyNames.PaddingTop)!;
+        public string PaddingRight { get; init; } = CssDefaults.GetInitialValue(PropertyNames.PaddingRight)!;
+        public string PaddingBottom { get; init; } = CssDefaults.GetInitialValue(PropertyNames.PaddingBottom)!;
+        public string PaddingLeft { get; init; } = CssDefaults.GetInitialValue(PropertyNames.PaddingLeft)!;
+
+        public string Left { get; init; } = CssDefaults.GetInitialValue(PropertyNames.Left)!;
+        public string Top { get; init; } = CssDefaults.GetInitialValue(PropertyNames.Top)!;
+        public string Bottom { get; init; } = CssDefaults.GetInitialValue(PropertyNames.Bottom)!;
+        public string Right { get; init; } = CssDefaults.GetInitialValue(PropertyNames.Right)!;
+
+        public string Width { get; init; } = CssDefaults.GetInitialValue(PropertyNames.Width)!;
+        public string MaxWidth { get; init; } = CssDefaults.GetInitialValue(PropertyNames.MaxWidth)!;
+        public string MinWidth { get; init; } = CssDefaults.GetInitialValue(PropertyNames.MinWidth)!;
+
+        public string Height { get; init; } = CssDefaults.GetInitialValue(PropertyNames.Height)!;
+        public string MaxHeight { get; init; } = CssDefaults.GetInitialValue(PropertyNames.MaxHeight)!;
+        public string MinHeight { get; init; } = CssDefaults.GetInitialValue(PropertyNames.MinHeight)!;
+
+        public string BoxSizing { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BoxSizing)!;
+    }
+
+    #endregion
+
+    #region Break
+
+    /// <summary>
+    /// CSS Fragmentation Module properties that do NOT inherit (contrast <see cref="PaginationArea"/>,
+    /// which holds the two that do).
+    /// </summary>
+    internal sealed record BreakArea
+    {
+        internal static readonly BreakArea Default = new();
+
+        public string BreakBefore { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BreakBefore)!;
+        public string BreakInside { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BreakInside)!;
+        public string BreakAfter { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BreakAfter)!;
+        public string BoxDecorationBreak { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BoxDecorationBreak)!;
+    }
+
+    #endregion
+
+    #region Pagination
+
+    /// <summary>
+    /// The two CSS Fragmentation Module properties that DO inherit (contrast <see cref="BreakArea"/>).
+    /// </summary>
+    internal sealed record PaginationArea
+    {
+        internal static readonly PaginationArea Default = new();
+
+        public string Orphans { get; init; } = CssDefaults.GetInitialValue(PropertyNames.Orphans)!;
+        public string Widows { get; init; } = CssDefaults.GetInitialValue(PropertyNames.Widows)!;
+    }
+
+    #endregion
+
+    #region Background
+
+    /// <summary>
+    /// CSS Backgrounds Module properties, plus CSS Images' object-fit/object-position (grouped here for
+    /// convenience - both concern how replaced content fills a box). None inherited.
+    /// </summary>
+    internal sealed record BackgroundArea
+    {
+        internal static readonly BackgroundArea Default = new();
+
+        public string BackgroundColor { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BackgroundColor)!;
+        public IReadOnlyList<CssImage>? BackgroundImages { get; init; }
+        public string BackgroundPosition { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BackgroundPosition)!;
+        public string BackgroundRepeat { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BackgroundRepeat)!;
+        public string BackgroundSize { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BackgroundSize)!;
+        public string BackgroundOrigin { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BackgroundOrigin)!;
+        public string BackgroundClip { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BackgroundClip)!;
+        public string BackgroundAttachment { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BackgroundAttachment)!;
+        public string ObjectFit { get; init; } = CssDefaults.GetInitialValue(PropertyNames.ObjectFit)!;
+        public string ObjectPosition { get; init; } = CssDefaults.GetInitialValue(PropertyNames.ObjectPosition)!;
+    }
+
+    #endregion
+
+    #region DisplayPositioning
+
+    /// <summary>
+    /// CSS Display + Positioned Layout + Overflow properties. Kept together (rather than split further
+    /// by literal spec module) since <c>Display</c>'s used-value getter already reads <c>Float</c>
+    /// directly for CSS2.1 §9.7 blockification. None inherited.
+    /// </summary>
+    internal sealed record DisplayPositioningArea
+    {
+        internal static readonly DisplayPositioningArea Default = new();
+
+        public string Display { get; init; } = CssDefaults.GetInitialValue(PropertyNames.Display)!;
+        public string Float { get; init; } = CssDefaults.GetInitialValue(PropertyNames.Float)!;
+        public string Clear { get; init; } = CssDefaults.GetInitialValue(PropertyNames.Clear)!;
+        public string Position { get; init; } = CssDefaults.GetInitialValue(PropertyNames.Position)!;
+        public string ZIndex { get; init; } = CssDefaults.GetInitialValue(PropertyNames.ZIndex)!;
+        public string Overflow { get; init; } = CssDefaults.GetInitialValue(PropertyNames.Overflow)!;
+    }
+
+    #endregion
+
+    #region Table
+
+    /// <summary>
+    /// CSS Tables Module properties that inherit (contrast most Border-area properties, which don't).
+    /// </summary>
+    internal sealed record TableArea
+    {
+        internal static readonly TableArea Default = new();
+
+        public string BorderCollapse { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BorderCollapse)!;
+        public string BorderSpacing { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BorderSpacing)!;
+        public string EmptyCells { get; init; } = CssDefaults.GetInitialValue(PropertyNames.EmptyCells)!;
+    }
+
+    #endregion
+
+    #region Text
+
+    /// <summary>
+    /// CSS Color + Text + Writing Modes properties that inherit. <c>text-decoration-*</c> is
+    /// deliberately excluded - see <see cref="TextDecorationArea"/>.
+    /// </summary>
+    internal sealed record TextArea
+    {
+        internal static readonly TextArea Default = new();
+
+        public string Color { get; init; } = CssDefaults.GetInitialValue(PropertyNames.Color)!;
+        public string LineHeight { get; init; } = CssDefaults.GetInitialValue(PropertyNames.LineHeight)!;
+        public string VerticalAlign { get; init; } = CssDefaults.GetInitialValue(PropertyNames.VerticalAlign)!;
+        public string TextIndent { get; init; } = CssDefaults.GetInitialValue(PropertyNames.TextIndent)!;
+        public string TextAlign { get; init; } = CssDefaults.GetInitialValue(PropertyNames.TextAlign)!;
+        public string TextTransform { get; init; } = CssDefaults.GetInitialValue(PropertyNames.TextTransform)!;
+        public string WhiteSpace { get; init; } = CssDefaults.GetInitialValue(PropertyNames.WhiteSpace)!;
+        public string Visibility { get; init; } = CssDefaults.GetInitialValue(PropertyNames.Visibility)!;
+        public string WordSpacing { get; init; } = CssDefaults.GetInitialValue(PropertyNames.WordSpacing)!;
+        public string LetterSpacing { get; init; } = CssDefaults.GetInitialValue(PropertyNames.LetterSpacing)!;
+        public string WordBreak { get; init; } = CssDefaults.GetInitialValue(PropertyNames.WordBreak)!;
+        public string Direction { get; init; } = CssDefaults.GetInitialValue(PropertyNames.Direction)!;
+        public string Hyphens { get; init; } = CssDefaults.GetInitialValue(PropertyNames.Hyphens)!;
+    }
+
+    #endregion
+
+    #region TextDecoration
+
+    /// <summary>
+    /// CSS Text Decoration Module properties. Unlike the rest of "Color &amp; Typography", these do NOT
+    /// inherit through the normal CSS mechanism (they visually propagate via a separate, explicit
+    /// mechanism in <c>DomParser</c>).
+    /// </summary>
+    internal sealed record TextDecorationArea
+    {
+        internal static readonly TextDecorationArea Default = new();
+
+        public string TextDecorationLine { get; init; } = CssDefaults.GetInitialValue(PropertyNames.TextDecorationLine)!;
+        public string TextDecorationStyle { get; init; } = CssDefaults.GetInitialValue(PropertyNames.TextDecorationStyle)!;
+        public string TextDecorationColor { get; init; } = CssDefaults.GetInitialValue(PropertyNames.TextDecorationColor)!;
+    }
+
+    #endregion
+
+    #region Font
+
+    /// <summary>CSS Fonts Module properties. All inherit.</summary>
+    internal sealed record FontArea
+    {
+        internal static readonly FontArea Default = new();
+
+        // Null (not sourced from CssDefaults) is a deliberate "not yet resolved" sentinel -
+        // DerivedStyle.ActualFont lazily falls back to CssConstants.DefaultFont when empty.
+        public string? FontFamily { get; init; }
+
+        // Not a real CSS property (no PropertyNames/CssDefaults entry) - a PeachPDF-internal
+        // companion to FontFamily carrying the full unresolved font-family list.
+        public string? FontFamilyList { get; init; }
+
+        public string FontSize { get; init; } = CssDefaults.GetInitialValue(PropertyNames.FontSize)!;
+        public string FontStyle { get; init; } = CssDefaults.GetInitialValue(PropertyNames.FontStyle)!;
+        public string FontVariant { get; init; } = CssDefaults.GetInitialValue(PropertyNames.FontVariant)!;
+        public string FontWeight { get; init; } = CssDefaults.GetInitialValue(PropertyNames.FontWeight)!;
+        public string FontStretch { get; init; } = CssDefaults.GetInitialValue(PropertyNames.FontStretch)!;
+        public string FontPalette { get; init; } = CssDefaults.GetInitialValue(PropertyNames.FontPalette)!;
+    }
+
+    #endregion
+
+    #region List
+
+    /// <summary>CSS Lists and Counters Module properties. All inherit.</summary>
+    internal sealed record ListArea
+    {
+        internal static readonly ListArea Default = new();
+
+        public string ListStylePosition { get; init; } = CssDefaults.GetInitialValue(PropertyNames.ListStylePosition)!;
+        // Null (not "none") - a structured type, resolved via CssImagePainter's own parser, not the
+        // string-only initial-value store.
+        public CssImage? ListStyleImage { get; init; }
+        public string ListStyleType { get; init; } = CssDefaults.GetInitialValue(PropertyNames.ListStyleType)!;
+    }
+
+    #endregion
+
+    #region Flex
+
+    /// <summary>CSS Flexible Box Layout Module properties (container + item). None inherited.</summary>
+    internal sealed record FlexArea
+    {
+        internal static readonly FlexArea Default = new();
+
+        public string FlexDirection { get; init; } = CssDefaults.GetInitialValue(PropertyNames.FlexDirection)!;
+        public string FlexWrap { get; init; } = CssDefaults.GetInitialValue(PropertyNames.FlexWrap)!;
+        public string JustifyContent { get; init; } = CssDefaults.GetInitialValue(PropertyNames.JustifyContent)!;
+        public string AlignItems { get; init; } = CssDefaults.GetInitialValue(PropertyNames.AlignItems)!;
+        public string AlignContent { get; init; } = CssDefaults.GetInitialValue(PropertyNames.AlignContent)!;
+
+        public string FlexGrow { get; init; } = CssDefaults.GetInitialValue(PropertyNames.FlexGrow)!;
+        public string FlexShrink { get; init; } = CssDefaults.GetInitialValue(PropertyNames.FlexShrink)!;
+        public string FlexBasis { get; init; } = CssDefaults.GetInitialValue(PropertyNames.FlexBasis)!;
+        public string AlignSelf { get; init; } = CssDefaults.GetInitialValue(PropertyNames.AlignSelf)!;
+        public string Order { get; init; } = CssDefaults.GetInitialValue(PropertyNames.Order)!;
+
+        // Shared with Grid/MultiColumn's row-gap/column-gap (the same CSS property); the C# name here
+        // keeps its historical "Flex" prefix, but the CSS name is PropertyNames.RowGap/ColumnGap, not
+        // "flex-row-gap"/"flex-column-gap".
+        public string FlexRowGap { get; init; } = CssDefaults.GetInitialValue(PropertyNames.RowGap)!;
+        public string FlexColumnGap { get; init; } = CssDefaults.GetInitialValue(PropertyNames.ColumnGap)!;
+    }
+
+    #endregion
+
+    #region Grid
+
+    /// <summary>CSS Grid Layout Module properties (container + item). None inherited.</summary>
+    internal sealed record GridArea
+    {
+        internal static readonly GridArea Default = new();
+
+        // grid-template-columns/rows carry the parsed GridTemplate through the cascade (CssProperty<T>)
+        // so the layout engine reads the already-parsed value. The raw CSS text half of the initial
+        // value ("none") still comes from CssDefaults; there is no cascade value to parse for "none",
+        // so the parsed half stays a literal null.
+        public CssProperty<GridTemplate> GridTemplateColumns { get; init; } =
+            CssProperty<GridTemplate>.FromValue(CssDefaults.GetInitialValue(PropertyNames.GridTemplateColumns)!, null);
+        public CssProperty<GridTemplate> GridTemplateRows { get; init; } =
+            CssProperty<GridTemplate>.FromValue(CssDefaults.GetInitialValue(PropertyNames.GridTemplateRows)!, null);
+
+        public string GridTemplateAreas { get; init; } = CssDefaults.GetInitialValue(PropertyNames.GridTemplateAreas)!;
+        public string GridAutoColumns { get; init; } = CssDefaults.GetInitialValue(PropertyNames.GridAutoColumns)!;
+        public string GridAutoRows { get; init; } = CssDefaults.GetInitialValue(PropertyNames.GridAutoRows)!;
+        public string GridAutoFlow { get; init; } = CssDefaults.GetInitialValue(PropertyNames.GridAutoFlow)!;
+        public string JustifyItems { get; init; } = CssDefaults.GetInitialValue(PropertyNames.JustifyItems)!;
+        public string JustifySelf { get; init; } = CssDefaults.GetInitialValue(PropertyNames.JustifySelf)!;
+
+        public string GridColumnStart { get; init; } = CssDefaults.GetInitialValue(PropertyNames.GridColumnStart)!;
+        public string GridColumnEnd { get; init; } = CssDefaults.GetInitialValue(PropertyNames.GridColumnEnd)!;
+        public string GridRowStart { get; init; } = CssDefaults.GetInitialValue(PropertyNames.GridRowStart)!;
+        public string GridRowEnd { get; init; } = CssDefaults.GetInitialValue(PropertyNames.GridRowEnd)!;
+    }
+
+    #endregion
+
+    #region MultiColumn
+
+    /// <summary>CSS Multi-column Layout Module properties. None inherited.</summary>
+    internal sealed record MultiColumnArea
+    {
+        internal static readonly MultiColumnArea Default = new();
+
+        public string ColumnCount { get; init; } = CssDefaults.GetInitialValue(PropertyNames.ColumnCount)!;
+        public string ColumnWidth { get; init; } = CssDefaults.GetInitialValue(PropertyNames.ColumnWidth)!;
+        public string ColumnFill { get; init; } = CssDefaults.GetInitialValue(PropertyNames.ColumnFill)!;
+        public string ColumnSpan { get; init; } = CssDefaults.GetInitialValue(PropertyNames.ColumnSpan)!;
+        public string ColumnRuleWidth { get; init; } = CssDefaults.GetInitialValue(PropertyNames.ColumnRuleWidth)!;
+        public string ColumnRuleStyle { get; init; } = CssDefaults.GetInitialValue(PropertyNames.ColumnRuleStyle)!;
+        public string ColumnRuleColor { get; init; } = CssDefaults.GetInitialValue(PropertyNames.ColumnRuleColor)!;
+    }
+
+    #endregion
+}
