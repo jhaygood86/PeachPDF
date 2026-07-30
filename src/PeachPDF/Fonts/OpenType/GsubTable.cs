@@ -49,7 +49,10 @@ namespace PeachPDF.Fonts.OpenType
 
         // A GsubTable instance is cached and shared process-wide across concurrently-rendering
         // PdfGenerator instances (see OpenTypeFontface/FontFactory's caching), so this needs to be
-        // safe for concurrent reads/writes rather than a plain Dictionary.
+        // safe for concurrent reads/writes rather than a plain Dictionary. The dictionary alone isn't
+        // enough, though: computing a not-yet-cached entry still means sequential _face.Position reads
+        // (see GetActiveLookupIndices/ReadLigatureLookup's own locking on _face) against the same
+        // shared, mutable-cursor OpenTypeFontface.
         private readonly ConcurrentDictionary<int, GsubLigatureLookup?> _ligatureLookupCache = new();
 
         public GsubTable(OpenTypeFontface face, int tableStart)
@@ -73,49 +76,59 @@ namespace PeachPDF.Fonts.OpenType
         /// </summary>
         public SortedSet<int> GetActiveLookupIndices(IReadOnlyList<string> scriptTagPreference, IReadOnlySet<string> featureTags)
         {
-            var lookupIndices = new SortedSet<int>();
-
-            int scriptOffset = FindScript(scriptTagPreference);
-            if (scriptOffset < 0)
-                return lookupIndices;
-
-            _face.Position = scriptOffset;
-            int defaultLangSysOffset = _face.ReadUShort();
-            if (defaultLangSysOffset == 0)
-                return lookupIndices;
-
-            _face.Position = scriptOffset + defaultLangSysOffset;
-            _face.ReadUShort(); // lookupOrder - reserved, always 0
-            int requiredFeatureIndex = _face.ReadUShort();
-            int featureIndexCount = _face.ReadUShort();
-            var featureIndices = new int[featureIndexCount];
-            for (int i = 0; i < featureIndexCount; i++)
-                featureIndices[i] = _face.ReadUShort();
-
-            var featureRecords = ReadFeatureRecords();
-
-            void CollectFeature(int featureIndex)
+            // OpenTypeFontface.Position is a plain mutable field on an instance that is cached and
+            // shared process-wide (OpenTypeFontfaceCache), so two threads shaping concurrently on the
+            // same cached font would otherwise interleave their Position writes/reads against each
+            // other. Unlike GetLigatureLookup below, this method's result isn't cached at all - it
+            // re-reads the ScriptList/FeatureList tables on every single Shape() call - so it is by far
+            // the widest, most frequently hit critical section, and locking on the shared face closes
+            // that race. See the CI regression this fixed: issue #543.
+            lock (_face)
             {
-                if (featureIndex < 0 || featureIndex >= featureRecords.Length)
-                    return;
-                var (tag, offset) = featureRecords[featureIndex];
-                if (!featureTags.Contains(tag))
-                    return;
+                var lookupIndices = new SortedSet<int>();
 
-                _face.Position = offset;
-                _face.ReadUShort(); // featureParams offset - ignored
-                int lookupIndexCount = _face.ReadUShort();
-                for (int i = 0; i < lookupIndexCount; i++)
-                    lookupIndices.Add(_face.ReadUShort());
+                int scriptOffset = FindScript(scriptTagPreference);
+                if (scriptOffset < 0)
+                    return lookupIndices;
+
+                _face.Position = scriptOffset;
+                int defaultLangSysOffset = _face.ReadUShort();
+                if (defaultLangSysOffset == 0)
+                    return lookupIndices;
+
+                _face.Position = scriptOffset + defaultLangSysOffset;
+                _face.ReadUShort(); // lookupOrder - reserved, always 0
+                int requiredFeatureIndex = _face.ReadUShort();
+                int featureIndexCount = _face.ReadUShort();
+                var featureIndices = new int[featureIndexCount];
+                for (int i = 0; i < featureIndexCount; i++)
+                    featureIndices[i] = _face.ReadUShort();
+
+                var featureRecords = ReadFeatureRecords();
+
+                void CollectFeature(int featureIndex)
+                {
+                    if (featureIndex < 0 || featureIndex >= featureRecords.Length)
+                        return;
+                    var (tag, offset) = featureRecords[featureIndex];
+                    if (!featureTags.Contains(tag))
+                        return;
+
+                    _face.Position = offset;
+                    _face.ReadUShort(); // featureParams offset - ignored
+                    int lookupIndexCount = _face.ReadUShort();
+                    for (int i = 0; i < lookupIndexCount; i++)
+                        lookupIndices.Add(_face.ReadUShort());
+                }
+
+                const int noRequiredFeature = 0xFFFF;
+                if (requiredFeatureIndex != noRequiredFeature)
+                    CollectFeature(requiredFeatureIndex);
+                foreach (int featureIndex in featureIndices)
+                    CollectFeature(featureIndex);
+
+                return lookupIndices;
             }
-
-            const int noRequiredFeature = 0xFFFF;
-            if (requiredFeatureIndex != noRequiredFeature)
-                CollectFeature(requiredFeatureIndex);
-            foreach (int featureIndex in featureIndices)
-                CollectFeature(featureIndex);
-
-            return lookupIndices;
         }
 
         /// <summary>Parses (and caches) the lookup at <paramref name="lookupListIndex"/> as a
@@ -163,49 +176,58 @@ namespace PeachPDF.Fonts.OpenType
 
         private GsubLigatureLookup? ReadLigatureLookup(int lookupListIndex)
         {
-            _face.Position = _lookupListOffset;
-            int lookupCount = _face.ReadUShort();
-            if (lookupListIndex < 0 || lookupListIndex >= lookupCount)
-                return null;
-
-            _face.Position = _lookupListOffset + 2 + lookupListIndex * 2;
-            int lookupTableStart = _lookupListOffset + _face.ReadUShort();
-
-            _face.Position = lookupTableStart;
-            int lookupType = _face.ReadUShort();
-            _face.ReadUShort(); // lookupFlag - GDEF mark filtering not implemented, see file header.
-            int subtableCount = _face.ReadUShort();
-            var subtableOffsets = new int[subtableCount];
-            for (int i = 0; i < subtableCount; i++)
-                subtableOffsets[i] = lookupTableStart + _face.ReadUShort();
-
-            // Only plain Ligature Substitution (4) and Extension Substitution (9) wrapping it are
-            // understood; every other lookup type (single/multiple/alternate/contextual/reverse
-            // chaining substitution) is skipped rather than mis-applied.
-            if (lookupType != 4 && lookupType != 9)
-                return null;
-
-            var subtables = new List<GsubLigatureSubtable>(subtableCount);
-            foreach (int subtableOffset in subtableOffsets)
+            // Reached via _ligatureLookupCache.GetOrAdd, so a result is only ever computed once per
+            // index and then cached - but the sequential _face.Position reads below (and in the
+            // ReadLigatureSubtable/ReadLigatureSet helpers this calls, only ever reached from here)
+            // still need to be serialized against GetActiveLookupIndices and any concurrent first
+            // resolution of a different index, since _face is a single mutable cursor shared
+            // process-wide across concurrently-rendering fonts. See issue #543.
+            lock (_face)
             {
-                int resolvedOffset = subtableOffset;
-                if (lookupType == 9)
+                _face.Position = _lookupListOffset;
+                int lookupCount = _face.ReadUShort();
+                if (lookupListIndex < 0 || lookupListIndex >= lookupCount)
+                    return null;
+
+                _face.Position = _lookupListOffset + 2 + lookupListIndex * 2;
+                int lookupTableStart = _lookupListOffset + _face.ReadUShort();
+
+                _face.Position = lookupTableStart;
+                int lookupType = _face.ReadUShort();
+                _face.ReadUShort(); // lookupFlag - GDEF mark filtering not implemented, see file header.
+                int subtableCount = _face.ReadUShort();
+                var subtableOffsets = new int[subtableCount];
+                for (int i = 0; i < subtableCount; i++)
+                    subtableOffsets[i] = lookupTableStart + _face.ReadUShort();
+
+                // Only plain Ligature Substitution (4) and Extension Substitution (9) wrapping it are
+                // understood; every other lookup type (single/multiple/alternate/contextual/reverse
+                // chaining substitution) is skipped rather than mis-applied.
+                if (lookupType != 4 && lookupType != 9)
+                    return null;
+
+                var subtables = new List<GsubLigatureSubtable>(subtableCount);
+                foreach (int subtableOffset in subtableOffsets)
                 {
-                    _face.Position = subtableOffset;
-                    _face.ReadUShort(); // substFormat (always 1)
-                    int extensionLookupType = _face.ReadUShort();
-                    uint extensionOffset = _face.ReadULong();
-                    if (extensionLookupType != 4)
-                        continue;
-                    resolvedOffset = subtableOffset + (int)extensionOffset;
+                    int resolvedOffset = subtableOffset;
+                    if (lookupType == 9)
+                    {
+                        _face.Position = subtableOffset;
+                        _face.ReadUShort(); // substFormat (always 1)
+                        int extensionLookupType = _face.ReadUShort();
+                        uint extensionOffset = _face.ReadULong();
+                        if (extensionLookupType != 4)
+                            continue;
+                        resolvedOffset = subtableOffset + (int)extensionOffset;
+                    }
+
+                    GsubLigatureSubtable? subtable = ReadLigatureSubtable(resolvedOffset);
+                    if (subtable is not null)
+                        subtables.Add(subtable);
                 }
 
-                GsubLigatureSubtable? subtable = ReadLigatureSubtable(resolvedOffset);
-                if (subtable is not null)
-                    subtables.Add(subtable);
+                return subtables.Count > 0 ? new GsubLigatureLookup { Subtables = subtables } : null;
             }
-
-            return subtables.Count > 0 ? new GsubLigatureLookup { Subtables = subtables } : null;
         }
 
         private GsubLigatureSubtable? ReadLigatureSubtable(int offset)

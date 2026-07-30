@@ -1,5 +1,8 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 using PeachPDF.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Tests.TestSupport;
@@ -250,6 +253,33 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             return b.ToArray();
         }
 
+        /// <summary>A minimal, otherwise-empty GSUB table whose ScriptList has zero records - the one
+        /// branch of <see cref="GsubTable.FindScript"/> no bundled font or the main synthetic table
+        /// above exercises (both always define at least one script).</summary>
+        private static byte[] BuildEmptyScriptListGsub()
+        {
+            var b = new Builder();
+
+            b.U16(1); b.U16(0); // majorVersion, minorVersion
+            int scriptListOffsetAt = b.PlaceholderU16();
+            int featureListOffsetAt = b.PlaceholderU16();
+            int lookupListOffsetAt = b.PlaceholderU16();
+
+            int scriptListStart = b.Position;
+            b.PatchU16(scriptListOffsetAt, scriptListStart);
+            b.U16(0); // scriptCount = 0
+
+            int featureListStart = b.Position;
+            b.PatchU16(featureListOffsetAt, featureListStart);
+            b.U16(0); // featureCount = 0
+
+            int lookupListStart = b.Position;
+            b.PatchU16(lookupListOffsetAt, lookupListStart);
+            b.U16(0); // lookupCount = 0
+
+            return b.ToArray();
+        }
+
         private static byte[] Concat(byte[] a, byte[] b)
         {
             var combined = new byte[a.Length + b.Length];
@@ -277,6 +307,20 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var indices = gsub.GetActiveLookupIndices(["bbbb"], new HashSet<string> { "extr" });
 
             Assert.Equal([1], indices);
+        }
+
+        [Fact]
+        public void EmptyScriptList_ReturnsEmpty()
+        {
+            byte[] fontBytes = File.ReadAllBytes(BundledFonts.Ttf);
+            int tableStart = fontBytes.Length;
+            byte[] combined = Concat(fontBytes, BuildEmptyScriptListGsub());
+            var face = XFontSource.GetOrCreateFrom(combined).Fontface;
+            var gsub = new GsubTable(face, tableStart);
+
+            var indices = gsub.GetActiveLookupIndices(["aaaa"], new HashSet<string> { "liga" });
+
+            Assert.Empty(indices);
         }
 
         [Fact]
@@ -364,6 +408,51 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 
             Assert.Null(gsub.GetLigatureLookup(-1));
             Assert.Null(gsub.GetLigatureLookup(999));
+        }
+
+        /// <summary>
+        /// Regression test for issue #543: a single <see cref="GsubTable"/> (and the
+        /// <see cref="OpenTypeFontface"/> it reads from) is cached and shared process-wide across
+        /// concurrently-rendering fonts, so <see cref="GsubTable.GetActiveLookupIndices"/> and
+        /// <see cref="GsubTable.GetLigatureLookup"/> must tolerate being called from many threads at
+        /// once against the same instance. Before the locking added for #543, this reliably produced
+        /// wrong results (corrupted <c>_face.Position</c> reads interleaving across threads) or thrown
+        /// exceptions under concurrent load - which is exactly the shape of the Windows-only CI crash
+        /// the issue reported. This can't guarantee reproducing that exact interleaving on every OS/CLR
+        /// combination, but hammering the same shared table from many threads is the most direct
+        /// verification available without live Windows CI access.
+        /// </summary>
+        [Fact]
+        public void ConcurrentAccess_FromManyThreads_ProducesConsistentResults()
+        {
+            var (face, tableStart) = BuildFaceWithSyntheticGsub();
+            var gsub = new GsubTable(face, tableStart);
+
+            var actions = new Action[]
+            {
+                () => Assert.Equal([1], gsub.GetActiveLookupIndices(["bbbb"], new HashSet<string> { "extr" })),
+                () => Assert.Empty(gsub.GetActiveLookupIndices(["cccc"], new HashSet<string> { "liga" })),
+                () => Assert.Equal([0], gsub.GetActiveLookupIndices(["zzzz", "yyyy"], new HashSet<string> { "liga" })),
+                () => Assert.Equal([1], gsub.GetActiveLookupIndices(["yyyy", "bbbb"], new HashSet<string> { "extr" })),
+                () =>
+                {
+                    var lookup = gsub.GetLigatureLookup(1);
+                    Assert.NotNull(lookup);
+                    var subtable = Assert.Single(lookup.Subtables);
+                    Assert.Equal(0, subtable.Coverage.IndexOfGlyph(20));
+                    Assert.Equal(22, subtable.LigatureSets[0][0].LigatureGlyph);
+                },
+                () => Assert.Null(gsub.GetLigatureLookup(2)),
+                () => Assert.Null(gsub.GetLigatureLookup(3)),
+                () => Assert.Null(gsub.GetLigatureLookup(4)),
+                () => Assert.Null(gsub.GetLigatureLookup(999)),
+            };
+
+            const int repeatsPerAction = 40;
+            var work = Enumerable.Range(0, actions.Length * repeatsPerAction)
+                .Select(i => actions[i % actions.Length]);
+
+            Parallel.ForEach(work, action => action());
         }
     }
 }
