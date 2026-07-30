@@ -220,6 +220,36 @@ namespace PeachPDF.Tests.Html.Core.Dom
             Assert.Equal("border-box", clone.BoxSizing);
         }
 
+        [Fact]
+        public void InheritStyle_UnicodeBidi_DoesNotAdoptParentsValue()
+        {
+            // unicode-bidi is CSS-spec Inherited: no, unlike every other property in the otherwise-100%-
+            // inherited Text area - InheritStyle must explicitly restore it after the area's whole-by-
+            // reference adoption, or a child would silently pick up the parent's isolate/embed/etc.
+            var parent = new CssBox(null, null) { UnicodeBidi = CssProperty<UnicodeMode>.FromCssText("isolate", Map.UnicodeModes, UnicodeMode.Normal) };
+            var child = new CssBox(parent, null);
+
+            child.InheritStyle();
+
+            Assert.Equal(UnicodeMode.Normal, child.UnicodeBidi.Value);
+        }
+
+        [Fact]
+        public void InheritStyle_Everything_CopiesUnicodeBidi()
+        {
+            // Unlike the normal ancestor->descendant case just above, a structural duplicate of the SAME
+            // source box (CssProxyBox's repeated header/footer, an inline/block split) needs the source
+            // element's own resolved unicode-bidi, exactly like box-sizing/BoxDecorationBreak/PdfTagType -
+            // this is the `everything: true` path deliberately skipping the restore-to-pre-inherit-value
+            // correction the normal path applies.
+            var source = new CssBox(null, null) { UnicodeBidi = CssProperty<UnicodeMode>.FromCssText("isolate", Map.UnicodeModes, UnicodeMode.Normal) };
+            var clone = new CssBox(null, null);
+
+            clone.InheritStyle(source, everything: true);
+
+            Assert.Equal(UnicodeMode.Isolate, clone.UnicodeBidi.Value);
+        }
+
         // ── regression: DomParser.CascadeApplyStyles's fast-path skip of the defaulting loop ──
 
         /// <summary>

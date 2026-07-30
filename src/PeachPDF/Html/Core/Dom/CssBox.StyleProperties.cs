@@ -2087,7 +2087,26 @@ namespace PeachPDF.Html.Core.Dom
             // total no-op at both levels - no clone, no new reference even assigned.
             _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.CustomProperties, customProperties, static (s, v) => s with { CustomProperties = v });
             _computedStyle = _computedStyle.AdoptArea(_computedStyle.Font, parentStyle.Font, static (s, a) => s with { Font = a });
+            var unicodeBidiBeforeInherit = _computedStyle.Text.UnicodeBidi;
             _computedStyle = _computedStyle.AdoptArea(_computedStyle.Text, parentStyle.Text, static (s, a) => s with { Text = a });
+            if (!everything)
+            {
+                // unicode-bidi is the one property in this otherwise-100%-inherited area that is CSS-spec
+                // Inherited: no - the whole-area adoption just above unconditionally copied it from the
+                // parent anyway (that's the whole point of adopting the area by reference), so put this
+                // box's own pre-inherit value (already defaulted to initial, or set by an earlier cascade
+                // phase) back. The `everything: true` path deliberately skips this and keeps the adopted
+                // value, since that path is a structural duplicate of the same source element (CssProxyBox's
+                // repeated header/footer, DomParser's inline/block split) which needs the source's own
+                // resolved value even though it isn't a real ancestor-descendant inheritance case - the
+                // same reasoning box-sizing's own everything-branch exception below already established.
+                // Routed through SetPropertyValue (not a bare `with`, which always allocates) so the common
+                // case - this box's own value already matches what the parent just handed down - stays a
+                // total no-op, preserving the "whole unchanged subtree shares one Text instance" guarantee.
+                var textArea = _computedStyle.Text;
+                var restoredTextArea = textArea.SetPropertyValue(textArea.UnicodeBidi, unicodeBidiBeforeInherit, static (a, v) => a with { UnicodeBidi = v });
+                _computedStyle = _computedStyle.AdoptArea(textArea, restoredTextArea, static (s, a) => s with { Text = a });
+            }
             _computedStyle = _computedStyle.AdoptArea(_computedStyle.Table, parentStyle.Table, static (s, a) => s with { Table = a });
             _computedStyle = _computedStyle.AdoptArea(_computedStyle.List, parentStyle.List, static (s, a) => s with { List = a });
             _computedStyle = _computedStyle.AdoptArea(_computedStyle.Pagination, parentStyle.Pagination, static (s, a) => s with { Pagination = a });

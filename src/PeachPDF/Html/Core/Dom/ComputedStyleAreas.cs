@@ -270,11 +270,14 @@ namespace PeachPDF.Html.Core.Dom
     /// stays grouped here (rather than in its own non-inherited area) because fixing it requires
     /// auditing <c>CssLayoutEngine.ApplyVerticalAlignment</c>'s dependence on today's behavior first.
     /// <see cref="UnicodeBidi"/> is CSS-spec <c>Inherited: no</c> too (correctly - <c>CssDefaults
-    /// .InheritedProperties</c> does not list it), and correctly is NOT copied by <c>InheritStyle</c>'s
-    /// always-section; it lives in this area purely because <c>direction</c>/<c>unicode-bidi</c>/
-    /// <c>writing-mode</c> are the same CSS Writing Modes module and it's convenient to keep them
-    /// textually adjacent, the same reasoning <see cref="TextDecorationArea"/>'s own doc comment gives
-    /// for its non-inherited siblings.
+    /// .InheritedProperties</c> does not list it) - unlike <see cref="VerticalAlign"/>'s accepted gap, this
+    /// one IS actually corrected: since the whole-area adoption below unconditionally copies every
+    /// property in this area from the parent, <c>CssBox.InheritStyle</c> explicitly restores
+    /// <see cref="UnicodeBidi"/> to this box's own pre-inherit value immediately after adopting the area
+    /// (skipped for the `everything: true` structural-duplicate path, which keeps the adopted value on
+    /// purpose - see the comment there). It lives in this area, rather than its own non-inherited one,
+    /// purely because <c>direction</c>/<c>unicode-bidi</c>/<c>writing-mode</c> are the same CSS Writing
+    /// Modes module and it's convenient to keep them textually adjacent.
     /// </para>
     /// </summary>
     internal sealed record TextArea
