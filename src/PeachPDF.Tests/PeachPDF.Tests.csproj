@@ -50,6 +50,18 @@
     </None>
   </ItemGroup>
 
+  <!--
+    Unicode's official UAX #9 bidi conformance suite (Unicode 17.0.0), shared from the
+    repository-root assets/unicode/ directory the same way font assets are - see
+    assets/unicode/generate_bidi_tables.py for how the embedded PeachPDF.Text.Bidi lookup tables
+    are generated from this same directory's source files.
+  -->
+  <ItemGroup>
+    <None Include="..\..\assets\unicode\BidiCharacterTest.txt" Link="BidiCharacterTest.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
   <ItemGroup>
     <None Include="TestSupport\acid2.html">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
