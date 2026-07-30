@@ -414,6 +414,7 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.WordBreak, () => new WordBreakProperty(), true);
             AddLonghand(PropertyNames.WordSpacing, () => new WordSpacingProperty(), true);
             AddLonghand(PropertyNames.WordWrap, () => new OverflowWrapProperty());
+            AddLonghand(PropertyNames.WritingMode, () => new WritingModeProperty());
             AddLonghand(PropertyNames.ZIndex, () => new ZIndexProperty(), true);
             AddLonghand(PropertyNames.ObjectFit, () => new ObjectFitProperty());
             AddLonghand(PropertyNames.ObjectPosition, () => new ObjectPositionProperty(), true);

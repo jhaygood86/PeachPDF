@@ -288,6 +288,7 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter FontVariantLigaturesConverter =
             new FontVariantLigaturesValueConverter().Or(Keywords.None).Or(Keywords.Normal);
         public static readonly IValueConverter DirectionModeConverter = Map.DirectionModes.ToConverter();
+        public static readonly IValueConverter WritingModeConverter = Map.WritingModes.ToConverter();
         public static readonly IValueConverter HorizontalAlignmentConverter = Map.HorizontalAlignments.ToConverter();
         public static readonly IValueConverter VerticalAlignmentConverter = Map.VerticalAlignments.ToConverter();
         public static readonly IValueConverter WhitespaceConverter = Map.WhitespaceModes.ToConverter();

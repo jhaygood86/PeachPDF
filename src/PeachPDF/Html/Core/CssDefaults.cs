@@ -217,6 +217,7 @@ namespace PeachPDF.Html.Core
             "white-space",
             "word-break",
             "word-spacing",
+            "writing-mode",
         }.ToFrozenSet(System.StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
@@ -333,6 +334,7 @@ namespace PeachPDF.Html.Core
             { "box-shadow", CssConstants.None },
             { "transform-origin", "50% 50% 0" },
             { "opacity", "1" },
+            { "unicode-bidi", CssConstants.Normal },
             { "vertical-align", "baseline" },
             { "visibility", "visible" },
             { "white-space", CssConstants.Normal },
@@ -340,6 +342,7 @@ namespace PeachPDF.Html.Core
             { "word-break", CssConstants.Normal },
             { "word-spacing", CssConstants.Normal },
             { "letter-spacing", CssConstants.Normal },
+            { "writing-mode", Keywords.HorizontalTb },
             { "z-index", CssConstants.Auto },
 
             // Flex container/item, Grid container/item, object-fit/position, font-palette, and page were

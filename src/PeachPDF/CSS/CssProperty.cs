@@ -1,5 +1,8 @@
 #nullable enable
 
+using System;
+using System.Collections.Generic;
+
 namespace PeachPDF.CSS
 {
     /// <summary>The five CSS-wide keywords (CSS Cascade &amp; Inheritance §7.3) a property value can be.</summary>
@@ -58,6 +61,26 @@ namespace PeachPDF.CSS
 
         public static CssProperty<T> FromValue(string cssText, T? value) =>
             new(global: null, unresolved: false, value, cssText);
+
+        /// <summary>
+        /// Builds a <see cref="CssProperty{T}"/> for a simple single-keyword enum property (e.g.
+        /// <c>direction</c>, <c>unicode-bidi</c>, <c>writing-mode</c>) directly from its authored string, for
+        /// the cascade paths that apply a plain string rather than a Layer A parse result (the initial-value
+        /// seed, a resolved global keyword, an inherited copy, a var()-resolved string, a presentational HTML
+        /// attribute). Unlike <see cref="GridTemplateValueConverter.FromCssText"/> this is a shared generic
+        /// helper rather than one bespoke method per property, since a single-keyword lookup has no grammar of
+        /// its own to duplicate — every caller just needs a case-insensitive keyword-to-enum map (already a
+        /// <c>Map.*</c> <see cref="System.Collections.Frozen.FrozenDictionary{TKey,TValue}"/> for each of these
+        /// properties) and a fallback for an unrecognized keyword.
+        /// </summary>
+        public static CssProperty<T> FromCssText(string value, IReadOnlyDictionary<string, T> keywordMap, T fallback)
+        {
+            if (CssGlobalKeywords.TryParse(value, out var keyword))
+                return Global(keyword);
+            if (value.Contains("var(", StringComparison.OrdinalIgnoreCase))
+                return Unresolved(value);
+            return FromValue(value, keywordMap.TryGetValue(value.Trim(), out var parsed) ? parsed : fallback);
+        }
 
         public override string ToString() => _cssText;
     }

@@ -927,13 +927,35 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        public string Direction
+        public CssProperty<DirectionMode> Direction
         {
             get => _computedStyle.Text.Direction;
             set
             {
                 var area = _computedStyle.Text;
                 var newArea = area.SetPropertyValue(area.Direction, value, static (a, v) => a with { Direction = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
+            }
+        }
+
+        public CssProperty<UnicodeMode> UnicodeBidi
+        {
+            get => _computedStyle.Text.UnicodeBidi;
+            set
+            {
+                var area = _computedStyle.Text;
+                var newArea = area.SetPropertyValue(area.UnicodeBidi, value, static (a, v) => a with { UnicodeBidi = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
+            }
+        }
+
+        public CssProperty<WritingMode> WritingMode
+        {
+            get => _computedStyle.Text.WritingMode;
+            set
+            {
+                var area = _computedStyle.Text;
+                var newArea = area.SetPropertyValue(area.WritingMode, value, static (a, v) => a with { WritingMode = v });
                 _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
             }
         }

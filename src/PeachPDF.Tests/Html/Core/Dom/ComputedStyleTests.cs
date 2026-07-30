@@ -233,15 +233,26 @@ namespace PeachPDF.Tests.Html.Core.Dom
         /// and asserting nothing outside the known set changes anything - so it fails loudly (rather than
         /// silently reintroducing a correctness bug) if a future area/property addition breaks the
         /// no-op assumption the fast path depends on.
+        /// <para>
+        /// <c>direction</c>/<c>unicode-bidi</c>/<c>writing-mode</c> joined the exception set for the same
+        /// reason <c>grid-template-columns</c>/<c>-rows</c> are already here: all five are
+        /// <see cref="CSS.CssProperty{T}"/>-typed (a <see langword="sealed class"/> with no value equality),
+        /// so <c>CssProperty{T}.FromCssText</c> re-parsing the same initial-value string always produces a
+        /// new, reference-distinct instance even when the parsed value is identical - the cascade's
+        /// copy-on-write comparison has no way to see through that and always clones the area.
+        /// </para>
         /// </summary>
         [Fact]
-        public void CascadeDefaultingLoop_OnAFreshBox_OnlyFontFamilyAndGridTemplatesAreNotNoOps()
+        public void CascadeDefaultingLoop_OnAFreshBox_OnlyKnownExceptionsAreNotNoOps()
         {
             var knownExceptions = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
             {
                 PropertyNames.FontFamily,
                 PropertyNames.GridTemplateColumns,
                 PropertyNames.GridTemplateRows,
+                PropertyNames.Direction,
+                PropertyNames.UnicodeBidirectional,
+                PropertyNames.WritingMode,
             };
             var parser = new CssValueParser(new PdfSharpAdapter());
             var unexpectedlyNotNoOp = new List<string>();

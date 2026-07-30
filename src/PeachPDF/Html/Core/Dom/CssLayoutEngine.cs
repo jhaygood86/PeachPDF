@@ -1906,7 +1906,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="lineBox"></param>
         private static void ApplyRightToLeft(CssBox blockBox, CssLineBox lineBox)
         {
-            if (blockBox.Direction == CssConstants.Rtl)
+            if (blockBox.Direction.Value == DirectionMode.Rtl)
             {
                 ApplyRightToLeftOnLine(lineBox);
             }
@@ -1914,7 +1914,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 foreach (var box in lineBox.RelatedBoxes)
                 {
-                    if (box.Direction == CssConstants.Rtl)
+                    if (box.Direction.Value == DirectionMode.Rtl)
                     {
                         ApplyRightToLeftOnSingleBox(lineBox, box);
                     }

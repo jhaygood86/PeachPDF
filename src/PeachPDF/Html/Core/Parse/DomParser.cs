@@ -536,16 +536,17 @@ namespace PeachPDF.Html.Core.Parse
             //    Fast path: a box whose ComputedStyle is still the shared Default singleton hasn't had
             //    ANY property touched yet - and every area's own Default is itself sourced from this same
             //    CssDefaults store (see ComputedStyleAreas.cs), so re-asserting a property's initial value
-            //    on such a box is a guaranteed no-op for every property except the three audited below,
-            //    where an area's Default deliberately differs from the literal CssDefaults value:
-            //    FontFamily (kept null as a "not yet resolved" sentinel - see FontArea) and
-            //    GridTemplateColumns/Rows (the parsed GridTemplate half of "none" isn't the literal null
-            //    ComputedStyle.Default's own initializer uses - see GridArea). This also correctly still
-            //    runs the full loop (with its Display-for-anonymous-box exception above) for any box that
-            //    HAS already diverged from Default - e.g. an anonymous box whose Display was assigned
-            //    structurally before this runs, which is exactly what keeps that exception meaningful.
-            //    Verified exhaustively against every CssDefaults entry - see
-            //    ComputedStyleTests.CascadeDefaultingLoop_OnAFreshBox_OnlyFontFamilyAndGridTemplatesAreNotNoOps.
+            //    on such a box is a guaranteed no-op for every property except the ones audited below:
+            //    FontFamily (kept null as a "not yet resolved" sentinel - see FontArea); GridTemplateColumns/
+            //    Rows (the parsed GridTemplate half of "none" isn't the literal null ComputedStyle.Default's
+            //    own initializer uses - see GridArea); and Direction/UnicodeBidi/WritingMode (each a
+            //    CssProperty<T>-typed reference value with no equality override, so re-parsing the same
+            //    initial-value string always produces a new, reference-distinct instance - see TextArea).
+            //    This also correctly still runs the full loop (with its Display-for-anonymous-box exception
+            //    above) for any box that HAS already diverged from Default - e.g. an anonymous box whose
+            //    Display was assigned structurally before this runs, which is exactly what keeps that
+            //    exception meaningful. Verified exhaustively against every CssDefaults entry - see
+            //    ComputedStyleTests.CascadeDefaultingLoop_OnAFreshBox_OnlyKnownExceptionsAreNotNoOps.
             if (!ReferenceEquals(box.ComputedStyle, ComputedStyle.Default))
             {
                 foreach (var (name, initial) in CssDefaults.InitialValues)
@@ -1396,7 +1397,7 @@ namespace PeachPDF.Html.Core.Parse
                         box.Color = value.ToLower();
                         break;
                     case HtmlConstants.Dir:
-                        box.Direction = value.ToLower();
+                        box.Direction = CssProperty<DirectionMode>.FromCssText(value.ToLower(), Map.DirectionModes, DirectionMode.Ltr);
                         break;
                     case HtmlConstants.Face:
                         //box.FontFamily = _cssParser.ParseFontFamily(value);

@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
@@ -21,7 +22,7 @@ namespace PeachPDF.Html.Core.Paint
         {
             if (box.Width is null or { Length: <= 0 }) return;
 
-            var isRtl = box.Direction == CssConstants.Rtl;
+            var isRtl = box.Direction.Value == DirectionMode.Rtl;
 
             foreach (var wordFragment in fragment.Words)
             {

@@ -223,6 +223,15 @@ namespace PeachPDF.CSS
                 {Keywords.Ltr, DirectionMode.Ltr},
                 {Keywords.Rtl, DirectionMode.Rtl}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, WritingMode> WritingModes =
+            new Dictionary<string, WritingMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.HorizontalTb, WritingMode.HorizontalTb},
+                {Keywords.VerticalRl, WritingMode.VerticalRl},
+                {Keywords.VerticalLr, WritingMode.VerticalLr},
+                {Keywords.SidewaysRl, WritingMode.SidewaysRl},
+                {Keywords.SidewaysLr, WritingMode.SidewaysLr}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, ListStyle> ListStyles =
             new Dictionary<string, ListStyle>(StringComparer.OrdinalIgnoreCase)
             {

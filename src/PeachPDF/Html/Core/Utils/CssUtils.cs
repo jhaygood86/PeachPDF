@@ -138,7 +138,9 @@ namespace PeachPDF.Html.Core.Utils
                 ["content"] = b => b.Content,
                 ["color"] = b => b.Color,
                 ["display"] = b => b.Display,
-                ["direction"] = b => b.Direction,
+                ["direction"] = b => b.Direction.ToString(),
+                ["unicode-bidi"] = b => b.UnicodeBidi.ToString(),
+                ["writing-mode"] = b => b.WritingMode.ToString(),
                 ["empty-cells"] = b => b.EmptyCells,
                 ["float"] = b => b.Float,
                 ["clear"] = b => b.Clear,
@@ -221,6 +223,7 @@ namespace PeachPDF.Html.Core.Utils
             "counter-increment", "counter-reset", "counter-set",
             "direction", "display",
             "empty-cells", "float",
+            "unicode-bidi", "writing-mode",
             "font-family", "font-size", "font-stretch", "font-style", "font-variant", "font-variant-ligatures", "font-weight", "font-palette",
             "height",
             "left", "letter-spacing", "line-height",
@@ -397,7 +400,8 @@ namespace PeachPDF.Html.Core.Utils
                 ["color"] = (p, b, v) => { if (IsValidColorProperty(p, v)) b.Color = v; },
                 ["content"] = (_, b, v) => b.Content = v,
                 ["display"] = (_, b, v) => b.Display = v,
-                ["direction"] = (_, b, v) => b.Direction = v,
+                ["direction"] = (_, b, v) => b.Direction = CssProperty<DirectionMode>.FromCssText(v, Map.DirectionModes, DirectionMode.Ltr),
+                ["writing-mode"] = (_, b, v) => b.WritingMode = CssProperty<WritingMode>.FromCssText(v, Map.WritingModes, WritingMode.HorizontalTb),
                 ["empty-cells"] = (_, b, v) => b.EmptyCells = v,
                 ["float"] = (_, b, v) => b.Float = v,
                 ["clear"] = (_, b, v) => b.Clear = v,
@@ -471,8 +475,7 @@ namespace PeachPDF.Html.Core.Utils
                 ["column-rule-width"] = (_, b, v) => { if (IsValidLengthProperty(v)) b.ColumnRuleWidth = v; },
                 ["column-rule-style"] = (_, b, v) => { if (IsValidBorderStyleProperty(v)) b.ColumnRuleStyle = v; },
                 ["column-rule-color"] = (p, b, v) => { if (IsValidColorProperty(p, v)) b.ColumnRuleColor = v; },
-                // Parsed and accepted but intentionally not applied (no layout effect yet).
-                ["unicode-bidi"] = (_, _, _) => { },
+                ["unicode-bidi"] = (_, b, v) => b.UnicodeBidi = CssProperty<UnicodeMode>.FromCssText(v, Map.UnicodeModes, UnicodeMode.Normal),
                 ["overflow-wrap"] = (_, _, _) => { },
             }.ToFrozenDictionary(StringComparer.Ordinal);
 
