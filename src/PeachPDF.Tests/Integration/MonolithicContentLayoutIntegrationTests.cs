@@ -224,6 +224,35 @@ namespace PeachPDF.Tests.Integration
                 container.PageIndexOf(card.ActualBottom - HtmlContainerInt.PageBoundaryEpsilon));
         }
 
+        /// <summary>
+        /// A scroll container too tall for any band, with nothing inside it to fragment, overflows in
+        /// place exactly as the word-level case does (<c>MonolithicContent.FitsNoFragmentainer</c>'s
+        /// block-axis counterpart) - and content after it has to see a truthful pass cursor, or a later
+        /// fragmentation question is answered against a stale band (issue #435). Measured as
+        /// <see cref="HtmlContainerInt.CursorSpills"/> staying zero: <c>CssBox.LayoutBlockChildren</c>
+        /// steps the cursor once such a child finishes, gated on
+        /// <see cref="MonolithicContent.IsMonolithic"/> specifically - an earlier, broader version that
+        /// matched every finished block child regressed
+        /// <c>FragmentEmitterTests.MaterializedPages_MatchThePrePagedFragmentTreeBehaviour</c>'s
+        /// margin-truncation fixture, since an ordinary container (html/body/div) can land deep in the
+        /// document through no decision of its own.
+        /// </summary>
+        [Fact]
+        public async Task ContentAfterAScrollContainerTallerThanTheBand_SeesATruthfulCursor()
+        {
+            var html = LayoutHarness.Wrap(
+                "<div style='height:100pt'>filler</div>" +
+                "<div id='card' style='overflow:hidden;height:900pt'></div>" +
+                "<p>content after the oversized scroll container</p>");
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight, margin: Margin);
+            var card = LayoutHarness.FindById(root, "card")!;
+
+            Assert.True(card.ActualBottom - card.Location.Y > PageHeight - 2 * Margin,
+                "the fixture must be taller than a whole band, or this asserts nothing");
+            Assert.Equal(0, container.CursorSpills);
+        }
+
         // The replaced half of §2 reaches the same outcome by a different route: an <img> is forced inline
         // (DomParser.CorrectReplacedElementBoxes), so it never runs the epilogue's mover at all - its whole
         // word is relocated by CssRect.BreakPage instead. Worth pinning, because the predicate's

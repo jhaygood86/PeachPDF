@@ -71,6 +71,27 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
+        /// A paragraph after a word too tall for any band flows into whatever band the oversized word's
+        /// own bottom actually ends in, not the one the pass was filling when the word was placed - and
+        /// the document-level pass cursor has to see that too, or every fragmentation question the
+        /// following paragraph asks is answered against a stale band (issue #435). Measured as
+        /// <see cref="HtmlContainerInt.CursorSpills"/> staying zero: <c>CssLayoutEngine.FlowBox</c> steps
+        /// the cursor once it places the oversized word, mirroring how a forced break's own step-over
+        /// already works.
+        /// </summary>
+        [Fact]
+        public async Task ContentAfterAWordTallerThanTheBand_SeesATruthfulCursor()
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<p style='font-size:1800pt;line-height:1;margin:0'>T</p>"
+                    + "<p>content after the oversized word</p>"),
+                pageHeight: 842, margin: 10);
+
+            Assert.Equal(0, container.CursorSpills);
+        }
+
+        /// <summary>
         /// Every shape whose commit pass applies — grid rows, row/row-reverse flex lines (single or
         /// wrapped), and column/column-reverse flex lines' sequential items — no longer straddles a page
         /// boundary: each engine's commit pass revisits the relevant content live and lets what would have

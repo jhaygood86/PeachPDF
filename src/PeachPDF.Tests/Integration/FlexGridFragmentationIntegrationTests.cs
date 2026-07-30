@@ -68,6 +68,33 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(1, SlotOf(container, a!));
         }
 
+        /// <summary>
+        /// Closes issue #453: relocating a flex line to the next fragmentainer (LineRelocation.DeltaFor
+        /// returning a non-zero delta) used to leave the document-level pass cursor naming the
+        /// fragmentainer the pass opened with, while the relocated item's own content landed a band
+        /// ahead of it - the accepted gap's own words are "unreachable rather than merely untested",
+        /// which #435's straddle-predicate work is what makes it reachable. Content after the relocated
+        /// line has to see a truthful cursor, or a later straddle question is answered against the wrong
+        /// band - measurable as <see cref="HtmlContainerInt.CursorSpills"/> staying zero.
+        /// </summary>
+        [Fact]
+        public async Task ContentAfterARelocatedFlexLine_SeesATruthfulCursor()
+        {
+            var html = LayoutHarness.Wrap(
+                "<div style='height:120pt'>filler</div>"
+                + "<div id='c' style='display:flex'>"
+                + "<div id='a' style='height:70pt;break-inside:avoid'>A</div>"
+                + "</div>"
+                + "<p>content after the relocated line, on whatever band it actually landed on</p>");
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight);
+
+            var a = LayoutHarness.FindById(root, "a");
+            Assert.NotNull(a);
+            Assert.Equal(1, SlotOf(container, a!));
+            Assert.Equal(0, container.CursorSpills);
+        }
+
         // A forced break is taken whether or not the line would have been cut.
         [Theory]
         [InlineData("break-before: page")]
