@@ -555,6 +555,27 @@ namespace PeachPDF.Html.Core.Utils
             return currentBox!;
         }
 
+        /// <summary>
+        /// Whether <paramref name="box"/> is <paramref name="root"/> itself or one of its descendants.
+        /// </summary>
+        /// <remarks>
+        /// Used to ask whether a box a subtree-translating mover is about to skip (an out-of-flow
+        /// descendant whose containing block lies outside the subtree being moved, see
+        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/437">#437</see>) is genuinely an
+        /// outsider or is itself part of the subtree — a walk up from <paramref name="box"/> rather than
+        /// down from <paramref name="root"/>, since a containing block is always an ancestor of the box it
+        /// was resolved from.
+        /// </remarks>
+        internal static bool IsSelfOrDescendantOf(CssBox box, CssBox root)
+        {
+            for (var current = box; current is not null; current = current.ParentBox)
+            {
+                if (ReferenceEquals(current, root)) return true;
+            }
+
+            return false;
+        }
+
         public static CssBox? GetFirstIntersectingFloatBox(CssBox reference, CssFloatCoordinates coordinates, string floatProp)
         {
             var container = reference.HtmlContainer;
