@@ -357,10 +357,16 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// content to the <i>next</i> fragmentainer, so a target above the content it must follow is not a
         /// break).
         /// </remarks>
-        internal void MoveToSlot(int slot, double top)
+        internal void MoveToSlot(int slot, double top, HtmlContainerInt? container = null)
         {
             CurrentY = top;
             SlotIndex = slot;
+
+            // A row break moves the table's own cursor several bands in one step, between rows -
+            // never mid-row, since the §6.2 reservations a row's cells read are keyed by the band
+            // BandReached has just settled. The document-level pass cursor has to follow, or a cell's
+            // own content asks its fragmentation questions of a band the pass has already left - #435.
+            container?.CurrentFragmentainer?.StepOverTo(slot);
         }
 
         /// <summary>
@@ -390,7 +396,15 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             var reached = container.SlotStartingAt(CurrentY);
 
-            if (reached > SlotIndex) SlotIndex = reached;
+            if (reached > SlotIndex)
+            {
+                SlotIndex = reached;
+
+                // The table's own floor just rose, between rows, with no break recorded for the
+                // crossing - the same silent spill a line's tolerance-boundary case has, one level
+                // down. The document-level pass cursor has to see it too - #435.
+                container.CurrentFragmentainer?.StepOverTo(reached);
+            }
 
             return SlotIndex;
         }
