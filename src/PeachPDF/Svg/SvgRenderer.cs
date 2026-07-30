@@ -334,11 +334,14 @@ namespace PeachPDF.Svg
         /// before: <see cref="LayoutGlyphs"/> starts a new text chunk wherever it sees an explicit
         /// <c>x</c>/<c>y</c> - always true of a chunk's own first (logical-order) glyph, from the
         /// element's own <c>x</c>/<c>y</c> attribute - so reordering the list first would carry that
-        /// marker to a different list position and fool it into starting a spurious new chunk. Instead
-        /// this reuses the exact set of <c>(Px, Py)</c> positions logical-order layout already assigned
-        /// (the same slot-preservation the HTML per-line bidi reorder uses to survive
-        /// <c>text-align: justify</c>) - only which glyph occupies which position changes; a glyph's own
-        /// font/advance/rotation/opacity travel with it regardless of list order.
+        /// marker to a different list position and fool it into starting a spurious new chunk. Each run's
+        /// glyphs are repositioned by reflecting the run about its own content span - each glyph's own
+        /// <see cref="GlyphInfo.Advance"/> and its own offset from the run's start (the same fix
+        /// <c>CssLayoutEngine.ApplyBidiReordering</c> needed for HTML) - rather than reusing the
+        /// logical-order <c>Px</c> <see cref="LayoutGlyphs"/> assigned to whichever glyph used to occupy
+        /// that list index: that only produced correct output when every glyph in a run happened to
+        /// share the same advance, and overlapped or gapped otherwise. <see cref="GlyphInfo.Py"/> is
+        /// never reassigned by reordering - it already belongs to its own glyph, not to a list position.
         /// </summary>
         private static void ApplyBidiReordering(SvgTextElement text, List<GlyphInfo> glyphs, List<BidiIsolateOverride> overrides)
         {
@@ -352,46 +355,60 @@ namespace PeachPDF.Svg
 
             if (runs.Count == 1 && !runs[0].IsRtl) return;
 
-            var slots = glyphs.Select(gi => (gi.Px, gi.Py)).ToList();
+            var originalPx = glyphs.Select(gi => gi.Px).ToList();
+            var runNewStart = originalPx[0];
 
             var reordered = new List<GlyphInfo>(glyphs.Count);
             foreach (var run in runs)
             {
+                var runOldStart = originalPx[run.Start];
+                var lastIndexInRun = run.Start + run.Length - 1;
+                var runContentWidth = originalPx[lastIndexInRun] + glyphs[lastIndexInRun].Advance - runOldStart;
+
                 if (run.IsRtl)
                 {
                     for (var k = run.Length - 1; k >= 0; k--)
                     {
-                        var gi = glyphs[run.Start + k];
+                        var idx = run.Start + k;
+                        var gi = glyphs[idx];
                         if (System.Text.Rune.DecodeFromUtf16(gi.Glyph, out var rune, out _) == System.Buffers.OperationStatus.Done
                             && BidiMirroring.TryGetMirror(rune.Value, out var mirrored))
                         {
                             gi.Glyph = char.ConvertFromUtf32(mirrored);
                         }
+
+                        var offsetFromRunStart = originalPx[idx] - runOldStart;
+                        gi.Px = runNewStart + runContentWidth - (offsetFromRunStart + gi.Advance);
                         reordered.Add(gi);
                     }
                 }
                 else
                 {
                     for (var k = 0; k < run.Length; k++)
-                        reordered.Add(glyphs[run.Start + k]);
+                    {
+                        var idx = run.Start + k;
+                        var gi = glyphs[idx];
+                        gi.Px = runNewStart + (originalPx[idx] - runOldStart);
+                        reordered.Add(gi);
+                    }
                 }
+
+                runNewStart += runContentWidth;
             }
 
-            for (var i = 0; i < reordered.Count; i++)
+            foreach (var gi in reordered)
             {
-                (reordered[i].Px, reordered[i].Py) = slots[i];
-
                 // X/Y/Dx/Dy already did their one job - marking a logical-order chunk start for
-                // LayoutGlyphs's pen-advance algorithm, now fully resolved into Px/Py above. Left in
-                // place, they would misdirect PaintGlyphs's own merge-adjacency check (which treats any
+                // LayoutGlyphs's pen-advance algorithm, now fully resolved into Px above. Left in place,
+                // they would misdirect PaintGlyphs's own merge-adjacency check (which treats any
                 // "explicitly positioned" glyph as its own paint call) into breaking a visually
                 // contiguous run apart at whichever glyph originally carried the element's own explicit
                 // x/y - typically the chunk's first LOGICAL character, which after an RTL reorder is no
                 // longer first in the visual sequence PaintGlyphs actually walks.
-                reordered[i].X = null;
-                reordered[i].Y = null;
-                reordered[i].Dx = null;
-                reordered[i].Dy = null;
+                gi.X = null;
+                gi.Y = null;
+                gi.Dx = null;
+                gi.Dy = null;
             }
 
             glyphs.Clear();

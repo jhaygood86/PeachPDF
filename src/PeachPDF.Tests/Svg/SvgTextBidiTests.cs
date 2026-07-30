@@ -95,5 +95,27 @@ namespace PeachPDF.Tests.Svg
             Assert.True(hebrewCall.IndexOf(reversedOlam, System.StringComparison.Ordinal) < hebrewCall.IndexOf(reversedShalom, System.StringComparison.Ordinal),
                 $"expected the isolated tspan's own words to reorder; text='{hebrewCall}'");
         }
+
+        [Fact]
+        public void Text_BidiOverrideReversesGlyphsOfDifferingAdvance_NoGapOrOverlap()
+        {
+            // Reflecting a run about its own content span (each glyph's own Advance and its own offset
+            // from the run's start), not reusing the logical-order Px of whichever glyph used to occupy
+            // a list position, is what keeps this correct once glyph advances differ within a run - here
+            // by giving the two tspans very different font sizes. A regression shows up as a gap or
+            // overlap between the two runs, not merely as the wrong left-to-right order.
+            var g = Render(
+                """<text x="10" y="60" direction="rtl" unicode-bidi="bidi-override">""" +
+                """<tspan font-size="40">AA</tspan><tspan font-size="10">BB</tspan></text>""");
+
+            Assert.Equal(2, g.DrawStringCalls.Count);
+            var bb = Assert.Single(g.DrawStringCalls, c => c.Text == "BB");
+            var aa = Assert.Single(g.DrawStringCalls, c => c.Text == "AA");
+
+            // "BB" (logically last, small font) is visually first; "AA" (logically first, large font)
+            // immediately follows it with no gap and no overlap.
+            var bbAdvance = g.MeasureString("BB", bb.Font).Width;
+            Assert.Equal(bb.Point.X + bbAdvance, aa.Point.X, 1);
+        }
     }
 }
