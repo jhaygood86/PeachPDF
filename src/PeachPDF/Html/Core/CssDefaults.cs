@@ -204,8 +204,9 @@ namespace PeachPDF.Html.Core
             "color",
             "direction",
             "empty-cells",
-            "font-family", "font-size", "font-stretch", "font-style", "font-variant", "font-weight",
+            "font-family", "font-palette", "font-size", "font-stretch", "font-style", "font-variant", "font-weight",
             "hyphens",
+            "letter-spacing",
             "line-height",
             "list-style-image", "list-style-position", "list-style-type",
             "orphans", "widows",
@@ -215,6 +216,7 @@ namespace PeachPDF.Html.Core
             "visibility",
             "white-space",
             "word-break",
+            "word-spacing",
         }.ToFrozenSet(System.StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
@@ -342,8 +344,16 @@ namespace PeachPDF.Html.Core
             // Flex container/item, Grid container/item, object-fit/position, font-palette, and page were
             // missing entirely until the ComputedStyle-per-area split - meaning "initial"/"unset"/"revert"
             // on any of them was a silent no-op (DomParser.AssignCssBlock's `value is null` short-circuit).
-            // Added here so every property has exactly one initial-value source; values match what
-            // ComputedStyle's own field initializers already used.
+            // Added here so every property has exactly one initial-value source; most values match the
+            // real CSS spec initial value, with two pragmatic exceptions carried over unchanged from what
+            // ComputedStyle's own field initializers already used (not introduced by this change):
+            // - row-gap/column-gap: css-align-3 §8.1's real initial value is "normal", not "0" - which
+            //   ends up equivalent to 0 for flex/grid but is 1em for multicol. CssLayoutEngineColumns
+            //   already special-cases the stored "0" to mean "1em" for multicol's own column-gap reads,
+            //   so this is a shared, already-compensated-for value, not a plain spec mismatch.
+            // - justify-items: css-align-3 §6.2's real initial value is "legacy", which nothing in this
+            //   codebase parses or acts on (only plain alignment keywords are supported) - "normal" is a
+            //   deliberate stand-in until "legacy <side>" support exists.
             { PropertyNames.FlexDirection, "row" },
             { PropertyNames.FlexWrap, "nowrap" },
             { PropertyNames.JustifyContent, CssConstants.Normal },

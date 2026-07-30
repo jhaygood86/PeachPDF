@@ -15,7 +15,7 @@ namespace PeachPDF.Tests.Integration
 {
     /// <summary>
     /// Regression coverage for real <c>font-variant: small-caps</c> rendering. Previously this property
-    /// was parsed, cascaded, and inherited (<see cref="ComputedStyle.FontVariant"/>) but never
+    /// was parsed, cascaded, and inherited (<see cref="PeachPDF.Html.Core.Dom.FontArea.FontVariant"/>) but never
     /// consumed anywhere in layout or paint — a full-tree grep found zero non-storage read sites, so the
     /// property was a complete no-op for any spelling, including the standard keyword. PeachPDF has no
     /// OpenType shaping engine to do real <c>smcp</c>/<c>c2sc</c> glyph substitution, so small-caps is

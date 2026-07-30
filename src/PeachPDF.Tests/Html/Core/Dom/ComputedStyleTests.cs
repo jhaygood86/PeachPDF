@@ -6,7 +6,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
     /// Coverage for the copy-on-write sharing guarantee <see cref="ComputedStyle"/> is built around: a
     /// fresh <see cref="CssBox"/> starts out referencing the shared, immutable <see cref="ComputedStyle.Default"/>
     /// instance, and only gets its own private instance the first time one of its properties is set (via
-    /// <see cref="ComputedStyle.SetPropertyValue{T}"/>). Nothing in the existing integration suite exercises
+    /// <see cref="ComputedStyleCow.SetPropertyValue{TSelf,TValue}"/>). Nothing in the existing integration suite exercises
     /// this sharing/isolation behavior directly - those tests only ever observe the *values* a box ends up
     /// with, not whether two untouched boxes are safely sharing the same underlying instance.
     /// </summary>
@@ -195,6 +195,24 @@ namespace PeachPDF.Tests.Html.Core.Dom
 
             Assert.Equal("13px", clone.Bottom);
             Assert.Equal("17px", clone.Right);
+        }
+
+        [Fact]
+        public void InheritStyle_Everything_CopiesBoxSizing()
+        {
+            // box-sizing stopped inheriting through the normal ancestor->descendant mechanism (moved out
+            // of InheritStyle's "always" section into the non-inherited BoxModel area), but a structural
+            // duplicate of the SAME source box - CssProxyBox's repeated header/footer, an inline/block
+            // split - still needs to carry the source element's own resolved box-sizing, exactly like
+            // BoxDecorationBreak/the break properties/PdfTagType. Without this, a border-box element split
+            // across an inline/block boundary would have its continuation fragment silently revert to the
+            // CSS initial content-box.
+            var source = new CssBox(null, null) { BoxSizing = "border-box" };
+            var clone = new CssBox(null, null);
+
+            clone.InheritStyle(source, everything: true);
+
+            Assert.Equal("border-box", clone.BoxSizing);
         }
     }
 }

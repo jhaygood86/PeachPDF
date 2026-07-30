@@ -6,9 +6,9 @@ using System.Collections.Generic;
 namespace PeachPDF.Html.Core.Dom
 {
     /// <summary>
-    /// The generic copy-on-write mechanism shared by <see cref="ComputedStyle"/> and every area record
-    /// below. Declared once here rather than as an instance method on 18 separate record types
-    /// (<see cref="ComputedStyle"/> plus the 17 areas).
+    /// The generic copy-on-write mechanisms shared by <see cref="ComputedStyle"/> and every area record
+    /// below. Declared once here rather than as instance methods on 17 separate record types
+    /// (<see cref="ComputedStyle"/> plus the 16 areas).
     /// </summary>
     internal static class ComputedStyleCow
     {
@@ -16,10 +16,34 @@ namespace PeachPDF.Html.Core.Dom
         /// Produces the record that results from changing one property to <paramref name="newValue"/> -
         /// or, if it already holds that value, returns <paramref name="self"/> unchanged. Safe to call
         /// unconditionally regardless of whether <paramref name="self"/> is a shared <c>Default</c>
-        /// singleton or already customized, and a no-op write allocates nothing.
+        /// singleton or already customized, and a no-op write allocates nothing. Used at the "leaf"
+        /// level, where <paramref name="currentValue"/>/<paramref name="newValue"/> are the actual CSS
+        /// property value (a string, a <see cref="CssImage"/>, etc.) - see <see cref="AdoptArea{TSelf,TArea}"/>
+        /// for the analogous operation one level up, where the value being compared is a whole area record.
         /// </summary>
         internal static TSelf SetPropertyValue<TSelf, TValue>(this TSelf self, TValue currentValue, TValue newValue, Func<TSelf, TValue, TSelf> apply) =>
             EqualityComparer<TValue>.Default.Equals(currentValue, newValue) ? self : apply(self, newValue);
+
+        /// <summary>
+        /// The area-level counterpart to <see cref="SetPropertyValue{TSelf,TValue}"/>: swaps
+        /// <paramref name="newArea"/> onto <paramref name="self"/> (a <see cref="ComputedStyle"/>) unless
+        /// it's already there. Compares by <em>reference</em>, not by structural (record) equality -
+        /// deliberately, for two reasons. First, every call site passes a <paramref name="newArea"/> that
+        /// is either exactly <paramref name="currentArea"/> (when the leaf-level <see cref="SetPropertyValue{TSelf,TValue}"/>
+        /// call that produced it was itself a no-op) or a freshly-forked, therefore-necessarily-different
+        /// object (when it changed a field) - so a structural comparison here would always agree with a
+        /// reference comparison anyway, at the cost of scanning every field of the area for nothing.
+        /// Second, in <see cref="CssBox.InheritStyle"/>'s whole-area adoption, <paramref name="currentArea"/>
+        /// and <paramref name="newArea"/> come from two unrelated boxes - using reference equality there
+        /// means two boxes whose areas happen to be equal in content but are separate objects still get
+        /// unified onto the same shared instance, which is what makes the "every box in a subtree that
+        /// never overrides an area ends up ReferenceEquals-sharing it" guarantee (see
+        /// <see cref="ComputedStyle"/>'s remarks) actually hold, rather than only holding when a child
+        /// happens to start from the shared <c>Default</c>.
+        /// </summary>
+        internal static TSelf AdoptArea<TSelf, TArea>(this TSelf self, TArea currentArea, TArea newArea, Func<TSelf, TArea, TSelf> apply)
+            where TArea : class =>
+            ReferenceEquals(currentArea, newArea) ? self : apply(self, newArea);
     }
 
     #region Border
@@ -236,6 +260,13 @@ namespace PeachPDF.Html.Core.Dom
     /// <summary>
     /// CSS Color + Text + Writing Modes properties that inherit. <c>text-decoration-*</c> is
     /// deliberately excluded - see <see cref="TextDecorationArea"/>.
+    /// <para>
+    /// One exception to "all inherit": <see cref="VerticalAlign"/> is CSS-spec <c>Inherited: no</c>, but
+    /// this codebase has always (pre-existing this area split) treated it as inherited - a known,
+    /// tracked deviation, see <c>.claude/accepted-gaps/vertical-align-is-treated-as-inherited.md</c>. It
+    /// stays grouped here (rather than in its own non-inherited area) because fixing it requires
+    /// auditing <c>CssLayoutEngine.ApplyVerticalAlignment</c>'s dependence on today's behavior first.
+    /// </para>
     /// </summary>
     internal sealed record TextArea
     {

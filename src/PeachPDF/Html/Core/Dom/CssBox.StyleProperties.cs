@@ -69,7 +69,7 @@ namespace PeachPDF.Html.Core.Dom
                 var previousStyle = _computedStyle;
                 var previousArea = previousStyle.Border;
                 var newArea = previousArea.SetPropertyValue(previousArea.BorderTopWidth, value, static (a, v) => a with { BorderTopWidth = v });
-                _computedStyle = previousStyle.SetPropertyValue(previousArea, newArea, static (s, a) => s with { Border = a });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { Border = a });
                 if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateBorderTopWidth();
             }
         }
@@ -82,7 +82,7 @@ namespace PeachPDF.Html.Core.Dom
                 var previousStyle = _computedStyle;
                 var previousArea = previousStyle.Border;
                 var newArea = previousArea.SetPropertyValue(previousArea.BorderRightWidth, value, static (a, v) => a with { BorderRightWidth = v });
-                _computedStyle = previousStyle.SetPropertyValue(previousArea, newArea, static (s, a) => s with { Border = a });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { Border = a });
                 if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateBorderRightWidth();
             }
         }
@@ -95,7 +95,7 @@ namespace PeachPDF.Html.Core.Dom
                 var previousStyle = _computedStyle;
                 var previousArea = previousStyle.Border;
                 var newArea = previousArea.SetPropertyValue(previousArea.BorderBottomWidth, value, static (a, v) => a with { BorderBottomWidth = v });
-                _computedStyle = previousStyle.SetPropertyValue(previousArea, newArea, static (s, a) => s with { Border = a });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { Border = a });
                 if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateBorderBottomWidth();
             }
         }
@@ -108,7 +108,7 @@ namespace PeachPDF.Html.Core.Dom
                 var previousStyle = _computedStyle;
                 var previousArea = previousStyle.Border;
                 var newArea = previousArea.SetPropertyValue(previousArea.BorderLeftWidth, value, static (a, v) => a with { BorderLeftWidth = v });
-                _computedStyle = previousStyle.SetPropertyValue(previousArea, newArea, static (s, a) => s with { Border = a });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { Border = a });
                 if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateBorderLeftWidth();
             }
         }
@@ -120,7 +120,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Border;
                 var newArea = area.SetPropertyValue(area.BorderTopStyle, value, static (a, v) => a with { BorderTopStyle = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Border = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Border = a });
             }
         }
 
@@ -131,7 +131,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Border;
                 var newArea = area.SetPropertyValue(area.BorderRightStyle, value, static (a, v) => a with { BorderRightStyle = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Border = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Border = a });
             }
         }
 
@@ -142,7 +142,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Border;
                 var newArea = area.SetPropertyValue(area.BorderBottomStyle, value, static (a, v) => a with { BorderBottomStyle = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Border = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Border = a });
             }
         }
 
@@ -153,7 +153,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Border;
                 var newArea = area.SetPropertyValue(area.BorderLeftStyle, value, static (a, v) => a with { BorderLeftStyle = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Border = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Border = a });
             }
         }
 
@@ -165,7 +165,7 @@ namespace PeachPDF.Html.Core.Dom
                 var previousStyle = _computedStyle;
                 var previousArea = previousStyle.Border;
                 var newArea = previousArea.SetPropertyValue(previousArea.BorderTopColor, value, static (a, v) => a with { BorderTopColor = v });
-                _computedStyle = previousStyle.SetPropertyValue(previousArea, newArea, static (s, a) => s with { Border = a });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { Border = a });
                 if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateBorderTopColor();
             }
         }
@@ -178,7 +178,7 @@ namespace PeachPDF.Html.Core.Dom
                 var previousStyle = _computedStyle;
                 var previousArea = previousStyle.Border;
                 var newArea = previousArea.SetPropertyValue(previousArea.BorderRightColor, value, static (a, v) => a with { BorderRightColor = v });
-                _computedStyle = previousStyle.SetPropertyValue(previousArea, newArea, static (s, a) => s with { Border = a });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { Border = a });
                 if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateBorderRightColor();
             }
         }
@@ -191,7 +191,7 @@ namespace PeachPDF.Html.Core.Dom
                 var previousStyle = _computedStyle;
                 var previousArea = previousStyle.Border;
                 var newArea = previousArea.SetPropertyValue(previousArea.BorderBottomColor, value, static (a, v) => a with { BorderBottomColor = v });
-                _computedStyle = previousStyle.SetPropertyValue(previousArea, newArea, static (s, a) => s with { Border = a });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { Border = a });
                 if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateBorderBottomColor();
             }
         }
@@ -204,7 +204,7 @@ namespace PeachPDF.Html.Core.Dom
                 var previousStyle = _computedStyle;
                 var previousArea = previousStyle.Border;
                 var newArea = previousArea.SetPropertyValue(previousArea.BorderLeftColor, value, static (a, v) => a with { BorderLeftColor = v });
-                _computedStyle = previousStyle.SetPropertyValue(previousArea, newArea, static (s, a) => s with { Border = a });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { Border = a });
                 if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateBorderLeftColor();
             }
         }
@@ -217,7 +217,7 @@ namespace PeachPDF.Html.Core.Dom
                 var previousStyle = _computedStyle;
                 var previousArea = previousStyle.Border;
                 var newArea = previousArea.SetPropertyValue(previousArea.BorderTopLeftRadius, value, static (a, v) => a with { BorderTopLeftRadius = v });
-                _computedStyle = previousStyle.SetPropertyValue(previousArea, newArea, static (s, a) => s with { Border = a });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { Border = a });
                 if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateBorderTopLeftRadius();
             }
         }
@@ -230,7 +230,7 @@ namespace PeachPDF.Html.Core.Dom
                 var previousStyle = _computedStyle;
                 var previousArea = previousStyle.Border;
                 var newArea = previousArea.SetPropertyValue(previousArea.BorderTopRightRadius, value, static (a, v) => a with { BorderTopRightRadius = v });
-                _computedStyle = previousStyle.SetPropertyValue(previousArea, newArea, static (s, a) => s with { Border = a });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { Border = a });
                 if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateBorderTopRightRadius();
             }
         }
@@ -243,7 +243,7 @@ namespace PeachPDF.Html.Core.Dom
                 var previousStyle = _computedStyle;
                 var previousArea = previousStyle.Border;
                 var newArea = previousArea.SetPropertyValue(previousArea.BorderBottomRightRadius, value, static (a, v) => a with { BorderBottomRightRadius = v });
-                _computedStyle = previousStyle.SetPropertyValue(previousArea, newArea, static (s, a) => s with { Border = a });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { Border = a });
                 if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateBorderBottomRightRadius();
             }
         }
@@ -256,7 +256,7 @@ namespace PeachPDF.Html.Core.Dom
                 var previousStyle = _computedStyle;
                 var previousArea = previousStyle.Border;
                 var newArea = previousArea.SetPropertyValue(previousArea.BorderBottomLeftRadius, value, static (a, v) => a with { BorderBottomLeftRadius = v });
-                _computedStyle = previousStyle.SetPropertyValue(previousArea, newArea, static (s, a) => s with { Border = a });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { Border = a });
                 if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateBorderBottomLeftRadius();
             }
         }
@@ -268,7 +268,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Table;
                 var newArea = area.SetPropertyValue(area.BorderSpacing, value, static (a, v) => a with { BorderSpacing = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Table = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Table = a });
             }
         }
 
@@ -279,7 +279,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Table;
                 var newArea = area.SetPropertyValue(area.BorderCollapse, value, static (a, v) => a with { BorderCollapse = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Table = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Table = a });
             }
         }
 
@@ -295,7 +295,7 @@ namespace PeachPDF.Html.Core.Dom
                 var previousStyle = _computedStyle;
                 var previousArea = previousStyle.VisualEffects;
                 var newArea = previousArea.SetPropertyValue(previousArea.Transform, value, static (a, v) => a with { Transform = v });
-                _computedStyle = previousStyle.SetPropertyValue(previousArea, newArea, static (s, a) => s with { VisualEffects = a });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { VisualEffects = a });
                 if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateTransform();
             }
         }
@@ -308,7 +308,7 @@ namespace PeachPDF.Html.Core.Dom
                 var previousStyle = _computedStyle;
                 var previousArea = previousStyle.VisualEffects;
                 var newArea = previousArea.SetPropertyValue(previousArea.TransformOrigin, value, static (a, v) => a with { TransformOrigin = v });
-                _computedStyle = previousStyle.SetPropertyValue(previousArea, newArea, static (s, a) => s with { VisualEffects = a });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { VisualEffects = a });
                 if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateTransform();
             }
         }
@@ -321,7 +321,7 @@ namespace PeachPDF.Html.Core.Dom
                 var previousStyle = _computedStyle;
                 var previousArea = previousStyle.VisualEffects;
                 var newArea = previousArea.SetPropertyValue(previousArea.Opacity, value, static (a, v) => a with { Opacity = v });
-                _computedStyle = previousStyle.SetPropertyValue(previousArea, newArea, static (s, a) => s with { VisualEffects = a });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { VisualEffects = a });
                 if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateOpacity();
             }
         }
@@ -333,7 +333,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.VisualEffects;
                 var newArea = area.SetPropertyValue(area.ClipPath, value, static (a, v) => a with { ClipPath = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { VisualEffects = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { VisualEffects = a });
             }
         }
 
@@ -344,7 +344,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.VisualEffects;
                 var newArea = area.SetPropertyValue(area.AspectRatio, value, static (a, v) => a with { AspectRatio = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { VisualEffects = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { VisualEffects = a });
             }
         }
 
@@ -355,7 +355,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Border;
                 var newArea = area.SetPropertyValue(area.BoxShadow, value, static (a, v) => a with { BoxShadow = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Border = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Border = a });
             }
         }
 
@@ -366,7 +366,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.BoxModel;
                 var newArea = area.SetPropertyValue(area.BoxSizing, value, static (a, v) => a with { BoxSizing = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { BoxModel = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
             }
         }
 
@@ -381,7 +381,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.GeneratedContent;
                 var newArea = area.SetPropertyValue(area.CounterIncrement, value, static (a, v) => a with { CounterIncrement = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { GeneratedContent = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { GeneratedContent = a });
             }
         }
 
@@ -392,7 +392,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.GeneratedContent;
                 var newArea = area.SetPropertyValue(area.CounterReset, value, static (a, v) => a with { CounterReset = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { GeneratedContent = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { GeneratedContent = a });
             }
         }
 
@@ -403,7 +403,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.GeneratedContent;
                 var newArea = area.SetPropertyValue(area.CounterSet, value, static (a, v) => a with { CounterSet = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { GeneratedContent = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { GeneratedContent = a });
             }
         }
 
@@ -414,7 +414,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.GeneratedContent;
                 var newArea = area.SetPropertyValue(area.StringSet, value, static (a, v) => a with { StringSet = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { GeneratedContent = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { GeneratedContent = a });
             }
         }
 
@@ -425,7 +425,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.GeneratedContent;
                 var newArea = area.SetPropertyValue(area.PageName, value, static (a, v) => a with { PageName = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { GeneratedContent = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { GeneratedContent = a });
             }
         }
 
@@ -436,7 +436,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.GeneratedContent;
                 var newArea = area.SetPropertyValue(area.PdfTagType, value, static (a, v) => a with { PdfTagType = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { GeneratedContent = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { GeneratedContent = a });
             }
         }
 
@@ -463,7 +463,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.BoxModel;
                 var newArea = area.SetPropertyValue(area.MarginTop, value, static (a, v) => a with { MarginTop = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { BoxModel = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
             }
         }
 
@@ -474,7 +474,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.BoxModel;
                 var newArea = area.SetPropertyValue(area.MarginRight, value, static (a, v) => a with { MarginRight = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { BoxModel = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
             }
         }
 
@@ -485,7 +485,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.BoxModel;
                 var newArea = area.SetPropertyValue(area.MarginBottom, value, static (a, v) => a with { MarginBottom = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { BoxModel = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
             }
         }
 
@@ -496,7 +496,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.BoxModel;
                 var newArea = area.SetPropertyValue(area.MarginLeft, value, static (a, v) => a with { MarginLeft = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { BoxModel = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
             }
         }
 
@@ -508,7 +508,7 @@ namespace PeachPDF.Html.Core.Dom
                 var previousStyle = _computedStyle;
                 var previousArea = previousStyle.BoxModel;
                 var newArea = previousArea.SetPropertyValue(previousArea.PaddingTop, value, static (a, v) => a with { PaddingTop = v });
-                _computedStyle = previousStyle.SetPropertyValue(previousArea, newArea, static (s, a) => s with { BoxModel = a });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { BoxModel = a });
                 if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidatePaddingTop();
             }
         }
@@ -521,7 +521,7 @@ namespace PeachPDF.Html.Core.Dom
                 var previousStyle = _computedStyle;
                 var previousArea = previousStyle.BoxModel;
                 var newArea = previousArea.SetPropertyValue(previousArea.PaddingRight, value, static (a, v) => a with { PaddingRight = v });
-                _computedStyle = previousStyle.SetPropertyValue(previousArea, newArea, static (s, a) => s with { BoxModel = a });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { BoxModel = a });
                 if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidatePaddingRight();
             }
         }
@@ -534,7 +534,7 @@ namespace PeachPDF.Html.Core.Dom
                 var previousStyle = _computedStyle;
                 var previousArea = previousStyle.BoxModel;
                 var newArea = previousArea.SetPropertyValue(previousArea.PaddingBottom, value, static (a, v) => a with { PaddingBottom = v });
-                _computedStyle = previousStyle.SetPropertyValue(previousArea, newArea, static (s, a) => s with { BoxModel = a });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { BoxModel = a });
                 if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidatePaddingBottom();
             }
         }
@@ -547,7 +547,7 @@ namespace PeachPDF.Html.Core.Dom
                 var previousStyle = _computedStyle;
                 var previousArea = previousStyle.BoxModel;
                 var newArea = previousArea.SetPropertyValue(previousArea.PaddingLeft, value, static (a, v) => a with { PaddingLeft = v });
-                _computedStyle = previousStyle.SetPropertyValue(previousArea, newArea, static (s, a) => s with { BoxModel = a });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { BoxModel = a });
                 if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidatePaddingLeft();
             }
         }
@@ -563,7 +563,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Break;
                 var newArea = area.SetPropertyValue(area.BreakBefore, value, static (a, v) => a with { BreakBefore = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Break = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Break = a });
             }
         }
 
@@ -574,7 +574,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Break;
                 var newArea = area.SetPropertyValue(area.BreakInside, value, static (a, v) => a with { BreakInside = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Break = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Break = a });
             }
         }
 
@@ -585,7 +585,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Break;
                 var newArea = area.SetPropertyValue(area.BreakAfter, value, static (a, v) => a with { BreakAfter = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Break = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Break = a });
             }
         }
 
@@ -602,7 +602,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Break;
                 var newArea = area.SetPropertyValue(area.BoxDecorationBreak, value, static (a, v) => a with { BoxDecorationBreak = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Break = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Break = a });
             }
         }
 
@@ -619,7 +619,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Pagination;
                 var newArea = area.SetPropertyValue(area.Orphans, value, static (a, v) => a with { Orphans = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Pagination = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Pagination = a });
             }
         }
 
@@ -630,7 +630,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Pagination;
                 var newArea = area.SetPropertyValue(area.Widows, value, static (a, v) => a with { Widows = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Pagination = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Pagination = a });
             }
         }
 
@@ -645,7 +645,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.BoxModel;
                 var newArea = area.SetPropertyValue(area.Left, value, static (a, v) => a with { Left = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { BoxModel = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
             }
         }
 
@@ -656,7 +656,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.BoxModel;
                 var newArea = area.SetPropertyValue(area.Top, value, static (a, v) => a with { Top = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { BoxModel = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
             }
         }
 
@@ -667,7 +667,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.BoxModel;
                 var newArea = area.SetPropertyValue(area.Bottom, value, static (a, v) => a with { Bottom = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { BoxModel = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
             }
         }
 
@@ -678,7 +678,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.BoxModel;
                 var newArea = area.SetPropertyValue(area.Right, value, static (a, v) => a with { Right = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { BoxModel = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
             }
         }
 
@@ -689,7 +689,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.BoxModel;
                 var newArea = area.SetPropertyValue(area.Width, value, static (a, v) => a with { Width = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { BoxModel = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
             }
         }
 
@@ -700,7 +700,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.BoxModel;
                 var newArea = area.SetPropertyValue(area.MaxWidth, value, static (a, v) => a with { MaxWidth = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { BoxModel = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
             }
         }
 
@@ -711,7 +711,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.BoxModel;
                 var newArea = area.SetPropertyValue(area.MinWidth, value, static (a, v) => a with { MinWidth = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { BoxModel = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
             }
         }
 
@@ -722,7 +722,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.BoxModel;
                 var newArea = area.SetPropertyValue(area.Height, value, static (a, v) => a with { Height = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { BoxModel = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
             }
         }
 
@@ -733,7 +733,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.BoxModel;
                 var newArea = area.SetPropertyValue(area.MaxHeight, value, static (a, v) => a with { MaxHeight = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { BoxModel = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
             }
         }
 
@@ -744,7 +744,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.BoxModel;
                 var newArea = area.SetPropertyValue(area.MinHeight, value, static (a, v) => a with { MinHeight = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { BoxModel = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
             }
         }
 
@@ -759,7 +759,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Background;
                 var newArea = area.SetPropertyValue(area.BackgroundColor, value, static (a, v) => a with { BackgroundColor = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Background = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Background = a });
             }
         }
 
@@ -770,7 +770,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Background;
                 var newArea = area.SetPropertyValue(area.BackgroundImages, value, static (a, v) => a with { BackgroundImages = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Background = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Background = a });
             }
         }
 
@@ -781,7 +781,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Background;
                 var newArea = area.SetPropertyValue(area.BackgroundPosition, value, static (a, v) => a with { BackgroundPosition = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Background = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Background = a });
             }
         }
 
@@ -792,7 +792,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Background;
                 var newArea = area.SetPropertyValue(area.BackgroundRepeat, value, static (a, v) => a with { BackgroundRepeat = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Background = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Background = a });
             }
         }
 
@@ -803,7 +803,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Background;
                 var newArea = area.SetPropertyValue(area.BackgroundSize, value, static (a, v) => a with { BackgroundSize = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Background = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Background = a });
             }
         }
 
@@ -814,7 +814,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Background;
                 var newArea = area.SetPropertyValue(area.BackgroundOrigin, value, static (a, v) => a with { BackgroundOrigin = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Background = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Background = a });
             }
         }
 
@@ -825,7 +825,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Background;
                 var newArea = area.SetPropertyValue(area.BackgroundClip, value, static (a, v) => a with { BackgroundClip = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Background = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Background = a });
             }
         }
 
@@ -836,7 +836,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Background;
                 var newArea = area.SetPropertyValue(area.BackgroundAttachment, value, static (a, v) => a with { BackgroundAttachment = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Background = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Background = a });
             }
         }
 
@@ -847,7 +847,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Background;
                 var newArea = area.SetPropertyValue(area.ObjectFit, value, static (a, v) => a with { ObjectFit = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Background = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Background = a });
             }
         }
 
@@ -858,7 +858,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Background;
                 var newArea = area.SetPropertyValue(area.ObjectPosition, value, static (a, v) => a with { ObjectPosition = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Background = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Background = a });
             }
         }
 
@@ -874,7 +874,7 @@ namespace PeachPDF.Html.Core.Dom
                 var previousStyle = _computedStyle;
                 var previousArea = previousStyle.Text;
                 var newArea = previousArea.SetPropertyValue(previousArea.Color, value, static (a, v) => a with { Color = v });
-                _computedStyle = previousStyle.SetPropertyValue(previousArea, newArea, static (s, a) => s with { Text = a });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { Text = a });
                 if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateColor();
             }
         }
@@ -886,7 +886,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.GeneratedContent;
                 var newArea = area.SetPropertyValue(area.Content, value, static (a, v) => a with { Content = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { GeneratedContent = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { GeneratedContent = a });
             }
         }
 
@@ -922,7 +922,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.DisplayPositioning;
                 var newArea = area.SetPropertyValue(area.Display, value, static (a, v) => a with { Display = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { DisplayPositioning = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { DisplayPositioning = a });
             }
         }
 
@@ -933,7 +933,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Text;
                 var newArea = area.SetPropertyValue(area.Direction, value, static (a, v) => a with { Direction = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Text = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
             }
         }
 
@@ -944,7 +944,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Table;
                 var newArea = area.SetPropertyValue(area.EmptyCells, value, static (a, v) => a with { EmptyCells = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Table = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Table = a });
             }
         }
 
@@ -955,7 +955,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.DisplayPositioning;
                 var newArea = area.SetPropertyValue(area.Float, value, static (a, v) => a with { Float = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { DisplayPositioning = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { DisplayPositioning = a });
             }
         }
 
@@ -966,7 +966,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.DisplayPositioning;
                 var newArea = area.SetPropertyValue(area.Clear, value, static (a, v) => a with { Clear = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { DisplayPositioning = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { DisplayPositioning = a });
             }
         }
 
@@ -977,7 +977,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.DisplayPositioning;
                 var newArea = area.SetPropertyValue(area.Position, value, static (a, v) => a with { Position = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { DisplayPositioning = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { DisplayPositioning = a });
             }
         }
 
@@ -995,7 +995,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Text;
                 var newArea = area.SetPropertyValue(area.LineHeight, value, static (a, v) => a with { LineHeight = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Text = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
             }
         }
 
@@ -1009,7 +1009,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Text;
                 var newArea = area.SetPropertyValue(area.VerticalAlign, value, static (a, v) => a with { VerticalAlign = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Text = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
             }
         }
 
@@ -1020,7 +1020,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Text;
                 var newArea = area.SetPropertyValue(area.TextIndent, NoEms(value), static (a, v) => a with { TextIndent = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Text = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
             }
         }
 
@@ -1034,7 +1034,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Text;
                 var newArea = area.SetPropertyValue(area.TextAlign, value, static (a, v) => a with { TextAlign = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Text = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
             }
         }
 
@@ -1045,7 +1045,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.TextDecoration;
                 var newArea = area.SetPropertyValue(area.TextDecorationLine, value, static (a, v) => a with { TextDecorationLine = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { TextDecoration = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { TextDecoration = a });
             }
         }
 
@@ -1056,7 +1056,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.TextDecoration;
                 var newArea = area.SetPropertyValue(area.TextDecorationStyle, value, static (a, v) => a with { TextDecorationStyle = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { TextDecoration = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { TextDecoration = a });
             }
         }
 
@@ -1067,7 +1067,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.TextDecoration;
                 var newArea = area.SetPropertyValue(area.TextDecorationColor, value, static (a, v) => a with { TextDecorationColor = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { TextDecoration = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { TextDecoration = a });
             }
         }
 
@@ -1078,7 +1078,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Text;
                 var newArea = area.SetPropertyValue(area.TextTransform, value, static (a, v) => a with { TextTransform = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Text = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
             }
         }
 
@@ -1089,7 +1089,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Text;
                 var newArea = area.SetPropertyValue(area.WhiteSpace, value, static (a, v) => a with { WhiteSpace = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Text = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
             }
         }
 
@@ -1100,7 +1100,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Text;
                 var newArea = area.SetPropertyValue(area.Visibility, value, static (a, v) => a with { Visibility = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Text = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
             }
         }
 
@@ -1111,7 +1111,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Text;
                 var newArea = area.SetPropertyValue(area.WordSpacing, NoEms(value), static (a, v) => a with { WordSpacing = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Text = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
             }
         }
 
@@ -1125,7 +1125,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Text;
                 var newArea = area.SetPropertyValue(area.LetterSpacing, NoEms(value), static (a, v) => a with { LetterSpacing = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Text = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
             }
         }
 
@@ -1145,7 +1145,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Text;
                 var newArea = area.SetPropertyValue(area.WordBreak, value, static (a, v) => a with { WordBreak = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Text = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
             }
         }
 
@@ -1163,7 +1163,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Text;
                 var newArea = area.SetPropertyValue(area.Hyphens, value, static (a, v) => a with { Hyphens = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Text = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
             }
         }
 
@@ -1178,7 +1178,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Font;
                 var newArea = area.SetPropertyValue(area.FontFamily, value, static (a, v) => a with { FontFamily = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Font = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Font = a });
             }
         }
 
@@ -1194,7 +1194,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Font;
                 var newArea = area.SetPropertyValue(area.FontFamilyList, value, static (a, v) => a with { FontFamilyList = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Font = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Font = a });
             }
         }
 
@@ -1224,7 +1224,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 var area = _computedStyle.Font;
                 var newArea = area.SetPropertyValue(area.FontSize, resolved, static (a, v) => a with { FontSize = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Font = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Font = a });
             }
         }
 
@@ -1235,7 +1235,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Font;
                 var newArea = area.SetPropertyValue(area.FontStyle, value, static (a, v) => a with { FontStyle = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Font = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Font = a });
             }
         }
 
@@ -1246,7 +1246,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Font;
                 var newArea = area.SetPropertyValue(area.FontVariant, value, static (a, v) => a with { FontVariant = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Font = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Font = a });
             }
         }
 
@@ -1257,7 +1257,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Font;
                 var newArea = area.SetPropertyValue(area.FontWeight, value, static (a, v) => a with { FontWeight = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Font = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Font = a });
             }
         }
 
@@ -1268,7 +1268,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Font;
                 var newArea = area.SetPropertyValue(area.FontStretch, value, static (a, v) => a with { FontStretch = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Font = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Font = a });
             }
         }
 
@@ -1280,7 +1280,7 @@ namespace PeachPDF.Html.Core.Dom
                 var previousStyle = _computedStyle;
                 var previousArea = previousStyle.Font;
                 var newArea = previousArea.SetPropertyValue(previousArea.FontPalette, value, static (a, v) => a with { FontPalette = v });
-                _computedStyle = previousStyle.SetPropertyValue(previousArea, newArea, static (s, a) => s with { Font = a });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { Font = a });
                 if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateFontPalette();
             }
         }
@@ -1296,7 +1296,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.DisplayPositioning;
                 var newArea = area.SetPropertyValue(area.Overflow, value, static (a, v) => a with { Overflow = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { DisplayPositioning = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { DisplayPositioning = a });
             }
         }
 
@@ -1307,7 +1307,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.List;
                 var newArea = area.SetPropertyValue(area.ListStylePosition, value, static (a, v) => a with { ListStylePosition = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { List = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { List = a });
             }
         }
 
@@ -1318,7 +1318,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.List;
                 var newArea = area.SetPropertyValue(area.ListStyleImage, value, static (a, v) => a with { ListStyleImage = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { List = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { List = a });
             }
         }
 
@@ -1329,7 +1329,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.List;
                 var newArea = area.SetPropertyValue(area.ListStyleType, value, static (a, v) => a with { ListStyleType = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { List = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { List = a });
             }
         }
 
@@ -1344,7 +1344,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.DisplayPositioning;
                 var newArea = area.SetPropertyValue(area.ZIndex, value, static (a, v) => a with { ZIndex = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { DisplayPositioning = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { DisplayPositioning = a });
             }
         }
 
@@ -1359,7 +1359,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Flex;
                 var newArea = area.SetPropertyValue(area.FlexDirection, value, static (a, v) => a with { FlexDirection = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Flex = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Flex = a });
             }
         }
 
@@ -1370,7 +1370,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Flex;
                 var newArea = area.SetPropertyValue(area.FlexWrap, value, static (a, v) => a with { FlexWrap = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Flex = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Flex = a });
             }
         }
 
@@ -1381,7 +1381,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Flex;
                 var newArea = area.SetPropertyValue(area.JustifyContent, value, static (a, v) => a with { JustifyContent = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Flex = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Flex = a });
             }
         }
 
@@ -1392,7 +1392,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Flex;
                 var newArea = area.SetPropertyValue(area.AlignItems, value, static (a, v) => a with { AlignItems = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Flex = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Flex = a });
             }
         }
 
@@ -1403,7 +1403,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Flex;
                 var newArea = area.SetPropertyValue(area.AlignContent, value, static (a, v) => a with { AlignContent = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Flex = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Flex = a });
             }
         }
 
@@ -1414,7 +1414,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Flex;
                 var newArea = area.SetPropertyValue(area.FlexGrow, value, static (a, v) => a with { FlexGrow = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Flex = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Flex = a });
             }
         }
 
@@ -1425,7 +1425,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Flex;
                 var newArea = area.SetPropertyValue(area.FlexShrink, value, static (a, v) => a with { FlexShrink = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Flex = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Flex = a });
             }
         }
 
@@ -1436,7 +1436,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Flex;
                 var newArea = area.SetPropertyValue(area.FlexBasis, value, static (a, v) => a with { FlexBasis = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Flex = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Flex = a });
             }
         }
 
@@ -1447,7 +1447,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Flex;
                 var newArea = area.SetPropertyValue(area.AlignSelf, value, static (a, v) => a with { AlignSelf = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Flex = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Flex = a });
             }
         }
 
@@ -1458,7 +1458,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Flex;
                 var newArea = area.SetPropertyValue(area.Order, value, static (a, v) => a with { Order = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Flex = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Flex = a });
             }
         }
 
@@ -1470,7 +1470,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Flex;
                 var newArea = area.SetPropertyValue(area.FlexRowGap, value, static (a, v) => a with { FlexRowGap = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Flex = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Flex = a });
             }
         }
 
@@ -1481,7 +1481,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Flex;
                 var newArea = area.SetPropertyValue(area.FlexColumnGap, value, static (a, v) => a with { FlexColumnGap = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Flex = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Flex = a });
             }
         }
 
@@ -1496,7 +1496,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Grid;
                 var newArea = area.SetPropertyValue(area.GridTemplateColumns, value, static (a, v) => a with { GridTemplateColumns = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Grid = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Grid = a });
             }
         }
 
@@ -1507,7 +1507,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Grid;
                 var newArea = area.SetPropertyValue(area.GridTemplateRows, value, static (a, v) => a with { GridTemplateRows = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Grid = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Grid = a });
             }
         }
 
@@ -1518,7 +1518,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Grid;
                 var newArea = area.SetPropertyValue(area.GridTemplateAreas, value, static (a, v) => a with { GridTemplateAreas = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Grid = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Grid = a });
             }
         }
 
@@ -1529,7 +1529,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Grid;
                 var newArea = area.SetPropertyValue(area.GridAutoColumns, value, static (a, v) => a with { GridAutoColumns = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Grid = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Grid = a });
             }
         }
 
@@ -1540,7 +1540,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Grid;
                 var newArea = area.SetPropertyValue(area.GridAutoRows, value, static (a, v) => a with { GridAutoRows = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Grid = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Grid = a });
             }
         }
 
@@ -1551,7 +1551,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Grid;
                 var newArea = area.SetPropertyValue(area.GridAutoFlow, value, static (a, v) => a with { GridAutoFlow = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Grid = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Grid = a });
             }
         }
 
@@ -1562,7 +1562,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Grid;
                 var newArea = area.SetPropertyValue(area.JustifyItems, value, static (a, v) => a with { JustifyItems = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Grid = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Grid = a });
             }
         }
 
@@ -1573,7 +1573,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Grid;
                 var newArea = area.SetPropertyValue(area.JustifySelf, value, static (a, v) => a with { JustifySelf = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Grid = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Grid = a });
             }
         }
 
@@ -1584,7 +1584,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Grid;
                 var newArea = area.SetPropertyValue(area.GridColumnStart, value, static (a, v) => a with { GridColumnStart = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Grid = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Grid = a });
             }
         }
 
@@ -1595,7 +1595,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Grid;
                 var newArea = area.SetPropertyValue(area.GridColumnEnd, value, static (a, v) => a with { GridColumnEnd = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Grid = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Grid = a });
             }
         }
 
@@ -1606,7 +1606,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Grid;
                 var newArea = area.SetPropertyValue(area.GridRowStart, value, static (a, v) => a with { GridRowStart = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Grid = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Grid = a });
             }
         }
 
@@ -1617,7 +1617,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Grid;
                 var newArea = area.SetPropertyValue(area.GridRowEnd, value, static (a, v) => a with { GridRowEnd = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { Grid = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Grid = a });
             }
         }
 
@@ -1637,7 +1637,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.MultiColumn;
                 var newArea = area.SetPropertyValue(area.ColumnCount, value, static (a, v) => a with { ColumnCount = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { MultiColumn = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { MultiColumn = a });
             }
         }
 
@@ -1648,7 +1648,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.MultiColumn;
                 var newArea = area.SetPropertyValue(area.ColumnWidth, value, static (a, v) => a with { ColumnWidth = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { MultiColumn = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { MultiColumn = a });
             }
         }
 
@@ -1659,7 +1659,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.MultiColumn;
                 var newArea = area.SetPropertyValue(area.ColumnFill, value, static (a, v) => a with { ColumnFill = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { MultiColumn = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { MultiColumn = a });
             }
         }
 
@@ -1670,7 +1670,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.MultiColumn;
                 var newArea = area.SetPropertyValue(area.ColumnSpan, value, static (a, v) => a with { ColumnSpan = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { MultiColumn = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { MultiColumn = a });
             }
         }
 
@@ -1681,7 +1681,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.MultiColumn;
                 var newArea = area.SetPropertyValue(area.ColumnRuleWidth, value, static (a, v) => a with { ColumnRuleWidth = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { MultiColumn = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { MultiColumn = a });
             }
         }
 
@@ -1692,7 +1692,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.MultiColumn;
                 var newArea = area.SetPropertyValue(area.ColumnRuleStyle, value, static (a, v) => a with { ColumnRuleStyle = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { MultiColumn = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { MultiColumn = a });
             }
         }
 
@@ -1703,7 +1703,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.MultiColumn;
                 var newArea = area.SetPropertyValue(area.ColumnRuleColor, value, static (a, v) => a with { ColumnRuleColor = v });
-                _computedStyle = _computedStyle.SetPropertyValue(area, newArea, static (s, a) => s with { MultiColumn = a });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { MultiColumn = a });
             }
         }
 
@@ -2049,11 +2049,11 @@ namespace PeachPDF.Html.Core.Dom
             // object. When this box's own area already equals the parent's (the common case), this is a
             // total no-op at both levels - no clone, no new reference even assigned.
             _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.CustomProperties, customProperties, static (s, v) => s with { CustomProperties = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Font, parentStyle.Font, static (s, a) => s with { Font = a });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Text, parentStyle.Text, static (s, a) => s with { Text = a });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Table, parentStyle.Table, static (s, a) => s with { Table = a });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.List, parentStyle.List, static (s, a) => s with { List = a });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Pagination, parentStyle.Pagination, static (s, a) => s with { Pagination = a });
+            _computedStyle = _computedStyle.AdoptArea(_computedStyle.Font, parentStyle.Font, static (s, a) => s with { Font = a });
+            _computedStyle = _computedStyle.AdoptArea(_computedStyle.Text, parentStyle.Text, static (s, a) => s with { Text = a });
+            _computedStyle = _computedStyle.AdoptArea(_computedStyle.Table, parentStyle.Table, static (s, a) => s with { Table = a });
+            _computedStyle = _computedStyle.AdoptArea(_computedStyle.List, parentStyle.List, static (s, a) => s with { List = a });
+            _computedStyle = _computedStyle.AdoptArea(_computedStyle.Pagination, parentStyle.Pagination, static (s, a) => s with { Pagination = a });
 
             // The invalidations these bypass (border/padding/opacity/transform/color/font-palette caches)
             // are intentionally skipped here - every value copied above either has no such cache, or (for
@@ -2078,7 +2078,7 @@ namespace PeachPDF.Html.Core.Dom
                 .SetPropertyValue(background.BackgroundAttachment, parentStyle.Background.BackgroundAttachment, static (a, v) => a with { BackgroundAttachment = v })
                 .SetPropertyValue(background.ObjectFit, parentStyle.Background.ObjectFit, static (a, v) => a with { ObjectFit = v })
                 .SetPropertyValue(background.ObjectPosition, parentStyle.Background.ObjectPosition, static (a, v) => a with { ObjectPosition = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Background, background, static (s, a) => s with { Background = a });
+            _computedStyle = _computedStyle.AdoptArea(_computedStyle.Background, background, static (s, a) => s with { Background = a });
 
             var border = _computedStyle.Border;
             border = border
@@ -2098,14 +2098,14 @@ namespace PeachPDF.Html.Core.Dom
                 .SetPropertyValue(border.BorderTopRightRadius, parentStyle.Border.BorderTopRightRadius, static (a, v) => a with { BorderTopRightRadius = v })
                 .SetPropertyValue(border.BorderBottomRightRadius, parentStyle.Border.BorderBottomRightRadius, static (a, v) => a with { BorderBottomRightRadius = v })
                 .SetPropertyValue(border.BorderBottomLeftRadius, parentStyle.Border.BorderBottomLeftRadius, static (a, v) => a with { BorderBottomLeftRadius = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Border, border, static (s, a) => s with { Border = a });
+            _computedStyle = _computedStyle.AdoptArea(_computedStyle.Border, border, static (s, a) => s with { Border = a });
 
             var visualEffects = _computedStyle.VisualEffects;
             visualEffects = visualEffects
                 .SetPropertyValue(visualEffects.Transform, parentStyle.VisualEffects.Transform, static (a, v) => a with { Transform = v })
                 .SetPropertyValue(visualEffects.TransformOrigin, parentStyle.VisualEffects.TransformOrigin, static (a, v) => a with { TransformOrigin = v })
                 .SetPropertyValue(visualEffects.Opacity, parentStyle.VisualEffects.Opacity, static (a, v) => a with { Opacity = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.VisualEffects, visualEffects, static (s, a) => s with { VisualEffects = a });
+            _computedStyle = _computedStyle.AdoptArea(_computedStyle.VisualEffects, visualEffects, static (s, a) => s with { VisualEffects = a });
 
             var displayPositioning = _computedStyle.DisplayPositioning;
             displayPositioning = displayPositioning
@@ -2113,7 +2113,7 @@ namespace PeachPDF.Html.Core.Dom
                 .SetPropertyValue(displayPositioning.Float, parentStyle.DisplayPositioning.Float, static (a, v) => a with { Float = v })
                 .SetPropertyValue(displayPositioning.Overflow, parentStyle.DisplayPositioning.Overflow, static (a, v) => a with { Overflow = v })
                 .SetPropertyValue(displayPositioning.Position, parentStyle.DisplayPositioning.Position, static (a, v) => a with { Position = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.DisplayPositioning, displayPositioning, static (s, a) => s with { DisplayPositioning = a });
+            _computedStyle = _computedStyle.AdoptArea(_computedStyle.DisplayPositioning, displayPositioning, static (s, a) => s with { DisplayPositioning = a });
 
             var boxModel = _computedStyle.BoxModel;
             boxModel = boxModel
@@ -2131,7 +2131,14 @@ namespace PeachPDF.Html.Core.Dom
                 .SetPropertyValue(boxModel.Top, parentStyle.BoxModel.Top, static (a, v) => a with { Top = v })
                 .SetPropertyValue(boxModel.Width, parentStyle.BoxModel.Width, static (a, v) => a with { Width = v })
                 .SetPropertyValue(boxModel.MaxWidth, parentStyle.BoxModel.MaxWidth, static (a, v) => a with { MaxWidth = v })
-                .SetPropertyValue(boxModel.MinWidth, parentStyle.BoxModel.MinWidth, static (a, v) => a with { MinWidth = v });
+                .SetPropertyValue(boxModel.MinWidth, parentStyle.BoxModel.MinWidth, static (a, v) => a with { MinWidth = v })
+                // box-sizing moved out of the "always" section (it no longer inherits, per the
+                // spec-compliance fix above) - but same reasoning as BoxDecorationBreak/the break
+                // properties/PdfTagType below: a structural duplicate is a fragment of the SAME
+                // element, so its own resolved box-sizing must still carry over, or CssProxyBox's
+                // repeated header/footer and DomParser's inline/block split would silently revert to
+                // content-box regardless of what the source element actually declared.
+                .SetPropertyValue(boxModel.BoxSizing, parentStyle.BoxModel.BoxSizing, static (a, v) => a with { BoxSizing = v });
             // Bottom/Right: the pre-split CssBoxProperties had a private _bottom/_right field pair that
             // this branch copied, but Bottom/Right's real getters/setters never read or wrote those fields
             // (they were independent auto-properties) - so a structural duplicate's Bottom/Right silently
@@ -2143,14 +2150,14 @@ namespace PeachPDF.Html.Core.Dom
             boxModel = boxModel
                 .SetPropertyValue(boxModel.Bottom, parentStyle.BoxModel.Bottom, static (a, v) => a with { Bottom = v })
                 .SetPropertyValue(boxModel.Right, parentStyle.BoxModel.Right, static (a, v) => a with { Right = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BoxModel, boxModel, static (s, a) => s with { BoxModel = a });
+            _computedStyle = _computedStyle.AdoptArea(_computedStyle.BoxModel, boxModel, static (s, a) => s with { BoxModel = a });
 
             var textDecoration = _computedStyle.TextDecoration;
             textDecoration = textDecoration
                 .SetPropertyValue(textDecoration.TextDecorationLine, parentStyle.TextDecoration.TextDecorationLine, static (a, v) => a with { TextDecorationLine = v })
                 .SetPropertyValue(textDecoration.TextDecorationStyle, parentStyle.TextDecoration.TextDecorationStyle, static (a, v) => a with { TextDecorationStyle = v })
                 .SetPropertyValue(textDecoration.TextDecorationColor, parentStyle.TextDecoration.TextDecorationColor, static (a, v) => a with { TextDecorationColor = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.TextDecoration, textDecoration, static (s, a) => s with { TextDecoration = a });
+            _computedStyle = _computedStyle.AdoptArea(_computedStyle.TextDecoration, textDecoration, static (s, a) => s with { TextDecoration = a });
 
             // Same reasoning as PdfTagType below: not inherited, but a structural duplicate of the same
             // element's box has to carry the element's own resolved value.
@@ -2166,7 +2173,7 @@ namespace PeachPDF.Html.Core.Dom
                 .SetPropertyValue(breakArea.BreakBefore, parentStyle.Break.BreakBefore, static (a, v) => a with { BreakBefore = v })
                 .SetPropertyValue(breakArea.BreakAfter, parentStyle.Break.BreakAfter, static (a, v) => a with { BreakAfter = v })
                 .SetPropertyValue(breakArea.BreakInside, parentStyle.Break.BreakInside, static (a, v) => a with { BreakInside = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Break, breakArea, static (s, a) => s with { Break = a });
+            _computedStyle = _computedStyle.AdoptArea(_computedStyle.Break, breakArea, static (s, a) => s with { Break = a });
 
             // Not a real inherited property (never copied in the "always" section above, so
             // ordinary parent->child cascade seeding never touches it) - but every "everything"
@@ -2176,7 +2183,7 @@ namespace PeachPDF.Html.Core.Dom
             // tag type must carry over too.
             var generatedContent = _computedStyle.GeneratedContent;
             var newGeneratedContent = generatedContent.SetPropertyValue(generatedContent.PdfTagType, parentStyle.GeneratedContent.PdfTagType, static (a, v) => a with { PdfTagType = v });
-            _computedStyle = _computedStyle.SetPropertyValue(generatedContent, newGeneratedContent, static (s, a) => s with { GeneratedContent = a });
+            _computedStyle = _computedStyle.AdoptArea(generatedContent, newGeneratedContent, static (s, a) => s with { GeneratedContent = a });
         }
     }
 }

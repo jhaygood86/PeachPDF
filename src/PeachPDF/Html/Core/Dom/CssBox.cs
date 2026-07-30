@@ -701,7 +701,7 @@ namespace PeachPDF.Html.Core.Dom
                     else
                     {
                         // A soft hyphen (U+00AD) is an extra break opportunity honored for hyphens:
-                        // manual/auto (the default is manual - see ComputedStyle.Hyphens). Unlike a
+                        // manual/auto (the default is manual - see TextArea.Hyphens). Unlike a
                         // literal '-' it's never part of the rendered word text; unlike the old
                         // behavior, it no longer eagerly splits the word here either - at this
                         // pre-layout stage there's no way to know whether a line break will actually

@@ -545,6 +545,68 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal("border-box", child!.BoxSizing);
         }
 
+        // ── regression: letter-spacing/word-spacing/font-palette are genuinely inherited, ──
+        // ── so "unset" on them must resolve to the parent's value, not the initial value ──
+
+        [Fact]
+        public async Task Unset_LetterSpacing_ResolvesToParentsValue()
+        {
+            // letter-spacing is inherited (CSS Text 3 §5.1), but was missing from
+            // CssDefaults.InheritedProperties - so "unset" incorrectly fell back to the initial
+            // "normal" instead of the parent's declared value.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <div id="parent" style="letter-spacing: 2px">
+                  <div id="child" style="letter-spacing: unset">text</div>
+                </div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var child = FindById(root, "child");
+
+            Assert.NotNull(child);
+            Assert.Equal("2px", child!.LetterSpacing);
+        }
+
+        [Fact]
+        public async Task Unset_WordSpacing_ResolvesToParentsValue()
+        {
+            var html = """
+                <!DOCTYPE html><html><body>
+                <div id="parent" style="word-spacing: 3px">
+                  <div id="child" style="word-spacing: unset">text</div>
+                </div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var child = FindById(root, "child");
+
+            Assert.NotNull(child);
+            Assert.Equal("3px", child!.WordSpacing);
+        }
+
+        [Fact]
+        public async Task Unset_FontPalette_ResolvesToParentsValue()
+        {
+            // font-palette is inherited (CSS Fonts 4 §16), but was missing from
+            // CssDefaults.InheritedProperties.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <div id="parent" style="font-palette: dark">
+                  <div id="child" style="font-palette: unset">text</div>
+                </div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var child = FindById(root, "child");
+
+            Assert.NotNull(child);
+            Assert.Equal("dark", child!.FontPalette);
+        }
+
         // ── regression: lazy revert-snapshot (only computed when a matched rule ──
         // ── actually uses revert/revert-layer) must still resolve correctly ─────
 

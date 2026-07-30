@@ -10,7 +10,7 @@ namespace PeachPDF.Html.Core.Dom
     /// (<c>Location</c>/<c>Size</c>/etc.) and non-cascaded box state (<c>UsedPageName</c>,
     /// <c>SubgridContext</c>) stay directly on <see cref="CssBox"/>.
     /// <para>
-    /// A thin container over 17 "area" records (<see cref="BorderArea"/>, <see cref="FontArea"/>, etc.,
+    /// A thin container over 16 "area" records (<see cref="BorderArea"/>, <see cref="FontArea"/>, etc.,
     /// declared in <c>ComputedStyleAreas.cs</c>), each grouping the properties of roughly one CSS module.
     /// Splitting storage this way means: (1) changing one property only clones the small area it belongs
     /// to, not all ~130 properties; and (2) <see cref="CssBox.InheritStyle"/> can adopt a whole area
@@ -27,6 +27,20 @@ namespace PeachPDF.Html.Core.Dom
     /// from it yet; "changing" a value always means producing a new instance through
     /// <see cref="ComputedStyleCow.SetPropertyValue{TSelf,TValue}"/>, the only place in the codebase
     /// allowed to use a <c>with</c> expression on these records.
+    /// </para>
+    /// <para>
+    /// Every area's per-property defaults are sourced from <c>CssDefaults.GetInitialValue</c> - the
+    /// same store <c>DomParser.CascadeApplyStyles</c> uses to seed a real, cascaded element's initial
+    /// values - rather than redeclaring literals, so there is exactly one place initial values can
+    /// drift. Before this, a handful of properties' pre-cascade defaults differed between the two
+    /// stores (e.g. border colors defaulted to the literal <c>black</c> here vs the spec's
+    /// <c>currentcolor</c> in <c>CssDefaults</c>; similarly for <c>background-size</c>,
+    /// <c>text-align</c>, the <c>text-decoration-*</c> longhands, and <c>page</c>). For any box that
+    /// goes through the normal cascade this was already invisible - <c>CascadeApplyStyles</c> seeds
+    /// every property from <c>CssDefaults</c> before any rule is applied - but a box that skips the
+    /// cascade (an anonymous text/table box, <see cref="CssBoxMarker"/>, <see cref="CssProxyBox"/>, an
+    /// inline/block split half) now starts from the spec-correct value instead. Confirmed safe: every
+    /// consumer of the affected properties already handles both spellings.
     /// </para>
     /// </summary>
     internal sealed record ComputedStyle
