@@ -98,7 +98,7 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 else if (ParticipatesInParentParagraph(child))
                 {
-                    var pushes = MapUnicodeBidiToPushes(child.UnicodeBidi.Value, child.Direction.Value);
+                    var pushes = CssUnicodeBidiMapping.MapToPushes(child.UnicodeBidi.Value, child.Direction.Value);
 
                     if (pushes.Count == 0)
                     {
@@ -133,25 +133,5 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        private static readonly IReadOnlyList<BidiExplicitPush> NoPushes = [];
-
-        private static IReadOnlyList<BidiExplicitPush> MapUnicodeBidiToPushes(UnicodeMode mode, DirectionMode direction)
-        {
-            var rtl = direction == DirectionMode.Rtl;
-
-            return mode switch
-            {
-                UnicodeMode.Embed => [rtl ? BidiExplicitPush.Rle : BidiExplicitPush.Lre],
-                UnicodeMode.BidirectionalOverride => [rtl ? BidiExplicitPush.Rlo : BidiExplicitPush.Lro],
-                UnicodeMode.Isolate => [rtl ? BidiExplicitPush.Rli : BidiExplicitPush.Lri],
-                UnicodeMode.IsolateOverride =>
-                [
-                    rtl ? BidiExplicitPush.Rli : BidiExplicitPush.Lri,
-                    rtl ? BidiExplicitPush.Rlo : BidiExplicitPush.Lro
-                ],
-                UnicodeMode.Plaintext => [BidiExplicitPush.Fsi],
-                _ => NoPushes
-            };
-        }
     }
 }

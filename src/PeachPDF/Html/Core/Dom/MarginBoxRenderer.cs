@@ -8,6 +8,7 @@ using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.Text.Bidi;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -67,7 +68,7 @@ namespace PeachPDF.Html.Core.Dom
                 var image = await ResolveContentImage(contentValue, adapter, htmlContainer, imageCache);
                 if (image != null)
                 {
-                    var position = ResolveImagePosition(marginRule.Style, boxName);
+                    var position = ResolveImagePosition(marginRule.Style, pageStyle, boxName);
                     PaintImage(g, image, rect, position, adapter, htmlContainer);
                     continue;
                 }
@@ -82,9 +83,9 @@ namespace PeachPDF.Html.Core.Dom
 
                 var font = BuildFont(marginRule.Style, pageStyle, adapter);
                 var brush = BuildBrush(marginRule.Style);
-                var format = BuildStringFormat(marginRule.Style, boxName);
+                var format = BuildStringFormat(marginRule.Style, pageStyle, boxName);
 
-                g.DrawString(text, font, brush, rect, format);
+                g.DrawString(ResolveBidiText(text, marginRule.Style, pageStyle), font, brush, rect, format);
             }
         }
 
@@ -516,7 +517,7 @@ namespace PeachPDF.Html.Core.Dom
             return null;
         }
 
-        private static (string TextAlign, string VerticalAlign) ResolveAlignment(StyleDeclaration style, string boxName)
+        private static (string TextAlign, string VerticalAlign) ResolveAlignment(StyleDeclaration style, StyleDeclaration? pageStyle, string boxName)
         {
             // StyleDeclaration.TextAlign/VerticalAlign return string.Empty (not null) for an unset
             // property, so a null-coalescing fallback never fires - an unset text-align must fall
@@ -525,10 +526,57 @@ namespace PeachPDF.Html.Core.Dom
             var textAlign = string.IsNullOrWhiteSpace(style.TextAlign)
                 ? InferAlignment(boxName)
                 : style.TextAlign.ToLowerInvariant();
+
+            // text-align's initial/logical values (CSS Text 3 §7.1) resolve against the margin box's
+            // own direction, the same as an in-flow box's - see CssLayoutEngine.ResolveHorizontalAlign.
+            textAlign = textAlign switch
+            {
+                "start" => IsRtl(style, pageStyle) ? CssConstants.Right : CssConstants.Left,
+                "end" => IsRtl(style, pageStyle) ? CssConstants.Left : CssConstants.Right,
+                _ => textAlign
+            };
+
             var verticalAlign = string.IsNullOrWhiteSpace(style.VerticalAlign)
                 ? "middle"
                 : style.VerticalAlign.ToLowerInvariant();
             return (textAlign, verticalAlign);
+        }
+
+        /// <summary>
+        /// A margin box's own resolved <c>direction</c> - falls back to the <c>@page</c> context's own
+        /// declaration, then <c>ltr</c>, since margin boxes have no real inheritance chain (see
+        /// <see cref="ResolveFontSizePt(StyleDeclaration,StyleDeclaration?)"/>'s own doc comment).
+        /// </summary>
+        private static bool IsRtl(StyleDeclaration style, StyleDeclaration? pageStyle) =>
+            (FirstNonEmpty(style.Direction, pageStyle?.Direction) ?? CssConstants.Ltr)
+            .Equals(CssConstants.Rtl, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Applies real UAX#9 resolution (<see cref="BidiResolver"/>) to a margin box's resolved
+        /// <c>content</c> text - reordering (L2) and mirroring (L4) it for its own resolved
+        /// <c>direction</c>, exactly as in-flow text does (<see cref="CssLayoutEngine"/>), rather than
+        /// drawing the logical-order string as-is. Margin-box content is drawn as one already-shaped
+        /// string (no line wrapping/word model the way in-flow text has), so reordering runs at
+        /// character granularity directly rather than needing a word-level split first.
+        /// </summary>
+        internal static string ResolveBidiText(string text, StyleDeclaration style, StyleDeclaration? pageStyle)
+        {
+            if (text.Length == 0) return text;
+
+            var direction = IsRtl(style, pageStyle) ? BidiParagraphDirection.Rtl : BidiParagraphDirection.Ltr;
+            var result = BidiResolver.Resolve(text, direction);
+            var runs = BidiResolver.ReorderLine(result.Levels, 0, text.Length);
+
+            if (runs.Count == 1 && !runs[0].IsRtl) return text;
+
+            var visual = new StringBuilder(text.Length);
+            foreach (var run in runs)
+            {
+                var runText = text.Substring(run.Start, run.Length);
+                visual.Append(run.IsRtl ? BidiMirrorResolver.ApplyMirroring(runText, run.Level) : runText);
+            }
+
+            return visual.ToString();
         }
 
         /// <summary>
@@ -539,9 +587,9 @@ namespace PeachPDF.Html.Core.Dom
         /// within the box exactly as text would be, instead of always at the box's content-start.
         /// Mirror of <see cref="BuildStringFormat"/> for the image paint path.
         /// </summary>
-        private static string ResolveImagePosition(StyleDeclaration style, string boxName)
+        private static string ResolveImagePosition(StyleDeclaration style, StyleDeclaration? pageStyle, string boxName)
         {
-            var (textAlign, verticalAlign) = ResolveAlignment(style, boxName);
+            var (textAlign, verticalAlign) = ResolveAlignment(style, pageStyle, boxName);
 
             var horizontal = textAlign switch
             {
@@ -559,9 +607,9 @@ namespace PeachPDF.Html.Core.Dom
             return $"{horizontal} {vertical}";
         }
 
-        private static XStringFormat BuildStringFormat(StyleDeclaration style, string boxName)
+        private static XStringFormat BuildStringFormat(StyleDeclaration style, StyleDeclaration? pageStyle, string boxName)
         {
-            var (textAlign, verticalAlign) = ResolveAlignment(style, boxName);
+            var (textAlign, verticalAlign) = ResolveAlignment(style, pageStyle, boxName);
 
             return (textAlign, verticalAlign) switch
             {
