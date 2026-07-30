@@ -1,6 +1,6 @@
 # Third-Party Licenses
 
-PeachPDF is MIT-licensed (see [LICENSE](LICENSE)), but it embeds and adapts a small number of third-party components directly in its source tree, each carrying its own license terms. This document collects those licenses, alongside where each component lives in the repo, so they aren't just scattered `LICENSE`/`license.txt` files a reader has to go hunting for.
+PeachPDF is BSD 3-Clause-licensed (see [LICENSE](LICENSE)), but it embeds and adapts a small number of third-party components directly in its source tree, each carrying its own license terms. This document collects those licenses, alongside where each component lives in the repo, so they aren't just scattered `LICENSE`/`license.txt` files a reader has to go hunting for.
 
 ## PdfSharpCore (embedded fork)
 
@@ -12,7 +12,7 @@ PeachPDF is MIT-licensed (see [LICENSE](LICENSE)), but it embeds and adapts a sm
 ## MIT License
 
 Copyright (c) 2001-2024 empira Software GmbH, Troisdorf (Cologne Area), Germany
-Copyright (c) 2017-2025 Justin Haygood
+Copyright (c) 2017-2026 Justin Haygood
 
 http://docs.pdfsharp.net
 
@@ -85,7 +85,7 @@ Each UCD source file carries this notice in its own header, reproduced here rath
 - **Upstream source:** the `hyph-utf8` package from CTAN, mirrored at [github.com/hyphenation/tex-hyphen](https://github.com/hyphenation/tex-hyphen)
 - **Regeneration/provenance script:** [`tools/Update-HyphenationPatterns.ps1`](tools/Update-HyphenationPatterns.ps1), pinned to a specific upstream commit for reproducibility
 
-Each language's original `hyph-<tag>.tex` source carries its own copyright and license notice (these patterns are contributed independently, by different authors, over several decades). `tools/Update-HyphenationPatterns.ps1` bundles **only permissively-licensed pattern sets** (MIT/LPPL/BSD-style/public-domain) and skips any whose resolved license is GPL/LGPL-family or unstated (see the script's `Test-PermissiveLicense` function) — consistent with PeachPDF's own MIT license. Each compressed pattern file also carries this same notice inline in its decompressed text header, alongside its title, copyright holder, and a source/retrieval-date/commit stamp.
+Each language's original `hyph-<tag>.tex` source carries its own copyright and license notice (these patterns are contributed independently, by different authors, over several decades). `tools/Update-HyphenationPatterns.ps1` bundles **only permissively-licensed pattern sets** (MIT/LPPL/BSD-style/public-domain) and skips any whose resolved license is GPL/LGPL-family or unstated (see the script's `Test-PermissiveLicense` function) — consistent with PeachPDF's own BSD 3-Clause license. Each compressed pattern file also carries this same notice inline in its decompressed text header, alongside its title, copyright holder, and a source/retrieval-date/commit stamp.
 
 The table below groups the 73 bundled languages by their exact license text, so each distinct notice is reproduced once rather than 73 times. Language tags correspond to `hyph-<tag>.txt.br` in the Patterns directory above.
 

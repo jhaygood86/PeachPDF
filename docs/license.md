@@ -11,7 +11,7 @@ Usage of PeachPDF is **free and open source** under the terms of the **BSD 3-Cla
 ```
 Copyright (c) 2009, José Manuel Menéndez Poo
 Copyright (c) 2013, Arthur Teplitzki
-Copyright (c) 2017-2025 Justin Haygood
+Copyright (c) 2017-2026 Justin Haygood
 
 All rights reserved.
 
