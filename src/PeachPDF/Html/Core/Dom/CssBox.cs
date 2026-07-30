@@ -3023,7 +3023,8 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Resolves this box's own inline size, then has the frame above it assign its position.
+        /// Has the frame above this box decide where it goes, resolves this box's own inline size against
+        /// the page that offset lands on, and then has the frame commit the offset.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -3033,6 +3034,19 @@ namespace PeachPDF.Html.Core.Dom
         /// it and whatever this frame placed before it — which only the frame above knows, because the
         /// answer is margin collapsing against a previous sibling, the fragmentainer that sibling ended in,
         /// and the run chained to it by break avoidance.
+        /// </para>
+        /// <para>
+        /// <b>The offset is decided first, because the size depends on it and not the other way round.</b>
+        /// <see href="https://www.w3.org/TR/css-page-3/#page-model">css-page-3 §5.1</see> makes each page's
+        /// own page area the containing block for the layout that occurs between page breaks, so a box's
+        /// measure comes from the page it <i>lands on</i>. Resolving the size first meant
+        /// <c>CssLayoutEngine.GetBoxWidth</c> had nothing to read but <see cref="CssBox.Location"/>, which at
+        /// that moment still held the position some earlier layout generation gave the box — page 0's
+        /// measure on the first one — and only <see cref="HtmlContainerInt.PerformLayout"/>'s reflow loop
+        /// could iterate that back to the truth. Nothing in this frame's block-flow arithmetic reads the
+        /// child's inline size, so the dependency only runs one way and the order can simply be the right
+        /// one. (The reflow loop stays: it also settles the width→height→page-assignment feedback of the
+        /// boxes <i>after</i> this one, and the constrained-block nesting of issues #199-#201.)
         /// </para>
         /// <para>
         /// The root has no frame above it, so it stands in for its own. Nothing is lost by that:
@@ -3048,10 +3062,61 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private async ValueTask PlaceBlockBox(RGraphics g)
         {
-            await ResolveOwnInlineSize(g);
+            var frame = ParentBox ?? this;
 
-            PlaceAsBlockChild();
+            // The frame declined to place this box here at all (§5.2 concluded the break falls before it),
+            // so there is no landing page to measure against and nothing to commit.
+            if (frame.ResolveBlockChildOffset(this) is not { } offset) return;
+
+            var measuredAt = offset.Top;
+
+            await ResolveOwnInlineSize(g, measuredAt);
+            frame.CommitBlockChildOffset(this, offset);
+
+            // Committing the offset can still move the box in the block axis: CssLayoutEngine.FloatBox
+            // displaces a float past the ones it intersects, and `clear` pushes it below them. A box carried
+            // into a band of a different measure that way has been measured for a page it is not on, so it
+            // is measured again where it landed and re-committed from the same resolved offset — the float
+            // scan restarts from the offset rather than from wherever the previous round left the box, so
+            // each round is a fresh attempt rather than a cumulative slide. Bounded rather than a plain
+            // `if`, and for the same reason StepPastSlotsOnTheWrongSide is: one round settles every case a
+            // single displacement can produce, and the small cap keeps two measures that displace the box
+            // into each other from spinning. Never entered by a document with one measure, which is every
+            // document without per-page left/right margins.
+            //
+            // Measured, and worth knowing before deleting it: it does fire (a `clear: both` block displaced
+            // past a float onto a narrower page enters it once, on every layout generation), but no fixture
+            // found makes it change the *final* geometry - a displacement big enough to change the measure
+            // has by definition crossed a page boundary, and in a fragmenting layout that is also a break
+            // decision, so the box is placed again at the resumed target and measured correctly there
+            // anyway. What it buys is that the first placement is self-consistent on its own terms rather
+            // than by way of a later mechanism: the descendants laid out inside this box immediately
+            // afterwards read its width, and a width belonging to a page the box is not on is the exact
+            // defect this whole reorder removes.
+            for (var guard = 0; guard < 4 && offset.PositionedInBlockFlow
+                                          && InlineSizeCameFromAnotherPagesMeasure(measuredAt); guard++)
+            {
+                measuredAt = StaticTop;
+
+                await ResolveOwnInlineSize(g, measuredAt);
+                frame.CommitBlockChildOffset(this, offset);
+            }
         }
+
+        /// <summary>
+        /// Whether this box's border-box top now sits on a page whose measure differs from the one at
+        /// <paramref name="measuredAt"/>, which its inline size was resolved against.
+        /// </summary>
+        /// <remarks>
+        /// Asked about the <i>measure</i> rather than about the slot index, and with
+        /// <see cref="HtmlContainerInt.MeasureIsSharedBetween"/>'s own tolerance: two pages that differ only
+        /// in where their content begins (mirrored inner/outer margins) wrap identically, so a box moving
+        /// between them has nothing to re-resolve.
+        /// </remarks>
+        private bool InlineSizeCameFromAnotherPagesMeasure(double measuredAt) =>
+            HtmlContainer is { UseVariablePageWidth: true } container
+            && Math.Abs(container.PageContentRightOf(StaticTop)
+                        - container.PageContentRightOf(measuredAt)) >= 0.01;
 
         /// <summary>
         /// Has the frame above this box assign its position.
@@ -3065,19 +3130,25 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// Resolves this box's own inline size — the half of placing a block-level box that is the box's
-        /// own to answer.
+        /// own to answer — against the page <paramref name="blockTop"/> falls on.
         /// </summary>
+        /// <param name="g">the device context</param>
+        /// <param name="blockTop">
+        /// the border-box top the frame above has decided this box will occupy. Passed rather than read off
+        /// <see cref="CssBox.Location"/>, which has not been written yet on the pass that places the box —
+        /// see <see cref="PlaceBlockBox"/> for why that read was the whole defect.
+        /// </param>
         /// <remarks>
         /// Written as an extent rather than a width: <see cref="CssBox.ActualRight"/>'s setter
         /// stores it as a size against the current <see cref="CssBox.Location"/>, so the frame
         /// above is free to move the box afterwards and take the size with it.
         /// </remarks>
-        private async ValueTask ResolveOwnInlineSize(RGraphics g)
+        private async ValueTask ResolveOwnInlineSize(RGraphics g, double blockTop)
         {
             // Because their width and height are set by CssTable, CssLayoutEngineFlex or CssLayoutEngineGrid
             if (Display != CssConstants.TableCell && Display != CssConstants.Table && Display != CssConstants.Flex && Display != CssConstants.InlineFlex && Display != CssConstants.Grid && Display != CssConstants.InlineGrid)
             {
-                var width = await CssLayoutEngine.GetBoxWidth(g, this);
+                var width = await CssLayoutEngine.GetBoxWidth(g, this, blockTop);
                 ActualRight = Location.X + width + ActualBoxSizeIncludedWidth;
             }
 
@@ -3228,6 +3299,50 @@ namespace PeachPDF.Html.Core.Dom
         /// lands on.
         /// </summary>
         /// <remarks>
+        /// The two halves together, for a caller that has nothing to do between them —
+        /// <see cref="PlaceAsBlockChild"/>'s own callers, which have already resolved their size. A box
+        /// whose size is still to be resolved goes through <see cref="PlaceBlockBox"/> instead, which is
+        /// exactly the caller that needs the offset before the size.
+        /// </remarks>
+        private void PlaceBlockChild(CssBox child)
+        {
+            if (ResolveBlockChildOffset(child) is { } offset)
+            {
+                CommitBlockChildOffset(child, offset);
+            }
+        }
+
+        /// <summary>
+        /// Where a frame has decided to put a block-level child, decided <i>before</i> that child's inline
+        /// size is resolved so the size can be resolved against the page the offset lands on.
+        /// </summary>
+        /// <param name="Left">
+        /// the containing block's content left edge. The child's own left margin is added to it at commit
+        /// rather than here, because <c>margin: auto</c> resolves against the very inline size this offset
+        /// is settled ahead of (CSS 2.1 §10.3.3).
+        /// </param>
+        /// <param name="Top">
+        /// the child's border-box top — the coordinate whose page decides the child's measure, per
+        /// <see href="https://www.w3.org/TR/css-page-3/#page-model">css-page-3 §5.1</see>.
+        /// </param>
+        /// <param name="PositionedInBlockFlow">
+        /// whether this frame's block-flow arithmetic produced <see cref="Top"/> at all. False for a table
+        /// cell (its engine positions it) and for an absolutely or fixed positioned box (positioned from
+        /// its containing block by <see cref="CommitBlockChildOffset"/>, and out of flow, so no page break
+        /// falls before it): for those, <see cref="Top"/> only reports where the box already sits.
+        /// </param>
+        private readonly record struct BlockChildOffset(double Left, double Top, bool PositionedInBlockFlow);
+
+        /// <summary>
+        /// Decides where <paramref name="child"/> goes in this frame, without writing it.
+        /// </summary>
+        /// <returns>
+        /// the offset to commit, or null when the child declines to be placed here at all: <c>§5.2</c>'s
+        /// margin truncation can conclude that the break falls <i>before</i> it, in which case this records
+        /// the request and returns without writing a position or a registration, and the child contributes
+        /// no fragment to the fragmentainer being filled.
+        /// </returns>
+        /// <remarks>
         /// <para>
         /// Everything here is resolved against boxes only this frame can see — the previous in-flow sibling
         /// this frame placed, the keep-with-next run chained to it, and the fragmentainer that run started
@@ -3235,18 +3350,12 @@ namespace PeachPDF.Html.Core.Dom
         /// to the child: a break point is between two children, so no child can answer it alone.
         /// </para>
         /// <para>
-        /// Synchronous, deliberately. Assigning an offset consults nothing that has to be fetched or
-        /// measured — the child's own size is already resolved by <see cref="ResolveOwnInlineSize"/> before
-        /// this runs — so a position is decided from what is already known.
-        /// </para>
-        /// <para>
-        /// The child may decline to be placed here at all: <c>§5.2</c>'s margin truncation can conclude that
-        /// the break falls <i>before</i> it, in which case this records the request and returns without
-        /// writing a position or a registration, and the child contributes no fragment to the fragmentainer
-        /// being filled.
+        /// Synchronous, deliberately. Deciding an offset consults nothing that has to be fetched or
+        /// measured — and, in particular, nothing about the child's own inline size, which is what lets the
+        /// size be resolved against the answer instead of the other way round.
         /// </para>
         /// </remarks>
-        private void PlaceBlockChild(CssBox child)
+        private BlockChildOffset? ResolveBlockChildOffset(CssBox child)
         {
             if (child.Display != CssConstants.TableCell)
             {
@@ -3364,7 +3473,7 @@ namespace PeachPDF.Html.Core.Dom
                             child._escapedForcedBreakPending = true;
                             child._escapedForcedBreakBlankSlot = reservedBlankSlot;
                             child.RequestBreakBefore(top, escapesNestedFragmentainer: true);
-                            return;
+                            return null;
                         }
 
                         // The pass has just stepped over one or more slots without ending, so the
@@ -3467,7 +3576,7 @@ namespace PeachPDF.Html.Core.Dom
                             if (child.HtmlContainer!.IsFragmenting)
                             {
                                 child.RequestBreakBefore(newTop);
-                                return;
+                                return null;
                             }
 
                             // Breaking is not live here (a measurement pass, or monolithic content), so
@@ -3482,7 +3591,36 @@ namespace PeachPDF.Html.Core.Dom
                         }
                     }
 
-                    child.Location = new RPoint(left + child.ActualMarginLeft, top);
+                    return new BlockChildOffset(left, top, PositionedInBlockFlow: true);
+                }
+            }
+
+            // Nothing in this frame's block flow to decide: a table cell is positioned by the table engine,
+            // and an out-of-flow box by its containing block at commit. Reporting where the box already
+            // sits keeps its measure resolved against the same coordinate it always was.
+            return new BlockChildOffset(0, child.Location.Y, PositionedInBlockFlow: false);
+        }
+
+        /// <summary>
+        /// Writes the offset <see cref="ResolveBlockChildOffset"/> decided on, positions
+        /// <paramref name="child"/> under whichever positioning scheme it uses, and registers the used page
+        /// name it lands on.
+        /// </summary>
+        /// <remarks>
+        /// Split from the decision so the child's inline size can be resolved in between: every line here
+        /// that reads a size — the left margin (which <c>margin: auto</c> centres against the used width),
+        /// a percentage relative offset, and <c>CssLayoutEngine.FloatBox</c>'s displacement scan — needs the
+        /// size the box actually has, and the decision above needs none of it.
+        /// </remarks>
+        private void CommitBlockChildOffset(CssBox child, BlockChildOffset offset)
+        {
+            if (child.Display != CssConstants.TableCell)
+            {
+                if (offset.PositionedInBlockFlow)
+                {
+                    var top = offset.Top;
+
+                    child.Location = new RPoint(offset.Left + child.ActualMarginLeft, top);
                     child.ActualBottom = top;
 
                     // The root places itself (PlaceAsBlockChild's (ParentBox ?? this) receiver), and §5.2's

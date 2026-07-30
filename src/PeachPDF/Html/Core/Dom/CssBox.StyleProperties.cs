@@ -1979,6 +1979,14 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         internal double StaticBottom => ActualBottom - RelativeOffsetY;
 
+        /// <summary>
+        /// The border-box top edge of the box at its static (un-offset) position — the mirror of
+        /// <see cref="StaticBottom"/>, and the coordinate that decides which page's measure the box takes
+        /// (<c>CssLayoutEngine.GetBoxWidth</c>), since a relative offset is visual only and must not move a
+        /// box to another page's containing block any more than it moves its neighbours.
+        /// </summary>
+        internal double StaticTop => Location.Y - RelativeOffsetY;
+
         /// <summary>Gets the left of the client rectangle (Where content starts rendering).</summary>
         public double ClientLeft => Location.X + ActualBorderLeftWidth + ActualPaddingLeft;
 
