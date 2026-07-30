@@ -1532,6 +1532,14 @@ namespace PeachPDF.Html.Core.Dom
             _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Width, parentStyle.Width, static (s, v) => s with { Width = v });
             _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.MaxWidth, parentStyle.MaxWidth, static (s, v) => s with { MaxWidth = v });
             _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.MinWidth, parentStyle.MinWidth, static (s, v) => s with { MinWidth = v });
+            // Bottom/Right: the pre-split CssBoxProperties had a private _bottom/_right field pair that
+            // this branch copied, but Bottom/Right's real getters/setters never read or wrote those fields
+            // (they were independent auto-properties) - so a structural duplicate's Bottom/Right silently
+            // never inherited the source box's value, always keeping the CSS initial "auto", even though
+            // CSS 2.1 §9.4.3 says a relatively/absolutely positioned box's offsets should apply here too
+            // (a structural duplicate is a fragment of the same source box, same as BoxDecorationBreak/
+            // PdfTagType/the break properties below). Unifying storage onto ComputedStyle.Bottom/.Right
+            // fixes this for real - see ComputedStyleTests.InheritStyle_Everything_CopiesBottomAndRight.
             _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Bottom, parentStyle.Bottom, static (s, v) => s with { Bottom = v });
             _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Right, parentStyle.Right, static (s, v) => s with { Right = v });
             // Same reasoning as PdfTagType below: not inherited, but a structural duplicate of the same

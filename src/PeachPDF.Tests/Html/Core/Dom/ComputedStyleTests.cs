@@ -122,5 +122,25 @@ namespace PeachPDF.Tests.Html.Core.Dom
 
             Assert.Same(ComputedStyle.Default, child.ComputedStyle);
         }
+
+        [Fact]
+        public void InheritStyle_Everything_CopiesBottomAndRight()
+        {
+            // Pre-refactor, CssBoxProperties.InheritStyle's "everything" branch (used only for structural
+            // duplicates of the SAME source box - CssProxyBox's repeated header/footer, an inline/block
+            // split) copied two private _bottom/_right fields that the real Bottom/Right auto-properties
+            // never actually read from, so a structural duplicate's Bottom/Right silently never inherited
+            // the source box's value and always stayed at the CSS initial "auto" - even though CSS 2.1
+            // §9.4.3 says a relatively/absolutely positioned box's offsets should carry over here, same as
+            // Left/Top/Width/Height already did. Unifying storage onto ComputedStyle.Bottom/.Right (see
+            // CssBox.StyleProperties.cs's InheritStyle) fixes this for real; this test locks the fix in.
+            var source = new CssBox(null, null) { Bottom = "13px", Right = "17px" };
+            var clone = new CssBox(null, null);
+
+            clone.InheritStyle(source, everything: true);
+
+            Assert.Equal("13px", clone.Bottom);
+            Assert.Equal("17px", clone.Right);
+        }
     }
 }
