@@ -30,6 +30,12 @@ In particular, `px` is spec-correct CSS pixels: a `96px`-wide element is exactly
 
 ## HTML Elements
 
+### Global attributes
+
+| Attribute | MDN Reference | Notes |
+|-----------|--------------|-------|
+| `dir` | [dir](https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/dir) | `ltr`, `rtl`, and `auto` are all supported on any element. `auto` (and `<bdi>`'s implicit default when it carries no `dir` of its own) resolves the element's base direction from the first strong-directional character in its own text content, per the HTML Standard's directionality algorithm — skipping into a descendant only if that descendant has no `dir` of its own, and never descending into a nested element that sets its own direction |
+
 ### Document Structure
 
 | Element | MDN Reference | Notes |
@@ -138,6 +144,7 @@ Example:
 |---------|--------------|-------|
 | `a` | [a](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/a) | `href` links are embedded as clickable PDF hyperlinks, regardless of whether the `<a>` also carries an `id`/`name` (both a link source and a fragment target, e.g. `<a id="toc-1" href="#ch1">`, is a common and fully-supported pattern). Anchor links (`href="#id"`) for in-document navigation are also supported. Any element (not just `<a>`) with an `id` or `name` attribute can serve as a fragment-link target |
 | `b` | [b](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/b) | Full support |
+| `bdi` | [bdi](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/bdi) | Full support — isolates its content from the surrounding paragraph's Unicode Bidi Algorithm resolution (`unicode-bidi: isolate`, per the UA stylesheet), and when it has no `dir` attribute of its own, its base direction is auto-detected from its content's first strong character, same as an explicit `dir="auto"` |
 | `bdo` | [bdo](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/bdo) | Full support |
 | `big` | [big](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/big) | Deprecated element; rendered with a larger font size |
 | `br` | [br](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/br) | Full support |
@@ -354,7 +361,8 @@ Remaining boundaries: fallback walks the declared `font-family` stack (plus the 
 
 | Property | MDN Reference | Notes |
 |----------|--------------|-------|
-| `direction` | [direction](https://developer.mozilla.org/en-US/docs/Web/CSS/direction) | `ltr` and `rtl`. `rtl` mirrors the visual order of whole word boxes on a line; there is no Unicode Bidi Algorithm (no per-character reordering or mixed-direction resolution), and `unicode-bidi` is parsed but has no layout effect. See [Text shaping](#text-shaping) |
+| `direction` | [direction](https://developer.mozilla.org/en-US/docs/Web/CSS/direction) | `ltr` and `rtl`. Drives a real [Unicode Bidirectional Algorithm (UAX #9)](https://www.unicode.org/reports/tr9/) implementation: mixed-direction text within a line is resolved per-character (not per whole word), digits and other neutral/weak runs are correctly embedded inside surrounding RTL text, and mirrored characters (parentheses, brackets, etc.) are substituted for their mirror glyph in an RTL run. See [Text shaping](#text-shaping) |
+| `unicode-bidi` | [unicode-bidi](https://developer.mozilla.org/en-US/docs/Web/CSS/unicode-bidi) | `normal`, `embed`, `bidi-override`, `isolate`, `isolate-override`, `plaintext` — each pushes the corresponding explicit directional embedding/override/isolate onto the Unicode Bidi Algorithm's level stack (the same mechanism a raw Unicode LRE/RLE/LRO/RLO/LRI/RLI/FSI control character would), scoped to the element it's set on |
 | `writing-mode` | [writing-mode](https://developer.mozilla.org/en-US/docs/Web/CSS/writing-mode) | All five values (`horizontal-tb`, `vertical-rl`, `vertical-lr`, `sideways-rl`, `sideways-lr`) parse, cascade, and inherit correctly, and correctly drive [logical box-model property](#logical-box-model-properties) resolution — e.g. `margin-block-start` under `vertical-rl` resolves to the physical right edge. **Layout and painting are not affected**: line-box flow, glyph rotation/orientation, and table/flex axis interpretation all stay horizontal-tb-oriented regardless of the value |
 | `hyphens` | [hyphens](https://developer.mozilla.org/en-US/docs/Web/CSS/hyphens) | `none`, `manual`, `auto` are parsed, cascaded, and inherited. `manual` and `auto` both honor an explicit soft hyphen (`&shy;`/U+00AD) as a line-break opportunity, rendering a literal `-` glyph only when that break is actually used. `auto` additionally performs real pattern-based automatic hyphenation (Liang's algorithm) for ~73 languages — see the note below the table for language coverage and exclusions |
 | `letter-spacing` | [letter-spacing](https://developer.mozilla.org/en-US/docs/Web/CSS/letter-spacing) | Full support, including negative values; spacing is added after every character including the last (realized via the PDF `Tc` character-spacing operator, which applies to every glyph shown), and one letter-spacing unit is folded into the following inter-word gap so adjacent words never collapse together. Per CSS Text Level 3 §7.2, spacing is not suppressed at the start/end of a *word* — only at the start/end of a *line*, which this engine does not special-case, leaving each line's own leading/trailing edge with a sub-pixel, visually negligible extra inset |
@@ -371,11 +379,11 @@ Remaining boundaries: fallback walks the declared `font-family` stack (plus the 
 
 #### Text shaping
 
-PeachPDF applies [OpenType Layout](https://learn.microsoft.com/en-us/typography/opentype/spec/ttochap1) `GSUB` ligature substitution, but does not yet perform full text shaping — there is no `GPOS` stage (kerning, mark positioning), no contextual substitution, no Unicode Bidi Algorithm, and no complex-script joining. In practice:
+PeachPDF applies [OpenType Layout](https://learn.microsoft.com/en-us/typography/opentype/spec/ttochap1) `GSUB` ligature substitution and a real [Unicode Bidirectional Algorithm (UAX #9)](https://www.unicode.org/reports/tr9/), but does not yet perform full text shaping — there is no `GPOS` stage (kerning, mark positioning), no contextual substitution, and no complex-script joining. In practice:
 
 - **Ligatures** are formed automatically from a font's `GSUB` `liga`/`clig` ("common ligatures") and `rlig` ("required ligatures") features — e.g. `f` + `f` becomes a font's `ff` ligature glyph when the font defines one, the same way a browser renders it, not only when the source text already contains a precomposed ligature codepoint (e.g. `ﬁ`, U+FB01). `font-variant-ligatures` controls this: `normal` (the initial value) and `common-ligatures` enable `liga`/`clig`, `none` and `no-common-ligatures` disable them — but per spec `rlig` ("required ligatures") is never affected by this property, not even by `none`, since a font's required ligatures aren't a stylistic choice. The property also accepts `discretionary-ligatures`/`historical-ligatures`/`contextual` (and their `no-*` forms) per the CSS Fonts Level 3 grammar — these parse and cascade correctly but do not yet change rendering (no `dlig`/`hlig`/`calt` lookup application). Ligature substitution also has two narrower limits worth knowing: it does not consult a `GDEF` table to skip over intervening mark glyphs, and it does not apply a chaining-context lookup (GSUB lookup types 5–8) even if a font routes `liga`/`clig`/`rlig` through one — plain, unconditional ligature lookups (the common case) are unaffected.
-- **Complex-script shaping** (Arabic joining and initial/medial/final/isolated contextual forms, Indic reordering, mark positioning) is not performed — each codepoint uses its nominal glyph regardless of its neighbours, aside from the ligature merging above.
-- **Bidirectional text**: `direction: rtl` mirrors the visual order of whole word boxes only; there is no [Unicode Bidi Algorithm](https://www.unicode.org/reports/tr9/) (no per-character reordering, no mixed-direction resolution), and `unicode-bidi` has no layout effect.
+- **Complex-script shaping** (Arabic joining and initial/medial/final/isolated contextual forms, Indic reordering, mark positioning) is not performed — each codepoint uses its nominal glyph regardless of its neighbours, aside from the bidi mirroring and ligature merging described here.
+- **Bidirectional text** implements the full Unicode Bidirectional Algorithm: paragraph/embedding level resolution (including the [`dir="auto"`](#global-attributes) first-strong-character heuristic and `<bdi>`'s isolation), per-character reordering of mixed-direction runs within a line (not just whole-word reordering), correct placement of neutral/weak runs (digits, punctuation) against their strong-direction neighbors, and mirroring of paired characters (parentheses, brackets, etc.) in a right-to-left run. This applies uniformly to HTML text layout, inline and standalone SVG `<text>`/`<tspan>`, and `@page` margin-box content (headers/footers, counters, named strings).
 
 Kerning (`GPOS`) is likewise not applied.
 
