@@ -375,6 +375,20 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(0, SlotOf(container, a!));
         }
 
+        // An inline-grid container is an atomic inline, so the commit pass declines the same way it does
+        // for inline-flex - where it sits is the line it is on to decide, not a fragmentainer question
+        // of its own.
+        [Fact]
+        public async Task AnInlineGridContainer_IsLeftToItsLine()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                Document("display:inline-grid; grid-template-columns:1fr", ""), pageHeight: PageHeight);
+
+            var a = LayoutHarness.FindById(root, "a");
+            Assert.NotNull(a);
+            Assert.Equal(0, SlotOf(container, a!));
+        }
+
         // ─── Grid item content fragmentation (issues #517/#526) ───────────────────
 
         // A row's own content, once it sits at its final position, is laid out for real against a live

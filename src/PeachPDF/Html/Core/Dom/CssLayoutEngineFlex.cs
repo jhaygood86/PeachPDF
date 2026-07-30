@@ -28,10 +28,12 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="g">the graphics context layout is running against</param>
         /// <param name="flexBox">the flex container to lay out</param>
         /// <param name="resume">
-        /// a <see cref="FlexBreakToken"/> naming which of this container's items did not finish their own
-        /// content on an earlier fragmentainer pass, or null to lay the container out from the start. Only
-        /// a single-line, row-direction container currently publishes one — see the commit-pass remarks on
-        /// <see cref="RelocateLinesAcrossFragmentainers"/>'s sibling below.
+        /// a <see cref="FlexBreakToken"/> or <see cref="FlexColumnBreakToken"/> naming which of this
+        /// container's items (or, for column-direction, which lines and where in each) did not finish
+        /// their own content on an earlier fragmentainer pass, or null to lay the container out from the
+        /// start. A row/row-reverse container publishes the former for any line count; a column/
+        /// column-reverse container publishes the latter — see <see cref="CommitLineContent"/>'s and
+        /// <see cref="CommitColumnContent"/>'s own remarks.
         /// </param>
         public static async ValueTask PerformLayout(RGraphics g, CssBox flexBox, BreakToken? resume = null)
         {

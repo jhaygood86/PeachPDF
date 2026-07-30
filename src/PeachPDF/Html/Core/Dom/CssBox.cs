@@ -2285,9 +2285,10 @@ namespace PeachPDF.Html.Core.Dom
         /// how this engine resumes on the current fragmentainer pass, or null when it is laying the box out
         /// from the start. The record is what lets it tell a <i>continuation</i> — earlier fragments already
         /// emitted — from a fresh layout of the same box, which is a distinction only the engine can act on.
-        /// The table engine always reads one; flex reads one for a single row/row-reverse line and grid
-        /// reads one for the row its own commit pass stopped in. Both otherwise still pass null for a
-        /// container/pass their own commit pass declined to run for (see each engine's remarks).
+        /// The table engine always reads one; grid reads one for the row its own commit pass stopped in;
+        /// flex reads one for the line (row/row-reverse, any count) or the lines (column/column-reverse)
+        /// its own commit pass stopped in. All three otherwise still pass null for a container/pass their
+        /// own commit pass declined to run for (see each engine's remarks).
         /// </param>
         private async ValueTask LayoutEngineContent(
             RGraphics g, Func<RGraphics, CssBox, BreakToken?, ValueTask> engine, BreakToken? resume)
