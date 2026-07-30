@@ -2110,7 +2110,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <remarks>
         /// <para>
         /// The row is not resized and not moved. Content taller than a band is drawn once, from one
-        /// <see cref="CssBoxProperties.Location"/>, and each fragmentainer already shows the strip of it
+        /// <see cref="CssBox.Location"/>, and each fragmentainer already shows the strip of it
         /// that falls in that band — which is why a block taller than three pages slices correctly today
         /// with no machinery at all. What it cannot do unaided is <i>resume below</i> a repeated
         /// <c>&lt;thead&gt;</c>, because that makes the strips non-contiguous in document space. Each band

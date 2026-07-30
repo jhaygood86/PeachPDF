@@ -87,7 +87,7 @@ namespace PeachPDF.Html.Core.Fragments
     /// decoration are painted over. A block-level box with no line boxes of its own gets exactly one
     /// <see cref="LineFragment"/> covering its border box, with a null <see cref="Line"/> — the
     /// fragment-tree form of paint's historical "<c>Rectangles.Count == 0</c> ⇒ use
-    /// <see cref="CssBoxProperties.Bounds"/>" fallback.
+    /// <see cref="CssBox.Bounds"/>" fallback.
     /// </summary>
     /// <param name="Rect">the decoration rectangle, in fragmentainer-local coordinates</param>
     /// <param name="Line">the line box this rectangle belongs to, or null for a whole-box rectangle</param>

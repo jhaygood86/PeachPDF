@@ -286,7 +286,7 @@ namespace PeachPDF.Svg
         /// custom properties. Values are stored raw (they may themselves contain <c>var()</c>), matching the
         /// HTML cascade. A property registered via <c>@property</c> with <c>inherits: false</c> is dropped from
         /// the inherited copy (the descendant resolves it to its <c>initial-value</c> instead — CSS Properties
-        /// &amp; Values API §2.2), mirroring <c>CssBoxProperties.InheritStyle</c> on the HTML side.
+        /// &amp; Values API §2.2), mirroring <c>CssBox.InheritStyle</c> on the HTML side.
         /// </summary>
         public static void CascadeCustomProperties(XElement root, CssData? cssData, string media, IReadOnlyDictionary<string, RegisteredProperty>? registered = null)
         {

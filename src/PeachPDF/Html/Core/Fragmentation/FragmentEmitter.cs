@@ -309,7 +309,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// box. <see href="https://www.w3.org/TR/css-tables-3/#fragmentation">css-tables-3 §6.1</see>'s
         /// finished table cell is the case this exists for: the cells of one row are §2.1 parallel flows, so
         /// a row can continue with one of its cells already complete, and that cell's box continues with the
-        /// row while its single <see cref="CssBoxProperties.Location"/> keeps describing the fragmentainer that placed
+        /// row while its single <see cref="CssBox.Location"/> keeps describing the fragmentainer that placed
         /// it.
         /// </summary>
         /// <remarks>
@@ -412,7 +412,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// The second place layout <i>states</i> geometry rather than leaving it to be read off the boxes,
         /// and for the sharper of the two reasons. <see cref="RecordNestedFragmentainer"/> exists because a
         /// box's live geometry describes only its last column; this exists because the box has no geometry
-        /// here <i>at all</i> — a continuation deliberately leaves its one <see cref="CssBoxProperties.Location"/>
+        /// here <i>at all</i> — a continuation deliberately leaves its one <see cref="CssBox.Location"/>
         /// naming the fragmentainer that placed it, and giving it a second retracts the earlier fragment.
         /// Nothing downstream could re-derive this: a cell that finished and a cell no pass ever entered are
         /// indistinguishable from geometry alone, which is the whole reason
@@ -475,7 +475,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <see href="https://www.w3.org/TR/css-break-3/#possible-breaks">css-break-3 §4.3</see>'s "fragment
         /// the contents of monolithic elements by slicing the element's graphical representation", made
         /// answerable per band. Content taller than a band is drawn once, from one
-        /// <see cref="CssBoxProperties.Location"/>, and each fragmentainer shows the strip of it that falls
+        /// <see cref="CssBox.Location"/>, and each fragmentainer shows the strip of it that falls
         /// in that band — which is why a 620pt block already slices correctly across three pages with no
         /// machinery at all. What it cannot do unaided is <i>resume below</i> a repeated
         /// <c>&lt;thead&gt;</c>, because that means the strips are no longer contiguous in document space.

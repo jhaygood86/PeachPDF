@@ -15,7 +15,7 @@ namespace PeachPDF.Html.Core.Dom
 {
     /// <summary>
     /// The parent-grid track geometry threaded into a <c>subgrid</c> grid item so it lays its own items out
-    /// against the parent's tracks (CSS Grid Level 2 §9). Set transiently on <see cref="CssBoxProperties.SubgridContext"/>
+    /// against the parent's tracks (CSS Grid Level 2 §9). Set transiently on <see cref="CssBox.SubgridContext"/>
     /// by the parent engine immediately before laying the child out, then cleared. Sizes (not absolute
     /// positions) are adopted so the parent's cell translation lands the child's tracks on the parent lines.
     /// </summary>

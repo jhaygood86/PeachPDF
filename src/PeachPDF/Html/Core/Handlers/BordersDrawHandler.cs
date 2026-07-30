@@ -399,7 +399,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// <summary>
         /// Get the border color for the given box border.
         /// </summary>
-        private static RColor GetColor(Border border, CssBoxProperties box, string style)
+        private static RColor GetColor(Border border, CssBox box, string style)
         {
             return border switch
             {
@@ -420,7 +420,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// <summary>
         /// Get the border width for the given box border.
         /// </summary>
-        private static double GetWidth(Border border, CssBoxProperties box)
+        private static double GetWidth(Border border, CssBox box)
         {
             return border switch
             {
@@ -435,7 +435,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// <summary>
         /// Get the border style for the given box border.
         /// </summary>
-        private static string GetStyle(Border border, CssBoxProperties box)
+        private static string GetStyle(Border border, CssBox box)
         {
             return border switch
             {

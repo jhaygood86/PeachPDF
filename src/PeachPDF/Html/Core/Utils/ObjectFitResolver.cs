@@ -25,7 +25,7 @@ namespace PeachPDF.Html.Core.Utils
             RRect contentBox,
             double naturalWidth, double naturalHeight,
             string objectFit, string objectPosition,
-            CssBoxProperties box)
+            CssBox box)
         {
             // fill (the initial value) and the no-known-intrinsic-size case both stretch to the content
             // box - identical to the pre-object-fit behavior, so the common path is unchanged.
@@ -68,7 +68,7 @@ namespace PeachPDF.Html.Core.Utils
         private static (double Width, double Height) ScaleDown(
             double containerWidth, double containerHeight,
             double naturalWidth, double naturalHeight,
-            double ratio, CssBoxProperties box)
+            double ratio, CssBox box)
         {
             var contain = BackgroundLayerResolver.ResolveSize(
                 CssConstants.Contain, containerWidth, containerHeight, naturalWidth, naturalHeight, ratio, box);

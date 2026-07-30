@@ -19,7 +19,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <c>fill</c> (and the no-known-intrinsic-size case) draws to the content box unchanged; a fit
         /// that overflows (e.g. <c>cover</c>) is clipped to the content box.
         /// </summary>
-        public static void Paint(RGraphics g, RRect contentBox, RImage? image, SvgDocument? svg, CssBoxProperties box)
+        public static void Paint(RGraphics g, RRect contentBox, RImage? image, SvgDocument? svg, CssBox box)
         {
             if (contentBox is not { Width: > 0, Height: > 0 } || (image is null && svg is null))
                 return;

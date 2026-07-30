@@ -46,7 +46,7 @@ namespace PeachPDF.Html.Core.Handlers
             string sizeValue, string positionValue, string backgroundRepeat,
             RRect positioningRect, RRect clipRect,
             RGraphicsPath? roundedClipPath,
-            CssBoxProperties box,
+            CssBox box,
             bool intrinsicSizeInCssPixels)
         {
             var pxFactor = intrinsicSizeInCssPixels ? Length.PointsPerPx : 1d;

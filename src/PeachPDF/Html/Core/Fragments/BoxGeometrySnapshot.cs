@@ -22,7 +22,7 @@ namespace PeachPDF.Html.Core.Fragments
     {
         /// <summary>
         /// One box's captured geometry. <see cref="Bounds"/> is reconstructed from the same
-        /// location/right/bottom triple <see cref="CssBoxProperties.Bounds"/> derives from, so a
+        /// location/right/bottom triple <see cref="CssBox.Bounds"/> derives from, so a
         /// snapshot describes exactly what the live box would have reported at capture time.
         /// </summary>
         internal sealed class BoxGeometry

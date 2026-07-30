@@ -201,7 +201,7 @@ namespace PeachPDF.Adapters
         /// Points <see cref="CssConstants.DefaultFont"/> at <paramref name="registeredFamily"/> when nothing
         /// currently resolves it. On a host with no discoverable system fonts (browser/WebAssembly) the
         /// default names a family that nothing satisfies until the caller registers one - and it is the
-        /// engine's last resort, so <c>CssBoxProperties.ActualFont</c> throws outright rather than rendering
+        /// engine's last resort, so <c>DerivedStyle.ActualFont</c> throws outright rather than rendering
         /// when it resolves to nothing.
         /// <para>
         /// This latches on its own, giving "the first font registered wins": <c>IsFontExists</c> follows one
