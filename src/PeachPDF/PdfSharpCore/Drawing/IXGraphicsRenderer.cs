@@ -27,6 +27,8 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachPDF.Text;
+
 namespace PeachPDF.PdfSharpCore.Drawing
 {
     /// <summary>
@@ -125,7 +127,8 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// The resolved CSS <c>font-palette</c> selection (CPAL palette index + per-entry color overrides) for a
         /// COLR/CPAL color font; <c>null</c> selects palette 0 with no overrides (the default color-glyph path).
         /// </param>
-        void DrawString(string s, XFont font, XBrush brush, XRect layoutRectangle, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null);
+        /// <param name="ligatureFeatures">Which GSUB ligature features (see <see cref="LigatureFeatures"/>) to apply when shaping <paramref name="s"/>.</param>
+        void DrawString(string s, XFont font, XBrush brush, XRect layoutRectangle, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null, LigatureFeatures ligatureFeatures = LigatureFeatures.Default);
 
         /// <summary>
         /// Draws an image.

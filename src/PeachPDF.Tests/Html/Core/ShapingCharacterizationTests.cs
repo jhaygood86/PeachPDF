@@ -6,6 +6,7 @@ using PeachPDF.Fonts;
 using PeachPDF.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.Tests.TestSupport;
+using PeachPDF.Text;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,16 +15,17 @@ using System.Text;
 namespace PeachPDF.Tests.Html.Core
 {
     /// <summary>
-    /// These tests characterize <b>known limitations</b>, not desired output: PeachPDF has no text-shaping
-    /// engine - no OpenType Layout (GSUB/GPOS), no Unicode Bidi Algorithm, no Arabic joining. Text maps
-    /// 1:1 from codepoint to glyph. They lock that behavior in so the Rune/format-12 pipeline changes can't
-    /// silently regress it; a real shaping engine (tracked separately) would update them. See
-    /// docs/html-css-support.md "Text shaping" for the reader-facing note.
+    /// PeachPDF applies GSUB ligature substitution (<c>liga</c>/<c>clig</c>/<c>rlig</c>, see
+    /// <see cref="GsubShaper"/>) but still has no full OpenType Layout engine: no <c>GPOS</c>
+    /// (kerning/mark positioning), no contextual substitution (GSUB lookup types 5-8), no Unicode
+    /// Bidi Algorithm, no Arabic/Indic complex-script joining. These tests characterize what
+    /// remains a <b>known limitation</b> (contextual-forms independence, RTL word-box-only
+    /// mirroring) so it can't silently regress, alongside the ligature behavior that GSUB support
+    /// added. See docs/html-css-support.md "Text shaping" for the reader-facing note and
+    /// .claude/accepted-gaps/no-text-shaping.md for what's still out of scope.
     /// </summary>
     public class ShapingCharacterizationTests
     {
-        private const int FiLigature = 0xFB01; // ﬁ LATIN SMALL LIGATURE FI
-
         private static OpenTypeDescriptor Descriptor(string fontPath)
         {
             var face = XFontSource.GetOrCreateFrom(System.IO.File.ReadAllBytes(fontPath)).Fontface;
@@ -32,33 +34,71 @@ namespace PeachPDF.Tests.Html.Core
         }
 
         [Fact]
-        public void NoGsubLigatureSubstitution_FiCollectsSeparateFAndIGlyphs()
+        public void GsubLigatureSubstitution_FfCollectsLigatureGlyph()
         {
+            // Source Sans 3's GSUB `liga` feature ligates "ff"/"ft"/"fft" from a single ('f')
+            // coverage glyph (confirmed against the font directly via fontTools) - notably not
+            // "fi"/"fl", so this deliberately doesn't use the precomposed U+FB01 "ﬁ" ligature the
+            // old (pre-GSUB) version of this test referenced.
             var descriptor = Descriptor(BundledFonts.Ttf); // Source Sans 3
             var f = descriptor.CharCodeToGlyphIndex(new Rune('f'));
-            var i = descriptor.CharCodeToGlyphIndex(new Rune('i'));
-            var ligature = descriptor.CharCodeToGlyphIndex(new Rune(FiLigature));
 
-            // The font DOES contain the ﬁ ligature glyph, but it is reachable only through its own
-            // codepoint (a designer-invented ligature with no codepoint would be unreachable entirely)...
-            Assert.NotEqual(0, ligature);
-            Assert.NotEqual(ligature, f);
-            Assert.NotEqual(ligature, i);
-
-            // ...and the text "fi" collects the separate f and i glyphs - there is no GSUB pass to merge
-            // them into the ligature.
             var cmap = new CMapInfo(descriptor);
-            cmap.AddChars("fi");
-            Assert.Equal(f, cmap.CharacterToGlyphIndex['f']);
-            Assert.Equal(i, cmap.CharacterToGlyphIndex['i']);
-            Assert.DoesNotContain(ligature, cmap.CharacterToGlyphIndex.Values);
+            cmap.AddShapedText("ff", LigatureFeatures.Default);
+
+            // The merged ligature glyph is not the plain 'f' glyph, and its source text ("ff") is
+            // recorded for ToUnicode - a codepoint-keyed CharacterToGlyphIndex entry can't carry it.
+            Assert.Single(cmap.LigatureGlyphToText);
+            var (ligatureGlyph, text) = cmap.LigatureGlyphToText.Single();
+            Assert.NotEqual(f, ligatureGlyph);
+            Assert.Equal("ff", text);
+            Assert.Contains(ligatureGlyph, cmap.GlyphIndices.Keys);
+        }
+
+        [Fact]
+        public void GsubLigatureSubstitution_NoneDisablesIt()
+        {
+            // font-variant-ligatures: none (LigatureFeatures.None) must fully restore the pre-GSUB,
+            // 1:1 codepoint-to-glyph behavior - this is what makes turning ligatures off actually work.
+            var descriptor = Descriptor(BundledFonts.Ttf);
+            var shaped = descriptor.Shape("ff", LigatureFeatures.None);
+
+            Assert.Equal(2, shaped.Count);
+        }
+
+        [Fact]
+        public void GsubLigatureSubstitution_LongestMatchFirst()
+        {
+            // The font lists "fft" before "ff" in its LigatureSet for the shared 'f' coverage entry -
+            // shaping must try ligatures in the font's own authored order (not merge greedily by
+            // twos), so "fft" collects the single 3-glyph ligature, not "ff" + "t".
+            var descriptor = Descriptor(BundledFonts.Ttf);
+            var shaped = descriptor.Shape("fft", LigatureFeatures.Default);
+
+            Assert.Single(shaped);
+            Assert.Equal(0, shaped[0].ClusterStart);
+            Assert.Equal(3, shaped[0].ClusterLength);
+        }
+
+        [Fact]
+        public void AddShapedText_NullText_IsANoOp()
+        {
+            var descriptor = Descriptor(BundledFonts.Ttf);
+            var cmap = new CMapInfo(descriptor);
+
+            cmap.AddShapedText(null!, LigatureFeatures.Default);
+
+            Assert.Empty(cmap.GlyphIndices);
+            Assert.Empty(cmap.LigatureGlyphToText);
         }
 
         [Fact]
         public void GlyphSelectionIsNeighborIndependent_NoContextualForms()
         {
-            // No contextual/positional shaping (the Arabic isolated/initial/medial/final family, etc.):
-            // a codepoint resolves to the same glyph regardless of the characters around it.
+            // No contextual/positional shaping (the Arabic isolated/initial/medial/final family, GSUB
+            // lookup types 5-8, etc.): a codepoint not involved in any ligature resolves to the same
+            // glyph regardless of the characters around it. ('a'/"cat" don't participate in any of
+            // this font's ligatures, so this remains neighbor-independent even with GSUB wired up.)
             var descriptor = Descriptor(BundledFonts.Ttf);
 
             var alone = new CMapInfo(descriptor);

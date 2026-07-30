@@ -1039,6 +1039,12 @@ namespace PeachPDF.CSS
             set => SetPropertyValue(PropertyNames.FontVariant, value);
         }
 
+        public string FontVariantLigatures
+        {
+            get => GetPropertyValue(PropertyNames.FontVariantLigatures);
+            set => SetPropertyValue(PropertyNames.FontVariantLigatures, value);
+        }
+
         public string FontWeight
         {
             get => GetPropertyValue(PropertyNames.FontWeight);

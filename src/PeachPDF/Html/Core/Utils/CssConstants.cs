@@ -133,6 +133,7 @@ namespace PeachPDF.Html.Core.Utils
         public const string Slice = "slice";
         public const string Small = "small";
         public const string SmallCaps = "small-caps";
+        public const string NoCommonLigatures = "no-common-ligatures";
         public const string Smaller = "smaller";
         public const string Solid = "solid";
         public const string Static = "static";

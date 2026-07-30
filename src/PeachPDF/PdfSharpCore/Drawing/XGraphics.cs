@@ -32,6 +32,7 @@
 using PeachPDF.PdfSharpCore.Drawing.Pdf;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using PeachPDF.Text;
 using System;
 
 #pragma warning disable 1587
@@ -1198,9 +1199,9 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws the specified text string.
         /// </summary>
-        public void DrawString(string s, XFont font, XBrush brush, double x, double y, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null)
+        public void DrawString(string s, XFont font, XBrush brush, double x, double y, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null, LigatureFeatures ligatureFeatures = LigatureFeatures.Default)
         {
-            DrawString(s, font, brush, new XRect(x, y, 0, 0), format, letterSpacing, fontPalette);
+            DrawString(s, font, brush, new XRect(x, y, 0, 0), format, letterSpacing, fontPalette, ligatureFeatures);
         }
 
 
@@ -1215,7 +1216,7 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws the specified text string.
         /// </summary>
-        public void DrawString(string text, XFont font, XBrush brush, XRect layoutRectangle, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null)
+        public void DrawString(string text, XFont font, XBrush brush, XRect layoutRectangle, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null, LigatureFeatures ligatureFeatures = LigatureFeatures.Default)
         {
             if (text == null)
                 throw new ArgumentNullException("text");
@@ -1234,7 +1235,7 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
                 format = XStringFormats.Default;
 
             if (_renderer != null)
-                _renderer.DrawString(text, font, brush, layoutRectangle, format, letterSpacing, fontPalette);
+                _renderer.DrawString(text, font, brush, layoutRectangle, format, letterSpacing, fontPalette, ligatureFeatures);
         }
 
         // ----- MeasureString ------------------------------------------------------------------------
@@ -1242,7 +1243,7 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         /// <summary>
         /// Measures the specified string when drawn with the specified font.
         /// </summary>
-        public XSize MeasureString(string text, XFont font, XStringFormat stringFormat)
+        public XSize MeasureString(string text, XFont font, XStringFormat stringFormat, LigatureFeatures ligatureFeatures = LigatureFeatures.Default)
         {
             if (text == null)
                 throw new ArgumentNullException("text");
@@ -1251,16 +1252,16 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
             if (stringFormat == null)
                 throw new ArgumentNullException("stringFormat");
 
-            XSize size = FontHelper.MeasureString(text, font, XStringFormats.Default);
+            XSize size = FontHelper.MeasureString(text, font, XStringFormats.Default, ligatureFeatures);
             return size;
         }
 
         /// <summary>
         /// Measures the specified string when drawn with the specified font.
         /// </summary>
-        public XSize MeasureString(string text, XFont font)
+        public XSize MeasureString(string text, XFont font, LigatureFeatures ligatureFeatures = LigatureFeatures.Default)
         {
-            return MeasureString(text, font, XStringFormats.Default);
+            return MeasureString(text, font, XStringFormats.Default, ligatureFeatures);
         }
 
         // ----- DrawImage ----------------------------------------------------------------------------

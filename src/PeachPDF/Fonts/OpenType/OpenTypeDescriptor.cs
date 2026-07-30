@@ -29,7 +29,9 @@
 
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf.Internal;
+using PeachPDF.Text;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
 
@@ -268,6 +270,15 @@ namespace PeachPDF.Fonts.OpenType
         /// it to something other than the missing glyph. Used to drive per-codepoint font fallback.
         /// </summary>
         public bool HasGlyph(Rune value) => CharCodeToGlyphIndexCore(value.Value) != 0;
+
+        /// <summary>
+        /// Maps <paramref name="text"/> to a shaped glyph run: one glyph per codepoint via
+        /// <see cref="CharCodeToGlyphIndex"/>, then GSUB ligature substitution (<c>liga</c>/<c>clig</c>/
+        /// <c>rlig</c>) when <paramref name="features"/> requests it and the font has a GSUB table.
+        /// The single glyph-walk shared by measurement, painting, outline extraction and glyph
+        /// subsetting/embedding - see <see cref="GsubShaper"/>.
+        /// </summary>
+        public IReadOnlyList<ShapedGlyph> Shape(string text, LigatureFeatures features) => GsubShaper.Shape(this, text, features);
 
         /// <summary>
         /// True when this font carries COLR + CPAL color-glyph data over glyf outlines, so its color

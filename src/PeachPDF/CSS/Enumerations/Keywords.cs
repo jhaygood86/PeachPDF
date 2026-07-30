@@ -212,6 +212,14 @@
         public static readonly string Flat = "flat";
         public static readonly string Preserve3d = "preserve-3d";
         public static readonly string SmallCaps = "small-caps";
+        public static readonly string CommonLigatures = "common-ligatures";
+        public static readonly string NoCommonLigatures = "no-common-ligatures";
+        public static readonly string DiscretionaryLigatures = "discretionary-ligatures";
+        public static readonly string NoDiscretionaryLigatures = "no-discretionary-ligatures";
+        public static readonly string HistoricalLigatures = "historical-ligatures";
+        public static readonly string NoHistoricalLigatures = "no-historical-ligatures";
+        public static readonly string Contextual = "contextual";
+        public static readonly string NoContextual = "no-contextual";
         public static readonly string Slice = "slice";
         public static readonly string Clone = "clone";
         public static readonly string Running = "running";

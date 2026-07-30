@@ -31,6 +31,7 @@
 
 using PeachPDF.Fonts;
 using PeachPDF.Fonts.OpenType;
+using PeachPDF.Text;
 using System;
 using System.Diagnostics;
 using System.Text;
@@ -45,7 +46,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Measure string directly from font data.
         /// </summary>
-        public static XSize MeasureString(string text, XFont font, XStringFormat stringFormat)
+        public static XSize MeasureString(string text, XFont font, XStringFormat stringFormat, LigatureFeatures ligatureFeatures = LigatureFeatures.Default)
         {
             XSize size = new XSize();
 
@@ -62,21 +63,34 @@ namespace PeachPDF.PdfSharpCore.Drawing
 
                 Debug.Assert(descriptor.Ascender > 0);
 
-                bool symbol = descriptor.FontFace.cmap.symbol;
                 int adjustedLength = 0;
                 var height = singleLineHeight;
                 int maxWidth = 0;
                 int width = 0;
+                // Accumulates one measured line's printable text (tabs remapped to spaces, other
+                // control chars dropped) so it can be shaped - and any GSUB ligatures merged - as
+                // one run, rather than measuring glyph-by-glyph the way a single Shape call for the
+                // whole line already replaces.
+                var lineText = new StringBuilder();
                 // A '\n' starts a new line only when another rune follows it (a trailing newline adds no
                 // line); iterating runes (not UTF-16 units) loses the index used for that "is-last" test,
                 // so defer the line break until the next rune actually arrives.
                 bool pendingNewlineBreak = false;
+
+                void FlushLine()
+                {
+                    width = 0;
+                    foreach (ShapedGlyph glyph in descriptor.Shape(lineText.ToString(), ligatureFeatures))
+                        width += descriptor.GlyphIndexToWidth(glyph.GlyphIndex);
+                    lineText.Clear();
+                }
+
                 foreach (Rune rune in text.EnumerateRunes())
                 {
                     if (pendingNewlineBreak)
                     {
+                        FlushLine();
                         maxWidth = Math.Max(maxWidth, width);
-                        width = 0;
                         height += lineGapHeight + singleLineHeight;
                         pendingNewlineBreak = false;
                     }
@@ -96,7 +110,8 @@ namespace PeachPDF.PdfSharpCore.Drawing
                     // HACK: Handle tabulator sign as space (\t)
                     if (value == 9)
                     {
-                        value = ' ';
+                        lineText.Append(' ');
+                        continue;
                     }
 
                     // HACK: Unclear what to do here.
@@ -107,16 +122,9 @@ namespace PeachPDF.PdfSharpCore.Drawing
                         continue;
                     }
 
-                    Rune lookup = new Rune(value);
-                    if (symbol && value <= 0xFFFF)
-                    {
-                        // Remap for symbol fonts (BMP-only).
-                        // Used | instead of + because of: http://PeachPDF.PdfSharpCore.codeplex.com/workitem/15954
-                        lookup = new Rune(value | (descriptor.FontFace.os2.usFirstCharIndex & 0xFF00));
-                    }
-                    int glyphIndex = descriptor.CharCodeToGlyphIndex(lookup);
-                    width += descriptor.GlyphIndexToWidth(glyphIndex);
+                    lineText.Append(rune.ToString());
                 }
+                FlushLine();
                 maxWidth = Math.Max(maxWidth, width);
 
                 // What? size.Width = maxWidth * font.Size * (font.Italic ? 1 : 1) / descriptor.UnitsPerEm;

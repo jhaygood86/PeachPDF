@@ -28,6 +28,7 @@
 #endregion
 
 using PeachPDF.Fonts;
+using PeachPDF.Text;
 using System;
 using System.Diagnostics;
 using System.Text;
@@ -71,6 +72,12 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         {
             if (_cmapInfo != null)
                 _cmapInfo.AddChars(text);
+        }
+
+        internal void AddShapedText(string text, LigatureFeatures features)
+        {
+            if (_cmapInfo != null)
+                _cmapInfo.AddShapedText(text, features);
         }
 
         internal void AddGlyphIndices(string glyphIndices)
