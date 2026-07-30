@@ -420,123 +420,131 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.ObjectPosition, () => new ObjectPositionProperty(), true);
             AddLonghand(PropertyNames.Size, () => new PageSizeProperty());
 
-            // CSS Logical Properties and Values Level 1. PeachPDF is always LTR / horizontal-tb,
-            // so each logical property is registered to produce/export the existing physical
-            // longhands (block-start = top, block-end = bottom, inline-start = left,
-            // inline-end = right). Layer B needs no changes since it already handles every
-            // physical longhand.
+            // CSS Logical Properties and Values Level 1. Each logical longhand is its own genuine,
+            // distinctly-identified Property (CSS/StyleProperties/Logical/) rather than an alias onto a
+            // physical one - CssBox.CascadeApplyStyles resolves each to its physical edge afterward, via
+            // LogicalPropertyResolver, against the box's own resolved direction/writing-mode (CSS Writing
+            // Modes 3's abstract-to-physical mapping table), so `margin-inline-start` genuinely means
+            // "insertion edge" rather than always `margin-left`. Shorthands expand into the *logical*
+            // longhand names below (not their physical counterparts) for the same reason.
 
-            // Logical margin longhands (aliases to the physical longhand classes).
-            AddLonghand(PropertyNames.MarginBlockStart, () => new MarginTopProperty(), true);
-            AddLonghand(PropertyNames.MarginBlockEnd, () => new MarginBottomProperty(), true);
-            AddLonghand(PropertyNames.MarginInlineStart, () => new MarginLeftProperty(), true);
-            AddLonghand(PropertyNames.MarginInlineEnd, () => new MarginRightProperty(), true);
+            // Logical margin longhands.
+            AddLonghand(PropertyNames.MarginBlockStart, () => new MarginBlockStartProperty(), true);
+            AddLonghand(PropertyNames.MarginBlockEnd, () => new MarginBlockEndProperty(), true);
+            AddLonghand(PropertyNames.MarginInlineStart, () => new MarginInlineStartProperty(), true);
+            AddLonghand(PropertyNames.MarginInlineEnd, () => new MarginInlineEndProperty(), true);
             // Logical margin shorthands.
             AddLogicalShorthand(PropertyNames.MarginBlock, () => new MarginBlockProperty(),
-                PropertyNames.MarginTop,
-                PropertyNames.MarginBottom);
+                PropertyNames.MarginBlockStart,
+                PropertyNames.MarginBlockEnd);
             AddLogicalShorthand(PropertyNames.MarginInline, () => new MarginInlineProperty(),
-                PropertyNames.MarginLeft,
-                PropertyNames.MarginRight);
+                PropertyNames.MarginInlineStart,
+                PropertyNames.MarginInlineEnd);
 
-            // Logical padding longhands (aliases to the physical longhand classes).
-            AddLonghand(PropertyNames.PaddingBlockStart, () => new PaddingTopProperty(), true);
-            AddLonghand(PropertyNames.PaddingBlockEnd, () => new PaddingBottomProperty(), true);
-            AddLonghand(PropertyNames.PaddingInlineStart, () => new PaddingLeftProperty(), true);
-            AddLonghand(PropertyNames.PaddingInlineEnd, () => new PaddingRightProperty(), true);
+            // Logical padding longhands.
+            AddLonghand(PropertyNames.PaddingBlockStart, () => new PaddingBlockStartProperty(), true);
+            AddLonghand(PropertyNames.PaddingBlockEnd, () => new PaddingBlockEndProperty(), true);
+            AddLonghand(PropertyNames.PaddingInlineStart, () => new PaddingInlineStartProperty(), true);
+            AddLonghand(PropertyNames.PaddingInlineEnd, () => new PaddingInlineEndProperty(), true);
             // Logical padding shorthands.
             AddLogicalShorthand(PropertyNames.PaddingBlock, () => new PaddingBlockProperty(),
-                PropertyNames.PaddingTop,
-                PropertyNames.PaddingBottom);
+                PropertyNames.PaddingBlockStart,
+                PropertyNames.PaddingBlockEnd);
             AddLogicalShorthand(PropertyNames.PaddingInline, () => new PaddingInlineProperty(),
-                PropertyNames.PaddingLeft,
-                PropertyNames.PaddingRight);
+                PropertyNames.PaddingInlineStart,
+                PropertyNames.PaddingInlineEnd);
 
-            // Logical inset longhands (aliases to the physical coordinate longhand classes).
-            AddLonghand(PropertyNames.InsetBlockStart, () => new TopProperty(), true);
-            AddLonghand(PropertyNames.InsetBlockEnd, () => new BottomProperty(), true);
-            AddLonghand(PropertyNames.InsetInlineStart, () => new LeftProperty(), true);
-            AddLonghand(PropertyNames.InsetInlineEnd, () => new RightProperty(), true);
-            // Inset shorthands.
+            // Logical inset longhands.
+            AddLonghand(PropertyNames.InsetBlockStart, () => new InsetBlockStartProperty(), true);
+            AddLonghand(PropertyNames.InsetBlockEnd, () => new InsetBlockEndProperty(), true);
+            AddLonghand(PropertyNames.InsetInlineStart, () => new InsetInlineStartProperty(), true);
+            AddLonghand(PropertyNames.InsetInlineEnd, () => new InsetInlineEndProperty(), true);
+            // Inset shorthands. `inset` itself (unlike inset-block/inset-inline) is a purely physical
+            // shorthand for top/right/bottom/left - CSS Logical Properties 1 §3 defines it in terms of
+            // the physical box, not the flow-relative one, despite living in the same spec module.
             AddLogicalShorthand(PropertyNames.Inset, () => new InsetProperty(),
                 PropertyNames.Top,
                 PropertyNames.Right,
                 PropertyNames.Bottom,
                 PropertyNames.Left);
             AddLogicalShorthand(PropertyNames.InsetBlock, () => new InsetBlockProperty(),
-                PropertyNames.Top,
-                PropertyNames.Bottom);
+                PropertyNames.InsetBlockStart,
+                PropertyNames.InsetBlockEnd);
             AddLogicalShorthand(PropertyNames.InsetInline, () => new InsetInlineProperty(),
-                PropertyNames.Left,
-                PropertyNames.Right);
+                PropertyNames.InsetInlineStart,
+                PropertyNames.InsetInlineEnd);
 
-            // Logical per-edge border longhands (aliases to the physical longhand classes).
-            AddLonghand(PropertyNames.BorderBlockStartWidth, () => new BorderTopWidthProperty(), true);
-            AddLonghand(PropertyNames.BorderBlockStartStyle, () => new BorderTopStyleProperty());
-            AddLonghand(PropertyNames.BorderBlockStartColor, () => new BorderTopColorProperty(), true);
-            AddLonghand(PropertyNames.BorderBlockEndWidth, () => new BorderBottomWidthProperty(), true);
-            AddLonghand(PropertyNames.BorderBlockEndStyle, () => new BorderBottomStyleProperty());
-            AddLonghand(PropertyNames.BorderBlockEndColor, () => new BorderBottomColorProperty(), true);
-            AddLonghand(PropertyNames.BorderInlineStartWidth, () => new BorderLeftWidthProperty(), true);
-            AddLonghand(PropertyNames.BorderInlineStartStyle, () => new BorderLeftStyleProperty());
-            AddLonghand(PropertyNames.BorderInlineStartColor, () => new BorderLeftColorProperty(), true);
-            AddLonghand(PropertyNames.BorderInlineEndWidth, () => new BorderRightWidthProperty(), true);
-            AddLonghand(PropertyNames.BorderInlineEndStyle, () => new BorderRightStyleProperty());
-            AddLonghand(PropertyNames.BorderInlineEndColor, () => new BorderRightColorProperty(), true);
+            // Logical per-edge border longhands.
+            AddLonghand(PropertyNames.BorderBlockStartWidth, () => new BorderBlockStartWidthProperty(), true);
+            AddLonghand(PropertyNames.BorderBlockStartStyle, () => new BorderBlockStartStyleProperty());
+            AddLonghand(PropertyNames.BorderBlockStartColor, () => new BorderBlockStartColorProperty(), true);
+            AddLonghand(PropertyNames.BorderBlockEndWidth, () => new BorderBlockEndWidthProperty(), true);
+            AddLonghand(PropertyNames.BorderBlockEndStyle, () => new BorderBlockEndStyleProperty());
+            AddLonghand(PropertyNames.BorderBlockEndColor, () => new BorderBlockEndColorProperty(), true);
+            AddLonghand(PropertyNames.BorderInlineStartWidth, () => new BorderInlineStartWidthProperty(), true);
+            AddLonghand(PropertyNames.BorderInlineStartStyle, () => new BorderInlineStartStyleProperty());
+            AddLonghand(PropertyNames.BorderInlineStartColor, () => new BorderInlineStartColorProperty(), true);
+            AddLonghand(PropertyNames.BorderInlineEndWidth, () => new BorderInlineEndWidthProperty(), true);
+            AddLonghand(PropertyNames.BorderInlineEndStyle, () => new BorderInlineEndStyleProperty());
+            AddLonghand(PropertyNames.BorderInlineEndColor, () => new BorderInlineEndColorProperty(), true);
 
-            // Logical per-edge border shorthands (aliases to the physical edge shorthand classes).
-            AddLogicalShorthand(PropertyNames.BorderBlockStart, () => new BorderTopProperty(),
-                PropertyNames.BorderTopWidth,
-                PropertyNames.BorderTopStyle,
-                PropertyNames.BorderTopColor);
-            AddLogicalShorthand(PropertyNames.BorderBlockEnd, () => new BorderBottomProperty(),
-                PropertyNames.BorderBottomWidth,
-                PropertyNames.BorderBottomStyle,
-                PropertyNames.BorderBottomColor);
-            AddLogicalShorthand(PropertyNames.BorderInlineStart, () => new BorderLeftProperty(),
-                PropertyNames.BorderLeftWidth,
-                PropertyNames.BorderLeftStyle,
-                PropertyNames.BorderLeftColor);
-            AddLogicalShorthand(PropertyNames.BorderInlineEnd, () => new BorderRightProperty(),
-                PropertyNames.BorderRightWidth,
-                PropertyNames.BorderRightStyle,
-                PropertyNames.BorderRightColor);
+            // Logical per-edge border shorthands - each its own class (not reused from the physical
+            // border-top/bottom/left/right shorthand classes, unlike before this fix): border-top's own
+            // shorthand must keep expanding into border-top-width/-style/-color regardless of this box's
+            // writing-mode/direction, so it cannot also serve as border-block-start's shorthand once
+            // border-block-start expands into its own logical longhands instead.
+            AddLogicalShorthand(PropertyNames.BorderBlockStart, () => new BorderBlockStartProperty(),
+                PropertyNames.BorderBlockStartWidth,
+                PropertyNames.BorderBlockStartStyle,
+                PropertyNames.BorderBlockStartColor);
+            AddLogicalShorthand(PropertyNames.BorderBlockEnd, () => new BorderBlockEndProperty(),
+                PropertyNames.BorderBlockEndWidth,
+                PropertyNames.BorderBlockEndStyle,
+                PropertyNames.BorderBlockEndColor);
+            AddLogicalShorthand(PropertyNames.BorderInlineStart, () => new BorderInlineStartProperty(),
+                PropertyNames.BorderInlineStartWidth,
+                PropertyNames.BorderInlineStartStyle,
+                PropertyNames.BorderInlineStartColor);
+            AddLogicalShorthand(PropertyNames.BorderInlineEnd, () => new BorderInlineEndProperty(),
+                PropertyNames.BorderInlineEndWidth,
+                PropertyNames.BorderInlineEndStyle,
+                PropertyNames.BorderInlineEndColor);
 
             // Logical two-edge border shorthands (both block/inline edges the same value).
             AddLogicalShorthand(PropertyNames.BorderBlock, () => new BorderBlockProperty(),
-                PropertyNames.BorderTopWidth,
-                PropertyNames.BorderTopStyle,
-                PropertyNames.BorderTopColor,
-                PropertyNames.BorderBottomWidth,
-                PropertyNames.BorderBottomStyle,
-                PropertyNames.BorderBottomColor);
+                PropertyNames.BorderBlockStartWidth,
+                PropertyNames.BorderBlockStartStyle,
+                PropertyNames.BorderBlockStartColor,
+                PropertyNames.BorderBlockEndWidth,
+                PropertyNames.BorderBlockEndStyle,
+                PropertyNames.BorderBlockEndColor);
             AddLogicalShorthand(PropertyNames.BorderInline, () => new BorderInlineProperty(),
-                PropertyNames.BorderLeftWidth,
-                PropertyNames.BorderLeftStyle,
-                PropertyNames.BorderLeftColor,
-                PropertyNames.BorderRightWidth,
-                PropertyNames.BorderRightStyle,
-                PropertyNames.BorderRightColor);
+                PropertyNames.BorderInlineStartWidth,
+                PropertyNames.BorderInlineStartStyle,
+                PropertyNames.BorderInlineStartColor,
+                PropertyNames.BorderInlineEndWidth,
+                PropertyNames.BorderInlineEndStyle,
+                PropertyNames.BorderInlineEndColor);
 
             // Logical two-edge border width/style/color shorthands.
             AddLogicalShorthand(PropertyNames.BorderBlockWidth, () => new BorderBlockWidthProperty(),
-                PropertyNames.BorderTopWidth,
-                PropertyNames.BorderBottomWidth);
+                PropertyNames.BorderBlockStartWidth,
+                PropertyNames.BorderBlockEndWidth);
             AddLogicalShorthand(PropertyNames.BorderBlockStyle, () => new BorderBlockStyleProperty(),
-                PropertyNames.BorderTopStyle,
-                PropertyNames.BorderBottomStyle);
+                PropertyNames.BorderBlockStartStyle,
+                PropertyNames.BorderBlockEndStyle);
             AddLogicalShorthand(PropertyNames.BorderBlockColor, () => new BorderBlockColorProperty(),
-                PropertyNames.BorderTopColor,
-                PropertyNames.BorderBottomColor);
+                PropertyNames.BorderBlockStartColor,
+                PropertyNames.BorderBlockEndColor);
             AddLogicalShorthand(PropertyNames.BorderInlineWidth, () => new BorderInlineWidthProperty(),
-                PropertyNames.BorderLeftWidth,
-                PropertyNames.BorderRightWidth);
+                PropertyNames.BorderInlineStartWidth,
+                PropertyNames.BorderInlineEndWidth);
             AddLogicalShorthand(PropertyNames.BorderInlineStyle, () => new BorderInlineStyleProperty(),
-                PropertyNames.BorderLeftStyle,
-                PropertyNames.BorderRightStyle);
+                PropertyNames.BorderInlineStartStyle,
+                PropertyNames.BorderInlineEndStyle);
             AddLogicalShorthand(PropertyNames.BorderInlineColor, () => new BorderInlineColorProperty(),
-                PropertyNames.BorderLeftColor,
-                PropertyNames.BorderRightColor);
+                PropertyNames.BorderInlineStartColor,
+                PropertyNames.BorderInlineEndColor);
 
             _fontsBuilder.Add(PropertyNames.Src, () => new SrcProperty());
             _fontsBuilder.Add(PropertyNames.UnicodeRange, () => new UnicodeRangeProperty());

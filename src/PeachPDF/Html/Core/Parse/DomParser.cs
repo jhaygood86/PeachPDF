@@ -711,6 +711,11 @@ namespace PeachPDF.Html.Core.Parse
             // Correct current color
             CssUtils.ApplyCurrentColor(box, valueParser);
 
+            // CSS Logical Properties: resolve any of the 24 logical margin/padding/inset/border
+            // longhands cascaded onto this box (CssBox.LogicalProperties.cs) to their physical edge, now
+            // that this box's own Direction/WritingMode are fully resolved.
+            box.ResolveLogicalProperties();
+
             if (!box.FirstLineProcessed)
             {
                 box.FirstLineProcessed = true;
