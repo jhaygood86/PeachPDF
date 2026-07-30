@@ -99,7 +99,7 @@ namespace PeachPDF.Html.Core.Dom
                 columnsBox.ActualBottom = columnsBox.Location.Y;
                 foreach (var childBox in columnsBox.Boxes)
                 {
-                    await childBox.PerformLayout(g);
+                    await columnsBox.LayoutBlockChild(g, childBox);
                 }
 
                 columnsBox.ActualRight = columnsBox.CalculateActualRight();
@@ -139,7 +139,7 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     foreach (var childBox in children)
                     {
-                        await childBox.PerformLayout(g);
+                        await columnsBox.LayoutBlockChild(g, childBox);
                     }
                 }
                 finally

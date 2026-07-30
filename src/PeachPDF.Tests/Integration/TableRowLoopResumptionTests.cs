@@ -117,7 +117,7 @@ namespace PeachPDF.Tests.Integration
             /// <summary>The record this cell hands back, kept so a test can assert it travelled.</summary>
             internal BreakToken Record { get; }
 
-            protected override ValueTask PerformLayoutImp(RGraphics g)
+            protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild)
             {
                 SetPendingBreakToken(Record);
                 return default;
@@ -595,7 +595,7 @@ namespace PeachPDF.Tests.Integration
                 Display = CssConstants.TableCell;
             }
 
-            protected override ValueTask PerformLayoutImp(RGraphics g) =>
+            protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild) =>
                 throw new InvalidOperationException("layout failed part-way through the row loop");
         }
 
@@ -958,7 +958,7 @@ namespace PeachPDF.Tests.Integration
                 _depth = depth;
             }
 
-            protected override ValueTask PerformLayoutImp(RGraphics g)
+            protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild)
             {
                 ActualBottom = Location.Y + _depth;
                 Height = $"{_depth}px";
@@ -1007,7 +1007,7 @@ namespace PeachPDF.Tests.Integration
             /// <summary>Where this cell's layout left that content.</summary>
             internal double PlacedContentTop { get; private set; }
 
-            protected override ValueTask PerformLayoutImp(RGraphics g)
+            protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild)
             {
                 // What a real stopped flow leaves: content 200pt deep, and a box still holding the top it
                 // was placed at.

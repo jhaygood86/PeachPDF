@@ -270,7 +270,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <remarks>
         /// It has to fit the destination — see <see cref="Discover"/>'s own remarks for why that is the
         /// guard the whole redirect hangs on — and it has to be a box that <i>places itself</i>, since the
-        /// target reaches it through <c>PlaceBlockBox</c> and any other box would ignore it and never move.
+        /// target reaches it through <c>CssBox.PlaceAndSizeBlockChild</c> and any other box would ignore it and never move.
         /// </remarks>
         private static bool CanTravelTo(CssBox subject, double subjectExtent, double destinationBand) =>
             subject.PlacesItselfAsBlockBox && subjectExtent <= destinationBand;

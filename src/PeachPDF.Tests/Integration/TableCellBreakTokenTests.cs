@@ -557,7 +557,7 @@ namespace PeachPDF.Tests.Integration
             /// <summary>The record this cell hands back, kept so the test can assert it travelled.</summary>
             internal BreakToken Record { get; }
 
-            protected override ValueTask PerformLayoutImp(RGraphics g)
+            protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild)
             {
                 SetPendingBreakToken(Record);
                 return default;

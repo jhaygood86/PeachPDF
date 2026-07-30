@@ -67,7 +67,7 @@ namespace PeachPDF.Tests.Integration
             /// <summary>Whether breaking was live on each pass this box was laid out in, in order.</summary>
             internal List<bool> FragmentingPerPass { get; } = [];
 
-            protected override ValueTask PerformLayoutImp(RGraphics g)
+            protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild)
             {
                 var context = HtmlContainer?.CurrentFragmentainer;
                 FragmentingPerPass.Add(context is { IsFragmenting: true });
@@ -116,7 +116,7 @@ namespace PeachPDF.Tests.Integration
                 Display = CssConstants.Block;
             }
 
-            protected override ValueTask PerformLayoutImp(RGraphics g)
+            protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild)
             {
                 var context = HtmlContainer?.CurrentFragmentainer;
 

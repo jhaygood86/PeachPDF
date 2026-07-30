@@ -9,19 +9,26 @@ them. Three generic mechanisms independently assume they are the ones deciding, 
 item's re-layout when the flag was missing, found only by full-suite and showcase-corpus runs, not by
 design review:
 
-- **`CssBox.PlaceBlockChild`** (ordinary block-flow self-placement) overwrote the engine's `Location`
-  with a block-flow-derived one on every re-layout. Guarded by checking
-  `PositionAssignedByEngine` before running `LayoutContents`'s placement branch at all.
+- **The frame's own block-flow placement** overwrote the engine's `Location` with a
+  block-flow-derived one on every re-layout.
 - **`ResolveOwnInlineSize`'s `GetBoxWidth` call** has a `box.Words.Count > 0` branch that sums stale
   word widths left over from the *previous* generation's layout and uses that sum in place of the
   already-pinned `Width` — corrupting word-wrap specifically for nested flex-in-flex content
-  (`.row` > `.cell` > `.box` > text). Fixed by skipping the `ResolveOwnInlineSize` call entirely for a
-  `PositionAssignedByEngine` box, since its `Width`/`Height` are already correct and need no
-  re-deriving before the commit pass.
+  (`.row` > `.cell` > `.box` > text). Its `Width`/`Height` are already correct and need no re-deriving
+  before the commit pass.
+
+  Both of those are now answered where the pass is *entered* rather than by the box noticing mid-layout:
+  the commit pass drives the item through `CssBox.LayoutContentAtItsAssignedPosition`, which is
+  `LayoutBlockChild(…, framePlacesChild: false)`, so neither `ResolveBlockChildOffset`/
+  `CommitBlockChildOffset` nor `ResolveOwnInlineSize` is called for it at all. Which children a frame
+  positions is the frame's question — do not put either of these back behind a flag the box checks about
+  itself.
 - **`PerformLayoutEpilogue`'s §4.3 correctors** (keep-with-next retry, avoid/monolithic relocation via
   `TakeEarlyBreak`, orphans/widows) re-fired during the commit pass and moved a line
   `RelocateLinesAcrossFragmentainers` had already placed, landing it in the wrong fragmentainer slot.
-  Guarded with `&& !PositionAssignedByEngine` on all three blocks.
+  Guarded with `&& !PositionAssignedByEngine` on all three blocks — and this is the whole of what the
+  flag is still for. These run *after* the box is complete, so no decision at the point the pass was
+  entered can cover them.
 
 Any future pass that re-lays-out a box at a position/size an engine (not block flow) already assigned
 needs to audit for this same class of mechanism before trusting a "full suite green" result — a defect

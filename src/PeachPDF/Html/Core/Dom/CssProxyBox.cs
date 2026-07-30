@@ -84,7 +84,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Performs layout by resetting source box, laying it out at this proxy's location,
         /// and capturing the resulting layout state.
         /// </summary>
-        protected override async ValueTask PerformLayoutImp(RGraphics g)
+        protected override async ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild)
         {
 #if DEBUG
             System.Console.WriteLine($"CssProxyBox.PerformLayoutImp: START - Location={Location}, Display={Display}");

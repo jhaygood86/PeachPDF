@@ -641,18 +641,14 @@ namespace PeachPDF.Html.Core.Dom
         /// Performs layout of the DOM structure creating lines by set bounds restrictions.
         /// </summary>
         /// <param name="g">Device context to use</param>
-        public async ValueTask PerformLayout(RGraphics g)
-        {
-            try
-            {
-                await PerformLayoutImp(g);
-            }
-            catch (Exception ex)
-            {
-                if (HtmlContainer is { } container)
-                    throw container.RenderError(HtmlRenderErrorType.Layout, "Exception in box layout", ex);
-            }
-        }
+        /// <remarks>
+        /// The adapter for a caller that is <i>not</i> one of this box's frame's child loops — a layout
+        /// engine measuring an item, the out-of-flow walk, the document root. It names the frame on the
+        /// box's behalf, because where a block-level box goes is the frame's question and not the box's
+        /// (<see cref="LayoutBlockChild"/>); a child its frame's own loop reaches is entered there instead.
+        /// The root has no frame above it, so it stands in for its own.
+        /// </remarks>
+        public ValueTask PerformLayout(RGraphics g) => (ParentBox ?? this).LayoutBlockChild(g, this);
 
         /// <summary>
         /// Set this box in 
@@ -1562,17 +1558,153 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (childBox.IsOutOfFlow && childBox.Display != CssConstants.None)
                 {
-                    await childBox.PerformLayout(g);
+                    await LayoutBlockChild(g, childBox);
                 }
             }
         }
 
-        protected virtual async ValueTask PerformLayoutImp(RGraphics g)
+        /// <summary>
+        /// One layout pass of this box, as <paramref name="frame"/> drives it — the seam a box kind that
+        /// replaces the generic block pass overrides.
+        /// </summary>
+        /// <param name="g">the device context</param>
+        /// <param name="frame">
+        /// the frame driving this pass, which is this box's parent (or the box itself, for the root, which
+        /// has no frame above it to stand in for it). Handed <i>down</i> rather than looked up, because the
+        /// caller is what decides whether this box is a block-flow child at all — see
+        /// <see cref="LayoutBlockChild"/>.
+        /// </param>
+        /// <param name="framePlacesChild">whether <paramref name="frame"/> assigns this box a position</param>
+        /// <remarks>
+        /// The base implementation is the generic block pass, driven in phases by the frame
+        /// (<see cref="DriveBlockChildPass"/>). Three box kinds override it with a pass of their own — the
+        /// horizontal rule (its size is a formula of its own, and it runs no prologue at all), an outside
+        /// <c>::marker</c> (positioned beside its item rather than in any flow) and a repeated row group's
+        /// proxy (its content was laid out elsewhere and is only translated here) — none of which has a
+        /// prologue, a placement and a content phase that could be separated. The rule still asks the frame
+        /// for what is genuinely the frame's, through <see cref="PlaceAsBlockChild"/>.
+        /// </remarks>
+        protected virtual ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild) =>
+            frame.DriveBlockChildPass(g, this, framePlacesChild);
+
+        /// <summary>
+        /// Lays out one of this frame's block-level children: this frame decides where the child goes, has
+        /// the child resolve its inline size against that, commits the offset, and only then hands the
+        /// child its own content to lay out.
+        /// </summary>
+        /// <param name="g">the device context</param>
+        /// <param name="child">the child to place and lay out</param>
+        /// <param name="framePlacesChild">
+        /// whether this frame assigns the child's position at all. False for a child a layout engine has
+        /// already placed (<c>ItemContentCommit</c>'s commit pass): every earlier item layout in such an
+        /// engine is a <i>measurement</i>, moved into place by translation afterwards, so it is harmless
+        /// for this frame's block-flow arithmetic to run during those — but the commit pass is the item's
+        /// real, final content layout, with nothing after it to correct a wrong position back. Nor is the
+        /// child's own inline size safe to resolve again there: its <c>Words.Count &gt; 0</c> branch
+        /// measures the leftover words of the layout this call is about to replace rather than the pinned
+        /// <c>Width</c> the engine set, and for an inline-content box the two can disagree, corrupting the
+        /// very re-wrap that pass exists to get right.
+        /// </param>
+        /// <remarks>
+        /// <b>This is where a block-level box's layout is entered</b>: at the frame, not at the box. The
+        /// frame's own child loop calls this for each child it owns, and every other caller reaches it
+        /// through <see cref="PerformLayout"/>, which names the frame on the box's behalf. Error handling
+        /// is <see cref="PerformLayout"/>'s, so a loop that drives its children through here reports a
+        /// layout failure exactly as one calling <see cref="PerformLayout"/> on each of them did.
+        /// </remarks>
+        internal async ValueTask LayoutBlockChild(RGraphics g, CssBox child, bool framePlacesChild = true)
+        {
+            try
+            {
+                await child.PerformLayoutImp(g, this, framePlacesChild);
+            }
+            catch (Exception ex)
+            {
+                if (child.HtmlContainer is { } container)
+                    throw container.RenderError(HtmlRenderErrorType.Layout, "Exception in box layout", ex);
+            }
+        }
+
+        /// <summary>
+        /// Drives one layout pass of <paramref name="child"/> from this frame, in the three phases the
+        /// pass is made of: the child opens it, this frame places the child, and the child then lays its
+        /// own content out inside the position it was given.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The phases are in this order because each needs the one before it. Placement reads what the
+        /// child's prologue settles — whether a forced break falls before it, which side that break names,
+        /// the used page name the commit registers — and the child's inline size is resolved from the page
+        /// the offset lands on, so the words the prologue measures have to exist by then
+        /// (<see cref="PlaceAndSizeBlockChild"/>). Content comes last because everything laid out inside
+        /// the child reads the width and origin the first two phases settled.
+        /// </para>
+        /// <para>
+        /// A frame that declines to place the child at all — §5.2 concluding the break falls before it —
+        /// skips the content phase entirely, which is what makes a break before a box produce no fragment
+        /// in the fragmentainer it is leaving.
+        /// </para>
+        /// </remarks>
+        private async ValueTask DriveBlockChildPass(RGraphics g, CssBox child, bool framePlacesChild)
         {
 #if DEBUG
-            Console.WriteLine($"layout start: {ToString()}");
+            Console.WriteLine($"layout start: {child}");
 #endif
 
+            var resume = await child.BeginBlockPass(g);
+
+            // Bounded by _earlyBreakTaken: the epilogue may conclude, once, that this box has to start
+            // somewhere else, and the only honest way to act on that is to lay it out again there.
+            while (true)
+            {
+                var placed = true;
+
+                if (child.PlacesItselfAsBlockBox && framePlacesChild)
+                {
+                    if (resume is null)
+                    {
+                        placed = await PlaceAndSizeBlockChild(g, child);
+                    }
+                    else
+                    {
+                        child.ResumeInTheNextFragmentainer();
+                    }
+                }
+
+                if (await child.LayoutPassContents(g, resume, placed) is not { } retryTop) return;
+
+                // The same one-shot channel a break-before uses, for the same reason: the target has
+                // already been worked out and must not be re-derived here.
+                child._resumeTopOverride = retryTop;
+
+                // A retry re-places this box; it does not continue where a previous fragmentainer left
+                // off. The prologue deliberately does not run again — everything it settles is either
+                // already consumed or overridden by the target above, and re-running it would register
+                // this box's named strings and named page a second time.
+                resume = null;
+            }
+        }
+
+        /// <summary>
+        /// Lays this box's own content out at the position a layout engine has already assigned it, without
+        /// the frame above deciding a position of its own.
+        /// </summary>
+        /// <remarks>
+        /// The commit pass of the flex and grid engines is the caller (<c>ItemContentCommit</c>). Which
+        /// children a frame positions is the frame's own question, asked once where the pass is driven from,
+        /// so an engine-positioned item is simply an item nothing calls
+        /// <see cref="ResolveBlockChildOffset"/>/<see cref="CommitBlockChildOffset"/> for — rather than one
+        /// that is placed and then has to notice, from inside its own layout, that it should not have been.
+        /// </remarks>
+        internal ValueTask LayoutContentAtItsAssignedPosition(RGraphics g) =>
+            (ParentBox ?? this).LayoutBlockChild(g, this, framePlacesChild: false);
+
+        /// <summary>
+        /// Opens this box's layout pass: picks up the resumption record left for it, and runs its
+        /// once-per-layout prologue if no earlier pass has.
+        /// </summary>
+        private async ValueTask<BreakToken?> BeginBlockPass(RGraphics g)
+        {
             var resume = BeginLayoutPass();
 
             // Once per box per layout, never once per fragmentainer pass - see the method's own remarks
@@ -1583,46 +1715,55 @@ namespace PeachPDF.Html.Core.Dom
                 await PerformLayoutPrologue(g);
             }
 
-            // Bounded by _earlyBreakTaken: the epilogue may conclude, once, that this box has to start
-            // somewhere else, and the only honest way to act on that is to lay it out again there.
-            while (true)
+            return resume;
+        }
+
+        /// <summary>
+        /// Lays this box's own content out inside the position its frame has just given it, and closes the
+        /// pass.
+        /// </summary>
+        /// <param name="g">the device context</param>
+        /// <param name="resume">this pass's resumption record, or null when the box is laid out afresh</param>
+        /// <param name="placed">
+        /// whether the frame placed this box at all. False when it declined — §5.2's margin truncation
+        /// concluding the break falls before the box — in which case the box contributes nothing to the
+        /// fragmentainer being filled and its content waits for the next pass.
+        /// </param>
+        /// <returns>
+        /// where this box has to be laid out again, when its epilogue concluded it must start somewhere
+        /// else; null when the pass is done with it.
+        /// </returns>
+        private async ValueTask<double?> LayoutPassContents(RGraphics g, BreakToken? resume, bool placed)
+        {
+            if (placed)
             {
                 await LayoutContents(g, resume);
-
-                // Positioned here rather than from the epilogue, so that a box which does not finish in
-                // this fragmentainer still has its marker - see the method's own remarks for why that is
-                // the pass which places the item, and only that one.
-                if (MarkerBelongsToTheFragmentainerBeingFilled(resume))
-                {
-                    await LayoutOutsideMarker(g);
-                }
-
-                if (PendingBreakToken is not null || RequestedBreakBeforeTop is not null)
-                {
-                    TakeBackTheMarkerOfAnItemThisPassKeptNothingOf();
-
-                    // This box did not finish in this fragmentainer. Its epilogue judges a *complete*
-                    // box, so it waits for the pass that completes it; the record unwinds from here.
-                    PublishBreakToTheContextRoot();
-                    return;
-                }
-
-                await PerformLayoutEpilogue(g);
-
-                if (_earlyBreakRetryTop is not { } retryTop) return;
-
-                _earlyBreakRetryTop = null;
-
-                // The same one-shot channel a break-before uses, for the same reason: the target has
-                // already been worked out and must not be re-derived here.
-                _resumeTopOverride = retryTop;
-
-                // A retry re-places this box; it does not continue where a previous fragmentainer left
-                // off. The prologue deliberately does not run again — everything it settles is either
-                // already consumed or overridden by the target above, and re-running it would register
-                // this box's named strings and named page a second time.
-                resume = null;
             }
+
+            // Positioned here rather than from the epilogue, so that a box which does not finish in
+            // this fragmentainer still has its marker - see the method's own remarks for why that is
+            // the pass which places the item, and only that one.
+            if (MarkerBelongsToTheFragmentainerBeingFilled(resume))
+            {
+                await LayoutOutsideMarker(g);
+            }
+
+            if (PendingBreakToken is not null || RequestedBreakBeforeTop is not null)
+            {
+                TakeBackTheMarkerOfAnItemThisPassKeptNothingOf();
+
+                // This box did not finish in this fragmentainer. Its epilogue judges a *complete*
+                // box, so it waits for the pass that completes it; the record unwinds from here.
+                PublishBreakToTheContextRoot();
+                return null;
+            }
+
+            await PerformLayoutEpilogue(g);
+
+            if (_earlyBreakRetryTop is not { } retryTop) return null;
+
+            _earlyBreakRetryTop = null;
+            return retryTop;
         }
 
         /// <summary>
@@ -1891,16 +2032,25 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// Whether an engine has already decided this box's final <see cref="CssBox.Location"/>
-        /// for the pass about to run, so <see cref="LayoutContents"/>'s ordinary self-placement
-        /// (<see cref="PlaceBlockBox"/>/<see cref="PlaceAsBlockChild"/>) must not touch it.
+        /// for the pass about to run, so the corrections that would move it afterwards must not.
         /// </summary>
         /// <remarks>
-        /// Set by <c>CssLayoutEngineFlex</c>'s commit pass immediately before re-laying an item's content
-        /// out at the position <see cref="CssLayoutEngineFlex.AssignLocations"/>/line relocation already
-        /// assigned it — every earlier item layout in that engine is a *measurement*, moved into place by
-        /// translation afterward, so it is harmless for <c>PlaceBlockChild</c> to run during those (its
-        /// result is discarded the moment translation overwrites it); this one is the item's real, final
-        /// content layout, with nothing after it to correct a wrong position back.
+        /// <para>
+        /// Set by <c>ItemContentCommit</c> immediately before re-laying a flex or grid item's content out
+        /// at the position <see cref="CssLayoutEngineFlex.AssignLocations"/>/line relocation already
+        /// assigned it — every earlier item layout in those engines is a *measurement*, moved into place by
+        /// translation afterward; this one is the item's real, final content layout, with nothing after it
+        /// to correct a wrong position back.
+        /// </para>
+        /// <para>
+        /// <b>It no longer decides whether the box is placed.</b> That is now the frame's own question,
+        /// asked once where the pass is driven from (<see cref="LayoutBlockChild"/>'s
+        /// <c>framePlacesChild</c>): a child an engine positions is simply a child the frame's loop does not
+        /// call <see cref="ResolveBlockChildOffset"/>/<see cref="CommitBlockChildOffset"/> for. What is left
+        /// here is the other half — the <see cref="PerformLayoutEpilogue"/> movers (the keep-with-next
+        /// first-line retry, §4.3's <c>avoid</c>/monolithic relocation, §5.4's widows push), which run after
+        /// the box is complete and would re-derive a position the engine owns.
+        /// </para>
         /// </remarks>
         internal bool PositionAssignedByEngine { get; set; }
 
@@ -2036,14 +2186,12 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Places this box and lays out its content — the part of layout a resumed pass re-enters,
-        /// picking up where the previous fragmentainer stopped rather than starting over.
-        /// </summary>
-        /// <summary>
-        /// Whether <see cref="LayoutContents"/> positions this box itself, via <c>PlaceBlockBox</c>.
+        /// Whether the frame above this box assigns it a block-level position at all
+        /// (<see cref="PlaceAndSizeBlockChild"/>).
         /// </summary>
         /// <remarks>
-        /// Everything else falls into that method's else branch, which copies the <i>previous sibling's</i>
+        /// Everything else falls into <see cref="LayoutContents"/>'s else branch, which copies the
+        /// <i>previous sibling's</i>
         /// <see cref="CssBox.Location"/> and <see cref="CssBox.ActualBottom"/> — a
         /// <c>display: none</c> box, a <c>table-row</c>, a bare inline. So any later code that measures this
         /// box's own height, or moves it, has to ask this first: for those boxes the coordinates belong to
@@ -2055,36 +2203,15 @@ namespace PeachPDF.Html.Core.Dom
                        or CssConstants.TableCell or CssConstants.Flex or CssConstants.InlineFlex
                        or CssConstants.Grid or CssConstants.InlineGrid;
 
+        /// <summary>
+        /// Lays out this box's content, inside the position its frame has already given it — the part of
+        /// layout a resumed pass re-enters, picking up where the previous fragmentainer stopped rather
+        /// than starting over.
+        /// </summary>
         private async ValueTask LayoutContents(RGraphics g, BreakToken? resume)
         {
             if (PlacesItselfAsBlockBox)
             {
-                if (PositionAssignedByEngine)
-                {
-                    // An engine (CssLayoutEngineFlex's commit pass) already decided this box's final
-                    // Location, Width and ActualRight - PlaceBlockChild's previous-sibling block-flow math
-                    // was never part of how it got there, and calling it here would silently reposition
-                    // the box using a relationship (its "previous sibling" in Boxes) that has nothing to do
-                    // with where a flex engine put it. Nor is ResolveOwnInlineSize's own GetBoxWidth safe to
-                    // call again here: its Words.Count > 0 branch measures this box's *own* leftover words
-                    // from the layout this call is about to replace, not the pinned Width the engine set -
-                    // for an inline-content box the two can disagree, corrupting the very re-wrap this pass
-                    // exists to get right. Nothing here needs redoing: Width/Height and the ActualRight/
-                    // ActualBottom they were derived from already agree.
-                }
-                else if (resume is null)
-                {
-                    await PlaceBlockBox(g);
-
-                    // Placement decided the break falls before this box, so it contributes nothing to
-                    // the fragmentainer being filled and its content waits for the next pass.
-                    if (RequestedBreakBeforeTop is not null) return;
-                }
-                else
-                {
-                    ResumeInTheNextFragmentainer();
-                }
-
                 // The engines MonolithicContent.RunsAnEngineOfItsOwn names, in the same order; this branch
                 // needs to know *which* one, which is why it cannot ask the combined predicate.
                 if (Display is CssConstants.Flex or CssConstants.InlineFlex)
@@ -2466,7 +2593,9 @@ namespace PeachPDF.Html.Core.Dom
                             resumeAt.ResumeTopOverride ?? ColumnTopForTheChildThisFillBeginsAt(resumeAt, childBox));
                     }
 
-                    await childBox.PerformLayout(g);
+                    // This frame places the child and then hands it its own content — the offset is
+                    // appended by the loop rather than assigned by the child (see LayoutBlockChild).
+                    await LayoutBlockChild(g, childBox);
 
                     if (_requestedChildRestart is { } restart)
                     {
@@ -3047,8 +3176,8 @@ namespace PeachPDF.Html.Core.Dom
         /// <remarks>
         /// <para>
         /// Every fragmentainer of the page grid shares one inline position, which is why
-        /// <see cref="PlaceBlockBox"/> deliberately does not run again on a resumed pass: CSS Fragmentation
-        /// Level 3 §2 gives a box one inline size across all of its fragments, and re-deriving its top from
+        /// <see cref="PlaceAndSizeBlockChild"/> deliberately does not run again on a resumed pass: CSS
+        /// Fragmentation Level 3 §2 gives a box one inline size across all of its fragments, and re-deriving its top from
         /// the previous sibling would read the end of the whole flow. A column differs from its neighbours in
         /// exactly the axis that rule holds constant, so a box continuing into one has to be moved there —
         /// otherwise its continuation is laid out over the fragment it just left.
@@ -3086,17 +3215,22 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Has the frame above this box decide where it goes, resolves this box's own inline size against
-        /// the page that offset lands on, and then has the frame commit the offset.
+        /// Decides where <paramref name="child"/> goes in this frame, has it resolve its own inline size
+        /// against the page that offset lands on, and commits the offset.
         /// </summary>
+        /// <returns>
+        /// false when this frame declined to place the child here at all, so it contributes no fragment to
+        /// the fragmentainer being filled.
+        /// </returns>
         /// <remarks>
         /// <para>
         /// <b>This is the seam a block-level box's position is written at, and it is the parent's.</b> The
-        /// two halves are different questions: how wide this box is, is the box's own to answer from its
+        /// two halves are different questions: how wide the child is, is the child's own to answer from its
         /// style and its containing block; <i>where</i> it goes is a question about the break point between
-        /// it and whatever this frame placed before it — which only the frame above knows, because the
-        /// answer is margin collapsing against a previous sibling, the fragmentainer that sibling ended in,
-        /// and the run chained to it by break avoidance.
+        /// it and whatever this frame placed before it — which only this frame knows, because the answer is
+        /// margin collapsing against a previous sibling, the fragmentainer that sibling ended in, and the
+        /// run chained to it by break avoidance. So the frame's own child loop calls this, before the child
+        /// lays out any content of its own; the child never reaches back out for it.
         /// </para>
         /// <para>
         /// <b>The offset is decided first, because the size depends on it and not the other way round.</b>
@@ -3117,24 +3251,22 @@ namespace PeachPDF.Html.Core.Dom
         /// <c>DomUtils.GetPreviousSibling</c> already answered for a box with no parent.
         /// </para>
         /// <para>
-        /// Runs on the pass that first places the box and never again: a resumed pass continues the
-        /// box's <i>content</i>, and re-deriving its top from the previous sibling would now read the
+        /// Runs on the pass that first places the child and never again: a resumed pass continues the
+        /// child's <i>content</i>, and re-deriving its top from the previous sibling would now read the
         /// end of the whole flow. Skipping it is also what keeps a box that spans a fragmentainer
         /// boundary on one inline size across its fragments, per CSS Fragmentation Level 3 §2.
         /// </para>
         /// </remarks>
-        private async ValueTask PlaceBlockBox(RGraphics g)
+        private async ValueTask<bool> PlaceAndSizeBlockChild(RGraphics g, CssBox child)
         {
-            var frame = ParentBox ?? this;
-
             // The frame declined to place this box here at all (§5.2 concluded the break falls before it),
             // so there is no landing page to measure against and nothing to commit.
-            if (frame.ResolveBlockChildOffset(this) is not { } offset) return;
+            if (ResolveBlockChildOffset(child) is not { } offset) return false;
 
             var measuredAt = offset.Top;
 
-            await ResolveOwnInlineSize(g, measuredAt);
-            frame.CommitBlockChildOffset(this, offset);
+            await child.ResolveOwnInlineSize(g, measuredAt);
+            CommitBlockChildOffset(child, offset);
 
             // Committing the offset can still move the box in the block axis: CssLayoutEngine.FloatBox
             // displaces a float past the ones it intersects, and `clear` pushes it below them. A box carried
@@ -3157,13 +3289,15 @@ namespace PeachPDF.Html.Core.Dom
             // afterwards read its width, and a width belonging to a page the box is not on is the exact
             // defect this whole reorder removes.
             for (var guard = 0; guard < 4 && offset.PositionedInBlockFlow
-                                          && InlineSizeCameFromAnotherPagesMeasure(measuredAt); guard++)
+                                          && child.InlineSizeCameFromAnotherPagesMeasure(measuredAt); guard++)
             {
-                measuredAt = StaticTop;
+                measuredAt = child.StaticTop;
 
-                await ResolveOwnInlineSize(g, measuredAt);
-                frame.CommitBlockChildOffset(this, offset);
+                await child.ResolveOwnInlineSize(g, measuredAt);
+                CommitBlockChildOffset(child, offset);
             }
+
+            return true;
         }
 
         /// <summary>
@@ -3199,7 +3333,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="blockTop">
         /// the border-box top the frame above has decided this box will occupy. Passed rather than read off
         /// <see cref="CssBox.Location"/>, which has not been written yet on the pass that places the box —
-        /// see <see cref="PlaceBlockBox"/> for why that read was the whole defect.
+        /// see <see cref="PlaceAndSizeBlockChild"/> for why that read was the whole defect.
         /// </param>
         /// <remarks>
         /// Written as an extent rather than a width: <see cref="CssBox.ActualRight"/>'s setter
@@ -3364,7 +3498,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <remarks>
         /// The two halves together, for a caller that has nothing to do between them —
         /// <see cref="PlaceAsBlockChild"/>'s own callers, which have already resolved their size. A box
-        /// whose size is still to be resolved goes through <see cref="PlaceBlockBox"/> instead, which is
+        /// whose size is still to be resolved goes through <see cref="PlaceAndSizeBlockChild"/> instead, which is
         /// exactly the caller that needs the offset before the size.
         /// </remarks>
         private void PlaceBlockChild(CssBox child)
@@ -3888,7 +4022,10 @@ namespace PeachPDF.Html.Core.Dom
 
                             try
                             {
-                                await PerformLayoutImp(g);
+                                // The same frame this pass was driven from — the retry re-places this box
+                                // as well as re-flowing it, and this arm is unreachable for a box a layout
+                                // engine positioned (PositionAssignedByEngine, guarded above).
+                                await PerformLayoutImp(g, ParentBox ?? this, framePlacesChild: true);
                             }
                             finally
                             {
@@ -5281,7 +5418,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <remarks>
         /// <para>
         /// Three things have to hold. The box must <see cref="PlacesItselfAsBlockBox">place itself</see>,
-        /// since the target is delivered through <c>PlaceBlockBox</c> and any other box would simply
+        /// since the target is delivered through <c>PlaceAndSizeBlockChild</c> and any other box would simply
         /// ignore it and never move at all. It must not already have taken a break on this pass
         /// (<see cref="_earlyBreakTaken"/>). And breaking must be live: inside the flex, grid, table and
         /// multi-column engines a box's coordinates are provisional — a flex item is laid out at the
