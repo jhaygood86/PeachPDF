@@ -135,7 +135,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Moves the captured <see cref="SourceGeometry"/> along with this proxy. Without this, a mover
         /// that translates a subtree containing this proxy after it has already laid out (a flex item's
         /// final placement, a column re-banding pass, table row placement) would move the proxy's own
-        /// <see cref="CssBoxProperties.Location"/> via the ordinary <see cref="CssBox.Boxes"/> walk but leave the
+        /// <see cref="CssBox.Location"/> via the ordinary <see cref="CssBox.Boxes"/> walk but leave the
         /// frozen snapshot — which <see cref="Fragmentation.FragmentEmitter"/> actually reads to build the
         /// repeated header/footer's fragments — describing the position it was captured at, silently wrong
         /// by however far the move went. See <see href="https://github.com/jhaygood86/PeachPDF/issues/437">#437</see>.

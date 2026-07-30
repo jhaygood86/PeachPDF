@@ -3102,7 +3102,7 @@ namespace PeachPDF.Html.Core.Dom
                     var prevSibling = PreviousInFlowSibling(child);
 
                     var left = child.ContainingBlock.ClientLeft;
-                    // prevSibling.ActualBottom is already the outer border-box edge (CssBoxProperties.
+                    // prevSibling.ActualBottom is already the outer border-box edge (CssBox.
                     // ActualBottom = Location.Y + content height + padding + border, per its own
                     // getter/ApplyHeight/MarginBottomCollapse - all three fold border-bottom in
                     // exactly once) - adding prevSibling.ActualBorderBottomWidth again here double-
@@ -4842,7 +4842,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Called once a subtree translation (<see cref="OffsetTop(double)"/>/<see cref="OffsetLeft(double)"/>)
         /// has finished moving this box by <paramref name="dx"/>/<paramref name="dy"/>, after
-        /// <see cref="CssBoxProperties.Location"/> has already been updated. A no-op here; overridden by a
+        /// <see cref="CssBox.Location"/> has already been updated. A no-op here; overridden by a
         /// box that holds geometry the ordinary <see cref="Boxes"/>/<see cref="Rectangles"/>/<see cref="Words"/>
         /// walk cannot reach, such as <see cref="CssProxyBox"/>'s frozen source-subtree snapshot.
         /// </summary>
