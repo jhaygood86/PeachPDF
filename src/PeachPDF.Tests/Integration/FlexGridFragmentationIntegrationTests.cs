@@ -243,6 +243,78 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(0, SlotOf(container, a!));
         }
 
+        // ─── Flex item content fragmentation, multi-line (issues #517/#526) ───────
+
+        // A wrapped row-direction container's commit pass walks every line in one pass, committing as
+        // many as fit before it stops - so line 1 finishes in slot 0 and only line 3's own content needs
+        // to continue.
+        [Fact]
+        public async Task ALaterLinesContent_ContinuesOnTheNextPageWhenItDoesNotFit()
+        {
+            var lines = string.Concat(Enumerable.Range(1, 3)
+                .Select(i => $"<div id='l{i}' style='width:100%'>line {i} one two</div>"));
+
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:120pt'>filler</div>"
+                    + "<div id='c' style='display:flex; flex-wrap:wrap; line-height:20pt'>"
+                    + lines + "</div>"),
+                pageHeight: PageHeight);
+
+            var l1 = LayoutHarness.FindById(root, "l1");
+            var l3 = LayoutHarness.FindById(root, "l3");
+            Assert.NotNull(l1);
+            Assert.NotNull(l3);
+
+            // 120pt filler + 2 lines of 20pt leaves exactly 0pt for line 3 in slot 0's 160pt band.
+            Assert.Equal(0, SlotOf(container, l1!));
+            Assert.Equal(1, SlotOf(container, l3!));
+
+            var authored = LayoutHarness.Descendants(root)
+                .SelectMany(b => b.Words).Where(w => !w.IsSpaces).Select(w => w.Text).ToList();
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => FlattenFragments(f.Root))
+                .SelectMany(f => f.Words).Select(w => w.Word.Text).ToList();
+
+            Assert.Equal(authored.OrderBy(w => w), claimed.OrderBy(w => w));
+        }
+
+        // The commit loop must walk lines in block-axis (down-the-page) order, not source order - under
+        // wrap-reverse those differ, and reading the wrong one would commit the wrong line first (or
+        // resume the wrong one), exactly the bug issues #448/#458/#459 already fixed for line relocation.
+        [Fact]
+        public async Task WrapReverse_CommitsLinesInBlockAxisOrderNotSourceOrder()
+        {
+            var lines = string.Concat(Enumerable.Range(1, 3)
+                .Select(i => $"<div id='l{i}' style='width:100%'>line {i} one two</div>"));
+
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:120pt'>filler</div>"
+                    + "<div id='c' style='display:flex; flex-wrap:wrap-reverse; line-height:20pt'>"
+                    + lines + "</div>"),
+                pageHeight: PageHeight);
+
+            var l1 = LayoutHarness.FindById(root, "l1");
+            var l3 = LayoutHarness.FindById(root, "l3");
+            Assert.NotNull(l1);
+            Assert.NotNull(l3);
+
+            // wrap-reverse stacks source-first line 1 at the bottom and source-last line 3 at the top, so
+            // line 3 (block-axis first) is the one already sitting in slot 0's remaining room, and line 1
+            // (block-axis last) is the one pushed into slot 1.
+            Assert.Equal(1, SlotOf(container, l1!));
+            Assert.Equal(0, SlotOf(container, l3!));
+
+            var authored = LayoutHarness.Descendants(root)
+                .SelectMany(b => b.Words).Where(w => !w.IsSpaces).Select(w => w.Text).ToList();
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => FlattenFragments(f.Root))
+                .SelectMany(f => f.Words).Select(w => w.Word.Text).ToList();
+
+            Assert.Equal(authored.OrderBy(w => w), claimed.OrderBy(w => w));
+        }
+
         // ─── Grid ─────────────────────────────────────────────────────────────────
 
         [Theory]

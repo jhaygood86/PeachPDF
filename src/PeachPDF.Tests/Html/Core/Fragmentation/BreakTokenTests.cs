@@ -142,15 +142,16 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
             var container = new CssBox(null, null);
             var item = new CssBox(null, null);
             var finished = new CssBox(null, null);
+            var lines = new List<IReadOnlyList<CssBox>> { new List<CssBox> { item } };
 
             var itemToken = new InlineBreakToken(item, 1, new List<int> { 0 }, ResumeWordIndex: 3, CompletedLineCount: 2);
 
-            var first = new FlexBreakToken(container, 1,
+            var first = new FlexBreakToken(container, 1, 0, lines,
                 new List<UnfinishedFlexItem> { new(item, itemToken) },
-                new List<CssBox> { finished });
-            var second = new FlexBreakToken(container, 1,
+                new List<CssBox> { finished }, default);
+            var second = new FlexBreakToken(container, 1, 0, lines,
                 new List<UnfinishedFlexItem> { new(item, itemToken) },
-                new List<CssBox> { finished });
+                new List<CssBox> { finished }, default);
 
             Assert.Equal(first, second);
             Assert.Equal(first.GetHashCode(), second.GetHashCode());
@@ -163,11 +164,12 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
             var itemA = new CssBox(null, null);
             var itemB = new CssBox(null, null);
             var itemToken = new InlineBreakToken(itemA, 1, new List<int> { 0 }, ResumeWordIndex: 3, CompletedLineCount: 2);
+            var lines = new List<IReadOnlyList<CssBox>> { new List<CssBox> { itemA, itemB } };
 
-            var first = new FlexBreakToken(container, 1,
-                new List<UnfinishedFlexItem> { new(itemA, itemToken) }, []);
-            var second = new FlexBreakToken(container, 1,
-                new List<UnfinishedFlexItem> { new(itemB, itemToken) }, []);
+            var first = new FlexBreakToken(container, 1, 0, lines,
+                new List<UnfinishedFlexItem> { new(itemA, itemToken) }, [], default);
+            var second = new FlexBreakToken(container, 1, 0, lines,
+                new List<UnfinishedFlexItem> { new(itemB, itemToken) }, [], default);
 
             Assert.NotEqual(first, second);
         }
@@ -178,11 +180,36 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
             var container = new CssBox(null, null);
             var finishedA = new CssBox(null, null);
             var finishedB = new CssBox(null, null);
+            var lines = new List<IReadOnlyList<CssBox>> { new List<CssBox> { finishedA, finishedB } };
 
-            var first = new FlexBreakToken(container, 1, [], new List<CssBox> { finishedA });
-            var second = new FlexBreakToken(container, 1, [], new List<CssBox> { finishedB });
+            var first = new FlexBreakToken(container, 1, 0, lines, [], new List<CssBox> { finishedA }, default);
+            var second = new FlexBreakToken(container, 1, 0, lines, [], new List<CssBox> { finishedB }, default);
 
             Assert.NotEqual(first, second);
+        }
+
+        /// <summary>
+        /// A resumed pass in a different fragmentainer than the one that published the token still
+        /// compares equal if the item/row sets match - <see cref="FlexBreakToken.PlacementOrigin"/> must
+        /// not participate, or content too tall for any single fragmentainer would never compare equal to
+        /// itself as it walks through many of them making zero real progress.
+        /// </summary>
+        [Fact]
+        public void FlexToken_WithADifferentPlacementOrigin_StillComparesEqual()
+        {
+            var container = new CssBox(null, null);
+            var item = new CssBox(null, null);
+            var itemToken = new InlineBreakToken(item, 1, new List<int> { 0 }, ResumeWordIndex: 3, CompletedLineCount: 2);
+            var lines = new List<IReadOnlyList<CssBox>> { new List<CssBox> { item } };
+
+            var first = new FlexBreakToken(container, 1, 0, lines,
+                new List<UnfinishedFlexItem> { new(item, itemToken) }, [],
+                new PeachPDF.Html.Adapters.Entities.RPoint(0, 0));
+            var second = new FlexBreakToken(container, 1, 0, lines,
+                new List<UnfinishedFlexItem> { new(item, itemToken) }, [],
+                new PeachPDF.Html.Adapters.Entities.RPoint(999, 999));
+
+            Assert.Equal(first, second);
         }
     }
 }

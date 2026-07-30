@@ -234,8 +234,16 @@ namespace PeachPDF.Html.Core.Dom
             RelocateLinesAcrossFragmentainers(lines);
 
             // Phase 9c: fragment each item's own content for real, now that every item sits at the
-            // position it will finally hold. See CommitItemContent's remarks.
-            await CommitItemContent(g, lines);
+            // position it will finally hold. See CommitLineContent's remarks.
+            if (_isRow)
+            {
+                var lineOrder = BuildLineOrder(lines);
+                if (lineOrder.Count > 0)
+                {
+                    await CommitLineContent(g, lineOrder, startLineIndex: 0, seedUnfinished: null,
+                        seedFinished: null, placementOrigin: _flexBox.Location);
+                }
+            }
 
             // Phase 10b: inline-flex shrinks to content in the main axis (like inline-block).
             // For row direction with auto width, update ActualRight to the actual content extent.
@@ -933,10 +941,12 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Lays each item of a single, row-direction line's content out for real, at the position it now
-        /// finally holds, with breaking genuinely live — rather than translating an already-measured
-        /// subtree the way every earlier phase does. Publishes this container's own
-        /// <see cref="FlexBreakToken"/> when one or more items did not finish.
+        /// Lays each line's items' content out for real, at the position it now finally holds, with
+        /// breaking genuinely live — rather than translating an already-measured subtree the way every
+        /// earlier phase does. Walks the container's lines forward from <paramref name="startLineIndex"/>,
+        /// committing as many whole lines as fit the current fragmentainer before publishing this
+        /// container's own <see cref="FlexBreakToken"/> naming the line (and that line's items) which
+        /// stopped it.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -949,86 +959,146 @@ namespace PeachPDF.Html.Core.Dom
         /// page pass, or a table cell's own resumed content pass, already does.
         /// </para>
         /// <para>
-        /// <b>Row-direction, single line, only.</b> A row line's items sit side by side sharing one
-        /// block-axis range, which is exactly css-break-3 §2.1's "parallel flows" — the spec's own example
-        /// of the concept is "the contents of each flex item in a flex layout row" — so this is the direct
-        /// analogue of a table row's cells (<c>TableRowCursor</c>/<see cref="TableBreakToken"/>), and
+        /// <b>Row-direction only.</b> A row line's items sit side by side sharing one block-axis range,
+        /// which is exactly css-break-3 §2.1's "parallel flows" — the spec's own example of the concept is
+        /// "the contents of each flex item in a flex layout row" — so this is the direct analogue of a
+        /// table row's cells (<c>TableRowCursor</c>/<see cref="TableBreakToken"/>), and
         /// <see cref="FlexBreakToken"/> mirrors that shape for the same reason. A column-direction line's
-        /// items are sequential rather than parallel (a different unit of work — see
-        /// <c>flex-column-container-has-no-break-points-between-items.md</c>'s equivalent scope cut for the
-        /// break-value half of this problem), and a wrapped container's second line has no record to resume
-        /// it from yet; both are left at today's translate-only behaviour rather than half-built.
+        /// items are sequential rather than parallel — a different unit of work, committed instead by
+        /// <c>FlexColumnBreakToken</c>'s own mechanism.
+        /// </para>
+        /// <para>
+        /// <b>Why one pass can commit several lines.</b> A pass fills as much of the current fragmentainer
+        /// as fits, not just one line — a line that fully finishes falls through to the next iteration of
+        /// this same loop, exactly like the grid engine's own row loop
+        /// (<c>CssLayoutEngineGrid.CommitItemContent</c>) and <c>TableRowCursor</c>'s per-row loop.
+        /// </para>
+        /// <para>
+        /// <b>Why every item of a line commits regardless of an earlier item's own outcome.</b> A line's
+        /// items are parallel flows (above), so each commits independently; one item stopping does not
+        /// stop its line-mates from continuing (or finishing) on their own.
         /// </para>
         /// </remarks>
-        private async ValueTask CommitItemContent(RGraphics g, List<FlexLine> lines)
+        /// <remarks>
+        /// <b>Does not itself check <see cref="_isRow"/>.</b> A resumed pass never calls
+        /// <see cref="ParseFlexDirection"/> (see <see cref="Layout"/>'s short-circuit remarks), so that
+        /// field is never initialized on the fresh <see cref="CssLayoutEngineFlex"/> instance a resumed
+        /// call runs on — reading it here would always evaluate false and silently no-op every resumed
+        /// pass. The fresh call site gates on it instead (only a row/row-reverse container ever publishes
+        /// a <see cref="FlexBreakToken"/> to resume in the first place), which is enough: by the time this
+        /// runs, either the caller already confirmed row-direction, or it is resuming a token that could
+        /// only have been published by that same confirmed path.
+        /// </remarks>
+        private async ValueTask CommitLineContent(
+            RGraphics g,
+            IReadOnlyList<IReadOnlyList<CssBox>> lines,
+            int startLineIndex,
+            IReadOnlyList<UnfinishedFlexItem>? seedUnfinished,
+            IReadOnlyList<CssBox>? seedFinished,
+            RPoint placementOrigin)
         {
             var container = _flexBox.HtmlContainer;
 
             // The same liveness gate RelocateLinesAcrossFragmentainers uses, for the same reason: outside
             // it this container's own coordinates are provisional, belonging to whatever is measuring it.
             if (container is null || !container.HasRealPageGrid || !container.IsFragmenting
-                || _flexBox.Display == CssConstants.InlineFlex || !_isRow || lines.Count != 1)
+                || _flexBox.Display == CssConstants.InlineFlex)
             {
                 return;
             }
 
-            var line = lines[0];
-            if (line.Items.Count == 0) return;
-
-            var unfinished = new List<UnfinishedFlexItem>();
-            var finished = new List<CssBox>();
-
-            foreach (var item in line.Items)
+            for (var lineIndex = startLineIndex; lineIndex < lines.Count; lineIndex++)
             {
-                await ItemContentCommit.CommitLayout(g, item.Box, resume: null);
+                var isResumedLine = lineIndex == startLineIndex && seedUnfinished is not null;
 
-                if (item.Box.PendingBreakToken is { } token)
-                    unfinished.Add(new UnfinishedFlexItem(item.Box, token));
-                else
-                    finished.Add(item.Box);
-            }
+                var pending = isResumedLine
+                    ? seedUnfinished!.Select(u => (Box: u.Item, Resume: (BreakToken?)u.Token)).ToList()
+                    : lines[lineIndex].Select(box => (Box: box, Resume: (BreakToken?)null)).ToList();
 
-            if (unfinished.Count > 0)
-            {
-                var resumeSlot = unfinished.Max(u => u.Token.ResumeSlotIndex);
-                _flexBox.SetPendingBreakToken(new FlexBreakToken(_flexBox, resumeSlot, unfinished, finished));
+                var finished = isResumedLine && seedFinished is not null
+                    ? new List<CssBox>(seedFinished)
+                    : new List<CssBox>();
+                var unfinished = new List<UnfinishedFlexItem>();
+
+                foreach (var (box, itemResume) in pending)
+                {
+                    await ItemContentCommit.CommitLayout(g, box, itemResume);
+
+                    if (box.PendingBreakToken is { } token)
+                        unfinished.Add(new UnfinishedFlexItem(box, token));
+                    else
+                        finished.Add(box);
+                }
+
+                if (unfinished.Count > 0)
+                {
+                    var resumeSlot = unfinished.Max(u => u.Token.ResumeSlotIndex);
+                    _flexBox.SetPendingBreakToken(new FlexBreakToken(
+                        _flexBox, resumeSlot, lineIndex, lines, unfinished, finished, placementOrigin));
+                    return;
+                }
             }
         }
 
         /// <summary>
-        /// Re-enters exactly the items an earlier pass's <see cref="FlexBreakToken"/> named as unfinished,
-        /// at the position they already hold, and continues their content from where each one stopped.
+        /// The container's lines as an <see cref="ItemContentCommit"/> commit loop walks them: every
+        /// non-empty line's item boxes, in <b>block-axis</b> (down-the-page) order.
+        /// </summary>
+        /// <remarks>
+        /// Reuses the exact <c>_isWrapReverse ? flowLines.Count - 1 - index : index</c> transform
+        /// <see cref="BuildLineGroups"/> already established, rather than re-deriving block-axis order —
+        /// a second independent implementation of "compute block-axis order" is exactly the kind of drift
+        /// issue #448 eliminated by splitting <see cref="LineGroup"/>'s flow/block-axis halves apart.
+        /// </remarks>
+        private List<IReadOnlyList<CssBox>> BuildLineOrder(List<FlexLine> lines)
+        {
+            var flowLines = lines
+                .Where(line => line.Items.Count > 0)
+                .Select(line => (IReadOnlyList<CssBox>)line.Items.Select(item => item.Box).ToList())
+                .ToList();
+
+            var ordered = new List<IReadOnlyList<CssBox>>(flowLines.Count);
+            for (var index = 0; index < flowLines.Count; index++)
+            {
+                var flowIndex = _isWrapReverse ? flowLines.Count - 1 - index : index;
+                ordered.Add(flowLines[flowIndex]);
+            }
+
+            return ordered;
+        }
+
+        /// <summary>
+        /// Re-enters exactly the line an earlier pass's <see cref="FlexBreakToken"/> named as unfinished,
+        /// at the position it already holds, and continues from where its items stopped — then, if that
+        /// line now finishes on this pass, keeps walking forward through however many further lines fit
+        /// the same fragmentainer, exactly like a fresh pass's own loop.
         /// </summary>
         /// <remarks>
         /// Nothing else about the container is touched: every phase that decides sizing, line membership
         /// and position already ran on an earlier pass and its results are sitting on the live box tree
         /// untouched (nothing between passes resets an item's <see cref="CssBox.Location"/> or
         /// its pinned content-box <c>Width</c>/<c>Height</c> — see <see cref="ItemContentCommit.CommitLayout"/>),
-        /// which is what a resumed pass is allowed to rely on and a fresh one is not.
+        /// which is what a resumed pass is allowed to rely on and a fresh one is not — except for the
+        /// container's own position, which <see cref="CssBox.ResumeInTheNextFragmentainer"/> moves when a
+        /// resumed pass lands in a new fragmentainer (a multicolumn column boundary, most concretely)
+        /// without moving any item to match. <see cref="ItemContentCommit.RepositionForResume"/> reads how
+        /// far the container moved since <see cref="FlexBreakToken.PlacementOrigin"/> was recorded and
+        /// applies that same correction to every not-yet-committed item — see
+        /// <c>CssLayoutEngineGrid.ResumeCommitPass</c>'s identical remarks for the full reasoning.
         /// </remarks>
         private async ValueTask ResumeCommitPass(RGraphics g, FlexBreakToken resume)
         {
-            var stillUnfinished = new List<UnfinishedFlexItem>();
+            var delta = new RPoint(
+                _flexBox.Location.X - resume.PlacementOrigin.X,
+                _flexBox.Location.Y - resume.PlacementOrigin.Y);
 
-            foreach (var unfinishedItem in resume.UnfinishedItems)
-            {
-                await ItemContentCommit.CommitLayout(g, unfinishedItem.Item, unfinishedItem.Token);
+            ItemContentCommit.RepositionForResume(resume.UnfinishedItems.Select(u => u.Item), delta);
+            for (var lineIndex = resume.ResumeLineIndex + 1; lineIndex < resume.Lines.Count; lineIndex++)
+                ItemContentCommit.RepositionForResume(resume.Lines[lineIndex], delta);
 
-                if (unfinishedItem.Item.PendingBreakToken is { } token)
-                    stillUnfinished.Add(new UnfinishedFlexItem(unfinishedItem.Item, token));
-            }
-
-            if (stillUnfinished.Count > 0)
-            {
-                var nowFinished = resume.FinishedItems.Concat(
-                    resume.UnfinishedItems
-                        .Select(u => u.Item)
-                        .Where(item => stillUnfinished.All(u => !ReferenceEquals(u.Item, item))))
-                    .ToList();
-
-                var resumeSlot = stillUnfinished.Max(u => u.Token.ResumeSlotIndex);
-                _flexBox.SetPendingBreakToken(new FlexBreakToken(_flexBox, resumeSlot, stillUnfinished, nowFinished));
-            }
+            await CommitLineContent(
+                g, resume.Lines, resume.ResumeLineIndex, resume.UnfinishedItems, resume.FinishedItems,
+                _flexBox.Location);
         }
 
         /// <summary>

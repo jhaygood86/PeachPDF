@@ -564,7 +564,7 @@ namespace PeachPDF.Html.Core.Dom
         /// applies that same correction — the same reasoning <c>ResumeInTheNextFragmentainer</c> gives
         /// for translating rather than re-measuring a column: every fragmentainer here is the same
         /// width, so the delta that repositions the container also repositions its items correctly.
-        /// A direct <see cref="CssBox.Location"/> reassignment is used rather than
+        /// <see cref="ItemContentCommit.RepositionForResume"/> is used rather than
         /// <see cref="CssBox.OffsetLeft(double)"/>/<see cref="CssBox.OffsetTop(double)"/> deliberately: those translate a
         /// box's already-placed content along with it, which is right for a subtree that has not been
         /// frozen anywhere yet (the earlier placement/relocation phases) but wrong here, where an item
@@ -578,22 +578,13 @@ namespace PeachPDF.Html.Core.Dom
                 _gridBox.Location.X - resume.PlacementOrigin.X,
                 _gridBox.Location.Y - resume.PlacementOrigin.Y);
 
-            if (delta.X != 0 || delta.Y != 0)
-            {
-                RepositionForResume(resume.UnfinishedItems.Select(u => u.Item), delta);
-                for (var rowIndex = resume.ResumeRowIndex + 1; rowIndex < resume.Rows.Count; rowIndex++)
-                    RepositionForResume(resume.Rows[rowIndex], delta);
-            }
+            ItemContentCommit.RepositionForResume(resume.UnfinishedItems.Select(u => u.Item), delta);
+            for (var rowIndex = resume.ResumeRowIndex + 1; rowIndex < resume.Rows.Count; rowIndex++)
+                ItemContentCommit.RepositionForResume(resume.Rows[rowIndex], delta);
 
             await CommitItemContent(
                 g, resume.Rows, resume.ResumeRowIndex, resume.UnfinishedItems, resume.FinishedItems,
                 resume.SubgridContexts, _gridBox.Location);
-        }
-
-        private static void RepositionForResume(IEnumerable<CssBox> boxes, RPoint delta)
-        {
-            foreach (var box in boxes)
-                box.Location = new RPoint(box.Location.X + delta.X, box.Location.Y + delta.Y);
         }
 
         /// <summary>

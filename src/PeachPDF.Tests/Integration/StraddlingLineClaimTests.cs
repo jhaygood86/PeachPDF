@@ -20,20 +20,21 @@ namespace PeachPDF.Tests.Integration
     /// <para>
     /// Two production mechanisms leave a line straddling by more than
     /// <see cref="HtmlContainerInt.PageBoundaryEpsilon"/>, and both are exercised here rather than
-    /// simulated: a flex item's content whose commit pass does not apply — today, any
-    /// <c>flex-wrap</c> container with more than one line, or a <c>flex-direction: column</c>/
-    /// <c>column-reverse</c> container — is laid out with <c>HtmlContainerInt.SuppressWordPageBreaks</c>
-    /// set and is never revisited when the engine translates the item into place, and
-    /// <c>MonolithicContent.FitsNoFragmentainer</c> leaves anything taller than the band exactly where
-    /// it is.
+    /// simulated: a flex item's content whose commit pass does not apply — today, a
+    /// <c>flex-direction: column</c>/<c>column-reverse</c> container, whose items are a sequential
+    /// flow rather than the row/row-reverse "parallel flows" shape the commit pass covers — is laid out
+    /// with <c>HtmlContainerInt.SuppressWordPageBreaks</c> set and is never revisited when the engine
+    /// translates the item into place, and <c>MonolithicContent.FitsNoFragmentainer</c> leaves anything
+    /// taller than the band exactly where it is.
     /// </para>
     /// <para>
-    /// A grid item's content no longer exhibits the first mechanism: <c>CssLayoutEngineGrid</c>'s own
-    /// commit pass (issues #517/#526) revisits every row's content live once it sits at its final
-    /// position, the same way flex's single-line commit pass already did — so a grid line that would
-    /// have straddled a page boundary under the old translate-only path now genuinely continues onto
-    /// the next page instead of drawing twice. Only the flex shapes above (and monolithic content,
-    /// which is unrelated to either engine) still straddle.
+    /// Neither a grid item's content nor a row/row-reverse flex item's content (single-line or
+    /// wrapped into several) exhibits the first mechanism any more: <c>CssLayoutEngineGrid</c>'s and
+    /// <c>CssLayoutEngineFlex</c>'s own commit passes (issues #517/#526) revisit every row's/line's
+    /// content live once it sits at its final position — so a line that would have straddled a page
+    /// boundary under the old translate-only path now genuinely continues onto the next page instead of
+    /// drawing twice. Only column-direction flex (and monolithic content, which is unrelated to any
+    /// engine) still straddles.
     /// </para>
     /// <para>
     /// The fixtures assert the overhang they produce is real — comfortably past the tolerance — before
@@ -130,20 +131,25 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
-        /// The grid counterpart of <see cref="ALineTheEngineCouldNotMove_IsClaimedByBothPagesItSpans"/>:
-        /// the exact same fixture shape that straddles for flex (each row its own line, one row landing
-        /// across a page boundary) does <b>not</b> straddle for grid, because
-        /// <c>CssLayoutEngineGrid</c>'s commit pass revisits every row's content live and lets a row that
+        /// The counterpart of <see cref="ALineTheEngineCouldNotMove_IsClaimedByBothPagesItSpans"/> for
+        /// every shape whose commit pass <b>does</b> apply: the same fixture shape that still straddles
+        /// for column-direction flex (each row its own line, one row landing across a page boundary) does
+        /// <b>not</b> straddle for grid or for row/row-reverse flex (single-line or wrapped into several),
+        /// because each engine's commit pass revisits every row's/line's content live and lets one that
         /// would have straddled genuinely continue on the next page instead. Every word is claimed by
-        /// exactly one page, and the one row whose content the boundary falls through is split across
+        /// exactly one page, and the one row/line whose content the boundary falls through is split across
         /// both pages rather than drawn twice or lost.
         /// </summary>
-        [Fact]
-        public async Task AGridRowTheEngineCouldNotFit_ContinuesOnTheNextPageInstead()
+        [Theory]
+        [InlineData("display:grid;grid-template-columns:1fr")]
+        [InlineData("display:flex;flex-wrap:wrap")]
+        public async Task ARowOrLineTheEngineCouldNotFit_ContinuesOnTheNextPageInstead(string containerStyle)
         {
+            // width:100% keeps a wrapped flex line to one item each, matching one row's worth of content
+            // per grid line - harmless for grid, which lays each row out in its own single column anyway.
             var items = string.Join("", Enumerable.Range(0, 120).Select(i =>
-                $"<div style='font-size:10pt;line-height:13pt'>w{i * 3} w{i * 3 + 1} w{i * 3 + 2}</div>"));
-            var markup = $"<div style='display:grid;grid-template-columns:1fr'>{items}</div>";
+                $"<div style='width:100%;font-size:10pt;line-height:13pt'>w{i * 3} w{i * 3 + 1} w{i * 3 + 2}</div>"));
+            var markup = $"<div style='{containerStyle}'>{items}</div>";
 
             var (root, container) = await LayoutHarness.LayoutAsync(
                 LayoutHarness.Wrap(markup), pageHeight: 842, margin: 10);
@@ -165,14 +171,15 @@ namespace PeachPDF.Tests.Integration
 
         private static Task<(CssBox Root, HtmlContainerInt Container)> LayoutAsync()
         {
-            // width:100% on a flex item makes each item its own line, so the items stack down the page and
-            // one of them lands across the boundary. line-height is pinned so the stack's pitch does not
-            // depend on the platform's font metrics. flex-wrap:wrap gives the container more than one
-            // line, which is outside CssLayoutEngineFlex.CommitItemContent's single-line scope.
+            // flex-direction:column stacks items sequentially down the page in what is normally a single
+            // line, so one of them lands across the boundary - and, unlike row/row-reverse, its commit
+            // pass does not apply (a column-direction line's items are sequential, not the "parallel
+            // flows" shape the commit pass covers), so the line still straddles rather than continuing.
+            // line-height is pinned so the stack's pitch does not depend on the platform's font metrics.
             var items = string.Join("", Enumerable.Range(0, 120).Select(i =>
-                $"<div style='width:100%;font-size:10pt;line-height:13pt'>w{i * 3} w{i * 3 + 1} w{i * 3 + 2}</div>"));
+                $"<div style='font-size:10pt;line-height:13pt'>w{i * 3} w{i * 3 + 1} w{i * 3 + 2}</div>"));
 
-            var markup = $"<div style='display:flex;flex-wrap:wrap'>{items}</div>";
+            var markup = $"<div style='display:flex;flex-direction:column'>{items}</div>";
 
             return LayoutHarness.LayoutAsync(LayoutHarness.Wrap(markup), pageHeight: 842, margin: 10);
         }

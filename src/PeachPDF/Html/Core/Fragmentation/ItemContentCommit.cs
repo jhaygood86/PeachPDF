@@ -1,7 +1,9 @@
 using PeachPDF.Html.Adapters;
+using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Threading.Tasks;
 
@@ -115,5 +117,28 @@ namespace PeachPDF.Html.Core.Fragmentation
 
         private static string FormatLayoutUnits(double value) =>
             value.ToString("F4", CultureInfo.InvariantCulture) + "pt";
+
+        /// <summary>
+        /// Moves each of <paramref name="boxes"/> by <paramref name="delta"/> via a direct
+        /// <see cref="CssBox.Location"/> reassignment — <b>not</b> <see cref="CssBox.OffsetLeft(double)"/>/
+        /// <see cref="CssBox.OffsetTop(double)"/>, which would translate a box's already-placed content
+        /// along with it.
+        /// </summary>
+        /// <remarks>
+        /// Mirrors <see cref="CssBox.ResumeInTheNextFragmentainer"/>'s own choice, for the same reason: a
+        /// resumed commit-pass item may already have content frozen in the fragmentainer being left (a
+        /// paragraph that placed some lines before stopping), and only the origin new content flows from
+        /// should move — the already-frozen lines must stay exactly where they are. This is what a
+        /// resumed pass applies to every not-yet-committed item when the container itself moved to a new
+        /// fragmentainer (a multicolumn column boundary, most concretely) since the token naming them was
+        /// published — see each engine's own <c>ResumeCommitPass</c>.
+        /// </remarks>
+        internal static void RepositionForResume(IEnumerable<CssBox> boxes, RPoint delta)
+        {
+            if (delta.X == 0 && delta.Y == 0) return;
+
+            foreach (var box in boxes)
+                box.Location = new RPoint(box.Location.X + delta.X, box.Location.Y + delta.Y);
+        }
     }
 }
