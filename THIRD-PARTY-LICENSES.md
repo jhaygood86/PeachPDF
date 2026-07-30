@@ -67,6 +67,18 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## Unicode Character Database (bidi data tables)
+
+- **Location:** [`src/PeachPDF/Text/Resources/Bidi/`](src/PeachPDF/Text/Resources/Bidi/) — `DerivedBidiClass.txt.br`, `BidiBrackets.txt.br`, `BidiMirroring.txt.br` (Brotli-compressed, consumed by `PeachPDF.Text.Bidi.BidiClassTable`/`BidiBrackets`/`BidiMirroring`)
+- **Upstream source:** the Unicode Character Database (UCD), version 17.0.0, mirrored unmodified at [`assets/unicode/DerivedBidiClass.txt`](assets/unicode/DerivedBidiClass.txt), [`assets/unicode/BidiBrackets.txt`](assets/unicode/BidiBrackets.txt), [`assets/unicode/BidiMirroring.txt`](assets/unicode/BidiMirroring.txt) — see [`assets/unicode/UnicodeCharacterDatabase.LICENSE.txt`](assets/unicode/UnicodeCharacterDatabase.LICENSE.txt)
+- **Generation script:** [`assets/unicode/generate_bidi_tables.py`](assets/unicode/generate_bidi_tables.py), which reparses the three UCD source files above into the compact per-codepoint-range records the embedded resources actually ship
+- **Also present, not shipped:** `assets/unicode/BidiCharacterTest.txt`, the Unicode Consortium's own bidi conformance test suite, used only by `PeachPDF.Tests` to verify the Unicode Bidirectional Algorithm (UAX #9) implementation against real test vectors — never embedded in the library or its NuGet package
+- **License:** [Unicode License v3](https://www.unicode.org/license.txt) ("Unicode® License Agreement — Data Files and Software")
+
+Each UCD source file carries this notice in its own header, reproduced here rather than the full license text (see the license file linked above for that):
+
+> © 2025 Unicode®, Inc. Unicode and the Unicode Logo are registered trademarks of Unicode, Inc. in the U.S. and other countries. For terms of use and license, see https://www.unicode.org/terms_of_use.html
+
 ## Hyphenation patterns (hyph-utf8 / CTAN)
 
 - **Location:** [`src/PeachPDF/Text/Resources/Patterns/`](src/PeachPDF/Text/Resources/Patterns/) — one Brotli-compressed `hyph-<tag>.txt.br` file per language (73 files)
