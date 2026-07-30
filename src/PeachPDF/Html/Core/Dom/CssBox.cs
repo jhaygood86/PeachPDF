@@ -3653,6 +3653,22 @@ namespace PeachPDF.Html.Core.Dom
                         (top, reservedBlankSlot) =
                             StepPastSlotsOnTheWrongSide(child, forcedTop + forcedBreakMargin, forcedBreakMargin);
 
+                        // css-break-3 §4.4's blank-page idiom: a forced break can land a box that carries
+                        // no printable content of its own alone on a slot (an empty break marker between
+                        // two "break-after: always" siblings is the canonical case). Without an explicit
+                        // reservation, CSS Paged Media 3 §3.2's content-empty-page skip
+                        // (FragmentEmitter.Finish) would drop that slot from the output entirely, silently
+                        // discarding the deliberate blank page - the layout-position half of this (which
+                        // slot the box lands on) was already correct without it. Skipped when a directional
+                        // step already reserved a slot for this box: the dictionary holds one slot per
+                        // owner, and the stepped-over slot must keep it - the box's own landing slot is what
+                        // a directional break exists to carry real content to.
+                        if (reservedBlankSlot is null)
+                        {
+                            child.HtmlContainer!.SetBlankSlotReservation(
+                                child, child.HtmlContainer.SlotStartingAt(top));
+                        }
+
                         // §3.1: a forced *page* break is not a nested fragmentainer's to satisfy. The page
                         // vehicle is realized by placement, and placing the child at `top` inside a column
                         // puts it past that column's band - which the container's own overflow arm then
