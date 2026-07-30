@@ -426,6 +426,12 @@ namespace PeachPDF.Html.Core
         private const int MaxFragmentainers = 100_000;
 
         /// <summary>
+        /// Test-only override for <see cref="MaxFragmentainers"/>, so a unit test can drive the driver
+        /// loop to exhaustion without actually running 100,000 passes. Null in production.
+        /// </summary>
+        internal int? MaxFragmentainersOverride { get; set; }
+
+        /// <summary>
         /// The top-left most location of the rendered html.<br/>
         /// This will offset the top-left corner of the rendered html.
         /// </summary>
@@ -961,8 +967,14 @@ namespace PeachPDF.Html.Core
             try
             {
                 var slot = 0;
+                var maxPasses = MaxFragmentainersOverride ?? MaxFragmentainers;
 
-                for (var pass = 0; pass < MaxFragmentainers; pass++)
+                // Set before every `break` below, so the code after the loop can tell "the loop reached a
+                // real conclusion" apart from "the loop ran out of passes" - a bare `break` only exits the
+                // loop, it does not skip the statements that follow it.
+                var concluded = false;
+
+                for (var pass = 0; pass < maxPasses; pass++)
                 {
                     var context = new FragmentainerContext(this, Root!, slot);
                     CurrentFragmentainer = context;
@@ -1003,6 +1015,7 @@ namespace PeachPDF.Html.Core
                     if (next is null)
                     {
                         emitter.EmitPass(slot, LastSlotAnyGeometryTouches(context.SlotIndex), token, null);
+                        concluded = true;
                         break;
                     }
 
@@ -1022,6 +1035,7 @@ namespace PeachPDF.Html.Core
                         // here failed the whole render instead of producing a document with one bad
                         // page. LastResortRelayouts is what says it happened.
                         await LayoutTheRemainderMonolithically(g, emitter, token!, slot);
+                        concluded = true;
                         break;
                     }
 
@@ -1039,6 +1053,16 @@ namespace PeachPDF.Html.Core
                     token = next;
                     slot = next.ResumeSlotIndex;
                 }
+
+                // Running out of passes without a detected cycle is a no-progress condition too: a
+                // genuine walk that keeps producing a (slot, token) pair it has never been entered with
+                // before never trips HasAlreadyBeenEntered, so it would otherwise fall out of the loop
+                // silently, with whatever the last pass produced never emitted. Route it through the
+                // same last-resort recovery a detected cycle uses rather than dropping it. Guarded on
+                // `concluded` because a `break` above only exits the loop - it does not skip this
+                // statement, which sits after the loop rather than inside it.
+                if (!concluded && token is not null)
+                    await LayoutTheRemainderMonolithically(g, emitter, token, slot);
             }
             finally
             {

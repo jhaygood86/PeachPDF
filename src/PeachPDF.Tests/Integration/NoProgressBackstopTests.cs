@@ -139,6 +139,48 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
+        /// A box that never gets nowhere the same way twice: every pass it is laid out in while breaking
+        /// is live, it hands back a record naming a child index one higher than the last, so no <c>(slot,
+        /// token)</c> pair it produces is ever repeated.
+        /// </summary>
+        /// <remarks>
+        /// This is the third way the driver's pass budget can be reached, distinct from both
+        /// <see cref="StallingBox"/>'s one-pass cycle and <see cref="AlternatingBox"/>'s two-pass one:
+        /// <see cref="HasAlreadyBeenEntered"/> never trips for a run that keeps producing pairs it has
+        /// never been entered with before, so only the loop's own bound — <c>MaxFragmentainers</c>, or
+        /// <see cref="MaxFragmentainersOverride"/> in a test — can end it. Before that fallback existed,
+        /// running out of passes this way fell out of the driver loop with whatever the last pass produced
+        /// never emitted.
+        /// </remarks>
+        private sealed class WalkingBox : CssBox
+        {
+            private int _steps;
+
+            internal WalkingBox(CssBox parent) : base(parent, null)
+            {
+                InheritStyle(parent, everything: true);
+                Display = CssConstants.Block;
+            }
+
+            protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild)
+            {
+                var context = HtmlContainer?.CurrentFragmentainer;
+
+                if (context is not { IsFragmenting: true })
+                {
+                    // See StallingBox: this override never runs BeginLayoutPass, so what the lifecycle
+                    // would have cleared has to be cleared here or the recovery pass places nothing.
+                    SetPendingBreakToken(null);
+                    return default;
+                }
+
+                SetPendingBreakToken(
+                    new BlockBreakToken(this, context.SlotIndex, _steps++, null, IsBreakBefore: true, null));
+                return default;
+            }
+        }
+
+        /// <summary>
         /// Lays <paramref name="before"/>, then a box the driver cannot get past, then
         /// <paramref name="after"/> — so everything in <paramref name="after"/> exists only if the
         /// recovery laid it out and the emitter kept it.
@@ -160,8 +202,18 @@ namespace PeachPDF.Tests.Integration
         private static async Task<HtmlContainerInt> LayoutWithATwoPassCycle(string before, string after) =>
             await LayoutWith(before, after, "", parent => new AlternatingBox(parent));
 
+        /// <summary>
+        /// The same, with a box that never repeats a <c>(slot, token)</c> pair — a genuine walk — and the
+        /// driver's pass budget shrunk to <paramref name="maxPasses"/> so it exhausts in a handful of
+        /// passes rather than the real 100,000.
+        /// </summary>
+        private static async Task<HtmlContainerInt> LayoutWithAWalkToExhaustion(
+            string before, string after, int maxPasses) =>
+            await LayoutWith(before, after, "", parent => new WalkingBox(parent), maxPasses);
+
         private static async Task<HtmlContainerInt> LayoutWith(
-            string before, string after, string pageCss, Func<CssBox, CssBox> makeStall)
+            string before, string after, string pageCss, Func<CssBox, CssBox> makeStall,
+            int? maxFragmentainersOverride = null)
         {
             var (_, container) = await LayoutHarness.LayoutAsync(
                 "<!DOCTYPE html><html><head><style>" + pageCss + "</style></head><body style='margin:0'>"
@@ -170,6 +222,8 @@ namespace PeachPDF.Tests.Integration
                 margin: 0,
                 prepare: root =>
                 {
+                    root.HtmlContainer!.MaxFragmentainersOverride = maxFragmentainersOverride;
+
                     var anchor = LayoutHarness.FindById(root, "stall-anchor")!;
                     var parent = anchor.ParentBox!;
 
@@ -322,6 +376,92 @@ namespace PeachPDF.Tests.Integration
                 after: "<p style='margin:0'>beta</p><p style='margin:0'>gamma</p>");
 
             Assert.Equal(["alpha", "beta", "gamma"], WordsIn(container).Order());
+        }
+
+        /// <summary>
+        /// A run that gets nowhere by <i>walking</i> rather than cycling — never repeating a
+        /// <c>(slot, token)</c> pair — trips no cycle detection at all, so only the driver's pass budget
+        /// can end it. Running out of that budget must not be silent truncation: before this issue was
+        /// fixed, the loop fell out with the last pass's content never emitted (#422).
+        /// </summary>
+        [Fact]
+        public async Task APassThatWalksForever_StillProducesADocument()
+        {
+            var container = await LayoutWithAWalkToExhaustion(
+                before: "<p style='margin:0'>alpha</p>", after: "<p style='margin:0'>omega</p>", maxPasses: 5);
+
+            Assert.NotNull(container.FragmentTree);
+            Assert.NotEmpty(container.FragmentTree!.Fragmentainers);
+        }
+
+        /// <summary>
+        /// Reaching the pass budget without a detected cycle is routed through the same last-resort
+        /// recovery a cycle is, so it is counted the same way and the run actually stops at the budget
+        /// rather than running past it looking for a cycle that will never come.
+        /// </summary>
+        [Fact]
+        public async Task APassThatWalksForever_IsCountedAsALastResortRelayoutAndStopsAtTheBudget()
+        {
+            const int maxPasses = 5;
+
+            var container = await LayoutWithAWalkToExhaustion(
+                before: "<p style='margin:0'>alpha</p>", after: "<p style='margin:0'>omega</p>", maxPasses);
+
+            Assert.Equal(1, container.LastResortRelayouts);
+            // One extra pass: the recovery itself also counts against FragmentainerPasses.
+            Assert.Equal(maxPasses + 1, container.FragmentainerPasses);
+        }
+
+        /// <summary>
+        /// And the content the walk was deferring survives it — the whole point of routing exhaustion
+        /// through the recovery instead of letting the loop simply end.
+        /// </summary>
+        [Fact]
+        public async Task APassThatWalksForever_KeepsTheDocumentsContent()
+        {
+            var container = await LayoutWithAWalkToExhaustion(
+                before: "<p style='margin:0'>alpha</p>",
+                after: "<p style='margin:0'>beta</p><p style='margin:0'>gamma</p>",
+                maxPasses: 5);
+
+            Assert.Equal(["alpha", "beta", "gamma"], WordsIn(container).Order());
+        }
+
+        /// <summary>
+        /// A multi-column container laid out entirely by the recovery still establishes its own
+        /// per-column fragmentation context (<c>CssLayoutEngineColumns</c>, <c>inheritsSuppression:
+        /// true</c>), which used to still record a column break nothing above it ever reads — the
+        /// recovery emits with <c>outgoing: null</c> unconditionally — silently dropping whatever content
+        /// that break named (#423). Fixed by gating the column-break arms in
+        /// <c>CssBox.LayoutBlockChildren</c> on <c>IsFragmenting</c> as well as <c>HasOwnBand</c>, the same
+        /// pattern already used elsewhere (e.g. the escaped-forced-break arm), so a column context nested
+        /// in a non-fragmenting scope stops trying to record breaks at all.
+        /// </summary>
+        /// <remarks>
+        /// Twelve items is not enough to reproduce the drop — a small multicol container's own two-column
+        /// capacity happens to hold all of it. Sixty is: without the fix, everything past the point the
+        /// multicol container exhausts both its columns is never positioned at all and silently missing.
+        /// Asserted as containment rather than exactly-once: an unbreakable box that straddles a page
+        /// boundary while breaking is suppressed is drawn on both pages it touches, deliberately (#484) —
+        /// unrelated to what this test is about, and a large enough fixture to reproduce the drop can
+        /// happen to land an item or two across such a boundary too.
+        /// </remarks>
+        [Fact]
+        public async Task TheRecovery_KeepsAMulticolChildsContent()
+        {
+            var items = string.Concat(Enumerable.Range(1, 60)
+                .Select(i => $"<div style='height:40px'>item{i}</div>"));
+
+            var (container, _) = await LayoutWithAStall(
+                before: "<p style='margin:0'>alpha</p>",
+                after: $"<div style='columns:2; column-gap:0; width:200px'>{items}</div>");
+
+            var expected = new[] { "alpha" }.Concat(Enumerable.Range(1, 60).Select(i => $"item{i}"));
+            var actual = WordsIn(container).ToHashSet();
+            var missing = expected.Where(word => !actual.Contains(word)).ToList();
+
+            Assert.Equal(1, container.LastResortRelayouts);
+            Assert.Empty(missing);
         }
 
         private static IReadOnlyList<string> WordsIn(HtmlContainerInt container) =>

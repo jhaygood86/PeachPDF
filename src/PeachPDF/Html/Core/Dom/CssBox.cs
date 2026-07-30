@@ -2656,7 +2656,13 @@ namespace PeachPDF.Html.Core.Dom
                     // Asked only while such a fragmentainer is being filled. Once the record is out of the
                     // last of them the mark names nothing - no page-grid site reads it - and intercepting
                     // here would skip the two arms below that a page-context loop does have answers for.
-                    if (HtmlContainer?.CurrentFragmentainer is { HasOwnBand: true }
+                    //
+                    // Gated on IsFragmenting as well as HasOwnBand: a column context nested inside a scope
+                    // that cannot record a break at all - the no-progress recovery's suppressed pass being
+                    // the case that found it (#423) - would otherwise still intercept this and hand back a
+                    // token nothing above it ever reads, silently dropping whatever content it named.
+                    if (HtmlContainer is { IsFragmenting: true }
+                        && HtmlContainer.CurrentFragmentainer is { HasOwnBand: true }
                         && EscapingBreakBefore(childBox, i) is { } escaping)
                     {
                         PendingBreakToken = escaping;
@@ -2675,7 +2681,8 @@ namespace PeachPDF.Html.Core.Dom
                     // column is therefore split rather than walked from column to column - §4.3's fourth
                     // tier, where the constraint is given up rather than acted on pointlessly.
                     if (i > start
-                        && HtmlContainer?.CurrentFragmentainer is { HasOwnBand: true } columnContext
+                        && HtmlContainer is { IsFragmenting: true }
+                        && HtmlContainer.CurrentFragmentainer is { HasOwnBand: true } columnContext
                         && (ForcedColumnBreakFallsBefore(childBox) || AvoidsBreakingAcrossThisColumn(childBox)))
                     {
                         // No target: every column of a container begins at the same block-axis coordinate,
@@ -2783,7 +2790,8 @@ namespace PeachPDF.Html.Core.Dom
                         && childBox.PlacesItselfAsBlockBox
                         && !childBox.IsOutOfFlow
                         && childBox.Display != CssConstants.None
-                        && HtmlContainer?.CurrentFragmentainer is { HasOwnBand: true } columnBand
+                        && HtmlContainer is { IsFragmenting: true }
+                        && HtmlContainer.CurrentFragmentainer is { HasOwnBand: true } columnBand
                         && childBox.ActualBottom > columnBand.BandBottom)
                     {
                         PendingBreakToken = new BlockBreakToken(
