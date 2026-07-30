@@ -1311,7 +1311,7 @@ When a `var()` reference can't be resolved and no fallback is given, the contain
 
 ## CSS Math Functions
 
-PeachPDF supports [`calc()`](https://developer.mozilla.org/en-US/docs/Web/CSS/calc), [`min()`](https://developer.mozilla.org/en-US/docs/Web/CSS/min), [`max()`](https://developer.mozilla.org/en-US/docs/Web/CSS/max), and [`clamp()`](https://developer.mozilla.org/en-US/docs/Web/CSS/clamp) anywhere a `<length>`, `<percentage>`, `<angle>`, or plain `<number>` is accepted — width, height, margin, padding, inset (`top`/`left`/`right`/`bottom`), border-width, border-spacing, border-radius, gap, flex-basis, font-size, line-height, text-indent, the length/number arguments of `transform` functions like `translateX()`/`scale()`, the angle argument of `rotate()`/`skewX()`/`skewY()` and gradient direction angles, and the hue component of `hsl()`/`hsla()`.
+PeachPDF supports [`calc()`](https://developer.mozilla.org/en-US/docs/Web/CSS/calc), [`min()`](https://developer.mozilla.org/en-US/docs/Web/CSS/min), [`max()`](https://developer.mozilla.org/en-US/docs/Web/CSS/max), and [`clamp()`](https://developer.mozilla.org/en-US/docs/Web/CSS/clamp) anywhere a `<length>`, `<percentage>`, `<angle>`, `<integer>`, or plain `<number>` is accepted — width, height, margin, padding, inset (`top`/`left`/`right`/`bottom`), border-width, border-spacing, border-radius, gap, flex-basis, font-size, line-height, text-indent, the length/number arguments of `transform` functions like `translateX()`/`scale()`, the angle argument of `rotate()`/`skewX()`/`skewY()` and gradient direction angles, the hue component of `hsl()`/`hsla()`, and the `<integer>`-typed properties `z-index`, `order`, and `widows` (e.g. `z-index: calc(3 - 2)`).
 
 ```css
 .card {
@@ -1335,6 +1335,7 @@ PeachPDF supports [`calc()`](https://developer.mozilla.org/en-US/docs/Web/CSS/ca
 | Time and resolution units (`s`, `dpi`) inside a math function | Not supported | PeachPDF doesn't support these unit categories at all, with or without a math function |
 | Viewport units (`vw`/`vh`/`vmin`/`vmax`) inside a math function | Not supported | PeachPDF has no viewport-unit support anywhere |
 | A math function inside CSS Grid track sizing | Full | A `calc()`/`min()`/`max()`/`clamp()` length resolves as a grid track size — bare, and inside `minmax()`/`fit-content()`/`repeat()` arguments (a wrong-category math function, e.g. an angle, drops the whole track list at parse time) |
+| A math function for an `<integer>`-typed property (`z-index`, `order`, `widows`) | Full | Must type-check as a plain `<number>` (a length/percentage/angle-category expression is rejected); the result is rounded to the nearest integer, ties away from zero, and folded to a literal at parse time — the same as a `<number>`-typed property, calc() is resolved eagerly rather than kept symbolic, since an integer-category expression has no relative unit to defer to layout |
 
 Note: `background-position` and `background-size` are not listed in the table above because they're not part of the math-function-specific test matrix — both fully support `calc()` in their length/percentage values (e.g. `background-position: calc(50% - 10px) center`), resolved via the same length parser used everywhere else in this table.
 

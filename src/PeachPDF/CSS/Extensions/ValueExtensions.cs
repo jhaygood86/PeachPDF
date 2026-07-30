@@ -242,6 +242,22 @@ namespace PeachPDF.CSS
                 return ((NumberToken)element).IntegerValue;
             }
 
+            // CSS Values and Units Level 4 §10.9: a math function is accepted anywhere <integer> is
+            // expected, provided it type-checks as a plain <number> (no length/percentage/angle leaf -
+            // those categories are meaningless for e.g. z-index/order), and its result is rounded to the
+            // nearest integer (ties away from zero) rather than kept symbolic. Unlike a length calc(),
+            // a Number-category calc() has no em/rem/percent-relative leaf to defer to layout, so it can
+            // - and must, to satisfy every existing int.Parse(box.ZIndex)-style consumer - be folded to a
+            // concrete integer right here rather than carried as a CalcValue.
+            if (element is FunctionToken function && CalcParser.IsCalcFamily(function.Data))
+            {
+                var node = CalcParser.Parse(function);
+                if (node is null || CalcTypeChecker.Check(node) != CalcCategory.Number) return null;
+
+                var result = CalcEvaluator.Evaluate(node, new CalcContext(1, 0, 0));
+                return result.HasValue ? (int)Math.Round(result.Value, MidpointRounding.AwayFromZero) : null;
+            }
+
             return null;
         }
 
