@@ -1260,9 +1260,10 @@ namespace PeachPDF.Tests.Integration
         /// A boundary rather than the behaviour, and a <i>pre-existing</i> one: a forced break carried by a
         /// box that is not the container's own child is lost entirely — no page break and no column break —
         /// so there is nothing here for an escaping record to carry. Its cause is one level down from
-        /// anything about columns: <c>_forcedBreakTop</c> is a one-shot, and the measurement pass that sizes
-        /// the fill spends it, because <c>PassRewind.RollBackTo</c> re-opens the prologue for the
-        /// container's own children only.
+        /// anything about columns: the break is one-shot — <c>CssBox.PlacedByForcedBreak</c> latches that it
+        /// has been taken and only a prologue that re-decides it clears that again — and the measurement
+        /// pass that sizes the fill spends it, because <c>PassRewind.RollBackTo</c> re-opens the prologue
+        /// for the container's own children only.
         /// </summary>
         /// <remarks>
         /// This is why the direct-child case had an observable behaviour to fix at all. Filed as

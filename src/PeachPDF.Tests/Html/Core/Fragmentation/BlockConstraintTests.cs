@@ -149,5 +149,76 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
             Assert.Equal(container.PageTopOf(1), constraint.AbsoluteBandBottom, 9);
             Assert.Equal(container.PageBottomOf(0), constraint.AbsoluteBandBottom, 9);
         }
+
+        [Fact]
+        public void AbsoluteBandTop_IsWhereThisFragmentainerBegins()
+        {
+            var container = CreateContainer();
+            var box = new CssBox(null, null) { HtmlContainer = container };
+
+            Assert.Equal(container.PageTopOf(3), BlockConstraint.AtSlot(container, box, 3).AbsoluteBandTop, 9);
+            // A measurement pass has no band to begin at, and must not answer with a sentinel that reads
+            // as a coordinate content could be placed at.
+            Assert.Equal(0, BlockConstraint.Measurement.AbsoluteBandTop);
+        }
+
+        // EndingAt carries HtmlContainerInt.SlotEndingAt's bottom-edge convention: an edge flush on a
+        // boundary belongs to the band above it, not the one it merely touches. For's top-edge convention
+        // answers the other way for the very same coordinate, which is why they are separate factories.
+        [Theory]
+        [InlineData(MarginTop + BandHeight, 0)] // flush on slot 1's top: still slot 0's bottom edge
+        [InlineData(MarginTop + BandHeight + 0.4, 0)] // inside the tolerance, still slot 0
+        [InlineData(MarginTop + BandHeight + 1, 1)] // genuinely into slot 1
+        [InlineData(MarginTop + BandHeight - 1, 0)]
+        public void EndingAt_PlacesTheBandABottomEdgeEndsIn(double blockEnd, int expectedSlot)
+        {
+            var container = CreateContainer();
+            var box = new CssBox(null, null) { HtmlContainer = container };
+
+            var constraint = BlockConstraint.EndingAt(container, box, blockEnd);
+
+            Assert.Equal(expectedSlot, constraint.Fragmentainer!.SlotIndex);
+            Assert.Equal(container.PageTopOf(expectedSlot), constraint.AbsoluteBandTop, 9);
+            Assert.Equal(blockEnd - container.PageTopOf(expectedSlot), constraint.BlockOffset, 9);
+        }
+
+        [Fact]
+        public void EndingAt_ReturnsMeasurement_WhenThereIsNoRealPageGrid()
+        {
+            var container = CreateContainer(double.MaxValue);
+            var box = new CssBox(null, null) { HtmlContainer = container };
+
+            Assert.Equal(BlockConstraint.Measurement, BlockConstraint.EndingAt(container, box, 500));
+        }
+
+        // FallsPast is the same bottom-edge convention asked of an absolute coordinate, tolerance included -
+        // deliberately NOT Straddles, whose bare `>` would call a box landing exactly on the boundary a
+        // crossing and truncate a margin that never spanned anything.
+        [Theory]
+        [InlineData(MarginTop + BandHeight - 1, false)]
+        [InlineData(MarginTop + BandHeight, false)] // flush on the boundary has not crossed it
+        [InlineData(MarginTop + BandHeight + 0.4, false)] // inside the tolerance
+        [InlineData(MarginTop + BandHeight + 1, true)]
+        public void FallsPast_UsesTheBoundaryToleranceThatStraddlesDoesNot(double blockEnd, bool expected)
+        {
+            var container = CreateContainer();
+            var box = new CssBox(null, null) { HtmlContainer = container };
+            var constraint = BlockConstraint.AtSlot(container, box, 0);
+
+            Assert.Equal(expected, constraint.FallsPast(blockEnd));
+
+            // The same coordinate, asked as an extent from the band's own top: Straddles calls the flush
+            // case a crossing. The two answers differ exactly where the tolerance is, which is the whole
+            // reason both members exist.
+            Assert.Equal(blockEnd > container.PageBottomOf(0),
+                constraint.Straddles(blockEnd - container.PageTopOf(0)));
+        }
+
+        [Fact]
+        public void FallsPast_IsFalseDuringAMeasurementPass()
+        {
+            // No band means nothing to cross out of - the same refusal Straddles makes.
+            Assert.False(BlockConstraint.Measurement.FallsPast(double.MaxValue / 2));
+        }
     }
 }
