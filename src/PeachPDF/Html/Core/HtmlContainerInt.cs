@@ -1684,29 +1684,40 @@ namespace PeachPDF.Html.Core
 
         /// <summary>
         /// The band a bottom-edge straddle question about content beginning at <paramref name="top"/>
-        /// is answered against — <paramref name="gridBand"/> where no fragmentainer is named (a
-        /// measurement pass, per <see cref="DetachFragmentainer"/>), inside a column (which has a band
-        /// of its own), or for the driver's suppressed last-resort pass (which may place content
-        /// anywhere and must not break again).
+        /// is answered against: the fragmentainer <see cref="CurrentFragmentainer"/> is actually filling,
+        /// per its own cursor (<c>FragmentainerContext.SlotIndex</c>) — <paramref name="gridBand"/> only
+        /// where no fragmentainer is named (a measurement pass, per <see cref="DetachFragmentainer"/>),
+        /// inside a column (which has a band of its own), or for the driver's suppressed last-resort pass
+        /// (which may place content anywhere and must not break again).
         /// </summary>
         /// <remarks>
-        /// Also the sole instrumentation point for <see cref="CursorSpills"/>: whenever a fragmenting
-        /// page pass is asked this question about content whose own slot disagrees with
-        /// <see cref="CurrentFragmentainer"/>'s, that is a pass placing content past the band it says
-        /// it is filling without a break recorded for the crossing — see
-        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/435">#435</see>. Returns
-        /// <paramref name="gridBand"/> unconditionally today; once every such crossing is closed (so
-        /// <see cref="CursorSpills"/> is provably always zero), this returns <c>filling.Band</c>
-        /// instead, which is what makes <c>CssRect.WouldStraddleFragmentainer</c>'s two arms one
-        /// expression.
+        /// <para>
+        /// Safe since <see href="https://github.com/jhaygood86/PeachPDF/issues/435">#435</see>'s stage 1
+        /// closed every production mechanism that could leave the two disagreeing — an unforced §5.2
+        /// flush placement, unbreakable word/block overflow, a table row-loop band jump, a flex/grid line
+        /// relocation — each now steps <c>FragmentainerContext.StepOverTo</c> to match. Before that, this
+        /// answered <paramref name="gridBand"/> unconditionally; converting it directly, without stage 1
+        /// closing those mechanisms first, is recorded (in the issue and in
+        /// <c>.claude/recent-fixes/</c>) as changing 63 of 69 showcases, with visibly overlapping content.
+        /// </para>
+        /// <para>
+        /// <see cref="CursorSpills"/> remains wired here as the permanent regression guard: any future
+        /// mechanism that reopens the gap this closes shows up as a non-zero count rather than a silent
+        /// re-divergence between the two bands this method used to be able to return.
+        /// </para>
         /// </remarks>
         internal PageBand BandBeingFilled(double top, PageBand gridBand)
         {
             if (CurrentFragmentainer is not { IsFragmenting: true, HasOwnBand: false } filling) return gridBand;
 
+            // Diagnostic only - never a behavioural fallback. A mismatch here means either a mechanism
+            // stage 1 did not close (there should be none left in production), or this word is exactly
+            // the tolerance case stage 1 deliberately left for this conversion to turn into a break: its
+            // own top has drifted into a later grid band while nothing advanced the cursor, and asking
+            // FallsPast against filling.Band (not gridBand) is what makes that word straddle now.
             if (filling.SlotIndex != SlotStartingAt(top)) CursorSpills++;
 
-            return gridBand;
+            return filling.Band;
         }
 
         /// <summary>

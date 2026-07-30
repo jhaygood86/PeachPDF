@@ -74,8 +74,16 @@ namespace PeachPDF.Tests.Html.Core.Fragments
         [InlineData("<div style='height:1000pt'>x</div>", 200, "0", "0")]
         // Forced breaks materialize consecutive pages; each origin is the previous plus one band.
         [InlineData("<p>a</p><p style='page-break-before:always'>b</p><p style='page-break-before:always'>c</p>", 300, "0,1,2", "0,260,520")]
-        // A margin large enough to cross a page is truncated, so it never paginates as blank space.
-        [InlineData("<div style='margin-top:900pt'>far below</div>", 200, "0", "0")]
+        // The div's own margin-top collapses all the way up through html/body to the document root
+        // (§8.3.1) - which §5.2's truncation never sees, since "only the root is excluded: it has
+        // nothing before it for a break to fall between." So the margin is genuinely, entirely applied,
+        // landing the content wherever that lands it on the page grid - slot 5 here, not truncated to
+        // slot 0. Before #435's stage 1 gave the root's own placement a cursor step of its own
+        // (`CssBox.PlaceBlockChild`'s `child.ParentBox is null` arm), this fixture materialized as slot
+        // 0 with local Y 920 - off the bottom of a ~200pt sheet and never actually drawn on any visible
+        // page. Caught only by walking the fragment tree's own word rectangles, not by this slot/origin
+        // pin alone (see ContentAfterARootLevelMarginCollapse_LandsWithinItsFragmentsVisibleArea below).
+        [InlineData("<div style='margin-top:900pt'>far below</div>", 200, "5", "800")]
         // Real content either side of a tall empty gap: the gap's own slots are never materialized.
         [InlineData("<p>top</p><div style='height:900pt'></div><p>far below</p>", 200, "0,6", "0,960")]
         public async Task MaterializedPages_MatchThePrePagedFragmentTreeBehaviour(
@@ -87,6 +95,28 @@ namespace PeachPDF.Tests.Html.Core.Fragments
 
             Assert.Equal(expectedSlots, string.Join(",", fragmentainers.Select(f => f.SlotIndex)));
             Assert.Equal(expectedOrigins, string.Join(",", fragmentainers.Select(f => f.LocalOriginY)));
+        }
+
+        /// <summary>
+        /// The word-level counterpart to the theory above's margin-collapse-through row: not just which
+        /// slot the content materializes on, but that the words actually land within that fragment's own
+        /// visible area (a non-negative local Y no taller than the page). A slot/origin pin alone is
+        /// satisfied by content rendered off the bottom of the page just as well as by content rendered
+        /// on it - this is the check that would have caught #435's root-placement gap, which the theory
+        /// above's old "0"/"0" expectation did not.
+        /// </summary>
+        [Fact]
+        public async Task ContentAfterARootLevelMarginCollapse_LandsWithinItsFragmentsVisibleArea()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap("<div style='margin-top:900pt'>far below</div>"), pageHeight: 200);
+
+            var word = LayoutHarness.Descendants(root).SelectMany(b => b.Words).First(w => w.Text == "far");
+            var fragmentainer = container.FragmentTree!.Fragmentainers.Single();
+            var localY = word.Top - fragmentainer.LocalOriginY;
+
+            Assert.True(localY >= 0 && localY <= container.PageSize.Height,
+                $"word landed at local Y {localY}, outside the fragment's own [0, {container.PageSize.Height}] visible band");
         }
 
         [Fact]
@@ -389,8 +419,15 @@ namespace PeachPDF.Tests.Html.Core.Fragments
         [Fact]
         public async Task InlineSpanningAPageBreak_KeepsCountingEdgesAcrossPages()
         {
+            // widows/orphans pinned to 1: the default of 2 now correctly pulls Gamma onto page 1 along
+            // with Delta (only Delta alone there violates the default widows minimum) since #435 made an
+            // ordinary paragraph overflowing a page a real break the widows mover can act on - which it
+            // could not before, having nothing to act on. That is a real, separate behaviour change (see
+            // BandMembershipToleranceTests/OrphansWidowsIntegrationTests for its own coverage); this
+            // fixture is about edge continuity across a break, not about where the break falls, so it
+            // pins the split it was written around.
             var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
-                "<div style='width:200pt;font:10pt Arial;line-height:30pt'>" +
+                "<div style='width:200pt;font:10pt Arial;line-height:30pt;widows:1;orphans:1'>" +
                 "<span id='s'>Alpha<br>Beta<br>Gamma<br>Delta</span></div>"),
                 pageHeight: 80, margin: 0);
 

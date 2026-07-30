@@ -414,10 +414,21 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// relocation the engine has already worked out — a whole-table pre-check moving the table onto
         /// the next page, which restarts the row loop rather than continuing it.
         /// </summary>
-        internal void RestartAt(double top, int slotIndex)
+        /// <param name="top">the row loop's new starting position</param>
+        /// <param name="slotIndex">the band the table was moved to</param>
+        /// <param name="container">
+        /// the container whose document-level pass cursor must follow - see the identical reasoning on
+        /// <see cref="MoveToSlot"/>. Missing here left a whole-table relocation invisible to
+        /// <see cref="HtmlContainerInt.BandBeingFilled"/>: row 0's own content asked its fragmentation
+        /// questions of the band the table was relocated *from*, read a spurious straddle against a band
+        /// it had already left, and deferred every word to a same-slot "resume" that then landed with no
+        /// vertical alignment applied - #435.
+        /// </param>
+        internal void RestartAt(double top, int slotIndex, HtmlContainerInt? container = null)
         {
             CurrentY = top;
             SlotIndex = slotIndex;
+            container?.CurrentFragmentainer?.StepOverTo(slotIndex);
         }
 
         /// <summary>

@@ -1282,7 +1282,7 @@ namespace PeachPDF.Html.Core.Dom
 
                     _tableBox.Location = _tableBox.Location with { Y = _tableBox.Location.Y + pageBreakOffset };
                     startY = Math.Max(_tableBox.ClientTop + GetVerticalSpacing(), 0);
-                    cursor.RestartAt(startY, container.PageIndexOf(startY));
+                    cursor.RestartAt(startY, container.PageIndexOf(startY), container);
                 }
             }
 
@@ -1320,7 +1320,7 @@ namespace PeachPDF.Html.Core.Dom
                     _headerBox.OffsetTop(pageBreakOffset);
 
                     startY = Math.Max(_tableBox.ClientTop + GetVerticalSpacing(), 0);
-                    cursor.RestartAt(startY, container.PageIndexOf(startY));
+                    cursor.RestartAt(startY, container.PageIndexOf(startY), container);
                 }
             }
 

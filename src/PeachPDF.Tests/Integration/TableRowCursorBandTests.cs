@@ -340,5 +340,37 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Equal(0, container.CursorSpills);
         }
+
+        /// <summary>
+        /// The whole-table relocation pre-check (<c>LayoutBodyRows</c>' "move the entire table to the next
+        /// page when the first body row would cross a page boundary and the full body fits one page")
+        /// moves the table via <c>TableRowCursor.RestartAt</c> rather than <c>MoveToSlot</c>/<c>BandReached</c>
+        /// — the only one of the three that used to leave the document-level cursor stale. A row laid out
+        /// at the relocated table's own top then asked its own fragmentation questions of the band the
+        /// table was relocated *from*, which is exactly what <see cref="HtmlContainerInt.CursorSpills"/>
+        /// counts - see the flexbox showcase corpus regression this pinned down, where the resulting
+        /// spurious straddle deferred a row's words to a same-slot "resume" that landed with no vertical
+        /// alignment applied and effectively zero height.
+        /// </summary>
+        [Fact]
+        public async Task ContentAfterAWholeTableRelocation_SeesATruthfulCursor()
+        {
+            var html = LayoutHarness.Wrap(
+                "<div style='height:250pt'>filler</div>"
+                + "<table style='width:100%'>"
+                + "<tr><td>first row label</td></tr>"
+                + "<tr><td>second row</td></tr>"
+                + "</table>"
+                + "<p>content after the table</p>");
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight, margin: Margin);
+
+            var table = TableOf(root);
+
+            // The whole-table pre-check had to actually fire for this to assert anything.
+            Assert.Equal(container.PageTopOf(1), table.Location.Y, 0.01);
+
+            Assert.Equal(0, container.CursorSpills);
+        }
     }
 }

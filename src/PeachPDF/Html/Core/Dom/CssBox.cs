@@ -2632,18 +2632,27 @@ namespace PeachPDF.Html.Core.Dom
                         return true;
                     }
 
-                    // On the page grid, unlike a column (above), css-break-3 §2 monolithic content (a
-                    // replaced element, a scroll container) that overflows the fragmentainer it started
-                    // in simply overflows - it has no fragmentable inner structure to ask a break of, and
-                    // there is nowhere better for it to be. But the siblings the loop places after it now
-                    // flow into whatever band follows, with no break ever recording that crossing - #435's
-                    // shape one level up from a word's own unbreakable overflow. Scoped to §2's own set,
-                    // not every block child that happens to overflow: an ordinary container (a plain div,
-                    // html/body themselves) can land deep in the document through no decision of its own -
-                    // a margin collapsed through it from a descendant, say - and stepping the cursor there
-                    // regressed a margin-truncation fixture from one fragmentainer to six.
-                    if (MonolithicContent.IsMonolithic(childBox)
-                        && !childBox.IsOutOfFlow
+                    // On the page grid, unlike a column (above), a child that has genuinely finished -
+                    // no break requested at any level above - but whose own bottom still lands past the
+                    // fragmentainer the pass opened with (css-break-3 §2 monolithic content with nowhere
+                    // better to be; an explicit height; or simply enough accumulated content, table rows,
+                    // or line boxes that it was never asked a single crossing question anywhere on the
+                    // way) is left exactly where it is. But the siblings the loop places after it now flow
+                    // into whatever band follows, with no break ever recording that crossing - #435's
+                    // shape one level up from a word's own unbreakable overflow.
+                    //
+                    // Safe once (not before) the straddle predicate itself asks the fragmentainer being
+                    // filled rather than the page grid (#435 stage 2): before that landed, stepping here
+                    // for every child - rather than only genuinely monolithic ones - corrupted which slot
+                    // the emitter attributed the whole pass to for a child whose position was merely
+                    // *inherited* from an already-exempt ancestor (the document root's own margin, which
+                    // collapses through html/body/div with no crossing ever decided for any of them) -
+                    // regressing a margin-truncation fixture from one fragmentainer to six. Once the
+                    // predicate agrees with the cursor, that inherited position is exactly as real as any
+                    // other, and the narrower monolithic-only gate instead left an ordinary tall filler
+                    // (no break of its own to take, but a bottom past the page it started on) leaving the
+                    // cursor stale for whatever follows it.
+                    if (!childBox.IsOutOfFlow
                         && childBox.Display != CssConstants.None
                         && HtmlContainer?.CurrentFragmentainer is { HasOwnBand: false })
                     {
@@ -3428,6 +3437,18 @@ namespace PeachPDF.Html.Core.Dom
 
                     child.Location = new RPoint(left + child.ActualMarginLeft, top);
                     child.ActualBottom = top;
+
+                    // The root places itself (PlaceAsBlockChild's (ParentBox ?? this) receiver), and §5.2's
+                    // whole crossing question above is never asked of it - "only the root is excluded - it
+                    // has nothing before it for a break to fall between." A descendant's margin can still
+                    // collapse all the way up to the root (margin-collapse-through), landing it far down
+                    // the document with no crossing ever decided anywhere - the one placement every other
+                    // site's StepOverTo call is scoped to skip, and so the one that needs its own - #435.
+                    if (child.ParentBox is null)
+                    {
+                        child.HtmlContainer?.CurrentFragmentainer?.StepOverTo(
+                            child.HtmlContainer!.SlotStartingAt(top));
+                    }
 
                     CssLayoutEngine.FloatBox(child);
                 }
