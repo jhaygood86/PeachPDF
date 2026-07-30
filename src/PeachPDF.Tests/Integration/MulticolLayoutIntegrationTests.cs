@@ -1257,22 +1257,26 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
-        /// A boundary rather than the behaviour, and a <i>pre-existing</i> one: a forced break carried by a
-        /// box that is not the container's own child is lost entirely — no page break and no column break —
-        /// so there is nothing here for an escaping record to carry. Its cause is one level down from
-        /// anything about columns: the break is one-shot — <c>CssBox.PlacedByForcedBreak</c> latches that it
-        /// has been taken and only a prologue that re-decides it clears that again — and the measurement
-        /// pass that sizes the fill spends it, because <c>PassRewind.RollBackTo</c> re-opens the prologue
-        /// for the container's own children only.
+        /// A forced break carried by a box that is not the container's own child is honoured exactly as its
+        /// direct-child sibling above is — no longer lost entirely, which is what
+        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/395">#395</see> characterized: the break
+        /// is one-shot (<c>CssBox.PlacedByForcedBreak</c>, cleared only by a prologue that re-decides it),
+        /// and the multi-column engine's measurement pass — which lays every child out once to size the
+        /// fill, then again for real — used to spend that one shot on a descendant nothing re-opened the
+        /// prologue for, since <c>PassRewind.RollBackTo</c> re-opens it directly only for the container's
+        /// own children.
         /// </summary>
         /// <remarks>
-        /// This is why the direct-child case had an observable behaviour to fix at all. Filed as
-        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/395">#395</see>; closing it should turn
-        /// this into the invariant it was drafted as — b starting the next page, exactly as its own sibling
-        /// does one level up.
+        /// Fixed incidentally by <see href="https://github.com/jhaygood86/PeachPDF/issues/434">#434</see>'s
+        /// own fix, not by work scoped to #395 directly: both the page driver's pass re-entry and this
+        /// engine's measurement-pass retry share the same <c>CssBox.ResetForRefill</c>/<c>PassRewind</c>
+        /// primitive, so widening <c>ResetForRefill</c> to let a reset box's whole subtree retake a forced
+        /// break (rather than only the box itself) closes this shape too. #395's own text names flex, grid
+        /// and table as the same shape for their own measure-then-place engines; those are unverified here
+        /// and #395 stays open for them until checked.
         /// </remarks>
         [Fact]
-        public async Task AForcedPageBreak_BelowTheContainersOwnChild_IsLostEntirely_KnownBoundary()
+        public async Task AForcedPageBreak_BelowTheContainersOwnChild_StartsTheNextPage()
         {
             var html = Wrap(@"
                 <div id='mc' style='columns:2; column-gap:0; width:200px; column-fill:auto'>
@@ -1283,12 +1287,15 @@ namespace PeachPDF.Tests.Integration
                 </div>");
             var (root, container) = await BuildAndLayout(html, pageHeight: 200);
 
+            var mc = FindById(root, "mc")!;
             var a = FindById(root, "a")!;
             var b = FindById(root, "b")!;
 
             Assert.Equal(0, container.PageIndexOf(a.Location.Y));
-            Assert.Equal(0, container.PageIndexOf(b.Location.Y));
-            Assert.Equal(a.Location.X, b.Location.X, 1);
+            Assert.True(container.PageIndexOf(b.Location.Y) > container.PageIndexOf(a.Location.Y),
+                $"expected the box to start the next page, it is at y={b.Location.Y}");
+            Assert.True(b.Location.X < mc.ClientLeft + 50,
+                $"expected the box to begin the next page's first column, it is at x={b.Location.X}");
         }
 
         /// <summary>
