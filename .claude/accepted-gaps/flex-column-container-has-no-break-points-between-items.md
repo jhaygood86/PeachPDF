@@ -29,4 +29,12 @@ of block-axis break points that must not disturb one another — while `LineRelo
 displacement is one number for one chain. Grid is unaffected: even under `grid-auto-flow: column` the rows
 are still the block-axis unit.
 
+This is narrower than it once was: a column-direction line's items now genuinely fragment their own
+**content** across a fragmentainer boundary (`CssLayoutEngineFlex.CommitColumnContent`/
+`FlexColumnBreakToken`) — an item too tall for the remaining page continues onto the next one instead of
+being cut off. What stays inert is only the break-*value* question this file describes: a forced
+`break-before`/`break-after`/`break-inside: avoid` between two items of the same line still does nothing:
+every item commits unconditionally, and a line's walk stops only where an item's own content genuinely
+doesn't fit.
+
 Filed as [issue #455](https://github.com/jhaygood86/PeachPDF/issues/455).
