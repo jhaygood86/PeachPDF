@@ -703,7 +703,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="box">the box to measure</param>
         /// <param name="blockTop">
         /// the border-box top to resolve the per-page measure against — the position the box is <i>about</i>
-        /// to be placed at, which only the frame placing it knows (<c>CssBox.PlaceBlockBox</c>). Omitted by
+        /// to be placed at, which only the frame placing it knows (<c>CssBox.PlaceAndSizeBlockChild</c>). Omitted by
         /// the engines, which call this for a container whose <see cref="CssBox.Location"/> the frame above
         /// has already written, so the box's own coordinate is the truthful answer there.
         /// </param>

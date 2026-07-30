@@ -130,7 +130,7 @@ namespace PeachPDF.Html.Core.Dom
         /// this - it's simply the owner's first inline child, positioned by the ordinary inline-layout
         /// algorithm like any other flowed content.
         /// </summary>
-        protected override async ValueTask PerformLayoutImp(RGraphics g)
+        protected override async ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild)
         {
             await MeasureWordsSize(g);
 

@@ -38,7 +38,7 @@ namespace PeachPDF.Tests.Integration
                 Display = CssConstants.Block;
             }
 
-            protected override ValueTask PerformLayoutImp(RGraphics g) =>
+            protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild) =>
                 throw new InvalidOperationException(Marker);
         }
 

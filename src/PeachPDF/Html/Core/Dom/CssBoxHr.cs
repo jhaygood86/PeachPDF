@@ -39,6 +39,14 @@ namespace PeachPDF.Html.Core.Dom
         /// Performs layout of the DOM structure creating lines by set bounds restrictions.
         /// </summary>
         /// <param name="g">Device context to use</param>
+        /// <param name="frame">the frame driving this pass — unused here; the rule reaches it through
+        /// <see cref="CssBox.PlaceAsBlockChild"/>, which is the one dispatcher every block-level box's
+        /// position goes through</param>
+        /// <param name="framePlacesChild">
+        /// unused: the rule replaces the generic block pass rather than being driven through its phases, so
+        /// the frame has no placement phase here to skip. It has no prologue either, and its inline size is
+        /// a formula of its own rather than <c>CssLayoutEngine.GetBoxWidth</c>'s answer.
+        /// </param>
         /// <remarks>
         /// <para>
         /// The rule's <i>size</i> is its own — a full-width line whose height falls back to a 1px top and
@@ -61,7 +69,7 @@ namespace PeachPDF.Html.Core.Dom
         /// fire on a re-layout instead of reading the previous pass's height.
         /// </para>
         /// </remarks>
-        protected override ValueTask PerformLayoutImp(RGraphics g)
+        protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild)
         {
             if (Display == CssConstants.None)
                 return ValueTask.CompletedTask;

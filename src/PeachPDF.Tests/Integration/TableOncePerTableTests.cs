@@ -208,7 +208,7 @@ namespace PeachPDF.Tests.Integration
                 Display = CssConstants.TableCell;
             }
 
-            protected override ValueTask PerformLayoutImp(RGraphics g) =>
+            protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild) =>
                 throw new InvalidOperationException("layout failed while the header was being measured");
         }
 
