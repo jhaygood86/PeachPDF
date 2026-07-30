@@ -583,12 +583,23 @@ namespace PeachPDF.Html.Core.Parse
             // effects, so hoisting it here (ahead of TranslateAttributes, which still runs at its
             // original point below) doesn't change behavior, and lets RulesUseRevertKeyword below
             // see it too.
+            //
+            // A style="..." attribute's text is always a flat declaration list - never a full rule (no
+            // selector, no braces) - so this parses it directly into a bare StyleRule's StyleDeclaration
+            // (StylesheetParser.AppendDeclarations, the same primitive AssignCustomPropertyDeclaration's
+            // var()-reparse already uses via StylesheetParser.Default below) rather than wrapping it as
+            // "* { ... }" and running the full stylesheet pipeline - tokenizing an unused "*" selector,
+            // rule/brace handling, a whole Stylesheet/StylesheetText wrapper - just to reach the same
+            // declarations. AssignCssBlock only ever reads stylesheetRule.Style; nothing downstream reads
+            // this rule's Selector/SelectorText, so the constructor's default "match everything" selector
+            // is simply unused, not incorrect.
             IStyleRule? inlineRule = null;
             if (box.HtmlTag != null && box.HtmlTag.HasAttribute("style"))
             {
-                var styleAttributeText = box.HtmlTag.TryGetAttribute("style");
-                var block = CssParser.ParseStyleSheet("* { " + styleAttributeText + " }");
-                inlineRule = block.StyleRules.Single();
+                var styleAttributeText = box.HtmlTag.TryGetAttribute("style")!;
+                var rule = new StyleRule(StylesheetParser.Default);
+                StylesheetParser.Default.AppendDeclarations(rule.Style, styleAttributeText);
+                inlineRule = rule;
             }
 
             // The relatively expensive property/custom-property snapshots below are only ever read
