@@ -327,7 +327,7 @@ namespace PeachPDF.Html.Core
             { "position", "static" },
             { "right", CssConstants.Auto },
             { "string-set", CssConstants.None },
-            { "text-align", "left" },
+            { "text-align", CssConstants.Start },
             { "text-decoration-color", CssConstants.CurrentColor },
             { "text-decoration-line", CssConstants.None },
             { "text-decoration-style", CssConstants.Solid },

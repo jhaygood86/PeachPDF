@@ -1886,7 +1886,18 @@ namespace PeachPDF.Html.Core.Dom
         /// </param>
         private static void ApplyHorizontalAlignment(CssLineBox lineBox, bool blockFinished)
         {
-            switch (lineBox.OwnerBox.TextAlign)
+            // text-align's initial/logical values, start/end (CSS Text 3 §7.1), resolve against the
+            // owning box's own direction - the CSS-OM-visible value (box.TextAlign) stays exactly as
+            // authored/defaulted; only this *used*-value resolution is direction-aware.
+            var isRtl = lineBox.OwnerBox.Direction.Value == DirectionMode.Rtl;
+            var textAlign = lineBox.OwnerBox.TextAlign switch
+            {
+                CssConstants.Start => isRtl ? CssConstants.Right : CssConstants.Left,
+                CssConstants.End => isRtl ? CssConstants.Left : CssConstants.Right,
+                var other => other
+            };
+
+            switch (textAlign)
             {
                 case CssConstants.Right:
                     ApplyRightAlignment(lineBox);

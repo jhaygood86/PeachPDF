@@ -77,7 +77,9 @@ namespace PeachPDF.CSS
                 {Keywords.Left, HorizontalAlignment.Left},
                 {Keywords.Right, HorizontalAlignment.Right},
                 {Keywords.Center, HorizontalAlignment.Center},
-                {Keywords.Justify, HorizontalAlignment.Justify}
+                {Keywords.Justify, HorizontalAlignment.Justify},
+                {Keywords.Start, HorizontalAlignment.Start},
+                {Keywords.End, HorizontalAlignment.End}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, VerticalAlignment> VerticalAlignments =
             new Dictionary<string, VerticalAlignment>(StringComparer.OrdinalIgnoreCase)

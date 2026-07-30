@@ -5,6 +5,8 @@ namespace PeachPDF.CSS
         Left,
         Center,
         Right,
-        Justify
+        Justify,
+        Start,
+        End
     }
 }
