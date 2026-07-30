@@ -1,4 +1,3 @@
-using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
@@ -21,8 +20,6 @@ namespace PeachPDF.Html.Core.Paint
         private static void PaintWords(RGraphics g, CssBox box, BoxFragment fragment)
         {
             if (box.Width is null or { Length: <= 0 }) return;
-
-            var isRtl = box.Direction.Value == DirectionMode.Rtl;
 
             foreach (var wordFragment in fragment.Words)
             {
@@ -57,7 +54,7 @@ namespace PeachPDF.Html.Core.Paint
                 var baselineAdjust = styleSource.ActualFont.Ascent - font.Ascent;
                 var wordPoint = new RPoint(wordFragment.Rect.X, wordFragment.Rect.Y + baselineAdjust);
                 var text = word.FirstLineText ?? word.Text!;
-                g.DrawString(text, font, styleSource.ActualColor, wordPoint, new RSize(word.Width, word.Height), isRtl, styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, styleSource.ActualFontVariantLigatures);
+                g.DrawString(text, font, styleSource.ActualColor, wordPoint, new RSize(word.Width, word.Height), styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, styleSource.ActualFontVariantLigatures);
             }
         }
     }

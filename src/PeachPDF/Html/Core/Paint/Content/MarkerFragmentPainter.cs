@@ -1,4 +1,3 @@
-using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
@@ -43,7 +42,7 @@ namespace PeachPDF.Html.Core.Paint.Content
             {
                 g.DrawString(box.Text ?? string.Empty, box.ActualFont, box.ActualColor,
                     new RPoint(wordRect.X, wordRect.Y), new RSize(wordRect.Width, wordRect.Height),
-                    box.Direction.Value == DirectionMode.Rtl, letterSpacing: 0, fontPalette: null, box.ActualFontVariantLigatures);
+                    letterSpacing: 0, fontPalette: null, box.ActualFontVariantLigatures);
             }
         }
 

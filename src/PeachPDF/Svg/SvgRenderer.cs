@@ -487,7 +487,7 @@ namespace PeachPDF.Svg
                     return;
 
                 var solid = ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity);
-                g.DrawString(text, font, solid, new RPoint(drawX, drawY), size, rtl: false);
+                g.DrawString(text, font, solid, new RPoint(drawX, drawY), size);
                 return;
             }
 
@@ -503,7 +503,7 @@ namespace PeachPDF.Svg
                 // CFF/bitmap font: no glyf outlines. Best-effort solid fill; a gradient/pattern/stroke
                 // simply can't be honored here (documented gap).
                 if (run.Fill.Kind == SvgPaintKind.Solid)
-                    g.DrawString(text, font, ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity), new RPoint(drawX, drawY), size, rtl: false);
+                    g.DrawString(text, font, ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity), new RPoint(drawX, drawY), size);
                 return;
             }
 
@@ -632,7 +632,7 @@ namespace PeachPDF.Svg
                 if (run.Fill.Kind != SvgPaintKind.Solid)
                     return;
 
-                g.DrawString(glyph, font, ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity), new RPoint(leftX, -font.Ascent), glyphSize, rtl: false);
+                g.DrawString(glyph, font, ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity), new RPoint(leftX, -font.Ascent), glyphSize);
                 return;
             }
 
@@ -640,7 +640,7 @@ namespace PeachPDF.Svg
             if (outline is null)
             {
                 if (run.Fill.Kind == SvgPaintKind.Solid)
-                    g.DrawString(glyph, font, ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity), new RPoint(leftX, -font.Ascent), glyphSize, rtl: false);
+                    g.DrawString(glyph, font, ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity), new RPoint(leftX, -font.Ascent), glyphSize);
                 return;
             }
 

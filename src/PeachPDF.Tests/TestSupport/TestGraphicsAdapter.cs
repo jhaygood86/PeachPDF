@@ -176,7 +176,7 @@ namespace PeachPDF.Tests.TestSupport
     /// </summary>
     internal class TestRecordingGraphics : RGraphics
     {
-        public sealed record DrawStringCall(string Text, RFont Font, RColor Color, RPoint Point, RSize Size, bool Rtl, double LetterSpacing = 0);
+        public sealed record DrawStringCall(string Text, RFont Font, RColor Color, RPoint Point, RSize Size, double LetterSpacing = 0);
         public sealed record DrawRectCall(RColor Color, double X, double Y, double Width, double Height);
         /// <summary>
         /// A filled or stroked path. <see cref="Points"/> is the path's recorded geometry, which is the only
@@ -207,9 +207,9 @@ namespace PeachPDF.Tests.TestSupport
 
         public TestRecordingGraphics() : base(new TestGraphicsAdapter(), new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
 
-        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl, double letterSpacing = 0, RFontPalette? fontPalette = null, LigatureFeatures ligatureFeatures = LigatureFeatures.Default)
+        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, LigatureFeatures ligatureFeatures = LigatureFeatures.Default)
         {
-            var call = new DrawStringCall(str, font, color, point, size, rtl, letterSpacing);
+            var call = new DrawStringCall(str, font, color, point, size, letterSpacing);
             DrawStringCalls.Add(call);
             Log.Add(call);
         }
