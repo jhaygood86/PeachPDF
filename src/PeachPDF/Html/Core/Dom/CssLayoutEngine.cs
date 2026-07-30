@@ -1920,15 +1920,21 @@ namespace PeachPDF.Html.Core.Dom
         /// which only ever repositioned whole words and never reordered or mirrored their own characters.
         /// </summary>
         /// <remarks>
-        /// Reuses the exact set of <c>Left</c> "slots" <see cref="ApplyHorizontalAlignment"/> already
-        /// assigned in logical order (plain left-packed, centered, right-aligned, or justified with its
-        /// own per-word extra spacing) rather than recomputing positions from a fresh cumulative
-        /// <see cref="CssRect.FullWidth"/> sum - only which word occupies which slot changes, not the
-        /// slot geometry itself. Recomputing from scratch would silently undo justify's per-line spacing
-        /// (its extra gap is baked into each slot's <c>Left</c>, not derivable from word width alone), and
-        /// this way a line with no actual reordering to do (by far the common case - a plain LTR line, one
-        /// run spanning the whole line) is a true no-op: every word's slot index equals its own original
-        /// position.
+        /// Repositions one run at a time (a run is a maximal same-level span - the common case is one run
+        /// spanning the whole line) by <b>reflecting it about its own span</b> rather than reusing the
+        /// <c>Left</c> "slots" <see cref="ApplyHorizontalAlignment"/> already assigned in logical order:
+        /// an earlier version reused those slots positionally (the word that used to occupy slot <c>i</c>
+        /// handed its <c>Left</c> to whichever word the reordered sequence put there), which corrupted
+        /// layout as soon as two words in a run had different widths - a slot sized for a narrow word
+        /// (say, a lone comma) now had to hold a much wider one, overlapping its neighbor. Reflection
+        /// avoids this because it only ever repositions a word using <i>its own</i> width and <i>its
+        /// own</i> original offset from the run's start - <c>newLeft = runNewStart + runWidth -
+        /// (offsetFromRunStart + word.Width)</c> for an RTL run, or a straight carry-over of
+        /// <c>offsetFromRunStart</c> for an LTR one - so every gap the original logical-order layout
+        /// already established between adjacent words (plain inter-word spacing, justify's extra
+        /// per-word budget, whatever it is) reappears at the mirrored position instead of being
+        /// recomputed, and a line with no actual reordering to do (a plain LTR line, one run spanning the
+        /// whole line) is a true no-op - confirmed by the early return below, not just by coincidence.
         /// </remarks>
         /// <param name="lineBox">the line to reorder</param>
         private static void ApplyBidiReordering(CssLineBox lineBox)
@@ -1958,30 +1964,46 @@ namespace PeachPDF.Html.Core.Dom
 
             var runs = BidiResolver.ReorderLine(levels, 0, levels.Length);
 
-            var slotIndex = 0;
+            if (runs.Count == 1 && !runs[0].IsRtl) return;
+
+            // The original Left of the word right after `index` in document order - or, for the line's
+            // very last word, its own spacing-inclusive right edge, since there is no following slot to
+            // read a boundary from. Runs partition `lineBox.Words` into contiguous document-order
+            // ranges (BD7/UAX#9), so this is exactly the boundary a run ending at `index` needs.
+            double SlotBoundaryAfter(int index) =>
+                index + 1 < lineBox.Words.Count
+                    ? slots[index + 1]
+                    : slots[index] + lineBox.Words[index].FullWidth;
+
+            var runNewStart = slots[0];
 
             foreach (var run in runs)
             {
                 // BidiRun.Start/Length here index into `levels`/lineBox.Words (word ordinals, one
                 // homogeneous-level unit each) rather than characters - ReorderLine only ever compares
-                // and copies the levels array, so it works unchanged at this granularity. Within an RTL
-                // run both the word order and each word's own text reverse (mirroring characters where
-                // they have a mirror image), matching how BidiResolver's own conformance reconstruction
-                // walks a character-granularity RTL run backwards.
-                if (run.IsRtl)
+                // and copies the levels array, so it works unchanged at this granularity. `runs` is
+                // already in final visual (left-to-right) order, so each run's new span simply follows
+                // the previous one's.
+                var runOldStart = slots[run.Start];
+                var runWidth = SlotBoundaryAfter(run.Start + run.Length - 1) - runOldStart;
+
+                // Within an RTL run both the word order and each word's own text reverse (mirroring
+                // characters where they have a mirror image), matching how BidiResolver's own
+                // conformance reconstruction walks a character-granularity RTL run backwards.
+                for (var k = 0; k < run.Length; k++)
                 {
-                    for (var k = run.Length - 1; k >= 0; k--)
-                    {
-                        PlaceBidiRunWord(lineBox.Words[run.Start + k], slots[slotIndex++], run.Level, mirror: true);
-                    }
+                    var idx = run.Start + k;
+                    var word = lineBox.Words[idx];
+                    var offsetFromRunStart = slots[idx] - runOldStart;
+
+                    var newLeft = run.IsRtl
+                        ? runNewStart + runWidth - (offsetFromRunStart + word.Width)
+                        : runNewStart + offsetFromRunStart;
+
+                    PlaceBidiRunWord(word, newLeft, run.Level, mirror: run.IsRtl);
                 }
-                else
-                {
-                    for (var k = 0; k < run.Length; k++)
-                    {
-                        PlaceBidiRunWord(lineBox.Words[run.Start + k], slots[slotIndex++], run.Level, mirror: false);
-                    }
-                }
+
+                runNewStart += runWidth;
             }
         }
 

@@ -95,6 +95,38 @@ namespace PeachPDF.Tests.Html.Core
                 $"expected the isolated <bdi>'s own first logical word to end up rightmost; [0].Left={bdiWords[0].Left}, [1].Left={bdiWords[1].Left}");
         }
 
+        [Fact]
+        public async Task RtlParagraph_WordsOfDifferingWidths_DoNotOverlapAfterReordering()
+        {
+            // Reflecting a run about its own span (not reusing the original per-slot Left of whichever
+            // word used to sit there) is what keeps this correct once word widths differ - a version that
+            // handed each reordered word the *positional* slot of whatever word it displaced corrupted
+            // layout the moment two words in the run had different widths (a slot sized for a narrow word
+            // now had to hold a wider one). Every word here is a different length precisely to catch that:
+            // a regression would show up as overlapping rectangles, not merely as the wrong left-to-right
+            // order (which RtlParagraph_DigitRunWithNoSurroundingWhitespace_SplitsIntoItsOwnWord and the
+            // other tests in this file already assert, but none of them check for overlap).
+            var html = LayoutHarness.Wrap(
+                """<p id="p" dir="rtl" style="width:400pt">שלום עולם זהו טקסט בעברית והוא זורם מימין לשמאל</p>""");
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var p = LayoutHarness.FindById(root, "p");
+
+            Assert.NotNull(p);
+            var words = WordsOf(p!).OrderByDescending(w => w.Left).ToList();
+
+            Assert.True(words.Count > 1, "expected more than one word to actually exercise adjacency");
+
+            for (var i = 0; i < words.Count - 1; i++)
+            {
+                var (leftWord, rightWord) = (words[i + 1], words[i]);
+                Assert.True(leftWord.Right <= rightWord.Left + 0.01,
+                    $"expected non-overlapping adjacent words in visual (right-to-left) order; " +
+                    $"'{rightWord.Text}' [{rightWord.Left:F2}, {rightWord.Right:F2}] overlaps " +
+                    $"'{leftWord.Text}' [{leftWord.Left:F2}, {leftWord.Right:F2}]");
+            }
+        }
+
         private static List<CssRectWord> WordsOf(CssBox box) =>
             LayoutHarness.Descendants(box)
                 .SelectMany(b => b.Words.OfType<CssRectWord>())
