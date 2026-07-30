@@ -14,7 +14,8 @@ namespace PeachPDF.Html.Core.Utils
         //        public const string B = "B";
         //        public const string BASE = "BASE";
         //        public const string BASEFONT = "BASEFONT";
-        //        public const string BDO = "BDO";
+        public const string Bdo = "bdo";
+        public const string Bdi = "bdi";
         //        public const string BIG = "BIG";
         //        public const string BLOCKQUOTE = "BLOCKQUOTE";
         //        public const string BODY = "BODY";

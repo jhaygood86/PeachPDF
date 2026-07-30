@@ -115,6 +115,12 @@ namespace PeachPDF.Html.Core
             *[DIR="ltr"]    { direction: ltr; unicode-bidi: embed }
             *[DIR="rtl"]    { direction: rtl; unicode-bidi: embed }
 
+            /* A plain type selector (0,0,1) would lose the unicode-bidi: embed set by the *[DIR=...]
+               rule just above (0,1,0) once the dir="auto"/no-dir-attribute pre-pass has written a
+               literal ltr/rtl dir attribute onto every <bdi> - matching its attribute-selector
+               specificity (0,1,1) is what lets isolate win instead. */
+            bdi[DIR="ltr"], bdi[DIR="rtl"] { unicode-bidi: isolate }
+
             /* Spelt with css-break-3's break-* properties rather than the legacy page-break-*
                aliases. The two share their storage and their initial value (see InitialValues
                below), so this is the same cascade either way - but the sheet is where a reader
